@@ -256,7 +256,7 @@ function quaisFaltam(faltam) {
 
 // D257 secao 11, item 11: uma base por arquivo (revisao/<id>/<n>/). Revisao em andamento no formato
 // da 0.3.0 - pasta numerada solta em revisao/ - segue na base unica, para nao partir a revisao ao meio.
-const revisao = path.join(cwd, '.claude', 'esquadro', 'revisao');
+const revisao = path.join(cwd, '.claude', 'sworn', 'revisao');
 const formatoAntigo = cegar.temPastaNumeradaSolta(revisao);
 const base = formatoAntigo ? revisao : cegar.baseDoArquivo(revisao, rel);
 
@@ -265,10 +265,10 @@ const base = formatoAntigo ? revisao : cegar.baseDoArquivo(revisao, rel);
 // projeto, que pode estar acima da pasta atual (D244/defeito 1). A gravacao do regua.md e la embaixo, no try.
 let secaoRegua = null;
 try {
-  secaoRegua = secaoDaRegua(fs.readFileSync(path.join(config.raizDoProjeto(cwd), '.claude', 'esquadro', 'regras.md'), 'utf8'));
+  secaoRegua = secaoDaRegua(fs.readFileSync(path.join(config.raizDoProjeto(cwd), '.claude', 'sworn', 'regras.md'), 'utf8'));
 } catch (e) {
   if (!e || e.code !== 'ENOENT') {
-    process.stdout.write('ERRO: nao consegui ler .claude/esquadro/regras.md (causa: ' + (e ? textoLib.causaDoErro(e) : 'desconhecida') +
+    process.stdout.write('ERRO: nao consegui ler .claude/sworn/regras.md (causa: ' + (e ? textoLib.causaDoErro(e) : 'desconhecida') +
       '). Nada foi gravado. Confira se e um arquivo que voce pode ler, e nao uma pasta, e rode de novo.\n');
     process.exit(1);
   }
@@ -301,7 +301,7 @@ function desfazerPastasVazias(faltavam) {
 
 // 0.3.3, item 2 (decisao do dono, 2026-09-29): base por arquivo que ja tem fechada.json e revisao FECHADA.
 // Preparar de novo nao herda as rondas antigas nem o teto gasto: a base inteira e movida (nada se apaga) para
-// .claude/esquadro/revisao-fechada/<id>/<carimbo>/ - FORA de revisao/, senao o escolherBase do apurar-ronda a
+// .claude/sworn/revisao-fechada/<id>/<carimbo>/ - FORA de revisao/, senao o escolherBase do apurar-ronda a
 // veria como outra revisao - e a revisao nova comeca na ronda 1. Base sem fechada.json (em andamento) segue
 // como antes; o formato antigo (pastas numeradas soltas) fica fora. renameSync so vale no mesmo volume: a
 // pasta de arquivo mora ao lado de revisao/.
@@ -425,7 +425,7 @@ try {
       'a conta como uma ronda. Depois rode de novo.' + ondeFoi + '\n');
   } else {
     process.stdout.write('ERRO: nao consegui criar a pasta da ronda ' + dirRel + ' (causa: ' + causa + '). ' +
-      'Nada foi gravado. Confira se .claude/esquadro/revisao, e cada pasta do caminho ate ela, e uma pasta ' +
+      'Nada foi gravado. Confira se .claude/sworn/revisao, e cada pasta do caminho ate ela, e uma pasta ' +
       'e nao um arquivo, e rode de novo.' + ondeFoi + '\n');
   }
   process.exit(1);
@@ -499,12 +499,12 @@ if (identico) {
 }
 if (formatoAntigo) {
   aviso += ' A revisao em andamento esta no formato antigo (pastas numeradas soltas em ' +
-    '.claude/esquadro/revisao/). Terminada ela, mova essas pastas numeradas para dentro de ' +
-    '.claude/esquadro/revisao/<id>/, mantendo os numeros; <id> e ' + cegar.REGRA_DO_ID +
+    '.claude/sworn/revisao/). Terminada ela, mova essas pastas numeradas para dentro de ' +
+    '.claude/sworn/revisao/<id>/, mantendo os numeros; <id> e ' + cegar.REGRA_DO_ID +
     ' (a/b.js vira ' + cegar.idDoArquivo('a/b.js') + ').';
   if (idAntigo) {
     aviso += ' O arquivo dessa revisao e ' + arquivoAntigo + ', entao o destino e ' +
-      '.claude/esquadro/revisao/' + idAntigo + '/.';
+      '.claude/sworn/revisao/' + idAntigo + '/.';
   } else {
     // 0.3.3, item 17: o proximo passo. O aviso ja diz a regra do id logo acima.
     aviso += ' Nao consegui ler o mapa.json de nenhuma pasta numerada para dizer o id dessa revisao. ' +
@@ -514,7 +514,7 @@ if (formatoAntigo) {
   // novo. Se ela ja estava fechada, o aviso diz isso e como arquivar a mao.
   if (fs.existsSync(path.join(base, 'fechada.json'))) {
     aviso += ' Essa revisao ja estava fechada (revisao/fechada.json) e fica fora do arquivamento automatico: para ' +
-      'arquivar, mova as pastas numeradas e o fechada.json para .claude/esquadro/revisao-fechada/' +
+      'arquivar, mova as pastas numeradas e o fechada.json para .claude/sworn/revisao-fechada/' +
       (idAntigo || '<id>') + '/<carimbo>/ (o <carimbo> e a data e a hora, como 2026-09-29-173045) e prepare de novo.';
   }
 }

@@ -2,7 +2,7 @@
 // 0.3.4, item 1 (D264, D287): o veredito do inspetor e gravado por hook, nao a mao.
 // O script nunca barra (sai com 0, nunca emite `decision`) e nunca cala (nao gravou = systemMessage
 // com a causa). A fixture REAL_SUBAGENT_STOP e o payload de um SubagentStop real (claude 2.1.258,
-// 2026-09-30, agente esquadro:inspetor), com os caminhos de usuario trocados por ficticios. D597: o session_id tambem (era o de uma sessao real do dono).
+// 2026-09-30, agente sworn:inspector), com os caminhos de usuario trocados por ficticios. D597: o session_id tambem (era o de uma sessao real do dono).
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -20,7 +20,7 @@ const REAL_SUBAGENT_STOP = {
   prompt_id: 'e7fb3c83-5849-4197-bccb-fd491ed465fa',
   permission_mode: 'acceptEdits',
   agent_id: 'a4ef814f10f9daff9',
-  agent_type: 'esquadro:inspetor',
+  agent_type: 'sworn:inspector',
   effort: { level: 'medium' },
   hook_event_name: 'SubagentStop',
   stop_hook_active: false,
@@ -28,18 +28,18 @@ const REAL_SUBAGENT_STOP = {
   last_assistant_message: '```json\n{\n  "lente": "correcao",\n  "melhor": "empate",\n' +
     '  "porQue": "nao sei - A.txt:1 retorna 1 e B.txt:1 retorna 2",\n  "achados": []\n}\n```',
   background_tasks: [{ id: 'a4ef814f10f9daff9', type: 'subagent', status: 'running',
-    description: 'esquadro:inspetor review', agent_type: 'esquadro:inspetor' }],
+    description: 'sworn:inspector review', agent_type: 'sworn:inspector' }],
   session_crons: []
 };
 
 function tmp(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro gravar-' + nome + '-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn gravar-' + nome + '-'));
 }
 
 /** Um projeto com uma ronda de verdade: revisao/<id>/<n>/ com A.txt, B.txt e vereditos/. */
 function projeto() {
   const dir = tmp('proj');
-  const ronda = path.join(dir, '.claude', 'esquadro', 'revisao', 'src__a.js', '1');
+  const ronda = path.join(dir, '.claude', 'sworn', 'revisao', 'src__a.js', '1');
   fs.mkdirSync(path.join(ronda, 'vereditos'), { recursive: true });
   fs.writeFileSync(path.join(ronda, 'A.txt'), 'a\n', 'utf8');
   fs.writeFileSync(path.join(ronda, 'B.txt'), 'b\n', 'utf8');
@@ -61,14 +61,14 @@ function stop(p, mensagem, extra) {
 function handback(p, mensagem, extra) {
   return Object.assign({
     session_id: REAL_SUBAGENT_STOP.session_id, cwd: p.dir, agent_id: REAL_SUBAGENT_STOP.agent_id,
-    agent_type: 'esquadro:inspetor', hook_event_name: 'PostToolUse', tool_name: 'SubagentHandback',
+    agent_type: 'sworn:inspector', hook_event_name: 'PostToolUse', tool_name: 'SubagentHandback',
     tool_input: { message: mensagem }, tool_response: {}
   }, extra || {});
 }
 
 function opcoes(p, entrada) {
   return { cwd: p.dir, encoding: 'utf8', input: typeof entrada === 'string' ? entrada : JSON.stringify(entrada),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: p.estado }) };
+    env: Object.assign({}, process.env, { SWORN_TMP: p.estado }) };
 }
 
 function rodar(p, entrada) {
@@ -295,7 +295,7 @@ test('gravar-veredito: sem o campo vereditos nao grava e avisa', () => {
 test('gravar-veredito: pasta que nao e de ronda nao grava e avisa', () => {
   const p = projeto();
   try {
-    // fora de .claude/esquadro/revisao/, mesmo com A.txt e B.txt ao lado
+    // fora de .claude/sworn/revisao/, mesmo com A.txt e B.txt ao lado
     const solta = path.join(p.dir, 'outra', 'vereditos');
     fs.mkdirSync(solta, { recursive: true });
     fs.writeFileSync(path.join(p.dir, 'outra', 'A.txt'), 'a', 'utf8');
@@ -401,7 +401,7 @@ test('gravar-veredito: agent_type de outro agente (ou sem agent_type) -> nada', 
     const msg = JSON.stringify(veredito(p));
     calado(rodar(p, stop(p, msg, { agent_type: 'desenvolvedor' })));
     calado(rodar(p, stop(p, msg, { agent_type: 'inspetor' })));
-    calado(rodar(p, stop(p, msg, { agent_type: 'outro:esquadro:inspetor' })));
+    calado(rodar(p, stop(p, msg, { agent_type: 'outro:sworn:inspector' })));
     const sem = stop(p, msg); delete sem.agent_type;
     calado(rodar(p, sem));
     calado(rodar(p, handback(p, msg, { agent_type: 'Explore' })));
@@ -492,7 +492,7 @@ test('gravar-veredito: vinte inspetores terminando juntos gravam vinte arquivos,
     const lentes = require('../scripts/lib/veredito.js').LENTES.concat(require('../scripts/lib/veredito.js').LENTES_UI);
     const rodadas = lentes.map((l, i) => new Promise((resolve) => {
       const f = spawn(process.execPath, [SCRIPT], { cwd: p.dir,
-        env: Object.assign({}, process.env, { ESQUADRO_TMP: p.estado }) });
+        env: Object.assign({}, process.env, { SWORN_TMP: p.estado }) });
       let out = '';
       f.stdout.on('data', (d) => { out += d; });
       f.on('close', (status) => resolve({ status: status, stdout: out }));
@@ -511,10 +511,10 @@ test('gravar-veredito: entrada vazia, lixo e tipos absurdos saem com 0 e sem dec
   const p = projeto();
   try {
     for (const entrada of ['', 'isto nao e json', '[]', 'null', '{}']) semBarrar(rodar(p, entrada));
-    for (const e of [{ hook_event_name: 'SubagentStop', agent_type: 'esquadro:inspetor', last_assistant_message: 7 },
-      { hook_event_name: 'PostToolUse', agent_type: 'esquadro:inspetor', tool_name: 'SubagentHandback', tool_input: 'x' },
-      { hook_event_name: 'PostToolUse', agent_type: 'esquadro:inspetor', tool_name: 'SubagentHandback' },
-      { hook_event_name: 'SubagentStop', agent_type: 'esquadro:inspetor', cwd: 5, last_assistant_message: '{}' }]) {
+    for (const e of [{ hook_event_name: 'SubagentStop', agent_type: 'sworn:inspector', last_assistant_message: 7 },
+      { hook_event_name: 'PostToolUse', agent_type: 'sworn:inspector', tool_name: 'SubagentHandback', tool_input: 'x' },
+      { hook_event_name: 'PostToolUse', agent_type: 'sworn:inspector', tool_name: 'SubagentHandback' },
+      { hook_event_name: 'SubagentStop', agent_type: 'sworn:inspector', cwd: 5, last_assistant_message: '{}' }]) {
       semBarrar(rodar(p, e));
     }
     assert.deepStrictEqual(arquivosEm(p), []);
@@ -597,9 +597,9 @@ test('gravar-veredito (C): o aviso diz onde e como gravar: <pasta>/<lente>.json,
 test('gravar-veredito (E): handback que avisa e nao grava a marca diz que o aviso pode se repetir', () => {
   const p = projeto();
   try {
-    // a pasta do estado nao se cria: ja existe um ARQUIVO onde ficaria a pasta "esquadro"
+    // a pasta do estado nao se cria: ja existe um ARQUIVO onde ficaria a pasta "sworn"
     fs.mkdirSync(p.estado, { recursive: true });
-    fs.writeFileSync(path.join(p.estado, 'esquadro'), 'x', 'utf8');
+    fs.writeFileSync(path.join(p.estado, 'sworn'), 'x', 'utf8');
     const r = rodar(p, handback(p, 'sem json nenhum'));
     avisou(r, /JSON/);
     assert.ok(/pode se repetir/.test(r.json.systemMessage), 'faltou dizer que o aviso pode voltar: ' + r.json.systemMessage);
@@ -616,14 +616,14 @@ test('gravar-veredito (E): marca gravada -> o aviso do handback nao fala em repe
   } finally { limpar(p); }
 });
 
-// ------------------------------------------------ T2 do plano dos 82 (frente esquadro-pendencias)
+// ------------------------------------------------ T2 do plano dos 82 (frente sworn-pendencias)
 
 test('T2/F3-07 (D335 secao 2): handback que GRAVOU e nao grava a marca avisa que gravou, e que o "nao achei o JSON" do fim pode ser ignorado', () => {
   const p = projeto();
   try {
-    // a pasta do estado nao se cria: ja existe um ARQUIVO onde ficaria a pasta "esquadro"
+    // a pasta do estado nao se cria: ja existe um ARQUIVO onde ficaria a pasta "sworn"
     fs.mkdirSync(p.estado, { recursive: true });
-    fs.writeFileSync(path.join(p.estado, 'esquadro'), 'x', 'utf8');
+    fs.writeFileSync(path.join(p.estado, 'sworn'), 'x', 'utf8');
     const vd = veredito(p, { lente: 'borda', achados: [] });
     const r = rodar(p, handback(p, JSON.stringify(vd)));
     semBarrar(r);
@@ -640,7 +640,7 @@ test('T2/F3-07 (D335 secao 2): handback que GRAVOU e nao grava a marca avisa que
     // quando o handback AVISA (nao gravou) e a marca falha, segue o aviso de sempre, sem dizer que gravou
     const r3 = rodar(p, handback(p, 'sem json nenhum', { agent_id: 'terceiro' }));
     avisou(r3, /JSON/);
-    assert.ok(/pode se repetir/.test(r3.json.systemMessage) && !/^esquadro: gravei o veredito/.test(r3.json.systemMessage), r3.json.systemMessage);
+    assert.ok(/pode se repetir/.test(r3.json.systemMessage) && !/^sworn: gravei o veredito/.test(r3.json.systemMessage), r3.json.systemMessage);
   } finally { limpar(p); }
   // controle: marca gravada + gravou = segue calado
   const q = projeto();
@@ -654,7 +654,7 @@ test('T2/F3-21: a pasta da ronda tem de estar dentro da raiz do projeto (absolut
   const p = projeto();
   const fora = tmp('fora');
   try {
-    const rondaFora = path.join(fora, '.claude', 'esquadro', 'revisao', 'src__a.js', '1');
+    const rondaFora = path.join(fora, '.claude', 'sworn', 'revisao', 'src__a.js', '1');
     fs.mkdirSync(path.join(rondaFora, 'vereditos'), { recursive: true });
     fs.writeFileSync(path.join(rondaFora, 'A.txt'), 'a\n', 'utf8');
     fs.writeFileSync(path.join(rondaFora, 'B.txt'), 'b\n', 'utf8');
@@ -703,9 +703,9 @@ test('fiacao: o hooks.json liga o gravar-veredito no SubagentStop (inspetor) e n
 
   const gs = (hooks.SubagentStop || []).filter(chama);
   assert.strictEqual(gs.length, 1, 'SubagentStop sem o gravar-veredito, ou com ele duas vezes');
-  assert.strictEqual(gs[0].matcher, '^esquadro:inspetor$');
-  assert.ok(new RegExp(gs[0].matcher).test('esquadro:inspetor'));
-  assert.ok(!new RegExp(gs[0].matcher).test('meu-esquadro:inspetor'));
+  assert.strictEqual(gs[0].matcher, '^sworn:inspector$');
+  assert.ok(new RegExp(gs[0].matcher).test('sworn:inspector'));
+  assert.ok(!new RegExp(gs[0].matcher).test('meu-sworn:inspector'));
 
   const gp = (hooks.PostToolUse || []).filter(chama);
   assert.strictEqual(gp.length, 1, 'PostToolUse sem o gravar-veredito, ou com ele duas vezes');
@@ -728,9 +728,9 @@ test('fiacao: o hooks.json liga o gravar-veredito no SubagentStop (inspetor) e n
 });
 
 test('fiacao: o inspetor devolve a pasta vereditos e o briefing da skill a passa (D287)', () => {
-  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspetor.md'), 'utf8');
+  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
   assert.ok(/"vereditos":/.test(inspetor), 'o formato do JSON do inspetor nao tem o campo vereditos');
-  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   const briefing = skill.slice(skill.indexOf('Briefing de cada um'), skill.indexOf('A linha da r'));
   assert.ok(/vereditos/.test(briefing), 'o briefing nao passa o caminho da pasta vereditos');
   const passo2 = skill.slice(skill.indexOf('## Passo 2'), skill.indexOf('## Passo 3'));
@@ -740,11 +740,11 @@ test('fiacao: o inspetor devolve a pasta vereditos e o briefing da skill a passa
 });
 
 test('D503: fiacao da referencia - o inspetor devolve vsReferencia e lacunas; a skill passa R.txt e a 2a passada e diz o custo', () => {
-  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspetor.md'), 'utf8');
+  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
   assert.match(inspetor, /"vsReferencia":/, 'o JSON do inspetor nao tem vsReferencia');
   assert.match(inspetor, /"lacunas":/, 'o JSON do inspetor nao tem lacunas');
   assert.match(inspetor, /R\.txt/, 'o inspetor nao sabe do R.txt');
-  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   const passo2 = skill.slice(skill.indexOf('## Passo 2'), skill.indexOf('## Passo 3'));
   assert.match(passo2, /R\.txt/, 'o Passo 2 nao passa o R.txt');
   assert.match(passo2, /`invertida\.vereditos`/, 'o briefing da 2a passada nao troca a pasta de vereditos');
@@ -762,7 +762,7 @@ test('D503: fiacao da referencia - o inspetor devolve vsReferencia e lacunas; a 
 // Plano 082, Tarefa 6 (p4-2, p4-3, p4-4): o inspetor sabe ler cada bloco do R.txt, o que devolver contra a referencia
 // quando nao a ve, e o "nao tem acesso" nao contradiz a regua.md e o R.txt.
 test('082 T6 (p4-2, p4-3, p4-4): o inspetor le os blocos do R.txt e sabe o que devolver contra a referencia sem ve-la', () => {
-  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspetor.md'), 'utf8');
+  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
   const ref = inspetor.slice(inspetor.indexOf('## Quando o briefing passa um `R.txt`'), inspetor.indexOf('## Proveni'));
   for (const t of ['=== referencia i de n: <entrada> ===', '`\\===`', '(imagem ou binario: abra com Read em "<caminho>")',
     '(maior que o teto do R.txt', '(URL:', '(NAO ACHADA', '`vsReferencia` e `lacunas` saem dos blocos que você leu']) {
@@ -811,7 +811,7 @@ test('D503 E9: no pacote com referencia, veredito sem vsReferencia nao e gravado
 test('D503 E9: invertida/vereditos fora de uma ronda com referencia (sem R.txt acima) nao e aceita', () => {
   const p = projetoComReferencia();
   // revisao/<id>/outra/invertida/vereditos casa o formato do caminho e tem A.txt e B.txt ao lado; "outra" nao e ronda
-  const inv = path.join(p.dir, '.claude', 'esquadro', 'revisao', 'src__a.js', 'outra', 'invertida');
+  const inv = path.join(p.dir, '.claude', 'sworn', 'revisao', 'src__a.js', 'outra', 'invertida');
   fs.mkdirSync(path.join(inv, 'vereditos'), { recursive: true });
   fs.writeFileSync(path.join(inv, 'A.txt'), 'b\n', 'utf8');
   fs.writeFileSync(path.join(inv, 'B.txt'), 'a\n', 'utf8');
@@ -826,7 +826,7 @@ test('D503 E9: invertida/vereditos fora de uma ronda com referencia (sem R.txt a
 // A.txt, B.txt e R.txt no <id> passava pela 2a passada de uma "ronda" que o apurar nunca le.
 test('082 T6 (p1-1): invertida/ fora de uma ronda numerada nao vira 2a passada, mesmo com A, B e R.txt acima', () => {
   const p = projetoComReferencia();
-  const base = path.join(p.dir, '.claude', 'esquadro', 'revisao', 'src__a.js');
+  const base = path.join(p.dir, '.claude', 'sworn', 'revisao', 'src__a.js');
   for (const n of ['A.txt', 'B.txt', 'R.txt']) fs.writeFileSync(path.join(base, n), 'x\n', 'utf8');
   const inv = path.join(base, 'invertida');
   fs.mkdirSync(path.join(inv, 'vereditos'), { recursive: true });

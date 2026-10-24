@@ -13,19 +13,19 @@ const AGORA = Date.parse('2026-10-18T12:00:00Z');
 const DIA = 24 * 60 * 60 * 1000;
 
 function temp(nome) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ordens-' + nome + '-'));
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ordens-' + nome + '-'));
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
   return dir;
 }
 const conversas = function (n) { return function () { return n; }; };
-const MARCA = path.join('.claude', 'esquadro', 'calibrar-ordem.json');
+const MARCA = path.join('.claude', 'sworn', 'calibrar-ordem.json');
 
 function ordemDoMock(n, padrao) {
   return [
-    'esquadro: ja ha ' + n + ' conversas salvas neste projeto e o limiar de troca de chat',
+    'sworn: ja ha ' + n + ' conversas salvas neste projeto e o limiar de troca de chat',
     'nunca foi calibrado (vale o padrao, ' + padrao + ' tokens).',
     'Faca no seu primeiro turno, depois de atender o pedido:',
-    '1. Rode /esquadro:calibrar (so mede; nao grava).',
+    '1. Rode /sworn:calibrate (so mede; nao grava).',
     '2. Mostre o limiar sugerido e pergunte pelo AskUserQuestion, em 3 opcoes:',
     '   gravar o sugerido (recomendada), manter o padrao, perguntar de novo em 30 dias.',
     'So grave com o sim.'
@@ -80,19 +80,19 @@ test('ordens #4: sai uma vez a cada 30 dias (a marca); marca ilegivel ou no futu
 // #7: o texto do mock, mais a linha de como gravar o "nunca" (o mock dizia so "fica gravado fora do projeto").
 function ordemDoInitMock(comando) {
   return [
-    'esquadro: este projeto ainda nao tem o esquadro configurado',
-    '(.claude/esquadro/projeto.json). Sem ele, os portoes de escopo e de',
+    'sworn: este projeto ainda nao tem o sworn configurado',
+    '(.claude/sworn/projeto.json). Sem ele, os portoes de escopo e de',
     'intocaveis ficam desligados.',
     'No seu primeiro turno, antes de editar qualquer arquivo, pergunte pelo',
-    'AskUserQuestion, em 3 opcoes: configurar agora com /esquadro:init',
+    'AskUserQuestion, em 3 opcoes: configurar agora com /sworn:init',
     '(recomendada; 6 perguntas), depois (pergunto na proxima sessao), nunca',
-    'neste projeto. Com "agora", rode o /esquadro:init na mesma resposta.',
+    'neste projeto. Com "agora", rode o /sworn:init na mesma resposta.',
     'Com "nunca", rode: ' + comando
   ].join('\n');
 }
 
 function semProjeto(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ordens-' + nome + '-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ordens-' + nome + '-'));
 }
 
 test('ordens #7: sem projeto.json -> o texto do mock, com o comando do "nunca"', () => {
@@ -122,15 +122,15 @@ test('ordens #7: calada com projeto carregado, com projeto.json presente e ilegi
   const o = { env: { CLAUDE_CONFIG_DIR: cfg }, comandoNunca: 'x' };
   try {
     assert.strictEqual(ordens.ordemDoInit(dir, {}, o), '');
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), '{torto');
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), '{torto');
     assert.strictEqual(ordens.ordemDoInit(dir, null, o), '', 'ilegivel tem aviso proprio');
     fs.rmSync(path.join(dir, '.claude'), { recursive: true, force: true });
     assert.notStrictEqual(ordens.ordemDoInit(dir, null, o), '', 'controle: sem nada, fala');
     assert.strictEqual(ordens.recusarInit(dir.toUpperCase(), { CLAUDE_CONFIG_DIR: cfg }), true);
     assert.strictEqual(ordens.ordemDoInit(dir, null, o), '', 'o "nunca" (sem diferenciar maiuscula) nao calou');
     assert.strictEqual(ordens.recusarInit(dir, { CLAUDE_CONFIG_DIR: cfg }), true, 'gravar de novo e inofensivo');
-    const lista = JSON.parse(fs.readFileSync(path.join(cfg, 'esquadro', ordens.ARQUIVO_INIT_RECUSADO), 'utf8')).raizes;
+    const lista = JSON.parse(fs.readFileSync(path.join(cfg, 'sworn', ordens.ARQUIVO_INIT_RECUSADO), 'utf8')).raizes;
     assert.strictEqual(lista.length, 1, 'duplicou: ' + JSON.stringify(lista));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(cfg, { recursive: true, force: true }); }
 });
@@ -139,8 +139,8 @@ test('ordens #7: lista de recusa ilegivel nao cala nem derruba', () => {
   const dir = semProjeto('init-i');
   const cfg = semProjeto('init-i-cfg');
   try {
-    fs.mkdirSync(path.join(cfg, 'esquadro'));
-    fs.writeFileSync(path.join(cfg, 'esquadro', ordens.ARQUIVO_INIT_RECUSADO), '{torto');
+    fs.mkdirSync(path.join(cfg, 'sworn'));
+    fs.writeFileSync(path.join(cfg, 'sworn', ordens.ARQUIVO_INIT_RECUSADO), '{torto');
     assert.notStrictEqual(ordens.ordemDoInit(dir, null, { env: { CLAUDE_CONFIG_DIR: cfg }, comandoNunca: 'x' }), '');
     assert.strictEqual(ordens.ordemDoInit('', null, { env: { CLAUDE_CONFIG_DIR: cfg }, comandoNunca: 'x' }), '');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(cfg, { recursive: true, force: true }); }
@@ -166,12 +166,12 @@ test('091 T6: dada conta uma vez por pendencia; cumprida so pela skill certa; re
   ordens.marcarDada(s, 'revisar'); // o commit negado de novo: a mesma ordem
   assert.deepStrictEqual(s.ordensPendentes, ['revisar']);
   assert.strictEqual(s.contadores.ordem_revisar_dada, 1);
-  ordens.marcarCumprida(s, 'esquadro:auditar');
+  ordens.marcarCumprida(s, 'sworn:audit');
   assert.strictEqual(s.contadores.ordem_revisar_cumprida, undefined, 'outra skill cumpriu');
-  ordens.marcarCumprida(s, 'esquadro:revisar');
+  ordens.marcarCumprida(s, 'sworn:review');
   assert.strictEqual(s.contadores.ordem_revisar_cumprida, 1);
   assert.deepStrictEqual(s.ordensPendentes, []);
-  ordens.marcarCumprida(s, 'esquadro:revisar');
+  ordens.marcarCumprida(s, 'sworn:review');
   assert.strictEqual(s.contadores.ordem_revisar_cumprida, 1, 'cumpriu sem ordem pendente');
   ordens.marcarDada(s, 'revisar');
   assert.strictEqual(s.contadores.ordem_revisar_dada, 2, 'ordem nova depois de cumprida nao contou');
@@ -187,9 +187,9 @@ test('091 T6: o manual cumpre com skill de "padrao" no nome; as outras pelo nome
   for (const t of ['manual', 'aprender', 'auditar', 'calibrar', 'init']) ordens.marcarDada(s, t);
   ordens.marcarCumprida(s, 'padrao-aaa');
   ordens.marcarCumprida(s, 'aprender');
-  ordens.marcarCumprida(s, 'esquadro:calibrar');
+  ordens.marcarCumprida(s, 'sworn:calibrate');
   ordens.marcarCumprida(s, 'outro:init');
-  ordens.marcarCumprida(s, 'esquadro:auditar-x');
+  ordens.marcarCumprida(s, 'sworn:auditar-x');
   assert.deepStrictEqual(s.ordensPendentes.slice().sort(), ['auditar', 'init']);
   assert.deepStrictEqual(s.contadores, { fecho_sem_evidencia: 2, ordem_manual_dada: 1, ordem_aprender_dada: 1,
     ordem_auditar_dada: 1, ordem_calibrar_dada: 1, ordem_init_dada: 1, ordem_manual_cumprida: 1,
@@ -198,7 +198,7 @@ test('091 T6: o manual cumpre com skill de "padrao" no nome; as outras pelo nome
 
 test('091 T6: estado torto nao lanca; tipo desconhecido nao conta', () => {
   for (const s of [null, undefined, 'x', 3]) {
-    assert.doesNotThrow(function () { ordens.marcarDada(s, 'revisar'); ordens.marcarCumprida(s, 'esquadro:revisar'); });
+    assert.doesNotThrow(function () { ordens.marcarDada(s, 'revisar'); ordens.marcarCumprida(s, 'sworn:review'); });
   }
   const s = { contadores: 'x', ordensPendentes: 'y' };
   ordens.marcarDada(s, 'revisar');
@@ -209,7 +209,7 @@ test('091 T6: estado torto nao lanca; tipo desconhecido nao conta', () => {
   assert.deepStrictEqual(s.contadores, { ordem_revisar_dada: 1 });
 });
 
-const NOTA = '  (-: o esquadro nao ve essa recusa; dada e nao cumprida foi ignorada ou recusada na conversa)';
+const NOTA = '  (-: o sworn nao ve essa recusa; dada e nao cumprida foi ignorada ou recusada na conversa)';
 
 test('091 T6: as linhas da auditoria - diferenca contra a foto anterior, os nunca disparados e a nota do "-"', () => {
   const antes = { ordem_aprender_dada: 1, ordem_aprender_cumprida: 1 };
@@ -243,10 +243,10 @@ test('091 T6: totaisDasOrdens le so as chaves de ordem do contadores.json; ausen
   const dir = temp('totais');
   try {
     assert.deepStrictEqual(ordens.totaisDasOrdens(dir), {});
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'contadores.json'),
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'),
       JSON.stringify({ ordem_aprender_dada: 3, ordem_x: 'a', fecho_sem_evidencia: 2, ordem_revisar_recusada: 1 }));
     assert.deepStrictEqual(ordens.totaisDasOrdens(dir), { ordem_aprender_dada: 3, ordem_revisar_recusada: 1 });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'contadores.json'), '[1,2]');
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'), '[1,2]');
     assert.deepStrictEqual(ordens.totaisDasOrdens(dir), {});
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

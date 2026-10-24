@@ -39,14 +39,14 @@ function ambiente(cwd, projeto) {
     temMarchas: !!(p.marchas && Object.keys(p.marchas).length > 0),
     temIntocaveis: Array.isArray(p.intocaveis) && p.intocaveis.length > 0,
     temPlataforma: !!(p.plataforma && p.plataforma.so),
-    temDesign: existe(path.join(cwd, '.claude', 'esquadro', 'design.json')),
+    temDesign: existe(path.join(cwd, '.claude', 'sworn', 'design.json')),
     temGit: existe(path.join(cwd, '.git')),
     escada: escada.length,
     degraus: degraus.length,
     temPastaDeAgentes: lidos.existe,
     agentes: lidos.agentes.length,
     catalogo: catalogoLib.ler(cwd),
-    prova: lerJson(path.join(cwd, '.claude', 'esquadro', 'apelidos-vivos.json'))
+    prova: lerJson(path.join(cwd, '.claude', 'sworn', 'apelidos-vivos.json'))
   };
 }
 
@@ -83,7 +83,7 @@ function portoes(cwd, projeto, a) {
   lista.push(portao('design', 'Token fora do design system', HOOK,
     a.temDesign,
     a.temDesign ? 'ha design.json neste projeto'
-                : 'modulo opcional: sem .claude/esquadro/design.json nada dispara'));
+                : 'modulo opcional: sem .claude/sworn/design.json nada dispara'));
 
   lista.push(portao('destrutivo', 'Comando destrutivo', HOOK,
     true, 'classifica o proprio comando; nao depende de configuracao'));
@@ -150,7 +150,7 @@ function relatorio(cwd, projeto) {
 /** O relatorio em texto. Declarar o que NAO da e o ponto, nao o rodape. */
 function texto(r) {
   // Plano 082, Tarefa 5 (mock S10): a 1a linha diz o que o relatorio responde.
-  const linhas = ['esquadro - cobertura neste ambiente: o que consigo verificar aqui, e o que nao.', ''];
+  const linhas = ['sworn - cobertura neste ambiente: o que consigo verificar aqui, e o que nao.', ''];
   linhas.push('Consigo verificar aqui (' + r.resumo.verificaveis + ' de ' + r.resumo.total + '):');
   for (const p of r.portoes) {
     if (p.verificavel) linhas.push('  [x] ' + p.titulo + ' - ' + p.porque);

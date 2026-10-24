@@ -5,8 +5,8 @@ const catalogo = require('./lib/catalogo.js');
 /**
  * A consulta ao catalogo de modelos pela linha de comando: se e hora de
  * consultar, o texto do modo sem rede, e o registro do desfecho. E o que o
- * /esquadro:init chama ao terminar, com o motivo `instalacao` - o gatilho 1 da
- * spec (decisao 36) -, e o que o /esquadro:auditar chama no Passo 1b.
+ * /sworn:init chama ao terminar, com o motivo `instalacao` - o gatilho 1 da
+ * spec (decisao 36) -, e o que o /sworn:audit chama no Passo 1b.
  *
  * Existe em vez de `node -e` por um motivo medido: o one-liner poe o caminho do
  * plugin DENTRO de uma string JavaScript, e no Windows esse caminho vem com barra
@@ -56,7 +56,7 @@ if (process.argv.indexOf('--registrar') !== -1) {
   // na conversa, com a fonte. O arquivo guarda quando, como terminou e de onde.
   const fontes = process.argv.slice(process.argv.indexOf('--registrar') + 2);
   const alvo = catalogo.gravar(cwd, catalogo.registrar(desfecho, [], fontes, Date.now()));
-  process.stdout.write('esquadro: consulta registrada (' + desfecho + ', ' + fontes.length +
+  process.stdout.write('sworn: consulta registrada (' + desfecho + ', ' + fontes.length +
     ' fonte(s)) em ' + alvo + '\n');
   process.exit(0);
 }

@@ -224,7 +224,7 @@ function valoresCrus(texto) {
   return achados;
 }
 
-// A entrevista do /esquadro:init coleta anti-referencia em PORTUGUES ("gradiente"), e
+// A entrevista do /sworn:init coleta anti-referencia em PORTUGUES ("gradiente"), e
 // CSS se escreve em INGLES ("linear-gradient"). O cognato so difere pela vogal final,
 // entao a busca cai para o radical. ALCANCE MEDIDO: 2 de 7 casos reais de CSS - so o par
 // gradiente/gradient. Termo sem cognato ("sombra" x "box-shadow") continua passando:
@@ -272,9 +272,9 @@ function conferir(texto, sistema, antes) {
 // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos - o que falta, o arquivo entre aspas, "Faca uma destas".
 function motivo(alvo, fora, sistema) {
   const linhas = [
-    'esquadro - valor fora do design system deste projeto.',
+    'sworn - valor fora do design system deste projeto.',
     '',
-    'Estes valores nao estao no sistema declarado (.claude/esquadro/design.json):',
+    'Estes valores nao estao no sistema declarado (.claude/sworn/design.json):',
     '  - ' + entreAspas(alvo)
   ];
   for (const f of fora.slice(0, 12)) {
@@ -846,23 +846,23 @@ function alvosDeEstiloNoShell(comando, projeto, opcoes) {
   return saida;
 }
 
-/** Mensagem de remedio: o que o esquadro confere e onde, e o que fazer. Nao ensina desvio. */
+/** Mensagem de remedio: o que o sworn confere e onde, e o que fazer. Nao ensina desvio. */
 function motivoShell(alvos) {
   // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos.
   const linhas = [
-    'esquadro - arquivo de estilo escrito por comando de shell fica sem a conferencia do design.',
+    'sworn - arquivo de estilo escrito por comando de shell fica sem a conferencia do design.',
     '',
     'Arquivo' + (alvos.length > 1 ? 's' : '') + ':'
   ];
   for (const a of alvos.slice(0, 12)) linhas.push('  - ' + entreAspas(a));
   if (alvos.length > 12) linhas.push('  - ... e mais ' + (alvos.length - 12));
   // D396 n. 14: o porque da negacao, sem ensinar desvio
-  linhas.push('Por que: o esquadro nao le o conteudo que um comando de shell vai gravar, entao nao confere os tokens');
+  linhas.push('Por que: o sworn nao le o conteudo que um comando de shell vai gravar, entao nao confere os tokens');
   linhas.push('do design.json antes de rodar. Com a ferramenta Write ou Edit, ele confere.');
   linhas.push('');
   linhas.push('Faca uma destas:');
   linhas.push('  1. escreva este arquivo com a ferramenta Write ou Edit;');
-  linhas.push('  2. se o comando nao grava estilo nenhum, diga ao usuario: e leitura errada do esquadro, para registrar.');
+  linhas.push('  2. se o comando nao grava estilo nenhum, diga ao usuario: e leitura errada do sworn, para registrar.');
   return linhas.join('\n');
 }
 

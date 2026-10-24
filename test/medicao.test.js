@@ -17,7 +17,7 @@ const RAIZ = path.join(__dirname, '..');
 const CLI = path.join(RAIZ, 'scripts', 'medir-qualidade.js');
 const MARCADOR = qualidade.BLOCO.split('\n')[0];
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro medicao-')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn medicao-')); }
 
 // ── apuracao: fixtures de mentira ────────────────────────────────────────
 
@@ -384,7 +384,7 @@ function stream(o) {
     texto: 'A suite passou; falta teste no modulo X.', skillSolta: false
   }, o || {});
   const L = [];
-  const abertura = '# esquadro - regras deste projeto\n\n1. regra de mentira\n' +
+  const abertura = '# sworn - regras deste projeto\n\n1. regra de mentira\n' +
     (p.bloco ? '\n' + qualidade.BLOCO : '');
   L.push({ type: 'system', subtype: 'init', session_id: 's1' });
   for (let i = 0; i < p.aberturas; i++) {
@@ -394,7 +394,7 @@ function stream(o) {
     L.push({ type: 'system', subtype: 'hook_response', hook_event: 'SessionStart', hook_name: 'SessionStart:startup',
       stdout: abertura, stderr: '', output: abertura, exit_code: p.saida, outcome: p.saida === 0 ? 'success' : 'error' });
   }
-  // o hook de OUTRO plugin, que nao e a abertura do esquadro
+  // o hook de OUTRO plugin, que nao e a abertura do sworn
   L.push({ type: 'system', subtype: 'hook_response', hook_event: 'SessionStart', hook_name: 'SessionStart:outro',
     stdout: 'contexto de outro plugin', stderr: '', output: 'contexto de outro plugin', exit_code: 0, outcome: 'success' });
   L.push({ type: 'system', subtype: 'hook_response', hook_event: 'UserPromptSubmit', hook_name: 'UserPromptSubmit:x',
@@ -477,7 +477,7 @@ test('medicao/lerExecucao: caveman que nao deu sucesso nao liga a condicao', () 
   assert.strictEqual(r.aplicou, false);
 });
 
-test('medicao/lerExecucao: sem a abertura do esquadro, ou com ela duas vezes -> nao aplicou', () => {
+test('medicao/lerExecucao: sem a abertura do sworn, ou com ela duas vezes -> nao aplicou', () => {
   const nenhuma = ler({ aberturas: 0 }, 'padrao');
   assert.strictEqual(nenhuma.aplicou, false, 'sem a abertura, a ausencia do bloco no padrao nao provaria nada');
   assert.ok(nenhuma.motivos.some((m) => /abertura/.test(m)), JSON.stringify(nenhuma.motivos));
@@ -609,10 +609,10 @@ const FAKE = [
   "const entrada = fs.readFileSync(0, 'utf8');",
   "if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ args: process.argv.slice(2), entrada: entrada, cwd: process.cwd() }) + '\\n');",
   "let projeto = {};",
-  "try { projeto = JSON.parse(fs.readFileSync('.claude/esquadro/projeto.json', 'utf8')); } catch (e) { projeto = {}; }",
+  "try { projeto = JSON.parse(fs.readFileSync('.claude/sworn/projeto.json', 'utf8')); } catch (e) { projeto = {}; }",
   "const caveman = entrada.indexOf('/caveman ') === 0;",
   "const bloco = projeto.qualidadeDeResposta !== false;",
-  "const abertura = '# esquadro - regras deste projeto\\n\\n1. regra\\n' + (bloco ? '\\n' + qualidade.BLOCO : '');",
+  "const abertura = '# sworn - regras deste projeto\\n\\n1. regra\\n' + (bloco ? '\\n' + qualidade.BLOCO : '');",
   "const out = [];",
   "out.push({ type: 'system', subtype: 'hook_response', hook_event: 'SessionStart', hook_name: 'SessionStart:startup', stdout: abertura, stderr: '', output: abertura, exit_code: 0, outcome: 'success' });",
   "const sid = 'sessao-' + process.pid + '-' + Date.now();",
@@ -646,7 +646,7 @@ function cli(args, o) {
 
 function achar(dir, nome) {
   // a unica pasta de rodada dentro de medicao-qr
-  const base = path.join(dir, '.claude', 'esquadro', 'medicao-qr');
+  const base = path.join(dir, '.claude', 'sworn', 'medicao-qr');
   const rodadas = fs.readdirSync(base);
   assert.strictEqual(rodadas.length, 1, 'esperava 1 rodada em ' + base + ': ' + rodadas);
   return path.join(base, rodadas[0]);
@@ -654,19 +654,19 @@ function achar(dir, nome) {
 
 test('cli: --gerar sem --modelo recusa com a forma de uso, sai diferente de 0 e nao roda o claude', () => {
   const a = ambienteFalso();
-  const r = cli(['--gerar', '--destino', path.join(a.dir, 'brinquedos')], { cwd: a.onde, env: { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
+  const r = cli(['--gerar', '--destino', path.join(a.dir, 'brinquedos')], { cwd: a.onde, env: { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
   assert.notStrictEqual(r.status, 0, r.stdout + r.stderr);
   assert.ok(/--modelo/.test(r.stdout + r.stderr), 'a recusa tem de mostrar a forma de uso: ' + r.stdout + r.stderr);
   assert.ok(!fs.existsSync(a.log), 'o claude rodou sem modelo');
   assert.ok(!fs.existsSync(path.join(a.dir, 'brinquedos')), 'criou pasta sem modelo');
-  const vazio = cli(['--gerar', '--modelo', '', '--destino', path.join(a.dir, 'brinquedos')], { cwd: a.onde, env: { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
+  const vazio = cli(['--gerar', '--modelo', '', '--destino', path.join(a.dir, 'brinquedos')], { cwd: a.onde, env: { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
   assert.notStrictEqual(vazio.status, 0, 'modelo vazio tambem recusa');
   assert.ok(!fs.existsSync(a.log));
 });
 
 test('cli: --gerar sem --destino recusa', () => {
   const a = ambienteFalso();
-  const r = cli(['--gerar', '--modelo', 'modelo-x'], { cwd: a.onde, env: { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
+  const r = cli(['--gerar', '--modelo', 'modelo-x'], { cwd: a.onde, env: { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
   assert.notStrictEqual(r.status, 0);
   assert.ok(/--destino/.test(r.stdout + r.stderr));
   assert.ok(!fs.existsSync(a.log));
@@ -682,7 +682,7 @@ test('cli: --gerar monta o brinquedo de cada condicao, chama o claude e grava ge
   const a = ambienteFalso();
   const destino = path.join(a.dir, 'brinquedos');
   const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino, '--prompt', 'ferramentas-1'],
-    { cwd: a.onde, env: { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
+    { cwd: a.onde, env: { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
 
   const rodada = achar(a.onde);
@@ -716,8 +716,8 @@ test('cli: --gerar monta o brinquedo de cada condicao, chama o claude e grava ge
   const brinq = (c) => path.join(destino, carimbo[0], 'ferramentas-1-' + c);
   ['padrao', 'caveman', 'recurso'].forEach((c) => {
     assert.ok(fs.existsSync(path.join(brinq(c), '.git')), c + ': sem git init');
-    assert.ok(fs.existsSync(path.join(brinq(c), '.claude', 'esquadro', 'regras.md')), c + ': sem regras.md');
-    const pj = JSON.parse(fs.readFileSync(path.join(brinq(c), '.claude', 'esquadro', 'projeto.json'), 'utf8'));
+    assert.ok(fs.existsSync(path.join(brinq(c), '.claude', 'sworn', 'regras.md')), c + ': sem regras.md');
+    const pj = JSON.parse(fs.readFileSync(path.join(brinq(c), '.claude', 'sworn', 'projeto.json'), 'utf8'));
     if (c === 'recurso') assert.ok(!('qualidadeDeResposta' in pj), 'o recurso nao pode gravar a chave');
     else assert.strictEqual(pj.qualidadeDeResposta, false, c);
     PROMPTS.prompts.filter((p) => p.id === 'ferramentas-1').forEach((p) => {
@@ -748,12 +748,12 @@ test('cli: --gerar monta o brinquedo de cada condicao, chama o claude e grava ge
 test('cli: --gerar nunca apaga nem reaproveita pasta - destino com a pasta da execucao ja existente recusa', () => {
   const a = ambienteFalso();
   const destino = path.join(a.dir, 'brinquedos');
-  const ok = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino, '--prompt', 'explicar-1'], { cwd: a.onde, env: { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
+  const ok = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino, '--prompt', 'explicar-1'], { cwd: a.onde, env: { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
   assert.strictEqual(ok.status, 0, ok.stdout + ok.stderr);
   const carimbo = fs.readdirSync(destino)[0];
   fs.writeFileSync(path.join(destino, carimbo, 'explicar-1-padrao', 'meu.txt'), 'nao apague', 'utf8');
   // outra rodada, outro carimbo: a pasta antiga segue intacta
-  const outra = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino, '--prompt', 'explicar-1'], { cwd: path.join(a.dir, 'outro lugar'), env: { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
+  const outra = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino, '--prompt', 'explicar-1'], { cwd: path.join(a.dir, 'outro lugar'), env: { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
   assert.strictEqual(outra.status, 0, outra.stdout + outra.stderr);
   assert.strictEqual(fs.readFileSync(path.join(destino, carimbo, 'explicar-1-padrao', 'meu.txt'), 'utf8'), 'nao apague');
 });
@@ -762,7 +762,7 @@ test('cli: --gerar para na primeira execucao que falhou, e grava o que ja havia'
   const a = ambienteFalso();
   const destino = path.join(a.dir, 'brinquedos');
   const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino, '--prompt', 'explicar-1'],
-    { cwd: a.onde, env: { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config, FAKE_SEM_RESULT: '1' } });
+    { cwd: a.onde, env: { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config, FAKE_SEM_RESULT: '1' } });
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
   const ger = JSON.parse(fs.readFileSync(path.join(achar(a.onde), 'geracoes.json'), 'utf8'));
   assert.strictEqual(ger.geracoes.length, 1, 'continuou gastando depois da falha');
@@ -785,7 +785,7 @@ test('cli: --gerar que nao grava a evidencia de uma execucao paga guarda a gerac
       '  if (String(arguments[' + arg + "]).endsWith('" + sufixo + "')) { const e = new Error('disco cheio de mentira'); e.code = 'ENOSPC'; throw e; }",
       '  return original.apply(this, arguments);',
       '};'
-    ]), { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config });
+    ]), { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config });
     const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', path.join(a.dir, 'brinquedos'), '--prompt', 'explicar-1'],
       { cwd: a.onde, env: env });
     assert.strictEqual(r.status, 1, nome + ': ' + r.stdout + r.stderr);
@@ -812,7 +812,7 @@ test('cli: --gerar cujo geracoes.json nao grava depois da execucao paga poe a ge
     "  if (path.basename(String(alvo)) === 'geracoes.json' && ++n === 2) { const e = new Error('disco cheio de mentira'); e.code = 'ENOSPC'; throw e; }",
     '  return original.apply(this, arguments);',
     '};'
-  ]), { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config });
+  ]), { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config });
   const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', path.join(a.dir, 'brinquedos'), '--prompt', 'explicar-1'],
     { cwd: a.onde, env: env });
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
@@ -841,7 +841,7 @@ test('cli: --gerar cujo claude foi parado pelo limite de tempo ou de saida nao d
       "  r.error = e; r.status = null;" + (code === 'ENOENT' ? ' r.pid = 0;' : ''),
       '  return r;',
       '};'
-    ]), { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config });
+    ]), { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config });
     const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', path.join(a.dir, 'brinquedos'), '--prompt', 'explicar-1'],
       { cwd: a.onde, env: env });
     assert.strictEqual(r.status, 1, nome + ': ' + r.stdout + r.stderr);
@@ -852,15 +852,15 @@ test('cli: --gerar cujo claude foi parado pelo limite de tempo ou de saida nao d
   });
 });
 
-test('cli: --gerar com ESQUADRO_CLAUDE relativo o acha a partir de onde roda, e nao do brinquedo', () => {
+test('cli: --gerar com SWORN_CLAUDE relativo o acha a partir de onde roda, e nao do brinquedo', () => {
   const a = ambienteFalso();
   const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', path.join(a.dir, 'brinquedos'), '--prompt', 'explicar-1'],
-    { cwd: a.dir, env: { ESQUADRO_CLAUDE: path.basename(a.fake), FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
+    { cwd: a.dir, env: { SWORN_CLAUDE: path.basename(a.fake), FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   assert.strictEqual(fs.readFileSync(a.log, 'utf8').trim().split('\n').length, 3);
 });
 
-test('cli: --gerar com ESQUADRO_CLAUDE que nao serve diz a variavel e o caminho, nao o PATH', () => {
+test('cli: --gerar com SWORN_CLAUDE que nao serve diz a variavel e o caminho, nao o PATH', () => {
   const a = ambienteFalso();
   const mudo = path.join(a.dir, 'mudo.cmd');
   fs.writeFileSync(mudo, '@echo off', 'utf8');
@@ -870,9 +870,9 @@ test('cli: --gerar com ESQUADRO_CLAUDE que nao serve diz a variavel e o caminho,
   ];
   casos.forEach(([nome, valor, motivo]) => {
     const destino = path.join(a.dir, 'brinquedos');
-    const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino], { cwd: a.onde, env: { ESQUADRO_CLAUDE: valor } });
+    const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino], { cwd: a.onde, env: { SWORN_CLAUDE: valor } });
     assert.notStrictEqual(r.status, 0, nome);
-    assert.ok(r.stderr.indexOf('ESQUADRO_CLAUDE') !== -1 && r.stderr.indexOf(valor) !== -1, nome + ': nao diz a variavel e o caminho: ' + r.stderr);
+    assert.ok(r.stderr.indexOf('SWORN_CLAUDE') !== -1 && r.stderr.indexOf(valor) !== -1, nome + ': nao diz a variavel e o caminho: ' + r.stderr);
     assert.ok(motivo.test(r.stderr), nome + ': ' + r.stderr);
     assert.ok(!/no PATH/.test(r.stderr), nome + ': fala do PATH, que nao foi olhado: ' + r.stderr);
     assert.ok(!fs.existsSync(destino), nome);
@@ -883,7 +883,7 @@ test('cli: --gerar com claude inexistente falha antes de criar qualquer pasta', 
   const a = ambienteFalso();
   const destino = path.join(a.dir, 'brinquedos');
   const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino],
-    { cwd: a.onde, env: { ESQUADRO_CLAUDE: path.join(a.dir, 'nao existe.js') } });
+    { cwd: a.onde, env: { SWORN_CLAUDE: path.join(a.dir, 'nao existe.js') } });
   assert.notStrictEqual(r.status, 0);
   assert.ok(/claude/.test(r.stdout + r.stderr));
   assert.ok(!fs.existsSync(destino));
@@ -892,7 +892,7 @@ test('cli: --gerar com claude inexistente falha antes de criar qualquer pasta', 
 test('cli: --gerar com prompt que nao existe recusa', () => {
   const a = ambienteFalso();
   const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', path.join(a.dir, 'b'), '--prompt', 'nao-existe'],
-    { cwd: a.onde, env: { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
+    { cwd: a.onde, env: { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config } });
   assert.notStrictEqual(r.status, 0);
   assert.ok(!fs.existsSync(a.log));
 });
@@ -921,7 +921,7 @@ test('cli: --gerar confere os prompts antes de rodar o claude ou criar pasta - i
     const destino = path.join(a.dir, 'brinquedos');
     fs.mkdirSync(a.onde, { recursive: true });
     const r = spawnSync(process.execPath, [path.join(copia, 'scripts', 'medir-qualidade.js'), '--gerar', '--modelo', 'modelo-x', '--destino', destino],
-      { cwd: a.onde, encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config }), timeout: 120000 });
+      { cwd: a.onde, encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config }), timeout: 120000 });
     assert.notStrictEqual(r.status, 0, nome + ': gerou');
     assert.ok(/prompt/.test(r.stderr), nome + ': a recusa nao diz que o problema e o prompt: ' + r.stderr);
     assert.ok(!fs.existsSync(a.log), nome + ': o claude rodou');
@@ -947,7 +947,7 @@ test('cli: --gerar monta todos os brinquedos antes da 1a execucao - arquivo do p
     fs.writeFileSync(arquivo, JSON.stringify(dados, null, 2), 'utf8');
     fs.mkdirSync(a.onde, { recursive: true });
     const r = spawnSync(process.execPath, [path.join(copia, 'scripts', 'medir-qualidade.js'), '--gerar', '--modelo', 'modelo-x', '--destino', path.join(a.dir, 'brinquedos')],
-      { cwd: a.onde, encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config }), timeout: 120000 });
+      { cwd: a.onde, encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config }), timeout: 120000 });
     assert.notStrictEqual(r.status, 0, nome + ': gerou');
     assert.ok(!fs.existsSync(a.log), nome + ': o claude rodou antes do brinquedo que falha');
     assert.ok(/prompt 2/.test(r.stderr), nome + ': a recusa nao diz qual prompt: ' + r.stderr);
@@ -1119,7 +1119,7 @@ test('cli: --pares recusa prompt cujo id nao serve de nome de pasta, id repetido
 });
 
 test('cli: --pares que falha ao gravar desfaz pares/ e mapa.json, e a retentativa monta', () => {
-  const dirFalha = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-falha-'));
+  const dirFalha = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-falha-'));
   const quando = [
     ['a 3a gravacao dentro de pares/', 'writeFileSync', "partes.indexOf('pares') !== -1 && ++n === 3"],
     ['a gravacao do mapa.json', 'writeFileSync', "path.basename(alvo) === 'mapa.json'"],
@@ -1155,7 +1155,7 @@ test('cli: --pares que falha ao gravar desfaz pares/ e mapa.json, e a retentativ
 
 /** Um --require que troca funcoes do fs no processo do CLI; `linhas` vem depois de fs e path. */
 function preloadDeFalha(linhas) {
-  const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-falha-')), 'falha.js');
+  const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-falha-')), 'falha.js');
   fs.writeFileSync(arquivo, ["const fs = require('fs');", "const path = require('path');"].concat(linhas).join('\n') + '\n', 'utf8');
   // NODE_OPTIONS le a barra invertida como escape dentro das aspas: o caminho vai com barra normal
   return { NODE_OPTIONS: '--require "' + arquivo.split(path.sep).join('/') + '"' };
@@ -1443,17 +1443,17 @@ test('cli: --veredito de rodada invalida diz INVALIDO e o motivo', () => {
 
 const { resolverClaude, montarBrinquedo, acharTranscricao } = require('../scripts/medir-qualidade.js');
 
-test('resolverClaude: ESQUADRO_CLAUDE manda; .js roda pelo node, o resto direto', () => {
+test('resolverClaude: SWORN_CLAUDE manda; .js roda pelo node, o resto direto', () => {
   const a = ambienteFalso();
-  const js = resolverClaude({ ESQUADRO_CLAUDE: a.fake }, 'win32');
+  const js = resolverClaude({ SWORN_CLAUDE: a.fake }, 'win32');
   assert.strictEqual(js.exe, process.execPath);
   assert.deepStrictEqual(js.prefixo, [a.fake]);
   const bin = path.join(a.dir, 'claude bin');
   fs.writeFileSync(bin, 'x');
-  const direto = resolverClaude({ ESQUADRO_CLAUDE: bin }, 'linux');
+  const direto = resolverClaude({ SWORN_CLAUDE: bin }, 'linux');
   assert.strictEqual(direto.exe, bin);
   assert.deepStrictEqual(direto.prefixo, []);
-  assert.strictEqual(resolverClaude({ ESQUADRO_CLAUDE: path.join(a.dir, 'nao existe') }, 'linux'), null);
+  assert.strictEqual(resolverClaude({ SWORN_CLAUDE: path.join(a.dir, 'nao existe') }, 'linux'), null);
 });
 
 test('resolverClaude: no Windows o atalho .cmd do npm leva ao .exe de verdade, com espaco no caminho', () => {
@@ -1626,8 +1626,8 @@ test('brinquedo: nasce commitado - git status vazio, sem arquivo de outra frente
   assert.strictEqual(git(alvo, ['rev-list', '--count', 'HEAD']).trim(), '1');
   const rastreados = git(alvo, ['ls-files']).split('\n').filter(Boolean).sort();
   assert.ok(rastreados.indexOf('src/preco.js') !== -1, rastreados.join(','));
-  assert.ok(rastreados.indexOf('.claude/esquadro/projeto.json') !== -1, rastreados.join(','));
-  assert.ok(rastreados.indexOf('.claude/esquadro/regras.md') !== -1);
+  assert.ok(rastreados.indexOf('.claude/sworn/projeto.json') !== -1, rastreados.join(','));
+  assert.ok(rastreados.indexOf('.claude/sworn/regras.md') !== -1);
 });
 
 test('brinquedo: o commit nao depende da identidade do git do usuario nem de assinatura', () => {
@@ -1638,14 +1638,14 @@ test('brinquedo: o commit nao depende da identidade do git do usuario nem de ass
   assert.strictEqual(git(alvo, ['status', '--porcelain']), '');
 });
 
-// Ensaio real: sem escopo declarado o portao de escopo do proprio esquadro barra o Edit, e o claude
+// Ensaio real: sem escopo declarado o portao de escopo do proprio sworn barra o Edit, e o claude
 // nao deixa o modelo escrever o escopo.md no modo print - nenhuma condicao fazia a tarefa. E o git
 // do modelo, sem caminho longo, falhava ("Filename too long") e gastava tokens so numa delas.
 test('brinquedo: nasce com escopo declarado para src/ e com caminho longo ligado no git', () => {
   const escopo = require('../scripts/lib/escopo.js');
   const alvo = path.join(pasta(), 'brinquedo');
   montarBrinquedo(alvo, PROMPTS.prompts.filter((p) => p.id === 'ferramentas-1')[0], 'caveman');
-  const e = escopo.parse(fs.readFileSync(path.join(alvo, '.claude', 'esquadro', 'escopo.md'), 'utf8'));
+  const e = escopo.parse(fs.readFileSync(path.join(alvo, '.claude', 'sworn', 'escopo.md'), 'utf8'));
   assert.ok(e.objetivo, 'escopo sem objetivo');
   assert.deepStrictEqual(e.dentro, ['src/**']);
   assert.strictEqual(git(alvo, ['config', '--local', 'core.longpaths']).trim(), 'true');
@@ -1655,7 +1655,7 @@ test('brinquedo: nasce com escopo declarado para src/ e com caminho longo ligado
 test('cli: --gerar sem transcricao da sessao para na condicao caveman e diz o motivo', () => {
   const a = ambienteFalso();
   const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', path.join(a.dir, 'brinquedos'), '--prompt', 'explicar-1'],
-    { cwd: a.onde, env: { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config, FAKE_SEM_TRANSCRICAO: '1' } });
+    { cwd: a.onde, env: { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config, FAKE_SEM_TRANSCRICAO: '1' } });
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
   const ger = JSON.parse(fs.readFileSync(path.join(achar(a.onde), 'geracoes.json'), 'utf8'));
   assert.deepStrictEqual(ger.geracoes.map((g) => g.condicao), ['padrao', 'caveman']);
@@ -1776,14 +1776,14 @@ test('T4/F7: os abridores novos e a aspa sobrando nao custam tempo quadratico', 
 /** O claude de mentira com um --require que mexe no CLI; `linhas` vem depois de fs e path. */
 function geraComPreload(linhas) {
   const a = ambienteFalso();
-  const env = Object.assign(preloadDeFalha(linhas), { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config });
+  const env = Object.assign(preloadDeFalha(linhas), { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config });
   const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', path.join(a.dir, 'brinquedos'), '--prompt', 'explicar-1'], { cwd: a.onde, env: env });
   return { a: a, r: r, ger: () => JSON.parse(fs.readFileSync(path.join(achar(a.onde), 'geracoes.json'), 'utf8')) };
 }
 
 test('T4/F4-01: --prompt sem valor recusa dizendo isso; prompt que nao existe segue com a mensagem de antes', () => {
   const a = ambienteFalso();
-  const env = { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config };
+  const env = { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config };
   const destino = path.join(a.dir, 'brinquedos');
   const casos = [
     ['ultimo argumento', ['--gerar', '--modelo', 'modelo-x', '--destino', destino, '--prompt']],
@@ -1801,12 +1801,12 @@ test('T4/F4-01: --prompt sem valor recusa dizendo isso; prompt que nao existe se
   assert.ok(/--prompt "nao-existe" nao esta em modelos\/qualidade-prompts\.json/.test(outro.stderr), outro.stderr);
 });
 
-test('T4/F4-02: arquivo de prompt que cai em .claude/esquadro/ ou .git/ do brinquedo recusa antes de rodar o claude', () => {
+test('T4/F4-02: arquivo de prompt que cai em .claude/sworn/ ou .git/ do brinquedo recusa antes de rodar o claude', () => {
   const caixa = process.platform === 'win32';
-  const ruins = ['.claude/esquadro/projeto.json', '.claude/esquadro/escopo.md', '.git/config', './.git/hooks/pre-commit', '.claude/esquadro'];
-  if (caixa) ruins.push('.GIT/config', '.Claude/Esquadro/regras.md', '.claude\\esquadro\\regras.md', 'src\\..\\.git\\HEAD');
+  const ruins = ['.claude/sworn/projeto.json', '.claude/sworn/escopo.md', '.git/config', './.git/hooks/pre-commit', '.claude/sworn'];
+  if (caixa) ruins.push('.GIT/config', '.Claude/Sworn/regras.md', '.claude\\sworn\\regras.md', 'src\\..\\.git\\HEAD');
   else ruins.push('src/../.git/HEAD');
-  const bons = ['.claude/outra.md', 'src/.git-nao.txt', '.gitignore', '.claude/esquadro-nao/x.md'];
+  const bons = ['.claude/outra.md', 'src/.git-nao.txt', '.gitignore', '.claude/sworn-nao/x.md'];
   const rodar = (rel) => {
     const a = ambienteFalso();
     const copia = path.join(a.dir, 'plugin');
@@ -1818,13 +1818,13 @@ test('T4/F4-02: arquivo de prompt que cai em .claude/esquadro/ ou .git/ do brinq
     fs.mkdirSync(a.onde, { recursive: true });
     const r = spawnSync(process.execPath, [path.join(copia, 'scripts', 'medir-qualidade.js'), '--gerar', '--modelo', 'modelo-x',
       '--destino', path.join(a.dir, 'brinquedos'), '--prompt', dados.prompts[0].id],
-    { cwd: a.onde, encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config }), timeout: 120000 });
+    { cwd: a.onde, encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, CLAUDE_CONFIG_DIR: a.config }), timeout: 120000 });
     return { r: r, a: a };
   };
   ruins.forEach((rel) => {
     const { r, a } = rodar(rel);
     assert.notStrictEqual(r.status, 0, rel + ': gerou');
-    assert.ok(/prompt 2/.test(r.stderr) && /cai em \.claude\/esquadro\/ \(ou \.git\/\) do brinquedo, que a medicao grava/.test(r.stderr), rel + ': ' + r.stderr);
+    assert.ok(/prompt 2/.test(r.stderr) && /cai em \.claude\/sworn\/ \(ou \.git\/\) do brinquedo, que a medicao grava/.test(r.stderr), rel + ': ' + r.stderr);
     assert.ok(!fs.existsSync(a.log), rel + ': o claude rodou');
   });
   bons.forEach((rel) => {
@@ -1894,18 +1894,18 @@ test('T4/F4-06: claude que chegou a rodar e foi parado nao e "nao rodou"; o que 
   });
 });
 
-test('T4/F4-07: ESQUADRO_CLAUDE entre aspas ganha a dica de tirar as aspas, e nao e consertado sozinho', () => {
+test('T4/F4-07: SWORN_CLAUDE entre aspas ganha a dica de tirar as aspas, e nao e consertado sozinho', () => {
   const a = ambienteFalso();
   [['aspas duplas', '"' + a.fake + '"'], ['aspas simples', "'" + a.fake + "'"]].forEach(([nome, valor]) => {
     const destino = path.join(a.dir, 'brinquedos');
-    const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino], { cwd: a.onde, env: { ESQUADRO_CLAUDE: valor, FAKE_LOG: a.log } });
+    const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino], { cwd: a.onde, env: { SWORN_CLAUDE: valor, FAKE_LOG: a.log } });
     assert.notStrictEqual(r.status, 0, nome + ': tirou as aspas sozinho');
-    assert.ok(/ESQUADRO_CLAUDE/.test(r.stderr) && /tire as aspas do valor/.test(r.stderr), nome + ': ' + r.stderr);
+    assert.ok(/SWORN_CLAUDE/.test(r.stderr) && /tire as aspas do valor/.test(r.stderr), nome + ': ' + r.stderr);
     assert.ok(!fs.existsSync(a.log) && !fs.existsSync(destino), nome);
   });
   // controle: valor sem aspas que nao existe nao leva a dica
   const sem = cli(['--gerar', '--modelo', 'modelo-x', '--destino', path.join(a.dir, 'brinquedos')],
-    { cwd: a.onde, env: { ESQUADRO_CLAUDE: path.join(a.dir, 'sumido.js') } });
+    { cwd: a.onde, env: { SWORN_CLAUDE: path.join(a.dir, 'sumido.js') } });
   assert.notStrictEqual(sem.status, 0);
   assert.ok(!/aspas/.test(sem.stderr), sem.stderr);
 });
@@ -1992,5 +1992,5 @@ test('T10-7/4: bloco na condicao que nao quer bloco aponta o projeto.json e a ch
   assert.ok(m, 'sem o motivo do bloco');
   assert.ok(m.indexOf('padrao') !== -1, m);
   assert.ok(m.indexOf('"qualidadeDeResposta": false') !== -1, 'falta a chave que desliga: ' + m);
-  assert.ok(m.indexOf('.claude/esquadro/projeto.json') !== -1, 'falta o arquivo: ' + m);
+  assert.ok(m.indexOf('.claude/sworn/projeto.json') !== -1, 'falta o arquivo: ' + m);
 });

@@ -1,9 +1,9 @@
 ---
-name: calibrar
+name: calibrate
 description: Mede, nas conversas do proprio projeto, a partir de quantos tokens de contexto trocar de chat ainda compensa, e sugere o limiar de troca. So grava no projeto.json com o sim explicito do dono. Use quando o dono perguntar se o limiar de troca de chat serve para este projeto, ou depois de algumas semanas de uso.
 ---
 
-# `/esquadro:calibrar` — o limiar de troca medido no seu projeto
+# `/sworn:calibrate` — o limiar de troca medido no seu projeto
 
 O aviso de troca de chat por tamanho sai a 175 mil tokens (o padrão). Esse número foi medido nas conversas de
 um projeto só (as sessões do autor do plugin). Esta skill mede o **seu**: lê as transcrições que o Claude Code guarda
@@ -23,7 +23,7 @@ do Claude Code. Se não achar, sai com `erro` e pede o caminho: a pasta é a que
 ele estiver definido), com o caminho do projeto no nome; diga isso ao dono, pergunte qual é e rode de
 novo com `--pasta "<caminho>"`. Se vier `erro` outra vez, ou uma saída que não seja JSON, mostre ao
 dono, diga que a calibração não roda sem as transcrições deste projeto e que ele pode conferir o caminho
-e chamar `/esquadro:calibrar` de novo; e pare. Não leia nem abra os `.jsonl` você mesmo: eles podem ter muitos megabytes.
+e chamar `/sworn:calibrate` de novo; e pare. Não leia nem abra os `.jsonl` você mesmo: eles podem ter muitos megabytes.
 
 ## Passo 2 — apresentar, nesta ordem
 
@@ -60,7 +60,7 @@ recusar o número, mostre o `erro` ao dono (ele diz a faixa aceita) e peça outr
 de novo, diga a faixa, diga que o limiar atual fica, e pare. Se o comando falhar por
 outro motivo (sem `projeto.json`, JSON inválido) ou a saída não for JSON, mostre o `erro` e o que ele
 manda corrigir, e pare. **Nunca pelo `Write`:** o portão de escopo (a
-trava 4) nega gravar em `.claude/esquadro/projeto.json` sem escopo declarado, e editar JSON à mão é o
+trava 4) nega gravar em `.claude/sworn/projeto.json` sem escopo declarado, e editar JSON à mão é o
 jeito frágil.
 
 ## O que esta medição NÃO faz

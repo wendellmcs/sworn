@@ -1,5 +1,5 @@
 'use strict';
-// D612/D613/D615: toda peca do esquadro conversa com as outras, na hora certa. Duas partes:
+// D612/D613/D615: toda peca do sworn conversa com as outras, na hora certa. Duas partes:
 // (1) a regra geral (D613, vale para as adicoes futuras): skill, agente e script de entrada que nenhuma OUTRA peca
 //     chama nem cita e peca solta - reprova. Citacao no README, no CHANGELOG, em docs/ ou em test/ nao conta (senao
 //     tudo passaria por estar no README). Ferramenta do mantenedor, que roda a mao, vai em AUTONOMAS com o motivo.
@@ -15,6 +15,7 @@ const RAIZ = path.join(__dirname, '..');
 // Scripts de entrada que rodam a mao, sem chamador: o motivo e obrigatorio (peca nova sem motivo reprova).
 const AUTONOMAS = {
   'experimento.js': 'roda a mao (README, tabela do fim): monta e julga a tabela de obrigacoes do manual do usuario',
+  'medir-travas.js': 'roda a mao (README, tabela do fim): a medicao paga de antes/depois das travas, com pre-registro',
   'plataforma.js': 'roda a mao (README): diz em que sistemas cada trecho dependente de plataforma foi exercitado',
   'provar-apelidos.js': 'roda a mao (README): sonda se os apelidos dos agentes do plugin carregam'
 };
@@ -74,7 +75,7 @@ test('orquestracao: toda skill e chamada por outra peca do plugin (fora README, 
   assert.ok(skills.length >= 10);
   const soltas = skills.filter(function (n) {
     const dela = function (rel) { return rel.indexOf(path.join('skills', n) + path.sep) === 0; };
-    return citantes('esquadro:' + n, dela).length === 0;
+    return citantes('sworn:' + n, dela).length === 0;
   });
   assert.deepStrictEqual(soltas, [], 'skill sem chamador: ligue-a na peca que precisa dela (D613)');
 });
@@ -92,7 +93,7 @@ test('orquestracao: todo agente e chamado por outra peca do plugin', () => {
   for (const a of fs.readdirSync(path.join(RAIZ, 'agents'))) {
     const nome = a.replace(/\.md$/, '');
     const dele = function (rel) { return rel === path.join('agents', a); };
-    assert.ok(citantes('esquadro:' + nome, dele).length > 0, 'agente sem chamador: ' + nome);
+    assert.ok(citantes('sworn:' + nome, dele).length > 0, 'agente sem chamador: ' + nome);
   }
 });
 
@@ -116,49 +117,49 @@ test('orquestracao: todo script de entrada roda por gancho, por outra peca ou es
 
 // So o manual: o portao-fecho.js so cobra quando a referencia JA existe, e a mensagem dele e a cena S10 do mock
 // aprovado (D529) - mudar pede mock novo, sem ganho no caso "falta referencia".
-test('ligacao L2: o manual manda rodar o /esquadro:referencia quando a AAA nao tem referencia', () => {
-  const s = ler('skills/padrao/SKILL.md');
+test('ligacao L2: o manual manda rodar o /sworn:reference quando a AAA nao tem referencia', () => {
+  const s = ler('skills/playbook/SKILL.md');
   const i = s.indexOf('**A referência de topo, nomeada antes de começar.**');
   assert.ok(i !== -1, 'o paragrafo da referencia de topo');
-  assert.ok(s.slice(i, i + 1600).includes('/esquadro:referencia'), 'no paragrafo da referencia de topo');
+  assert.ok(s.slice(i, i + 1600).includes('/sworn:reference'), 'no paragrafo da referencia de topo');
 });
 
-test('ligacao L3 e L5: o candidato escolhido no radar e estudado pelo /esquadro:referencia e entra com atalho: e a lente enxuto', () => {
+test('ligacao L3 e L5: o candidato escolhido no radar e estudado pelo /sworn:reference e entra com atalho: e a lente enxuto', () => {
   const s = secao(ler('skills/radar/SKILL.md'), 'Passo 6');
-  assert.ok(s.includes('/esquadro:referencia'), 'o estudo do candidato escolhido');
+  assert.ok(s.includes('/sworn:reference'), 'o estudo do candidato escolhido');
   assert.ok(s.includes('atalho:'), 'o formato do atalho deliberado (D554)');
-  assert.match(s, /enxuto/, 'a lente enxuto do /esquadro:revisar');
+  assert.match(s, /enxuto/, 'a lente enxuto do /sworn:review');
 });
 
 test('ligacao L4 e L8: a referencia le o que o radar ja estudou e le os produtos em paralelo', () => {
-  const s = ler('skills/referencia/SKILL.md');
-  assert.ok(s.includes('.claude/esquadro/radar/estudados.md'), 'o ja estudado do radar');
-  assert.ok(s.includes('/esquadro:paralelo') && s.includes('esquadro:leitor'), 'a leitura em paralelo');
+  const s = ler('skills/reference/SKILL.md');
+  assert.ok(s.includes('.claude/sworn/radar/estudados.md'), 'o ja estudado do radar');
+  assert.ok(s.includes('/sworn:parallel') && s.includes('sworn:reader'), 'a leitura em paralelo');
 });
 
 test('ligacao L6: o manual chama o radar, os atalhos e o calibrar nos momentos deles', () => {
-  const s = ler('skills/padrao/SKILL.md');
-  for (const c of ['/esquadro:radar', '/esquadro:atalhos', '/esquadro:calibrar']) assert.ok(s.includes(c), c);
+  const s = ler('skills/playbook/SKILL.md');
+  for (const c of ['/sworn:radar', '/sworn:shortcuts', '/sworn:calibrate']) assert.ok(s.includes(c), c);
 });
 
 test('ligacao L7: o init fecha mostrando os proximos comandos', () => {
   const s = secao(ler('skills/init/SKILL.md'), 'Passo 8');
-  for (const c of ['/esquadro:referencia', '/esquadro:radar', '/esquadro:atalhos', '/esquadro:auditar', '/esquadro:calibrar']) {
+  for (const c of ['/sworn:reference', '/sworn:radar', '/sworn:shortcuts', '/sworn:audit', '/sworn:calibrate']) {
     assert.ok(s.includes(c), c);
   }
 });
 
 test('ligacao L11: o handoff leva os estudos em andamento (radar e referencia)', () => {
   const s = ler('skills/handoff/SKILL.md');
-  assert.ok(s.includes('.claude/esquadro/radar/'), 'a ficha do radar');
-  assert.ok(s.includes('.claude/esquadro/referencias/'), 'a ficha de referencia');
+  assert.ok(s.includes('.claude/sworn/radar/'), 'a ficha do radar');
+  assert.ok(s.includes('.claude/sworn/referencias/'), 'a ficha de referencia');
 });
 
-test('ligacao L10: o /esquadro:auditar mostra a disputa das skills do projeto com as do plugin', () => {
-  assert.ok(ler('skills/auditar/SKILL.md').includes('`doPlugin`'), 'a skill le a chave que o script devolve');
+test('ligacao L10: o /sworn:audit mostra a disputa das skills do projeto com as do plugin', () => {
+  assert.ok(ler('skills/audit/SKILL.md').includes('`doPlugin`'), 'a skill le a chave que o script devolve');
   assert.ok(ler('scripts/lib/auditoria.js').includes('doPlugin'));
 });
 
-test('ligacao L12: o revisar chama o /esquadro:atalhos', () => {
-  assert.ok(ler('skills/revisar/SKILL.md').includes('/esquadro:atalhos'));
+test('ligacao L12: o revisar chama o /sworn:shortcuts', () => {
+  assert.ok(ler('skills/review/SKILL.md').includes('/sworn:shortcuts'));
 });

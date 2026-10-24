@@ -14,19 +14,19 @@ function rodar(args, cwd) {
 }
 
 function projeto() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-aprende-'));
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), '# Regras\n\n- ao editar -> rodar git status antes\n', 'utf8');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-aprende-'));
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'regras.md'), '# Regras\n\n- ao editar -> rodar git status antes\n', 'utf8');
   return dir;
 }
 
 test('propor: sem --gravar, NAO escreve nada (D11)', () => {
   const dir = projeto();
   try {
-    const antes = fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), 'utf8');
+    const antes = fs.readFileSync(path.join(dir, '.claude', 'sworn', 'regras.md'), 'utf8');
     const r = rodar(['--gatilho', 'ao fechar tarefa', '--acao', 'colar a saida da rodada'], dir);
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
-    assert.strictEqual(fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), 'utf8'), antes);
+    assert.strictEqual(fs.readFileSync(path.join(dir, '.claude', 'sworn', 'regras.md'), 'utf8'), antes);
     assert.ok(r.stdout.includes('nao gravei') || r.stdout.includes('NAO gravei'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -35,7 +35,7 @@ test('propor: com --gravar, acrescenta ao fim sem apagar o que havia', () => {
   const dir = projeto();
   try {
     rodar(['--gatilho', 'ao fechar tarefa', '--acao', 'colar a saida da rodada', '--gravar'], dir);
-    const depois = fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), 'utf8');
+    const depois = fs.readFileSync(path.join(dir, '.claude', 'sworn', 'regras.md'), 'utf8');
     assert.ok(depois.includes('ao editar -> rodar git status antes'), 'nao pode apagar o que ja existia');
     assert.ok(depois.includes('ao fechar tarefa -> colar a saida da rodada'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -47,7 +47,7 @@ test('propor: regra invalida e recusada e sai com codigo 1', () => {
     const r = rodar(['--gatilho', 'ao subir', '--acao', 'usar a versao 2.1.220', '--gravar'], dir);
     assert.strictEqual(r.status, 1);
     assert.ok(r.stdout.includes('volatil'));
-    assert.ok(!fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), 'utf8').includes('2.1.220'));
+    assert.ok(!fs.readFileSync(path.join(dir, '.claude', 'sworn', 'regras.md'), 'utf8').includes('2.1.220'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -62,7 +62,7 @@ test('propor: regra duplicada nao e gravada duas vezes', () => {
   const dir = projeto();
   try {
     rodar(['--gatilho', 'ao editar', '--acao', 'rodar git status antes', '--gravar'], dir);
-    const texto = fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), 'utf8');
+    const texto = fs.readFileSync(path.join(dir, '.claude', 'sworn', 'regras.md'), 'utf8');
     const ocorrencias = texto.split('ao editar -> rodar git status antes').length - 1;
     assert.strictEqual(ocorrencias, 1);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -72,7 +72,7 @@ test('propor: regra duplicada nao e gravada duas vezes', () => {
 // existe ("ao editar -> rodar git status") era dada como JA EXISTE e nao era gravada. Agora compara a linha inteira.
 test('D442/6: regra que e trecho de outra e gravada; a mesma regra com espaco a mais segue sendo duplicata', () => {
   const dir = projeto();
-  const regras = path.join(dir, '.claude', 'esquadro', 'regras.md');
+  const regras = path.join(dir, '.claude', 'sworn', 'regras.md');
   try {
     const r = rodar(['--gatilho', 'ao editar', '--acao', 'rodar git status', '--gravar'], dir);
     assert.ok(!/JA EXISTE/.test(r.stdout), r.stdout);
@@ -88,9 +88,9 @@ test('D442/6: regra que e trecho de outra e gravada; a mesma regra com espaco a 
 
 test('propor: D434 quebra de linha no gatilho ou na acao e recusada e nada e gravado', () => {
   for (const [g, a] of [['linha1\nlinha2', 'x'], ['ao fechar', 'passo1\r\npasso2'], ['ao fechar', 'x\ry']]) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-aprende-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-aprende-'));
     try {
-      const alvo = path.join(dir, '.claude', 'esquadro', 'regras.md');
+      const alvo = path.join(dir, '.claude', 'sworn', 'regras.md');
       const r = rodar(['--gatilho', g, '--acao', a, '--gravar'], dir);
       assert.strictEqual(r.status, 1, r.stdout + r.stderr);
       assert.ok(r.stdout.includes('RECUSADA'), r.stdout);
@@ -101,7 +101,7 @@ test('propor: D434 quebra de linha no gatilho ou na acao e recusada e nada e gra
   // e, com regras.md ja existente, ele fica intacto
   const dir = projeto();
   try {
-    const alvo = path.join(dir, '.claude', 'esquadro', 'regras.md');
+    const alvo = path.join(dir, '.claude', 'sworn', 'regras.md');
     const antes = fs.readFileSync(alvo, 'utf8');
     const r = rodar(['--gatilho', 'a\nb', '--acao', 'x', '--gravar'], dir);
     assert.strictEqual(r.status, 1);
@@ -112,12 +112,12 @@ test('propor: D434 quebra de linha no gatilho ou na acao e recusada e nada e gra
 test('propor: A4-04 grava no regras.md da raiz do projeto, mesmo rodando de uma subpasta', () => {
   const dir = projeto();
   try {
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), '{}\n', 'utf8');
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), '{}\n', 'utf8');
     const sub = path.join(dir, 'src', 'modulo');
     fs.mkdirSync(sub, { recursive: true });
     const r = rodar(['--gatilho', 'ao fechar tarefa', '--acao', 'colar a saida da rodada', '--gravar'], sub);
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
-    const raiz = fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), 'utf8');
+    const raiz = fs.readFileSync(path.join(dir, '.claude', 'sworn', 'regras.md'), 'utf8');
     assert.ok(raiz.includes('ao fechar tarefa -> colar a saida da rodada'), raiz);
     assert.ok(raiz.includes('ao editar -> rodar git status antes'), raiz);
     assert.strictEqual(fs.existsSync(path.join(sub, '.claude')), false, 'criou .claude/ na subpasta');
@@ -136,7 +136,7 @@ test('propor: A4-05 regras.md que nao e texto utf8 e recusado e fica intacto', (
   for (const [nome, bytes] of Object.entries(casos)) {
     const dir = projeto();
     try {
-      const alvo = path.join(dir, '.claude', 'esquadro', 'regras.md');
+      const alvo = path.join(dir, '.claude', 'sworn', 'regras.md');
       fs.writeFileSync(alvo, bytes);
       const r = rodar(['--gatilho', 'ao fechar tarefa', '--acao', 'colar a saida da rodada', '--gravar'], dir);
       assert.strictEqual(r.status, 1, nome + ': ' + r.stdout + r.stderr);
@@ -147,9 +147,9 @@ test('propor: A4-05 regras.md que nao e texto utf8 e recusado e fica intacto', (
 });
 
 test('propor: A4-05 regras.md que existe e nao abre e recusado, nunca trocado pelo cabecalho', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-aprende-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-aprende-'));
   try {
-    const alvo = path.join(dir, '.claude', 'esquadro', 'regras.md');
+    const alvo = path.join(dir, '.claude', 'sworn', 'regras.md');
     fs.mkdirSync(alvo, { recursive: true });
     const r = rodar(['--gatilho', 'ao fechar tarefa', '--acao', 'colar a saida da rodada', '--gravar'], dir);
     assert.strictEqual(r.status, 1, r.stdout + r.stderr);
@@ -161,7 +161,7 @@ test('propor: A4-05 regras.md que existe e nao abre e recusado, nunca trocado pe
 test('propor: A4-05 controle - regras.md utf8 com BOM e o ausente seguem gravando', () => {
   const dir = projeto();
   try {
-    const alvo = path.join(dir, '.claude', 'esquadro', 'regras.md');
+    const alvo = path.join(dir, '.claude', 'sworn', 'regras.md');
     fs.writeFileSync(alvo, '\uFEFF# Regras\n\n- ao editar -> rodar git status antes\n', 'utf8');
     const r = rodar(['--gatilho', 'ao fechar tarefa', '--acao', 'colar a saida da rodada', '--gravar'], dir);
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
@@ -169,7 +169,7 @@ test('propor: A4-05 controle - regras.md utf8 com BOM e o ausente seguem gravand
     assert.ok(fs.readFileSync(alvo, 'utf8').startsWith('﻿# Regras'), 'o BOM do arquivo do dono sumiu');
     assert.ok(r.stdout.includes('Total de regras agora: 2'), r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  const novo = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-aprende-'));
+  const novo = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-aprende-'));
   try {
     const r = rodar(['--gatilho', 'ao fechar tarefa', '--acao', 'colar a saida da rodada', '--gravar'], novo);
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);

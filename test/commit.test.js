@@ -1,6 +1,6 @@
 'use strict';
 // Plano 091, Tarefa 4 (#1, D558, D559): o portao do commit. Commit com arquivo de codigo mudado na sessao sem revisao
-// aprovada e negado com a lista (faixa e inspetores de cada um, D485) e a ordem de rodar o /esquadro:revisar. O texto e
+// aprovada e negado com a lista (faixa e inspetores de cada um, D485) e a ordem de rodar o /sworn:review. O texto e
 // o do mock aprovado (prints-091/mock-091.png), sem a parte dos atalhos (#8, depende do plano 090 Tarefa 5).
 const test = require('node:test');
 const assert = require('node:assert');
@@ -28,9 +28,9 @@ test('commit: ehCommit acha o git commit fora de aspas, com -C, -c e depois de c
 });
 
 test('commit: a marca sem-revisao vale so fora de aspas', () => {
-  assert.strictEqual(commit.semRevisao('git commit -m x # esquadro: sem-revisao'), true);
-  assert.strictEqual(commit.semRevisao('git commit -m x #esquadro:sem-revisao'), true);
-  assert.strictEqual(commit.semRevisao('git commit -m "x # esquadro: sem-revisao"'), false);
+  assert.strictEqual(commit.semRevisao('git commit -m x # sworn: sem-revisao'), true);
+  assert.strictEqual(commit.semRevisao('git commit -m x #sworn:sem-revisao'), true);
+  assert.strictEqual(commit.semRevisao('git commit -m "x # sworn: sem-revisao"'), false);
   assert.strictEqual(commit.semRevisao('git commit -m x'), false);
 });
 
@@ -52,13 +52,13 @@ test('commit: inspetores pela faixa (D485): uma 1, duas 2, completa 10 de codigo
 // ------------------------------- o gancho, num repositorio de verdade
 
 function repo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-commit-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-commit-'));
   const g = function (args) { return spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false }); };
   g(['init', '-q', '.']);
   g(['config', 'user.email', 'ensaio@ensaio']);
   g(['config', 'user.name', 'ensaio']);
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), '{}');
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), '{}');
   fs.mkdirSync(path.join(dir, 'src'));
   const linhas = function (n, p) { return Array.from({ length: n }, function (_, i) { return p + i; }).join('\n') + '\n'; };
   fs.writeFileSync(path.join(dir, 'src', 'grande.js'), linhas(60, 'a'));
@@ -76,7 +76,7 @@ function repo() {
 function hook(script, dir, tmp, entrada) {
   return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
     input: JSON.stringify(Object.assign({ session_id: 'c1', cwd: dir }, entrada)),
-    encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+    encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
   });
 }
 
@@ -100,23 +100,23 @@ const motivo = function (r) { return r.json.hookSpecificOutput.permissionDecisio
 
 function motivoDoMock(linhas) {
   return [
-    'esquadro - commit parado: falta a revisao antes do commit.',
+    'sworn - commit parado: falta a revisao antes do commit.',
     '',
     'Arquivos de codigo mudados nesta sessao sem revisao aprovada:'
   ].concat(linhas, [
     '',
     'Faca agora:',
-    '  1. rode /esquadro:revisar "<arquivo>" para cada um, ate sair "aprovado";',
+    '  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";',
     '  2. rode o commit de novo.',
     'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
-    'repita o commit com "# esquadro: sem-revisao" no fim do comando.',
-    'Desligar neste projeto: "portaoCommit": false em .claude/esquadro/projeto.json.'
+    'repita o commit com "# sworn: sem-revisao" no fim do comando.',
+    'Desligar neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
   ]).join('\n');
 }
 
 function comRepo(fn) {
   const dir = repo();
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-commit-tmp-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-commit-tmp-'));
   try { fn(dir, tmp); } finally {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -134,7 +134,7 @@ test('091 #1: commit com codigo mudado sem revisao e negado com a lista, a faixa
       '  - "src/pequeno.js"   faixa uma, 1 inspetor',
       '  - "src/novo.js"      faixa completa, 10 inspetores'
     ]));
-    const estado = JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', 'c1.json'), 'utf8'));
+    const estado = JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'c1.json'), 'utf8'));
     assert.strictEqual(estado.contadores.commit_sem_revisao, 1, 'o balde nao contou');
   });
 });
@@ -143,7 +143,7 @@ test('091 #1: commit com codigo mudado sem revisao e negado com a lista, a faixa
 // commit `( cd "$D" && git commit ... )` deu topoDoCommit null (o $D nao se expande) e o portao listou o scratchpad.
 test('D575: arquivo tocado fora de qualquer repositorio nao barra o commit, com cd "$D" e com o commit no repositorio', () => {
   comRepo(function (dir, tmp) {
-    const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fora-'));
+    const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fora-'));
     try {
       const noGit = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: fora, encoding: 'utf8' });
       if (noGit.status === 0) return; // tmpdir dentro de um repositorio: o cenario nao se monta aqui
@@ -179,7 +179,7 @@ test('091 #8: commit negado lista o atalho novo sem gatilho e manda escrever o g
     const r = commitar(dir, tmp, 'git commit -m "feat: atalhos"');
     assert.ok(negou(r), 'o commit passou: ' + JSON.stringify(r.json));
     assert.strictEqual(motivo(r), [
-      'esquadro - commit parado: falta a revisao antes do commit.',
+      'sworn - commit parado: falta a revisao antes do commit.',
       '',
       'Arquivos de codigo mudados nesta sessao sem revisao aprovada:',
       '  - "src/pequeno.js"   faixa uma, 1 inspetor',
@@ -190,19 +190,19 @@ test('091 #8: commit negado lista o atalho novo sem gatilho e manda escrever o g
       '  - "src/novo.js:3"',
       '',
       'Faca agora:',
-      '  1. rode /esquadro:revisar "<arquivo>" para cada um, ate sair "aprovado";',
+      '  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";',
       '  2. escreva "trocar quando: ..." no atalho sem gatilho;',
       '  3. rode o commit de novo.',
       'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
-      'repita o commit com "# esquadro: sem-revisao" no fim do comando.',
-      'Desligar neste projeto: "portaoCommit": false em .claude/esquadro/projeto.json.'
+      'repita o commit com "# sworn: sem-revisao" no fim do comando.',
+      'Desligar neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
     ].join('\n'));
   });
 });
 
 test('091 #8: a marcaDeAtalho do projeto vale no portao', () => {
   comRepo(function (dir, tmp) {
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ marcaDeAtalho: 'divida' }));
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ marcaDeAtalho: 'divida' }));
     fs.writeFileSync(path.join(dir, 'src', 'novo.js'), '// divida: sem gatilho\n// atalho: nao conta aqui\n');
     tocar(dir, tmp, 'src/novo.js');
     const m = motivo(commitar(dir, tmp, 'git commit -m x'));
@@ -213,10 +213,10 @@ test('091 #8: a marcaDeAtalho do projeto vale no portao', () => {
 test('091 #1: a marca sem-revisao, o "portaoCommit": false e comando que nao e commit passam', () => {
   comRepo(function (dir, tmp) {
     tocar(dir, tmp, 'src/grande.js');
-    assert.ok(!negou(commitar(dir, tmp, 'git commit -m x # esquadro: sem-revisao')), 'a marca nao liberou');
+    assert.ok(!negou(commitar(dir, tmp, 'git commit -m x # sworn: sem-revisao')), 'a marca nao liberou');
     assert.ok(!negou(commitar(dir, tmp, 'git status')), 'nao-commit foi negado');
     assert.ok(!negou(commitar(dir, tmp, 'echo "git commit"')), 'commit entre aspas foi negado');
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ portaoCommit: false }));
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ portaoCommit: false }));
     assert.ok(!negou(commitar(dir, tmp, 'git commit -m x')), 'o false nao desligou');
   });
 });
@@ -238,13 +238,13 @@ test('091 #1: sem projeto.json, sem arquivo tocado ou com o arquivo ja igual ao 
 test('091 #1: revisao aprovada libera o arquivo; editar de novo o devolve a lista', () => {
   comRepo(function (dir, tmp) {
     tocar(dir, tmp, 'src/pequeno.js');
-    const anterior = process.env.ESQUADRO_TMP;
-    process.env.ESQUADRO_TMP = tmp;
+    const anterior = process.env.SWORN_TMP;
+    process.env.SWORN_TMP = tmp;
     try {
       const estado = require('../scripts/lib/estado.js');
       estado.alterar('c1', function (s) { s.revisadosAprovados = [path.join(dir, 'src', 'pequeno.js')]; return s; });
     } finally {
-      if (anterior === undefined) delete process.env.ESQUADRO_TMP; else process.env.ESQUADRO_TMP = anterior;
+      if (anterior === undefined) delete process.env.SWORN_TMP; else process.env.SWORN_TMP = anterior;
     }
     assert.ok(!negou(commitar(dir, tmp, 'git commit -m x')), 'aprovado foi negado');
     tocar(dir, tmp, 'src/pequeno.js');
@@ -258,7 +258,7 @@ test('091 #1: revisao aprovada libera o arquivo; editar de novo o devolve a list
 // skill do revisar rodou (cumprida) e o commit com a marca sem-revisao depois de negado (recusada).
 test('091 T6: commit negado conta a ordem dada uma vez; o revisar a cumpre; a marca sem-revisao a recusa', () => {
   comRepo(function (dir, tmp) {
-    const ler = function () { return JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', 'c1.json'), 'utf8')); };
+    const ler = function () { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'c1.json'), 'utf8')); };
     const skill = function (nome, extra) {
       return hook('marcar-trabalho.js', dir, tmp, Object.assign({ hook_event_name: 'PostToolUse', tool_name: 'Skill',
         tool_input: { skill: nome } }, extra || {}));
@@ -268,15 +268,15 @@ test('091 T6: commit negado conta a ordem dada uma vez; o revisar a cumpre; a ma
     assert.ok(negou(commitar(dir, tmp, 'git commit -m x')));
     assert.strictEqual(ler().contadores.ordem_revisar_dada, 1, 'a mesma ordem contou duas vezes');
     assert.strictEqual(ler().contadores.commit_sem_revisao, 2, 'o balde do portao conta cada negacao');
-    skill('esquadro:revisar', { agent_id: 'sub-1' });
+    skill('sworn:review', { agent_id: 'sub-1' });
     assert.strictEqual(ler().contadores.ordem_revisar_cumprida, undefined, 'subagente cumpriu a ordem');
-    skill('esquadro:revisar');
+    skill('sworn:review');
     assert.strictEqual(ler().contadores.ordem_revisar_cumprida, 1);
     assert.ok(negou(commitar(dir, tmp, 'git commit -m y')));
-    assert.ok(!negou(commitar(dir, tmp, 'git commit -m y # esquadro: sem-revisao')));
+    assert.ok(!negou(commitar(dir, tmp, 'git commit -m y # sworn: sem-revisao')));
     assert.strictEqual(ler().contadores.ordem_revisar_dada, 2);
     assert.strictEqual(ler().contadores.ordem_revisar_recusada, 1);
-    assert.ok(!negou(commitar(dir, tmp, 'git commit -m z # esquadro: sem-revisao')));
+    assert.ok(!negou(commitar(dir, tmp, 'git commit -m z # sworn: sem-revisao')));
     assert.strictEqual(ler().contadores.ordem_revisar_recusada, 1, 'recusou sem ordem pendente');
   });
 });

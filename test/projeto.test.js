@@ -331,9 +331,9 @@ test('projeto: padrao que nao e caminho relativo e recusado em intocaveis e em m
 // A CLI e o config.js liam o MESMO arquivo e discordavam sobre o BOM existir.
 test('projeto: a CLI le o mesmo arquivo que os portoes leem, BOM inclusive', () => {
   const cli = path.join(__dirname, '..', 'scripts', 'validar.js');
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-cli-'));
-  fs.mkdirSync(path.join(base, '.claude', 'esquadro'), { recursive: true });
-  const arq = path.join(base, '.claude', 'esquadro', 'projeto.json');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-cli-'));
+  fs.mkdirSync(path.join(base, '.claude', 'sworn'), { recursive: true });
+  const arq = path.join(base, '.claude', 'sworn', 'projeto.json');
   const roda = () => spawnSync(process.execPath, [cli, base], { encoding: 'utf8', shell: false });
 
   fs.writeFileSync(arq, '\uFEFF' + JSON.stringify(VALIDO), 'utf8');
@@ -552,7 +552,7 @@ test('D503: referencias e opcional e aceita listas de caminho ou URL por tipo', 
   assert.strictEqual(projeto.validar(copia({ referencias: {} })).ok, true, 'objeto vazio e config valida');
 });
 
-// Plano 090 Tarefa 5: a marca do /esquadro:atalhos. Opcional; quando vem, e uma palavra (a varredura monta a regex com ela).
+// Plano 090 Tarefa 5: a marca do /sworn:shortcuts. Opcional; quando vem, e uma palavra (a varredura monta a regex com ela).
 test('plano 090: marcaDeAtalho e opcional e palavra; torta vira erro e aviso', () => {
   assert.strictEqual(projeto.validar(copia({ marcaDeAtalho: 'divida' })).ok, true);
   for (const torta of ['duas palavras', '', 7, 'a:b', null]) {

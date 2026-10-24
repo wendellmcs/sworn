@@ -41,18 +41,8 @@ function contextoDoTranscript(caminho) {
  * `model` da ultima chamada. Horario ilegivel ou modelo ausente vem null; o contexto vem igual.
  */
 function ultimaChamadaDoTranscript(caminho) {
-  if (typeof caminho !== 'string' || !caminho) return null;
-  let texto;
-  try {
-    const fd = fs.openSync(caminho, 'r');
-    try {
-      const tamanho = fs.fstatSync(fd).size;
-      const n = Math.min(tamanho, CAUDA_DO_TRANSCRIPT);
-      const buf = Buffer.alloc(n);
-      fs.readSync(fd, buf, 0, n, tamanho - n);
-      texto = buf.toString('utf8');
-    } finally { fs.closeSync(fd); }
-  } catch (e) { return null; }
+  const texto = caudaDoTranscript(caminho);
+  if (texto === null) return null;
   const linhas = texto.split('\n');
   // a primeira linha da cauda pode vir cortada no meio: o JSON.parse a recusa e ela fica de fora
   for (let i = linhas.length - 1; i >= 0; i--) {
@@ -71,6 +61,77 @@ function ultimaChamadaDoTranscript(caminho) {
     }
   }
   return null;
+}
+
+/** A cauda do transcript como texto; sem caminho ou sem leitura, null. */
+function caudaDoTranscript(caminho) {
+  if (typeof caminho !== 'string' || !caminho) return null;
+  try {
+    const fd = fs.openSync(caminho, 'r');
+    try {
+      const tamanho = fs.fstatSync(fd).size;
+      const n = Math.min(tamanho, CAUDA_DO_TRANSCRIPT);
+      const buf = Buffer.alloc(n);
+      fs.readSync(fd, buf, 0, n, tamanho - n);
+      return buf.toString('utf8');
+    } finally { fs.closeSync(fd); }
+  } catch (e) { return null; }
+}
+
+// D634 (7b/8): o que conta como rodar teste (alem da provaDePronto do projeto), o que edita e o que nao e codigo.
+const COMANDOS_DE_TESTE = ['npm test', 'npm run test', 'pnpm test', 'yarn test', 'node --test', 'pytest', 'go test',
+  'cargo test', 'dotnet test', 'mvn test', 'gradle test', 'jest', 'vitest', 'mocha'];
+const FERRAMENTAS_DE_COMANDO = ['Bash', 'PowerShell'];
+const FERRAMENTAS_DE_EDICAO = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'];
+const NAO_E_CODIGO = /\.(?:md|markdown|txt|rst|adoc)$/i;
+
+/** Os pedacos da provaDePronto que o comando tem de conter: sem o `cd` (o agente o escreve do seu jeito). */
+function pedacosDaProva(prova) {
+  const pedacos = String(prova).split(/;|&&|\|\|/).map(function (p) { return p.trim(); }).filter(Boolean);
+  const sem = pedacos.filter(function (p) { return !/^(?:cd|pushd|Set-Location)\b/i.test(p); });
+  return sem.length ? sem : pedacos;
+}
+
+/**
+ * D634 (7b/8): na cauda do transcript, o ultimo teste que rodou (`{ comando, falhou }` ou null) e se a provaDePronto
+ * nao rodou depois da ultima edicao de codigo (`provaPendente`; sem prova declarada, false). Falhou = saida diferente
+ * de 0 (is_error, medido na s129) ou saida que mostra falha (o pipe zera o codigo). Teste sem resultado na cauda nao
+ * conta. Pula linha de subagente. Sem leitura, null. Limite: edicao feita por comando de shell nao se ve aqui.
+ */
+function testesDoTranscript(caminho, prova) {
+  const texto = caudaDoTranscript(caminho);
+  if (texto === null) return null;
+  // Tardios de proposito: saude.js carrega em quase todo gancho, e estes dois (com o que puxam) so servem ao fecho.
+  const rodouTeste = require('./medicao-travas.js').rodouTeste;
+  const textoMostraFalha = require('./evidencia.js').textoMostraFalha;
+  const pedacos = typeof prova === 'string' && prova.trim() ? pedacosDaProva(prova) : null;
+  const ehProva = function (c) { return pedacos !== null && pedacos.every(function (p) { return rodouTeste([c], p); }); };
+  const pendentes = Object.create(null);
+  let ultimoTeste = null;
+  let ultimaEdicao = -1;
+  let ultimaProva = -1;
+  texto.split('\n').forEach(function (linha, i) {
+    let o;
+    try { o = JSON.parse(linha); } catch (e) { return; }
+    if (!o || o.isSidechain === true || !o.message || !Array.isArray(o.message.content)) return;
+    o.message.content.forEach(function (b) {
+      if (!b) return;
+      const entrada = b.input || {};
+      if (b.type === 'tool_use' && FERRAMENTAS_DE_COMANDO.indexOf(b.name) !== -1 && typeof entrada.command === 'string') {
+        const daProva = ehProva(entrada.command);
+        if (daProva) ultimaProva = i;
+        if (b.id && (daProva || rodouTeste([entrada.command], COMANDOS_DE_TESTE))) pendentes[b.id] = entrada.command;
+      } else if (b.type === 'tool_use' && FERRAMENTAS_DE_EDICAO.indexOf(b.name) !== -1) {
+        const arquivo = entrada.file_path || entrada.notebook_path;
+        if (typeof arquivo === 'string' && !NAO_E_CODIGO.test(arquivo)) ultimaEdicao = i;
+      } else if (b.type === 'tool_result' && b.tool_use_id in pendentes) {
+        const saida = Array.isArray(b.content)
+          ? b.content.map(function (x) { return x && typeof x.text === 'string' ? x.text : ''; }).join('\n') : b.content;
+        ultimoTeste = { comando: pendentes[b.tool_use_id], falhou: b.is_error === true || textoMostraFalha(saida) };
+      }
+    });
+  });
+  return { ultimoTeste: ultimoTeste, provaPendente: pedacos !== null && ultimaEdicao > ultimaProva };
 }
 
 /**
@@ -210,19 +271,19 @@ function avisoDeSaude(gatilhos, alarme) {
   if (!Array.isArray(gatilhos) || gatilhos.length === 0) return null;
   const lista = gatilhos.map(function (g) { return '  - ' + g; }).join('\n');
   return (alarme ? [
-    'esquadro - ALARME: troque de chat agora; esta conversa ficou cara demais.',
+    'sworn - ALARME: troque de chat agora; esta conversa ficou cara demais.',
     '',
     'Ela passou do tamanho em que cada chamada custa varias vezes a de um chat novo:',
     lista
   ] : [
-    'esquadro - hora de abrir chat novo.',
+    'sworn - hora de abrir chat novo.',
     '',
     'Gatilho contavel disparou:',
     lista,
     'Se surgiu a duvida "ja e hora?", ja era.'
   ]).concat([
     '',
-    'Faca assim: rode /esquadro:handoff, cole o prompt pronto num chat novo e continue de la.'
+    'Faca assim: rode /sworn:handoff, cole o prompt pronto num chat novo e continue de la.'
   ]).join('\n');
 }
 
@@ -238,7 +299,7 @@ function avisoDeSaude(gatilhos, alarme) {
 function instrucaoAoModelo(gatilhos, promptJaColado) {
   if (promptJaColado === true) {
     return [
-      'esquadro: gatilho contavel de saude do contexto disparou. E hora de abrir chat novo.',
+      'sworn: gatilho contavel de saude do contexto disparou. E hora de abrir chat novo.',
       (gatilhos || []).map(function (g) { return '  - ' + g; }).join('\n'),
       'O prompt do handoff ja esta no bloco de codigo da sua resposta acima: nao rode o handoff de novo e',
       'nao cole o bloco outra vez. Nesta mesma resposta, diga ao usuario, com todas as letras, que e hora',
@@ -247,10 +308,10 @@ function instrucaoAoModelo(gatilhos, promptJaColado) {
     ].join('\n');
   }
   return [
-    'esquadro: gatilho contavel de saude do contexto disparou. E hora de abrir chat novo.',
+    'sworn: gatilho contavel de saude do contexto disparou. E hora de abrir chat novo.',
     (gatilhos || []).map(function (g) { return '  - ' + g; }).join('\n'),
     'Faca agora, nesta mesma resposta:',
-    '1. Rode /esquadro:handoff.',
+    '1. Rode /sworn:handoff.',
     '2. Diga ao usuario, com todas as letras, que e hora de abrir chat novo, e cite o gatilho acima que disparou.',
     '3. Cole o prompt pronto do handoff no chat, em bloco de codigo (nao basta gravar no arquivo).',
     'Nao pergunte "sigo?" antes de oferecer a troca: a troca vem primeiro.'
@@ -287,9 +348,9 @@ function perguntaSobreSaude(prompt) {
 
 /** T10-4: o que o modelo recebe quando o usuario pergunta pela saude do contexto. */
 const INSTRUCAO_DA_PERGUNTA = [
-  'esquadro: o usuario perguntou se o contexto/memoria desta conversa esta bom. A pergunta E a resposta:',
+  'sworn: o usuario perguntou se o contexto/memoria desta conversa esta bom. A pergunta E a resposta:',
   'e hora de trocar de chat. Faca agora, nesta mesma resposta:',
-  '1. Rode /esquadro:handoff.',
+  '1. Rode /sworn:handoff.',
   '2. Diga ao usuario, com todas as letras, que e hora de abrir chat novo, e por que (ele perguntou).',
   '3. Cole o prompt pronto do handoff no chat, em bloco de codigo.',
   'Nao responda "esta tudo bem" nem pergunte "sigo?" antes de oferecer a troca.'
@@ -412,7 +473,7 @@ function expandirPrefixo(linha) {
 // D412/D415. R5: ASCII puro - chega ao Claude como motivo do bloqueio.
 // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos.
 const MOTIVO_HANDOFF_SEM_PROMPT = [
-  'esquadro - falta colar no chat o prompt do handoff (portao de fecho).',
+  'sworn - falta colar no chat o prompt do handoff (portao de fecho).',
   '',
   'Voce gravou um arquivo de handoff neste turno, e a sua resposta final nao tem bloco de codigo.',
   'O prompt pronto tem de chegar ao chat, nao so ao arquivo. O portao le so a resposta final:',
@@ -420,8 +481,8 @@ const MOTIVO_HANDOFF_SEM_PROMPT = [
   '',
   'Faca assim: cole o prompt agora num bloco de codigo (tres crases ou tres tis), nesta resposta final - uma vez so.',
   '',
-  'Desligar neste projeto: "portaoHandoff": false em .claude/esquadro/projeto.json.'
+  'Desligar neste projeto: "portaoHandoff": false em .claude/sworn/projeto.json.'
 ].join('\n');
 
-module.exports = { LIMIARES_PADRAO, BALDES_DE_BLOQUEIO, contextoDoTranscript, ultimaChamadaDoTranscript, limiaresValidos, medir, acumular, avaliar, avisoDeSaude, instrucaoAoModelo, perguntaSobreSaude,
+module.exports = { LIMIARES_PADRAO, BALDES_DE_BLOQUEIO, contextoDoTranscript, ultimaChamadaDoTranscript, testesDoTranscript, limiaresValidos, medir, acumular, avaliar, avisoDeSaude, instrucaoAoModelo, perguntaSobreSaude,
   INSTRUCAO_DA_PERGUNTA, ehArquivoDeHandoff, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT };

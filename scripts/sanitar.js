@@ -72,7 +72,7 @@ function main() {
     console.log('SEM ' + sanit.ARQUIVO_LOCAL + ': rodando so com as classes genericas.');
     console.log('Nome de pessoa, de empresa e de projeto interno NAO estao sendo procurados.');
   }
-  // A4-03: o `docs/` fora e so do export do esquadro (exportar.js); aqui a pasta inteira entra.
+  // A4-03: o `docs/` fora e so do export do sworn (exportar.js); aqui a pasta inteira entra.
   console.log('Fora da superficie: so o que o .gitignore cobre.');
   console.log('');
 

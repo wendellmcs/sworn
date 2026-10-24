@@ -5,7 +5,7 @@ const cicatriz = require('./lib/cicatriz.js');
 
 /**
  * Entrega D. Mede e propoe; NAO poda. Aposentar instrucao e decisao do dono, e a
- * skill `auditar` ja promete isso com todas as letras: "nao apaga, nao move, nao
+ * skill `audit` ja promete isso com todas as letras: "nao apaga, nao move, nao
  * edita". Este comando existe para que a proposta tenha numero atras.
  *
  * O corpus e argumento, sempre. Cravar aqui o caminho de um historico seria

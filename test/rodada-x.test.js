@@ -46,10 +46,10 @@ const BASE = {
 const TRAVAS_LIGADAS = { fecho: true, escopo: true, destrutivo: true, outraFrente: true };
 
 function comBancada(fn) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-rx-tmp-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-rx-tmp-'));
   const criados = [tmp];
   const novoDir = function () {
-    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-rx-proj-'));
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-rx-proj-'));
     criados.push(d);
     return d;
   };
@@ -65,8 +65,8 @@ function comBase(mudancas) {
 }
 
 function gravarCru(dir, obj) {
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify(obj), 'utf8');
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify(obj), 'utf8');
   return dir;
 }
 
@@ -78,7 +78,7 @@ function rodarPortao(script, entrada, tmp) {
   const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
     input: JSON.stringify(entrada),
     encoding: 'utf8',
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+    env: Object.assign({}, process.env, { SWORN_TMP: tmp })
   });
   let json = null;
   if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
@@ -153,7 +153,7 @@ function projetoComOutraFrente(novoDir, tmp, travas, sessao) {
   fs.writeFileSync(path.join(dir, 'notas', 'guia.md'), 'outra frente', 'utf8');
   const abertura = rodarPortao('abertura.js', { session_id: sessao, cwd: dir, source: 'startup' }, tmp);
   assert.strictEqual(abertura.status, 0, 'a abertura tem de rodar');
-  const foto = JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', sessao + '.json'), 'utf8')).gitAbertura;
+  const foto = JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', sessao + '.json'), 'utf8')).gitAbertura;
   assert.ok(foto.indexOf('notas/guia.md') !== -1,
     'sem o alvo na foto o cenario nao discrimina nada: ' + JSON.stringify(foto));
   return dir;
@@ -463,14 +463,14 @@ test('RX-15 MATA PECA: travas.fecho:false desliga a COBRANCA, nunca o ledger (R-
     assert.ok(!(r.json && r.json.decision === 'block'), 'a trava desligada nao pode bloquear');
 
     const contadores = JSON.parse(
-      fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'contadores.json'), 'utf8'));
+      fs.readFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'), 'utf8'));
     assert.strictEqual(contadores.sem_escopo, 1,
       'o ledger tem de continuar sendo escrito: ' + JSON.stringify(contadores));
     // T18/D123: o arquivo de sessao passa a durar a SESSAO inteira, de proposito.
     // O que a trava desligada nao pode fazer e deixar de zerar o TURNO - e ai sim
     // bloqueouNesteTurno ficaria congelado e o portao morreria para sempre.
     const sessaoRx = JSON.parse(
-      fs.readFileSync(path.join(tmp, 'esquadro', 'rx15.json'), 'utf8'));
+      fs.readFileSync(path.join(tmp, 'sworn', 'rx15.json'), 'utf8'));
     assert.strictEqual(sessaoRx.bloqueouNesteTurno, undefined,
       'o turno tem de ter sido zerado: ' + JSON.stringify(sessaoRx));
     assert.strictEqual(sessaoRx.trabalhoReal, undefined,
@@ -544,8 +544,8 @@ test('RX-18 MATA PECA: intocaveis com tipo errado AVISA, e a decisao nao muda', 
     // process.exit(0). Sem esta ponta, metade da fiacao ficaria sem prova: o
     // caminho de cima sai pelo passo 4 (marcha rapida) e nunca chega aqui.
     const comEscopo = gravarProjeto(novoDir(), { intocaveis: 'cofre/**' });
-    fs.mkdirSync(path.join(comEscopo, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(comEscopo, '.claude', 'esquadro', 'escopo.md'),
+    fs.mkdirSync(path.join(comEscopo, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(comEscopo, '.claude', 'sworn', 'escopo.md'),
       '# Escopo\n**Objetivo:** exercitar o passo 5\n## Dentro\n- app/**\n', 'utf8');
     // C9: o alvo tem de JA EXISTIR, senao o passo 6 nega antes e o canal de aviso
     // nunca e exercitado. Editar existente e o caminho que chega ao passo 5 - e e

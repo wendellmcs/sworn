@@ -1,6 +1,6 @@
 ---
-name: juiz-mesmo
-description: Decide se pares de achados da revisao cega descrevem o mesmo defeito. So avisa, nao muda a contagem. Use dentro de /esquadro:revisar, Passo 3, nunca sozinho.
+name: dedupe-judge
+description: Decide se pares de achados da revisao cega descrevem o mesmo defeito. So avisa, nao muda a contagem. Use dentro de /sworn:review, Passo 3, nunca sozinho.
 model: haiku
 effort: low
 maxTurns: 3

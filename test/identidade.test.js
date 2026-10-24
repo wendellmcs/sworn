@@ -1,5 +1,5 @@
 'use strict';
-// Pedido 32 (plano dos pedidos 30-32, Tarefa 4; D519, D522): a identidade visual do esquadro - um acento so, o ambar
+// Pedido 32 (plano dos pedidos 30-32, Tarefa 4; D519, D522): a identidade visual do sworn - um acento so, o ambar
 // dos banners, sobre os neutros do tema. Na faixa: a chave de tema `warning` no terminal e no Desktop (D519); a cor
 // crua no VS Code, onde a chave nao pinta (D522, sonda da s53). Fonte unica: o mod (que nao le Node) repete as duas
 // cores, e este teste confere a copia.
@@ -68,7 +68,7 @@ test('083 T5 (p1-19): as strings acentuadas do mod sao NFC, sem mojibake, e cada
 });
 
 test('identidade: o README tem a secao "Aparencia" com as duas cores e a regra por tela', () => {
-  const readme = ler('README.md');
+  const readme = ler('GUIA.md');
   const i = readme.indexOf('### Aparência');
   assert.ok(i !== -1, 'secao ### Aparencia');
   const secao = readme.slice(i, readme.indexOf('\n#', i + 5) === -1 ? undefined : readme.indexOf('\n#', i + 5));

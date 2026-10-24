@@ -5,7 +5,7 @@ const path = require('node:path');
 const textoLib = require('./lib/texto.js');
 
 /**
- * D598 (revisao completa, A11-02): o /esquadro:init pergunta se o usuario quer as versoes novas sozinho e, com o
+ * D598 (revisao completa, A11-02): o /sworn:init pergunta se o usuario quer as versoes novas sozinho e, com o
  * sim, roda este comando com --gravar. O marketplace de terceiros comeca com a atualizacao automatica desligada; a
  * forma que liga, provada na s15 (D347), e `autoUpdate: true` na entrada do marketplace em `extraKnownMarketplaces`
  * do <CLAUDE_CONFIG_DIR ou ~/.claude>/settings.json. Na abertura seguinte o Claude Code copia a chave.
@@ -16,7 +16,7 @@ const textoLib = require('./lib/texto.js');
  * o settings.json nao se le como objeto JSON (nunca regrava o arquivo do usuario por cima do que nao entendeu) ou
  * quando o marketplace nao aparece em lugar nenhum (sem o `source`, a entrada nova nao funcionaria).
  */
-const MARKETPLACE = 'esquadro-local';
+const MARKETPLACE = 'sworn-local';
 const gravar = process.argv.indexOf('--gravar') !== -1;
 const pastaConfig = path.dirname(require('./lib/gasto.js').pastaDosProjetos());
 const alvo = path.join(pastaConfig, 'settings.json');
@@ -46,7 +46,7 @@ try {
 
 // R2: a forma que a recusa pede vai na propria mensagem; D603: com o source real - o instalado ou, sem ele, o publico
 // do README (o teste confere os dois juntos).
-const PUBLICO = { source: 'git', url: 'https://github.com/wendellmcs/esquadro.git' };
+const PUBLICO = { source: 'git', url: 'https://github.com/wendellmcs/sworn.git' };
 const FORMA = '"extraKnownMarketplaces": { "' + MARKETPLACE + '": { "source": ' + JSON.stringify(conhecido || PUBLICO) +
   ', "autoUpdate": true } }';
 
@@ -79,7 +79,7 @@ const source = atual && ehSource(atual.source) ? atual.source : conhecido;
 if (!source) {
   recusar('o marketplace ' + MARKETPLACE + ' nao aparece no settings.json nem no plugins/known_marketplaces.json de ' +
     pastaConfig + ' (ausente, ilegivel ou sem essa entrada)',
-    'instale primeiro (claude plugin marketplace add wendellmcs/esquadro) e rode de novo');
+    'instale primeiro (claude plugin marketplace add wendellmcs/sworn) e rode de novo');
 }
 
 const entrada = Object.assign({}, atual || {}, { source: source, autoUpdate: true });

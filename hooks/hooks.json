@@ -9,7 +9,7 @@
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/abertura.js"],
             "timeout": 15,
-            "statusMessage": "esquadro: lendo o estado do repositorio"
+            "statusMessage": "sworn: lendo o estado do repositorio"
           }
         ]
       }
@@ -128,7 +128,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^esquadro:inspetor$",
+        "matcher": "^sworn:inspector$",
         "hooks": [
           {
             "type": "command",

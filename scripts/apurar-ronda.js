@@ -18,7 +18,7 @@ function arg(nome) {
 }
 
 const cwd = process.cwd();
-const revisao = path.join(cwd, '.claude', 'esquadro', 'revisao');
+const revisao = path.join(cwd, '.claude', 'sworn', 'revisao');
 
 /** As pastas numeradas (as rondas) de uma base, em ordem. */
 function rondasDe(base) {
@@ -52,7 +52,7 @@ function lerMapaJson(base, ronda, naListagem) {
     if (naListagem) throw MAPA_ILEGIVEL;
     falhar('ERRO: ' + relDoCwd(arq) + ' esta corrompido (' + motivo + '). Ele diz qual arquivo a ronda revisou e ' +
       'qual rotulo e o lado novo; sem ele legivel os achados nao se separam por lado. Apague a pasta ' +
-      relDoCwd(path.dirname(arq)) + '/ e prepare a ronda de novo (Passo 1 do /esquadro:revisar), regrave os ' +
+      relDoCwd(path.dirname(arq)) + '/ e prepare a ronda de novo (Passo 1 do /sworn:review), regrave os ' +
       'vereditos dela e rode este comando de novo.\n');
   };
   let texto;
@@ -179,7 +179,7 @@ function escolherBase() {
         '. Apure-a sem --arquivo.\n');
     }
     falhar('ERRO: nao ha revisao de ' + rel + '. Prepare-a antes com preparar-revisao.js --arquivo ' + rel +
-      ' (Passo 1 do /esquadro:revisar).\n');
+      ' (Passo 1 do /sworn:review).\n');
   }
   if (antigo) return revisao;
   let bases = [];
@@ -192,8 +192,8 @@ function escolherBase() {
     bases = [];
   }
   if (bases.length === 0) {
-    falhar('ERRO: nao ha revisao em .claude/esquadro/revisao/. Prepare uma com preparar-revisao.js --arquivo ' +
-      '<caminho> (Passo 1 do /esquadro:revisar).\n');
+    falhar('ERRO: nao ha revisao em .claude/sworn/revisao/. Prepare uma com preparar-revisao.js --arquivo ' +
+      '<caminho> (Passo 1 do /sworn:review).\n');
   }
   if (bases.length > 1) {
     falhar('ERRO: ha ' + bases.length + ' revisoes em ' + revisao + ' e nao sei qual apurar. Passe --arquivo ' +
@@ -268,9 +268,9 @@ function lerVereditos(nomeRonda, partes, comReferencia, lentesDaOrdemNormal) {
         (semLente ? ' Falta tambem a lente de ' + (semLente === 1 ? '1 veredito' : semLente + ' vereditos') + ' da ordem ' +
           'normal que nao se ' + (semLente === 1 ? 'leu' : 'leram') + ' (o ERRO de veredito ilegivel ou invalido, abaixo, ' +
           'diz qual).' : '') +
-        ' Grave o veredito de cada uma em ' + dirRel + ' (Passo 2 do /esquadro:revisar) e rode este comando de novo.'
+        ' Grave o veredito de cada uma em ' + dirRel + ' (Passo 2 do /sworn:review) e rode este comando de novo.'
       : 'ERRO: a ronda ' + Number(nomeRonda) + ' nao tem nenhum veredito: ' + dirRel + ' nao existe ou ' +
-        'nao tem nenhum .json. Grave os vereditos dela (Passo 2 do /esquadro:revisar) ou, se a ronda foi preparada ' +
+        'nao tem nenhum .json. Grave os vereditos dela (Passo 2 do /sworn:review) ou, se a ronda foi preparada ' +
         'por engano, apague a pasta ' + [baseRel, nomeRonda].join('/') + '/, e rode este comando de novo.');
     return [];
   }
@@ -320,7 +320,7 @@ const rondas = pastas
       semVeredito.push('ERRO: a ronda ' + Number(e.name) + ' tem vereditos com A e B trocados em ' + ronda +
         'invertida/vereditos/, mas o mapa.json dela nao tem "invertida": eles nao entrariam na conta. Se a ronda tem ' +
         'referencia (R.txt), o mapa.json perdeu a chave: apague a pasta ' + ronda + ', prepare a ronda de novo (Passo 1 ' +
-        'do /esquadro:revisar) e regrave os vereditos. Se nao tem, apague a pasta ' + ronda + 'invertida/. Depois rode ' +
+        'do /sworn:review) e regrave os vereditos. Se nao tem, apague a pasta ' + ronda + 'invertida/. Depois rode ' +
         'este comando de novo.');
     }
     mapas.push(mapa);

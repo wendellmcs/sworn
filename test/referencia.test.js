@@ -1,5 +1,5 @@
 'use strict';
-// Plano do REA, Tarefa 3 (D555, D580): /esquadro:referencia. O alvo do texto e o mock aprovado
+// Plano do REA, Tarefa 3 (D555, D580): /sworn:reference. O alvo do texto e o mock aprovado
 // (.context/plans/prints-rea/mock-rea.png, secoes 1-3); a ficha do teste usa os dados do estudo de verdade da D579.
 const test = require('node:test');
 const assert = require('node:assert');
@@ -13,8 +13,8 @@ const projetoLib = require('../scripts/lib/projeto.js');
 
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'referencia.js');
-const SKILL = path.join(RAIZ, 'skills', 'referencia', 'SKILL.md');
-const FICHA_REL = '.claude/esquadro/referencias/texto-plugins-claude-code.md';
+const SKILL = path.join(RAIZ, 'skills', 'reference', 'SKILL.md');
+const FICHA_REL = '.claude/sworn/referencias/texto-plugins-claude-code.md';
 
 const FICHA = [
   '# Referência de texto: plugins do Claude Code',
@@ -43,7 +43,7 @@ const FICHA = [
   ''
 ].join('\n');
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro referencia-')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn referencia-')); }
 function escrever(dir, rel, conteudo) {
   const alvo = path.join(dir, rel);
   fs.mkdirSync(path.dirname(alvo), { recursive: true });
@@ -148,13 +148,13 @@ test('conferir: acima do teto do R.txt (100 KB) a ficha nao passa; no teto, pass
   assert.match(p[0], /100 KB/);
 });
 
-test('tipoDaFicha: so <tipo>-<assunto>.md em .claude/esquadro/referencias/, um dos tres tipos (D580)', () => {
+test('tipoDaFicha: so <tipo>-<assunto>.md em .claude/sworn/referencias/, um dos tres tipos (D580)', () => {
   assert.strictEqual(referencia.tipoDaFicha(FICHA_REL), 'texto');
-  assert.strictEqual(referencia.tipoDaFicha('.claude/esquadro/referencias/tela-painel.md'), 'tela');
-  assert.strictEqual(referencia.tipoDaFicha('.claude\\esquadro\\referencias\\codigo-cli.md'), 'codigo');
-  for (const torto of ['.claude/esquadro/referencias/telas-painel.md', '.claude/esquadro/referencias/texto-.md',
-    '.claude/esquadro/referencias/texto-x.txt', 'docs/texto-x.md', '.claude/esquadro/referencias/sub/texto-x.md',
-    '.claude/esquadro/referencias/texto-sub/x.md']) {
+  assert.strictEqual(referencia.tipoDaFicha('.claude/sworn/referencias/tela-painel.md'), 'tela');
+  assert.strictEqual(referencia.tipoDaFicha('.claude\\sworn\\referencias\\codigo-cli.md'), 'codigo');
+  for (const torto of ['.claude/sworn/referencias/telas-painel.md', '.claude/sworn/referencias/texto-.md',
+    '.claude/sworn/referencias/texto-x.txt', 'docs/texto-x.md', '.claude/sworn/referencias/sub/texto-x.md',
+    '.claude/sworn/referencias/texto-sub/x.md']) {
     assert.strictEqual(referencia.tipoDaFicha(torto), null, torto);
   }
 });
@@ -190,19 +190,19 @@ test('naReferencia: referencias torta no projeto.json vira erro, sem gravar por 
 test('script: confere sem gravar; com --gravar poe a ficha na referencias do projeto.json', () => {
   const dir = pasta();
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify(PROJETO));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify(PROJETO));
     escrever(dir, FICHA_REL, FICHA);
     const so = rodar([FICHA_REL], dir);
     assert.strictEqual(so.status, 0, so.saida);
     assert.strictEqual(so.json.ok, true, so.saida);
     assert.strictEqual(so.json.tipo, 'texto');
     assert.strictEqual(so.json.achados, 4);
-    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, '.claude/esquadro/projeto.json'), 'utf8')).referencias,
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, '.claude/sworn/projeto.json'), 'utf8')).referencias,
       undefined, 'sem --gravar nao grava');
     const g = rodar([FICHA_REL, '--gravar'], dir);
     assert.strictEqual(g.status, 0, g.saida);
     assert.strictEqual(g.json.gravou, true, g.saida);
-    const lido = JSON.parse(fs.readFileSync(path.join(dir, '.claude/esquadro/projeto.json'), 'utf8'));
+    const lido = JSON.parse(fs.readFileSync(path.join(dir, '.claude/sworn/projeto.json'), 'utf8'));
     assert.deepStrictEqual(lido.referencias, { texto: [FICHA_REL] });
     assert.strictEqual(lido.quemDecide, 'o dono', 'o resto do projeto.json fica');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -211,7 +211,7 @@ test('script: confere sem gravar; com --gravar poe a ficha na referencias do pro
 test('script: ficha com problema, fora da pasta ou do nome, ou sem projeto.json nao grava e sai com 1', () => {
   const dir = pasta();
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify(PROJETO));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify(PROJETO));
     escrever(dir, FICHA_REL, FICHA.replace('| derivado |', '| chute |'));
     const torta = rodar([FICHA_REL, '--gravar'], dir);
     assert.strictEqual(torta.status, 1, torta.saida);
@@ -221,30 +221,30 @@ test('script: ficha com problema, fora da pasta ou do nome, ou sem projeto.json 
     const fora = rodar(['docs/texto-x.md'], dir);
     assert.strictEqual(fora.status, 1, fora.saida);
     assert.match(fora.json.problemas.join(' '), /referencias/);
-    const falta = rodar(['.claude/esquadro/referencias/texto-nada.md'], dir);
+    const falta = rodar(['.claude/sworn/referencias/texto-nada.md'], dir);
     assert.strictEqual(falta.status, 1, falta.saida);
-    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, '.claude/esquadro/projeto.json'), 'utf8')).referencias,
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, '.claude/sworn/projeto.json'), 'utf8')).referencias,
       undefined, 'nada gravado');
     escrever(dir, FICHA_REL, FICHA);
     const torto = JSON.stringify(Object.assign({}, PROJETO, { referencias: ['README.md'] }));
-    escrever(dir, '.claude/esquadro/projeto.json', torto);
+    escrever(dir, '.claude/sworn/projeto.json', torto);
     const ref = rodar([FICHA_REL, '--gravar'], dir);
     assert.strictEqual(ref.status, 1, ref.saida);
     assert.match(ref.json.erro, /referencias/);
-    assert.strictEqual(fs.readFileSync(path.join(dir, '.claude/esquadro/projeto.json'), 'utf8'), torto, 'nao grava por cima');
+    assert.strictEqual(fs.readFileSync(path.join(dir, '.claude/sworn/projeto.json'), 'utf8'), torto, 'nao grava por cima');
     const sem = pasta();
     try {
       escrever(sem, FICHA_REL, FICHA);
       const r = rodar([FICHA_REL, '--gravar'], sem);
       assert.strictEqual(r.status, 1, r.saida);
-      assert.match(r.json.erro, /esquadro:init/);
+      assert.match(r.json.erro, /sworn:init/);
     } finally { fs.rmSync(sem, { recursive: true, force: true }); }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 // ── a ficha do radar (plano do radar, T2; D609) ──────────────────────────
 // A ficha do radar e a da referencia mais a secao dos candidatos. Mora fora do projeto (o arquivo puxado da nuvem fica
-// em ~/.claude/esquadro/), por isso o tipo vem de --tipo radar, nao do caminho; e nunca entra na `referencias`.
+// em ~/.claude/sworn/), por isso o tipo vem de --tipo radar, nao do caminho; e nunca entra na `referencias`.
 
 const CANDIDATOS = [
   '## Candidatos',
@@ -299,7 +299,7 @@ test('conferir radar: esforco, valor, veredito fora da lista, licenca vazia ou c
 test('script --tipo radar: confere a ficha em qualquer pasta, recusa --gravar e tipo desconhecido', () => {
   const dir = pasta();
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify(PROJETO));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify(PROJETO));
     escrever(dir, 'fora/semana.md', FICHA_RADAR);
     const ok = rodar(['fora/semana.md', '--tipo', 'radar'], dir);
     assert.strictEqual(ok.status, 0, ok.saida);
@@ -315,7 +315,7 @@ test('script --tipo radar: confere a ficha em qualquer pasta, recusa --gravar e 
     assert.strictEqual(g.status, 1, g.saida);
     assert.strictEqual(g.json.gravou, false);
     assert.match(g.json.erro, /radar nao entra na referencias.*chat/, 'a recusa e a do radar, nao a validacao do projeto.json');
-    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, '.claude/esquadro/projeto.json'), 'utf8')).referencias,
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, '.claude/sworn/projeto.json'), 'utf8')).referencias,
       undefined, 'nada gravado');
     const torto = rodar(['fora/semana.md', '--tipo', 'radr'], dir);
     assert.strictEqual(torto.status, 1, torto.saida);
@@ -331,7 +331,7 @@ function lerSkill() { return fs.readFileSync(SKILL, 'utf8').replace(/\r\n/g, '\n
 
 test('skill: como o comando comeca (mock secao 1) - tipo pelo projeto.json, lideres com hora, ja estudado, camadas, so publico', () => {
   const s = lerSkill();
-  assert.match(s, /^---\nname: referencia\n/);
+  assert.match(s, /^---\nname: reference\n/);
   assert.ok(s.includes('projeto.json'), 'o tipo sai do projeto.json');
   assert.match(s, /busca pública/);
   assert.match(s, /hora/);
@@ -351,7 +351,7 @@ test('skill: como o comando comeca (mock secao 1) - tipo pelo projeto.json, lide
 
 test('skill: a ficha (mock secao 2) - formato que o script confere, origem, grau, quem agiu, sem saber, Nao li', () => {
   const s = lerSkill();
-  assert.ok(s.includes('.claude/esquadro/referencias/<tipo>-<assunto>.md'), 'D580: o lugar e o nome da ficha');
+  assert.ok(s.includes('.claude/sworn/referencias/<tipo>-<assunto>.md'), 'D580: o lugar e o nome da ficha');
   assert.ok(s.includes('| Camada | Achado | Origem | Grau | Quem agiu |'), 'cabecalho da tabela de achados');
   assert.ok(s.includes('| Pergunta | Estado | O que mediria |'), 'cabecalho do que ficou sem saber');
   for (const g of ['observado', 'derivado', 'inferido', 'agente', 'dono', 'aberto', 'bloqueado', 'resolvido']) {
@@ -362,18 +362,18 @@ test('skill: a ficha (mock secao 2) - formato que o script confere, origem, grau
   assert.match(s, /"não achei"/i);
   assert.ok(s.includes('node "${CLAUDE_PLUGIN_ROOT}/scripts/referencia.js"'), 'o comando do script');
   assert.match(s, /100 KB/);
-  assert.ok(s.includes('.claude/esquadro/referencias/**'), 'o escopo precisa cobrir a pasta da ficha');
+  assert.ok(s.includes('.claude/sworn/referencias/**'), 'o escopo precisa cobrir a pasta da ficha');
   assert.match(s, /portão de escopo/);
 });
 
-test('init: o Passo 4b oferece o /esquadro:referencia a quem nao tem referencia (Tarefa 4)', () => {
+test('init: o Passo 4b oferece o /sworn:reference a quem nao tem referencia (Tarefa 4)', () => {
   const init = fs.readFileSync(path.join(RAIZ, 'skills', 'init', 'SKILL.md'), 'utf8').replace(/\r\n/g, '\n');
   const i = init.indexOf('**Por último, a referência de topo**');
   const j = init.indexOf('\n## Passo 5', i);
   assert.ok(i !== -1 && j > i, 'sumiu o trecho da referencia de topo no Passo 4b');
   const trecho = init.slice(i, j);
-  assert.match(trecho, /sem candidato[^.]*\/esquadro:referencia/, 'a opcao 1 sem candidato oferece o comando');
-  assert.match(trecho, /Para nomear depois[^"]*\/esquadro:referencia/, 'a opcao 2 diz o comando ao dono');
+  assert.match(trecho, /sem candidato[^.]*\/sworn:reference/, 'a opcao 1 sem candidato oferece o comando');
+  assert.match(trecho, /Para nomear depois[^"]*\/sworn:reference/, 'a opcao 2 diz o comando ao dono');
 });
 
 test('skill: o fecho (mock secao 3) - 3 opcoes, a recomendada primeiro, --gravar so com o sim', () => {

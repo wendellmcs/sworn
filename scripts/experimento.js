@@ -25,8 +25,8 @@ const ob = require('./lib/obrigacoes.js');
  * dentro do codigo e vazamento na superficie publicada.
  */
 
-const MANUAL_DO_PLUGIN = path.join(__dirname, '..', 'skills', 'padrao');
-const RESULTADO = ['.claude', 'esquadro', 'experimento-d83.json'];
+const MANUAL_DO_PLUGIN = path.join(__dirname, '..', 'skills', 'playbook');
+const RESULTADO = ['.claude', 'sworn', 'experimento-d83.json'];
 
 const COMO_EXECUTAR = [
   'A tarefa tem de ser REAL, do projeto de verdade, e das que disparam a marcha',
@@ -59,7 +59,7 @@ function sair(texto, codigo) {
 
 const doPlugin = ob.inventario(MANUAL_DO_PLUGIN);
 if (!doPlugin.ok) {
-  sair('ERRO: nao achei o manual do plugin em skills/padrao. Esta instalacao esta incompleta.', 1);
+  sair('ERRO: nao achei o manual do plugin em skills/playbook. Esta instalacao esta incompleta.', 1);
 }
 
 const caminhoOutro = arg('--manual');

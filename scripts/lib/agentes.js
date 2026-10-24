@@ -145,7 +145,7 @@ function validarFatias(valores) {
 function escalaPara(degraus, i) {
   const proximo = degraus[i + 1];
   if (proximo && proximo.agente) return '`' + proximo.agente + '`';
-  return 'quem decide neste projeto (veja `quemDecide` em `.claude/esquadro/projeto.json`)';
+  return 'quem decide neste projeto (veja `quemDecide` em `.claude/sworn/projeto.json`)';
 }
 
 module.exports = { PASTA, CERCA, ESFORCOS, frontmatter, caminho, listar, validarFatias, escalaPara };

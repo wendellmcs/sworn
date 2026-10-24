@@ -42,7 +42,7 @@ test('inicioDoMes: primeiro dia do mes, meia-noite local, e a chave AAAA-MM', ()
 });
 
 function arvore() {
-  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-gasto-'));
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-gasto-'));
   const proj = path.join(raiz, 'c--proj');
   fs.mkdirSync(path.join(proj, 's2', 'subagents'), { recursive: true });
   fs.writeFileSync(path.join(proj, 's1.jsonl'), linha('m1', 'claude-opus-5-5', U, OUT));
@@ -149,7 +149,7 @@ test('082 T6 (p6-1): mensagens sem id contam cada uma; o id que existe segue con
 // p6-3: o `semPreco` chega ao gastoDoMes e fica no cache (o arquivo do cache seguia somando o seu).
 test('082 T6 (p6-2, p6-3): ilegiveis e semPreco saem do estimarMes, do cache e do gastoDoMes', () => {
   const raiz = arvore();
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-gasto-cache-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-gasto-cache-'));
   try {
     const proj = path.join(raiz, 'c--proj');
     fs.mkdirSync(path.join(proj, 's2', 'subagents', 'agent-y.jsonl'));
@@ -191,14 +191,14 @@ test('083 T6 (p2-7): stat que falha conta em ilegiveis', () => {
 });
 
 test('estimarMes: raiz que nao existe da zero, sem lancar', () => {
-  const r = gasto.estimarMes({ raiz: path.join(os.tmpdir(), 'nao-existe-esquadro-gasto'), mes: { ms: 0, chave: 'x' },
+  const r = gasto.estimarMes({ raiz: path.join(os.tmpdir(), 'nao-existe-sworn-gasto'), mes: { ms: 0, chave: 'x' },
     cache: {}, excluir: [], prazoMs: 100 });
   assert.deepStrictEqual([r.usd, r.pendentes], [0, 0]);
 });
 
 test('gastoDoMes: soma o real do $.store do mes e a estimativa das outras sessoes; cache gravado no disco', () => {
   const raiz = arvore();
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-gasto-cache-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-gasto-cache-'));
   try {
     const agora = new Date(2026, 9, 10, 12).getTime();
     const real = { '2026-10': { s2: 1.5, atual: 2 }, '2026-09': { velha: 99 } };

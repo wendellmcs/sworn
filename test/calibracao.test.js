@@ -210,7 +210,7 @@ test('calibrar.js: sem pasta de transcricoes achada, sai 1 e manda passar --past
 
 test('calibrar.js: --gravar poe limiares.tokensDeContexto no projeto.json e preserva o resto', () => {
   const dir = pasta();
-  const arq = path.join(dir, '.claude', 'esquadro', 'projeto.json');
+  const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
   fs.mkdirSync(path.dirname(arq), { recursive: true });
   fs.writeFileSync(arq, '\uFEFF' + JSON.stringify({ shell: 'bash', limiares: { commits: 5 } }));
   try {
@@ -224,7 +224,7 @@ test('calibrar.js: --gravar poe limiares.tokensDeContexto no projeto.json e pres
 test('calibrar.js (D495): alarme gravado que nao e numero positivo cai no padrao', () => {
   for (const alarme of [0, null, -1]) {
     const dir = pasta();
-    const arq = path.join(dir, '.claude', 'esquadro', 'projeto.json');
+    const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
     fs.mkdirSync(path.dirname(arq), { recursive: true });
     fs.writeFileSync(arq, JSON.stringify({ shell: 'bash', limiares: { tokensAlarme: alarme } }));
     try {
@@ -254,7 +254,7 @@ test('083 T6 (sobra 5): limiarAtual e o em vigor - gravado, modo continuo ou pad
     const trans = path.join(dir, 'trans');
     fs.mkdirSync(trans);
     fs.writeFileSync(path.join(trans, 's1.jsonl'), [chamada(60000), chamada(70000)].join('\n'));
-    const arq = path.join(dir, '.claude', 'esquadro', 'projeto.json');
+    const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
     fs.mkdirSync(path.dirname(arq), { recursive: true });
     fs.writeFileSync(arq, JSON.stringify(cfg));
     try {
@@ -268,27 +268,27 @@ test('083 T6 (sobra 5): limiarAtual e o em vigor - gravado, modo continuo ou pad
 // botao "calibrar" (que aparece enquanto o projeto nunca calibrou) nao voltar a cada chat.
 test('083 T6 (sobra 5): --manter grava o limiar em vigor e preserva o resto; sem projeto.json manda rodar o init', () => {
   const dir = pasta();
-  const arq = path.join(dir, '.claude', 'esquadro', 'projeto.json');
+  const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
   try {
     const sem = rodar(['--manter'], dir);
     assert.strictEqual(sem.status, 1);
-    assert.ok(/esquadro:init/.test(JSON.parse(sem.stdout).erro), sem.stdout);
+    assert.ok(/sworn:init/.test(JSON.parse(sem.stdout).erro), sem.stdout);
     fs.mkdirSync(path.dirname(arq), { recursive: true });
     fs.writeFileSync(arq, JSON.stringify({ shell: 'bash', modoContinuo: true, limiares: { commits: 5 } }));
     const r = rodar(['--manter'], dir);
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
-    assert.deepStrictEqual(JSON.parse(r.stdout), { gravou: true, manteve: true, tokensDeContexto: 250000, arquivo: '.claude/esquadro/projeto.json' });
+    assert.deepStrictEqual(JSON.parse(r.stdout), { gravou: true, manteve: true, tokensDeContexto: 250000, arquivo: '.claude/sworn/projeto.json' });
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(arq, 'utf8')).limiares, { commits: 5, tokensDeContexto: 250000 });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('calibrar.js: --gravar recusa valor torto ou no alarme e nao grava; sem projeto.json manda rodar o init', () => {
   const dir = pasta();
-  const arq = path.join(dir, '.claude', 'esquadro', 'projeto.json');
+  const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
   try {
     const sem = rodar(['--gravar', '300000'], dir);
     assert.strictEqual(sem.status, 1);
-    assert.ok(/esquadro:init/.test(JSON.parse(sem.stdout).erro), sem.stdout);
+    assert.ok(/sworn:init/.test(JSON.parse(sem.stdout).erro), sem.stdout);
     fs.mkdirSync(path.dirname(arq), { recursive: true });
     const antes = JSON.stringify({ shell: 'bash' });
     fs.writeFileSync(arq, antes);

@@ -1,5 +1,5 @@
 'use strict';
-// D449/D451 (0.6.2): o workflow pronto /esquadro:paralelo. O runtime do Claude Code roda o script com
+// D449/D451 (0.6.2): o workflow pronto /sworn:parallel. O runtime do Claude Code roda o script com
 // agent/parallel/phase/log/args globais; aqui o corpo roda com dubles deles, para provar o freio de custo
 // (teto, modelo barato, isolamento de quem edita) sem gastar um agente.
 const test = require('node:test');
@@ -7,7 +7,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ARQ = path.join(__dirname, '..', 'workflows', 'paralelo.js');
+const ARQ = path.join(__dirname, '..', 'workflows', 'parallel.js');
 const texto = () => fs.readFileSync(ARQ, 'utf8');
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -34,7 +34,7 @@ test('paralelo: meta e literal puro com name, description e a fase que o corpo u
   assert.ok(t.startsWith('export const meta = {'), 'o script tem de comecar pelo meta');
   const meta = t.slice(0, t.indexOf('\n}\n') + 2);
   assert.ok(!/\$\{|\.\.\.|\b[a-z]+\(/i.test(meta.replace(/'[^']*'/g, "''")), 'meta tem de ser literal puro: ' + meta);
-  assert.ok(/^  name: 'paralelo',$/m.test(meta), 'name paralelo -> /esquadro:paralelo');
+  assert.ok(/^  name: 'parallel',$/m.test(meta), 'name parallel -> /sworn:parallel');
   assert.ok(/^  description: '[^']+',$/m.test(meta));
   const titulos = Array.from(meta.matchAll(/title: '([^']+)'/g)).map((m) => m[1]);
   const usados = Array.from(t.matchAll(/\bphase\('([^']+)'\)/g)).map((m) => m[1]);
@@ -96,16 +96,16 @@ test('paralelo: leitura abre no agente leve do plugin; quem edita segue no agent
     { tarefa: 'corrigir B', edita: true },
     { tarefa: 'ler C', edita: false, modelo: 'sonnet' },
   ]);
-  assert.deepStrictEqual(chamadas.map((c) => c.opts.agentType), ['esquadro:leitor', undefined, 'esquadro:leitor']);
+  assert.deepStrictEqual(chamadas.map((c) => c.opts.agentType), ['sworn:reader', undefined, 'sworn:reader']);
   assert.ok(!('agentType' in chamadas[1].opts), 'quem edita nao recebe agentType nenhum');
   assert.strictEqual(chamadas[2].opts.model, 'sonnet', 'o modelo pedido continua valendo no agente leve');
 });
 
 test('paralelo: o agente leve existe, abre sem CLAUDE.md, nao edita e nao fixa modelo (D455)', () => {
-  const t = fs.readFileSync(path.join(__dirname, '..', 'agents', 'leitor.md'), 'utf8');
+  const t = fs.readFileSync(path.join(__dirname, '..', 'agents', 'reader.md'), 'utf8');
   const cab = t.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   assert.ok(cab, 'o agente nao tem frontmatter');
-  assert.ok(/^name: leitor$/m.test(cab[1]), 'name leitor -> esquadro:leitor');
+  assert.ok(/^name: reader$/m.test(cab[1]), 'name reader -> sworn:reader');
   assert.ok(/^omitClaudeMd: true$/m.test(cab[1]), 'falta omitClaudeMd: true');
   // lista fechada: sem Skill a lista de skills e as ferramentas adiadas saem da abertura (D447, medido na s78).
   // Os dois shells: no Windows o `claude -p` so tem PowerShell (medido na s81); o que faltar e ignorado.
@@ -118,7 +118,7 @@ test('paralelo: o agente leve existe, abre sem CLAUDE.md, nao edita e nao fixa m
 // D457 (0.6.5): na medicao da s84 o leitor contou 110 linhas num arquivo de 121 com
 // `(Get-Content | Measure-Object -Line).Lines`, que pula linha vazia, e disse que era o mesmo que `wc -l`.
 test('paralelo: o agente leve avisa que Measure-Object -Line pula linha vazia (D457)', () => {
-  const t = fs.readFileSync(path.join(__dirname, '..', 'agents', 'leitor.md'), 'utf8');
+  const t = fs.readFileSync(path.join(__dirname, '..', 'agents', 'reader.md'), 'utf8');
   const corpo = t.replace(/^---\r?\n[\s\S]*?\r?\n---/, '');
   const linha = corpo.split(/\r?\n/).find((l) => /Measure-Object -Line/.test(l)) || '';
   assert.ok(linha, 'o corpo do leitor nao cita Measure-Object -Line');

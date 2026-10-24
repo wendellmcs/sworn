@@ -50,21 +50,21 @@ function causaDoErro(e) {
 
 /**
  * 0.3.3, itens 26 e 31: por que o projeto.json que existe nao se le, e o que fazer. `null` quando ele
- * nao existe (o normal antes do /esquadro:init) ou quando, olhando de novo, ele se le.
+ * nao existe (o normal antes do /sworn:init) ou quando, olhando de novo, ele se le.
  */
 function causaDoProjetoIlegivel(cwd) {
   let bruto;
   try {
-    bruto = fs.readFileSync(config.caminhoEmEsquadro(cwd, 'projeto.json'), 'utf8');
+    bruto = fs.readFileSync(config.caminhoEmSworn(cwd, 'projeto.json'), 'utf8');
   } catch (e) {
     if (e && e.code === 'ENOENT') return null;
     return {
       causa: 'erro de leitura: ' + causaDoErro(e),
       fazer: 'Confira a permissao do arquivo (ou se ele e uma pasta). ' +
-        'Se o arquivo aceitar escrita, /esquadro:init de novo o regrava com as respostas dadas.'
+        'Se o arquivo aceitar escrita, /sworn:init de novo o regrava com as respostas dadas.'
     };
   }
-  const corrija = 'Corrija o JSON ou rode /esquadro:init de novo (o init regrava o projeto.json com as respostas dadas).';
+  const corrija = 'Corrija o JSON ou rode /sworn:init de novo (o init regrava o projeto.json com as respostas dadas).';
   let obj;
   try { obj = JSON.parse(textoLib.semBom(bruto)); } catch (e) { return { causa: 'JSON quebrado', fazer: corrija }; }
   // H-3/H-4: concorda com config.lerJson, que tambem recusa lista; senao o config devolve null e o aviso calava.
@@ -73,7 +73,7 @@ function causaDoProjetoIlegivel(cwd) {
 }
 
 /**
- * D116 / R-T10-22: as quatro respostas da entrevista do `/esquadro:init`
+ * D116 / R-T10-22: as quatro respostas da entrevista do `/sworn:init`
  * (`modeloDeAmeaca`, `quemDecide`, `provaDePronto`, `fontesCanonicas`) eram
  * gravadas, validadas na forma e lidas por NINGUEM - nem portao, nem reinjecao.
  * Duas das dez regras semeadas mandam consultar justamente esses valores ("a menos
@@ -117,24 +117,24 @@ function contexto(cwd) {
 /** Texto curto que o SessionStart reinjeta. A2: reinjecao depois da compactacao. */
 function nucleo(cwd) {
   try {
-    const texto = fs.readFileSync(path.join(cwd, '.claude', 'esquadro', 'regras.md'), 'utf8');
+    const texto = fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'regras.md'), 'utf8');
     const regras = regraLib.parseRegras(texto);
     if (!regras.length) return null;
-    const linhas = ['# esquadro - regras deste projeto (reinjetadas nesta sessao)', ''];
+    const linhas = ['# sworn - regras deste projeto (reinjetadas nesta sessao)', ''];
     // D116: o contexto e cabecalho, nao substituto - a regra segue sendo o corpo.
     // Sem projeto.json nao ha contexto a declarar, e a reinjecao das regras nao pode
-    // morrer por isso: e a ausencia normal de todo projeto antes do /esquadro:init.
+    // morrer por isso: e a ausencia normal de todo projeto antes do /sworn:init.
     const ctx = contexto(cwd);
     if (ctx) linhas.push(ctx.join('\n'), '');
     // 0.3.2, item 16: projeto.json PRESENTE e ilegivel (JSON quebrado, ou nao e objeto) faz o
     // config devolver null, igual ao ausente - e a reinjecao saia calada, sem o contexto.
-    // Ausente segue como sempre (o normal antes do /esquadro:init); ilegivel avisa e diz o que fazer.
+    // Ausente segue como sempre (o normal antes do /sworn:init); ilegivel avisa e diz o que fazer.
     // 0.3.3, itens 26 e 31: o aviso diz a causa de verdade (nao se le, JSON quebrado ou nao e um objeto) e
     // o que fazer, inclusive o que o init faz com o arquivo.
     const ilegivel = ctx ? null : causaDoProjetoIlegivel(cwd);
     if (ilegivel) {
       linhas.push(
-        'ATENCAO: .claude/esquadro/projeto.json existe mas nao se le (' + ilegivel.causa + '), ' +
+        'ATENCAO: .claude/sworn/projeto.json existe mas nao se le (' + ilegivel.causa + '), ' +
         'entao o contexto declarado nao entra aqui. ' + ilegivel.fazer,
         ''
       );
@@ -143,9 +143,9 @@ function nucleo(cwd) {
     linhas.push('');
     linhas.push(
       ctx
-        ? 'Fonte das regras: .claude/esquadro/regras.md; do contexto: ' +
-          '.claude/esquadro/projeto.json. Regra numerica se cita com arquivo:linha.'
-        : 'Fonte: .claude/esquadro/regras.md. Regra numerica se cita com arquivo:linha.'
+        ? 'Fonte das regras: .claude/sworn/regras.md; do contexto: ' +
+          '.claude/sworn/projeto.json. Regra numerica se cita com arquivo:linha.'
+        : 'Fonte: .claude/sworn/regras.md. Regra numerica se cita com arquivo:linha.'
     );
     return linhas.join('\n') + '\n';
   } catch (e) {
@@ -153,8 +153,8 @@ function nucleo(cwd) {
     // falha vira uma linha curta com a causa e o que fazer - a abertura nao pode lancar, mas tambem nao pode
     // deixar o agente sem regra achando que nao ha regra.
     if (e && e.code === 'ENOENT') return null;
-    return 'esquadro: as regras deste projeto nao se leram (' + causaDoErro(e) + '), entao nada delas entra nesta sessao. ' +
-      'Confira .claude/esquadro/regras.md (permissao, ou se e uma pasta) e abra a sessao de novo.\n';
+    return 'sworn: as regras deste projeto nao se leram (' + causaDoErro(e) + '), entao nada delas entra nesta sessao. ' +
+      'Confira .claude/sworn/regras.md (permissao, ou se e uma pasta) e abra a sessao de novo.\n';
   }
 }
 
@@ -263,7 +263,7 @@ function montar(cwd, sessionId, origem) {
       ? 'esta vazio ou ausente'
       : 'nao e um texto (e ' + (Array.isArray(ativo.arquivo) ? 'uma lista' : typeof ativo.arquivo) + ')';
     estadoPartes.push(bloco('ESTADO - plano em execucao', [
-      'Plano ativo ilegivel: o campo "arquivo" de .claude/esquadro/plano-ativo.json ' + tipo +
+      'Plano ativo ilegivel: o campo "arquivo" de .claude/sworn/plano-ativo.json ' + tipo +
       '. Abra o plano de novo (ou apague esse arquivo).'
     ]));
   } else if (ativo && !caminhoLib.dentroPeloCaminhoReal(ativo.arquivo, cwd)) {

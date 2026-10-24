@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="780" height="500" viewBox="0 0 780 500" role="img" aria-labelledby="titulo desc">
   <title id="titulo">Sessão de exemplo: o portão de fecho devolve o turno ao agente</title>
-  <desc id="desc">O agente diz "Pronto! Corrigi o calculo do frete e todos os testes passam." sem colar saída de comando. O hook Stop do esquadro bloqueia o fecho com a mensagem literal do scripts/portao-fecho.js: cole a saída literal do comando que prova o que afirmou, ou declare o que não rodou, e por quê.</desc>
+  <desc id="desc">O agente diz "Pronto! Corrigi o calculo do frete e todos os testes passam." sem colar saída de comando. O hook Stop do sworn bloqueia o fecho com a mensagem literal do scripts/portao-fecho.js: cole a saída literal do comando que prova o que afirmou, ou declare o que não rodou, e por quê.</desc>
   <rect width="780" height="500" rx="12" fill="#0D1117"/>
   <path d="M12 0H768A12 12 0 0 1 780 12V40H0V12A12 12 0 0 1 12 0Z" fill="#161B22"/>
   <rect x="0.75" y="0.75" width="778.5" height="498.5" rx="11.5" fill="none" stroke="#30363D" stroke-width="1.5"/>
@@ -15,9 +15,9 @@
     <circle cx="37" cy="110" r="4.5" fill="#3FB950"/>
     <text x="52" y="115" fill="#E6EDF3">Pronto! Corrigi o calculo do frete e todos os testes passam.</text>
 
-    <text x="52" y="152" font-size="12.5" fill="#F0883E" letter-spacing="0.5">hook Stop · esquadro</text>
+    <text x="52" y="152" font-size="12.5" fill="#F0883E" letter-spacing="0.5">hook Stop · sworn</text>
     <rect x="52" y="164" width="3" height="250" rx="1.5" fill="#F0883E"/>
-    <text x="68" y="183" fill="#F0883E" font-weight="700">esquadro - portao de fecho (trava 3).</text>
+    <text x="68" y="183" fill="#F0883E" font-weight="700">sworn - portao de fecho (trava 3).</text>
     <text x="68" y="217" fill="#E6EDF3">Voce afirmou sucesso e nao colou evidencia desta rodada.</text>
     <text x="68" y="239" fill="#E6EDF3">Faca uma destas duas coisas, e responda de novo:</text>
     <text x="84" y="273" fill="#C9D1D9">1. cole a saida literal do comando que prova o que voce afirmou,</text>

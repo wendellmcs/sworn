@@ -10,7 +10,7 @@ const regra = require('../scripts/lib/regra.js');
 
 /**
  * Gatilho 1 da spec (secao 6): instalar e o momento natural de conferir o
- * catalogo de modelos. Decisao 36 do dono: o /esquadro:init dispara a consulta
+ * catalogo de modelos. Decisao 36 do dono: o /sworn:init dispara a consulta
  * ao terminar, com o motivo 'instalacao'; a atualizacao do plugin fica
  * declarada como limite no README - nenhum evento avisa o plugin de que ele
  * foi atualizado.
@@ -24,7 +24,7 @@ const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'catalogo.js');
 const ler = (rel) => fs.readFileSync(path.join(RAIZ, rel), 'utf8');
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro gatilho1-')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn gatilho1-')); }
 
 function rodar(args, cwd) {
   return spawnSync(process.execPath, [SCRIPT].concat(args), { cwd: cwd, encoding: 'utf8' });
@@ -126,7 +126,7 @@ test('gatilho 1: o init consulta DEPOIS de gravar e ANTES de fechar', () => {
   assert.ok((gravar < consulta) && (consulta < fechar),
     'a consulta tem de vir depois de gravar (Passo 7) e antes de fechar (Passo 8)');
   // o passo cita o Passo 1b do auditar como fonte do procedimento: ele tem de existir
-  assert.ok(ler('skills/auditar/SKILL.md').includes('\n## Passo 1b'), 'sumiu o Passo 1b do auditar');
+  assert.ok(ler('skills/audit/SKILL.md').includes('\n## Passo 1b'), 'sumiu o Passo 1b do auditar');
 });
 
 test('gatilho 1: o init registra pelo script, e diz por que nao pelo Write', () => {
@@ -136,12 +136,12 @@ test('gatilho 1: o init registra pelo script, e diz por que nao pelo Write', () 
 });
 
 test('gatilho 1: o init avisa que atualizar o plugin nao repete a conferencia', () => {
-  // por paragrafo: a secao ja cita o /esquadro:auditar em outro item, e a secao
+  // por paragrafo: a secao ja cita o /sworn:audit em outro item, e a secao
   // inteira passaria mesmo sem dizer o que rodar depois de atualizar
   const sobre = secao(ler('skills/init/SKILL.md'), '## Passo 7e')
     .split(/\r?\n\r?\n/).filter((p) => /atualiz/.test(p));
   assert.ok(sobre.length > 0, 'nao fala de atualizacao');
-  assert.ok(sobre.some((p) => p.includes('/esquadro:auditar')),
+  assert.ok(sobre.some((p) => p.includes('/sworn:audit')),
     'fala de atualizacao sem dizer o que rodar depois: ' + sobre.join(' | ').slice(0, 200));
 });
 
@@ -190,16 +190,16 @@ test('gatilho 1: todo comando catalogo.js das skills roda como esta escrito', ()
     }
   }
   // sem isto, uma skill sem comando nenhum passaria por nao ter o que rodar
-  assert.deepStrictEqual(['auditar', 'init'].filter((n) => !rodados.has(n)), [],
+  assert.deepStrictEqual(['audit', 'init'].filter((n) => !rodados.has(n)), [],
     'skill que consulta o catalogo sem comando catalogo.js: ' + Array.from(rodados).join(', '));
 });
 
 // ── o README ─────────────────────────────────────────────────────────────
 
 test('gatilho 1: o README declara a atualizacao do plugin como limite', () => {
-  const t = ler('README.md');
-  const i = t.indexOf('\n## O que o `esquadro` NÃO promete');
-  assert.ok(i !== -1, 'sumiu a secao do que o esquadro nao promete');
+  const t = ler('GUIA.md');
+  const i = t.indexOf('\n## O que o `sworn` NÃO promete');
+  assert.ok(i !== -1, 'sumiu a secao do que o sworn nao promete');
   const j = t.indexOf('\n## ', i + 1);
   const itens = t.slice(i, j).split(/\r?\n/).filter((l) => /^- /.test(l));
   assert.ok(itens.some((l) => /atualizado/.test(l)),

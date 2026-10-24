@@ -10,7 +10,7 @@ const enxuto = require('./lib/enxuto.js');
  * additionalContext; stdout puro a doc nao garante). Os agentes que so leem ficam de fora. Entrada torta falha
  * aberto: injeta, como no ponytail, de onde veio a ideia.
  */
-const SO_LEEM = ['esquadro:inspetor', 'esquadro:juiz-mesmo', 'esquadro:leitor', 'Explore', 'Plan'];
+const SO_LEEM = ['sworn:inspector', 'sworn:dedupe-judge', 'sworn:reader', 'Explore', 'Plan'];
 
 io.blindar(function () {
   io.lerEntrada(function (e) {

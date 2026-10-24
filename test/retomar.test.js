@@ -14,7 +14,7 @@ const MIN = 60 * 1000;
 const AGORA = Date.parse('2026-10-22T14:35:00.000Z');
 const ID = 'd731fc49-6d1e-4a6b-9a55-0123456789ab';
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-retomar-')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-retomar-')); }
 function registro(linhas) {
   const dir = pasta();
   const f = path.join(dir, 's.jsonl');
@@ -59,7 +59,7 @@ test('volta-resumo: lerRegistro junta os pedidos do dono, do mais novo, e tira o
     naFila(48, 'mensagem de outro agente', { kind: 'peer', from: 'a1' }),
     naFila(47, 'aviso de tarefa', null, { commandMode: 'task-notification' }),
     pedido(45, 'veja isto <browser_instruction>\nfaca X\n</browser_instruction> e <ide_selection>codigo</ide_selection>ok'),
-    pedido(40, '<pasted_content id="ab12">\nEsquadro (raiz). Frente x.\n</pasted_content id="ab12">'),
+    pedido(40, '<pasted_content id="ab12">\nSworn (raiz). Frente x.\n</pasted_content id="ab12">'),
     pedido(35, '<system-reminder>so lembrete</system-reminder>'),
     pedido(30, 'Eu dou o ok'),
     'linha torta {'
@@ -68,7 +68,7 @@ test('volta-resumo: lerRegistro junta os pedidos do dono, do mais novo, e tira o
     const reg = retomar.lerRegistro(r.f);
     assert.deepStrictEqual(reg.pedidos.map(function (p) { return p.texto; }), [
       'Eu dou o ok',
-      'Esquadro (raiz). Frente x.',
+      'Sworn (raiz). Frente x.',
       'veja isto e ok',
       'qual o numero de inspetores?',
       'segue com a T4'
@@ -92,9 +92,9 @@ test('volta-resumo: o resumo da compactacao nao e pedido do dono (A5-01, A9-08)'
 
 test('volta-resumo: o comando de barra conta como pedido, pelo nome e pelos argumentos', () => {
   const r = registro([pedido(10,
-    '<command-message>handoff is running</command-message>\n<command-name>/esquadro:handoff</command-name>\n<command-args>volta</command-args>')]);
+    '<command-message>handoff is running</command-message>\n<command-name>/sworn:handoff</command-name>\n<command-args>volta</command-args>')]);
   try {
-    assert.deepStrictEqual(retomar.lerRegistro(r.f).pedidos.map(function (p) { return p.texto; }), ['/esquadro:handoff volta']);
+    assert.deepStrictEqual(retomar.lerRegistro(r.f).pedidos.map(function (p) { return p.texto; }), ['/sworn:handoff volta']);
   } finally { r.fim(); }
 });
 
@@ -116,8 +116,8 @@ test('volta-resumo: respostas = o ultimo texto de cada turno, 3 no maximo, do ma
 test('volta-resumo: arquivos mexidos (Edit/Write/NotebookEdit), unicos, do mais novo, e o ultimo handoff do modelo', () => {
   const linhas = [pedido(200, 'p')];
   for (let i = 0; i < 25; i++) linhas.push(ferramenta(190 - i, 'Edit', { file_path: '/proj/a' + i + '.js' }));
-  linhas.push(ferramenta(150, 'Write', { file_path: '/proj/.claude/esquadro/handoff/2026-10-22-frente.md' }));
-  linhas.push(ferramenta(140, 'Write', { file_path: '/proj/.claude/esquadro/handoff/2026-10-22-retomar-aaaaaaaa.md' }));
+  linhas.push(ferramenta(150, 'Write', { file_path: '/proj/.claude/sworn/handoff/2026-10-22-frente.md' }));
+  linhas.push(ferramenta(140, 'Write', { file_path: '/proj/.claude/sworn/handoff/2026-10-22-retomar-aaaaaaaa.md' }));
   linhas.push(ferramenta(130, 'NotebookEdit', { notebook_path: '/proj/n.ipynb' }));
   linhas.push(ferramenta(120, 'Edit', { file_path: '/proj/a24.js' }));
   linhas.push(ferramenta(110, 'Read', { file_path: '/proj/lido.js' }));
@@ -128,10 +128,10 @@ test('volta-resumo: arquivos mexidos (Edit/Write/NotebookEdit), unicos, do mais 
     // a24.js foi mexido duas vezes: entra uma
     assert.strictEqual(new Set(reg.arquivos).size, 20);
     assert.deepStrictEqual(reg.arquivos.slice(0, 4), ['/proj/a24.js', '/proj/n.ipynb',
-      '/proj/.claude/esquadro/handoff/2026-10-22-retomar-aaaaaaaa.md', '/proj/.claude/esquadro/handoff/2026-10-22-frente.md']);
+      '/proj/.claude/sworn/handoff/2026-10-22-retomar-aaaaaaaa.md', '/proj/.claude/sworn/handoff/2026-10-22-frente.md']);
     assert.ok(reg.arquivos.indexOf('/proj/lido.js') === -1);
-    // o resumo do proprio esquadro (retomar-) nao e handoff do modelo
-    assert.deepStrictEqual(reg.handoff, { caminho: '/proj/.claude/esquadro/handoff/2026-10-22-frente.md', horario: AGORA - 150 * MIN });
+    // o resumo do proprio sworn (retomar-) nao e handoff do modelo
+    assert.deepStrictEqual(reg.handoff, { caminho: '/proj/.claude/sworn/handoff/2026-10-22-frente.md', horario: AGORA - 150 * MIN });
   } finally { r.fim(); }
 });
 
@@ -154,7 +154,7 @@ test('volta-resumo: lerRegistro le a cauda em blocos sem partir caractere acentu
 
 test('volta-resumo: lerRegistro sem leitura = null; sem pedido = listas vazias', () => {
   assert.strictEqual(retomar.lerRegistro(null), null);
-  assert.strictEqual(retomar.lerRegistro(path.join(os.tmpdir(), 'nao-existe-esquadro-retomar.jsonl')), null);
+  assert.strictEqual(retomar.lerRegistro(path.join(os.tmpdir(), 'nao-existe-sworn-retomar.jsonl')), null);
   const r = registro(['', 'torta {', resultado(5)]);
   try {
     assert.deepStrictEqual(retomar.lerRegistro(r.f), { pedidos: [], respostas: [], arquivos: [], handoff: null });
@@ -169,15 +169,15 @@ function dados(extra) {
       pedidos: [{ horario: AGORA - 30 * MIN, texto: 'Eu dou o ok' }, { horario: AGORA - 40 * MIN, texto: 'qual o numero?' }],
       respostas: [{ horario: AGORA - 29 * MIN, texto: 'D583 gravada.' }],
       arquivos: ['/proj/scripts/referencia.js', '/fora/outro.md'],
-      handoff: { caminho: '/proj/.claude/esquadro/handoff/2026-10-22-s173.md', horario: AGORA - 31 * MIN }
+      handoff: { caminho: '/proj/.claude/sworn/handoff/2026-10-22-s173.md', horario: AGORA - 31 * MIN }
     },
-    frente: 'esquadro-pendencias', objetivo: 'plano do REA, Tarefa 3.',
+    frente: 'sworn-pendencias', objetivo: 'plano do REA, Tarefa 3.',
     plano: 'plano rea · 3 de 5 tarefas',
     git: { ramo: 'master', head: '1a2b3c4', modificados: ['M docs/decisoes.md'] }
   }, extra || {});
 }
 
-test('volta-resumo: montar segue o mock (D588), com o texto do esquadro em ASCII', () => {
+test('volta-resumo: montar segue o mock (D588), com o texto do sworn em ASCII', () => {
   const t = retomar.montar(dados());
   const linhas = t.split('\n');
   assert.strictEqual(linhas[0], '# Resumo para retomar o chat d731fc49');
@@ -187,9 +187,9 @@ test('volta-resumo: montar segue o mock (D588), com o texto do esquadro em ASCII
     '## Arquivos mexidos (os ultimos)', '## Para o chat novo']) {
     assert.ok(linhas.indexOf(secao) !== -1, secao);
   }
-  assert.ok(linhas.indexOf('Frente: esquadro-pendencias. Objetivo: plano do REA, Tarefa 3.') !== -1);
+  assert.ok(linhas.indexOf('Frente: sworn-pendencias. Objetivo: plano do REA, Tarefa 3.') !== -1);
   assert.ok(linhas.indexOf('Plano: plano rea · 3 de 5 tarefas') !== -1);
-  assert.ok(linhas.indexOf('Ultimo handoff do modelo: .claude/esquadro/handoff/2026-10-22-s173.md (' + hora(31) + ').') !== -1);
+  assert.ok(linhas.indexOf('Ultimo handoff do modelo: .claude/sworn/handoff/2026-10-22-s173.md (' + hora(31) + ').') !== -1);
   assert.ok(linhas.indexOf('Raiz: master 1a2b3c4; modificados: M docs/decisoes.md.') !== -1);
   assert.ok(linhas.indexOf('1. (' + hora(30) + ') Eu dou o ok') !== -1);
   assert.ok(linhas.indexOf('2. (' + hora(40) + ') qual o numero?') !== -1);
@@ -197,8 +197,8 @@ test('volta-resumo: montar segue o mock (D588), com o texto do esquadro em ASCII
   // dentro da raiz sai relativo; fora, como veio
   assert.ok(linhas.indexOf('scripts/referencia.js') !== -1);
   assert.ok(linhas.indexOf('/fora/outro.md') !== -1);
-  assert.ok(linhas.indexOf('Se precisar de handoff completo, rode /esquadro:handoff.') !== -1);
-  // o texto fixo do esquadro e ASCII (D532); so o que veio do chat pode ter acento
+  assert.ok(linhas.indexOf('Se precisar de handoff completo, rode /sworn:handoff.') !== -1);
+  // o texto fixo do sworn e ASCII (D532); so o que veio do chat pode ter acento
   const fixo = retomar.montar(dados({ plano: 'plano x', registro: { pedidos: [{ horario: AGORA, texto: 'ok' }],
     respostas: [], arquivos: [], handoff: null } }));
   assert.ok(/^[\x00-\x7E]*$/.test(fixo), 'texto fixo fora de ASCII');
@@ -214,7 +214,7 @@ test('volta-resumo: montar corta pedido em 600 e resposta em 800, mascara segred
     handoff: null
   } }));
   // acima do teto saem os arquivos mais velhos, nao o fim do resumo
-  assert.ok(t.indexOf('Se precisar de handoff completo, rode /esquadro:handoff.') !== -1);
+  assert.ok(t.indexOf('Se precisar de handoff completo, rode /sworn:handoff.') !== -1);
   assert.ok(t.indexOf('c'.repeat(300) + '0') !== -1);
   assert.ok(t.indexOf('c'.repeat(300) + '19') === -1);
   const p1 = t.split('\n').filter(function (l) { return /^1\. \(\d\d:\d\d\) a/.test(l); })[0];
@@ -247,9 +247,9 @@ test('volta-resumo: gravar cria a pasta handoff/ e o mesmo chat no mesmo dia nao
     const rel = retomar.gravar(raiz, ID, AGORA, 'um');
     const d = new Date(AGORA);
     const dia = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    assert.strictEqual(rel, '.claude/esquadro/handoff/' + dia + '-retomar-d731fc49.md');
+    assert.strictEqual(rel, '.claude/sworn/handoff/' + dia + '-retomar-d731fc49.md');
     assert.strictEqual(retomar.gravar(raiz, ID, AGORA + MIN, 'dois'), rel);
-    const dir = path.join(raiz, '.claude', 'esquadro', 'handoff');
+    const dir = path.join(raiz, '.claude', 'sworn', 'handoff');
     assert.deepStrictEqual(fs.readdirSync(dir), [dia + '-retomar-d731fc49.md']);
     assert.strictEqual(fs.readFileSync(path.join(dir, dia + '-retomar-d731fc49.md'), 'utf8'), 'dois');
   } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
@@ -265,13 +265,13 @@ test('volta-resumo: o id da sessao que nao e nome seguro nao vira caminho', () =
 
 test('volta-resumo: resumir grava e devolve o caminho; handoff em dia = gravado depois do ultimo pedido', () => {
   const raiz = pasta();
-  const ho = path.join(raiz, '.claude', 'esquadro', 'handoff', '2026-10-22-frente.md');
+  const ho = path.join(raiz, '.claude', 'sworn', 'handoff', '2026-10-22-frente.md');
   const r = registro([pedido(40, 'faz o handoff'), ferramenta(35, 'Write', { file_path: ho }), resposta(34, 'Handoff gravado.')]);
   try {
     const s = retomar.resumir({ raiz: raiz, sessao: ID, transcript: r.f, frente: null, agora: AGORA,
       volta: { parado: 76 * MIN, contexto: 461234, modelo: 'claude-opus-5-5' } });
-    assert.ok(s && /^\.claude\/esquadro\/handoff\/\d{4}-\d\d-\d\d-retomar-d731fc49\.md$/.test(s.caminho));
-    assert.deepStrictEqual(s.handoff, { caminho: '.claude/esquadro/handoff/2026-10-22-frente.md', emDia: true });
+    assert.ok(s && /^\.claude\/sworn\/handoff\/\d{4}-\d\d-\d\d-retomar-d731fc49\.md$/.test(s.caminho));
+    assert.deepStrictEqual(s.handoff, { caminho: '.claude/sworn/handoff/2026-10-22-frente.md', emDia: true });
     assert.strictEqual(s.chat, 'd731fc49');
     const texto = fs.readFileSync(path.join(raiz, s.caminho), 'utf8');
     assert.ok(texto.indexOf('faz o handoff') !== -1);

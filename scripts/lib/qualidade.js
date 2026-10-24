@@ -10,7 +10,7 @@ const CHAVE = 'qualidadeDeResposta';
 const TETO = 1000;
 
 const BLOCO = [
-  '# esquadro - qualidade de resposta (toda resposta no chat ao usuario)',
+  '# sworn - qualidade de resposta (toda resposta no chat ao usuario)',
   '',
   '1. Conclusao na 1a linha. Sai: "Vou analisar o modulo". Fica: "A suite passou; falta teste em X". Em decisao, o que muda a escolha vem antes das opcoes.',
   '2. Sem preambulo nem cortesia. Sai: "Otima pergunta!". Bastidor da sessao (sandbox, permissao) so se o usuario tiver de agir.',
@@ -20,7 +20,7 @@ const BLOCO = [
   '6. Nao repetir o que o usuario acabou de ler ou decidir: citar onde esta. A resposta final fecha sozinha: o que mudou e o que falta, mesmo bloqueada.',
   '',
   'Valem no idioma de quem pergunta. Texto gravado em arquivo (plano, decisao, handoff) fica fora.',
-  'Desligar neste projeto: "' + CHAVE + '": false em .claude/esquadro/projeto.json.'
+  'Desligar neste projeto: "' + CHAVE + '": false em .claude/sworn/projeto.json.'
 ].join('\n') + '\n';
 
 function ehObjeto(p) {

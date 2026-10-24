@@ -18,10 +18,10 @@ const veredito = require('./lib/veredito.js');
 // NUNCA barra: sai sempre com 0 e nunca emite `decision` (no SubagentStop, `block` faria o inspetor
 // continuar). NUNCA cala: o que nao foi gravado vira `systemMessage` com a causa. NUNCA sobrescreve.
 
-const AGENTE = 'esquadro:inspetor';
+const AGENTE = 'sworn:inspector';
 // revisao/<id>/<n>/vereditos (formato novo) ou revisao/<n>/vereditos (formato da 0.3.0); D503 (E9): ou a 2a passada
 // do pacote com referencia, <ronda>/invertida/vereditos.
-const PASTA_DE_RONDA = /(?:^|\/)\.claude\/esquadro\/revisao\/[^/]+(?:\/[^/]+)?(?:\/invertida)?\/vereditos$/i;
+const PASTA_DE_RONDA = /(?:^|\/)\.claude\/sworn\/revisao\/[^/]+(?:\/[^/]+)?(?:\/invertida)?\/vereditos$/i;
 
 /** O nome do arquivo: a chave da lente. O titulo so vale quando as duas familias nao o dividem. */
 // RV-02 (D422): a regra mora no veredito.js, que o apurar tambem usa para a chave de repeticao.
@@ -59,7 +59,7 @@ function pastaDaRonda(campo, raiz) {
   }
   const abs = path.resolve(raiz, campo.trim());
   if (!PASTA_DE_RONDA.test(glob.normalizar(abs))) {
-    return { erro: '"' + campo.trim() + '" nao e a pasta vereditos de uma ronda em .claude/esquadro/revisao/' };
+    return { erro: '"' + campo.trim() + '" nao e a pasta vereditos de uma ronda em .claude/sworn/revisao/' };
   }
   const dentro = glob.normalizar(path.relative(raiz, abs));
   if (dentro === '..' || dentro.startsWith('../') || path.isAbsolute(dentro)) {
@@ -95,12 +95,12 @@ function comoGravar(lente, destino) {
 }
 
 function aviso(causa, lente, destino) {
-  return 'esquadro: nao gravei o veredito' + (lente ? ' da lente ' + lente : '') + ': ' + causa + '. ' + comoGravar(lente, destino);
+  return 'sworn: nao gravei o veredito' + (lente ? ' da lente ' + lente : '') + ': ' + causa + '. ' + comoGravar(lente, destino);
 }
 
 /** F3-08: ja existe um veredito diferente na pasta: nao e caso de "gravar a mao", e de conferir qual dos dois vale. */
 function avisoOutroConteudo(lente, arquivo) {
-  return 'esquadro: nao gravei o veredito da lente ' + lente + ': ja existe ' + lente + '.json com outro conteudo; nao sobrescrevi. ' +
+  return 'sworn: nao gravei o veredito da lente ' + lente + ': ja existe ' + lente + '.json com outro conteudo; nao sobrescrevi. ' +
     'Compare os dois (o arquivo e o JSON do inspetor) e apague o errado antes de gravar de novo: ' + arquivo + '.';
 }
 
@@ -202,7 +202,7 @@ function tratar(e) {
       // encerramento, nao achar JSON e avisar "nao achei o JSON". Diz agora, sem ler transcricao, que esse
       // aviso pode ser ignorado.
       if (gravado.lente) {
-        return 'esquadro: gravei o veredito da lente ' + gravado.lente + ' em ' +
+        return 'sworn: gravei o veredito da lente ' + gravado.lente + ' em ' +
           glob.normalizar(path.relative(raiz, gravado.arquivo)) + ', mas nao consegui gravar a marca deste ' +
           'inspetor. Se o fim deste subagente avisar que nao achou o JSON do veredito, ignore esse aviso: ' +
           'o veredito ja esta gravado.';
@@ -217,7 +217,7 @@ io.blindar(function () {
     let resultado;
     try { resultado = tratar(e); } catch (erro) {
       const lente = lenteDaResposta(e);
-      resultado = 'esquadro: nao consegui gravar o veredito ' +
+      resultado = 'sworn: nao consegui gravar o veredito ' +
         (lente ? 'da lente ' + lente : '(nao soube qual lente: a resposta do inspetor nao trazia um JSON legivel)') +
         ' - erro inesperado (' + (erro && erro.message) + '). ' + comoGravar(lente, null);
     }

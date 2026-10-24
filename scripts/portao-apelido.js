@@ -90,7 +90,7 @@ if (tem('corrigir')) {
     process.exit(0);
   }
 
-  const cfg = path.join(cwd, '.claude', 'esquadro', 'projeto.json');
+  const cfg = path.join(cwd, '.claude', 'sworn', 'projeto.json');
   const obj = config.carregarProjeto(cwd);
   let achou = false;
   for (const degrau of ((obj.agentes || {}).degraus || [])) {

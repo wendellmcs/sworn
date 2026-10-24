@@ -40,7 +40,7 @@ const json = (rel) => JSON.parse(ler(rel));
 const PLUGIN = json('.claude-plugin/plugin.json');
 const MERCADO = json('.claude-plugin/marketplace.json');
 const CHANGELOG = ler('CHANGELOG.md');
-const README = ler('README.md');
+const README = ler('GUIA.md');
 
 const NUMEROS = {
   // Plano 083, Tarefa 7 (sobra 3): o CHANGELOG antigo ganhou acento ("teto de três rondas").
@@ -120,12 +120,12 @@ test('publicacao: a entrada do radar no CHANGELOG nao se contradiz na conta nem 
 });
 
 // Revisao da 0.13.0, R3: o README dizia que a ficha fora do formato "diz quantos problemas tem" e parava ai; a
-// abertura manda ao /esquadro:radar (lib/vigia-local.js, contaDaFicha), e o README tem de dizer o mesmo passo.
+// abertura manda ao /sworn:radar (lib/vigia-local.js, contaDaFicha), e o README tem de dizer o mesmo passo.
 test('publicacao: o README diz o proximo passo da ficha do radar fora do formato', () => {
   const m = README.match(/A ficha fora do formato[^.]*\./);
   assert.ok(m, 'o README nao fala da ficha do radar fora do formato');
-  assert.ok(/\/esquadro:radar/.test(m[0]), 'sem o proximo passo: ' + m[0]);
-  assert.ok(/o \/esquadro:radar confere/.test(ler('scripts/lib/vigia-local.js')), 'a frase da abertura mudou');
+  assert.ok(/\/sworn:radar/.test(m[0]), 'sem o proximo passo: ' + m[0]);
+  assert.ok(/o \/sworn:radar confere/.test(ler('scripts/lib/vigia-local.js')), 'a frase da abertura mudou');
 });
 
 test('publicacao: a versao do manifesto e a do topo do CHANGELOG', () => {
@@ -190,7 +190,7 @@ test('publicacao: o total de baldes e os que so contam tambem vem do codigo', ()
 // Ronda 1 do Passo 8b: as lentes que o revisar despacha sao duas familias, e a
 // soma quando a mudanca e de codigo e de tela. Tres numeros por extenso, nenhum
 // ligado ao veredito.js - uma lente nova apodreceria o CHANGELOG calada.
-// Ronda 1 do 8c.5: a linha do /esquadro:revisar no README passa a dizer os mesmos tres.
+// Ronda 1 do 8c.5: a linha do /sworn:review no README passa a dizer os mesmos tres.
 test('publicacao: as lentes do CHANGELOG e do README sao as do veredito.js - as duas familias e a soma', () => {
   for (const [nome, texto] of [['CHANGELOG', CHANGELOG], ['README', README]]) {
     const m = texto.match(/\*\*(\S+)\*\* de c[oó]digo, \*\*(\S+)\*\* de\s+tela, e \*\*(\S+)\*\* quando/);
@@ -207,7 +207,7 @@ test('publicacao: as lentes do CHANGELOG e do README sao as do veredito.js - as 
 // rubrica mandava revisar logica sem UI com duas das oito de tela - o revisar despacha as
 // nove de codigo. Toda "<numero> lentes" da skill diz a familia, com o numero do codigo.
 test('publicacao: a skill padrao conta as duas familias de lentes, com os numeros do veredito.js', () => {
-  const dir = path.join(RAIZ, 'skills', 'padrao');
+  const dir = path.join(RAIZ, 'skills', 'playbook');
   const arquivos = ['SKILL.md'].concat(fs.readdirSync(path.join(dir, 'references'))
     .filter((f) => f.endsWith('.md')).map((f) => 'references/' + f));
   const FAMILIA = { tela: veredito.LENTES_UI.length, codigo: veredito.LENTES.length };
@@ -242,9 +242,9 @@ test('publicacao: a skill padrao conta as duas familias de lentes, com os numero
   // despacho e a tabela do Passo 2 do revisar; a secao aponta para ela, e ela bate com o codigo.
   const skill = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8');
   const secao = skill.slice(skill.indexOf('### 4.2'), skill.indexOf('### 4.3'));
-  assert.ok(secao.includes('skills/revisar/SKILL.md'), 'a secao 4.2 tem de apontar para a tabela do revisar');
+  assert.ok(secao.includes('skills/review/SKILL.md'), 'a secao 4.2 tem de apontar para a tabela do revisar');
   assert.ok(!/em toda mudan/.test(secao), 'a secao 4.2 manda as de codigo em toda mudanca: ' + secao);
-  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8').split('\n');
+  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8').split('\n');
   const despacho = { 'Só código': FAMILIA.codigo, 'Só tela': FAMILIA.tela, 'Código e tela': FAMILIA.codigo + FAMILIA.tela };
   for (const [mudanca, n] of Object.entries(despacho)) {
     const linha = revisar.find((l) => l.startsWith('| ' + mudanca + ' |'));
@@ -253,7 +253,7 @@ test('publicacao: a skill padrao conta as duas familias de lentes, com os numero
 });
 
 /**
- * O ritual de decisao tem DUAS metades - a decisao e o pronto - e a skill `padrao` carrega as duas
+ * O ritual de decisao tem DUAS metades - a decisao e o pronto - e a skill `playbook` carrega as duas
  * sozinha desde que a `economia` saiu: a regra do tamanho das opcoes vive na secao da decisao, e a
  * forma enxuta do pronto aponta para o bloco que a abertura injeta. Vinham do teste da `economia`;
  * medido por mutacao la, olhar a skill inteira deixava apagar metade da fiacao com a suite verde.
@@ -261,7 +261,7 @@ test('publicacao: a skill padrao conta as duas familias de lentes, com os numero
  * nao e recalibrado toda vez que a secao cresce.
  */
 function secaoDaPadrao(ancora) {
-  const manual = fs.readFileSync(path.join(RAIZ, 'skills', 'padrao', 'SKILL.md'), 'utf8');
+  const manual = fs.readFileSync(path.join(RAIZ, 'skills', 'playbook', 'SKILL.md'), 'utf8');
   const i = manual.indexOf(ancora);
   assert.notStrictEqual(i, -1, 'sumiu a ancora do ritual: ' + ancora);
   const antes = manual.slice(0, i).lastIndexOf('\n## ');
@@ -298,7 +298,7 @@ test('publicacao: a linha "So logica" do revisar diz LENTES menos SAEM_SO_LOGICA
   assert.deepStrictEqual(saem, ['design', 'medidor', 'escopo'], 'D448: saem design, medidor e escopo');
   saem.forEach((k) => assert.ok(veredito.LENTES.some((l) => l.chave === k), 'lente que sai nao existe: ' + k));
   const n = veredito.LENTES.length - saem.length;
-  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8').split('\n');
+  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8').split('\n');
   const linha = revisar.find((l) => l.startsWith('| Só lógica '));
   assert.ok(linha, 'a tabela do Passo 2 do revisar nao tem a linha "Só lógica"');
   assert.ok(linha.includes('**' + n + '**'), 'so logica tem de dizer LENTES menos SAEM_SO_LOGICA: ' + linha);
@@ -307,7 +307,7 @@ test('publicacao: a linha "So logica" do revisar diz LENTES menos SAEM_SO_LOGICA
   assert.match(revisar.join('\n'), new RegExp('na d[uú]vida, as ' + veredito.LENTES.length + '\\b', 'i'),
     'o revisar tem de dizer que na duvida vao as ' + veredito.LENTES.length);
   const m = README.match(/\*\*(\S+)\*\* quando [ée] s[oó] l[oó]gica/);
-  assert.ok(m, 'a linha do /esquadro:revisar no README nao diz o caso so logica');
+  assert.ok(m, 'a linha do /sworn:review no README nao diz o caso so logica');
   assert.strictEqual(NUMEROS[m[1].toLowerCase()], n, 'o README conta so logica errado');
 });
 
@@ -315,7 +315,7 @@ test('publicacao: a linha "So logica" do revisar diz LENTES menos SAEM_SO_LOGICA
 // lentesDaFaixa e os cortes FAIXA_UMA_ATE / FAIXA_DUAS_ATE do veredito.js, nao de memoria; e a regra de que o
 // agente pode subir de faixa, nunca descer, esta escrita.
 test('D485: a tabela de faixas do revisar diz as lentes e os cortes do veredito.js', () => {
-  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8');
+  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   const linhas = revisar.split('\n');
   for (const faixa of ['uma', 'duas', 'texto']) {
     const linha = linhas.find((l) => l.startsWith('| `' + faixa + '` |'));
@@ -335,7 +335,7 @@ test('D485: a tabela de faixas do revisar diz as lentes e os cortes do veredito.
 // D486 (s107): na faixa pequena, A e B sao recortes. O briefing do revisar ganha a linha do recorte quando a saida
 // traz `trecho`, e o inspetor sabe que o vao marcado nao e defeito (diz "nao consigo ver", nao "esta ausente").
 test('D486: o revisar e o inspetor dizem o que fazer com o recorte do trecho mudado', () => {
-  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8');
+  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   assert.match(revisar, /`trecho`/, 'o revisar nao fala do campo trecho da saida');
   assert.ok(revisar.includes('[fora do trecho: linhas a-b]'), 'o revisar nao diz a marca do vao');
   // o que o inspetor le e o briefing: a linha do recorte leva a marca e o "nao consigo ver"
@@ -343,7 +343,7 @@ test('D486: o revisar e o inspetor dizem o que fazer com o recorte do trecho mud
   assert.ok(brief && brief.includes('[fora do trecho: linhas a-b]') && /n[aã]o consigo ver/.test(brief),
     'o briefing do recorte nao diz a marca nem o "nao consigo ver": ' + brief);
   assert.ok(!/Entregue o \*\*arquivo inteiro\*\* ao inspetor\./.test(revisar), 'o revisar ainda manda sempre o arquivo inteiro');
-  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspetor.md'), 'utf8');
+  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
   assert.ok(inspetor.includes('[fora do trecho'), 'o inspetor nao sabe da marca do vao');
   assert.match(inspetor, /n[aã]o consigo ver/i, 'o inspetor tem de dizer "nao consigo ver" sobre o que esta fora');
   // s108, ronda 1 da Tarefa 3: 5 de 6 P1 das faixas pequenas eram inferencia sobre o que ficou fora do recorte.
@@ -355,7 +355,7 @@ test('D486: o revisar e o inspetor dizem o que fazer com o recorte do trecho mud
 // L3 (s104): subir a completa tem flag (A3-04); a aprovacao com achado descartado manda ler vereditosDescartados
 // (A3-05); a ronda 1 sem as lentes da faixa, ou sem a lente que achou P0/P1, para a apuracao (A3-03).
 test('L3: o revisar cita --completa, manda ler vereditosDescartados e diz que o script confere as lentes', () => {
-  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8');
+  const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   assert.ok(revisar.includes('--completa'), 'o revisar nao diz como subir a completa');
   assert.ok(revisar.includes('`vereditosDescartados`'), 'o revisar nao manda ler os descartados');
   assert.match(revisar, /lente que achou P0 ou P1 e n[aã]o voltou/i, 'o revisar nao diz que a lente tem de voltar');
@@ -383,7 +383,7 @@ const TRAVA_DO_BALDE = {
   // Plano 091 (#1, D558/D559): portao proprio da revisao antes do commit, com chave propria (portaoCommit)
   commit_sem_revisao: null
 };
-const TRAVA_DO_COMANDO = { init: 1, revisar: 2 };
+const TRAVA_DO_COMANDO = { init: 1, review: 2 };
 
 test('publicacao: as travas do README sao as do codigo - os portoes que negam e os dois comandos', () => {
   const temTrava = (b) => Object.prototype.hasOwnProperty.call(TRAVA_DO_BALDE, b);
@@ -466,19 +466,23 @@ test('publicacao: o limite de unidades do portao de design esta escrito, com as 
 
 /**
  * Comando citado no CHANGELOG e ausente do disco: so passa se o proprio CHANGELOG diz que
- * ele saiu - uma linha com `/esquadro:<nome>` e "saiu" ou "aposentad", em QUALQUER entrada,
+ * ele saiu - uma linha com `/sworn:<nome>` e "saiu" ou "aposentad", em QUALQUER entrada,
  * nao so na do topo. Na versao seguinte a entrada do topo muda, a citacao antiga continua no
  * historico, e o teste quebraria sem ninguem ter mexido em nada.
  */
+const RENOMEADOS = { aprender: 'learn', atalhos: 'shortcuts', auditar: 'audit', calibrar: 'calibrate', padrao: 'playbook',
+  referencia: 'reference', revisar: 'review', paralelo: 'parallel' };
 function comandosInexistentes(changelog, doDisco) {
   const citados = new Set();
   const aposentados = new Set();
-  const re = /esquadro:([a-z-]+)/g;
+  // D625: o plugin se chamava esquadro, e as entradas antigas do CHANGELOG guardam a historia com o nome antigo.
+  // Os comandos mudaram de nome junto: o nome antigo, so com o prefixo antigo, vale se o novo existe.
+  const re = /(sworn|esquadro):([a-z-]+)/g;
   let m;
-  while ((m = re.exec(changelog)) !== null) citados.add(m[1]);
+  while ((m = re.exec(changelog)) !== null) citados.add(m[1] === 'esquadro' && RENOMEADOS[m[2]] ? RENOMEADOS[m[2]] : m[2]);
   for (const linha of changelog.split(/\r?\n/)) {
     if (!/saiu|aposentad/i.test(linha)) continue;
-    for (const a of linha.matchAll(/\/esquadro:([a-z-]+)/g)) aposentados.add(a[1]);
+    for (const a of linha.matchAll(/\/(?:sworn|esquadro):([a-z-]+)/g)) aposentados.add(a[1]);
   }
   return Array.from(citados).filter((c) => !doDisco.has(c) && !aposentados.has(c)).sort();
 }
@@ -486,12 +490,12 @@ function comandosInexistentes(changelog, doDisco) {
 test('publicacao: todo comando que o CHANGELOG anuncia existe como skill ou workflow, ou diz que saiu', () => {
   const doDisco = new Set(fs.readdirSync(path.join(RAIZ, 'skills'), { withFileTypes: true })
     .filter((e) => e.isDirectory()).map((e) => e.name));
-  // 0.6.2: workflow do plugin roda como /esquadro:<meta.name> (mesmo criterio do readme.test.js)
+  // 0.6.2: workflow do plugin roda como /sworn:<meta.name> (mesmo criterio do readme.test.js)
   for (const f of fs.readdirSync(path.join(RAIZ, 'workflows')).filter((n) => n.endsWith('.js'))) {
     const nome = fs.readFileSync(path.join(RAIZ, 'workflows', f), 'utf8').match(/^  name: '([a-z-]+)',$/m);
     if (nome) doDisco.add(nome[1]);
   }
-  assert.ok(/esquadro:([a-z-]+)/.test(CHANGELOG), 'o CHANGELOG nao anuncia comando nenhum');
+  assert.ok(/(?:sworn|esquadro):([a-z-]+)/.test(CHANGELOG), 'o CHANGELOG nao anuncia comando nenhum');
   assert.deepStrictEqual(comandosInexistentes(CHANGELOG, doDisco), [],
     'o CHANGELOG anuncia comando que nao existe e nao diz que saiu');
 });
@@ -499,18 +503,18 @@ test('publicacao: todo comando que o CHANGELOG anuncia existe como skill ou work
 test('publicacao: comando aposentado - o instrumento distingue inventado, aposentado sem aviso e com aviso', () => {
   const disco = new Set(['init', 'padrao']);
   // inventado: cita, nao existe, nao diz que saiu - segue falhando
-  assert.deepStrictEqual(comandosInexistentes('- **`/esquadro:fantasma`** novo.', disco), ['fantasma']);
+  assert.deepStrictEqual(comandosInexistentes('- **`/sworn:fantasma`** novo.', disco), ['fantasma']);
   // a economia ausente do disco, citada so no historico e sem a frase de saida: falha
-  const antiga = '## 0.3.0\n- **`/esquadro:economia`** poe o ritual no tamanho certo.\n';
+  const antiga = '## 0.3.0\n- **`/sworn:economia`** poe o ritual no tamanho certo.\n';
   assert.deepStrictEqual(comandosInexistentes(antiga, disco), ['economia']);
   // com a frase de saida, em entrada que nao e a do topo: passa
-  const nova = '## 0.5.0\n- nada.\n\n## 0.4.0\n- A `/esquadro:economia` saiu: as regras viraram o bloco.\n\n' + antiga;
+  const nova = '## 0.5.0\n- nada.\n\n## 0.4.0\n- A `/sworn:economia` saiu: as regras viraram o bloco.\n\n' + antiga;
   assert.deepStrictEqual(comandosInexistentes(nova, disco), []);
   // "aposentad" tambem vale, e a frase de saida de um comando nao perdoa outro
   assert.deepStrictEqual(comandosInexistentes(
-    '- `/esquadro:economia` foi aposentada.\n- `/esquadro:fantasma` existe.', disco), ['fantasma']);
+    '- `/sworn:economia` foi aposentada.\n- `/sworn:fantasma` existe.', disco), ['fantasma']);
   // comando que esta no disco nunca falha
-  assert.deepStrictEqual(comandosInexistentes('- `/esquadro:init` pergunta.', disco), []);
+  assert.deepStrictEqual(comandosInexistentes('- `/sworn:init` pergunta.', disco), []);
 });
 
 // ── o texto que vai a publico ────────────────────────────────────────────
@@ -654,14 +658,14 @@ test('D396 n. 12, 17, 20, 21, 26, 28: os textos de skill e README dizem o que o 
   assert.ok(naoGravar, 'n. 20: sumiu a opcao Nao gravar do 7c');
   assert.ok(!/nada se perde/.test(naoGravar[0]) && /Passo 4b/.test(naoGravar[0]),
     'n. 20: o Nao gravar do 7c tem de dizer que a resposta do 4b se perde');
-  assert.ok(/Gerado por `\/esquadro:init`"; com mais de uma/.test(p4b), 'n. 21: o re-init nao diz qual skill e a do projeto');
-  const padrao = plano(ler('skills/padrao/SKILL.md'));
-  assert.ok(/Gerado por `\/esquadro:init`"; com mais de uma assim, perguntar ao dono/.test(padrao),
+  assert.ok(/Gerado por `\/sworn:init`"; com mais de uma/.test(p4b), 'n. 21: o re-init nao diz qual skill e a do projeto');
+  const padrao = plano(ler('skills/playbook/SKILL.md'));
+  assert.ok(/Gerado por `\/sworn:init`"; com mais de uma assim, perguntar ao dono/.test(padrao),
     'n. 21: o Passo 0-bis nao diz qual skill e a do projeto');
   // sessao 27: so a gerada deixava de fora a skill de execucao escrita a mao, que a secao 1 diz que vence
   assert.ok(/perguntar ao dono qual vale; sem nenhuma assim, a escrita [àa] m[ãa]o/.test(padrao),
     'sessao 27: o Passo 0-bis exclui a skill de execucao escrita a mao');
-  const revisar = ler('skills/revisar/SKILL.md');
+  const revisar = ler('skills/review/SKILL.md');
   assert.ok(!/~50 pares/.test(revisar) && /com mais de 50 pares, lotes de at[ée] 50/.test(revisar), 'n. 26: lote do juiz ambiguo');
   const i = README.indexOf('\n## Como desligar uma trava');
   const f = README.indexOf('\n## ', i + 4);
@@ -725,11 +729,11 @@ test('publicacao: a lente de seguranca do README cita as tres conferencias antes
 });
 
 // D387/D388 (0.5.0): o juiz de "mesmo defeito" e o portao do AskUserQuestion estao ligados onde devem.
-test('D387: agents/juiz-mesmo.md existe com model haiku e sem Write, e o corpo nao nomeia modelo', () => {
-  const t = ler('agents/juiz-mesmo.md');
+test('D387: agents/dedupe-judge.md existe com model haiku e sem Write, e o corpo nao nomeia modelo', () => {
+  const t = ler('agents/dedupe-judge.md');
   const cab = t.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   assert.ok(cab, 'o agente nao tem frontmatter');
-  assert.ok(/^name: juiz-mesmo$/m.test(cab[1]), 'o name do agente e juiz-mesmo');
+  assert.ok(/^name: dedupe-judge$/m.test(cab[1]), 'o name do agente e dedupe-judge');
   assert.ok(/^model: haiku$/m.test(cab[1]), 'o juiz roda no apelido haiku');
   const ferramentas = cab[1].match(/^tools: (.*)$/m);
   assert.ok(ferramentas && !/\bWrite\b/.test(ferramentas[1]), 'o juiz nao pode ter Write');
@@ -741,7 +745,7 @@ test('D387: agents/juiz-mesmo.md existe com model haiku e sem Write, e o corpo n
 // CLAUDE.md. Lista fechada sem Skill tira as duas listas da abertura (medido: boot 28.5K contra 56.6K);
 // omitClaudeMd tira as instrucoes do projeto. Nenhum dos dois roda comando nem chama skill.
 test('D447: inspetor e juiz-mesmo tem tools fechada so de leitura e omitClaudeMd', () => {
-  for (const nome of ['inspetor', 'juiz-mesmo']) {
+  for (const nome of ['inspector', 'dedupe-judge']) {
     const cab = ler('agents/' + nome + '.md').match(/^---\r?\n([\s\S]*?)\r?\n---/);
     assert.ok(cab, nome + ': o agente nao tem frontmatter');
     assert.ok(/^tools: Read, Grep, Glob$/m.test(cab[1]), nome + ': tools tem de ser Read, Grep, Glob');
@@ -750,13 +754,13 @@ test('D447: inspetor e juiz-mesmo tem tools fechada so de leitura e omitClaudeMd
   }
 });
 
-test('D387: o Passo 3 do revisar manda despachar esquadro:juiz-mesmo e gravar o mesmos.json', () => {
-  const t = ler('skills/revisar/SKILL.md');
+test('D387: o Passo 3 do revisar manda despachar sworn:dedupe-judge e gravar o mesmos.json', () => {
+  const t = ler('skills/review/SKILL.md');
   const i = t.indexOf('## Passo 3');
   const f = t.indexOf('## Passo 4');
   assert.ok(i !== -1 && f > i, 'sumiu o Passo 3 do revisar');
   const passo3 = t.slice(i, f);
-  assert.ok(passo3.includes('esquadro:juiz-mesmo'), 'o Passo 3 nao cita o esquadro:juiz-mesmo');
+  assert.ok(passo3.includes('sworn:dedupe-judge'), 'o Passo 3 nao cita o sworn:dedupe-judge');
   assert.ok(passo3.includes('mesmos.json') && passo3.includes('paresCandidatos') && passo3.includes('provaveisMesmos'),
     'o Passo 3 nao cita mesmos.json, paresCandidatos e provaveisMesmos');
 });
@@ -791,7 +795,7 @@ const secao = (s, de, ate) => {
 };
 
 test('D497: a escolha visual prefere a pagina Artifact e cai na imagem sem a ferramenta', () => {
-  const p = secao(ler('skills/padrao/SKILL.md'), '**Escolha visual:', '**Ação manual do dono');
+  const p = secao(ler('skills/playbook/SKILL.md'), '**Escolha visual:', '**Ação manual do dono');
   assert.ok(/p[áa]gina Artifact/.test(p), 'D497: o paragrafo nao cita a pagina Artifact');
   assert.ok(/claro e escuro/.test(p), 'D497: o paragrafo nao pede claro e escuro');
   assert.ok(/notebook/.test(p) && /celular/.test(p), 'D497: o paragrafo nao pede notebook e celular');
@@ -805,7 +809,7 @@ test('D497: a escolha visual prefere a pagina Artifact e cai na imagem sem a fer
 });
 
 test('D498: as lentes 2, 4 e 7 da rubrica de tela dizem catalogo, alvo de 24 px e INP', () => {
-  const r = ler('skills/padrao/references/02-rubrica-aaa.md');
+  const r = ler('skills/playbook/references/02-rubrica-aaa.md');
   const l2 = secao(r, '## Lente 2', '## Lente 3');
   assert.ok(/cat[áa]logo de componentes/.test(l2) && /p[áa]gina de estados/.test(l2), 'D498 n. 2: a Lente 2 nao cita catalogo ou pagina de estados');
   const l4 = secao(r, '## Lente 4', '## Lente 5');
@@ -820,7 +824,7 @@ test('D498: as lentes 2, 4 e 7 da rubrica de tela dizem catalogo, alvo de 24 px 
 });
 
 test('D498: a Marcha AAA pede comparacao de print antes x depois e entrega o roteiro de 5 usuarios', () => {
-  const m = secao(ler('skills/padrao/references/01-marchas-e-gates.md'), '## Marcha 3', '## Regra de d');
+  const m = secao(ler('skills/playbook/references/01-marchas-e-gates.md'), '## Marcha 3', '## Regra de d');
   assert.ok(/compara[çc][ãa]o (autom[áa]tica )?de print antes × depois/.test(m), 'D498 n. 1: o portao visual nao cita a comparacao de print');
   assert.ok(/5 usu[áa]rios/.test(m) && /n[ãa]o bloqueia/.test(m), 'D498 n. 3: a Marcha AAA nao entrega o roteiro de 5 usuarios sem bloquear');
 });
@@ -828,13 +832,13 @@ test('D498: a Marcha AAA pede comparacao de print antes x depois e entrega o rot
 // D503 (plano d503, Tarefa 4): a regra 1 do prompt - a referencia de topo e nomeada antes de fazer e se abre -
 // mora na 4.1 do padrao, junto do artefatoDeReferencia, e aponta a chave e a revisao que a usam.
 test('D503: a 4.1 do padrao manda nomear antes a referencia de topo que se abre e aponta referencias e o revisar', () => {
-  const s = secao(ler('skills/padrao/SKILL.md'), '### 4.1', '### 4.2');
+  const s = secao(ler('skills/playbook/SKILL.md'), '### 4.1', '### 4.2');
   assert.ok(s.includes('{{texto:artefatoDeReferencia}}'), 'a 4.1 perdeu o artefatoDeReferencia');
   assert.match(s, /antes de (come[çc]ar|fazer)/i, 'a 4.1 nao diz que a referencia se nomeia antes de fazer');
   assert.match(s, /se abre/, 'a 4.1 nao exige referencia que se abre');
   assert.match(s, /nunca uma lembran[çc]a/, 'a 4.1 aceita referencia de memoria');
   assert.match(s, /`referencias`/, 'a 4.1 nao aponta a chave referencias do projeto.json');
-  assert.match(s, /\/esquadro:revisar/, 'a 4.1 nao aponta a revisao que usa a referencia');
+  assert.match(s, /\/sworn:review/, 'a 4.1 nao aponta a revisao que usa a referencia');
   assert.match(s, /nas duas ordens/, 'a 4.1 nao diz a regra de pronto contra a referencia');
   assert.match(s, /sem refer[êe]ncia/, 'a 4.1 nao diz o que fazer sem referencia');
 });
@@ -850,7 +854,7 @@ test('A4-06: a skill gerada nao manda rodar script do plugin como se morasse no 
 
 test('A4-07: o aprender diz que o propor-regra.js RECUSA quebra de linha (D434)', () => {
   assert.match(ler('scripts/propor-regra.js'), /RECUSADA: o gatilho ou a acao tem quebra de linha\. Nada foi gravado\./);
-  const p = plano(ler('skills/aprender/SKILL.md'));
+  const p = plano(ler('skills/learn/SKILL.md'));
   assert.ok(!/n[ãa]o recusa texto com duas linhas/i.test(p), 'a skill ainda diz que o script nao recusa');
   assert.ok(!/grava assim mesmo/i.test(p), 'a skill ainda diz que o script grava a regra partida');
   assert.match(p, /recusa .{0,80}RECUSADA/, 'a skill nao diz que o script recusa, com a palavra que ele imprime');
@@ -869,7 +873,7 @@ test('A8-02: o aprender diz o que o gancho manda - rodar na mesma resposta e per
   const ordem = require('../scripts/lib/correcao.js').INSTRUCAO_DA_CORRECAO;
   assert.match(ordem, /nesta mesma resposta/);
   assert.match(ordem, /em 3 opcoes/);
-  const p = plano(ler('skills/aprender/SKILL.md'));
+  const p = plano(ler('skills/learn/SKILL.md'));
   assert.ok(!/oferece em uma linha/.test(p), 'a skill ainda diz que o agente so oferece em uma linha');
   assert.match(p, /na mesma resposta/, 'a skill nao diz que roda na mesma resposta');
   assert.match(p, /3 op[çc][õo]es/, 'a skill nao diz que pergunta em 3 opcoes');
@@ -889,24 +893,24 @@ test('A11-01: o que o init manda escrever (Passos 3, 4 e 8) nao e lido como aleg
 });
 
 // A8-03: os blocos de saida dos portoes no README sao a saida literal desta versao - rodados aqui, de verdade, contra o
-// projeto de exemplo do README. Bloco "esquadro..." do README que nao e nenhuma delas reprova (texto velho), salvo os
+// projeto de exemplo do README. Bloco "sworn..." do README que nao e nenhuma delas reprova (texto velho), salvo os
 // que este teste nao gera (o do fecho e o aviso do portaoDecisao).
 function saidasDosPortoes() {
   const os = require('node:os');
   const { spawnSync } = require('node:child_process');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-a803-'));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-a803t-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-a803-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-a803t-'));
   try {
     const escrever = (rel, c) => {
       const a = path.join(dir, rel);
       fs.mkdirSync(path.dirname(a), { recursive: true });
       fs.writeFileSync(a, c, 'utf8');
     };
-    escrever('.claude/esquadro/projeto.json', JSON.stringify({
+    escrever('.claude/sworn/projeto.json', JSON.stringify({
       versaoConfig: 1, marchaPadrao: 'padrao', intocaveis: ['.env'],
       marchas: { aaa: [], padrao: ['src/**', 'test/**'], rapida: ['docs/**'] }
     }));
-    escrever('.claude/esquadro/escopo.md', ['# Escopo', '**Objetivo:** corrigir o calculo do frete no carrinho.',
+    escrever('.claude/sworn/escopo.md', ['# Escopo', '**Objetivo:** corrigir o calculo do frete no carrinho.',
       '## Dentro', '- src/carrinho/**', '- test/carrinho.test.js', '- test/cobertura.json', '## Fora de escopo',
       '- src/pagamento/**', ''].join('\n'));
     escrever('src/usuarios/perfil.js', 'x\n');
@@ -916,7 +920,7 @@ function saidasDosPortoes() {
     spawnSync('git', ['init', '-q', dir]);
     spawnSync('git', ['-C', dir, 'add', '-A']);
     spawnSync('git', ['-C', dir, '-c', 'user.name=x', '-c', 'user.email=x@x', 'commit', '-q', '-m', 'base']);
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     const rodar = (script, ev) => {
       const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)],
         { input: JSON.stringify(Object.assign({ session_id: 'sa803', cwd: dir }, ev)), encoding: 'utf8', env: env, cwd: dir, timeout: 60000 });
@@ -935,7 +939,7 @@ function saidasDosPortoes() {
       criar: rodar('portao-escopo.js', pre('Write', { file_path: em('src/carrinho/frete-novo.js'), content: 'x\n' })),
       catraca: rodar('portao-escopo.js', pre('Edit', { file_path: em('test/cobertura.json'), old_string: '"minimo": 80', new_string: '"minimo": 60' }))
     };
-    const ho = '.claude/esquadro/handoff/2026-10-10-frete.md';
+    const ho = '.claude/sworn/handoff/2026-10-10-frete.md';
     escrever(ho, '# handoff\n');
     rodar('marcar-trabalho.js', { hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: em(ho), content: '# handoff\n' } });
     s.handoff = rodar('portao-fecho.js', { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'Gravei o handoff do frete.' });
@@ -948,7 +952,7 @@ function saidasDosPortoes() {
 }
 
 const secaoDoReadme = (titulo) => {
-  const t = ler('README.md');
+  const t = ler('GUIA.md');
   const i = t.indexOf('\n## ' + titulo);
   assert.ok(i !== -1, 'sumiu a secao "' + titulo + '" do README');
   const f = t.indexOf('\n## ', i + 4);
@@ -961,7 +965,7 @@ test('A12-05: o Como instalar diz o caminho de quem nao tem chave SSH no GitHub'
   const p = secaoDoReadme('Como instalar');
   assert.match(p, /CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1/, 'falta a variavel que pula a sonda SSH');
   assert.match(p, /SSH/, 'nao diz que o atalho tenta SSH');
-  assert.match(p, /https:\/\/github\.com\/wendellmcs\/esquadro\.git/, 'falta a URL https, que vai direto por HTTPS');
+  assert.match(p, /https:\/\/github\.com\/wendellmcs\/sworn\.git/, 'falta a URL https, que vai direto por HTTPS');
 });
 
 // A12-06 (doc hooks e plugins/org): allowManagedHooksOnly bloqueia hooks de plugin (isento o forcado no enabledPlugins
@@ -978,14 +982,14 @@ test('A8-03: os blocos de saida dos portoes no README sao a saida literal desta 
   const saidas = saidasDosPortoes();
   Object.keys(saidas).forEach(function (k) { assert.ok(saidas[k], 'o portao "' + k + '" nao negou no projeto de exemplo'); });
   const blocos = [];
-  ler('README.md').replace(/\r\n/g, '\n').replace(/^~~~text\n([\s\S]*?)\n~~~$/gm, function (m, c) { blocos.push(c); return m; });
+  ler('GUIA.md').replace(/\r\n/g, '\n').replace(/^~~~text\n([\s\S]*?)\n~~~$/gm, function (m, c) { blocos.push(c); return m; });
   const literais = Object.keys(saidas).map(function (k) { return saidas[k].replace(/\n+$/, ''); });
   Object.keys(saidas).forEach(function (k, i) {
     assert.ok(blocos.indexOf(literais[i]) !== -1, 'o README nao tem a saida literal do portao "' + k + '":\n' + literais[i]);
   });
-  const naoGerados = [/^esquadro - portao de fecho \(trava 3\)\./, /^esquadro: ATENCAO - valor de tipo errado/];
+  const naoGerados = [/^sworn - portao de fecho \(trava 3\)\./, /^sworn: ATENCAO - valor de tipo errado/];
   const velhos = blocos.filter(function (b) {
-    return /^esquadro[ :]/.test(b) && literais.indexOf(b) === -1 && !naoGerados.some(function (r) { return r.test(b); });
+    return /^sworn[ :]/.test(b) && literais.indexOf(b) === -1 && !naoGerados.some(function (r) { return r.test(b); });
   });
   assert.deepStrictEqual(velhos.map(function (b) { return b.split('\n')[0]; }), [], 'bloco de portao no README que o codigo nao imprime');
 });

@@ -1,9 +1,9 @@
 ---
 name: radar
-description: Busca projetos públicos parecidos com o que você está construindo (ou com o tema do seu pedido), cruza cada um com o seu projeto e devolve uma ficha com o que vale trazer, como entra, como fica melhor que o original, esforço, valor e licença. A lista da semana em alta no GitHub (github.com/trending?since=weekly) é do mantenedor do plugin, para melhorar o esquadro. Na dúvida sobre o encaixe, faz uma entrevista curta. Só lê e propõe; o escolhido entra com teste e revisão cega, só com o seu sim. Use quando quiser saber o que projetos parecidos trazem para o seu, ao aceitar a oferta do radar depois de um pedido de melhoria ou de função nova, ou quando a abertura avisar que o radar da semana chegou (mantenedor).
+description: Busca projetos públicos parecidos com o que você está construindo (ou com o tema do seu pedido), cruza cada um com o seu projeto e devolve uma ficha com o que vale trazer, como entra, como fica melhor que o original, esforço, valor e licença. A lista da semana em alta no GitHub (github.com/trending?since=weekly) é do mantenedor do plugin, para melhorar o sworn. Na dúvida sobre o encaixe, faz uma entrevista curta. Só lê e propõe; o escolhido entra com teste e revisão cega, só com o seu sim. Use quando quiser saber o que projetos parecidos trazem para o seu, ao aceitar a oferta do radar depois de um pedido de melhoria ou de função nova, ou quando a abertura avisar que o radar da semana chegou (mantenedor).
 ---
 
-# `/esquadro:radar` — o que projetos parecidos trazem para este projeto
+# `/sworn:radar` — o que projetos parecidos trazem para este projeto
 
 O radar procura projetos públicos **parecidos com o que você está construindo** (ou com o tema do
 pedido que você acabou de fazer), entende cada um pelo que é público e cruza com o seu projeto: o que
@@ -12,9 +12,9 @@ escolher entra como qualquer tarefa — teste vermelho antes, o mínimo de códi
 com o seu sim.
 
 A lista dos projetos **em alta da semana** no GitHub é do **mantenedor** do plugin (o repositório do
-próprio esquadro), para melhorar o esquadro: no seu projeto, a lista é a busca por tema.
+próprio sworn), para melhorar o sworn: no seu projeto, a lista é a busca por tema.
 
-A ficha tem a mesma forma da do `/esquadro:referencia` (cada achado com origem, grau e quem agiu, e
+A ficha tem a mesma forma da do `/sworn:reference` (cada achado com origem, grau e quem agiu, e
 o que ficou sem saber), mais a tabela dos candidatos.
 
 Tudo no chat, em português.
@@ -22,8 +22,8 @@ Tudo no chat, em português.
 ## Passo 1 — o modo e o projeto
 
 1. **Modo mantenedor** — na raiz do repositório do próprio plugin (`.claude-plugin/plugin.json` com
-   `"name": "esquadro"`). Uma rotina na nuvem grava a ficha da semana toda segunda, e a tarefa
-   agendada a traz para `~/.claude/esquadro/vigia/radar/novidades.md`. Leia esse arquivo: a 1ª linha é
+   `"name": "sworn"`). Uma rotina na nuvem grava a ficha da semana toda segunda, e a tarefa
+   agendada a traz para `~/.claude/sworn/vigia/radar/novidades.md`. Leia esse arquivo: a 1ª linha é
    `semana: AAAA-MM-DD`. Confira-o pelo script do Passo 5 e vá ao Passo 6. Arquivo ausente, sem a
    linha `semana:` ou de 7 dias atrás ou mais: diga isso ao dono e ofereça rodar a busca aqui
    (Passos 2 a 5), cruzando com o próprio plugin.
@@ -62,8 +62,8 @@ para o mantenedor**.
    e pare a busca; nunca "nada parecido" por fonte que falhou.
 
 **Nos dois modos**, o já estudado aparece, mas não é aprofundado de novo. Já estudado é o repositório
-que tem linha em `.claude/esquadro/radar/estudados.md` (`dono/repo | AAAA-MM-DD | <veredito>`), ficha
-em `.claude/esquadro/referencias/` ou estudo registrado nas decisões do projeto — reconhecido pelo
+que tem linha em `.claude/sworn/radar/estudados.md` (`dono/repo | AAAA-MM-DD | <veredito>`), ficha
+em `.claude/sworn/referencias/` ou estudo registrado nas decisões do projeto — reconhecido pelo
 endereço `dono/repo`, não pelo nome solto. Ele entra na triagem marcado "já estudado".
 
 Diga antes de começar: só se lê o que é público; o radar não clona, não instala, não executa
@@ -85,7 +85,7 @@ agente que chamar.
    licença, linguagem, último commit, pastas da raiz), o manifesto (`package.json`, `pyproject.toml`
    ou equivalente) e de 1 a 4 arquivos-chave, tudo pelo que é público. Nenhum com nota 2 ou mais:
    não aprofunde, e a ficha diz isso.
-3. **Em paralelo**, pelo `/esquadro:paralelo` com o agente `esquadro:leitor`: lotes de até 5 na
+3. **Em paralelo**, pelo `/sworn:parallel` com o agente `sworn:reader`: lotes de até 5 na
    triagem, um agente por aprofundado, teto de 8 por disparo, cada agente com pasta temporária
    própria. Antes de disparar, diga quantos agentes e em que modelo. Agente que falha, estoura o
    tempo ou volta vazio: o repositório dele vai para `Não li:` com o motivo, nunca some da ficha.
@@ -117,10 +117,10 @@ Não pare para esperar: escreva as perguntas que faria em "O que ficou sem saber
 
 ## Passo 5 — a ficha
 
-No modo usuário, a ficha vai para `.claude/esquadro/radar/<AAAA-MM-DD>.md` (a data de hoje; a da semana, no mantenedor), e
-cada aprofundado ganha uma linha em `.claude/esquadro/radar/estudados.md` — linha nunca se apaga.
+No modo usuário, a ficha vai para `.claude/sworn/radar/<AAAA-MM-DD>.md` (a data de hoje; a da semana, no mantenedor), e
+cada aprofundado ganha uma linha em `.claude/sworn/radar/estudados.md` — linha nunca se apaga.
 Com `projeto.json` no disco, o portão de escopo (trava 4) pode negar esses Writes: antes, ponha
-`.claude/esquadro/radar/**` no "Dentro" do `.claude/esquadro/escopo.md` (ou do arquivo da frente),
+`.claude/sworn/radar/**` no "Dentro" do `.claude/sworn/escopo.md` (ou do arquivo da frente),
 com o motivo. Se a edição do escopo também for negada, ou o dono não autorizar, mostre a ficha no
 chat e não grave por outro caminho.
 
@@ -169,13 +169,13 @@ Não li: <o que a triagem e o aprofundamento deixaram de fora, e as fontes que f
 
     | nenhum novo nesta semana | não se aplica | | | P | baixo | descartar |
 
-- **Achados, o que ficou sem saber e `Não li:`** seguem as regras do `/esquadro:referencia`: o que
+- **Achados, o que ficou sem saber e `Não li:`** seguem as regras do `/sworn:reference`: o que
   se leu é `observado`, a lição é `inferido` com a origem nos achados de onde saiu, fonte que não
   abriu vira pergunta `bloqueado`. "Não achei" só vale sobre o que foi lido.
 
 Gravada a ficha (ou, no modo mantenedor, a que chegou), confira:
 
-    node "${CLAUDE_PLUGIN_ROOT}/scripts/referencia.js" .claude/esquadro/radar/<AAAA-MM-DD>.md --tipo radar
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/referencia.js" .claude/sworn/radar/<AAAA-MM-DD>.md --tipo radar
 
 O script só lê, em qualquer pasta: com `"ok": false`, corrija o que `problemas` aponta e rode de
 novo; depois de duas correções sem `ok`, diga ao dono onde está a ficha e o que sobrou. A ficha do
@@ -191,18 +191,18 @@ pergunte pelo `AskUserQuestion`:
 2. **Guardar a ficha sem aplicar** — "A ficha fica; nada muda no projeto."
 3. **Aprofundar outro** — "Leio a fundo um da triagem que ficou de fora." Volte ao Passo 3 com ele.
 
-Escolhido um candidato, **estude-o pelo `/esquadro:referencia` antes da proposta** — só ele, não os
+Escolhido um candidato, **estude-o pelo `/sworn:reference` antes da proposta** — só ele, não os
 outros da ficha: as camadas dele (o que se vê, textos com `arquivo:linha` do commit lido) dão à
 proposta a evidência que a triagem não tem, e a ficha que sai pode, com o sim do dono, virar a
-referência que o `/esquadro:revisar` põe ao lado do trabalho. Diga o custo antes; se o dono recusar,
+referência que o `/sworn:review` põe ao lado do trabalho. Diga o custo antes; se o dono recusar,
 monte a proposta com o que o radar já leu e diga isso.
 
 A proposta diz, em 3 opções e a recomendada primeiro: o que o original faz, o que o projeto já tem
 parecido, e o que fica **melhor que o original** em cada caminho (com o esforço e o risco). O caminho
 escolhido vira tarefa como qualquer outra: teste vermelho antes, o mínimo de código que resolve, e a
-revisão cega do `/esquadro:revisar` (a lente `enxuto` julga o código que não precisava existir) antes
+revisão cega do `/sworn:review` (a lente `enxuto` julga o código que não precisava existir) antes
 de dar por pronto. Simplificação deliberada leva o comentário `atalho: <o que>. limite: <até onde
-vale>. trocar quando: <gatilho>.`, que o `/esquadro:atalhos` lista. Na semana seguinte, o candidato já
+vale>. trocar quando: <gatilho>.`, que o `/sworn:shortcuts` lista. Na semana seguinte, o candidato já
 levado aparece como "já estudado".
 
 ## O que esta skill NÃO faz
@@ -210,4 +210,4 @@ levado aparece como "já estudado".
 - **Não aplica nada sozinha.** Ela lê e propõe; o projeto só muda com o seu sim, no Passo 6.
 - **Não clona, não instala, não executa** código de terceiro, e não entra com login.
 - **Não copia código de licença incompatível.** ELv2, AGPL, fechada ou sem licença: só a ideia.
-- **Não mexe na `referencias`.** A referência de topo é do `/esquadro:referencia`.
+- **Não mexe na `referencias`.** A referência de topo é do `/sworn:reference`.

@@ -44,7 +44,7 @@ test('cegar: semente e estavel e cabe em inteiro', () => {
 });
 
 test('cegar: proximaRonda comeca em 1 e incrementa', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ronda-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ronda-'));
   try {
     assert.strictEqual(cegar.proximaRonda(dir), 1);
     fs.mkdirSync(path.join(dir, '1'));
@@ -62,7 +62,7 @@ const RAIZ = path.join(__dirname, '..');
 const CLI = path.join(RAIZ, 'scripts', 'preparar-revisao.js');
 
 function repoDeEnsaio() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-prep-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-prep-'));
   const g = function (args) {
     return spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
   };
@@ -131,9 +131,9 @@ test('D244/defeito 10: arquivo ausente de HEAD vira pacote com o lado antigo vaz
 
 // D244/defeito 9 (D242 secao 3.9): a regua do regras.md nao chegava ao inspetor.
 function comRegras(dir, texto) {
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), '{"versaoConfig":1}', 'utf8');
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), texto, 'utf8');
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), '{"versaoConfig":1}', 'utf8');
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'regras.md'), texto, 'utf8');
 }
 
 test('D244/defeito 9: a secao da regua do regras.md vai para o pacote, inteira e so ela', () => {
@@ -166,14 +166,14 @@ test('D244/defeito 9: sem secao de regua, nada de regua.md, e a saida diz', () =
 });
 
 test('D244/defeito 9: a skill revisar e o inspetor mandam ler a regua', () => {
-  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8');
-  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspetor.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
+  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
   assert.match(skill, /regua\.md/);
   assert.match(inspetor, /regua\.md/);
 });
 
 test('D244/defeito 10: a skill revisar manda declarar o que nao foi inspecionado', () => {
-  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   assert.match(skill, /n[aã]o foi inspecionado/i);
 });
 
@@ -206,7 +206,7 @@ test('preparar-revisao: arquivo que nao existe no disco diz qual, sem stack trac
 
 // T2 / item 11 da D257 (secao 11): uma base por arquivo. Antes, tres arquivos preparados na mesma
 // pasta viravam "rondas 1, 2, 3" de uma revisao so.
-function baseDeRevisao(dir) { return path.join(dir, '.claude', 'esquadro', 'revisao'); }
+function baseDeRevisao(dir) { return path.join(dir, '.claude', 'sworn', 'revisao'); }
 
 test('cegar: idDoArquivo troca a barra por duplo underscore e o resto fora de [a-zA-Z0-9._-] por underscore', () => {
   assert.strictEqual(cegar.idDoArquivo('scripts/lib/escopo.js'), 'scripts__lib__escopo.js');
@@ -228,7 +228,7 @@ test('cegar: baseDoArquivo e revisao/<id>', () => {
 });
 
 test('cegar: temPastaNumeradaSolta so olha pasta numerada direto em revisao/', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-solta-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-solta-'));
   try {
     assert.strictEqual(cegar.temPastaNumeradaSolta(path.join(dir, 'nao-existe')), false);
     assert.strictEqual(cegar.temPastaNumeradaSolta(dir), false);
@@ -290,7 +290,7 @@ test('T2/item 11: com pasta numerada solta (formato da 0.3.0) segue gravando la,
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-// 0.3.2 (frente esquadro-p2-d258), T2, itens 8 a 11 do preparar-revisao.js.
+// 0.3.2 (frente sworn-p2-d258), T2, itens 8 a 11 do preparar-revisao.js.
 // Para forcar o que o disco e o git de um teste nao dao (git que estoura o tempo, escrita que falha
 // no meio do pacote), o teste roda o script com `node --require <gancho>`: o gancho troca UMA funcao
 // antes do script carregar. O script em si nao ganha porta nenhuma para isso.
@@ -332,7 +332,7 @@ const GANCHO_ESCRITA_DO_B_FALHA = [
 ].join('\n');
 
 function rodarComGancho(cwd, rel, ganchoSrc) {
-  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-gancho-'));
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-gancho-'));
   try {
     const gancho = path.join(pasta, 'gancho.js');
     fs.writeFileSync(gancho, ganchoSrc, 'utf8');
@@ -375,13 +375,13 @@ test('0.3.2/item 9: --arquivo que e uma pasta (a leitura falha) vira ERRO com o 
 test('0.3.2/item 9: pasta das revisoes que e um arquivo (o mkdir falha) vira ERRO com o caminho e diz que nada foi gravado', () => {
   const dir = repoDeEnsaio();
   try {
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     fs.writeFileSync(baseDeRevisao(dir), 'sou um arquivo, nao a pasta', 'utf8');
     const r = rodarCli(dir, 'raiz.txt');
     assert.strictEqual(r.stderr, '', 'stack trace na saida de erro: ' + r.stderr);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /^ERRO: /, r.stdout);
-    assert.ok(r.stdout.indexOf('.claude/esquadro/revisao') !== -1, 'cita o caminho: ' + r.stdout);
+    assert.ok(r.stdout.indexOf('.claude/sworn/revisao') !== -1, 'cita o caminho: ' + r.stdout);
     assert.match(r.stdout, /Nada foi gravado/, r.stdout);
     assert.doesNotMatch(r.stdout, /pela metade/, 'nada ficou pela metade: ' + r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -399,7 +399,7 @@ test('0.3.2/item 9: gravacao que falha depois de criar a pasta da ronda diz qual
     assert.match(r.stdout, /apague/i, r.stdout);
     const pasta = path.join(baseDeRevisao(dir), 'raiz.txt', '1');
     assert.ok(fs.existsSync(pasta), 'a pasta da ronda ficou no disco (o que a mensagem tem de apontar)');
-    assert.ok(r.stdout.indexOf('.claude/esquadro/revisao/raiz.txt/1') !== -1, 'a mensagem aponta a pasta certa: ' + r.stdout);
+    assert.ok(r.stdout.indexOf('.claude/sworn/revisao/raiz.txt/1') !== -1, 'a mensagem aponta a pasta certa: ' + r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -436,7 +436,7 @@ test('0.3.2/item 11: o aviso do formato antigo diz para onde mover, com o id do 
     const r = rodarCli(dir, 'raiz.txt');
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const s = JSON.parse(r.stdout);
-    assert.ok(s.aviso.indexOf('.claude/esquadro/revisao/a_b__c.js/') !== -1,
+    assert.ok(s.aviso.indexOf('.claude/sworn/revisao/a_b__c.js/') !== -1,
       'o aviso tem de dizer o destino com o id da revisao antiga: ' + s.aviso);
     assert.strictEqual(s.aviso.indexOf('revisao/raiz.txt/'), -1, 'o id e o da revisao antiga, nao o do arquivo de agora: ' + s.aviso);
     assert.doesNotMatch(s.aviso, /base unica|base por arquivo/, s.aviso);
@@ -448,14 +448,14 @@ test('0.3.2/item 11: o aviso do formato antigo diz para onde mover, com o id do 
       const r2 = rodarCli(dir2, 'raiz.txt');
       assert.strictEqual(r2.status, 0, r2.stdout + r2.stderr);
       const s2 = JSON.parse(r2.stdout);
-      assert.ok(s2.aviso.indexOf('.claude/esquadro/revisao/<id>/') !== -1, 'destino com <id>: ' + s2.aviso);
+      assert.ok(s2.aviso.indexOf('.claude/sworn/revisao/<id>/') !== -1, 'destino com <id>: ' + s2.aviso);
       assert.ok(s2.aviso.indexOf('__') !== -1, 'diz a regra do id (barra vira __): ' + s2.aviso);
       assert.doesNotMatch(s2.aviso, /base unica|base por arquivo/, s2.aviso);
     } finally { fs.rmSync(dir2, { recursive: true, force: true }); }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-// 0.3.3 (frente esquadro-033), T2, itens 2 e 9 a 18 do preparar-revisao.js.
+// 0.3.3 (frente sworn-033), T2, itens 2 e 9 a 18 do preparar-revisao.js.
 // O gancho generico troca a resposta do git por subcomando ('show', 'ls-tree', 'rev-parse-verify'; o
 // `rev-parse --show-prefix` do git.js segue real). Com `logPath`, cada chamada do git ao subcomando trocado
 // ou nao e anotada, para provar quantos processos o caminho feliz gasta.
@@ -510,7 +510,7 @@ const GANCHO_ESCRITA_DA_REGUA_FALHA = [
 ].join('\n');
 
 function repoSemCommit() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-prep-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-prep-'));
   spawnSync('git', ['init', '-q', '.'], { cwd: dir, encoding: 'utf8', shell: false });
   fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz sem commit\n', 'utf8');
   return dir;
@@ -548,7 +548,7 @@ test('0.3.3/item 2: base ja fechada e arquivada INTEIRA pelo preparar, e a revis
     assert.strictEqual(r.stderr, '', r.stderr);
     const s2 = JSON.parse(r.stdout);
     assert.strictEqual(s2.ronda, 1, 'a revisao nova nao herda a contagem nem o teto da fechada');
-    const destino = path.join(dir, '.claude', 'esquadro', 'revisao-fechada', 'raiz.txt', '2026-09-29-173045');
+    const destino = path.join(dir, '.claude', 'sworn', 'revisao-fechada', 'raiz.txt', '2026-09-29-173045');
     assert.strictEqual(s2.arquivada, destino, 'a saida diz para onde foi (data e hora locais no carimbo): ' + r.stdout);
     assert.deepStrictEqual(fotoDaPasta(destino), antes, 'nada se apaga: a base inteira, igual a de antes');
     assert.deepStrictEqual(fs.readdirSync(s2.base), ['1'], 'a base nova so tem a ronda 1');
@@ -570,7 +570,7 @@ test('0.3.3/item 2: duas revisoes fechadas no mesmo segundo nao colidem (sufixo 
     const r3 = rodarComGancho(dir, 'raiz.txt', GANCHO_HORA_FIXA);
     assert.strictEqual(r3.status, 0, r3.stdout + r3.stderr);
     const s3 = JSON.parse(r3.stdout);
-    const pai = path.join(dir, '.claude', 'esquadro', 'revisao-fechada', 'raiz.txt');
+    const pai = path.join(dir, '.claude', 'sworn', 'revisao-fechada', 'raiz.txt');
     assert.strictEqual(s2.arquivada, path.join(pai, '2026-09-29-173045'));
     assert.strictEqual(s3.arquivada, path.join(pai, '2026-09-29-173045-2'), 'o segundo do mesmo segundo ganha sufixo');
     assert.deepStrictEqual(fs.readdirSync(pai).sort(), ['2026-09-29-173045', '2026-09-29-173045-2'],
@@ -589,7 +589,7 @@ test('0.3.3/item 2: falha ao mover a base fechada e ERRO, e a base fica como est
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /^ERRO: /, r.stdout);
     assert.match(r.stdout, /EPERM/, 'a causa vem na mensagem: ' + r.stdout);
-    assert.ok(r.stdout.indexOf('.claude/esquadro/revisao/raiz.txt') !== -1, 'cita a base: ' + r.stdout);
+    assert.ok(r.stdout.indexOf('.claude/sworn/revisao/raiz.txt') !== -1, 'cita a base: ' + r.stdout);
     assert.match(r.stdout, /Nada foi gravado/, r.stdout);
     assert.deepStrictEqual(fotoDaPasta(s1.base), antes, 'a base fechada segue intacta, sem ronda nova');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -603,12 +603,12 @@ test('0.3.3/item 2: base sem fechada.json (revisao em andamento) segue como ante
     assert.strictEqual(s1.ronda, 1);
     assert.strictEqual(s2.ronda, 2);
     assert.strictEqual('arquivada' in s2, false, 'sem fechada.json nao ha o que arquivar');
-    assert.strictEqual(fs.existsSync(path.join(dir, '.claude', 'esquadro', 'revisao-fechada')), false);
+    assert.strictEqual(fs.existsSync(path.join(dir, '.claude', 'sworn', 'revisao-fechada')), false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('0.3.3/item 2: a skill revisar diz o que acontece com a revisao ja fechada', () => {
-  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'revisar', 'SKILL.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   assert.match(skill, /revisao-fechada/, 'a skill tem de citar a pasta de arquivo');
   assert.doesNotMatch(skill, /Ronda nova depois do fecho/, 'a frase antiga descrevia o defeito');
 });
@@ -679,7 +679,7 @@ test('0.3.3/item 9: repositorio SEM commit segue sendo tudo arquivo novo (rev-pa
 
 test('0.3.3/item 9: o caminho feliz gasta um processo so (show); o ls-tree e o rev-parse so entram na falha', () => {
   const dir = repoDeEnsaio();
-  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-log-'));
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-log-'));
   try {
     const log = path.join(pasta, 'git.log');
     const r = rodarComGancho(dir, 'raiz.txt', ganchoGit({}, log));
@@ -705,7 +705,7 @@ test('0.3.3/item 10: base da revisao (revisao/<id>) que e um arquivo vira ERRO s
     assert.strictEqual(r.stderr, '', 'stack trace na saida de erro: ' + r.stderr);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /^ERRO: /, r.stdout);
-    assert.ok(r.stdout.indexOf('.claude/esquadro/revisao/raiz.txt') !== -1, 'cita o caminho: ' + r.stdout);
+    assert.ok(r.stdout.indexOf('.claude/sworn/revisao/raiz.txt') !== -1, 'cita o caminho: ' + r.stdout);
     assert.match(r.stdout, /Nada foi gravado/, r.stdout);
     assert.doesNotMatch(r.stdout, /pela metade/, r.stdout);
     assert.deepStrictEqual(fs.readdirSync(baseDeRevisao(dir)), ['raiz.txt'], 'nada novo em revisao/');
@@ -716,8 +716,8 @@ test('0.3.3/item 10: base da revisao (revisao/<id>) que e um arquivo vira ERRO s
 test('0.3.3/item 11: regras.md que nao se le (e uma pasta) e ERRO e nao grava nada', () => {
   const dir = repoDeEnsaio();
   try {
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), '{"versaoConfig":1}', 'utf8');
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn', 'regras.md'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), '{"versaoConfig":1}', 'utf8');
     const r = rodarCli(dir, 'raiz.txt');
     assert.strictEqual(r.stderr, '', r.stderr);
     assert.strictEqual(r.status, 1, 'regras.md ilegivel virou "sem regua" em silencio. Saida: ' + r.stdout);
@@ -739,7 +739,7 @@ test('0.3.3/item 11: falha ao gravar o regua.md e "ficou pela metade", nao "nenh
     assert.match(r.stdout, /^ERRO: /, r.stdout);
     assert.match(r.stdout, /EACCES/, r.stdout);
     assert.match(r.stdout, /pela metade/, r.stdout);
-    assert.ok(r.stdout.indexOf('.claude/esquadro/revisao/raiz.txt/1') !== -1, 'aponta a pasta certa: ' + r.stdout);
+    assert.ok(r.stdout.indexOf('.claude/sworn/revisao/raiz.txt/1') !== -1, 'aponta a pasta certa: ' + r.stdout);
     assert.doesNotMatch(r.stdout, /nenhuma regua declarada/, r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -838,14 +838,14 @@ test('0.3.3/item 15: o id da revisao antiga vem da ultima pasta numerada com map
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const s = JSON.parse(r.stdout);
     assert.strictEqual(s.ronda, 4);
-    assert.ok(s.aviso.indexOf('.claude/esquadro/revisao/a_b__c.js/') !== -1,
+    assert.ok(s.aviso.indexOf('.claude/sworn/revisao/a_b__c.js/') !== -1,
       'o aviso tem de achar o id na pasta 1: ' + s.aviso);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 // 0.3.3, itens 16 e 17: as duas mensagens ganham o proximo passo.
 test('0.3.3/item 16: fora de um repositorio git a mensagem diz o que fazer', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-sem-git-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-sem-git-'));
   try {
     fs.writeFileSync(path.join(dir, 'raiz.txt'), 'sem repositorio\n', 'utf8');
     const r = spawnSync(process.execPath, [CLI, '--arquivo', 'raiz.txt', '--semente', 'fixa'], {
@@ -906,7 +906,7 @@ test('0.3.3/item 18: o aviso do formato antigo usa o texto do cegar.js e o exemp
 
 
 // ---------------------------------------------------------------------------------------------
-// Frente esquadro-pendencias, T2 do plano dos 82: F2-07 a F2-12 e F3-22 do preparar-revisao.js.
+// Frente sworn-pendencias, T2 do plano dos 82: F2-07 a F2-12 e F3-22 do preparar-revisao.js.
 // ---------------------------------------------------------------------------------------------
 
 const GANCHO_RENAME_EM_USO = [
@@ -936,7 +936,7 @@ const GANCHO_RENAME_ENOENT_SEM_MOVER = [
   "};"
 ].join('\n');
 
-function pastaFechadas(dir) { return path.join(dir, '.claude', 'esquadro', 'revisao-fechada'); }
+function pastaFechadas(dir) { return path.join(dir, '.claude', 'sworn', 'revisao-fechada'); }
 
 test('T2/F2-07: rename que falha tira as pastas vazias que ESTE run criou, e so elas', () => {
   // 1) nada existia: revisao-fechada/ e revisao-fechada/<id>/ foram criadas por este run e saem
@@ -1030,7 +1030,7 @@ test('T2/F2-08: formato antigo com revisao/fechada.json: o aviso diz que ela fic
     assert.ok(fs.existsSync(path.join(baseDeRevisao(dir), 'fechada.json')));
     assert.match(s.aviso, /ja estava fechada \(revisao\/fechada\.json\)/, s.aviso);
     assert.match(s.aviso, /fora do arquivamento automatico/, s.aviso);
-    assert.ok(s.aviso.includes('.claude/esquadro/revisao-fechada/a_b__c.js/<carimbo>/'), 'diz para onde mover, com o id: ' + s.aviso);
+    assert.ok(s.aviso.includes('.claude/sworn/revisao-fechada/a_b__c.js/<carimbo>/'), 'diz para onde mover, com o id: ' + s.aviso);
     assert.match(s.aviso, /pastas numeradas e o fechada\.json/, s.aviso);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   // sem mapa legivel: o destino fica com <id> e a regra do id ja esta no aviso
@@ -1039,7 +1039,7 @@ test('T2/F2-08: formato antigo com revisao/fechada.json: o aviso diz que ela fic
     fs.mkdirSync(path.join(baseDeRevisao(dir2), '1'), { recursive: true });
     fs.writeFileSync(path.join(baseDeRevisao(dir2), 'fechada.json'), '{"ronda":1}', 'utf8');
     const s2 = JSON.parse(rodarCli(dir2, 'raiz.txt').stdout);
-    assert.ok(s2.aviso.includes('.claude/esquadro/revisao-fechada/<id>/<carimbo>/'), s2.aviso);
+    assert.ok(s2.aviso.includes('.claude/sworn/revisao-fechada/<id>/<carimbo>/'), s2.aviso);
   } finally { fs.rmSync(dir2, { recursive: true, force: true }); }
   // controle: formato antigo SEM fechada.json (revisao em andamento) nao fala em arquivamento
   const dir3 = repoDeEnsaio();
@@ -1059,7 +1059,7 @@ test('T2/F2-09: gravacao que falha depois de criar a pasta da ronda tambem diz p
     const r = rodarComGancho(dir, 'raiz.txt', GANCHO_ESCRITA_DO_B_FALHA);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /pela metade/, r.stdout);
-    assert.match(r.stdout, /A revisao anterior ja foi arquivada em \.claude\/esquadro\/revisao-fechada\/raiz\.txt\/\d{4}-\d{2}-\d{2}-\d{6}\./, r.stdout);
+    assert.match(r.stdout, /A revisao anterior ja foi arquivada em \.claude\/sworn\/revisao-fechada\/raiz\.txt\/\d{4}-\d{2}-\d{2}-\d{6}\./, r.stdout);
     // F3-22 (:249): a causa vem traduzida
     assert.match(r.stdout, /\(causa: sem permissao \(EACCES\)\)/, r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -1124,8 +1124,8 @@ test('T2/F3-22: arquivo e regras.md que nao se leem (sao pastas) dizem a causa t
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   const dir2 = repoDeEnsaio();
   try {
-    fs.mkdirSync(path.join(dir2, '.claude', 'esquadro', 'regras.md'), { recursive: true });
-    fs.writeFileSync(path.join(dir2, '.claude', 'esquadro', 'projeto.json'), '{"versaoConfig":1}', 'utf8');
+    fs.mkdirSync(path.join(dir2, '.claude', 'sworn', 'regras.md'), { recursive: true });
+    fs.writeFileSync(path.join(dir2, '.claude', 'sworn', 'projeto.json'), '{"versaoConfig":1}', 'utf8');
     const r = rodarCli(dir2, 'raiz.txt');
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /regras\.md \(causa: e uma pasta \(EISDIR\)\)/, r.stdout);
@@ -1245,7 +1245,7 @@ test('RV-04: mapa.json do formato antigo com BOM ainda diz o id da revisao antig
       '\uFEFF' + JSON.stringify({ arquivo: 'a b/c.js', mapa: { A: 'HEAD', B: 'trabalho' } }), 'utf8');
     const r = rodarCli(dir, 'raiz.txt');
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
-    assert.ok(JSON.parse(r.stdout).aviso.indexOf('.claude/esquadro/revisao/a_b__c.js/') !== -1, r.stdout);
+    assert.ok(JSON.parse(r.stdout).aviso.indexOf('.claude/sworn/revisao/a_b__c.js/') !== -1, r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -1260,7 +1260,7 @@ function trocar(texto, quantas, de) {
   return l.join('\n');
 }
 function repoDeFaixas() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-faixa-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-faixa-'));
   const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
   g(['init', '-q', '.']);
   g(['config', 'user.email', 'ensaio@ensaio']);
@@ -1471,8 +1471,8 @@ test('D503: montarReferencia - um bloco por entrada; texto inteiro, binario pelo
 });
 
 function comProjeto(dir, extra) {
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'),
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
     JSON.stringify(Object.assign({ versaoConfig: 1 }, extra)), 'utf8');
 }
 
@@ -1682,7 +1682,7 @@ test('082 T6 (p3-15): referencia acima do teto vai pelo caminho, na borda do tet
 
 test('082 T6 (p1-8): referencia fora da raiz do projeto nao se le, nem por caminho absoluto, ../ ou link (ataque)', () => {
   const dir = repoDeEnsaio();
-  const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fora-'));
+  const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fora-'));
   try {
     fs.writeFileSync(path.join(fora, 'segredo.txt'), 'SEGREDO-DE-FORA\n', 'utf8');
     fs.mkdirSync(path.join(dir, 'ref'));

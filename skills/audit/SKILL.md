@@ -1,9 +1,9 @@
 ---
-name: auditar
+name: audit
 description: Use quando o projeto acumular skills e regras ao longo do tempo e voce quiser saber o que cortar. Mede o peso de instrucao contra o teto, aponta skills que se sobrepoem, regras que se contradizem e itens fora da rubrica.
 ---
 
-# `/esquadro:auditar` — o que cortar
+# `/sworn:audit` — o que cortar
 
 Ninguém tira nada de um arquivo de instrução. Em seis meses o projeto tem skill que se sobrepõe,
 regra que se contradiz, e item que ninguém invoca — e cada um continua **competindo por atenção com
@@ -15,7 +15,7 @@ coisas e só fala se alguma passou do limite: peso de instrução acima do teto,
 regras que se contradizem, skills sem mudança há 90 dias ou mais (também por padrão), texto de gancho que
 voltou mais de 5 vezes na conversa anterior à atual (lido da transcrição dela, com o id e a data da conversa:
 pode ser de outra frente) e atalho deliberado sem "trocar quando:", com `arquivo:linha`, na pasta aberta e
-nos repositórios logo abaixo dela (o detalhe vem do `/esquadro:atalhos`, não deste relatório). O aviso aparece no contexto da
+nos repositórios logo abaixo dela (o detalhe vem do `/sworn:shortcuts`, não deste relatório). O aviso aparece no contexto da
 abertura, com a lista do que passou. Para peso, sobreposição e contradição, rode esta skill: o
 relatório traz o detalhe e a proposta de corte. Para o texto de gancho repetido, rode esta skill com
 `--transcricao` apontando o `.jsonl` daquela conversa (o id da linha é o começo do nome do arquivo): o
@@ -23,7 +23,7 @@ item 1c traz o texto que volta e o corte proposto. Skill parada **não** aparece
 skill (ela não mede idade): abra a skill apontada e decida se ainda vale como está; "parada" quer
 dizer sem mudança, não sem uso. A rodada automática **não** mede o `MEMORY.md`, os itens fora da
 rubrica nem o catálogo de modelos: esses só esta skill confere. Três chaves de
-`.claude/esquadro/projeto.json` mudam a rodada automática: `limiares.diasEntreAuditorias`
+`.claude/sworn/projeto.json` mudam a rodada automática: `limiares.diasEntreAuditorias`
 (intervalo), `limiares.diasSkillParada` (prazo da skill parada) e `"auditarNaAbertura": false`
 (desliga). O teto do peso e o critério de sobreposição não são do projeto: vêm do plugin, e não há
 chave no `projeto.json` para mudá-los. Se o teto incomoda, o caminho é cortar ou fundir instrução
@@ -77,7 +77,7 @@ desfecho `ok` consome a janela.
 Depois do desfecho vêm as fontes que você leu, cada uma entre aspas simples. **Pelo comando, nunca
 pelo `Write`:** com o `projeto.json` no disco, o portão de escopo (a trava, chamada de "trava 4" nas
 mensagens, que só deixa gravar o que o escopo declarado da tarefa cobre) nega o `Write` em
-`.claude/esquadro/catalogo.json` sem escopo declarado.
+`.claude/sworn/catalogo.json` sem escopo declarado.
 
 **5. O que a consulta NÃO resolve**, e é para dizer isso ao dono em vez de arbitrar: qual degrau
 serve para qual papel, e quanto ele aceita pagar. Com os fatos na mão, a pergunta deixa de ser
@@ -127,7 +127,7 @@ serve para qual papel, e quanto ele aceita pagar. Com os fatos na mão, a pergun
    disparam no mesmo momento significam que **nenhuma das duas dispara de forma confiável.**
 
    2b. **Contra as skills do plugin.** A chave `doPlugin`: `sobreposicoes` traz os pares em que uma
-   skill do projeto (`a`) disputa o gatilho de uma do esquadro (`b`, como `esquadro:padrao`). Diga
+   skill do projeto (`a`) disputa o gatilho de uma do sworn (`b`, como `sworn:playbook`). Diga
    qual das duas o projeto quer que mande naquele momento; a do plugin não se apaga, mas a do projeto
    pode passar a chamá-la em vez de repeti-la. O peso não soma o plugin: o corpo das skills dele só
    carrega quando são chamadas.
@@ -137,7 +137,7 @@ serve para qual papel, e quanto ele aceita pagar. Com os fatos na mão, a pergun
    3b. **Regras lidas.** A chave `regras`, ao lado das contradições: `lidas: true` com o `total` de
    regras, ou `lidas: false` com a `causa`. **`contradicoes: []` só quer dizer "nenhuma contradição"
    quando `lidas` é `true`.** Com `lidas: false`, diga "regras não lidas" e a `causa` — `ENOENT` é o
-   projeto sem `.claude/esquadro/regras.md`, o que não é erro, mas também não é "nada a cortar".
+   projeto sem `.claude/sworn/regras.md`, o que não é erro, mas também não é "nada a cortar".
 4. **Fora da rubrica.** Itens que violam `modelos/boa-skill.md` na parte mecânica.
 5. **Delegáveis.** O que outro plugin instalado já resolve e este projeto reimplementou.
 6. **Cicatriz.** Para cada item de instrução: existe decisão, incidente ou achado atrás dele?

@@ -129,7 +129,7 @@ function pluginDoComando(comando, mapa) {
   if (script) return unico(mapa.scripts, script[1]) || NAO_IDENTIFICADO;
   if (/CLAUDE_PROJECT_DIR/.test(c)) return 'projeto (settings.json)';
   // O comando inteiro contra o mapa de statusMessage, de proposito: o gancho com statusMessage chega a transcricao com
-  // o statusMessage no campo `command` (visto na s84 no SessionStart do esquadro, hooks/hooks.json:12).
+  // o statusMessage no campo `command` (visto na s84 no SessionStart do sworn, hooks/hooks.json:12).
   return unico(mapa.mensagens, String(comando || '')) || NAO_IDENTIFICADO;
 }
 

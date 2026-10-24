@@ -223,8 +223,8 @@ function quantoFalta(g) {
   return inteiro(n) + ' ' + u[n === 1 ? 0 : 1];
 }
 
-// A barra (mock D532, S3): contexto · 5h ate HH:MM · semana · mes · sessao · troca. Sem "esquadro" na frente (o VS Code
-// ja escreve "esquadro plugin") e sem o plano (esta na faixa logo acima). A previsao saiu da barra: sem espaco para
+// A barra (mock D532, S3): contexto · 5h ate HH:MM · semana · mes · sessao · troca. Sem "sworn" na frente (o VS Code
+// ja escreve "sworn plugin") e sem o plano (esta na faixa logo acima). A previsao saiu da barra: sem espaco para
 // dizer a unidade, fica so na resposta do comando.
 // Pedido 71 (D544, barra A; p2-27): o fim diz quanto falta para o aviso pelo sinal mais perto ("troca 0 de 2" nao
 // mudava o chat inteiro); disparou -> "troque de chat"; sem sinal medido, nada (numero inventado e pior que nenhum).
@@ -239,8 +239,8 @@ function barra(b) {
   // ainda cresce; o quanto falta, a resposta do comando diz)
   if (gasto) curta.push('mês US$ ' + mes(gasto.usd) + (gasto.pendentes > 0 ? '+ (somando)' : ''));
   if (uso && uso.cost && num(uso.cost.usd)) curta.push('sessão US$ ' + centavos(uso.cost.usd));
-  if (b.avisou) curta.push('troca já avisada → /esquadro:handoff');
-  else if (b.cruzados.length) curta.push('troque de chat → /esquadro:handoff');
+  if (b.avisou) curta.push('troca já avisada → /sworn:handoff');
+  else if (b.cruzados.length) curta.push('troque de chat → /sworn:handoff');
   else {
     const g = valemPorPerto(medidas).filter(function (x) { return x.limiar > x.valor; })[0];
     if (g) curta.push('troca de chat em ' + quantoFalta(g));
@@ -273,7 +273,7 @@ function linhasDoGasto(uso, gasto) {
   if (uso && uso.cost && num(uso.cost.usd)) gastos.push('- esta sessão: US$ ' + centavos(uso.cost.usd));
   if (gasto) {
     gastos.push('- mês' + (gasto.desde ? ' (desde ' + gasto.desde + ')' : '') + ': US$ ' + centavos(gasto.usd) + ' — US$ ' +
-      centavos(gasto.real) + ' medidos nas sessões com o esquadro + US$ ' + centavos(gasto.estimado) +
+      centavos(gasto.real) + ' medidos nas sessões com o sworn + US$ ' + centavos(gasto.estimado) +
       ' calculados pelas conversas salvas');
     if (gasto.pendentes > 0) {
       gastos.push('- ainda somando: ' + (gasto.pendentes === 1 ? 'falta 1 conversa salva' : 'faltam ' + gasto.pendentes + ' conversas salvas') +
@@ -358,7 +358,7 @@ function linhaDaSessao(entrada) {
   // Plano 083 (p2-26): o verbo concorda - "1 de 7 sinais disparou", "0 de 2 sinais dispararam".
   bloco('Troca de chat — ' + cruzados.length + ' de ' + podem + ' sinais ' + (cruzados.length === 1 ? 'disparou' : 'dispararam') +
     ' (basta 1)', linhasDosSinais(medidas, avisou));
-  bloco('O que fazer', [cruzou ? 'Rode /esquadro:handoff e cole o prompt pronto num chat novo.' : 'Nada por ora.']);
+  bloco('O que fazer', [cruzou ? 'Rode /sworn:handoff e cole o prompt pronto num chat novo.' : 'Nada por ora.']);
 
   const curta = barra({ uso: uso, gasto: gasto, js: js, cruzados: cruzados, medidas: medidas, avisou: avisou });
   return { curta: curta, longa: blocos.join('\n\n'), cruzou: cruzou };

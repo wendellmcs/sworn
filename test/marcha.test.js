@@ -64,8 +64,8 @@ function ligar(alvo, link) {
 }
 
 test('caminho/F2-21: dentroPeloCaminhoReal acompanha o link, e relativoAoProjeto continua lexico (D334)', (t) => {
-  const dir = tmp('esquadro-caminho-');
-  const fora = tmp('esquadro-caminho-fora-');
+  const dir = tmp('sworn-caminho-');
+  const fora = tmp('sworn-caminho-fora-');
   try {
     fs.writeFileSync(path.join(fora, 'segredo.md'), 'x', 'utf8');
     fs.writeFileSync(path.join(dir, 'a.js'), 'x', 'utf8');
@@ -89,8 +89,8 @@ test('caminho/F2-21: dentroPeloCaminhoReal acompanha o link, e relativoAoProjeto
 });
 
 test('caminho/F2-21: cwd aberto por link e arquivo pelo caminho real: dentro (o caso oposto)', (t) => {
-  const real = tmp('esquadro-caminho-real-');
-  const base = tmp('esquadro-caminho-base-');
+  const real = tmp('sworn-caminho-real-');
+  const base = tmp('sworn-caminho-base-');
   try {
     fs.writeFileSync(path.join(real, 'p.md'), 'x', 'utf8');
     const porLink = path.join(base, 'J');
@@ -105,7 +105,7 @@ test('caminho/F2-21: cwd aberto por link e arquivo pelo caminho real: dentro (o 
 });
 
 test('caminho/F2-21: entrada vazia, nao-texto e o proprio projeto nao sao "dentro"', () => {
-  const dir = tmp('esquadro-caminho-');
+  const dir = tmp('sworn-caminho-');
   try {
     for (const v of [undefined, null, '', 7, {}]) assert.strictEqual(caminho.dentroPeloCaminhoReal(v, dir), false, String(v));
     assert.strictEqual(caminho.dentroPeloCaminhoReal('a.js', ''), false);
@@ -153,7 +153,7 @@ test('marcha: D8 - sobe sim, desce nao', () => {
 
 // Plano 082, Tarefa 6 (p8-25): no Windows Src/A.js e src/a.js sao o mesmo arquivo e contavam duas vezes.
 test('082 T6 (p8-25): aaaComReferencia junta a mesma grafia em caixa diferente onde o disco nao distingue caixa', () => {
-  const raiz = path.join(os.tmpdir(), 'esquadro-marcha-caixa');
+  const raiz = path.join(os.tmpdir(), 'sworn-marcha-caixa');
   const projeto = { marchas: { aaa: ['**'] }, referencias: { codigo: ['ref/topo.js'] } };
   const r = marcha.aaaComReferencia([path.join(raiz, 'src', 'a.js'), path.join(raiz, 'Src', 'A.js'),
     path.join(raiz, 'src', 'b.js')], projeto, raiz);

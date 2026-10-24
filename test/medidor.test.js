@@ -5,7 +5,7 @@ const saude = require('../scripts/lib/saude.js');
 const medidor = require('../scripts/lib/medidor.js');
 
 // Bloco M / M1 (D435): o medidor da sessao. A regra dos gatilhos mora em saude.js (fonte unica);
-// o medidor so formata. Desenho: .context/plans/2026-10-11-esquadro-bloco-m-desenho.md.
+// o medidor so formata. Desenho: .context/plans/2026-10-11-sworn-bloco-m-desenho.md.
 
 const ASCII = /^[\x20-\x7E\n]*$/;
 
@@ -99,12 +99,12 @@ test('acumular: estado vazio da objeto vazio', () => {
 
 // --- medidor.linhaDaSessao ---
 
-// Plano 082, Tarefa 2 (mock D532, tela S3): a barra em uma linha, sem "esquadro" na frente (o VS Code ja escreve
-// "esquadro plugin") e sem o plano (esta na faixa); separador " · " e acento (D532: a sonda da T1 viu inteiro).
+// Plano 082, Tarefa 2 (mock D532, tela S3): a barra em uma linha, sem "sworn" na frente (o VS Code ja escreve
+// "sworn plugin") e sem o plano (esta na faixa); separador " · " e acento (D532: a sonda da T1 viu inteiro).
 // Pedido 71 (D544, barra A): o fim da barra diz quanto falta para o aviso de troca, pelo sinal mais perto.
 const LONGE = 'troca de chat em 15 respostas com trabalho real';
 
-test('barra (S3): contexto · 5h até HH:MM · semana · sessão · troca de chat em N, sem "esquadro" na frente', () => {
+test('barra (S3): contexto · 5h até HH:MM · semana · sessão · troca de chat em N, sem "sworn" na frente', () => {
   const r = medidor.linhaDaSessao({ uso: uso(), amostras: [], medidas: saude.medir({}, null), avisouSaude: false });
   assert.ok(r.curta.indexOf('\n') === -1, 'curta e UMA linha');
   assert.strictEqual(r.curta, 'contexto 5% · 5h 49% até ' + hhmm('2026-10-11T23:20:00.000Z') +
@@ -126,14 +126,14 @@ test('linha curta: campo que o motor nao deu e omitido, nunca vira 0', () => {
 test('gatilho cruzado: cruzou true e a curta manda ao handoff', () => {
   const r = medidor.linhaDaSessao({ uso: uso(), amostras: [], medidas: saude.medir({ contadores: { revisao_fechada: 17 } }, null), avisouSaude: false });
   assert.strictEqual(r.cruzou, true);
-  assert.ok(/ · troque de chat → \/esquadro:handoff$/.test(r.curta), r.curta);
+  assert.ok(/ · troque de chat → \/sworn:handoff$/.test(r.curta), r.curta);
   assert.ok(r.longa.indexOf('17 de 2') !== -1, r.longa);
   assert.ok(/handoff/.test(r.longa), r.longa);
 });
 
 test('aviso ja dado: a curta diz isso em vez de contar (o fecho zera os contadores depois do aviso)', () => {
   const r = medidor.linhaDaSessao({ uso: uso(), amostras: [], medidas: saude.medir({}, null), avisouSaude: true });
-  assert.ok(/ · troca já avisada → \/esquadro:handoff$/.test(r.curta), r.curta);
+  assert.ok(/ · troca já avisada → \/sworn:handoff$/.test(r.curta), r.curta);
   assert.strictEqual(r.cruzou, true, 'o aviso ja dado segue pedindo a troca');
 });
 
@@ -232,7 +232,7 @@ test('pedido 71 (D544): troca de chat em N, na unidade do sinal mais perto; disp
   assert.strictEqual(curta({ tokensDeContexto: 238000 }, true), 'troca de chat em 12 mil tokens', 'perto do aviso');
   assert.strictEqual(curta({ tokensDeContexto: 70400 }, true), 'troca de chat em 179 mil tokens', 'arredonda para baixo');
   assert.strictEqual(curta({ tokensDeContexto: 249500 }, true), 'troca de chat em 500 tokens', 'menos de mil');
-  assert.strictEqual(curta({ tokensDeContexto: 260000 }, true), 'troque de chat → /esquadro:handoff', 'disparou');
+  assert.strictEqual(curta({ tokensDeContexto: 260000 }, true), 'troque de chat → /sworn:handoff', 'disparou');
   assert.strictEqual(curta({ tokensDeContexto: 1000, contadores: { fora_do_escopo: 5 } }, true),
     'troca de chat em 1 bloqueio de portão', 'o bloqueio mais perto que o contexto');
   assert.strictEqual(curta({ decisoesDoDono: 2, tokensDeContexto: 1000 }, false), 'troca de chat em 1 decisão do dono',
@@ -241,7 +241,7 @@ test('pedido 71 (D544): troca de chat em N, na unidade do sinal mais perto; disp
   // o calado pelo modo continuo nunca e o mais perto, nem perto do limite
   assert.strictEqual(curta({ decisoesDoDono: 2, tokensDeContexto: 70000 }, true), 'troca de chat em 180 mil tokens');
   const avisou = medidor.linhaDaSessao({ uso: null, amostras: [], medidas: saude.medir({}, null, true), avisouSaude: true });
-  assert.strictEqual(avisou.curta, 'troca já avisada → /esquadro:handoff', 'igual a hoje depois do aviso');
+  assert.strictEqual(avisou.curta, 'troca já avisada → /sworn:handoff', 'igual a hoje depois do aviso');
 });
 
 // Pedido 31 (plano dos pedidos 30-32, Tarefa 3; D520): gasto do mes ao lado do semanal, separado do da sessao.
@@ -253,7 +253,7 @@ test('pedido 31: curta com "mês US$" depois das janelas e "sessão US$" depois 
   assert.ok(/semana 92% · mês US\$ 3\.181 · sessão US\$ 4,10 · /.test(r.curta), r.curta);
   // Plano 082 (mock S4; p6-34, achado da s60): o mes da longa no formato da barra, com centavos; sem jargao.
   assert.ok(r.longa.indexOf('**Gasto**\n- esta sessão: US$ 4,10\n- mês (desde 01/10): US$ 3.181,46 — US$ 12,50 medidos nas ' +
-    'sessões com o esquadro + US$ 3.168,96 calculados pelas conversas salvas\n' +
+    'sessões com o sworn + US$ 3.168,96 calculados pelas conversas salvas\n' +
     '- na assinatura é o valor que a API cobraria, não uma cobrança\n') !== -1, r.longa);
   assert.ok(!/transcric|estimado|equivalente/.test(r.longa), r.longa);
 });
@@ -307,7 +307,7 @@ test('plano 082: a barra na ordem do mock e sem o plano, mesmo se o chamador man
   const r = medidor.linhaDaSessao({ uso: uso(), amostras: [], medidas: saude.medir({}, null), gasto: GASTO, planoCurto: 'plano d503 5 de 6' });
   const partes = r.curta.split(' · ').map(function (p) { return p.split(' ')[0]; });
   assert.deepStrictEqual(partes, ['contexto', '5h', 'semana', 'mês', 'sessão', 'troca'], r.curta);
-  assert.ok(r.curta.indexOf('plano') === -1 && r.curta.indexOf('esquadro') === -1 && r.curta.indexOf('|') === -1, r.curta);
+  assert.ok(r.curta.indexOf('plano') === -1 && r.curta.indexOf('sworn') === -1 && r.curta.indexOf('|') === -1, r.curta);
 });
 
 // Pedido 31: "semana/5h acabam em ~N handoffs" pela media das sessoes anteriores (historico do $.store).
@@ -350,7 +350,7 @@ test('pedido 31: previsao em handoffs - so as ultimas 5, sessao que cruza a reno
   assert.ok(!/undefined|NaN|Infinity/.test(torto.curta + torto.longa), torto.curta);
 });
 
-// --- Plano 082, Tarefa 3 (mock D532, tela S4): a resposta do /esquadro-sessao em 5 blocos com titulo ---
+// --- Plano 082, Tarefa 3 (mock D532, tela S4): a resposta do /sworn-session em 5 blocos com titulo ---
 
 // A cena do mock parte 2: modo continuo ligado, 2 sinais valendo e 5 desligados; 5h com previsao nas duas unidades.
 function cenaDoMock() {
@@ -391,7 +391,7 @@ test('plano 082 (S4): a resposta do comando e a do mock, bloco por bloco', () =>
     '',
     '**Gasto**',
     '- esta sessão: US$ 7,52',
-    '- mês (desde 01/10): US$ 3.311,53 — US$ 54,44 medidos nas sessões com o esquadro + US$ 3.257,09 calculados pelas conversas salvas',
+    '- mês (desde 01/10): US$ 3.311,53 — US$ 54,44 medidos nas sessões com o sworn + US$ 3.257,09 calculados pelas conversas salvas',
     '- na assinatura é o valor que a API cobraria, não uma cobrança',
     '',
     '**Previsão**',
@@ -418,12 +418,12 @@ test('plano 082 (S4): sinal que disparou e aviso ja dado mandam ao handoff; "per
   assert.ok(cruzou.longa.indexOf('(basta 1)**\n- revisões independentes fechadas: 17 de 2 ← disparou\n') !== -1, cruzou.longa);
   assert.ok(cruzou.longa.indexOf('- respostas com trabalho real: 13 de 15\n') !== -1, cruzou.longa);
   assert.ok(cruzou.longa.indexOf('- decisões do dono respondidas: 2 de 3\n') !== -1, cruzou.longa);
-  assert.ok(/\*\*O que fazer\*\*\nRode \/esquadro:handoff e cole o prompt pronto num chat novo\.$/.test(cruzou.longa), cruzou.longa);
+  assert.ok(/\*\*O que fazer\*\*\nRode \/sworn:handoff e cole o prompt pronto num chat novo\.$/.test(cruzou.longa), cruzou.longa);
   const perto = medidor.linhaDaSessao({ uso: null, amostras: [], avisouSaude: false, medidas: saude.medir({ turnosComTrabalho: 14 }, null) });
   assert.ok(perto.longa.indexOf('- respostas com trabalho real: 14 de 15 ← perto do limite\n') !== -1, perto.longa);
   const avisou = medidor.linhaDaSessao({ uso: null, amostras: [], avisouSaude: true, medidas: saude.medir({}, null) });
   assert.ok(avisou.longa.indexOf('\n- o aviso de troca já foi dado nesta sessão; os contadores recomeçam depois dele\n') !== -1, avisou.longa);
-  assert.ok(/Rode \/esquadro:handoff/.test(avisou.longa), avisou.longa);
+  assert.ok(/Rode \/sworn:handoff/.test(avisou.longa), avisou.longa);
 });
 
 // Plano 083 Tarefa 4: p2-26 (concordancia do titulo), p2-11 (SINAL/FALTA sem o prototipo), p2-12 (sem "-0,00").

@@ -233,7 +233,7 @@ function varrer(raizManual, raizCorpus, opcoes) {
 function texto(r, limite) {
   const teto = typeof limite === 'number' ? limite : 20;
   // Plano 082, Tarefa 5 (mock S10): a 1a linha diz o que o relatorio responde; arquivo:linha entre aspas.
-  const linhas = ['esquadro - auditoria por cicatriz: que regra tem dor de origem, e qual pode sair.', ''];
+  const linhas = ['sworn - auditoria por cicatriz: que regra tem dor de origem, e qual pode sair.', ''];
 
   if (!r.corpusLido) {
     linhas.push('CORPUS NAO LIDO. Sem historico para comparar, nada aqui distingue regra com');

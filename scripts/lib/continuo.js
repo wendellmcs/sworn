@@ -17,7 +17,7 @@ const CALADOS = ['revisoesFechadas', 'decisoesDoDono', 'commits', 'turnosComTrab
 // projeto gravou em limiares.tokensDeContexto continua mandando (saude.medir). O alarme nao muda.
 const TOKENS_CONTEXTO = 250000;
 
-const TITULO = '# esquadro - menos paradas (toda sessao)';
+const TITULO = '# sworn - menos paradas (toda sessao)';
 const VALIDAR = '1. Antes de pedir acao manual ao dono, valide voce mesmo: rode o teste, abra o navegador (Claude in Chrome ou CDP), leia o resultado. Peca so o que so ele pode: credencial, publicar ou implantar, tela com dado de cliente no login dele; e junte tudo num pedido so.';
 
 // "250 mil" quando redondo; senao o numero. Number() converte como o >= do medidor (null vira 0, texto
@@ -57,8 +57,8 @@ function bloco(projeto) {
   return [TITULO, '', VALIDAR]
     .concat(ligado ? [LIGADO[0].replace('%TAMANHO%', tamanho(projeto))].concat(LIGADO.slice(1)) : [])
     .concat(['', ligado
-      ? 'Desligar o modo continuo: "' + CHAVE + '": false em .claude/esquadro/projeto.json.'
-      : 'Modo continuo (troca de chat so por tamanho, decisao tecnica sem parar): "' + CHAVE + '": true em .claude/esquadro/projeto.json.'])
+      ? 'Desligar o modo continuo: "' + CHAVE + '": false em .claude/sworn/projeto.json.'
+      : 'Modo continuo (troca de chat so por tamanho, decisao tecnica sem parar): "' + CHAVE + '": true em .claude/sworn/projeto.json.'])
     .join('\n') + '\n';
 }
 

@@ -13,10 +13,10 @@ const degraus = require('../scripts/lib/degraus.js');
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'cobertura.js');
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro cobertura-')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn cobertura-')); }
 
 function semear(dir, extra) {
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
   const p = Object.assign({
     versaoConfig: 1,
     marchas: { aaa: ['**/auth/**'], padrao: ['src/**'], rapida: ['docs/**'] },
@@ -26,7 +26,7 @@ function semear(dir, extra) {
       { agente: 'busca', apelido: 'barato' }, { agente: 'arquiteto', apelido: 'caro' }
     ] }
   }, extra || {});
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'),
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
     JSON.stringify(p, null, 2), 'utf8');
   return p;
 }

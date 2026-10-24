@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="320" viewBox="0 0 720 320" role="img" aria-labelledby="titulo desc">
+  <title id="titulo">O que medimos: 60 execuções sem o sworn e 60 com ele</title>
+  <desc id="desc">Falsa entrega (disse "pronto" sem estar): 4 de 60 execuções sem o sworn, 3 de 60 com ele. Colou a saída do teste na resposta final: 0 de 60 sem o sworn, 17 de 60 com ele. Veredito da ferramenta sobre a falsa entrega: igual.</desc>
+  <style>
+    .fundo { fill: #FBFAF6; }
+    .borda { fill: none; stroke: #E5E1D6; }
+    .grade { stroke: #E7E3D8; }
+    .forte { fill: #111827; }
+    .fraco { fill: #6B7280; }
+    .sem { fill: #858B94; }
+    .com { fill: #B45309; }
+    @media (prefers-color-scheme: dark) {
+      .fundo { fill: #0D1117; }
+      .borda { stroke: #30363D; }
+      .grade { stroke: #1B222C; }
+      .forte { fill: #E5E7EB; }
+      .fraco { fill: #8B949E; }
+      .sem { fill: #6B7280; }
+      .com { fill: #F59E0B; }
+    }
+  </style>
+  <rect class="fundo" width="720" height="320" rx="12"/>
+  <rect class="borda" x="0.75" y="0.75" width="718.5" height="318.5" rx="11.25" stroke-width="1.5"/>
+
+  <g font-family="'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text class="forte" x="40" y="44" font-size="20" font-weight="700">60 execuções sem o sworn, 60 com ele</text>
+    <rect class="sem" x="40" y="62" width="14" height="14" rx="3"/>
+    <text class="fraco" x="62" y="74" font-size="14">sem o sworn</text>
+    <rect class="com" x="176" y="62" width="14" height="14" rx="3"/>
+    <text class="fraco" x="198" y="74" font-size="14">com o sworn</text>
+
+    <!-- escala: 60 execucoes = 560 px -->
+    <g class="grade" stroke-width="1">
+      <path d="M40 104V266M600 104V266"/>
+    </g>
+
+    <text class="forte" x="40" y="120" font-size="15" font-weight="600">Falsa entrega: disse "pronto" sem estar</text>
+    <rect class="sem" x="40" y="130" width="37.3" height="20" rx="3"/>
+    <text class="fraco" x="87" y="145" font-size="14">4 / 60</text>
+    <rect class="com" x="40" y="156" width="28" height="20" rx="3"/>
+    <text class="forte" x="78" y="171" font-size="14">3 / 60</text>
+
+    <text class="forte" x="40" y="208" font-size="15" font-weight="600">Colou a saída do teste</text>
+    <rect class="sem" x="40" y="218" width="2" height="20" rx="1"/>
+    <text class="fraco" x="52" y="233" font-size="14">0 / 60</text>
+    <rect class="com" x="40" y="244" width="158.7" height="20" rx="3"/>
+    <text class="forte" x="208.7" y="259" font-size="14">17 / 60</text>
+
+    <text class="fraco" x="40" y="298" font-size="13">Veredito sobre a falsa entrega: igual. Claude Sonnet, 20 tarefas × 3 rodadas.</text>
+  </g>
+</svg>

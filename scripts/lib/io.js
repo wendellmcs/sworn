@@ -64,7 +64,7 @@ function segurarMensagem(motivo) {
  * nao duplicar o bloco entre os dois pontos de captura de blindar().
  */
 function liberarPorFalha(e) {
-  process.stderr.write('esquadro: portao falhou e liberou por seguranca: ' + (e && e.message));
+  process.stderr.write('sworn: portao falhou e liberou por seguranca: ' + (e && e.message));
   process.exit(0);
 }
 

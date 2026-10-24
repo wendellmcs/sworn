@@ -11,7 +11,7 @@ function avisoDeAmpliacao(contadores) {
   const n = (contadores && contadores.escopo_ampliado) || 0;
   if (!n) return null;
   // desenho §5: o escape existe, mas fica visivel. O aviso e para o usuario e diz o que fazer: conferir.
-  return 'esquadro: o escopo foi ampliado ' + n + 'x neste turno (escopo = a lista do que o agente pode editar). ' +
+  return 'sworn: o escopo foi ampliado ' + n + 'x neste turno (escopo = a lista do que o agente pode editar). ' +
     'Se voce nao pediu isso, confira o que entrou no escopo.md e mande reverter; se pediu, nao precisa fazer nada.';
 }
 
@@ -148,20 +148,34 @@ function semRevisaoDeReferencia(e, s, projeto, cwd) {
   const citados = arquivos.slice(0, MAX_CITADOS).map(function (a) { return '  - "' + ascii(a) + '"'; });
   if (arquivos.length > MAX_CITADOS) citados.push('  - e mais ' + (arquivos.length - MAX_CITADOS));
   return [
-    'esquadro - falta comparar com a tela de referencia.',
+    'sworn - falta comparar com a tela de referencia.',
     '',
     'Voce disse que entregou, e mudou arquivo que o projeto manda comparar com uma',
-    'tela de referencia (lista "referencias" em .claude/esquadro/projeto.json):'
+    'tela de referencia (lista "referencias" em .claude/sworn/projeto.json):'
   ].concat(citados, [
     'Nenhuma dessas comparacoes fechou nesta sessao.',
     '',
     'Faca uma destas:',
-    '  1. rode /esquadro:revisar "<arquivo>" para cada um, ate sair "aprovado";',
+    '  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";',
     '  2. se chegar a 3 rondas sem fechar, pare e leve ao usuario 3 opcoes;',
     '  3. ou diga ao usuario por que esta entrega fica sem a comparacao.',
     '',
-    'Desligar neste projeto: "portaoReferencia": false em .claude/esquadro/projeto.json.'
+    'Desligar neste projeto: "portaoReferencia": false em .claude/sworn/projeto.json.'
   ]).join('\n');
+}
+
+/** D634: o motivo quando a prova existe mas o resultado dela nao sustenta a alegacao - o bloco colado mostra falha
+ *  (7a), o ultimo teste rodado na sessao falhou (7b) ou a provaDePronto nao rodou depois da ultima edicao de codigo
+ *  (8). Declarar o que nao rodou, ou que a falha segue, sempre libera. O transcript so e lido quando ha alegacao. */
+function motivoDoResultado(e, projeto) {
+  const msg = e.last_assistant_message;
+  if (evidencia.deveBloquearPorFalha(msg)) return evidencia.MOTIVO_FALHA;
+  if (!evidencia.analisar(msg).alegaSucesso || evidencia.declaraRessalva(msg)) return null;
+  const t = saude.testesDoTranscript(e.transcript_path, projeto && projeto.provaDePronto);
+  if (!t) return null;
+  if (t.ultimoTeste && t.ultimoTeste.falhou) return evidencia.motivoTesteVermelho(t.ultimoTeste.comando);
+  if (t.provaPendente) return evidencia.motivoProvaNaoRodou(projeto.provaDePronto);
+  return null;
 }
 
 /** Um bloqueio por turno, com os motivos que o turno juntou - o do subitem aberto OU o da
@@ -220,7 +234,7 @@ io.blindar(function () {
       catch (err) {
         // S52-fec-1: plano ilegivel nao barra, mas tambem nao passa calado.
         tarefas = [];
-        planoIlegivel = 'esquadro: o plano ativo (' + String(ativo.arquivo) + ') nao pode ser lido; a alegacao de etapa concluida passou sem conferir os subitens.';
+        planoIlegivel = 'sworn: o plano ativo (' + String(ativo.arquivo) + ') nao pode ser lido; a alegacao de etapa concluida passou sem conferir os subitens.';
       }
       const aberta = tarefaACobrar(tarefas, e.last_assistant_message, ativo);
       if (aberta) {
@@ -231,14 +245,16 @@ io.blindar(function () {
     }
 
     const semEvidencia = evidencia.deveBloquear(e.last_assistant_message);
-    if (!semEvidencia && !semPrompt && !semReferencia) return encerrarTurno(e, s, planoIlegivel);
+    // D634: se a falta de bloco nao barrou, o resultado da prova; conta no mesmo balde (a evidencia nao sustenta a alegacao).
+    const semResultado = semEvidencia ? null : motivoDoResultado(e, projeto);
+    if (!semEvidencia && !semResultado && !semPrompt && !semReferencia) return encerrarTurno(e, s, planoIlegivel);
 
     const motivos = [];
     if (planoIlegivel) motivos.push(planoIlegivel);
-    if (semEvidencia) {
+    if (semEvidencia || semResultado) {
       s.contadores = s.contadores || {};
       s.contadores.fecho_sem_evidencia = (s.contadores.fecho_sem_evidencia || 0) + 1;
-      motivos.push(evidencia.MOTIVO);
+      motivos.push(semEvidencia ? evidencia.MOTIVO : semResultado);
     }
     barrar(e, s, motivos.concat(daReferencia), semPrompt);
   });

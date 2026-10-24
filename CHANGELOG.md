@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.14.0 — o esquadro agora se chama sworn, e o fecho olha o resultado da prova
+
+O plugin muda de nome e os comandos passam a ser em inglês; a pasta de configuração migra sozinha. O portão de fecho
+deixa de aceitar como prova um bloco que mostra falha. A página do repositório foi refeita, com a medição de antes e
+depois feita em público. Cada mudança ganhou antes um teste que falhava e passou pela revisão cega.
+
+**Quem já usa o esquadro: o que fazer uma vez**
+
+O marketplace e o plugin mudaram de nome, então a atualização não chega sozinha. No terminal:
+
+```
+claude plugin uninstall esquadro@esquadro-local
+claude plugin marketplace remove esquadro-local
+claude plugin marketplace add wendellmcs/sworn
+claude plugin install sworn@sworn-local
+```
+
+- Na primeira sessão depois disso, a abertura renomeia `.claude/esquadro/` para `.claude/sworn/` e diz numa linha;
+  o mesmo para `~/.claude/esquadro/`, só com o vigia ligado. Os caminhos de `referencias` do `projeto.json` que
+  passavam pela pasta velha são reescritos. Se `.claude/sworn/` já existe, nenhuma das duas é mexida e a abertura
+  avisa uma vez: o sworn lê só a nova, e o que ainda servir da antiga você leva à mão. Se a renomeação falhar (outra
+  sessão do Claude Code usando a pasta), feche as outras sessões e abra uma nova.
+- A variável `ESQUADRO_VIGIA` passa a ser `SWORN_VIGIA`.
+- A autorização do comando paralelo gravada com o nome antigo não vale para o nome novo: rode o `/sworn:init` de
+  novo, que confere e pergunta.
+
+**Mudou de nome**
+
+- Comandos: `/esquadro:aprender` virou `/sworn:learn`, `/esquadro:atalhos` virou `/sworn:shortcuts`,
+  `/esquadro:auditar` virou `/sworn:audit`, `/esquadro:calibrar` virou `/sworn:calibrate`, `/esquadro:padrao` virou
+  `/sworn:playbook`, `/esquadro:referencia` virou `/sworn:reference`, `/esquadro:revisar` virou `/sworn:review` e
+  `/esquadro:paralelo` virou `/sworn:parallel`. O `/sworn:init`, o `/sworn:handoff` e o `/sworn:radar` só trocam o
+  prefixo.
+- Agentes `inspector`, `dedupe-judge` e `reader`; painéis `/sworn-session` e `/sworn-plan`.
+- O texto dos portões e das skills segue em português; só os nomes mudaram.
+
+**Novo**
+
+- **O fecho olha o resultado da prova.** Um bloco colado que mostra falha (`fail 3`, `2 failed`, `not ok` sem
+  TODO/SKIP, `exit code 1`, `ERR!`, tempo esgotado) não prova sucesso; `fail 0` vale. O fecho também volta quando,
+  no fim da conversa, o último teste rodado falhou, ou quando a `provaDePronto` do projeto não rodou depois da última
+  edição de código. Dizer o que não rodou, ou que algo ainda falha, libera o fecho.
+- **Medição de antes e depois** (`scripts/medir-travas.js`): mede, sem o plugin e com ele, quantas vezes o agente diz
+  "pronto" com o teste vermelho, ou verde só porque um teste ou um limite mudou. São 20 tarefas em 5 armadilhas
+  (correção que quebra outro teste, testes que não rodam, limite para afrouxar, tarefa impossível e controle), cada
+  uma num projeto de brinquedo novo; `--gerar`, `--congelar` e `--apurar`. A rodada publicada, com o Claude Sonnet e
+  3 repetições, deu **igual**: falsa entrega em 4 de 60 sem o plugin e 3 de 60 com ele, dentro da margem. A saída do
+  teste veio colada na resposta final em 0 de 60 sem o plugin e em 17 de 60 com ele. A apuração está em
+  `medicao/resultado.txt`.
+- **Página nova.** README curto em inglês e em português, com figuras e a medição; o detalhe de cada portão, comando,
+  gancho e chave foi para o `GUIA.md`.
+
+**Melhora**
+
+- O manual (`/sworn:playbook`) e os modelos que o init grava ligam cada pedido à checagem que o prova (provado,
+  falhou ou não testado); teste instável se corrige ou se remove, nunca se repete até passar.
+- O `/sworn:shortcuts` dá 60 s a cada comando `git` da varredura (eram 5 e 15 s, que estouravam com a máquina
+  carregada).
+
 ## 0.13.0 — radar: projetos públicos parecidos com o seu, cruzados com o seu projeto
 
 Comando novo de estudo, o `/esquadro:radar`, e as peças do plugin passam a se chamar umas às outras na hora em que

@@ -12,9 +12,9 @@ const SCRIPT = path.join(RAIZ, 'scripts', 'portao-apelido.js');
 
 /** Espaco e acento no caminho: e o caso normal desta maquina (foco de revisao 5). */
 function projeto(degraus) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro apelido-'));
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn apelido-'));
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({
     versaoConfig: 1,
     agentes: { escada: degraus.map(function (d) { return d.agente; }), degraus: degraus }
   }, null, 2), 'utf8');
@@ -35,7 +35,7 @@ function hook(dir, tmp, sessaoId) {
       session_id: sessaoId, cwd: dir, hook_event_name: 'PreToolUse',
       tool_name: 'Task', tool_input: { subagent_type: 'busca' }
     }),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+    env: Object.assign({}, process.env, { SWORN_TMP: tmp })
   });
   let json = null;
   if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
@@ -59,12 +59,12 @@ function liberou(r) {
 }
 
 function sessao(tmp, id) {
-  try { return JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', id + '.json'), 'utf8')); }
+  try { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', id + '.json'), 'utf8')); }
   catch (e) { return null; }
 }
 
 function comTmp(fn) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ap-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ap-'));
   try { fn(base); } finally { fs.rmSync(base, { recursive: true, force: true }); }
 }
 
@@ -175,7 +175,7 @@ test('portao-apelido: cwd absurdo faz o portao DECIDIR, nao estourar', () => {
   comTmp((tmp) => {
     const r = spawnSync(process.execPath, [SCRIPT], {
       encoding: 'utf8', input: JSON.stringify({ session_id: 'p8', cwd: 42, tool_name: 'Task' }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+      env: Object.assign({}, process.env, { SWORN_TMP: tmp })
     });
     assert.strictEqual(r.status, 0);
     // A diferenca entre "decidiu" e "caiu e liberou por inercia" (D37): se tivesse
@@ -192,12 +192,12 @@ test('portao-apelido: cwd absurdo faz o portao DECIDIR, nao estourar', () => {
  * exercitar nada: neste portao um cwd absurdo NAO estoura - `carregarProjeto`
  * ja devolve null no catch dele, e `listar` devolve existe:false. Era um teste
  * verde medindo a coisa errada, achado no ensaio em sandbox.
- * O que estoura de verdade e a gravacao do estado: ESQUADRO_TMP apontando para
+ * O que estoura de verdade e a gravacao do estado: SWORN_TMP apontando para
  * um ARQUIVO faz o mkdir dar ENOTDIR dentro do callback assincrono, que e
  * exatamente o caminho que blindar() existe para cobrir.
  */
 test('portao-apelido R6: quando o portao FALHA mesmo, ele libera e deixa rastro', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-r6-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-r6-'));
   const naoPasta = path.join(base, 'naoSouPasta');
   fs.writeFileSync(naoPasta, 'sou um arquivo\n', 'utf8');
   try {
@@ -205,7 +205,7 @@ test('portao-apelido R6: quando o portao FALHA mesmo, ele libera e deixa rastro'
     const r = spawnSync(process.execPath, [SCRIPT], {
       cwd: dir, encoding: 'utf8',
       input: JSON.stringify({ session_id: 'p8b', cwd: dir, tool_name: 'Task' }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: naoPasta })
+      env: Object.assign({}, process.env, { SWORN_TMP: naoPasta })
     });
     assert.strictEqual(r.status, 0, 'R6: portao que falha nao pode travar a sessao');
     assert.strictEqual(r.stdout, '', 'portao que caiu nao opina');
@@ -282,7 +282,7 @@ test('portao-apelido --corrigir --para mapa: conserta o outro lado', () => {
     const c = cli(dir, ['--corrigir', 'busca', '--para', 'mapa']);
     assert.strictEqual(c.status, 0, c.stdout + c.stderr);
 
-    const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), 'utf8'));
+    const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), 'utf8'));
     assert.strictEqual(cfg.agentes.degraus[0].apelido, 'medio');
     assert.deepStrictEqual(cfg.agentes.escada, ['busca', 'arquiteto'], 'a escada nao pode ter mudado');
 
@@ -375,7 +375,7 @@ test('portao-apelido: o comando do conserto cita caminho REAL, nao a variavel na
 test('portao-apelido: caminho de instalacao com $ ou crase vai entre aspas simples; o normal segue entre duplas (L2-ape-2)', () => {
   const copias = [];
   function pluginEm(nome) {
-    const base = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ap-copia-')), nome);
+    const base = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ap-copia-')), nome);
     fs.cpSync(path.join(RAIZ, 'scripts'), path.join(base, 'scripts'), { recursive: true });
     fs.cpSync(path.join(RAIZ, 'modelos'), path.join(base, 'modelos'), { recursive: true });
     copias.push(path.dirname(base));
@@ -385,7 +385,7 @@ test('portao-apelido: caminho de instalacao com $ ou crase vai entre aspas simpl
     const r = spawnSync(process.execPath, [path.join(plugin, 'scripts', 'portao-apelido.js')], {
       cwd: dir, encoding: 'utf8',
       input: JSON.stringify({ session_id: id, cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Task', tool_input: { subagent_type: 'busca' } }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+      env: Object.assign({}, process.env, { SWORN_TMP: tmp })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     return JSON.parse(r.stdout).hookSpecificOutput.additionalContext;

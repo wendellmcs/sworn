@@ -120,7 +120,7 @@ const PONTOS = [
     classe: INJETAVEL,
     titulo: 'Onde o estado de sessao e gravado',
     arquivos: ['scripts/lib/estado.js'],
-    comoSeProva: 'ESQUADRO_TMP sobrepoe a pasta temporaria do sistema, e a suite inteira usa essa porta',
+    comoSeProva: 'SWORN_TMP sobrepoe a pasta temporaria do sistema, e a suite inteira usa essa porta',
     ressalva: 'o caminho PADRAO, quando ninguem sobrepoe, e diferente nos tres sistemas ' +
               'e so se ve naquele sistema. O que se prova aqui e que a sobreposicao manda.'
   },
@@ -129,15 +129,18 @@ const PONTOS = [
     classe: INJETAVEL,
     titulo: 'Onde o claude grava a transcricao da sessao',
     arquivos: ['scripts/autorizar-paralelo.js', 'scripts/lib/calibracao.js', 'scripts/lib/gasto.js',
-               'scripts/lib/injetado.js', 'scripts/lib/vigia-local.js', 'scripts/medir-qualidade.js'],
+               'scripts/lib/injetado.js', 'scripts/lib/migracao.js', 'scripts/lib/vigia-local.js',
+               'scripts/medir-qualidade.js'],
     comoSeProva: 'CLAUDE_CONFIG_DIR sobrepoe a pasta pessoal, e a pasta pessoal entra por parametro ' +
                  'em acharTranscricao: os dois caminhos rodam daqui. A pasta do vigia (Bloco V) idem: ' +
-                 'ESQUADRO_VIGIA a sobrepoe, e o teste roda por ela. O autorizar-paralelo (para de subir na ' +
+                 'SWORN_VIGIA a sobrepoe, e o teste roda por ela. O autorizar-paralelo (para de subir na ' +
                  'pasta pessoal) idem: o teste troca HOME e USERPROFILE. O calibrador idem: a pasta pessoal ' +
                  'entra por parametro em pastaDasTranscricoes, e o comando roda pelo CLAUDE_CONFIG_DIR. O gasto ' +
                  'do mes (pedido 31) idem: pastaDosProjetos recebe a pasta pessoal por parametro, e o sessao.js ' +
                  'roda no teste pelo CLAUDE_CONFIG_DIR. O injetado da auditoria (0.9.1) idem: a transcricao e o ' +
-                 'cache de plugins saem do CLAUDE_CONFIG_DIR, e o teste roda por ele',
+                 'cache de plugins saem do CLAUDE_CONFIG_DIR, e o teste roda por ele. A migracao da pasta antiga ' +
+                 '(.claude/esquadro) idem: migrarCasa recebe a pasta pessoal por parametro, e o teste da abertura troca ' +
+                 'HOME e USERPROFILE',
     ressalva: 'o nome da pasta de config padrao (.claude na pasta pessoal) so se confere naquele sistema ' +
               'com o claude de verdade; aqui se prova que a busca olha onde mandam.'
   },
@@ -146,7 +149,7 @@ const PONTOS = [
     classe: SO_NO_SISTEMA,
     titulo: 'Chamada do git como processo, sem shell',
     arquivos: ['scripts/exportar.js', 'scripts/lib/git.js', 'scripts/lib/sanitacao.js',
-               'scripts/medir-qualidade.js', 'scripts/preparar-revisao.js', 'scripts/vigia-puxar.js'],
+               'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/preparar-revisao.js', 'scripts/vigia-puxar.js'],
     comoSeProva: 'rodando naquele sistema com git instalado',
     ressalva: 'com shell:false o Node nao consulta PATHEXT: um git empacotado como .cmd ou .bat ' +
               'nao seria achado no Windows. Aqui ele e .exe e e achado. Fora do Windows o ' +
@@ -156,7 +159,7 @@ const PONTOS = [
     chave: 'caminho_especifico',
     classe: SO_NO_SISTEMA,
     titulo: 'Caminho relativo remontado pelo separador do sistema',
-    arquivos: ['scripts/apurar-ronda.js', 'scripts/lib/cicatriz.js', 'scripts/medir-qualidade.js'],
+    arquivos: ['scripts/apurar-ronda.js', 'scripts/lib/cicatriz.js', 'scripts/medir-qualidade.js', 'scripts/medir-travas.js'],
     comoSeProva: 'rodando a suite naquele sistema: o separador e o do proprio Node',
     ressalva: 'no Windows a troca vira barra normal; fora dele e identidade. ' +
               'A suite so exercita o lado do Windows.'

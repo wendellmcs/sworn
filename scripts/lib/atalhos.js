@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Plano 090 Tarefa 5: /esquadro:atalhos, a lista do que foi simplificado de proposito. Logica pura: quem le o disco e
+ * Plano 090 Tarefa 5: /sworn:shortcuts, a lista do que foi simplificado de proposito. Logica pura: quem le o disco e
  * pergunta ao git e o scripts/atalhos.js. Formato do comentario (D554), em rotulos para que uma virgula na frase nao
  * quebre a leitura:
  *   <prefixo de comentario> <marca>: <o que>. limite: <ate onde vale>. trocar quando: <gatilho>.
@@ -116,7 +116,9 @@ function painel(achados, totalDeArquivos, listaDeMarcas) {
 }
 
 const MAIOR_ARQUIVO = 1024 * 1024; // texto acima disso nao e codigo escrito a mao: nao abre
-const OPCOES_GIT = { maxBuffer: 64 * 1024 * 1024, timeout: 15000 };
+// 60 s em todo git da varredura (o rev-parse inclusive): com a maquina carregada, 5 s e 15 s estouravam e o repositorio
+// de dentro saia da contagem (medido na suite inteira da s129).
+const OPCOES_GIT = { maxBuffer: 64 * 1024 * 1024, timeout: 60000 };
 
 /** O texto de `abs`, ou null (nao e arquivo, passa de 1 MB, apagado sem commit, link quebrado, submodulo). */
 function lerArquivo(abs) {
@@ -138,7 +140,7 @@ function lerArquivo(abs) {
 function doRepositorio(cwd, projeto) {
   const git = require('./git.js');
   const path = require('node:path');
-  const topo = git.correr(cwd, ['rev-parse', '--show-toplevel']);
+  const topo = git.correr(cwd, ['rev-parse', '--show-toplevel'], OPCOES_GIT);
   if (topo === null) {
     return { erro: 'Esta pasta não é repositório git, ou o git não respondeu: não sei quais arquivos varrer. Rode de ' +
       'dentro da pasta do repositório; se já estiver nela, confira se o git está instalado.', foraDeRepositorio: true };
@@ -148,7 +150,7 @@ function doRepositorio(cwd, projeto) {
   const rastreados = git.correr(raiz, ['ls-files', '-z'], OPCOES_GIT);
   const novos = git.correr(raiz, ['ls-files', '--others', '--exclude-standard', '-z'], OPCOES_GIT);
   if (rastreados === null || novos === null) {
-    return { erro: 'O git não respondeu à lista de arquivos (falhou ou passou de 15 s): nada foi varrido. Rode de novo; se repetir, ' +
+    return { erro: 'O git não respondeu à lista de arquivos (falhou ou passou de 60 s): nada foi varrido. Rode de novo; se repetir, ' +
       'confira se `git ls-files` responde nesta pasta.' };
   }
   const arquivos = Array.from(new Set((rastreados + novos).split('\0').filter(function (a) { return a !== ''; })));

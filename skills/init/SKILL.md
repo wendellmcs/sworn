@@ -1,17 +1,17 @@
 ---
 name: init
-description: Configura o esquadro neste projeto. Varre o repositorio, mostra o que inferiu, faz seis perguntas que varredura nenhuma responde, e grava .claude/esquadro/projeto.json e regras.md. Use no primeiro contato com um repositorio, ou quando o projeto mudar de forma.
+description: Configura o sworn neste projeto. Varre o repositorio, mostra o que inferiu, faz seis perguntas que varredura nenhuma responde, e grava .claude/sworn/projeto.json e regras.md. Use no primeiro contato com um repositorio, ou quando o projeto mudar de forma.
 argument-hint: "[caminho do projeto, se nao for o atual]"
 ---
 
-# `/esquadro:init` — a entrevista
+# `/sworn:init` — a entrevista
 
-Você está configurando o `esquadro` para este projeto. **Varre primeiro, pergunta depois.**
+Você está configurando o `sworn` para este projeto. **Varre primeiro, pergunta depois.**
 Nunca pergunte o que a varredura já respondeu.
 
 **A raiz do projeto** é o caminho que o usuário passou como argumento; sem argumento, é a pasta
 atual. **Todo caminho deste roteiro é relativo a ela** — não só o `<raiz>` dos comandos, mas também
-`.claude/esquadro/projeto.json` e `.claude/esquadro/regras.md`, que são os dois arquivos que este
+`.claude/sworn/projeto.json` e `.claude/sworn/regras.md`, que são os dois arquivos que este
 roteiro **grava**. A ferramenta `Write` quer caminho absoluto: monte-o a partir da raiz, nunca da
 pasta atual. Configurar um projeto e gravar noutro é o erro que essa regra existe para impedir — e a
 gravação do `regras.md` é a mais perigosa das duas, porque nenhum passo posterior a confere.
@@ -50,8 +50,8 @@ Se a raiz não existir ou não for pasta, **pare e pergunte**. Não tente adivin
 
 ## Passo 0b — já existe configuração aqui?
 
-Leia `<raiz absoluta>/.claude/esquadro/projeto.json`. **Se existir, isto é um re-init** (uma
-reconfiguração: o `/esquadro:init` rodando num projeto que já foi configurado) **e o roteiro muda:**
+Leia `<raiz absoluta>/.claude/sworn/projeto.json`. **Se existir, isto é um re-init** (uma
+reconfiguração: o `/sworn:init` rodando num projeto que já foi configurado) **e o roteiro muda:**
 você não está configurando um projeto novo, está atualizando o de alguém. Ao falar com o dono, diga
 "reconfiguração"; "re-init" é só o nome que este roteiro usa.
 
@@ -75,29 +75,29 @@ que vai acontecer.
 - **O `regras.md` do Passo 6 não se sobrescreve.** Ele pode ter sido editado à mão desde então.
   Se já existir, diga e siga.
 
-**Antes de qualquer `Write` em `.claude/esquadro/` (o `projeto.json` do Passo 7, o `design.json` do
+**Antes de qualquer `Write` em `.claude/sworn/` (o `projeto.json` do Passo 7, o `design.json` do
 5b se for gravá-lo, o `regras.md` do Passo 6 se ele não existir mais), declare o escopo.** Três
 termos, em palavras simples: o **portão de escopo** (a "trava 4") é a proteção que só deixa gravar
-arquivo que o escopo declarado da tarefa cobre; o **escopo** é o arquivo `.claude/esquadro/escopo.md`,
+arquivo que o escopo declarado da tarefa cobre; o **escopo** é o arquivo `.claude/sworn/escopo.md`,
 a lista do que esta tarefa pode editar; e a **marcha** é o nível de rigor que o `projeto.json` dá a
 cada caminho (`padrao` exige escopo declarado, `rapida` não; o Passo 5 detalha). No re-init o
 `projeto.json` já está no disco, então o portão está de pé — e em marcha `padrao`, sem escopo, ele
 **nega** esses `Write` (medido; é a mesma armadilha que o Passo 7e descreve mais adiante).
-**Diga ao dono, em palavras simples, que você vai criar ou ampliar o `.claude/esquadro/escopo.md`, só
+**Diga ao dono, em palavras simples, que você vai criar ou ampliar o `.claude/sworn/escopo.md`, só
 para poder gravar a configuração, e que tirará de volta o que acrescentar a um escopo que já era de
 outra tarefa.**
 
-Ponha antes `.claude/esquadro/projeto.json` e `.claude/esquadro/regras.md` na seção "Dentro" do escopo
-— e `.claude/esquadro/design.json` **só se o 5b for gravá-lo** (o 5b é opcional) — pois o mapa de
+Ponha antes `.claude/sworn/projeto.json` e `.claude/sworn/regras.md` na seção "Dentro" do escopo
+— e `.claude/sworn/design.json` **só se o 5b for gravá-lo** (o 5b é opcional) — pois o mapa de
 marchas que este roteiro recomenda (`rapida`: `**/*.md`, `docs/**`) **não** cobre `.json`, e o mapa
 pode nem existir. O `escopo.md` e o arquivo da frente (abaixo) o portão libera sempre, sem exigir
 escopo: dá para editá-los antes de qualquer outro `Write`. Se o
-`.claude/esquadro/escopo.md` já existe (é de outra tarefa em uso), **acrescente** essas linhas à seção
+`.claude/sworn/escopo.md` já existe (é de outra tarefa em uso), **acrescente** essas linhas à seção
 "Dentro" dele com `Edit`, sem apagar o resto; só crie o arquivo se ele não existir — e, se foi o init
 que o criou, ele é só um andaime para poder gravar a configuração: **o Passo 8 o remove** (arquivo de
 escopo que sobra passa a restringir a marcha `padrao` depois do init). Se ele existe mas
 não tem a seção "Dentro", crie a seção. Se a sessão está vinculada a uma frente (o escopo próprio de
-uma linha de trabalho paralela, em `.claude/esquadro/escopos/<frente>.md`, ver "Com mais de uma
+uma linha de trabalho paralela, em `.claude/sworn/escopos/<frente>.md`, ver "Com mais de uma
 frente"), é nesse arquivo que se acrescenta.
 
 **No Passo 8, antes de fechar, remova de volta as linhas que você acrescentou** (com `Edit`; o arquivo
@@ -106,8 +106,8 @@ Passo 8** (o dono desistiu, a sessão fechou, você parou sem `OK` no Passo 7) d
 escopo da outra tarefa. Por isso: diga ao dono, na hora de acrescentar, quais linhas foram; se você
 mesmo vai parar antes do Passo 8, remova-as antes de parar; e **ao retomar um init interrompido**, o
 primeiro passo é abrir o escopo em vigor e remover (com `Edit`, só elas) as linhas que o init
-acrescentou — `.claude/esquadro/projeto.json`, `.claude/esquadro/regras.md` e, se foi o caso,
-`.claude/esquadro/design.json` na seção "Dentro". Se houver dúvida sobre alguma já ser da outra
+acrescentou — `.claude/sworn/projeto.json`, `.claude/sworn/regras.md` e, se foi o caso,
+`.claude/sworn/design.json` na seção "Dentro". Se houver dúvida sobre alguma já ser da outra
 tarefa, pergunte ao dono antes de remover. **Se foi o init que criou o próprio `escopo.md`** (ele não
 existia antes), um init interrompido o deixa no disco: ao retomar, se o arquivo só tem as linhas do
 init, remova o **arquivo** inteiro (como o Passo 8 descreve); se tem mais do que isso, pergunte ao
@@ -146,16 +146,16 @@ Rode, com a raiz do projeto no lugar de `<raiz>`:
 Mostre ao usuário o bloco `teto` da saída — quantos arquivos foram lidos, se truncou, e a estimativa
 de tokens. **Custo é informação dele, não detalhe.**
 
-## Passo 2b — o que já existe aqui, e o que o esquadro NÃO vai duplicar
+## Passo 2b — o que já existe aqui, e o que o sworn NÃO vai duplicar
 
 Leia o bloco `ambiente` da varredura e mostre ao usuário, em tabela: plugins ativos, skills, agentes,
 hooks já configurados e servidores MCP.
 
 **Regra:** o que já existe **não se duplica**. Se `superpowers` está instalado, o método
-(brainstorm, escrita e execução de plano, TDD, depuração) é dele — o `esquadro` cobra prova, não
+(brainstorm, escrita e execução de plano, TDD, depuração) é dele — o `sworn` cobra prova, não
 ensina método. Se `context7` está instalado, verificação de biblioteca é dele.
 
-**Se houver hook já configurado no `.claude/settings.json`**, avise: o `esquadro` acrescenta hooks
+**Se houver hook já configurado no `.claude/settings.json`**, avise: o `sworn` acrescenta hooks
 próprios e os dois vão rodar. Pergunte se algum deve sair, e **não desligue nada por conta própria.**
 
 ## Passo 2c — o peso de instrução que este projeto já carrega
@@ -323,7 +323,7 @@ achando que você viu.
 ## Passo 4b — onde cada coisa se registra
 
 Isto **não** é a sétima pergunta do Passo 4: aquelas gravam um campo do `projeto.json`, e a resposta
-daqui não é campo dele. A skill de execução (`padrao`) procura esses três lugares na fatia
+daqui não é campo dele. A skill de execução (`playbook`) procura esses três lugares na fatia
 `ondeRegistrar` do adaptador; sem resposta, ela não sabe para onde mandar o que sobrou de uma revisão
 nem a decisão que o dono tomou.
 
@@ -343,14 +343,14 @@ Na pergunta ao dono, use as palavras em português; o termo em inglês só entre
 candidato, diga isso e pergunte aberto (a regra do Passo 4). **Não crie os arquivos** — este passo só
 pergunta onde ficam.
 
-**Para onde a resposta vai:** para a fatia `decisoes` do Passo 7c, a skill do projeto, que a `padrao`
+**Para onde a resposta vai:** para a fatia `decisoes` do Passo 7c, a skill do projeto, que a `playbook`
 lê no Passo 0-bis. O 7c usa a resposta daqui **sem perguntar de novo**. Se o dono escolher **Não
 gravar** a skill no 7c, a resposta do 4b não fica gravada em lugar nenhum — **avise isso ao dono
 naquela hora**.
 
 **No re-init, olhe antes se a skill do projeto já existe** (liste `.claude/skills/`: é a pasta com o
 `SKILL.md` que um init anterior gravou pelo 7c, com a fatia `decisoes`, e que diz "Gerado por
-`/esquadro:init`"; com mais de uma assim, pergunte ao dono qual é), porque o 7c **não grava por cima dela** (o
+`/sworn:init`"; com mais de uma assim, pergunte ao dono qual é), porque o 7c **não grava por cima dela** (o
 script recusa sobrescrever skill que já existe, item 6 do 7c):
 
 - **existe e traz os três arquivos** na fatia `decisoes`: não repergunte; vale o que está lá;
@@ -362,7 +362,7 @@ script recusa sobrescrever skill que já existe, item 6 do 7c):
 
 **Por último, a referência de topo** → grava `referencias` no `projeto.json` (chave opcional). Não é lugar de
 registro: mora aqui para o Passo 4 continuar com seis perguntas. É a melhor peça que existe para cada tipo de
-entrega, `tela`, `codigo` e `texto`, no mercado ou no próprio projeto: o `/esquadro:revisar` a põe ao lado do
+entrega, `tela`, `codigo` e `texto`, no mercado ou no próprio projeto: o `/sworn:review` a põe ao lado do
 trabalho, e o fim do turno barra a entrega da marcha AAA que não foi revisada contra ela. Uma pergunta só, por
 `AskUserQuestion`, com 3 opções. Na pergunta ao dono, sem jargão: "qual é o melhor exemplo que existe do que este
 projeto entrega? A revisão vai comparar o trabalho com ele" — "marcha" só se explica no Passo 5.
@@ -373,13 +373,13 @@ para você, não entra na opção):
 1. **Nomear agora (recomendada)** — "Você aponta o melhor exemplo de cada tipo (tela, código, texto): um arquivo
    ou um print salvo no projeto. Toda revisão de entrega de rigor máximo compara o trabalho com ele." Grava:
    `referencias`, por tipo. O inspetor só lê arquivo: ofereça só caminhos que apareceram na listagem do Passo 3b ou
-   na varredura; sem candidato, pergunte aberto e ofereça o `/esquadro:referencia`, que estuda os produtos líderes
+   na varredura; sem candidato, pergunte aberto e ofereça o `/sworn:reference`, que estuda os produtos líderes
    do mesmo tipo e grava a ficha que vira a referência. Se o dono só tiver um link, diga que o inspetor não abre a página e
    dê as duas saídas: salvar a página ou um print num arquivo do projeto e dar esse caminho; ou gravar o link assim
-   mesmo, sabendo que aquele exemplo fica fora da comparação até virar arquivo (o `/esquadro:revisar` avisa isso a
+   mesmo, sabendo que aquele exemplo fica fora da comparação até virar arquivo (o `/sworn:review` avisa isso a
    cada revisão);
 2. **Deixar para depois** — "Nada muda por ora: a revisão compara só o antes e o depois. A próxima sessão lembra
-   uma vez. Para nomear depois, rode `/esquadro:init` de novo e responda só esta pergunta, ou rode `/esquadro:referencia`, que
+   uma vez. Para nomear depois, rode `/sworn:init` de novo e responda só esta pergunta, ou rode `/sworn:reference`, que
    estuda os melhores do mesmo tipo e traz a ficha." Grava: nada (a chave
    fica de fora, e a abertura da sessão avisa uma vez que ela falta);
 3. **Nunca neste projeto** — "A revisão nunca compara o trabalho com um exemplo de fora: ela só vê se o depois
@@ -395,7 +395,7 @@ lista dele vazia (`"tela": []`), que vale como sem referência.
 ## Passo 5 — o mapa de marchas
 
 Antes de propor, diga em uma linha o que a marcha faz — o usuário vai confirmar este mapa, e a
-palavra sozinha não significa nada para quem chega agora: **a marcha decide se o `esquadro` exige um
+palavra sozinha não significa nada para quem chega agora: **a marcha decide se o `sworn` exige um
 escopo declarado antes de deixar editar aquele arquivo.** `rapida` não exige; `padrao` e `aaa`
 exigem.
 
@@ -438,7 +438,7 @@ cujo **nome** casa o padrão dela (`DESIGN.md`, `tokens.*` ou `_tokens.*`, `desi
 devolve caminho nenhum.** Localize você mesmo os arquivos que casam esse padrão — sem entrar nas
 pastas que o Passo 1 pula (`node_modules`, `.git`, `dist`, `build` e afins) —, leia-os e **confirme
 com o dono** que são mesmo os tokens do projeto (um `tokens.ts` de autenticação também casa). **Só
-depois de perguntar as anti-referências** (parágrafo abaixo) grave `.claude/esquadro/design.json` com
+depois de perguntar as anti-referências** (parágrafo abaixo) grave `.claude/sworn/design.json` com
 `cores`, `raios`, `espacos`, `sombras` e `antiReferencias`.
 **Em re-init, o `Write` aqui é negado pelo portão de escopo** se o `escopo.md` não cobrir esse arquivo:
 declare-o antes, como manda o Passo 0b. **Se o `design.json` já existe, não o sobrescreva sem
@@ -453,7 +453,7 @@ pode parecer é verificável; dizer o que ela deve parecer, não é.
 
 ## Passo 5c — autorizar o trabalho em paralelo, uma vez só
 
-O plugin traz o workflow `/esquadro:paralelo` (tarefas independentes em paralelo, com teto de 8
+O plugin traz o workflow `/sworn:parallel` (tarefas independentes em paralelo, com teto de 8
 agentes por disparo, modelo barato e isolamento para quem edita) e uma regra, na abertura de toda
 sessão, que manda o Claude **rodá-lo direto**, dizendo o custo, quando houver 3 ou mais tarefas independentes.
 O Claude Code pede aprovação antes de rodar workflow; este passo deixa essa aprovação dada **uma vez**.
@@ -479,7 +479,7 @@ script mescla por JSON):
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/autorizar-paralelo.js"
 
-Ele acrescenta `Workflow(esquadro:paralelo)` em `permissions.allow` do `.claude/settings.local.json`
+Ele acrescenta `Workflow(sworn:parallel)` em `permissions.allow` do `.claude/settings.local.json`
 (o arquivo pessoal do projeto, fora do git). Saída `"erro"`: não grave à mão; mostre o erro ao dono.
 **Diga ao dono o limite que está medido:** a regra libera o workflow sem janela no modo `claude -p`;
 na sessão interativa (terminal ou VS Code), se a janela ainda aparecer na primeira execução, ele
@@ -494,17 +494,17 @@ marcha `padrao`, sem escopo declarado, e o roteiro seria **negado pelo portão q
 ligar** — medido. Semeando antes, não há portão ainda: o passo passa, e o
 portão nasce já com as regras no lugar. **Não troque estes dois passos de ordem.**
 
-Copie `${CLAUDE_PLUGIN_ROOT}/modelos/regras.md` para **`<raiz absoluta>/.claude/esquadro/regras.md`**
+Copie `${CLAUDE_PLUGIN_ROOT}/modelos/regras.md` para **`<raiz absoluta>/.claude/sworn/regras.md`**
 — a raiz do Passo 0, nunca a pasta atual. Monte o caminho a partir da raiz absoluta e **confira antes
 de gravar**: um erro de pasta aqui só é denunciado se o arquivo cair onde o passo seguinte procura.
 
 Leia com `Read` e grave com `Write` — nunca `Copy-Item`, `Set-Content` ou `Out-File`, pelo mesmo
 motivo de codificação explicado no passo seguinte. Ajuste só o que for específico do projeto (quem
 decide, prova de pronto, modelo de ameaça). Não invente regra nova aqui — regra nova entra por
-`/esquadro:aprender`, com aprovação.
+`/sworn:learn`, com aprovação.
 
-**Você provavelmente vai ver um aviso do próprio `esquadro`** dizendo que este projeto não tem
-`projeto.json` e que é para rodar `/esquadro:init` — durante o `/esquadro:init`. É esperado, e é
+**Você provavelmente vai ver um aviso do próprio `sworn`** dizendo que este projeto não tem
+`projeto.json` e que é para rodar `/sworn:init` — durante o `/sworn:init`. É esperado, e é
 justamente a prova de que a ordem está certa: o portão ainda não subiu. Siga.
 
 **Se o arquivo `modelos/regras.md` não existir**, diga isso ao usuário e siga — a configuração do
@@ -535,7 +535,7 @@ os caminhos por tipo, ou `{}` para "nunca"; com "deixar para depois", não grave
 "nunca" grava `{}` no lugar dela, e "deixar para depois" mantém a chave atual — o `Write` reescreve o arquivo inteiro
 e apagaria o que já estava gravado.
 
-**Onde gravar.** `<raiz absoluta>/.claude/esquadro/projeto.json` — a raiz do Passo 0, nunca a pasta
+**Onde gravar.** `<raiz absoluta>/.claude/sworn/projeto.json` — a raiz do Passo 0, nunca a pasta
 atual. Esta linha é a mais importante deste passo; o parágrafo seguinte é sobre outra coisa.
 
 **Em re-init, antes do `Write`:** o portão de escopo nega a gravação do `projeto.json` sem o
@@ -578,7 +578,7 @@ Enquanto não sair `OK`, o projeto está com proteção incompleta, e ele precis
 **Rode os três geradores (7b, 7c e 7d) de dentro da raiz absoluta do Passo 0, no mesmo comando** —
 `( cd -- '<raiz>' && node … )` no bash, `Push-Location -LiteralPath '<raiz>' -ErrorAction Stop; try { node … } finally { Pop-Location }` no PowerShell. Eles
 não recebem a raiz: leem o `projeto.json` e gravam na pasta atual, e a pasta atual pode voltar
-sozinha entre um comando e outro. Medido: fora da raiz, dizem *"rode /esquadro:init primeiro"* logo
+sozinha entre um comando e outro. Medido: fora da raiz, dizem *"rode /sworn:init primeiro"* logo
 depois de o init gravar; dentro de outro projeto já configurado, propõem gravar **nele**. Antes de
 gravar, confira que o `Destino seria:` da proposta começa pela raiz.
 
@@ -725,8 +725,8 @@ grava na pasta atual.
 
 A resposta traz `"sim": true` — é o que um motivo deliberado quer dizer.
 
-**2. Consulte como manda o Passo 1b do `/esquadro:auditar`, do item 2 ao 5** — leia
-`${CLAUDE_PLUGIN_ROOT}/skills/auditar/SKILL.md`. Em resumo: página oficial do fabricante primeiro,
+**2. Consulte como manda o Passo 1b do `/sworn:audit`, do item 2 ao 5** — leia
+`${CLAUDE_PLUGIN_ROOT}/skills/audit/SKILL.md`. Em resumo: página oficial do fabricante primeiro,
 resultado mostrado como evidência citada, a página vence a sua memória, e sem rede o modo degradado.
 
 **3. Registre o desfecho por este comando, nunca pelo `Write`** — `ok`, `semRede` ou `falhou`,
@@ -734,7 +734,7 @@ seguido das fontes que você leu, cada uma entre aspas simples:
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/catalogo.js" --registrar ok '<fonte>'
 
-O `Write` em `.claude/esquadro/catalogo.json` é **negado pelo portão de escopo que o Passo 7 acabou
+O `Write` em `.claude/sworn/catalogo.json` é **negado pelo portão de escopo que o Passo 7 acabou
 de ligar** — a mesma armadilha que pôs o Passo 6 antes do 7. O arquivo é estado do plugin, e quem o
 grava é o módulo dele. A saída diz onde gravou: confira que é a raiz.
 
@@ -743,12 +743,12 @@ aparece mais na página vai ao dono em 3 opções — e a troca, se ele a escolh
 pergunta 6, não edição sua.
 
 **5. Diga ao dono que atualizar o plugin não repete esta conferência.** Nenhum evento avisa o plugin
-de que ele foi atualizado, e o README declara isso como limite. Depois de atualizar, é o
-`/esquadro:auditar` que faz a mesma consulta.
+de que ele foi atualizado, e o guia do plugin (`GUIA.md`) declara isso como limite. Depois de atualizar, é o
+`/sworn:audit` que faz a mesma consulta.
 
 ## Passo 7f — a atualização automática do plugin
 
-O marketplace do `esquadro` é de terceiros: o Claude Code o instala com a atualização automática
+O marketplace do `sworn` é de terceiros: o Claude Code o instala com a atualização automática
 **desligada**, e sem ela o usuário fica na versão que instalou. Este passo roda em todo init, inclusive
 no re-init, e grava fora do projeto (no `settings.json` do Claude Code do usuário), por isso não passa
 pelo escopo do Passo 0b.
@@ -764,7 +764,7 @@ item 2.
 **2. Pergunte pelo `AskUserQuestion`, em 3 opções**, dizendo antes que a versão nova chega alguns
 minutos depois de a sessão abrir e vale a partir da sessão seguinte: **ligar agora (recomendada)** —
 recebe as correções sem fazer nada; **não, eu atualizo à mão** — mostre os dois comandos de "Para
-atualizar à mão" do README; **agora não** — o próximo init pergunta de novo.
+atualizar à mão" do guia do plugin (`GUIA.md`); **agora não** — o próximo init pergunta de novo.
 
 **3. Só com o sim**, rode o mesmo comando com `--gravar` e cole a saída:
 
@@ -776,11 +776,11 @@ recusa o que não entende sem regravar por cima, e preserva o resto das configur
 ## Passo 8 — fechar dizendo o que ligou
 
 **Se no re-init você acrescentou linhas ao `escopo.md` (ou ao arquivo da frente) de outra tarefa
-(Passo 0b), remova-as agora**, depois do último `Write` em `.claude/esquadro/`, e diga que removeu.
-**Se o `.claude/esquadro/escopo.md` não existia e foi o init que o criou, remova o arquivo inteiro**,
+(Passo 0b), remova-as agora**, depois do último `Write` em `.claude/sworn/`, e diga que removeu.
+**Se o `.claude/sworn/escopo.md` não existia e foi o init que o criou, remova o arquivo inteiro**,
 também depois do último `Write`, e diga ao dono que removeu: sobrando, ele passa a restringir a marcha
 `padrao` para a próxima tarefa. Apagar arquivo é comando, não `Write`/`Edit`; use
-`rm .claude/esquadro/escopo.md` (no PowerShell, `Remove-Item .claude\esquadro\escopo.md`), **sem `-f`,
+`rm .claude/sworn/escopo.md` (no PowerShell, `Remove-Item .claude\sworn\escopo.md`), **sem `-f`,
 `-r` ou `-Force`** — o portão destrutivo barra essas opções, e `rm` simples de um arquivo passa (medido
 com `classificar` de `scripts/lib/destrutivo.js`). Se o portão barrar mesmo assim, não insista e não
 esvazie o arquivo (arquivo vazio ainda existe): diga ao dono o caminho e peça que ele apague.
@@ -794,18 +794,18 @@ frente de trabalho".
 | Trava | O que bloqueia | Como desligar |
 |---|---|---|
 | `fecho` | Fechar o turno afirmando sucesso sem colar evidência (trava 3) | `travas.fecho: false` |
-| `escopo` | Gravar fora do escopo declarado em `.claude/esquadro/escopo.md` (trava 4) | **não tem botão** — ver abaixo |
+| `escopo` | Gravar fora do escopo declarado em `.claude/sworn/escopo.md` (trava 4) | **não tem botão** — ver abaixo |
 | `destrutivo` | Comando destrutivo **e** `cd` solto no Bash ou no PowerShell (trava 5; a chave desliga os dois juntos) | `travas.destrutivo: false` |
 | `outraFrente` | Gravar em arquivo que já estava modificado quando a sessão abriu, **e** que não está no escopo declarado (trava 5) | `travas.outraFrente: false` |
 | *roteamento por custo* | Despachar um agente da **metade cara** da escada num trabalho cujo escopo declarado só toca caminho de marcha `rapida` | **não é trava** — deixe `agentes.escada` com menos de dois nomes |
 
-**O `escopo.md` não sai deste comando.** Ele se escreve por tarefa, em `.claude/esquadro/escopo.md`,
+**O `escopo.md` não sai deste comando.** Ele se escreve por tarefa, em `.claude/sworn/escopo.md`,
 dizendo o que está dentro e o que está fora daquele trabalho — e o próprio portão ensina a forma dele
 na primeira vez que nega. Diga isso, senão a linha `escopo` da tabela cita um arquivo que o usuário
 nunca viu e não sabe como criar.
 
 **Com mais de uma frente de trabalho ativa no mesmo projeto**, cada uma pode ter o seu próprio
-arquivo em `.claude/esquadro/escopos/<frente>.md` (mesmo formato do `escopo.md`). Editar esse arquivo
+arquivo em `.claude/sworn/escopos/<frente>.md` (mesmo formato do `escopo.md`). Editar esse arquivo
 vincula a sessão àquela frente; sem vínculo, continua valendo o `escopo.md` geral.
 
 **A última linha não é uma trava, e diga isso.** Não existe `travas.custo`: o portão de custo se cala
@@ -833,16 +833,16 @@ travas desta tabela valem quando ele estiver trabalhando **dentro** desta raiz; 
 noutro lugar, nenhuma delas dispara. Prometer quatro travas ligadas sem essa ressalva é anunciar
 proteção que não vai acontecer.
 
-Diga também o que o `esquadro` **não** promete — ele não julga se a interface ficou bonita, não
+Diga também o que o `sworn` **não** promete — ele não julga se a interface ficou bonita, não
 resolve sessão concorrente no caso geral, e não aprende sozinho.
 
 **Feche com os próximos comandos**, uma frase cada, sem pergunta, para ele saber a hora de cada um:
 
-- `/esquadro:revisar` — revisão cega do que foi escrito, antes de dar por pronto;
-- `/esquadro:referencia` — estuda os líderes do mesmo tipo e grava a referência que a revisão usa
+- `/sworn:review` — revisão cega do que foi escrito, antes de dar por pronto;
+- `/sworn:reference` — estuda os líderes do mesmo tipo e grava a referência que a revisão usa
   (se ele recusou no Passo 4b, diga que pode rodar depois);
-- `/esquadro:radar` — projetos públicos parecidos com o que ele está construindo; ele se oferece
+- `/sworn:radar` — projetos públicos parecidos com o que ele está construindo; ele se oferece
   sozinho quando o pedido é de função nova ou melhoria;
-- `/esquadro:atalhos` — a dívida de simplificação deliberada, antes de um release;
-- `/esquadro:auditar` e `/esquadro:calibrar` — depois de algumas semanas: o peso das regras e o
+- `/sworn:shortcuts` — a dívida de simplificação deliberada, antes de um release;
+- `/sworn:audit` e `/sworn:calibrate` — depois de algumas semanas: o peso das regras e o
   limiar de troca de chat.

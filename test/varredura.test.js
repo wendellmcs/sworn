@@ -10,7 +10,7 @@ const varredura = require('../scripts/lib/varredura.js');
 const BOM = String.fromCharCode(65279);
 
 function montar(arquivos) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-varre-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-varre-'));
   for (const [rel, conteudo] of Object.entries(arquivos)) {
     const alvo = path.join(dir, rel);
     fs.mkdirSync(path.dirname(alvo), { recursive: true });
@@ -98,7 +98,7 @@ test('varredura: profundidade corta ramo e a lista CONFESSA o corte', () => {
 });
 
 test('varredura: diretorio ilegivel entra em ilegiveis e a lista confessa', () => {
-  const inexistente = path.join(os.tmpdir(), 'esquadro-nao-existe-' + process.pid);
+  const inexistente = path.join(os.tmpdir(), 'sworn-nao-existe-' + process.pid);
   assert.strictEqual(fs.existsSync(inexistente), false, 'a fixture so vale se o caminho nao existir');
   const r = varredura.listar(inexistente);
   assert.deepStrictEqual(r.arquivos, []);
@@ -450,10 +450,10 @@ test('varrer.js: a observacao nomeia so as leituras que houve, projeto.json incl
   const todos = montar({
     'package.json': JSON.stringify({ scripts: { test: 'node --test' } }),
     '.claude/settings.json': '{}', '.claude/settings.local.json': '{}', '.mcp.json': '{}',
-    '.claude/esquadro/projeto.json': JSON.stringify({ fontesCanonicas: [] })
+    '.claude/sworn/projeto.json': JSON.stringify({ fontesCanonicas: [] })
   });
   const so = montar({ '.mcp.json': '{}', 'a.js': '1' });
-  const ilegivel = montar({ '.claude/esquadro/projeto.json': '{isso nao fecha' });
+  const ilegivel = montar({ '.claude/sworn/projeto.json': '{isso nao fecha' });
   try {
     const t = rodarVarrer(todos).teto.observacao;
     for (const nome of ['package.json', 'projeto.json', 'settings.json', 'settings.local.json', '.mcp.json', 'contar linhas']) {
@@ -509,7 +509,7 @@ test('varrer.js: sem projeto.json, o CLAUDE.md da raiz entra no peso e vem marca
 test('varrer.js: projeto.json com fontesCanonicas vazio nao deixa o CLAUDE.md entrar', () => {
   const dir = montar({
     'CLAUDE.md': '- regra um\n- regra dois\n',
-    '.claude/esquadro/projeto.json': JSON.stringify({ fontesCanonicas: [] })
+    '.claude/sworn/projeto.json': JSON.stringify({ fontesCanonicas: [] })
   });
   try {
     const saida = rodarVarrer(dir);
@@ -522,7 +522,7 @@ test('varrer.js: projeto.json que declara outro arquivo conta so o declarado', (
   const dir = montar({
     'CLAUDE.md': '- a\n- b\n- c\n',
     'AGENTS.md': '- d\n',
-    '.claude/esquadro/projeto.json': JSON.stringify({ fontesCanonicas: ['AGENTS.md'] })
+    '.claude/sworn/projeto.json': JSON.stringify({ fontesCanonicas: ['AGENTS.md'] })
   });
   try {
     const saida = rodarVarrer(dir);

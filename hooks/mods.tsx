@@ -1,6 +1,6 @@
 import type { Register } from 'claude-code'
 
-// Bloco M (D435) - os mods do esquadro: M1 medidor da sessao, M2 painel do plano.
+// Bloco M (D435) - os mods do sworn: M1 medidor da sessao, M2 painel do plano.
 // Cola fina: a conta e o texto moram em scripts/sessao.js e scripts/plano.js (fonte unica, testados
 // pela suite node --test). O mod junta o que o motor mede, chama o script e mostra a resposta.
 // D148: nada abre rede - $.session.usage() sem breakdown e local; o resto e node na maquina.
@@ -8,9 +8,9 @@ import type { Register } from 'claude-code'
 // medida (uma linha so - o "\n" vira espaco) e faixa acima do prompt com a linha do plano (pedido 30) e, embaixo
 // dela, um botao por vez: o de maior prioridade que o sessao.js devolve em `botoes` (pedido 32; o do handoff quando a
 // troca de chat cruzou). Os dois comandos respondem em texto em qualquer tela.
-// Desenho: .context/plans/2026-10-11-esquadro-bloco-m-desenho.md.
+// Desenho: .context/plans/2026-10-11-sworn-bloco-m-desenho.md.
 
-// Pedido 32 (D519, D522): o acento do esquadro na faixa - a chave de tema no terminal e no Desktop, a cor crua do
+// Pedido 32 (D519, D522): o acento do sworn na faixa - a chave de tema no terminal e no Desktop, a cor crua do
 // banner no VS Code (la a chave nao pinta). Copia de scripts/lib/identidade.js, conferida por test/identidade.test.js.
 const ACENTO_CRU = '#F59E0B'
 const ACENTO_TEMA = 'warning'
@@ -21,8 +21,8 @@ const PRAZO_MS = 10000
 // uso nao tem prazo). A seguinte nao espera mais por ela.
 const PRAZO_PRESA_MS = 3 * PRAZO_MS
 
-// Pedido 32: so comando do esquadro vira botao (o texto vem do script; o mod nao poe outra coisa no prompt).
-const COMANDO_DO_ESQUADRO = /^\/esquadro:[a-z]+( [^\n]*)?$/
+// Pedido 32: so comando do sworn vira botao (o texto vem do script; o mod nao poe outra coisa no prompt).
+const COMANDO_DO_SWORN = /^\/sworn:[a-z]+( [^\n]*)?$/
 // A ultima resposta vai ao script so pelo fim: o gatilho do paralelo e a oferta, que fecha a resposta.
 const MAX_RESPOSTA = 2000
 
@@ -82,7 +82,7 @@ function botaoDaVez(): Botao | null {
   for (const b of botoes) {
     // Sem texto ou rotulo de verdade o botao sairia sem nome e com "undefined " na frente: fica de fora.
     if (b && typeof b.nome === 'string' && !usados.has(b.nome) && typeof b.comando === 'string' &&
-      COMANDO_DO_ESQUADRO.test(b.comando) && typeof b.texto === 'string' && typeof b.rotulo === 'string' &&
+      COMANDO_DO_SWORN.test(b.comando) && typeof b.texto === 'string' && typeof b.rotulo === 'string' &&
       b.rotulo.trim() !== '') return b
   }
   return null
@@ -162,10 +162,10 @@ export const register: Register = on => {
     // A doc manda: register que lanca (nome tomado) pula o resto do gancho - cada um no seu try.
     // A descricao no menu, sem jargao, fica em ASCII: a sonda que provou o acento na faixa (D532) nao o provou no menu.
     try {
-      await $.command.register({ name: 'esquadro-sessao', description: 'esquadro: uso da conversa e dos limites de 5 horas e da semana, gasto e quando trocar de chat' })
+      await $.command.register({ name: 'sworn-session', description: 'sworn: uso da conversa e dos limites de 5 horas e da semana, gasto e quando trocar de chat' })
     } catch (err) {}
     try {
-      await $.command.register({ name: 'esquadro-plano', description: 'esquadro: painel do plano (feitas, a proxima, o que falta, sessoes gastas e estimativa)' })
+      await $.command.register({ name: 'sworn-plan', description: 'sworn: painel do plano (feitas, a proxima, o que falta, sessoes gastas e estimativa)' })
     } catch (err) {}
     return r
   })
@@ -176,14 +176,14 @@ export const register: Register = on => {
     return r
   })
 
-  // Pedido 32: o botao do padrao some quando a skill do manual (esquadro:padrao, ou a do projeto com "padrao" no
+  // Pedido 32: o botao do padrao some quando a skill do manual (sworn:playbook, ou a do projeto com "padrao" no
   // nome) e carregada pelo agente principal. So olha; a chamada segue igual. O `.catch` diz isso ao motor: se o gancho
   // falhar, a chamada segue (next(e) repete o que ja rodou, sem rodar duas vezes) - quem so olha nunca recusa.
   on('tool.call', async ($, e: any, next) => {
     try {
       // O campo, conferido nos tipos do motor (2.1.301, ToolCallEnvelope): os argumentos da ferramenta vem ao lado do
       // `tool`, `e.skill`; nao ha `e.input`. Sem texto, nada (String(undefined) nao entra).
-      if (!e.agentId && e.tool === 'Skill' && typeof e.skill === 'string' && /padrao/i.test(e.skill)) padraoCarregado = true
+      if (!e.agentId && e.tool === 'Skill' && typeof e.skill === 'string' && /padrao|^(sworn:)?playbook$/i.test(e.skill)) padraoCarregado = true
     } catch (err) {}
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -206,15 +206,15 @@ export const register: Register = on => {
     return r
   })
 
-  on('command.run', { command: 'esquadro-sessao' }, async $ => {
+  on('command.run', { command: 'sworn-session' }, async $ => {
     let m: Medida | null = null
     try { m = await medir($) } catch (err) {}
-    // Sem "esquadro:" na frente: o motor ja escreve o nome do plugin antes da resposta. O passo concreto, como no
+    // Sem "sworn:" na frente: o motor ja escreve o nome do plugin antes da resposta. O passo concreto, como no
     // status, com acento (D532: a resposta do comando desenha acento inteiro).
     return { text: m ? m.longa : 'Medidor parado: o Node.js não respondeu. Rode **node -v** num terminal para conferir.' }
   })
 
-  on('command.run', { command: 'esquadro-plano' }, async $ => {
+  on('command.run', { command: 'sworn-plan' }, async $ => {
     try {
       // D476: sem plano-ativo.json o plano vem da frente vinculada a esta sessao; o script acha o vinculo pelo id.
       // Sem id de verdade, nada de --sessao (String(undefined) seria 'undefined'): o script cai no id do ambiente.
@@ -231,32 +231,32 @@ export const register: Register = on => {
     const b = f ? null : botaoDaVez()
     if ((!b && !f && !linhaDoPlano) || e.props.hasSurvey) return next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
-    // Pedido 32: um acento so - a borda e o nome "esquadro" na 1a linha; o resto com o desenho do motor.
+    // Pedido 32: um acento so - a borda e o nome "sworn" na 1a linha; o resto com o desenho do motor.
     const acento = e.surface === 'vscode' ? ACENTO_CRU : ACENTO_TEMA
-    const marca = <Text key="esquadro-marca" color={acento} bold>esquadro </Text>
+    const marca = <Text key="sworn-marca" color={acento} bold>sworn </Text>
     return (
-      <Box key="esquadro-faixa" flexDirection="column" borderStyle="round" borderColor={acento} paddingX={1}>
+      <Box key="sworn-faixa" flexDirection="column" borderStyle="round" borderColor={acento} paddingX={1}>
         {linhaDoPlano ? (
-          <Box key="esquadro-linha-plano">
+          <Box key="sworn-linha-plano">
             {marca}
-            <Text key="esquadro-plano">{linhaDoPlano}</Text>
+            <Text key="sworn-plan">{linhaDoPlano}</Text>
           </Box>
         ) : null}
         {f ? (
-          <Box key="esquadro-falhou">
+          <Box key="sworn-falhou">
             {linhaDoPlano ? null : marca}
             <Text>{'Não consegui escrever no prompt. Digite '}</Text>
-            <Text key="esquadro-falhou-comando" bold>{f.comando}</Text>
+            <Text key="sworn-falhou-comando" bold>{f.comando}</Text>
             <Text>{' e envie.'}</Text>
           </Box>
         ) : null}
         {b ? (
-          <Box key="esquadro-botao">
+          <Box key="sworn-botao">
             {linhaDoPlano ? null : marca}
             <Text>{b.texto + ' '}</Text>
             {/* Todo botao `primary`: a sonda da D532 viu o `secondary` sair azul igual no VS Code. */}
             <Button
-              key={'esquadro-' + b.nome}
+              key={'sworn-' + b.nome}
               label={b.rotulo}
               variant="primary"
               onPress={async () => {

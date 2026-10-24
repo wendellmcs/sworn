@@ -77,7 +77,7 @@ test('D244/defeito 6: pasta existente fora do git nao e inerte; o typo continua 
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-inertes-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-inertes-'));
   try {
     fs.mkdirSync(path.join(dir, 'Pasta Fora'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'Pasta Fora', 'a.txt'), 'x', 'utf8');
@@ -94,7 +94,7 @@ test('A2-05: padrao com barra no fim ou {a,b} e inerte pela forma, mesmo com a p
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-a205-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-a205-'));
   try {
     for (const p of ['sec', 'cfg']) fs.mkdirSync(path.join(dir, p));
     const r = projeto.intocaveisInertes({ intocaveis: ['sec/', 'cfg/*.{js,ts}', 'cfg/**', 'sec/**'] }, ARQUIVOS, dir);
@@ -118,17 +118,17 @@ test('F1-C12: abertura fora de repositorio, com intocaveis, diz que nao sabe; se
   const path = require('node:path');
   const { spawnSync } = require('node:child_process');
   const abertura = path.join(__dirname, '..', 'scripts', 'abertura.js');
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-c12-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-c12-'));
   try {
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     const abrir = (cwd) => spawnSync(process.execPath, [abertura], {
       input: JSON.stringify({ session_id: 'c12', cwd: cwd, source: 'startup' }),
       encoding: 'utf8', env: env, timeout: 30000
     });
     const montar = (nome, intocaveis) => {
       const dir = path.join(tmp, nome);
-      fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-      fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'),
+      fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+      fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
         JSON.stringify({ versaoConfig: 1, intocaveis: intocaveis }), 'utf8');
       return dir;
     };

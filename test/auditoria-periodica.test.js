@@ -14,7 +14,7 @@ const DIA = 24 * 60 * 60 * 1000;
 const AGORA = Date.UTC(2026, 9, 11, 12, 0, 0);
 
 function temp(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-audper-' + nome + '-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-audper-' + nome + '-'));
 }
 
 function escrever(dir, rel, conteudo) {
@@ -24,11 +24,11 @@ function escrever(dir, rel, conteudo) {
 }
 
 function marca(dir, ms) {
-  escrever(dir, '.claude/esquadro/auditoria.json', JSON.stringify({ ultima: new Date(ms).toISOString() }));
+  escrever(dir, '.claude/sworn/auditoria.json', JSON.stringify({ ultima: new Date(ms).toISOString() }));
 }
 
 function lerMarcaBruta(dir) {
-  return JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'auditoria.json'), 'utf8'));
+  return JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'sworn', 'auditoria.json'), 'utf8'));
 }
 
 /** Relatorio no formato de lib/auditoria.auditar, tudo certo; cada teste estraga so o que quer provar. */
@@ -103,7 +103,7 @@ test('A2: marca ilegivel, sem data valida ou no futuro conta como vencida (nao c
   try {
     const casos = ['{ quebrado', '[]', '{}', JSON.stringify({ ultima: 'ontem' }), JSON.stringify({ ultima: 42 }), ''];
     for (const bruto of casos) {
-      escrever(dir, '.claude/esquadro/auditoria.json', bruto);
+      escrever(dir, '.claude/sworn/auditoria.json', bruto);
       assert.strictEqual(ap.vencida(dir, PROJETO, AGORA), true, 'marca: ' + JSON.stringify(bruto));
     }
     marca(dir, AGORA + 30 * DIA); // relogio voltou
@@ -113,7 +113,7 @@ test('A2: marca ilegivel, sem data valida ou no futuro conta como vencida (nao c
     assert.strictEqual(a.chamadas, 1);
     assert.strictEqual(lerMarcaBruta(dir).ultima, new Date(AGORA).toISOString(), 'a marca futura nao foi corrigida');
     // BOM do Windows na marca: le normalmente
-    escrever(dir, '.claude/esquadro/auditoria.json', '﻿' + JSON.stringify({ ultima: new Date(AGORA).toISOString() }));
+    escrever(dir, '.claude/sworn/auditoria.json', '﻿' + JSON.stringify({ ultima: new Date(AGORA).toISOString() }));
     assert.strictEqual(ap.vencida(dir, PROJETO, AGORA + DIA), false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -135,17 +135,17 @@ test('A2: tudo dentro do teto = silencio, e a marca e gravada mesmo assim', () =
   const dir = temp('silencio');
   try {
     assert.strictEqual(ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo()) }), '');
-    assert.ok(fs.existsSync(path.join(dir, '.claude', 'esquadro', 'auditoria.json')));
+    assert.ok(fs.existsSync(path.join(dir, '.claude', 'sworn', 'auditoria.json')));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 // Plano 091 (#3, D559): o fim do aviso deixa de ser informacao e vira ordem ao modelo, no texto do mock aprovado.
 const ORDEM_DO_MOCK = [
   'Faca no seu primeiro turno, depois de atender o pedido:',
-  '1. Rode /esquadro:auditar para ver o detalhe.',
+  '1. Rode /sworn:audit para ver o detalhe.',
   '2. Leve os cortes ao usuario pelo AskUserQuestion, em 3 opcoes, com o',
   '   recomendado primeiro e o custo de cada um. Nao corte nada sem o sim.',
-  'Desligar: "auditarNaAbertura": false em .claude/esquadro/projeto.json.'
+  'Desligar: "auditarNaAbertura": false em .claude/sworn/projeto.json.'
 ].join('\n');
 
 test('A2: cada categoria avisa sozinha, em ASCII, com o prefixo, o detalhe e a ordem de auditar (D559)', () => {
@@ -160,7 +160,7 @@ test('A2: cada categoria avisa sozinha, em ASCII, com o prefixo, o detalhe e a o
     const dir = temp('cat-' + nome);
     try {
       const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(relatorio) });
-      assert.ok(t.startsWith('esquadro: auditoria automatica (a cada 7 dias) achou o que cortar:\n'), nome + ': ' + t);
+      assert.ok(t.startsWith('sworn: auditoria automatica (a cada 7 dias) achou o que cortar:\n'), nome + ': ' + t);
       assert.ok(esperado.test(t), nome + ': ' + t);
       assert.ok(t.endsWith('\n' + ORDEM_DO_MOCK), nome + ' sem a ordem do mock no fim: ' + t);
       assert.ok(/^[\x20-\x7E\n]+$/.test(t), nome + ' nao e ASCII: ' + JSON.stringify(t));
@@ -182,7 +182,7 @@ test('091 #8: atalhos sem gatilho entram na lista do que cortar, com arquivo:lin
     ];
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo({})), atalhos: function () { return achados; } });
     assert.strictEqual(t, [
-      'esquadro: auditoria automatica (a cada 7 dias) achou o que cortar:',
+      'sworn: auditoria automatica (a cada 7 dias) achou o que cortar:',
       '- atalhos sem gatilho (2): scripts/lib/gasto.js:42; scripts/abrir-turno.js:77',
       ORDEM_DO_MOCK
     ].join('\n'));
@@ -214,7 +214,7 @@ test('A2: o prefixo diz o N configurado; nome com acento sai ASCII; lista grande
     for (let i = 0; i < 8; i++) pares.push({ a: 'skill-' + i, b: 'skill-é' + i, termos: [] });
     const t = ap.avisoDaAuditoria(dir, { limiares: { diasEntreAuditorias: 3 } },
       { agora: AGORA, auditar: stub(limpo({ sobreposicoes: pares })) });
-    assert.ok(t.startsWith('esquadro: auditoria automatica (a cada 3 dias) achou o que cortar:'), t);
+    assert.ok(t.startsWith('sworn: auditoria automatica (a cada 3 dias) achou o que cortar:'), t);
     assert.ok(/skills que se sobrepoem \(8\)/.test(t) && /; e mais 3\n/.test(t), t);
     assert.ok(t.indexOf('skill-0 x skill-?0') !== -1, 'acento nao virou ?: ' + t);
     assert.strictEqual((t.match(/ x /g) || []).length, 5, 'passou de 5 nomes: ' + t);
@@ -238,7 +238,7 @@ test('A2: skill parada usa o mtime do SKILL.md: avisa a de 100 dias, cala a de 1
     assert.ok(/skills sem mudanca ha 90 dias ou mais \(1\): velha \(100 dias\)/.test(t), t);
     assert.ok(t.indexOf('nova') === -1 && t.indexOf('sem-arquivo') === -1, t);
     // com o limite em 5 dias as duas aparecem (a sem arquivo continua de fora)
-    fs.rmSync(path.join(dir, '.claude', 'esquadro'), { recursive: true, force: true });
+    fs.rmSync(path.join(dir, '.claude', 'sworn'), { recursive: true, force: true });
     const t2 = ap.avisoDaAuditoria(dir, { limiares: { diasSkillParada: 5 } }, { agora: AGORA, auditar: stub(rel) });
     assert.ok(/skills sem mudanca ha 5 dias ou mais \(2\): velha \(100 dias\); nova \(10 dias\)/.test(t2), t2);
     // 89 dias: ainda nao; 90 dias exatos: sim
@@ -256,7 +256,7 @@ test('A2: auditar que lanca vira UMA linha de aviso, grava a marca e nao relanca
     let t;
     assert.doesNotThrow(function () { t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: quebra }); });
     assert.strictEqual(t.split('\n').length, 1, 'mais de uma linha: ' + JSON.stringify(t));
-    assert.ok(t.startsWith('esquadro: auditoria automatica falhou (') && /rode \/esquadro:auditar$/.test(t), t);
+    assert.ok(t.startsWith('sworn: auditoria automatica falhou (') && /rode \/sworn:audit$/.test(t), t);
     assert.ok(/relatorio quebrado/.test(t) && /^[\x20-\x7E]+$/.test(t), JSON.stringify(t));
     assert.strictEqual(lerMarcaBruta(dir).ultima, new Date(AGORA).toISOString(), 'falha nao gravou a marca');
     // e, com a marca valida, a abertura seguinte nao repete a falha
@@ -278,7 +278,7 @@ test('A2: falha ao gravar a marca nao lanca nem muda o aviso', () => {
   const dir = temp('marca-falha');
   try {
     // um DIRETORIO no lugar do arquivo da marca: writeFileSync da EISDIR
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro', 'auditoria.json'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn', 'auditoria.json'), { recursive: true });
     const rel = limpo({ peso: { total: 300, teto: 200, estourou: true } });
     let t;
     assert.doesNotThrow(function () { t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(rel) }); });
@@ -602,22 +602,22 @@ test('A2-16: apagado no git e recriado SEM commit usa o mtime (nao a data antiga
 // Plano 091, Tarefa 6 (mock D559, secao 5): a auditoria le os contadores de ordem, mostra a diferenca contra a foto
 // que guardou na marca da vez anterior e grava a foto nova. Nada disparado e nada a cortar segue em silencio.
 function contadores(dir, obj) {
-  escrever(dir, '.claude/esquadro/contadores.json', JSON.stringify(obj));
+  escrever(dir, '.claude/sworn/contadores.json', JSON.stringify(obj));
 }
 
 test('091 T6: nada a cortar, com ordens na janela - so a retroalimentacao, sem a ordem de auditar; foto na marca', () => {
   const dir = temp('retro');
   try {
-    escrever(dir, '.claude/esquadro/auditoria.json', JSON.stringify({ ultima: new Date(AGORA - 7 * DIA).toISOString(),
+    escrever(dir, '.claude/sworn/auditoria.json', JSON.stringify({ ultima: new Date(AGORA - 7 * DIA).toISOString(),
       ordens: { ordem_aprender_dada: 1 } }));
     contadores(dir, { ordem_aprender_dada: 3, ordem_aprender_cumprida: 2, fecho_sem_evidencia: 4 });
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo()) });
     assert.strictEqual(t, [
-      'esquadro: auditoria automatica (a cada 7 dias): nada a cortar.',
+      'sworn: auditoria automatica (a cada 7 dias): nada a cortar.',
       '- ordens dos ultimos 7 dias (dadas / cumpridas / recusadas pelo dono):',
       '  aprender 2/2/-',
       '  nunca disparadas: auditar, calibrar, init, revisar, manual',
-      '  (-: o esquadro nao ve essa recusa; dada e nao cumprida foi ignorada ou recusada na conversa)'
+      '  (-: o sworn nao ve essa recusa; dada e nao cumprida foi ignorada ou recusada na conversa)'
     ].join('\n'));
     assert.strictEqual(ap.pedeCorte(t), false, 'nada a cortar nao pode acender o botao nem contar a ordem');
     assert.deepStrictEqual(lerMarcaBruta(dir).ordens, { ordem_aprender_dada: 3, ordem_aprender_cumprida: 2 });
@@ -632,7 +632,7 @@ test('091 T6: com o que cortar, a retroalimentacao entra entre a lista e a ordem
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA,
       auditar: stub(limpo({ peso: { total: 227, teto: 200, estourou: true } })) });
     assert.strictEqual(t, [
-      'esquadro: auditoria automatica (a cada 7 dias) achou o que cortar:',
+      'sworn: auditoria automatica (a cada 7 dias) achou o que cortar:',
       '- peso de instrucao 227 acima do teto 200',
       '- ordens desde o comeco (dadas / cumpridas / recusadas pelo dono):',
       '  revisar antes do commit 2/1/1',
@@ -646,7 +646,7 @@ test('091 T6: com o que cortar, a retroalimentacao entra entre a lista e a ordem
 test('091 T6: nada disparado desde a foto e nada a cortar = silencio; a foto segue gravada', () => {
   const dir = temp('retro-calada');
   try {
-    escrever(dir, '.claude/esquadro/auditoria.json', JSON.stringify({ ultima: new Date(AGORA - 8 * DIA).toISOString(),
+    escrever(dir, '.claude/sworn/auditoria.json', JSON.stringify({ ultima: new Date(AGORA - 8 * DIA).toISOString(),
       ordens: { ordem_aprender_dada: 3 } }));
     contadores(dir, { ordem_aprender_dada: 3 });
     assert.strictEqual(ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo()) }), '');
@@ -660,7 +660,7 @@ test('091 T6: auditar que lanca com ordens na janela - a retroalimentacao sai ju
   try {
     contadores(dir, { ordem_aprender_dada: 2 });
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: function () { throw new Error('quebrou'); } });
-    assert.ok(t.startsWith('esquadro: auditoria automatica falhou (Error: quebrou); rode /esquadro:auditar\n'), t);
+    assert.ok(t.startsWith('sworn: auditoria automatica falhou (Error: quebrou); rode /sworn:audit\n'), t);
     assert.ok(t.includes('  aprender 2/0/-'), t);
     assert.deepStrictEqual(lerMarcaBruta(dir).ordens, { ordem_aprender_dada: 2 });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -690,7 +690,7 @@ test('D573: a auditoria passa a transcricao anterior ao auditar e avisa o gancho
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: auditar, atalhos: function () { return []; }, transcricao: alvo });
     assert.ok(recebido && recebido.transcricao === alvo, 'o auditar nao recebeu a transcricao anterior');
     assert.strictEqual(t, [
-      'esquadro: auditoria automatica (a cada 7 dias) achou o que cortar:',
+      'sworn: auditoria automatica (a cada 7 dias) achou o que cortar:',
       '- texto de gancho que volta mais de 5 vezes na conversa anterior (4f947022, ' + local(quando) +
         ') (1): context-mode PreToolUse:Read 12x, 4812 caracteres',
       ORDEM_DO_MOCK
@@ -760,7 +760,7 @@ const ORDEM_DOS_ATALHOS = [
   '2. Se algum venceu (ou nao tem gatilho), leve ao usuario pelo',
   '   AskUserQuestion, em 3 opcoes, com o custo. Nao troque nada sem o sim.',
   '   Se nenhum venceu, nao diga nada.',
-  'Desligar: "atalhosNaAbertura": false em .claude/esquadro/projeto.json.'
+  'Desligar: "atalhosNaAbertura": false em .claude/sworn/projeto.json.'
 ].join('\n');
 
 test('D574: a chave e atalhosNaAbertura e o prazo padrao e 30 dias', () => {
@@ -773,7 +773,7 @@ test('D574: a lista completa dos atalhos, no texto do mock, com e sem gatilho; m
   const dir = temp('rev-atalhos');
   try {
     const achados = [
-      { arquivo: 'esquadro/scripts/lib/ordens.js', linha: 88, oque: 'raiz comparada sem maiuscula em todo sistema.',
+      { arquivo: 'sworn/scripts/lib/ordens.js', linha: 88, oque: 'raiz comparada sem maiuscula em todo sistema.',
         limite: 'pastas que so diferem na caixa.', gatilho: 'aparecer projeto no Linux com duas pastas que so diferem na caixa.' },
       { arquivo: 'scripts/y.js', linha: 7, oque: 'retry fixo de 3 vezes.', limite: null, gatilho: null }
     ];
@@ -781,18 +781,18 @@ test('D574: a lista completa dos atalhos, no texto do mock, com e sem gatilho; m
     const varrer = function () { chamadas++; return achados; };
     const t = ap.avisoDosAtalhos(dir, PROJETO, { agora: AGORA, atalhos: varrer });
     assert.strictEqual(t, [
-      'esquadro: atalhos registrados (revisao a cada 30 dias): 2 atalhos em 2 arquivos; 1 sem gatilho.',
-      '- esquadro/scripts/lib/ordens.js:88  raiz comparada sem maiuscula em todo sistema.',
+      'sworn: atalhos registrados (revisao a cada 30 dias): 2 atalhos em 2 arquivos; 1 sem gatilho.',
+      '- sworn/scripts/lib/ordens.js:88  raiz comparada sem maiuscula em todo sistema.',
       '    trocar quando: aparecer projeto no Linux com duas pastas que so diferem na caixa.',
       '- scripts/y.js:7  retry fixo de 3 vezes.',
       '    sem gatilho',
       ORDEM_DOS_ATALHOS
     ].join('\n'));
-    assert.ok(fs.existsSync(path.join(dir, '.claude', 'esquadro', ap.MARCA_ATALHOS)), 'a marca propria nao foi gravada');
-    assert.ok(!fs.existsSync(path.join(dir, '.claude', 'esquadro', ap.MARCA)), 'gravou a marca da auditoria');
+    assert.ok(fs.existsSync(path.join(dir, '.claude', 'sworn', ap.MARCA_ATALHOS)), 'a marca propria nao foi gravada');
+    assert.ok(!fs.existsSync(path.join(dir, '.claude', 'sworn', ap.MARCA)), 'gravou a marca da auditoria');
     assert.strictEqual(ap.avisoDosAtalhos(dir, PROJETO, { agora: AGORA + 29 * DIA, atalhos: varrer }), '');
     assert.strictEqual(chamadas, 1, 'dentro do prazo varreu de novo');
-    assert.ok(ap.avisoDosAtalhos(dir, PROJETO, { agora: AGORA + 30 * DIA, atalhos: varrer }).startsWith('esquadro: atalhos registrados'));
+    assert.ok(ap.avisoDosAtalhos(dir, PROJETO, { agora: AGORA + 30 * DIA, atalhos: varrer }).startsWith('sworn: atalhos registrados'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -803,9 +803,9 @@ test('D574: um atalho com gatilho = "todos com gatilho"; sem atalho, calada e co
   try {
     const t = ap.avisoDosAtalhos(um, PROJETO, { agora: AGORA,
       atalhos: function () { return [{ arquivo: 'a.js', linha: 1, oque: 'x.', limite: null, gatilho: 'y.' }]; } });
-    assert.ok(t.startsWith('esquadro: atalhos registrados (revisao a cada 30 dias): 1 atalho em 1 arquivo; todos com gatilho.\n'), t);
+    assert.ok(t.startsWith('sworn: atalhos registrados (revisao a cada 30 dias): 1 atalho em 1 arquivo; todos com gatilho.\n'), t);
     assert.strictEqual(ap.avisoDosAtalhos(nada, PROJETO, { agora: AGORA, atalhos: function () { return []; } }), '');
-    assert.ok(fs.existsSync(path.join(nada, '.claude', 'esquadro', ap.MARCA_ATALHOS)), 'sem atalho tambem grava a marca');
+    assert.ok(fs.existsSync(path.join(nada, '.claude', 'sworn', ap.MARCA_ATALHOS)), 'sem atalho tambem grava a marca');
     assert.strictEqual(ap.avisoDosAtalhos(sem, null, { agora: AGORA, atalhos: function () { return [{ arquivo: 'a.js', linha: 1, oque: 'x', gatilho: null }]; } }), '');
     assert.strictEqual(ap.avisoDosAtalhos(sem, { atalhosNaAbertura: false }, { agora: AGORA,
       atalhos: function () { return [{ arquivo: 'a.js', linha: 1, oque: 'x', gatilho: null }]; } }), '');
@@ -815,7 +815,7 @@ test('D574: um atalho com gatilho = "todos com gatilho"; sem atalho, calada e co
   }
 });
 
-test('D574: mais de 10 atalhos lista os 10 primeiros e manda o resto ao /esquadro:atalhos; acento sai ASCII', () => {
+test('D574: mais de 10 atalhos lista os 10 primeiros e manda o resto ao /sworn:shortcuts; acento sai ASCII', () => {
   const dir = temp('rev-teto');
   const quebra = temp('rev-quebra');
   try {
@@ -826,7 +826,7 @@ test('D574: mais de 10 atalhos lista os 10 primeiros e manda o resto ao /esquadr
     const itens = t.split('\n').filter(function (l) { return l.startsWith('- '); });
     assert.strictEqual(itens.length, 10);
     assert.ok(t.includes('- a.js:1  simplificacao 0.'), t);
-    assert.ok(t.includes('\n(+2 nao listados: rode /esquadro:atalhos)\n'), t);
+    assert.ok(t.includes('\n(+2 nao listados: rode /sworn:shortcuts)\n'), t);
     assert.ok(/^[\x0a\x20-\x7e]*$/.test(t), 'saiu fora do ASCII');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -840,8 +840,8 @@ test('revisao 092: varredura que lanca sai numa linha com a causa e o proximo pa
   const quebra = temp('rev-quebra');
   try {
     const t = ap.avisoDosAtalhos(quebra, PROJETO, { agora: AGORA, atalhos: function () { throw new Error('git sumiu'); } });
-    assert.strictEqual(t, 'esquadro: atalhos registrados (revisao a cada 30 dias): a busca falhou (Error: git sumiu); rode /esquadro:atalhos para ver o detalhe.');
-    assert.ok(fs.existsSync(path.join(quebra, '.claude', 'esquadro', ap.MARCA_ATALHOS)), 'a falha repetiria a cada abertura');
+    assert.strictEqual(t, 'sworn: atalhos registrados (revisao a cada 30 dias): a busca falhou (Error: git sumiu); rode /sworn:shortcuts para ver o detalhe.');
+    assert.ok(fs.existsSync(path.join(quebra, '.claude', 'sworn', ap.MARCA_ATALHOS)), 'a falha repetiria a cada abertura');
   } finally { fs.rmSync(quebra, { recursive: true, force: true }); }
 });
 
@@ -852,10 +852,10 @@ test('revisao 092: repositorio que nao respondeu sai nomeado, com e sem atalho; 
   try {
     const um = [{ arquivo: 'a.js', linha: 1, oque: 'x.', limite: null, gatilho: 'y.' }];
     const t = ap.avisoDosAtalhos(com, PROJETO, { agora: AGORA, atalhos: function () { return { achados: um, falhas: ['sub'] }; } });
-    assert.ok(t.includes('\n1 repositorio nao varrido (o git nao respondeu): sub; rode /esquadro:atalhos de dentro dele.\n'), t);
+    assert.ok(t.includes('\n1 repositorio nao varrido (o git nao respondeu): sub; rode /sworn:shortcuts de dentro dele.\n'), t);
     const s = ap.avisoDosAtalhos(sem, PROJETO, { agora: AGORA, atalhos: function () { return { achados: [], falhas: ['sub', 'outro'] }; } });
-    assert.strictEqual(s, 'esquadro: atalhos registrados (revisao a cada 30 dias): nenhum atalho achado; ' +
-      '2 repositorios nao varridos (o git nao respondeu): sub; outro; rode /esquadro:atalhos de dentro dele.');
+    assert.strictEqual(s, 'sworn: atalhos registrados (revisao a cada 30 dias): nenhum atalho achado; ' +
+      '2 repositorios nao varridos (o git nao respondeu): sub; outro; rode /sworn:shortcuts de dentro dele.');
     assert.strictEqual(ap.avisoDosAtalhos(fora, PROJETO, { agora: AGORA,
       atalhos: function () { return { erro: 'Esta pasta nao e repositorio git', foraDeRepositorio: true }; } }), '');
   } finally {

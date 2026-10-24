@@ -1060,7 +1060,7 @@ function classificar(comando, projeto) {
 function motivo(comando, r) {
   // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos. A liberacao fica por ultimo, como acao do dono.
   return [
-    'esquadro - comando destrutivo barrado (trava 5): falta o sim do dono.',
+    'sworn - comando destrutivo barrado (trava 5): falta o sim do dono.',
     '',
     'Comando: ' + escopo.ascii(String(comando).slice(0, 400)),
     // O MOTIVO tambem e higienizado (D64). Ate a ronda 7 so o comando era, e
@@ -1076,7 +1076,7 @@ function motivo(comando, r) {
     '  1. leve ao dono 3 opcoes com a recomendada marcada, dizendo o que acontece na pratica em cada uma;',
     '  2. ou siga sem este comando, se o trabalho nao depende dele.',
     '',
-    'So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosLiberados" de .claude/esquadro/projeto.json.'
+    'So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosLiberados" de .claude/sworn/projeto.json.'
   ].join('\n');
 }
 

@@ -16,7 +16,7 @@ const auditoria = require('../scripts/lib/auditoria.js');
 const shellLib = require('../scripts/lib/shell.js');
 
 function temp(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fiacao-' + nome + '-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fiacao-' + nome + '-'));
 }
 
 /** Roda um script de entrada como processo, com estado de sessao isolado. */
@@ -26,13 +26,13 @@ function rodar(script, dir, entrada) {
     cwd: dir,
     encoding: 'utf8',
     input: entrada === undefined ? undefined : JSON.stringify(entrada),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: sessoes })
+    env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
   });
 }
 
 function lerSessao(dir, id) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(dir, '_sessoes', 'esquadro', id + '.json'), 'utf8'));
+    return JSON.parse(fs.readFileSync(path.join(dir, '_sessoes', 'sworn', id + '.json'), 'utf8'));
   } catch (e) {
     return null;
   }
@@ -105,12 +105,12 @@ test('fiacao: portao-agente conta todo despacho, mesmo quando permite (R-T24-01)
 test('fiacao: portao-agente nega o agente do topo em escopo so de marcha rapida (R-T24-01)', () => {
   const dir = temp('agente-nega');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), JSON.stringify({
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), JSON.stringify({
       marchaPadrao: 'padrao',
       marchas: { rapida: ['**/*.md'] },
       agentes: { escada: ['busca-rapida', 'tarefas-simples', 'desenvolvedor', 'arquiteto', 'especialista'] }
     }));
-    escrever(dir, path.join('.claude', 'esquadro', 'escopo.md'),
+    escrever(dir, path.join('.claude', 'sworn', 'escopo.md'),
       '**objetivo:** corrigir um typo\n\n## dentro\n\n- docs/nota.md\n\n## fora\n\n- tudo o mais\n');
 
     const r = rodar('portao-agente.js', dir,
@@ -128,18 +128,18 @@ test('fiacao: portao-agente nega o agente do topo em escopo so de marcha rapida 
 test('fiacao: portao-agente usa o escopo da frente vinculada, nao o escopo.md geral (escopo por frente)', () => {
   const dir = temp('agente-frente');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), JSON.stringify({
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), JSON.stringify({
       marchaPadrao: 'padrao',
       marchas: { rapida: ['**/*.md'], padrao: ['src/**'] },
       agentes: { escada: ['busca-rapida', 'tarefas-simples', 'desenvolvedor', 'arquiteto', 'especialista'] }
     }));
     // o escopo.md geral so tem caminho de marcha rapida: despachar 'especialista' seria negado por ele.
-    escrever(dir, path.join('.claude', 'esquadro', 'escopo.md'),
+    escrever(dir, path.join('.claude', 'sworn', 'escopo.md'),
       '**objetivo:** geral\n\n## dentro\n\n- docs/nota.md\n');
     // a frente vinculada tem um caminho de marcha padrao: o topo da escada passa a ser permitido.
-    escrever(dir, path.join('.claude', 'esquadro', 'escopos', 'omni.md'),
+    escrever(dir, path.join('.claude', 'sworn', 'escopos', 'omni.md'),
       '**objetivo:** onda\n\n## dentro\n\n- src/a.js\n');
-    const sessoes = path.join(dir, '_sessoes', 'esquadro');
+    const sessoes = path.join(dir, '_sessoes', 'sworn');
     fs.mkdirSync(sessoes, { recursive: true });
     fs.writeFileSync(path.join(sessoes, 'fa9.json'), JSON.stringify({ frente: 'omni' }), 'utf8');
 
@@ -158,7 +158,7 @@ test('fiacao: portao-agente usa o escopo da frente vinculada, nao o escopo.md ge
 test('fiacao: abrir-turno zera as marcas do turno e PRESERVA os contadores (R-T26-01, D123)', () => {
   const dir = temp('abrir-turno');
   try {
-    const sessoes = path.join(dir, '_sessoes', 'esquadro');
+    const sessoes = path.join(dir, '_sessoes', 'sworn');
     fs.mkdirSync(sessoes, { recursive: true });
     fs.writeFileSync(path.join(sessoes, 'fa3.json'), JSON.stringify({
       trabalhoReal: true,
@@ -188,7 +188,7 @@ test('fiacao: gerar-skill sem projeto.json manda rodar o init, em vez de estoura
     const r = rodar('gerar-skill.js', dir);
     assert.notStrictEqual(r.status, 0, 'sem configuracao ele tem de recusar');
     const saida = r.stdout + r.stderr;
-    assert.ok(/esquadro:init/.test(saida), saida);
+    assert.ok(/sworn:init/.test(saida), saida);
     assert.ok(/projeto\.json/.test(saida), saida);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -233,7 +233,7 @@ const destrutivoLib = require('../scripts/lib/destrutivo.js');
 const PLATAFORMA_WIN = { so: 'win32', shell: 'powershell' };
 
 function comPlataforma(dir, plataforma) {
-  escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'),
+  escrever(dir, path.join('.claude', 'sworn', 'projeto.json'),
     JSON.stringify({ plataforma: plataforma }));
 }
 
@@ -364,7 +364,7 @@ test('fiacao: o cd solto no Bash e corrigido sozinho - subshell no updatedInput,
 });
 
 // D569 (0.9.1, licao "dica com teto"): o aviso do cd corrigido voltava inteiro a cada comando (13 vezes numa sessao,
-// 3.445 caracteres, medido pelo /esquadro:auditar). Agora: inteiro na 1a vez da sessao, uma linha curta depois. A marca
+// 3.445 caracteres, medido pelo /sworn:audit). Agora: inteiro na 1a vez da sessao, uma linha curta depois. A marca
 // e da sessao: sobrevive ao fecho do turno, e outra sessao recebe o aviso inteiro de novo.
 test('fiacao: o aviso do cd corrigido sai inteiro na 1a vez da sessao e curto depois, mesmo depois do fecho (D569)', () => {
   const dir = temp('cd-teto');
@@ -458,7 +458,7 @@ test('fiacao: o subshell e o PowerShell com Pop-Location passam calados e sem en
 test('fiacao: o comandosLiberados continua liberando o cd solto, e o cd_solto nao conta (D286)', () => {
   const dir = temp('cd-liberado');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'),
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'),
       JSON.stringify({ plataforma: PLATAFORMA_LINUX, comandosLiberados: ['^cd sub && git status$'] }));
     const r = chamar(dir, 'cd5', 'Bash', 'cd sub && git status');
     assert.strictEqual(r.stdout, '', 'o escape declarado tinha de liberar: ' + r.stdout);
@@ -472,12 +472,12 @@ test('fiacao: travas.destrutivo false desliga tambem o cd solto, como o README e
   const dir = temp('cd-trava');
   try {
     // controle: com a trava ligada o mesmo comando e pego como cd solto (D486: no Bash, corrigido em subshell)
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'),
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'),
       JSON.stringify({ plataforma: PLATAFORMA_LINUX, travas: { destrutivo: true } }));
     const ligada = corrigido(chamar(dir, 'cd8', 'Bash', 'cd sub && git status'));
     assert.ok(ligada && /cd solto/i.test(ligada.additionalContext), 'controle: a trava ligada tinha de pegar o cd solto: ' + JSON.stringify(ligada));
 
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'),
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'),
       JSON.stringify({ plataforma: PLATAFORMA_LINUX, travas: { destrutivo: false } }));
     const r = chamar(dir, 'cd9', 'Bash', 'cd sub && git status');
     assert.strictEqual(r.stdout, '', 'D295: a chave desliga o cd solto junto: ' + r.stdout);
@@ -527,7 +527,7 @@ function pluginComTabela(conteudo) {
 function rodarNoPlugin(plugin, script, dir, entrada) {
   const r = spawnSync(process.execPath, [path.join(plugin, 'scripts', script)], {
     cwd: dir, encoding: 'utf8', input: JSON.stringify(entrada),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
   });
   assert.strictEqual(r.status, 0, r.stderr);
   return r;
@@ -554,13 +554,13 @@ test('fiacao: tabela ilegivel com o estado da sessao fora do ar - o aviso sai me
   const dir = temp('tabela-sem-estado');
   try {
     comPlataforma(dir, PLATAFORMA_WIN);
-    // ESQUADRO_TMP dentro de um ARQUIVO: nenhuma pasta de estado pode ser criada
+    // SWORN_TMP dentro de um ARQUIVO: nenhuma pasta de estado pode ser criada
     const arquivo = path.join(dir, 'e-um-arquivo');
     fs.writeFileSync(arquivo, 'x', 'utf8');
     const r = spawnSync(process.execPath, [path.join(plugin, 'scripts', 'portao-destrutivo.js')], {
       cwd: dir, encoding: 'utf8',
       input: JSON.stringify({ session_id: 'sem-estado', cwd: dir, tool_name: 'PowerShell', tool_input: { command: 'npm test' } }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(arquivo, 'dentro') })
+      env: Object.assign({}, process.env, { SWORN_TMP: path.join(arquivo, 'dentro') })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     const a = avisoPermitido(r);
@@ -581,7 +581,7 @@ test('fiacao: estado da sessao fora do ar - a abertura e o abrir-turno falam mes
     projetoComRegras(dir);
     const arquivo = path.join(dir, 'e-um-arquivo');
     fs.writeFileSync(arquivo, 'x', 'utf8');
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: path.join(arquivo, 'dentro') });
+    const env = Object.assign({}, process.env, { SWORN_TMP: path.join(arquivo, 'dentro') });
     const abrir = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
       cwd: dir, encoding: 'utf8', env: env, timeout: 60000,
       input: JSON.stringify({ session_id: 'sem-estado', cwd: dir, source: 'compact' })
@@ -589,7 +589,7 @@ test('fiacao: estado da sessao fora do ar - a abertura e o abrir-turno falam mes
     assert.strictEqual(abrir.status, 0, abrir.stderr);
     assert.ok(abrir.stdout.includes(REGRA_Q), 'a abertura calou as regras: ' + JSON.stringify(abrir.stdout));
     assert.ok(abrir.stdout.includes(TITULO_C), abrir.stdout);
-    assert.ok(abrir.stdout.includes('esquadro: o estado da sessao nao gravou ('), abrir.stdout);
+    assert.ok(abrir.stdout.includes('sworn: o estado da sessao nao gravou ('), abrir.stdout);
     const turno = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abrir-turno.js')], {
       cwd: dir, encoding: 'utf8', env: env, timeout: 60000,
       input: JSON.stringify({ session_id: 'sem-estado', cwd: dir, prompt: 'o contexto esta bom?' })
@@ -618,8 +618,8 @@ test('fiacao: estado que nao grava depois de marcar - a oferta do radar nao sai 
   const tmp = temp('oferta-sem-gravar-tmp');
   try {
     projetoComRegras(dir);
-    fs.mkdirSync(path.join(tmp, 'esquadro', 'nao-grava.json'), { recursive: true });
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+    fs.mkdirSync(path.join(tmp, 'sworn', 'nao-grava.json'), { recursive: true });
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     const pedido = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abrir-turno.js')], {
       cwd: dir, encoding: 'utf8', env: env, timeout: 60000,
       input: JSON.stringify({ session_id: 'nao-grava', cwd: dir, prompt: 'quero adicionar uma funcao nova de exportar PDF' })
@@ -686,7 +686,7 @@ test('fiacao: seis comandos ao mesmo tempo na mesma sessao avisam UMA vez so (D2
     const entrada = JSON.stringify({ session_id: 'tb11', cwd: dir, tool_name: 'PowerShell', tool_input: { command: 'npm test' } });
     const saidas = await Promise.all(Array.from({ length: 6 }, () => new Promise((resolve) => {
       const f = spawn(process.execPath, [path.join(plugin, 'scripts', 'portao-destrutivo.js')], {
-        cwd: dir, env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+        cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
       });
       let out = '';
       f.stdout.on('data', (d) => { out += d; });
@@ -754,7 +754,7 @@ test('fiacao: o aviso da tabela so existe onde a tabela valeria; tabela legivel 
     assert.strictEqual(chamarNoPlugin(plugin, dir, 'tb7', 'Bash', 'npm test').stdout, '');
     assert.strictEqual(lerSessao(dir, 'tb7'), null);
     // o escape declarado do dono (travas.destrutivo === false) continua desligando o portao inteiro
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'),
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'),
       JSON.stringify({ plataforma: PLATAFORMA_WIN, travas: { destrutivo: false } }));
     assert.strictEqual(chamarNoPlugin(plugin, dir, 'tb8', 'PowerShell', 'npm test').stdout, '');
     assert.strictEqual(lerSessao(dir, 'tb8'), null);
@@ -780,7 +780,7 @@ test('fiacao: com a tabela real legivel o portao no win32 passa calado e sem est
 test('fiacao: abertura avisa quando OUTRA sessao detem o plano ativo (R-T25-01, F17)', () => {
   const dir = temp('plano-outro');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'plano-ativo.json'),
+    escrever(dir, path.join('.claude', 'sworn', 'plano-ativo.json'),
       JSON.stringify({ arquivo: 'docs/plano-v9.md', sessionId: 'sessao-do-outro', tarefa: null }));
 
     const r = rodar('abertura.js', dir, { session_id: 'fa7', cwd: dir, source: 'startup' });
@@ -796,7 +796,7 @@ test('fiacao: abertura NAO avisa quando o plano ativo e da propria sessao (R-T25
   // Controle: o aviso e sobre DONO, nao sobre existir plano ativo.
   const dir = temp('plano-meu');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'plano-ativo.json'),
+    escrever(dir, path.join('.claude', 'sworn', 'plano-ativo.json'),
       JSON.stringify({ arquivo: 'docs/plano-v9.md', sessionId: 'fa8', tarefa: null }));
 
     const r = rodar('abertura.js', dir, { session_id: 'fa8', cwd: dir, source: 'startup' });
@@ -810,14 +810,14 @@ test('fiacao: abertura NAO avisa quando o plano ativo e da propria sessao (R-T25
 test('D442/5: abertura avisa chave de liga/desliga com valor torto; com booleano, nao', () => {
   const dir = temp('liga-desliga');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), JSON.stringify({ sugerirAprender: 'false', vigia: 1 }));
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), JSON.stringify({ sugerirAprender: 'false', vigia: 1 }));
     const r = rodar('abertura.js', dir, { session_id: 'ld1', cwd: dir, source: 'startup' });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.includes('sugerirAprender tem de ser true ou false'), r.stdout);
     assert.ok(r.stdout.includes('vigia tem de ser true ou false'), r.stdout);
     assert.ok(r.stdout.includes('"false" entre aspas NAO desliga'), r.stdout);
     assert.ok(/^[\x20-\x7E\n]*$/.test(r.stdout.slice(r.stdout.indexOf('ATENCAO - valor'))), 'aviso fora de ASCII');
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), JSON.stringify({ sugerirAprender: false }));
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), JSON.stringify({ sugerirAprender: false }));
     const ok = rodar('abertura.js', dir, { session_id: 'ld2', cwd: dir, source: 'startup' });
     assert.ok(!/tem de ser true ou false/.test(ok.stdout), ok.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -826,16 +826,16 @@ test('D442/5: abertura avisa chave de liga/desliga com valor torto; com booleano
 test('fiacao: abertura cita a frente vinculada e o objetivo dela (escopo por frente)', () => {
   const dir = temp('abertura-frente');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'escopos', 'omni.md'),
+    escrever(dir, path.join('.claude', 'sworn', 'escopos', 'omni.md'),
       '**Objetivo:** fechar a onda 8\n## Dentro\n- src/a.js\n');
-    const sessoes = path.join(dir, '_sessoes', 'esquadro');
+    const sessoes = path.join(dir, '_sessoes', 'sworn');
     fs.mkdirSync(sessoes, { recursive: true });
     fs.writeFileSync(path.join(sessoes, 'ab1.json'), JSON.stringify({ frente: 'omni' }), 'utf8');
 
     const r = rodar('abertura.js', dir, { session_id: 'ab1', cwd: dir, source: 'startup' });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(/vinculada a frente omni/.test(r.stdout), r.stdout);
-    assert.ok(r.stdout.includes('.claude/esquadro/escopos/omni.md'), r.stdout);
+    assert.ok(r.stdout.includes('.claude/sworn/escopos/omni.md'), r.stdout);
     assert.ok(r.stdout.includes('fechar a onda 8'), r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -843,9 +843,9 @@ test('fiacao: abertura cita a frente vinculada e o objetivo dela (escopo por fre
 test('fiacao: abertura sem vinculo lista as frentes existentes e diz como se vincular', () => {
   const dir = temp('abertura-lista');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'escopos', 'omni.md'),
+    escrever(dir, path.join('.claude', 'sworn', 'escopos', 'omni.md'),
       '**Objetivo:** fechar a onda 8\n## Dentro\n- src/a.js\n');
-    escrever(dir, path.join('.claude', 'esquadro', 'escopos', 'tecnica.md'),
+    escrever(dir, path.join('.claude', 'sworn', 'escopos', 'tecnica.md'),
       '**Objetivo:** medir a oscilacao\n## Dentro\n- src/b.js\n');
 
     const r = rodar('abertura.js', dir, { session_id: 'ab2', cwd: dir, source: 'startup' });
@@ -864,15 +864,15 @@ const qualidade = require('../scripts/lib/qualidade.js');
 const projetoLib = require('../scripts/lib/projeto.js');
 
 const REGRA_Q = 'ao editar -> rodar git status antes';
-const TITULO_Q = '# esquadro - qualidade';
+const TITULO_Q = '# sworn - qualidade';
 const ORIGENS_Q = ['startup', 'resume', 'clear', 'compact'];
 
 /** projeto.json valido (o do proprio init) + uma regra; `extra` entra na raiz do projeto.json. */
 function projetoComRegras(dir, extra) {
   const projeto = Object.assign(
     projetoLib.montar({}, { modeloDeAmeaca: 'interno', quemDecide: 'o dono' }), extra || {});
-  escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), JSON.stringify(projeto));
-  escrever(dir, path.join('.claude', 'esquadro', 'regras.md'), '# Regras\n\n- ' + REGRA_Q + '\n');
+  escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), JSON.stringify(projeto));
+  escrever(dir, path.join('.claude', 'sworn', 'regras.md'), '# Regras\n\n- ' + REGRA_Q + '\n');
 }
 
 /** Abertura com a entrada crua no stdin (o `rodar` do arquivo a embrulha em JSON.stringify). */
@@ -881,18 +881,18 @@ function abrirComStdinCru(dir, bruto) {
     cwd: dir,
     encoding: 'utf8',
     input: bruto,
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
   });
 }
 
 const paralelismo = require('../scripts/lib/paralelismo.js');
-const TITULO_P = '# esquadro - trabalho em paralelo';
+const TITULO_P = '# sworn - trabalho em paralelo';
 
 const continuo = require('../scripts/lib/continuo.js');
-const TITULO_C = '# esquadro - menos paradas';
+const TITULO_C = '# sworn - menos paradas';
 
 const enxuto = require('../scripts/lib/enxuto.js');
-const TITULO_E = '# esquadro - menos codigo';
+const TITULO_E = '# sworn - menos codigo';
 
 // Plano 091 (#7, D559): sem projeto.json a abertura termina com a ordem de perguntar o init (lib/ordens.js). O comando
 // do "nunca" leva caminhos desta maquina: sai da ultima linha e entra de volta no texto esperado.
@@ -952,11 +952,11 @@ test('fiacao: qualidadeDeResposta false some com o bloco, e ligado e desligado +
   const dir = temp('qualidade-desligar');
   try {
     // Com plano de OUTRA sessao, a abertura tem texto depois das regras: o "resto" a comparar.
-    escrever(dir, path.join('.claude', 'esquadro', 'plano-ativo.json'),
+    escrever(dir, path.join('.claude', 'sworn', 'plano-ativo.json'),
       JSON.stringify({ arquivo: 'docs/plano-v9.md', sessionId: 'sessao-do-outro', tarefa: null }));
     // D503 (Tarefa 6): o aviso da referencia sai uma vez por projeto, so na 1a abertura; a marca ja dada o tira da
     // comparacao, que e do bloco de qualidade.
-    escrever(dir, path.join('.claude', 'esquadro', 'referencia-avisada.json'), '{}');
+    escrever(dir, path.join('.claude', 'sworn', 'referencia-avisada.json'), '{}');
     for (const origem of ORIGENS_Q) {
       projetoComRegras(dir, { [qualidade.CHAVE]: false });
       const desligado = rodar('abertura.js', dir, { session_id: 'q3d-' + origem, cwd: dir, source: origem });
@@ -973,7 +973,7 @@ test('fiacao: qualidadeDeResposta false some com o bloco, e ligado e desligado +
       // depois (o bloco de menos codigo e o aviso do plano de outra sessao) tem de sair igual.
       const i = desligado.stdout.indexOf('\n' + TITULO_E);
       assert.ok(i > desligado.stdout.indexOf(REGRA_Q), origem + ': nao achei o fim do texto montado: ' + desligado.stdout);
-      assert.ok(i < desligado.stdout.indexOf('\n# esquadro - ATENCAO'), origem + ': o bloco de menos codigo saiu depois do aviso');
+      assert.ok(i < desligado.stdout.indexOf('\n# sworn - ATENCAO'), origem + ': o bloco de menos codigo saiu depois do aviso');
       assert.strictEqual(ligado.stdout,
         desligado.stdout.slice(0, i) + '\n' + qualidade.BLOCO + desligado.stdout.slice(i), origem);
     }
@@ -993,7 +993,7 @@ test('fiacao: qualidadeDeResposta com tipo errado ("nao") segue ligado: o bloco 
 test('fiacao: projeto.json com JSON quebrado: a abertura sai com 0 e o bloco de qualidade sai', () => {
   const dir = temp('qualidade-json-quebrado');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), '{isso nao fecha');
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), '{isso nao fecha');
     const r = rodar('abertura.js', dir, { session_id: 'q5', cwd: dir, source: 'startup' });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.includes(qualidade.BLOCO), r.stdout);
@@ -1251,7 +1251,7 @@ test('T10-2/3: os dois contadores sobrevivem ao fecho', () => {
 
 // Plano 091 (#9): sem projeto.json o modo continuo e o padrao (ligado) e CALA os dois gatilhos contaveis; o limiar
 // padrao (3) so dispara com "modoContinuo": false gravado no projeto.json (o comportamento de antes).
-test('T10-5: sem /esquadro:init (sem projeto.json) o modo continuo padrao cala os dois gatilhos; com modoContinuo false disparam com o limiar padrao', () => {
+test('T10-5: sem /sworn:init (sem projeto.json) o modo continuo padrao cala os dois gatilhos; com modoContinuo false disparam com o limiar padrao', () => {
   for (const [nome, quando] of [
     ['decisoes', { tool_name: 'AskUserQuestion', tool_response: respostas({ 'a?': '1', 'b?': '2', 'c?': '3' }) }],
     ['commits', { tool_name: 'Bash', tool_response: { gitOperation: { commit: { sha: 'abc1234' } } } }]
@@ -1260,7 +1260,7 @@ test('T10-5: sem /esquadro:init (sem projeto.json) o modo continuo padrao cala o
       const dir = temp('sem-init-' + nome + (desligado ? '-off' : ''));
       try {
         assert.ok(!fs.existsSync(path.join(dir, '.claude')), 'controle: a pasta nao tem .claude');
-        if (desligado) escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), JSON.stringify({ modoContinuo: false }));
+        if (desligado) escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), JSON.stringify({ modoContinuo: false }));
         const id = 'si-' + nome + (desligado ? '-off' : '');
         const vezes = nome === 'commits' ? 3 : 1;
         for (let i = 0; i < vezes; i++) rodar('marcar-trabalho.js', dir, Object.assign({ session_id: id, cwd: dir }, quando));
@@ -1303,7 +1303,7 @@ test('T10-4: perguntar se o contexto/memoria esta bom devolve additionalContext 
       assert.ok(j && j.hookSpecificOutput, 'nao disparou para: ' + p);
       assert.strictEqual(j.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
       const t = j.hookSpecificOutput.additionalContext;
-      assert.ok(t.indexOf('/esquadro:handoff') !== -1, 'sem o handoff: ' + t);
+      assert.ok(t.indexOf('/sworn:handoff') !== -1, 'sem o handoff: ' + t);
       assert.ok(/chat/.test(t) && /mesma resposta/.test(t) && /bloco de codigo/.test(t), 'texto incompleto: ' + t);
       assert.ok(/^[\x20-\x7E\n]+$/.test(t), 'additionalContext tem de ser ASCII: ' + JSON.stringify(t));
     });
@@ -1359,7 +1359,7 @@ test('D475: retorno de subagente que cita "o contexto esta bom?" NAO dispara; a 
 test('T10-4: dispara toda vez que a pergunta vier, e continua zerando as marcas do turno', () => {
   const dir = temp('pergunta-saude-sempre');
   try {
-    const sessoes = path.join(dir, '_sessoes', 'esquadro');
+    const sessoes = path.join(dir, '_sessoes', 'sworn');
     fs.mkdirSync(sessoes, { recursive: true });
     fs.writeFileSync(path.join(sessoes, 'pq.json'), JSON.stringify({
       trabalhoReal: true, bloqueouNesteTurno: true, buscouNesteTurno: true, contadores: { comando_destrutivo: 4 }
@@ -1376,18 +1376,18 @@ test('T10-4: dispara toda vez que a pergunta vier, e continua zerando as marcas 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('T10-4/T10-5: a pergunta funciona sem /esquadro:init (pasta sem .claude)', () => {
+test('T10-4/T10-5: a pergunta funciona sem /sworn:init (pasta sem .claude)', () => {
   const dir = temp('pergunta-sem-init');
   try {
     assert.ok(!fs.existsSync(path.join(dir, '.claude')));
     const j = abrirComPrompt(dir, 'psi', 'is the context ok?');
-    assert.ok(j && j.hookSpecificOutput && j.hookSpecificOutput.additionalContext.indexOf('/esquadro:handoff') !== -1);
+    assert.ok(j && j.hookSpecificOutput && j.hookSpecificOutput.additionalContext.indexOf('/sworn:handoff') !== -1);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-// ------------------------------- Bloco A1 (D426): corrigir o agente sugere virar regra (/esquadro:aprender)
+// ------------------------------- Bloco A1 (D426): corrigir o agente sugere virar regra (/sworn:learn)
 
-test('A1: prompt que corrige o agente devolve additionalContext mandando rodar o /esquadro:aprender, sem gravar nada', () => {
+test('A1: prompt que corrige o agente devolve additionalContext mandando rodar o /sworn:learn, sem gravar nada', () => {
   const dir = temp('correcao');
   try {
     assert.ok(!fs.existsSync(path.join(dir, '.claude')), 'controle: a pasta nao tem .claude (vale sem init)');
@@ -1396,7 +1396,7 @@ test('A1: prompt que corrige o agente devolve additionalContext mandando rodar o
     assert.strictEqual(j.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
     const t = j.hookSpecificOutput.additionalContext;
     // Plano 091 (#2, D559): ordem de rodar a skill e perguntar em 3 opcoes, nao mais "oferecer em uma linha".
-    assert.ok(t.indexOf('Rode /esquadro:aprender') !== -1 && /AskUserQuestion, em 3 opcoes/.test(t) && /relato de bug/.test(t), t);
+    assert.ok(t.indexOf('Rode /sworn:learn') !== -1 && /AskUserQuestion, em 3 opcoes/.test(t) && /relato de bug/.test(t), t);
     assert.ok(/^[\x20-\x7E\n]+$/.test(t), 'additionalContext tem de ser ASCII: ' + JSON.stringify(t));
     assert.ok(!fs.existsSync(path.join(dir, '.claude')), 'o gancho nao pode criar nada no projeto');
     // relato de bug e resposta a pergunta seguem calados (e nao gastam a janela da sugestao)
@@ -1449,15 +1449,15 @@ test('A1: a janela da sugestao sobrevive ao fecho do turno (e campo da sessao, n
 test('A1: sugerirAprender: false desliga; ausente ou outro valor segue ligado', () => {
   const dir = temp('correcao-chave');
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ sugerirAprender: false }));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ sugerirAprender: false }));
     assert.strictEqual(abrirComPrompt(dir, 'cc1', 'já te disse'), null, 'disparou com a chave desligada');
     assert.strictEqual(lerSessao(dir, 'cc1').esperaAprender, undefined, 'desligado nao abre janela');
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({}));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({}));
     assert.ok(abrirComPrompt(dir, 'cc2', 'já te disse'), 'sem a chave tem de estar ligado');
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ sugerirAprender: 'nao' }));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ sugerirAprender: 'nao' }));
     assert.ok(abrirComPrompt(dir, 'cc3', 'já te disse'), 'so false desliga');
     // projeto.json ilegivel: ligado (falha aberta), nao estoura
-    escrever(dir, '.claude/esquadro/projeto.json', '{ quebrado');
+    escrever(dir, '.claude/sworn/projeto.json', '{ quebrado');
     assert.ok(abrirComPrompt(dir, 'cc4', 'já te disse'), 'projeto.json ilegivel tem de seguir ligado');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -1467,11 +1467,11 @@ test('A1: saude e correcao no mesmo prompt viram UM additionalContext com os doi
   try {
     const j = abrirComPrompt(dir, 'cs', 'o contexto está bom? eu já te disse para colar o prompt');
     const t = j.hookSpecificOutput.additionalContext;
-    assert.ok(t.indexOf('/esquadro:handoff') !== -1 && t.indexOf('/esquadro:aprender') !== -1, t);
+    assert.ok(t.indexOf('/sworn:handoff') !== -1 && t.indexOf('/sworn:learn') !== -1, t);
     // dentro da janela a pergunta de saude segue respondendo sozinha, sem o texto da correcao
     const k = abrirComPrompt(dir, 'cs', 'o contexto está bom? você errou');
     const u = k.hookSpecificOutput.additionalContext;
-    assert.ok(u.indexOf('/esquadro:handoff') !== -1 && u.indexOf('/esquadro:aprender') === -1, u);
+    assert.ok(u.indexOf('/sworn:handoff') !== -1 && u.indexOf('/sworn:learn') === -1, u);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -1484,7 +1484,7 @@ test('T3b: pedido de funcao nova devolve a ordem de oferecer o radar (ASCII, sem
     assert.ok(j && j.hookSpecificOutput, 'nao ofereceu');
     assert.strictEqual(j.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
     const t = j.hookSpecificOutput.additionalContext;
-    assert.ok(t.indexOf('/esquadro:radar') !== -1 && /AskUserQuestion, em 3 opcoes/.test(t) && /Nada roda sem o sim/.test(t), t);
+    assert.ok(t.indexOf('/sworn:radar') !== -1 && /AskUserQuestion, em 3 opcoes/.test(t) && /Nada roda sem o sim/.test(t), t);
     assert.ok(/^[\x20-\x7E\n]+$/.test(t), 'additionalContext tem de ser ASCII: ' + JSON.stringify(t));
     assert.ok(!fs.existsSync(path.join(dir, '.claude')), 'o gancho nao pode criar nada no projeto');
     assert.strictEqual(abrirComPrompt(dir, 'or2', 'o botão parou de funcionar'), null);
@@ -1508,14 +1508,14 @@ test('T3b: a oferta sai uma vez por SESSAO (o fecho do turno nao apaga a marca);
 test('T3b: oferecerRadar: false desliga (e nao grava marca); ausente, "false" entre aspas ou json ilegivel seguem ligados', () => {
   const dir = temp('oferta-radar-chave');
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ oferecerRadar: false }));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ oferecerRadar: false }));
     assert.strictEqual(abrirComPrompt(dir, 'oc1', 'sugere melhorias'), null, 'ofereceu com a chave desligada');
     assert.strictEqual(lerSessao(dir, 'oc1').ofereceuRadar, undefined, 'desligado nao grava a marca');
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({}));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({}));
     assert.ok(abrirComPrompt(dir, 'oc2', 'sugere melhorias'), 'sem a chave tem de estar ligado');
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ oferecerRadar: 'false' }));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ oferecerRadar: 'false' }));
     assert.ok(abrirComPrompt(dir, 'oc3', 'sugere melhorias'), 'so o booleano false desliga');
-    escrever(dir, '.claude/esquadro/projeto.json', '{ quebrado');
+    escrever(dir, '.claude/sworn/projeto.json', '{ quebrado');
     assert.ok(abrirComPrompt(dir, 'oc4', 'sugere melhorias'), 'projeto.json ilegivel tem de seguir ligado');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -1524,7 +1524,7 @@ test('T3b: no repositorio do proprio plugin o radar e do mantenedor - nao se ofe
   const dir = temp('oferta-radar-plugin');
   try {
     escrever(dir, '.git/HEAD', 'ref: refs/heads/main\n');
-    escrever(dir, '.claude-plugin/plugin.json', JSON.stringify({ name: 'esquadro', version: '0.0.0' }));
+    escrever(dir, '.claude-plugin/plugin.json', JSON.stringify({ name: 'sworn', version: '0.0.0' }));
     assert.strictEqual(abrirComPrompt(dir, 'op', 'sugere melhorias'), null, 'ofereceu no repo do plugin');
     assert.strictEqual(lerSessao(dir, 'op').ofereceuRadar, undefined);
     // controle: o mesmo repo com outro nome de plugin e projeto de usuario
@@ -1548,9 +1548,9 @@ test('T3b: oferta, saude e correcao no mesmo prompt viram UM additionalContext, 
   try {
     const j = abrirComPrompt(dir, 'oj', 'o contexto está bom? eu já te disse para sugerir melhorias');
     const t = j.hookSpecificOutput.additionalContext;
-    const a = t.indexOf('/esquadro:handoff');
-    const b = t.indexOf('/esquadro:aprender');
-    const c = t.indexOf('/esquadro:radar');
+    const a = t.indexOf('/sworn:handoff');
+    const b = t.indexOf('/sworn:learn');
+    const c = t.indexOf('/sworn:radar');
     assert.ok(a !== -1 && b !== -1 && c !== -1 && a < b && b < c, 'ordem saude, correcao, oferta: ' + t);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -1562,14 +1562,14 @@ function projetoComPesoEstourado(dir, extra) {
   const itens = [];
   for (let i = 0; i < 205; i++) itens.push('- item ' + i);
   escrever(dir, 'DOC.md', itens.join('\n') + '\n');
-  escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify(Object.assign({ fontesCanonicas: ['DOC.md'] }, extra || {})));
+  escrever(dir, '.claude/sworn/projeto.json', JSON.stringify(Object.assign({ fontesCanonicas: ['DOC.md'] }, extra || {})));
 }
 
 function abrirA2(dir, id) {
   return rodar('abertura.js', dir, { session_id: id, cwd: dir, source: 'startup' });
 }
 
-const MARCA_A2 = path.join('.claude', 'esquadro', 'auditoria.json');
+const MARCA_A2 = path.join('.claude', 'sworn', 'auditoria.json');
 
 test('A2: a abertura avisa o peso estourado quando a auditoria esta vencida, e a 2a abertura dentro do prazo fica calada', () => {
   const dir = temp('a2-vencida');
@@ -1578,10 +1578,10 @@ test('A2: a abertura avisa o peso estourado quando a auditoria esta vencida, e a
     assert.ok(!fs.existsSync(path.join(dir, MARCA_A2)), 'controle: sem marca no comeco');
     const r1 = abrirA2(dir, 'a2-1');
     assert.strictEqual(r1.status, 0, r1.stderr);
-    assert.ok(/esquadro: auditoria automatica \(a cada 7 dias\) achou o que cortar:/.test(r1.stdout), r1.stdout);
+    assert.ok(/sworn: auditoria automatica \(a cada 7 dias\) achou o que cortar:/.test(r1.stdout), r1.stdout);
     assert.ok(/peso de instrucao 205 acima do teto 200/.test(r1.stdout), r1.stdout);
     // Plano 091 (#3, D559): a abertura entrega a ordem de rodar a auditoria, nao so o aviso.
-    assert.ok(/1\. Rode \/esquadro:auditar para ver o detalhe\./.test(r1.stdout) && r1.stdout.indexOf('"auditarNaAbertura": false') !== -1, r1.stdout);
+    assert.ok(/1\. Rode \/sworn:audit para ver o detalhe\./.test(r1.stdout) && r1.stdout.indexOf('"auditarNaAbertura": false') !== -1, r1.stdout);
     assert.ok(/qualidade de resposta/.test(r1.stdout), 'o resto da abertura sumiu: ' + r1.stdout);
     const marca = JSON.parse(fs.readFileSync(path.join(dir, MARCA_A2), 'utf8'));
     assert.ok(Math.abs(Date.now() - Date.parse(marca.ultima)) < 60000, JSON.stringify(marca));
@@ -1596,7 +1596,7 @@ test('A2: a abertura avisa o peso estourado quando a auditoria esta vencida, e a
 });
 
 // Pedido 32 (plano dos pedidos 30-32, Tarefa 4 subitem 3): quando a auditoria automatica avisa, a abertura marca a
-// sessao (`auditoriaAvisou`), e o sessao.js acende o botao do /esquadro:auditar. Calada, sem marca.
+// sessao (`auditoriaAvisou`), e o sessao.js acende o botao do /sworn:audit. Calada, sem marca.
 test('A2 + pedido 32: a abertura que avisou da auditoria marca a sessao; a calada nao', () => {
   const dir = temp('a2-botao');
   try {
@@ -1616,20 +1616,20 @@ test('092: a abertura mede o injetado da conversa anterior e revisa os atalhos; 
   const dir = temp('092');
   const projects = temp('092-projects');
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', '{}');
+    escrever(dir, '.claude/sworn/projeto.json', '{}');
     const g = spawnSync('git', ['init', '-q'], { cwd: dir, encoding: 'utf8' });
     assert.strictEqual(g.status, 0, g.stderr);
     escrever(dir, 'a.js', 'x\n// atalho: lista lida inteira. limite: 1 MB. trocar quando: arquivo maior.\n');
     const anexo = JSON.stringify({ type: 'attachment', attachment: { type: 'hook_additional_context',
-      content: ['esquadro - aviso que se repete'], hookEvent: 'PreToolUse', hookName: 'PreToolUse:Bash', toolUseID: 't' } });
+      content: ['sworn - aviso que se repete'], hookEvent: 'PreToolUse', hookName: 'PreToolUse:Bash', toolUseID: 't' } });
     escrever(projects, 'aaaa1111-anterior.jsonl', Array(6).fill(anexo).join('\n') + '\n');
     const entrada = { session_id: '092-1', cwd: dir, source: 'startup', transcript_path: path.join(projects, '092-1.jsonl') };
     const r1 = rodar('abertura.js', dir, entrada);
     assert.strictEqual(r1.status, 0, r1.stderr);
     assert.ok(r1.stdout.indexOf('- texto de gancho que volta mais de 5 vezes na conversa anterior (aaaa1111, ') !== -1, r1.stdout);
-    assert.ok(r1.stdout.indexOf('esquadro: atalhos registrados (revisao a cada 30 dias): 1 atalho em 1 arquivo; todos com gatilho.\n' +
+    assert.ok(r1.stdout.indexOf('sworn: atalhos registrados (revisao a cada 30 dias): 1 atalho em 1 arquivo; todos com gatilho.\n' +
       '- a.js:2  lista lida inteira.\n    trocar quando: arquivo maior.\n') !== -1, r1.stdout);
-    assert.ok(r1.stdout.indexOf('esquadro: atalhos registrados') > r1.stdout.indexOf('auditoria automatica'), 'os atalhos sairam antes da auditoria');
+    assert.ok(r1.stdout.indexOf('sworn: atalhos registrados') > r1.stdout.indexOf('auditoria automatica'), 'os atalhos sairam antes da auditoria');
     const r2 = rodar('abertura.js', dir, Object.assign({}, entrada, { session_id: '092-2', transcript_path: path.join(projects, '092-2.jsonl') }));
     assert.strictEqual(r2.status, 0, r2.stderr);
     assert.strictEqual(r2.stdout.indexOf('auditoria automatica'), -1, r2.stdout);
@@ -1644,11 +1644,11 @@ test('092: a abertura mede o injetado da conversa anterior e revisa os atalhos; 
 test('091 T6: a abertura com so a retroalimentacao nao marca auditoriaAvisou nem conta a ordem', () => {
   const dir = temp('a2-retro');
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', '{}');
-    escrever(dir, '.claude/esquadro/contadores.json', JSON.stringify({ ordem_revisar_dada: 2, ordem_revisar_cumprida: 2 }));
+    escrever(dir, '.claude/sworn/projeto.json', '{}');
+    escrever(dir, '.claude/sworn/contadores.json', JSON.stringify({ ordem_revisar_dada: 2, ordem_revisar_cumprida: 2 }));
     const r = abrirA2(dir, 'a2r-1');
     assert.strictEqual(r.status, 0, r.stderr);
-    assert.ok(r.stdout.indexOf('esquadro: auditoria automatica (a cada 7 dias): nada a cortar.\n' +
+    assert.ok(r.stdout.indexOf('sworn: auditoria automatica (a cada 7 dias): nada a cortar.\n' +
       '- ordens desde o comeco (dadas / cumpridas / recusadas pelo dono):\n  revisar antes do commit 2/2/0') !== -1, r.stdout);
     const s = lerSessao(dir, 'a2r-1') || {};
     assert.strictEqual(s.auditoriaAvisou, undefined);
@@ -1659,7 +1659,7 @@ test('091 T6: a abertura com so a retroalimentacao nao marca auditoriaAvisou nem
 test('A2: abertura com tudo dentro do teto fica calada e mesmo assim grava a marca', () => {
   const dir = temp('a2-ok');
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({}));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({}));
     const r = abrirA2(dir, 'a2ok');
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(r.stdout.indexOf('auditoria automatica'), -1, r.stdout);
@@ -1673,23 +1673,23 @@ function abrirComConversas(dir, id, n, projeto) {
   const pasta = path.join(cfg, 'projects', require(path.join(RAIZ, 'scripts', 'lib', 'calibracao.js')).nomeDaPasta(dir));
   fs.mkdirSync(pasta, { recursive: true });
   for (let i = 0; i < n; i++) fs.writeFileSync(path.join(pasta, 'c' + i + '.jsonl'), '{}\n');
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify(projeto));
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify(projeto));
   return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
     cwd: dir, encoding: 'utf8', input: JSON.stringify({ session_id: id, cwd: dir, source: 'startup' }),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes'), CLAUDE_CONFIG_DIR: cfg })
+    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes'), CLAUDE_CONFIG_DIR: cfg })
   });
 }
 
-test('091 #4: 30 conversas e nunca calibrado -> a abertura manda rodar o /esquadro:calibrar; a 2a abertura fica calada', () => {
+test('091 #4: 30 conversas e nunca calibrado -> a abertura manda rodar o /sworn:calibrate; a 2a abertura fica calada', () => {
   const dir = temp('ordem-cal');
   try {
     const r1 = abrirComConversas(dir, 'oc1', 30, { auditarNaAbertura: false });
     assert.strictEqual(r1.status, 0, r1.stderr);
-    assert.ok(r1.stdout.indexOf('esquadro: ja ha 30 conversas salvas neste projeto') !== -1 &&
-      r1.stdout.indexOf('1. Rode /esquadro:calibrar (so mede; nao grava).') !== -1, r1.stdout);
+    assert.ok(r1.stdout.indexOf('sworn: ja ha 30 conversas salvas neste projeto') !== -1 &&
+      r1.stdout.indexOf('1. Rode /sworn:calibrate (so mede; nao grava).') !== -1, r1.stdout);
     assert.ok(/qualidade de resposta/.test(r1.stdout), 'o resto da abertura sumiu: ' + r1.stdout);
-    assert.strictEqual(abrirComConversas(dir, 'oc2', 30, { auditarNaAbertura: false }).stdout.indexOf('/esquadro:calibrar'), -1,
+    assert.strictEqual(abrirComConversas(dir, 'oc2', 30, { auditarNaAbertura: false }).stdout.indexOf('/sworn:calibrate'), -1,
       'repetiu dentro de 30 dias');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -1697,11 +1697,11 @@ test('091 #4: 30 conversas e nunca calibrado -> a abertura manda rodar o /esquad
 test('091 #4: controles - 29 conversas, ou limiar ja gravado, calam a ordem', () => {
   const dir = temp('ordem-cal-c');
   try {
-    assert.strictEqual(abrirComConversas(dir, 'occ1', 29, { auditarNaAbertura: false }).stdout.indexOf('/esquadro:calibrar'), -1);
+    assert.strictEqual(abrirComConversas(dir, 'occ1', 29, { auditarNaAbertura: false }).stdout.indexOf('/sworn:calibrate'), -1);
     const dir2 = temp('ordem-cal-c2');
     try {
       const r = abrirComConversas(dir2, 'occ2', 40, { auditarNaAbertura: false, limiares: { tokensDeContexto: 200000 } });
-      assert.strictEqual(r.stdout.indexOf('/esquadro:calibrar'), -1, r.stdout);
+      assert.strictEqual(r.stdout.indexOf('/sworn:calibrate'), -1, r.stdout);
     } finally { fs.rmSync(dir2, { recursive: true, force: true }); }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -1713,26 +1713,26 @@ test('091 #7: sem projeto.json a abertura manda perguntar o init; a reabertura d
   const abrir = function (id, source) {
     return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
       cwd: dir, encoding: 'utf8', input: JSON.stringify({ session_id: id, cwd: dir, source: source || 'startup' }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(cfg, '_sessoes'), CLAUDE_CONFIG_DIR: cfg })
+      env: Object.assign({}, process.env, { SWORN_TMP: path.join(cfg, '_sessoes'), CLAUDE_CONFIG_DIR: cfg })
     });
   };
   try {
     const r1 = abrir('oi1');
     assert.strictEqual(r1.status, 0, r1.stderr);
-    assert.ok(r1.stdout.indexOf('esquadro: este projeto ainda nao tem o esquadro configurado') !== -1 &&
-      r1.stdout.indexOf('configurar agora com /esquadro:init') !== -1, r1.stdout);
+    assert.ok(r1.stdout.indexOf('sworn: este projeto ainda nao tem o sworn configurado') !== -1 &&
+      r1.stdout.indexOf('configurar agora com /sworn:init') !== -1, r1.stdout);
     const linha = r1.stdout.split('\n').filter(function (l) { return l.indexOf('Com "nunca", rode: ') === 0; })[0];
     assert.ok(linha && linha.indexOf('recusar-init.js') !== -1, 'sem o comando do nunca: ' + r1.stdout);
-    const sessao = function (id) { return JSON.parse(fs.readFileSync(path.join(cfg, '_sessoes', 'esquadro', id + '.json'), 'utf8')); };
+    const sessao = function (id) { return JSON.parse(fs.readFileSync(path.join(cfg, '_sessoes', 'sworn', id + '.json'), 'utf8')); };
     // 091 T6: a ordem do init conta dada uma vez; a reabertura da mesma sessao nao conta de novo
     assert.strictEqual(sessao('oi1').contadores.ordem_init_dada, 1);
     assert.ok(!fs.existsSync(path.join(dir, '.claude')), 'a ordem nao pode criar nada no projeto');
-    assert.strictEqual(abrir('oi1', 'compact').stdout.indexOf('/esquadro:init na mesma resposta'), -1, 'repetiu na mesma sessao');
+    assert.strictEqual(abrir('oi1', 'compact').stdout.indexOf('/sworn:init na mesma resposta'), -1, 'repetiu na mesma sessao');
     assert.strictEqual(sessao('oi1').contadores.ordem_init_dada, 1, 'a reabertura contou de novo');
     const g = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'recusar-init.js'), dir], {
       encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
     assert.strictEqual(g.status, 0, g.stdout + g.stderr);
-    assert.strictEqual(abrir('oi2').stdout.indexOf('/esquadro:init na mesma resposta'), -1, 'o nunca nao calou a sessao nova');
+    assert.strictEqual(abrir('oi2').stdout.indexOf('/sworn:init na mesma resposta'), -1, 'o nunca nao calou a sessao nova');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(cfg, { recursive: true, force: true }); }
 });
 
@@ -1742,7 +1742,7 @@ test('091 #7: recusar-init.js sem pasta sai 1 e nao grava', () => {
     const g = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'recusar-init.js')], {
       encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
     assert.strictEqual(g.status, 1, g.stdout);
-    assert.ok(!fs.existsSync(path.join(cfg, 'esquadro')), 'gravou sem pasta');
+    assert.ok(!fs.existsSync(path.join(cfg, 'sworn')), 'gravou sem pasta');
   } finally { fs.rmSync(cfg, { recursive: true, force: true }); }
 });
 
@@ -1769,12 +1769,12 @@ test('A2: auditoria que lanca nao derruba a abertura - o resto do stdout sai, 1 
   const dir = temp('a2-lanca');
   try {
     // fonte canonica que nao e texto: path.resolve lanca TypeError dentro de instrucoes.contar, so na auditoria
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ fontesCanonicas: [123] }));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ fontesCanonicas: [123] }));
     const r = abrirA2(dir, 'a2lanca');
     assert.strictEqual(r.status, 0, r.stderr);
     const linhas = r.stdout.split('\n').filter(function (l) { return l.indexOf('auditoria automatica falhou') !== -1; });
     assert.strictEqual(linhas.length, 1, r.stdout);
-    assert.ok(/rode \/esquadro:auditar/.test(linhas[0]), linhas[0]);
+    assert.ok(/rode \/sworn:audit/.test(linhas[0]), linhas[0]);
     assert.ok(/qualidade de resposta/.test(r.stdout), 'o resto da abertura sumiu: ' + r.stdout);
     assert.ok(fs.existsSync(path.join(dir, MARCA_A2)), 'falha nao gravou a marca (repetiria a cada abertura)');
     assert.strictEqual(abrirA2(dir, 'a2lanca2').stdout.indexOf('auditoria automatica'), -1, 'repetiu a falha dentro do prazo');
@@ -1794,7 +1794,7 @@ function pluginCopia(nome) {
 function limparCopia(base) { fs.rmSync(path.dirname(base), { recursive: true, force: true }); }
 
 function projetoComPlanoDeOutro(dir) {
-  escrever(dir, path.join('.claude', 'esquadro', 'plano-ativo.json'),
+  escrever(dir, path.join('.claude', 'sworn', 'plano-ativo.json'),
     JSON.stringify({ arquivo: 'docs/plano-v9.md', sessionId: 'sessao-do-outro', tarefa: null }));
 }
 
@@ -1852,22 +1852,22 @@ test('S8 A2-4: o aviso de projeto.json ilegivel sai uma vez so, mesmo se a reinj
     assert.notStrictEqual(reescrito, original, 'a frase da reinjecao mudou de lugar: ajuste o teste');
     fs.writeFileSync(arq, reescrito, 'utf8');
     const avisos = function (stdout) { return (stdout.match(/projeto\.json (existe mas nao se le|ficou ilegivel)/g) || []).length; };
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), '{isso nao fecha');
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), '{isso nao fecha');
 
     // com regras: a reinjecao ja avisou (com a frase reescrita); a abertura nao dobra
-    escrever(dir, path.join('.claude', 'esquadro', 'regras.md'), '# Regras\n\n- ' + REGRA_Q + '\n');
+    escrever(dir, path.join('.claude', 'sworn', 'regras.md'), '# Regras\n\n- ' + REGRA_Q + '\n');
     const com = rodarNoPlugin(plugin, 'abertura.js', dir, { session_id: 'a24c', cwd: dir, source: 'startup' });
     assert.ok(/ficou ilegivel/.test(com.stdout), 'controle: a reinjecao tinha de avisar: ' + com.stdout);
     assert.strictEqual(avisos(com.stdout), 1, com.stdout);
 
     // controle positivo: regras.md sem nenhuma regra -> a reinjecao nao avisa, a abertura avisa (nunca calado)
-    escrever(dir, path.join('.claude', 'esquadro', 'regras.md'), '# Regras\n\nsem itens aqui\n');
+    escrever(dir, path.join('.claude', 'sworn', 'regras.md'), '# Regras\n\nsem itens aqui\n');
     const vazio = rodarNoPlugin(plugin, 'abertura.js', dir, { session_id: 'a24v', cwd: dir, source: 'startup' });
     assert.strictEqual(avisos(vazio.stdout), 1, vazio.stdout);
     assert.ok(/DESLIGADOS/.test(vazio.stdout), vazio.stdout);
 
     // e sem regras.md nenhum
-    fs.rmSync(path.join(dir, '.claude', 'esquadro', 'regras.md'));
+    fs.rmSync(path.join(dir, '.claude', 'sworn', 'regras.md'));
     const sem = rodarNoPlugin(plugin, 'abertura.js', dir, { session_id: 'a24s', cwd: dir, source: 'startup' });
     assert.strictEqual(avisos(sem.stdout), 1, sem.stdout);
   } finally { limparCopia(plugin); fs.rmSync(dir, { recursive: true, force: true }); }
@@ -1875,13 +1875,13 @@ test('S8 A2-4: o aviso de projeto.json ilegivel sai uma vez so, mesmo se a reinj
 
 // ------------------------------------------------ Bloco V (D426/D437): a novidade do vigia na abertura
 
-/** Abertura com a pasta do vigia injetada por ESQUADRO_VIGIA (o `rodar` comum nao passa env extra). */
+/** Abertura com a pasta do vigia injetada por SWORN_VIGIA (o `rodar` comum nao passa env extra). */
 function abrirVigia(dir, id, pastaVigia) {
   return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
     cwd: dir,
     encoding: 'utf8',
     input: JSON.stringify({ session_id: id, cwd: dir, source: 'startup' }),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes'), ESQUADRO_VIGIA: pastaVigia })
+    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes'), SWORN_VIGIA: pastaVigia })
   });
 }
 
@@ -1889,7 +1889,7 @@ test('V: com "vigia": true a abertura mostra a novidade da semana uma vez, e o r
   const dir = temp('vigia-liga');
   const pastaVigia = temp('vigia-pasta');
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ vigia: true }));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ vigia: true }));
     escrever(pastaVigia, 'novidades.md', 'semana: 2026-10-05\n\n- Cart\u00e3o novo da semana\n');
     const r1 = abrirVigia(dir, 'v1', pastaVigia);
     assert.strictEqual(r1.status, 0, r1.stderr);
@@ -1912,18 +1912,18 @@ test('V: com "vigia": true a abertura mostra o radar da semana uma vez, depois d
   const dir = temp('radar-liga');
   const pastaVigia = temp('radar-pasta');
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ vigia: true }));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ vigia: true }));
     escrever(pastaVigia, 'novidades.md', 'semana: 2026-10-05\n\n- Novidade\n');
     escrever(pastaVigia, 'radar/novidades.md', 'semana: 2026-10-19\n\n## Candidatos\n\n' +
       '| Repo | Licença | Como entra | Como melhora | Esforço | Valor | Veredito |\n|---|---|---|---|---|---|---|\n' +
       '| a/b | MIT | no fecho | barra | P | alto | adotar |\n');
     const r1 = abrirVigia(dir, 'r1', pastaVigia);
     assert.strictEqual(r1.status, 0, r1.stderr);
-    const i = r1.stdout.indexOf('esquadro: radar - ficha da semana de 2026-10-19: 1 candidato, 1 para adotar.');
+    const i = r1.stdout.indexOf('sworn: radar - ficha da semana de 2026-10-19: 1 candidato, 1 para adotar.');
     assert.ok(i !== -1, r1.stdout);
     assert.ok(r1.stdout.indexOf('novidade da semana de 2026-10-05') < i, 'o radar veio antes do vigia');
     const r2 = abrirVigia(dir, 'r2', pastaVigia);
-    assert.strictEqual(r2.stdout.indexOf('esquadro: radar'), -1, 'mostrou o radar duas vezes: ' + r2.stdout);
+    assert.strictEqual(r2.stdout.indexOf('sworn: radar'), -1, 'mostrou o radar duas vezes: ' + r2.stdout);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(pastaVigia, { recursive: true, force: true });
@@ -1935,12 +1935,12 @@ test('V: sem a chave (ou com vigia: false) a abertura nao fala do vigia e nao cr
   const base = temp('vigia-base');
   const pastaVigia = path.join(base, 'ainda-nao-existe');
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({}));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({}));
     const r = abrirVigia(dir, 'v-off', pastaVigia);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(r.stdout.indexOf('vigia'), -1, r.stdout);
     assert.ok(!fs.existsSync(pastaVigia), 'a abertura criou a pasta do vigia sem opt-in');
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ vigia: false }));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ vigia: false }));
     const f = abrirVigia(dir, 'v-false', pastaVigia);
     assert.strictEqual(f.stdout.indexOf('vigia'), -1, f.stdout);
     assert.ok(!fs.existsSync(pastaVigia));
@@ -1960,23 +1960,23 @@ test('V: sem a chave (ou com vigia: false) a abertura nao fala do vigia e nao cr
 });
 
 // D503 (plano d503, Tarefa 6, 1o subitem): sem a chave `referencias`, a abertura avisa UMA vez por projeto (marca em
-// .claude/esquadro/referencia-avisada.json) e diz como declarar e como calar; com a chave, ate `{}`, calada.
-const MARCA_REF = path.join('.claude', 'esquadro', 'referencia-avisada.json');
+// .claude/sworn/referencia-avisada.json) e diz como declarar e como calar; com a chave, ate `{}`, calada.
+const MARCA_REF = path.join('.claude', 'sworn', 'referencia-avisada.json');
 const RE_AVISO_REF = /referencia de topo/;
 
 test('D503 T6: abertura avisa uma vez que falta a referencia de topo, em ASCII, com o caminho de declarar e de calar', () => {
   const dir = temp('ref-falta');
   try {
-    escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), JSON.stringify({ versaoConfig: 1 }));
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), JSON.stringify({ versaoConfig: 1 }));
     const r = rodar('abertura.js', dir, { session_id: 'rf1', cwd: dir, source: 'startup' });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.match(r.stdout, RE_AVISO_REF, r.stdout);
     const aviso = r.stdout.split('\n').filter((l) => RE_AVISO_REF.test(l))[0];
     assert.match(aviso, /referencias/, 'nomeia a chave');
-    assert.match(aviso, /\/esquadro:init/, 'diz como declarar');
+    assert.match(aviso, /\/sworn:init/, 'diz como declarar');
     // Plano do REA, Tarefa 3 (D580; mock prints-rea/mock-rea.png, secao 4): o comando novo vem primeiro, dizendo o que faz.
-    assert.ok(aviso.includes('rode /esquadro:referencia (estuda 2-3 produtos lideres do mesmo tipo e grava a ficha), ' +
-      'rode /esquadro:init de novo (Passo 4b) ou ponha a chave a mao'), 'aponta o /esquadro:referencia: ' + aviso);
+    assert.ok(aviso.includes('rode /sworn:reference (estuda 2-3 produtos lideres do mesmo tipo e grava a ficha), ' +
+      'rode /sworn:init de novo (Passo 4b) ou ponha a chave a mao'), 'aponta o /sworn:reference: ' + aviso);
     assert.match(aviso, /"referencias": \{\}/, 'diz como calar de vez');
     assert.match(aviso, /uma vez/, 'diz que sai uma vez');
     assert.ok(/^[\x20-\x7E]*$/.test(aviso), 'aviso fora de ASCII: ' + aviso);
@@ -1996,7 +1996,7 @@ test('D503 T6: controles - com a chave (ate vazia), sem projeto.json ou com proj
   for (const [nome, conteudo] of casos) {
     const dir = temp(nome);
     try {
-      if (conteudo !== null) escrever(dir, path.join('.claude', 'esquadro', 'projeto.json'), conteudo);
+      if (conteudo !== null) escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), conteudo);
       const r = rodar('abertura.js', dir, { session_id: nome, cwd: dir, source: 'startup' });
       assert.strictEqual(r.status, 0, nome + ': ' + r.stderr);
       assert.doesNotMatch(r.stdout, RE_AVISO_REF, nome + ': ' + r.stdout);
@@ -2034,7 +2034,7 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
       ['SubagentHandback', 'gravar-veredito.js 10']
     ],
     SubagentStart: [['', 'abrir-subagente.js 10']],
-    SubagentStop: [['^esquadro:inspetor$', 'gravar-veredito.js 10']],
+    SubagentStop: [['^sworn:inspector$', 'gravar-veredito.js 10']],
     Stop: [['', 'portao-fecho.js 10']],
     SessionEnd: [['', 'fim-sessao.js 10']]
   });

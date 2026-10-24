@@ -24,7 +24,7 @@ const ob = require('../scripts/lib/obrigacoes.js');
 
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'experimento.js');
-const PROVA = path.join('.claude', 'esquadro', 'experimento-d83.json');
+const PROVA = path.join('.claude', 'sworn', 'experimento-d83.json');
 
 const LINHAS = [
   { id: 'marcha-3', familia: 'marcha', titulo: 'AAA' },
@@ -45,7 +45,7 @@ function resultado(extra) {
     ]
   }, extra || {});
 }
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro exp ')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn exp ')); }
 function rodar(args, cwd) {
   const r = spawnSync(process.execPath, [SCRIPT].concat(args), { cwd: cwd || RAIZ, encoding: 'utf8' });
   return { status: r.status, saida: String(r.stdout) + String(r.stderr), stdout: String(r.stdout) };
@@ -256,7 +256,7 @@ test('D244/P2 prosa: o stdout do roteiro e JSON puro, e a prosa sai no stderr', 
 });
 
 test('experimento: --manual cruza, e marca o que so existe do outro lado', () => {
-  const outro = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro outro '));
+  const outro = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn outro '));
   fs.writeFileSync(path.join(outro, 'SKILL.md'),
     '# m\n\n## R\n\nSempre:\n\n- **Par atomico de deploy** nunca sai um lado sem o outro\n', 'utf8');
   const r = rodar(['--manual', outro]);
@@ -280,7 +280,7 @@ test('experimento: --manual cruza, e marca o que so existe do outro lado', () =>
 });
 
 test('experimento: --manual para lugar sem SKILL.md para e diz onde olhou', () => {
-  const vazio = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro vazio '));
+  const vazio = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn vazio '));
   const r = rodar(['--manual', vazio]);
   assert.strictEqual(r.status, 1);
   assert.ok(/nao ha SKILL.md/.test(r.saida), r.saida);
@@ -320,7 +320,7 @@ test('experimento: --veredito devolve 0 no BASTA, 1 no NAO BASTA e 2 no INVALIDO
   assert.strictEqual(r.status, 1, r.saida);
   assert.ok(/NAO BASTA/.test(r.saida) && /\[NADA\]/.test(r.saida), r.saida);
 
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
   fs.writeFileSync(path.join(dir, PROVA), JSON.stringify(misto), 'utf8');
   r = rodar(['--veredito'], dir);
   assert.ok(r.status === 1 && r.saida.indexOf('resultado lido de: ' + PROVA) !== -1, r.saida);
@@ -346,7 +346,7 @@ test('experimento: --veredito devolve 0 no BASTA, 1 no NAO BASTA e 2 no INVALIDO
 test('experimento: o comando nao imprime caminho de maquina - a saida e para colar', () => {
   // Com resultado LIDO: e so quando ha arquivo que o caminho entra na saida.
   // Arquivo inexistente e primeira linha so provavam o caso que nunca vaza.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro saida '));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn saida '));
   const arq = path.join(dir, 'resultado.json');
   fs.writeFileSync(arq, '{}', 'utf8');
   const r = rodar(['--veredito', '--resultado', arq]);
@@ -370,7 +370,7 @@ test('experimento: o experimento gravado neste ambiente nao e invalido (D83)', (
     t.skip('nao verificavel aqui: ninguem rodou o experimento neste ambiente (' + PROVA.split(path.sep).join('/') + ')');
     return;
   }
-  const linhas = ob.linhasDoExperimento(ob.cruzar(ob.inventario(path.join(RAIZ, 'skills', 'padrao')), null));
+  const linhas = ob.linhasDoExperimento(ob.cruzar(ob.inventario(path.join(RAIZ, 'skills', 'playbook')), null));
   const c = ob.conferirResultado(linhas, gravado);
   assert.notStrictEqual(c.veredito, 'INVALIDO', ob.motivo(c));
 });

@@ -12,7 +12,7 @@ const { spawnSync } = require('node:child_process');
 const RAIZ = path.join(__dirname, '..');
 
 function temp(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-commit-linha-' + nome + '-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-commit-linha-' + nome + '-'));
 }
 
 function marcar(dir, id, entrada) {
@@ -20,7 +20,7 @@ function marcar(dir, id, entrada) {
     cwd: dir,
     encoding: 'utf8',
     input: JSON.stringify(Object.assign({ session_id: id, cwd: dir }, entrada)),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
   });
   assert.strictEqual(r.status, 0, r.stderr);
   return r;
@@ -28,7 +28,7 @@ function marcar(dir, id, entrada) {
 
 function sessao(dir, id) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(dir, '_sessoes', 'esquadro', id + '.json'), 'utf8'));
+    return JSON.parse(fs.readFileSync(path.join(dir, '_sessoes', 'sworn', id + '.json'), 'utf8'));
   } catch (e) {
     return null;
   }
@@ -148,8 +148,8 @@ test('T11-7: a contagem pela linha chega ao gatilho de saude - 3 commits sem git
   const dir = temp('gatilho');
   try {
     // Plano 091 (#9): modoContinuo false - o padrao ligado cala o gatilho de commits
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ modoContinuo: false }), 'utf8');
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ modoContinuo: false }), 'utf8');
     for (let i = 0; i < 3; i++) {
       marcar(dir, 'g1', { tool_name: 'PowerShell', tool_response: { stdout: '[master 43' + i + '7f01] x\n' } });
     }
@@ -158,7 +158,7 @@ test('T11-7: a contagem pela linha chega ao gatilho de saude - 3 commits sem git
     const f = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-fecho.js')], {
       cwd: dir, encoding: 'utf8',
       input: JSON.stringify({ session_id: 'g1', cwd: dir, hook_event_name: 'Stop', last_assistant_message: 'Anotado.' }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+      env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
     });
     assert.strictEqual(f.status, 0, f.stderr);
     assert.ok(f.stdout.indexOf('3 commits nesta sessao (limiar 3)') !== -1, f.stdout);
@@ -166,7 +166,7 @@ test('T11-7: a contagem pela linha chega ao gatilho de saude - 3 commits sem git
 });
 
 test('T11-7: o README diz as duas fontes do commit, que o -q nao conta, e que o formato das decisoes foi provado', () => {
-  const readme = fs.readFileSync(path.join(RAIZ, 'README.md'), 'utf8');
+  const readme = fs.readFileSync(path.join(RAIZ, 'GUIA.md'), 'utf8');
   const i = readme.indexOf('**Do que o gatilho de commit depende:**');
   assert.ok(i !== -1, 'sumiu o paragrafo "Do que o gatilho de commit depende"');
   const paragrafo = readme.slice(i).split(/\r?\n\s*\r?\n/)[0].replace(/\s+/g, ' ');

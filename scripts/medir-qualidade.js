@@ -15,7 +15,7 @@ const projetoLib = require('./lib/projeto.js');
  *   --gerar --modelo <nome> --destino <pasta> [--prompt <id>]
  *       12 prompts x 3 condicoes (padrao, caveman, recurso), cada execucao num repositorio de
  *       brinquedo NOVO em <destino>/<carimbo>/<prompt>-<condicao>/. Grava o stream bruto e o
- *       geracoes.json em .claude/esquadro/medicao-qr/<carimbo>/ da pasta de onde roda. Nada se apaga.
+ *       geracoes.json em .claude/sworn/medicao-qr/<carimbo>/ da pasta de onde roda. Nada se apaga.
  *   --pares <pasta da rodada>
  *       Monta os pares cegos (A.txt, B.txt, vereditos/) e imprime o briefing do juiz. O mapa de quem
  *       e quem fica em <rodada>/mapa.json, FORA de pares/.
@@ -24,7 +24,7 @@ const projetoLib = require('./lib/projeto.js');
  *       faltam julgamentos - juiz que nao respondeu nunca e empate.
  *
  * O MODELO VEM POR --modelo (D138): o codigo do plugin nunca escolhe modelo. O `claude` e o do PATH, ou
- * o de ESQUADRO_CLAUDE (a porta dos testes, que o trocam por um de mentira). No Windows o PATH tem o
+ * o de SWORN_CLAUDE (a porta dos testes, que o trocam por um de mentira). No Windows o PATH tem o
  * atalho `claude.cmd` do npm, que o Node recusa sem shell: o atalho e lido e o executavel de verdade
  * vira o comando, sem shell, para o texto livre e o caminho com espaco nao precisarem de aspas.
  * O ambiente segue inteiro para o processo filho: o claude lancado sem a variavel que aponta o bash do
@@ -34,7 +34,7 @@ const projetoLib = require('./lib/projeto.js');
 const RAIZ = path.join(__dirname, '..');
 const ARQUIVO_DE_PROMPTS = path.join(RAIZ, 'modelos', 'qualidade-prompts.json');
 const ARQUIVO_DE_REGRAS = path.join(RAIZ, 'modelos', 'regras.md');
-const PASTA_DA_MEDICAO = ['.claude', 'esquadro', 'medicao-qr'];
+const PASTA_DA_MEDICAO = ['.claude', 'sworn', 'medicao-qr'];
 // Uma execucao com ferramentas pode levar minutos; passar disto e execucao presa, nao lenta.
 const LIMITE_DA_EXECUCAO_MS = 15 * 60 * 1000;
 // A montagem dos pares leva segundos: mais velha que isto esta morta, mesmo com o pid vivo (o Windows reaproveita pid).
@@ -97,9 +97,9 @@ function comoRodar(arquivo) {
 function resolverClaude(env, so) {
   const e = env || process.env;
   const sistema = so || process.platform;
-  if (e.ESQUADRO_CLAUDE) {
+  if (e.SWORN_CLAUDE) {
     // relativo a pasta de onde roda: o claude roda com a pasta do brinquedo como atual, e la o relativo nao existe
-    const apontado = path.resolve(e.ESQUADRO_CLAUDE);
+    const apontado = path.resolve(e.SWORN_CLAUDE);
     return ehArquivo(apontado) ? comoRodar(apontado) : null;
   }
   const dirs = String(e.PATH || e.Path || '').split(path.delimiter).filter(Boolean);
@@ -142,11 +142,11 @@ function dentroDoBrinquedo(dir, rel) {
   return path.resolve(dir, rel).indexOf(path.resolve(dir) + path.sep) === 0;
 }
 
-/** O arquivo cai em .claude/esquadro/ ou .git/ do brinquedo (ou e a propria pasta)? Sem caixa no Windows. */
+/** O arquivo cai em .claude/sworn/ ou .git/ do brinquedo (ou e a propria pasta)? Sem caixa no Windows. */
 function caiNoQueAMedicaoGrava(base, rel) {
   const partes = path.relative(path.resolve(base), path.resolve(base, rel)).split(path.sep);
   const p = process.platform === 'win32' ? partes.map(function (x) { return x.toLowerCase(); }) : partes;
-  return p[0] === '.git' || (p[0] === '.claude' && p[1] === 'esquadro');
+  return p[0] === '.git' || (p[0] === '.claude' && p[1] === 'sworn');
 }
 
 /**
@@ -167,7 +167,7 @@ function arquivosRuins(prompts, base) {
       if (!dentroDoBrinquedo(base, rel)) ruins.push(onde + ': o arquivo ' + JSON.stringify(rel) + ' cai fora do brinquedo');
       else if (typeof arquivos[rel] !== 'string') ruins.push(onde + ': o arquivo ' + JSON.stringify(rel) + ' nao tem texto');
       else if (caiNoQueAMedicaoGrava(base, rel)) {
-        ruins.push(onde + ': o arquivo ' + JSON.stringify(rel) + ' cai em .claude/esquadro/ (ou .git/) do brinquedo, que a medicao grava');
+        ruins.push(onde + ': o arquivo ' + JSON.stringify(rel) + ' cai em .claude/sworn/ (ou .git/) do brinquedo, que a medicao grava');
       }
     });
   });
@@ -177,7 +177,7 @@ function arquivosRuins(prompts, base) {
 function montarBrinquedo(dir, prompt, condicao) {
   fs.mkdirSync(path.dirname(dir), { recursive: true });
   fs.mkdirSync(dir); // sem recursive: pasta que ja existe e erro, e nada se apaga nem se reaproveita
-  const esq = path.join(dir, '.claude', 'esquadro');
+  const esq = path.join(dir, '.claude', 'sworn');
   fs.mkdirSync(esq, { recursive: true });
   fs.writeFileSync(path.join(esq, 'projeto.json'), JSON.stringify(projetoDoBrinquedo(condicao), null, 2) + '\n', 'utf8');
   fs.copyFileSync(ARQUIVO_DE_REGRAS, path.join(esq, 'regras.md'));
@@ -195,7 +195,7 @@ function montarBrinquedo(dir, prompt, condicao) {
   git(dir, ['init', '-q']);
   // Na config do repositorio, e nao so no -c do helper: vale tambem para o git que o modelo rodar.
   git(dir, ['config', '--local', 'core.longpaths', 'true']);
-  // Nasce limpo: arquivo untracked o portao do esquadro le como "de outra frente" e barra o Edit do modelo.
+  // Nasce limpo: arquivo untracked o portao do sworn le como "de outra frente" e barra o Edit do modelo.
   git(dir, ['add', '-A']);
   git(dir, ['-c', 'user.name=medicao', '-c', 'user.email=medicao@exemplo.com', '-c', 'commit.gpgsign=false',
     'commit', '-q', '--no-verify', '-m', 'brinquedo']);
@@ -269,13 +269,13 @@ function gerar(argv) {
   const claude = resolverClaude(process.env);
   if (!claude) {
     // com a variavel, o PATH nem e olhado: a mensagem diz o que a variavel aponta
-    const apontado = process.env.ESQUADRO_CLAUDE;
+    const apontado = process.env.SWORN_CLAUDE;
     if (apontado) {
       const dica = /^["'].*["']$/.test(apontado) ? ' Dica: tire as aspas do valor.' : '';
-      return recusar('ERRO: nao achei o claude: ESQUADRO_CLAUDE aponta para ' + apontado + (ehArquivo(apontado)
+      return recusar('ERRO: nao achei o claude: SWORN_CLAUDE aponta para ' + apontado + (ehArquivo(apontado)
         ? ', um atalho que nao diz que executavel chama.' : ', que nao existe (ou nao e arquivo).') + dica);
     }
-    return recusar('ERRO: nao achei o claude no PATH. Ponha-o no PATH, ou aponte o executavel em ESQUADRO_CLAUDE.');
+    return recusar('ERRO: nao achei o claude no PATH. Ponha-o no PATH, ou aponte o executavel em SWORN_CLAUDE.');
   }
 
   const carimbo = carimboAgora();
@@ -683,4 +683,4 @@ function principal(argv) {
 
 if (require.main === module) principal(process.argv.slice(2));
 
-module.exports = { resolverClaude, projetoDoBrinquedo, montarBrinquedo, acharTranscricao };
+module.exports = { resolverClaude, projetoDoBrinquedo, montarBrinquedo, acharTranscricao, git };

@@ -76,7 +76,7 @@ io.blindar(function () {
         'cada uma com consequencia pratica e custo.',
       // D489: pergunta de fato nao e decisao
       'Se for pergunta de fato (sintoma, dado que so o dono tem), ponha (fato) no titulo curto (header) dela.',
-      'Para desligar este portao no projeto: "portaoDecisao": false em .claude/esquadro/projeto.json.'
+      'Para desligar este portao no projeto: "portaoDecisao": false em .claude/sworn/projeto.json.'
     ].join('\n'));
   });
 });

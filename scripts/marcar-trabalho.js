@@ -57,11 +57,11 @@ io.blindar(function () {
       }
 
       // Plano 091 (#6, D559): o manual carregado libera o portao do manual (portao-escopo.js, passo 5b). Mesma regra
-      // do mod (mods.tsx, botao do padrao): skill do agente principal com "padrao" no nome. Carregar skill nao e
+      // do mod (mods.tsx, botao do padrao): skill do agente principal que e o manual (ordens.MANUAL). Carregar skill nao e
       // trabalho a provar: sai antes de ligar trabalhoReal.
       if (nome === 'skill') {
         const skill = (e.tool_input || {}).skill;
-        if (!e.agent_id && typeof skill === 'string' && /padrao/i.test(skill)) s.manualCarregado = true;
+        if (!e.agent_id && typeof skill === 'string' && require('./lib/ordens.js').MANUAL.test(skill)) s.manualCarregado = true;
         // Plano 091 T6: a skill do agente principal cumpre a ordem pendente dela (lib/ordens.js).
         if (!e.agent_id) s.ordensPendentes = require('./lib/ordens.js').marcarCumprida(s, skill);
         return s;

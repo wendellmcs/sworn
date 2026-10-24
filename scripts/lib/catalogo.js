@@ -13,12 +13,12 @@ const texto = require('./texto.js');
  * Nao confundir com `scripts/lib/busca.js`, que e outra coisa por completo: o
  * portao C9, "procurar antes de criar arquivo".
  *
- * O arquivo mora em `.claude/esquadro/catalogo.json`, no projeto da pessoa -
+ * O arquivo mora em `.claude/sworn/catalogo.json`, no projeto da pessoa -
  * nomes de modelo e preco sao RESULTADO, e resultado nasce no projeto, nunca no
  * plugin (spec 3 e 4).
  */
 
-const ARQUIVO = ['.claude', 'esquadro', 'catalogo.json'];
+const ARQUIVO = ['.claude', 'sworn', 'catalogo.json'];
 
 /** Debounce: sem isto, o detector acusando a cada despacho mandaria consultar
  *  a cada despacho - lento, caro, e o dono desliga em uma semana (spec 6). */
@@ -124,7 +124,7 @@ function deveConsultar(cache, motivo, agora) {
  */
 function motivoDegradado() {
   return [
-    'esquadro: nao deu para consultar o catalogo de modelos agora.',
+    'sworn: nao deu para consultar o catalogo de modelos agora.',
     '',
     'Isto nao e falha do plugin nem motivo para parar: e modo degradado, e ele',
     'e declarado de proposito, em vez de virar silencio.',

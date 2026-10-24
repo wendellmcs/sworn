@@ -8,16 +8,16 @@ const path = require('node:path');
 const BOM = String.fromCharCode(65279);
 
 function comTmp(fn) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-teste-'));
-  const antes = process.env.ESQUADRO_TMP;
-  process.env.ESQUADRO_TMP = base;
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-teste-'));
+  const antes = process.env.SWORN_TMP;
+  process.env.SWORN_TMP = base;
   delete require.cache[require.resolve('../scripts/lib/estado.js')];
   const estado = require('../scripts/lib/estado.js');
   try {
     fn(estado, base);
   } finally {
-    if (antes === undefined) delete process.env.ESQUADRO_TMP;
-    else process.env.ESQUADRO_TMP = antes;
+    if (antes === undefined) delete process.env.SWORN_TMP;
+    else process.env.SWORN_TMP = antes;
     fs.rmSync(base, { recursive: true, force: true });
   }
 }
@@ -54,7 +54,7 @@ test('estado: limpar zera a sessao', () => {
 test('estado: session_id sujo nao escapa da pasta', () => {
   comTmp((estado, base) => {
     const alvo = estado.caminhoSessao('../../fora');
-    assert.ok(alvo.startsWith(path.join(base, 'esquadro')), alvo);
+    assert.ok(alvo.startsWith(path.join(base, 'sworn')), alvo);
     assert.ok(!alvo.includes('..'));
   });
 });
@@ -76,15 +76,15 @@ test('estado: incrementar conta por chave', () => {
   });
 });
 
-test('estado: descarregar so grava se .claude/esquadro existir (D14)', () => {
+test('estado: descarregar so grava se .claude/sworn existir (D14)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
       assert.strictEqual(estado.descarregar(proj, { a: 1 }), false);
-      fs.mkdirSync(path.join(proj, '.claude', 'esquadro'), { recursive: true });
+      fs.mkdirSync(path.join(proj, '.claude', 'sworn'), { recursive: true });
       assert.strictEqual(estado.descarregar(proj, { a: 1 }), true);
       assert.strictEqual(estado.descarregar(proj, { a: 2 }), true);
-      const dados = JSON.parse(fs.readFileSync(path.join(proj, '.claude', 'esquadro', 'contadores.json'), 'utf8'));
+      const dados = JSON.parse(fs.readFileSync(path.join(proj, '.claude', 'sworn', 'contadores.json'), 'utf8'));
       assert.strictEqual(dados.a, 3, 'contador durável acumula entre turnos');
     } finally {
       fs.rmSync(proj, { recursive: true, force: true });
@@ -94,9 +94,9 @@ test('estado: descarregar so grava se .claude/esquadro existir (D14)', () => {
 
 test('estado: contador corrompido nao apaga historico em silencio (D30)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      const pasta = path.join(proj, '.claude', 'esquadro');
+      const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
       const arquivo = path.join(pasta, 'contadores.json');
       const conteudoOriginal = '{ esse json esta corrompido e nao fecha';
@@ -116,9 +116,9 @@ test('estado: contador corrompido nao apaga historico em silencio (D30)', () => 
 
 test('estado: escrita de contadores nao deixa arquivo temporario (D30)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      const pasta = path.join(proj, '.claude', 'esquadro');
+      const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
       estado.descarregar(proj, { a: 1 });
       estado.descarregar(proj, { b: 2 });
@@ -134,10 +134,10 @@ test('estado: escrita de contadores nao deixa arquivo temporario (D30)', () => {
 
 test('estado: descarregar escreve em arquivo temporario antes de renomear (D30)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      fs.mkdirSync(path.join(proj, '.claude', 'esquadro'), { recursive: true });
-      const arquivo = path.join(proj, '.claude', 'esquadro', 'contadores.json');
+      fs.mkdirSync(path.join(proj, '.claude', 'sworn'), { recursive: true });
+      const arquivo = path.join(proj, '.claude', 'sworn', 'contadores.json');
 
       // Interceptar writeFileSync e renameSync para registrar chamadas
       const originalWriteFileSync = fs.writeFileSync;
@@ -200,9 +200,9 @@ test('estado: sessao sem BOM continua funcionando (controle)', () => {
 
 test('estado: contadores.json com BOM soma em vez de zerar (D-A)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      const pasta = path.join(proj, '.claude', 'esquadro');
+      const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
       const arquivo = path.join(pasta, 'contadores.json');
       fs.writeFileSync(arquivo, BOM + JSON.stringify({ a: 7 }), 'utf8');
@@ -220,9 +220,9 @@ test('estado: contadores.json com BOM soma em vez de zerar (D-A)', () => {
 
 test('estado: contadores.json sem BOM soma normalmente (controle)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      const pasta = path.join(proj, '.claude', 'esquadro');
+      const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
       const arquivo = path.join(pasta, 'contadores.json');
       fs.writeFileSync(arquivo, JSON.stringify({ a: 7 }), 'utf8');
@@ -241,9 +241,9 @@ test('estado: contadores.json sem BOM soma normalmente (controle)', () => {
 
 test('estado: contadores.json = numero (42) vira .corrompido, nao estoura (D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      const pasta = path.join(proj, '.claude', 'esquadro');
+      const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
       const arquivo = path.join(pasta, 'contadores.json');
       const original = '42';
@@ -262,9 +262,9 @@ test('estado: contadores.json = numero (42) vira .corrompido, nao estoura (D-A2)
 
 test('estado: contadores.json = string ("oi") vira .corrompido, nao estoura (D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      const pasta = path.join(proj, '.claude', 'esquadro');
+      const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
       const arquivo = path.join(pasta, 'contadores.json');
       const original = '"oi"';
@@ -283,9 +283,9 @@ test('estado: contadores.json = string ("oi") vira .corrompido, nao estoura (D-A
 
 test('estado: contadores.json = booleano (true) vira .corrompido, nao estoura (D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      const pasta = path.join(proj, '.claude', 'esquadro');
+      const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
       const arquivo = path.join(pasta, 'contadores.json');
       const original = 'true';
@@ -304,9 +304,9 @@ test('estado: contadores.json = booleano (true) vira .corrompido, nao estoura (D
 
 test('estado: contadores.json = array ([1,2,3]) vira .corrompido, nao perde o incremento (D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      const pasta = path.join(proj, '.claude', 'esquadro');
+      const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
       const arquivo = path.join(pasta, 'contadores.json');
       const original = '[1,2,3]';
@@ -325,9 +325,9 @@ test('estado: contadores.json = array ([1,2,3]) vira .corrompido, nao perde o in
 
 test('estado: contadores.json = objeto valido soma e NAO cria .corrompido (controle D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
     try {
-      const pasta = path.join(proj, '.claude', 'esquadro');
+      const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
       const arquivo = path.join(pasta, 'contadores.json');
       fs.writeFileSync(arquivo, JSON.stringify({ a: 7 }), 'utf8');

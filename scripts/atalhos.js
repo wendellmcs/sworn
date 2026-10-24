@@ -4,7 +4,7 @@ const atalhos = require('./lib/atalhos.js');
 const config = require('./lib/config.js');
 
 /**
- * Plano 090 Tarefa 5 (skill /esquadro:atalhos): lista os comentarios de atalho do repositorio da pasta atual.
+ * Plano 090 Tarefa 5 (skill /sworn:shortcuts): lista os comentarios de atalho do repositorio da pasta atual.
  *   node atalhos.js
  * Varre os arquivos que o git rastreia e os novos que ele nao ignora (fora `.git`, `node_modules` e o que o
  * .gitignore cobre), sem tocar em nada. Saida: o painel em texto; fora de repositorio git, o motivo e exit 1.

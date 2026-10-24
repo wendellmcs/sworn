@@ -31,7 +31,8 @@ cada uma dizendo a consequencia pratica e o custo.
 ## Antes de dizer que terminou
 
 Cole a saida de {{campo:provaDePronto}}. O que nao rodou se declara como nao rodado;
-silencio sobre uma verificacao equivale a dizer que ela passou.
+silencio sobre uma verificacao equivale a dizer que ela passou. Saida que mostra falha
+nao prova nada; teste instavel se corrige ou se remove, nunca se repete ate passar.
 
 ## O que este agente NAO faz
 

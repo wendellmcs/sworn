@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'uso.js');
 
 test('uso: projeto sem contadores diz que ainda nao ha dado', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-uso-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-uso-'));
   try {
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: 'utf8' });
     assert.strictEqual(r.status, 0);
@@ -20,10 +20,10 @@ test('uso: projeto sem contadores diz que ainda nao ha dado', () => {
 // Plano 083 (p4-30): valor que nao e numero no contadores.json nao entra no sort nem na soma; a linha diz que ele e
 // invalido, e o total e o dos numeros.
 test('083 T6 (p4-30): valor que nao e numero fica fora da soma e da ordem, e a linha diz por que', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-uso-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-uso-'));
   try {
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'contadores.json'),
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'),
       JSON.stringify({ texto: '3', nulo: null, bom: 5, outro: 2 }), 'utf8');
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: 'utf8' });
     assert.strictEqual(r.status, 0, r.stderr);
@@ -37,11 +37,11 @@ test('083 T6 (p4-30): valor que nao e numero fica fora da soma e da ordem, e a l
 });
 
 test('uso: lista os disparos em ordem decrescente', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-uso-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-uso-'));
   try {
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     fs.writeFileSync(
-      path.join(dir, '.claude', 'esquadro', 'contadores.json'),
+      path.join(dir, '.claude', 'sworn', 'contadores.json'),
       JSON.stringify({ fora_do_escopo: 40, fecho_sem_evidencia: 7, comando_destrutivo: 2 }),
       'utf8'
     );
@@ -55,10 +55,10 @@ test('uso: lista os disparos em ordem decrescente', () => {
 // Plano 091 T6: os contadores de ordem (ordem_<tipo>_<fase>) moram no mesmo arquivo, mas nao sao disparo de trava:
 // ficam fora da lista e do total; uma linha diz onde eles aparecem.
 test('091 T6: as chaves de ordem ficam fora da lista e do total das travas', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-uso-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-uso-'));
   try {
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'contadores.json'),
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'),
       JSON.stringify({ fora_do_escopo: 4, ordem_revisar_dada: 30, ordem_aprender_cumprida: 2 }), 'utf8');
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: 'utf8' });
     assert.strictEqual(r.status, 0, r.stderr);

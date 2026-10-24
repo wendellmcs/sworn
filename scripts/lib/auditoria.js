@@ -76,7 +76,7 @@ function lerSkills(cwd) {
   });
 }
 
-// D615 (L10 do censo da D612): as skills do proprio plugin, com o nome como o ambiente as lista (esquadro:<nome>).
+// D615 (L10 do censo da D612): as skills do proprio plugin, com o nome como o ambiente as lista (sworn:<nome>).
 // Entram so no cruzamento com as do projeto: o corpo delas carrega so quando chamadas, entao o peso nao as soma.
 const PASTA_DO_PLUGIN = path.join(__dirname, '..', '..', 'skills');
 
@@ -88,7 +88,7 @@ function lerSkillsDoPlugin() {
     try {
       const texto = fs.readFileSync(path.join(PASTA_DO_PLUGIN, nome, 'SKILL.md'), 'utf8');
       const m = texto.match(/^description:\s*(.+)$/im);
-      saida.push({ nome: 'esquadro:' + nome, descricao: m ? m[1] : '' });
+      saida.push({ nome: 'sworn:' + nome, descricao: m ? m[1] : '' });
     } catch (e) { /* pasta sem SKILL.md */ }
   }
   return saida;
@@ -201,19 +201,19 @@ function medirMemoria(caminho) {
 // Le o regras.md do projeto. Nunca cala: devolve a lista e o estado da leitura (chave `regras`, no
 // molde da `memoria`). Sem o arquivo (ENOENT) e "nao lidas", mas nao e erro: o projeto pode nao ter regras.
 function lerRegras(cwd) {
-  const relativo = '.claude/esquadro/regras.md';
+  const relativo = '.claude/sworn/regras.md';
   try {
-    const lista = regraLib.parseRegras(fs.readFileSync(path.join(cwd, '.claude', 'esquadro', 'regras.md'), 'utf8'));
+    const lista = regraLib.parseRegras(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'regras.md'), 'utf8'));
     return { lista: lista, estado: { lidas: true, total: lista.length } };
   } catch (e) {
     const codigo = (e && e.code) || 'ERRO';
     const motivo = codigo === 'ENOENT'
-      ? 'regras nao lidas: o projeto nao tem ' + relativo + '; as contradicoes entre regras nao foram conferidas (o /esquadro:init cria esse arquivo)'
+      ? 'regras nao lidas: o projeto nao tem ' + relativo + '; as contradicoes entre regras nao foram conferidas (o /sworn:init cria esse arquivo)'
       : (e && e.code
         ? 'regras nao lidas: nao consegui ler ' + relativo + ' (' + textoLib.causaDoErro(e) + ')'
         // F3-18: sem `code` o arquivo abriu; o que falhou foi o parseRegras, e "(ERRO)" escondia isso
         : 'regras nao lidas: regras.md ilegivel: ' + textoLib.causaDoErro(e)) +
-        '; as contradicoes entre regras nao foram conferidas. Confira o arquivo e rode /esquadro:auditar de novo';
+        '; as contradicoes entre regras nao foram conferidas. Confira o arquivo e rode /sworn:audit de novo';
     return { lista: [], estado: { lidas: false, causa: codigo, motivo: motivo } };
   }
 }

@@ -9,7 +9,7 @@ const agentes = require('../scripts/lib/agentes.js');
 function pastaTemporaria(t) {
   // Espaco E acento no caminho: e o caso normal desta maquina, e e o foco de
   // revisao 5. path.join nunca vira concatenacao de string por causa disto.
-  const p = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro projecao-'));
+  const p = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn projecao-'));
   t.after(() => fs.rmSync(p, { recursive: true, force: true }));
   return p;
 }
@@ -162,7 +162,7 @@ const { spawnSync } = require('node:child_process');
 const GERADOR = path.join(__dirname, '..', 'scripts', 'gerar-agentes.js');
 
 function semearProjeto(raiz, degraus) {
-  const dir = path.join(raiz, '.claude', 'esquadro');
+  const dir = path.join(raiz, '.claude', 'sworn');
   fs.mkdirSync(dir, { recursive: true });
   const cfg = Object.assign({}, PROJETO_ENSAIO, {
     geradoEm: '2026-09-23',
@@ -234,7 +234,7 @@ test('agentes: agente que ja existe e PULADO, e o gerador diz que pulou', (t) =>
 test('agentes: escada desalinhada faz o gerador parar antes de escrever', (t) => {
   const raiz = pastaTemporaria(t);
   semearProjeto(raiz, DOIS);
-  const cfgPath = path.join(raiz, '.claude', 'esquadro', 'projeto.json');
+  const cfgPath = path.join(raiz, '.claude', 'sworn', 'projeto.json');
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
   cfg.agentes.escada = ['arquiteto', 'busca'];   // ordem trocada de proposito
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), 'utf8');
@@ -314,7 +314,7 @@ test('agentes: escalaPara do degrau do meio e o proximo; a do ultimo aponta quem
   assert.ok(secao('dev').includes('`arquiteto`'), secao('dev'));
   const topo = secao('arquiteto');
   assert.ok(topo.includes('quemDecide'), topo);
-  assert.ok(topo.includes('.claude/esquadro/projeto.json'), topo);
+  assert.ok(topo.includes('.claude/sworn/projeto.json'), topo);
   assert.ok(!topo.includes('`dev`') && !topo.includes('`busca`'), 'o ultimo degrau nao escala para agente: ' + topo);
   assert.ok(!topo.includes('dono'), 'D10: o valor de quemDecide nao e impresso: ' + topo);
 });

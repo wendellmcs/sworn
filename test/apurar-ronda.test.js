@@ -10,7 +10,7 @@ const RAIZ = path.join(__dirname, '..');
 
 /** D120: o apurador e CLI, nao hook. Ele descobre a sessao por --sessao ou pelo ambiente. */
 function rodar(args, cwd, tmp, extraEnv) {
-  const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp }, extraEnv || {});
+  const env = Object.assign({}, process.env, { SWORN_TMP: tmp }, extraEnv || {});
   delete env.CLAUDE_CODE_SESSION_ID;
   if (extraEnv && extraEnv.CLAUDE_CODE_SESSION_ID) env.CLAUDE_CODE_SESSION_ID = extraEnv.CLAUDE_CODE_SESSION_ID;
   const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'apurar-ronda.js')].concat(args || []), {
@@ -22,13 +22,13 @@ function rodar(args, cwd, tmp, extraEnv) {
 }
 
 function comTmp(fn) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-apurar-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-'));
   try { fn(base); } finally { fs.rmSync(base, { recursive: true, force: true }); }
 }
 
-/** Escreve <cwd>/.claude/esquadro/revisao/<n>/vereditos/<lente>.json */
+/** Escreve <cwd>/.claude/sworn/revisao/<n>/vereditos/<lente>.json */
 function gravarRonda(cwd, n, vereditos) {
-  const dir = path.join(cwd, '.claude', 'esquadro', 'revisao', String(n), 'vereditos');
+  const dir = path.join(cwd, '.claude', 'sworn', 'revisao', String(n), 'vereditos');
   fs.mkdirSync(dir, { recursive: true });
   for (const v of vereditos) {
     fs.writeFileSync(path.join(dir, v.lente + '.json'), JSON.stringify(v), 'utf8');
@@ -36,7 +36,7 @@ function gravarRonda(cwd, n, vereditos) {
 }
 
 function gravarMapa(cwd, n, mapa) {
-  const dir = path.join(cwd, '.claude', 'esquadro', 'revisao', String(n));
+  const dir = path.join(cwd, '.claude', 'sworn', 'revisao', String(n));
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify({ arquivo: 'src/a.js', mapa: mapa }), 'utf8');
 }
@@ -45,7 +45,7 @@ function gravarMapa(cwd, n, mapa) {
 // duas secas, e nao pelo teto. Fixture sintetica: os vereditos reais citam o produto.
 test('D244/defeito 3: pelo CLI, P1 so do lado antigo fecha por duas rondas secas', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-apurar-lado-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-lado-'));
     const vd = (arq, linha) => ({ lente: 'design', melhor: 'A',
       achados: [{ severidade: 'P1', arquivo: arq, linha: linha, descricao: 'valor cru' }] });
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
@@ -60,14 +60,14 @@ test('D244/defeito 3: pelo CLI, P1 so do lado antigo fecha por duas rondas secas
   });
 });
 
-// D475 (s99): o par R2/R3 da skills/padrao/SKILL.md reduzido. O lado novo e B na ronda 1 e A na ronda 2; a linha 3
+// D475 (s99): o par R2/R3 da skills/playbook/SKILL.md reduzido. O lado novo e B na ronda 1 e A na ronda 2; a linha 3
 // do lado novo foi reescrita entre as rondas, e a mesma lente cita P1 nela de novo: evidencia nova, molha.
 test('D475: pelo CLI, P1 na mesma linha do lado novo com texto reescrito entre rondas molha a ronda', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-apurar-reescrita-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-reescrita-'));
     const vd = (arq) => ({ lente: 'microcopy', melhor: 'A',
       achados: [{ severidade: 'P1', arquivo: arq, linha: 3, descricao: 'frase ambigua' }] });
-    const texto = (n, rotulo, linha3) => fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', String(n),
+    const texto = (n, rotulo, linha3) => fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', String(n),
       rotulo + '.txt'), 'um\ndois\n' + linha3 + '\nquatro\n', 'utf8');
     gravarMapa(cwd, 1, { A: 'HEAD', B: 'trabalho' });
     gravarRonda(cwd, 1, [vd('B.txt')]);
@@ -88,13 +88,13 @@ test('D475: pelo CLI, P1 na mesma linha do lado novo com texto reescrito entre r
 // falta". O resto do script so trata ENOENT como ausencia; os outros erros param com a causa (0.3.3, item 1).
 test('D475: pelo CLI, A.txt da ronda que existe e nao se le para com a causa; o que falta segue a conta de antes', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-apurar-ilegivel-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-ilegivel-'));
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [{ lente: 'microcopy', melhor: 'B',
       achados: [{ severidade: 'P2', arquivo: 'A.txt', linha: 1, descricao: 'x' }] }]);
     const r0 = rodar(['--sessao', 'falta'], cwd, tmp);
     assert.strictEqual(r0.status, 0, 'A.txt que falta tem de seguir a conta de antes: ' + r0.stdout);
-    fs.mkdirSync(path.join(cwd, '.claude', 'esquadro', 'revisao', '1', 'A.txt'));
+    fs.mkdirSync(path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'A.txt'));
     const r = rodar(['--sessao', 'ilegivel'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /ERRO: nao consegui ler .*1\/A\.txt/, r.stdout);
@@ -104,11 +104,11 @@ test('D475: pelo CLI, A.txt da ronda que existe e nao se le para com a causa; o 
 
 test('D244/defeito 3: pelo CLI, refutados.json sem prova para com erro', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-apurar-ref-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-ref-'));
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [{ lente: 'design', melhor: 'A',
       achados: [{ severidade: 'P1', arquivo: 'A.txt', linha: 3, descricao: 'x' }] }]);
-    fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'refutados.json'),
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'refutados.json'),
       JSON.stringify([{ ronda: 1, lente: 'design', arquivo: 'A.txt', linha: 3 }]), 'utf8');
     const r = rodar(['--sessao', 'ref'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
@@ -117,7 +117,7 @@ test('D244/defeito 3: pelo CLI, refutados.json sem prova para com erro', () => {
 });
 
 function contadorDe(tmp, sessionId) {
-  const arquivo = path.join(tmp, 'esquadro', sessionId + '.json');
+  const arquivo = path.join(tmp, 'sworn', sessionId + '.json');
   try {
     const s = JSON.parse(fs.readFileSync(arquivo, 'utf8'));
     return (s.contadores && s.contadores.revisao_fechada) || 0;
@@ -128,7 +128,7 @@ function contadorDe(tmp, sessionId) {
 
 test('apurar-ronda: revisao que encerra soma +1 em revisao_fechada (D21)', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-repo-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
     try {
       gravarRonda(cwd, 1, [{ lente: 'correcao', melhor: 'B', achados: [] }]);
       gravarRonda(cwd, 2, [{ lente: 'correcao', melhor: 'B', achados: [] }]);
@@ -145,13 +145,13 @@ test('apurar-ronda: revisao que encerra soma +1 em revisao_fechada (D21)', () =>
 // Plano 091 (#1, D559): o "aprovado" grava o arquivo revisado em revisadosAprovados, que o portao do commit le; o
 // teto (encerra sem aprovar) e a ronda que nao encerra nao gravam.
 function aprovadosDe(tmp, sessionId) {
-  try { return JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', sessionId + '.json'), 'utf8')).revisadosAprovados; }
+  try { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', sessionId + '.json'), 'utf8')).revisadosAprovados; }
   catch (e) { return undefined; }
 }
 
 test('091 #1: revisao aprovada grava o arquivo em revisadosAprovados; o teto nao grava', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-repo-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
     try {
       gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
       gravarRonda(cwd, 1, [{ lente: 'correcao', melhor: 'A', achados: [] }]);
@@ -164,7 +164,7 @@ test('091 #1: revisao aprovada grava o arquivo em revisadosAprovados; o teto nao
     } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
   });
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-repo-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
     try {
       for (const n of [1, 2, 3]) {
         gravarMapa(cwd, n, { A: 'trabalho', B: 'HEAD' });
@@ -182,7 +182,7 @@ test('091 #1: revisao aprovada grava o arquivo em revisadosAprovados; o teto nao
 
 test('apurar-ronda: revisao que NAO encerra nao conta (contador inflado e D14 sem base)', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-repo-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
     try {
       gravarRonda(cwd, 1, [{
         lente: 'correcao', melhor: 'A',
@@ -200,7 +200,7 @@ test('apurar-ronda: revisao que NAO encerra nao conta (contador inflado e D14 se
 
 test('apurar-ronda: sem --sessao, a sessao vem de CLAUDE_CODE_SESSION_ID', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-repo-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
     try {
       gravarRonda(cwd, 1, [{ lente: 'correcao', melhor: 'B', achados: [] }]);
       gravarRonda(cwd, 2, [{ lente: 'correcao', melhor: 'B', achados: [] }]);
@@ -218,16 +218,16 @@ test('apurar-ronda: sem --sessao, a sessao vem de CLAUDE_CODE_SESSION_ID', () =>
 // validacao e contava a ronda como seca. Um voto que falta nao e voto a favor.
 test('apurar-ronda: veredito ilegivel para a apuracao, nomeia o arquivo e nao conta a revisao', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-repo-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
     try {
       gravarRonda(cwd, 1, [{ lente: 'correcao', melhor: 'B', achados: [] }]);
       gravarRonda(cwd, 2, [{ lente: 'correcao', melhor: 'B', achados: [] }]);
-      fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', '2', 'vereditos', 'seguranca.json'),
+      fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', '2', 'vereditos', 'seguranca.json'),
         '{ "lente": "seguranca", "melhor": ', 'utf8');
       const r = rodar(['--sessao', 's1'], cwd, tmp);
       assert.strictEqual(r.status, 1, 'ronda com voto ilegivel nao pode sair 0: ' + r.stdout);
       assert.strictEqual(r.json, null, 'nao pode sair apuracao com um voto faltando: ' + r.stdout);
-      assert.ok(r.stdout.includes('.claude/esquadro/revisao/2/vereditos/seguranca.json'),
+      assert.ok(r.stdout.includes('.claude/sworn/revisao/2/vereditos/seguranca.json'),
         'a mensagem tem de nomear o arquivo ilegivel: ' + r.stdout);
       assert.ok(/regrave/i.test(r.stdout), 'a mensagem tem de dizer o que fazer: ' + r.stdout);
       assert.strictEqual(contadorDe(tmp, 's1'), 0, 'revisao que nao se apurou nao fecha');
@@ -243,11 +243,11 @@ test('apurar-ronda: veredito ilegivel para a apuracao, nomeia o arquivo e nao co
 // segue so descartado: um achado mal citado nao trava a ronda.
 test('apurar-ronda: o que se le mas nao e veredito para a apuracao, e diz por que', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-repo-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
     try {
       gravarRonda(cwd, 1, [{ lente: 'correcao', melhor: 'B', achados: [] }]);
       gravarRonda(cwd, 2, [{ lente: 'correcao', melhor: 'B', achados: [] }]);
-      const dir = path.join(cwd, '.claude', 'esquadro', 'revisao', '2', 'vereditos');
+      const dir = path.join(cwd, '.claude', 'sworn', 'revisao', '2', 'vereditos');
       const falsos = {
         'estados.json': ['{}', ['sem lente', 'melhor', 'achados']],
         'seguranca.json': ['null', ['nao e objeto']],
@@ -262,7 +262,7 @@ test('apurar-ronda: o que se le mas nao e veredito para a apuracao, e diz por qu
       assert.strictEqual(r.json, null, 'nao pode sair apuracao com um voto faltando: ' + r.stdout);
       const linhas = r.stdout.split('\n');
       for (const [f, [, motivos]] of Object.entries(falsos)) {
-        const l = linhas.find((x) => x.includes('.claude/esquadro/revisao/2/vereditos/' + f));
+        const l = linhas.find((x) => x.includes('.claude/sworn/revisao/2/vereditos/' + f));
         assert.ok(l && l.startsWith('ERRO:'), 'a mensagem tem de nomear ' + f + ': ' + r.stdout);
         const ditos = l.slice(l.indexOf(f) + f.length + 2).split('; ');
         assert.strictEqual(ditos.length, motivos.length, f + ' diz os seus motivos, e so eles: ' + l);
@@ -293,10 +293,10 @@ test('apurar-ronda: o que se le mas nao e veredito para a apuracao, e diz por qu
 // para a apuracao, como o voto que falta, e nao conta o fecho.
 test('L3 A3-03: pelo CLI, ronda 1 sem as lentes da faixa para com erro e nao fecha', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-repo-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
     try {
       for (const n of [1, 2]) {
-        const dir = path.join(cwd, '.claude', 'esquadro', 'revisao', String(n));
+        const dir = path.join(cwd, '.claude', 'sworn', 'revisao', String(n));
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify({ arquivo: 'src/a.js',
           mapa: { A: 'trabalho', B: 'HEAD' }, faixa: 'duas' }), 'utf8');
@@ -329,7 +329,7 @@ const P1_NOVO = { lente: 'correcao', melhor: 'A',
 
 /** Grava revisao/<id>/<n>/ com vereditos e mapa.json (A = trabalho, B = HEAD). */
 function gravarNaBase(cwd, id, arquivo, n, vereditos) {
-  const dir = path.join(cwd, '.claude', 'esquadro', 'revisao', id, String(n));
+  const dir = path.join(cwd, '.claude', 'sworn', 'revisao', id, String(n));
   fs.mkdirSync(path.join(dir, 'vereditos'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'mapa.json'),
     JSON.stringify({ arquivo: arquivo, mapa: { A: 'trabalho', B: 'HEAD' } }), 'utf8');
@@ -338,7 +338,7 @@ function gravarNaBase(cwd, id, arquivo, n, vereditos) {
 
 function comRepo(fn) {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-bases-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-bases-'));
     try { fn(cwd, tmp); } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
   });
 }
@@ -401,7 +401,7 @@ test('T2/item 11: sem --arquivo e com uma base so, a base e achada sozinha', () 
 
 test('T2/item 11: revisao/ sem nenhuma ronda da o erro de "nao ha revisao"', () => {
   comRepo((cwd, tmp) => {
-    fs.mkdirSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js'), { recursive: true });
+    fs.mkdirSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js'), { recursive: true });
     const r = rodar(['--sessao', 'zero'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /nao ha revisao/);
@@ -412,16 +412,16 @@ test('T2/item 11: veredito ilegivel ou invalido numa base nomeia o caminho da ba
   comRepo((cwd, tmp) => {
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]);
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [SECO]);
-    const dir = path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js', '2', 'vereditos');
+    const dir = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', '2', 'vereditos');
     fs.writeFileSync(path.join(dir, 'borda.json'), '{ "lente": ', 'utf8');
     const r = rodar(['--sessao', 'ile'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
-    assert.ok(r.stdout.includes('.claude/esquadro/revisao/src__a.js/2/vereditos/borda.json'), r.stdout);
+    assert.ok(r.stdout.includes('.claude/sworn/revisao/src__a.js/2/vereditos/borda.json'), r.stdout);
     fs.rmSync(path.join(dir, 'borda.json'));
     fs.writeFileSync(path.join(dir, 'escopo.json'), JSON.stringify({ lente: 'escopo', melhor: 'talvez', achados: [] }), 'utf8');
     const r2 = rodar(['--sessao', 'inv'], cwd, tmp);
     assert.strictEqual(r2.status, 1, r2.stdout);
-    assert.ok(r2.stdout.includes('.claude/esquadro/revisao/src__a.js/2/vereditos/escopo.json'), r2.stdout);
+    assert.ok(r2.stdout.includes('.claude/sworn/revisao/src__a.js/2/vereditos/escopo.json'), r2.stdout);
   });
 });
 
@@ -429,7 +429,7 @@ test('T2/item 11: o refutados.json e lido da base escolhida', () => {
   comRepo((cwd, tmp) => {
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [P1_NOVO]);
     gravarNaBase(cwd, 'src__b.js', 'src/b.js', 1, [SECO]);
-    fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js', 'refutados.json'),
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'refutados.json'),
       JSON.stringify([{ ronda: 1, lente: 'correcao', arquivo: 'A.txt', linha: 3, severidade: 'P1', prova: 'x.js:9' }]), 'utf8');
     const r = rodar(['--sessao', 'rf', '--arquivo', 'src/a.js'], cwd, tmp);
     assert.strictEqual(r.status, 0, r.stdout);
@@ -478,7 +478,7 @@ test('T2/item 12: apurar duas vezes uma revisao fechada conta revisao_fechada um
     assert.strictEqual(r1.json.revisaoFechadaContada.revisao_fechada, 1);
     assert.strictEqual(contadorDe(tmp, 'idem'), 1);
     const fechada = JSON.parse(fs.readFileSync(
-      path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+      path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
     assert.strictEqual(fechada.ronda, 2);
     assert.strictEqual(fechada.sessao, 'idem');
     assert.match(fechada.motivo, /duas rondas secas/);
@@ -510,7 +510,7 @@ test('T2/item 12: revisao que nao fecha nao grava fechada.json e a saida segue c
     const r = rodar(['--sessao', 'aberta'], cwd, tmp);
     assert.strictEqual(r.json.encerrar, false);
     assert.strictEqual(r.json.revisaoFechadaContada, null);
-    assert.strictEqual(fs.existsSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js', 'fechada.json')), false);
+    assert.strictEqual(fs.existsSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json')), false);
   });
 });
 
@@ -519,7 +519,7 @@ test('T2/item 12: no formato antigo o fechada.json fica na pasta plana e tambem 
     gravarRonda(cwd, 1, [SECO]);
     gravarRonda(cwd, 2, [SECO]);
     rodar(['--sessao', 'ant1'], cwd, tmp);
-    assert.ok(fs.existsSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'fechada.json')));
+    assert.ok(fs.existsSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'fechada.json')));
     const r = rodar(['--sessao', 'ant1'], cwd, tmp);
     assert.strictEqual(contadorDe(tmp, 'ant1'), 1);
     assert.strictEqual(r.json.revisaoFechadaContada.jaContada, true);
@@ -563,7 +563,7 @@ test('T4/r1: se a contagem do fecho falha, fechada.json nao e gravado e a saida 
     assert.strictEqual(r.status, 1, r.stdout);
     assert.ok(r.stdout.startsWith('ERRO:'), r.stdout);
     assert.match(r.stdout, /de novo/);
-    assert.strictEqual(fs.existsSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js', 'fechada.json')), false);
+    assert.strictEqual(fs.existsSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json')), false);
   });
 });
 
@@ -571,7 +571,7 @@ test('T4/r1: fechada.json ilegivel para com erro em vez de contar o fecho outra 
   comRepo((cwd, tmp) => {
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]);
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [SECO]);
-    fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js', 'fechada.json'), '{ "ronda": ', 'utf8');
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), '{ "ronda": ', 'utf8');
     const r = rodar(['--sessao', 'trunc'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.ok(r.stdout.includes('fechada.json'), r.stdout);
@@ -624,8 +624,8 @@ test('T4/r2: --arquivo sem caminho para com erro em vez de apurar sem filtro', (
 
 test('T4/r2: erro de leitura que nao e pasta ausente sai com a causa, e nao como "nao ha revisao"', () => {
   comRepo((cwd, tmp) => {
-    fs.mkdirSync(path.join(cwd, '.claude', 'esquadro', 'revisao'), { recursive: true });
-    fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__x.js'), 'nao e pasta', 'utf8');
+    fs.mkdirSync(path.join(cwd, '.claude', 'sworn', 'revisao'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__x.js'), 'nao e pasta', 'utf8');
     const r = rodar(['--sessao', 'enotdir', '--arquivo', 'src/x.js'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.ok(!r.stdout.includes('nao ha revisao'), r.stdout);
@@ -635,7 +635,7 @@ test('T4/r2: erro de leitura que nao e pasta ausente sai com a causa, e nao como
 
 test('T4/r2: sem revisao nenhuma, o erro diz como preparar uma', () => {
   comRepo((cwd, tmp) => {
-    fs.mkdirSync(path.join(cwd, '.claude', 'esquadro', 'revisao'), { recursive: true });
+    fs.mkdirSync(path.join(cwd, '.claude', 'sworn', 'revisao'), { recursive: true });
     const r = rodar(['--sessao', 'nada'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /nao ha revisao/);
@@ -644,19 +644,19 @@ test('T4/r2: sem revisao nenhuma, o erro diz como preparar uma', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// 0.3.2 (frente esquadro-p2-d258), T1: itens 2, 3, 4, 6 e 7 do apurar-ronda.js. O item 1 e o 5 sao
+// 0.3.2 (frente sworn-p2-d258), T1: itens 2, 3, 4, 6 e 7 do apurar-ronda.js. O item 1 e o 5 sao
 // a remocao de um catch que nada alcancava: nao ha comportamento novo para prender.
 // ---------------------------------------------------------------------------------------------
 
 function baseFechada(cwd) {
   gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]);
   gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [SECO]);
-  return path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js');
+  return path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js');
 }
 
-/** O estado da sessao que --sessao/ambiente aponta: nada pode ter sido escrito em ESQUADRO_TMP. */
+/** O estado da sessao que --sessao/ambiente aponta: nada pode ter sido escrito em SWORN_TMP. */
 function nadaGravadoEm(tmp) {
-  return !fs.existsSync(path.join(tmp, 'esquadro')) || fs.readdirSync(path.join(tmp, 'esquadro')).length === 0;
+  return !fs.existsSync(path.join(tmp, 'sworn')) || fs.readdirSync(path.join(tmp, 'sworn')).length === 0;
 }
 
 test('0.3.2/item 2: sessao fora de [a-zA-Z0-9_-] para com erro, sem contar e sem gravar fechada.json', () => {
@@ -701,11 +701,11 @@ test('0.3.2/item 3: --sessao sem valor para com erro, mesmo com o ambiente e mes
 test('0.3.2/item 4: refutados.json ilegivel cita o caminho da base e diz o que fazer', () => {
   comRepo((cwd, tmp) => {
     baseFechada(cwd);
-    fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js', 'refutados.json'), '[ { "ronda": ', 'utf8');
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'refutados.json'), '[ { "ronda": ', 'utf8');
     const r = rodar(['--sessao', 'refile'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.strictEqual(r.json, null, r.stdout);
-    assert.ok(r.stdout.includes('.claude/esquadro/revisao/src__a.js/refutados.json'), 'cita o caminho: ' + r.stdout);
+    assert.ok(r.stdout.includes('.claude/sworn/revisao/src__a.js/refutados.json'), 'cita o caminho: ' + r.stdout);
     assert.ok(/corrija/i.test(r.stdout) && /apague/i.test(r.stdout), 'diz o que fazer: ' + r.stdout);
     assert.match(r.stdout, /de novo/);
     assert.strictEqual(contadorDe(tmp, 'refile'), 0, 'nao apurou, nao conta');
@@ -733,7 +733,7 @@ test('0.3.2/item 7: o arquivo do mapa.json da pasta plana com barra invertida ou
   comRepo((cwd, tmp) => {
     gravarRonda(cwd, 1, [SECO]);
     gravarRonda(cwd, 2, [SECO]);
-    const mapa2 = path.join(cwd, '.claude', 'esquadro', 'revisao', '2', 'mapa.json');
+    const mapa2 = path.join(cwd, '.claude', 'sworn', 'revisao', '2', 'mapa.json');
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     for (const grafia of ['src\\a.js', './src/a.js', '.\\src\\a.js']) {
       fs.writeFileSync(mapa2, JSON.stringify({ arquivo: grafia, mapa: { A: 'trabalho', B: 'HEAD' } }), 'utf8');
@@ -748,10 +748,10 @@ test('0.3.2/item 7: o arquivo do mapa.json da pasta plana com barra invertida ou
 });
 
 // ---------------------------------------------------------------------------------------------
-// 0.3.3 (frente esquadro-033), T1: defeito 1 e itens 3 a 8 do apurar-ronda.js.
+// 0.3.3 (frente sworn-033), T1: defeito 1 e itens 3 a 8 do apurar-ronda.js.
 // ---------------------------------------------------------------------------------------------
 
-const REL_BASE = '.claude/esquadro/revisao/src__a.js';
+const REL_BASE = '.claude/sworn/revisao/src__a.js';
 
 // Defeito 1: o readdir dos vereditos zerava em qualquer erro, e a ronda sem voto contava como seca:
 // duas pastas sem veredito nenhum fechavam aprovado, placar 0/0/0.
@@ -773,7 +773,7 @@ test('0.3.3/item 1: ronda sem veredito (pasta ausente, vazia ou sem .json) para 
       assert.ok(r.stdout.startsWith('ERRO:'), r.stdout);
       assert.ok(r.stdout.includes(REL_BASE + '/2/vereditos/'), nome + ': cita a pasta da ronda: ' + r.stdout);
       assert.ok(!r.stdout.includes(REL_BASE + '/1/vereditos/'), nome + ': so a ronda que falta: ' + r.stdout);
-      assert.ok(/Passo 2 do \/esquadro:revisar/.test(r.stdout) && /apague/i.test(r.stdout) && /de novo/.test(r.stdout),
+      assert.ok(/Passo 2 do \/sworn:review/.test(r.stdout) && /apague/i.test(r.stdout) && /de novo/.test(r.stdout),
         nome + ': diz o que fazer: ' + r.stdout);
       assert.strictEqual(r.json, null, 'sem apuracao: ' + r.stdout);
       assert.strictEqual(fs.existsSync(path.join(base, 'fechada.json')), false, 'nao grava o fecho');
@@ -800,17 +800,17 @@ test('0.3.3/item 1: no formato antigo a ronda sem veredito tambem para, e pasta 
   comRepo((cwd, tmp) => {
     gravarRonda(cwd, 1, [SECO]);
     gravarRonda(cwd, 2, [SECO]);
-    const dir2 = path.join(cwd, '.claude', 'esquadro', 'revisao', '2', 'vereditos');
+    const dir2 = path.join(cwd, '.claude', 'sworn', 'revisao', '2', 'vereditos');
     fs.rmSync(dir2, { recursive: true, force: true });
     const r = rodar(['--sessao', 'ant-vazio'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
-    assert.ok(r.stdout.includes('.claude/esquadro/revisao/2/vereditos/'), r.stdout);
+    assert.ok(r.stdout.includes('.claude/sworn/revisao/2/vereditos/'), r.stdout);
     assert.ok(nadaGravadoEm(tmp));
     // vereditos que e arquivo, e nao pasta: nao e "ausente", e a causa do erro de leitura vai na mensagem
     fs.writeFileSync(dir2, 'nao e pasta', 'utf8');
     const e = rodar(['--sessao', 'ant-vazio'], cwd, tmp);
     assert.strictEqual(e.status, 1, e.stdout);
-    assert.ok(e.stdout.includes('.claude/esquadro/revisao/2/vereditos/') && /ENOTDIR/.test(e.stdout), e.stdout);
+    assert.ok(e.stdout.includes('.claude/sworn/revisao/2/vereditos/') && /ENOTDIR/.test(e.stdout), e.stdout);
     assert.ok(!/Passo 2/.test(e.stdout), 'nao e o caso da pasta ausente: ' + e.stdout);
     assert.ok(nadaGravadoEm(tmp));
   });
@@ -865,7 +865,7 @@ test('0.3.3/item 4: CLAUDE_CODE_SESSION_ID invalido nao para a ronda que nao fec
 // Item 5: a mesma grafia de arquivo. `a/../b` se normaliza; grafia que so difere na caixa e o mesmo
 // arquivo SE o disco disser (mesmo dev+ino), sem olhar a plataforma.
 function trocaMapaDaRonda2(cwd, arquivo) {
-  fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', '2', 'mapa.json'),
+  fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', '2', 'mapa.json'),
     JSON.stringify({ arquivo: arquivo, mapa: { A: 'trabalho', B: 'HEAD' } }), 'utf8');
 }
 
@@ -974,10 +974,10 @@ test('0.3.3/item 6: mapa.json presente e corrompido para com erro que cita o arq
   comRepo((cwd, tmp) => {
     gravarRonda(cwd, 1, [SECO]);
     gravarRonda(cwd, 2, [SECO]);
-    fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', '2', 'mapa.json'), '{ "arquivo": ', 'utf8');
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', '2', 'mapa.json'), '{ "arquivo": ', 'utf8');
     const r = rodar(['--sessao', 'mapa-plana', '--arquivo', 'src/a.js'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
-    assert.ok(r.stdout.includes('.claude/esquadro/revisao/2/mapa.json'), r.stdout);
+    assert.ok(r.stdout.includes('.claude/sworn/revisao/2/mapa.json'), r.stdout);
     assert.ok(nadaGravadoEm(tmp));
   });
 });
@@ -1035,7 +1035,7 @@ test('0.3.3/item 8: fecho sem sessao avisa que nao entrou no contador de nenhuma
 });
 
 // ---------------------------------------------------------------------------------------------
-// Frente esquadro-pendencias, T2 do plano dos 82: F2-01, F2-06, F2-13 e F3-22 do apurar-ronda.js.
+// Frente sworn-pendencias, T2 do plano dos 82: F2-01, F2-06, F2-13 e F3-22 do apurar-ronda.js.
 // ---------------------------------------------------------------------------------------------
 
 test('T2/F2-01: valor que comeca com "--" so e "sem valor" quando e flag do uso (--sessao, --arquivo)', () => {
@@ -1069,7 +1069,7 @@ test('T2/F2-06: na lista de "ha N revisoes", base com mapa.json ruim sai como "(
   comRepo((cwd, tmp) => {
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]);
     gravarNaBase(cwd, 'src__b.js', 'src/b.js', 1, [SECO]);
-    const mapaB = path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__b.js', '1', 'mapa.json');
+    const mapaB = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__b.js', '1', 'mapa.json');
     fs.writeFileSync(mapaB, '{ "arquivo": ', 'utf8');
     const r = rodar(['--sessao', 'f206'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
@@ -1121,8 +1121,8 @@ test('T2/F3-22: mapa.json que nao se le (e uma pasta) diz a causa traduzida', ()
 
 test('T2/F3-22: pasta de revisao que nao se le (ENOTDIR) diz a causa traduzida', () => {
   comRepo((cwd, tmp) => {
-    fs.mkdirSync(path.join(cwd, '.claude', 'esquadro', 'revisao'), { recursive: true });
-    fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__x.js'), 'nao e pasta', 'utf8');
+    fs.mkdirSync(path.join(cwd, '.claude', 'sworn', 'revisao'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__x.js'), 'nao e pasta', 'utf8');
     const r = rodar(['--sessao', 'f322b', '--arquivo', 'src/x.js'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
     assert.ok(r.stdout.includes('(parte do caminho nao e uma pasta (ENOTDIR))'), r.stdout);
@@ -1155,7 +1155,7 @@ function baseComPar(cwd) {
     achados: [{ severidade: 'P2', arquivo: 'A.txt', linha: 3, descricao: 'raiz' }] }]);
   gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [{ lente: 'borda', melhor: 'A',
     achados: [{ severidade: 'P1', arquivo: 'A.txt', linha: 5, descricao: 'repete a raiz' }] }]);
-  return path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js');
+  return path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js');
 }
 
 test('D387/mesmos.json: ausente deixa a saida de hoje e acrescenta paresCandidatos e provaveisMesmos', () => {
@@ -1349,7 +1349,7 @@ test('RV-01: mapa com identico:true conta os achados dos dois rotulos como do la
       achados: [{ severidade: 'P0', arquivo: arq, linha: linha, descricao: 'quebra' }] });
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [vd('B.txt', 10)]);
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [vd('B.txt', 20)]);
-    const base = path.join(cwd, '.claude', 'esquadro', 'revisao', 'src__a.js');
+    const base = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js');
     for (const n of ['1', '2']) {
       fs.writeFileSync(path.join(base, n, 'mapa.json'),
         JSON.stringify({ arquivo: 'src/a.js', mapa: { A: 'trabalho', B: 'HEAD' }, identico: true }), 'utf8');
@@ -1378,7 +1378,7 @@ test('RV-01: CONTROLE - mapa antigo, sem o campo, segue contando o rotulo HEAD c
 // D503/D508 (plano d503, Tarefa 3, E6-E8): ronda com referencia = mapa.json com `invertida`; a 2a passada mora em
 // <ronda>/invertida/vereditos e os textos dela em invertida/A.txt e invertida/B.txt (os lados trocados).
 function gravarRondaRef(cwd, n, mapa, pass1, pass2, textos) {
-  const dir = path.join(cwd, '.claude', 'esquadro', 'revisao', String(n));
+  const dir = path.join(cwd, '.claude', 'sworn', 'revisao', String(n));
   fs.mkdirSync(path.join(dir, 'invertida', 'vereditos'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify({ arquivo: 'src/a.js', mapa: mapa,
     referencia: { tipo: 'codigo', entradas: ['ref/topo.js'] }, invertida: { A: mapa.B, B: mapa.A } }), 'utf8');
@@ -1475,7 +1475,7 @@ test('D503 (revisao s49): mapa.json com `invertida` que nao e objeto esta corrom
     comTmp((tmp) => comTmp((cwd) => {
       gravarRondaRef(cwd, 1, { A: 'trabalho', B: 'HEAD' }, [vdRef('correcao', 'vence', 'perde')],
         [vdRef('correcao', 'perde', 'vence')]);
-      const arq = path.join(cwd, '.claude', 'esquadro', 'revisao', '1', 'mapa.json');
+      const arq = path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'mapa.json');
       const mj = JSON.parse(fs.readFileSync(arq, 'utf8'));
       mj.invertida = torta;
       fs.writeFileSync(arq, JSON.stringify(mj), 'utf8');
@@ -1492,7 +1492,7 @@ test('082 T6 (p2-34): `invertida` sem o lado de A e de B esta corrompido, com o 
     comTmp((tmp) => comTmp((cwd) => {
       gravarRondaRef(cwd, 1, { A: 'trabalho', B: 'HEAD' }, [vdRef('correcao', 'vence', 'perde')],
         [vdRef('correcao', 'perde', 'vence')]);
-      const arq = path.join(cwd, '.claude', 'esquadro', 'revisao', '1', 'mapa.json');
+      const arq = path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'mapa.json');
       const mj = JSON.parse(fs.readFileSync(arq, 'utf8'));
       mj.invertida = torta;
       fs.writeFileSync(arq, JSON.stringify(mj), 'utf8');
@@ -1510,17 +1510,17 @@ test('082 T6 (p2-28): vereditos com A e B trocados numa ronda sem `invertida` no
   comTmp((tmp) => comTmp((cwd) => {
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [{ lente: 'correcao', melhor: 'A', achados: [] }]);
-    const inv = path.join(cwd, '.claude', 'esquadro', 'revisao', '1', 'invertida', 'vereditos');
+    const inv = path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'invertida', 'vereditos');
     fs.mkdirSync(inv, { recursive: true });
     const r0 = rodar(['--sessao', 'ref9'], cwd, tmp);
     assert.strictEqual(r0.status, 0, 'pasta vazia nao perde voto: ' + r0.stdout);
     fs.writeFileSync(path.join(inv, 'correcao.json'), JSON.stringify(vdRef('correcao', 'vence', 'perde')), 'utf8');
     const r = rodar(['--sessao', 'ref9'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
-    assert.ok(r.stdout.includes('ERRO: a ronda 1 tem vereditos com A e B trocados em .claude/esquadro/revisao/1/invertida/vereditos/, ' +
+    assert.ok(r.stdout.includes('ERRO: a ronda 1 tem vereditos com A e B trocados em .claude/sworn/revisao/1/invertida/vereditos/, ' +
       'mas o mapa.json dela nao tem "invertida"'), r.stdout);
     assert.match(r.stdout, /prepare a ronda de novo/, r.stdout);
-    assert.match(r.stdout, /apague a pasta \.claude\/esquadro\/revisao\/1\/invertida\//, r.stdout);
+    assert.match(r.stdout, /apague a pasta \.claude\/sworn\/revisao\/1\/invertida\//, r.stdout);
   }));
 });
 
@@ -1529,14 +1529,14 @@ test('083 T5 (p5-5): invertida/vereditos que nao se le (e um arquivo) numa ronda
   comTmp((tmp) => comTmp((cwd) => {
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [{ lente: 'correcao', melhor: 'A', achados: [] }]);
-    const inv = path.join(cwd, '.claude', 'esquadro', 'revisao', '1', 'invertida');
+    const inv = path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'invertida');
     fs.mkdirSync(inv, { recursive: true });
     const r0 = rodar(['--sessao', 'ref10'], cwd, tmp);
     assert.strictEqual(r0.status, 0, 'invertida/ sem vereditos/ (ENOENT) nao perde voto: ' + r0.stdout);
     fs.writeFileSync(path.join(inv, 'vereditos'), 'nao e pasta', 'utf8');
     const r = rodar(['--sessao', 'ref10'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
-    assert.ok(r.stdout.includes('ERRO: nao consegui ler .claude/esquadro/revisao/1/invertida/vereditos/ ('), r.stdout);
+    assert.ok(r.stdout.includes('ERRO: nao consegui ler .claude/sworn/revisao/1/invertida/vereditos/ ('), r.stdout);
     assert.match(r.stdout, /ENOTDIR/, r.stdout);
   }));
 });
@@ -1546,7 +1546,7 @@ test('083 T5 (p5-5): invertida/vereditos que nao se le (e um arquivo) numa ronda
 test('083 T5 (p5-2): lente repetida sai uma vez e o veredito ilegivel da ordem normal e contado na mensagem', () => {
   comTmp((tmp) => comTmp((cwd) => {
     gravarRondaRef(cwd, 1, { A: 'trabalho', B: 'HEAD' }, [vdRef('borda', 'vence', 'perde')], []);
-    const vds = path.join(cwd, '.claude', 'esquadro', 'revisao', '1', 'vereditos');
+    const vds = path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'vereditos');
     fs.writeFileSync(path.join(vds, 'borda-2.json'), JSON.stringify(vdRef('borda', 'vence', 'perde')), 'utf8');
     fs.writeFileSync(path.join(vds, 'quebrado.json'), '{ nao e json', 'utf8');
     const r = rodar(['--sessao', 'ref11'], cwd, tmp);
@@ -1563,8 +1563,8 @@ test('D503: pelo CLI, veredito sem vsReferencia na ronda com referencia e veredi
       [vdRef('borda', 'vence', 'perde'), { lente: 'correcao', melhor: 'A', achados: [] }]);
     const r = rodar(['--sessao', 'ref5'], cwd, tmp);
     assert.strictEqual(r.status, 1, r.stdout);
-    assert.match(r.stdout, /veredito invalido em \.claude\/esquadro\/revisao\/1\/vereditos\/correcao\.json: .*vsReferencia/);
-    assert.match(r.stdout, /veredito invalido em \.claude\/esquadro\/revisao\/1\/invertida\/vereditos\/correcao\.json: .*vsReferencia/);
+    assert.match(r.stdout, /veredito invalido em \.claude\/sworn\/revisao\/1\/vereditos\/correcao\.json: .*vsReferencia/);
+    assert.match(r.stdout, /veredito invalido em \.claude\/sworn\/revisao\/1\/invertida\/vereditos\/correcao\.json: .*vsReferencia/);
   }));
 });
 
@@ -1584,7 +1584,7 @@ test('D503: pelo CLI, arquivo identico ao HEAD conta os dois lados como trabalho
   comTmp((tmp) => comTmp((cwd) => {
     // a invertida gravada diz { A: HEAD, B: trabalho }; com identico, os dois sao trabalho e vale o pior (o A perde)
     gravarRondaRef(cwd, 1, { A: 'trabalho', B: 'HEAD' }, [vdRef('correcao', 'vence', 'vence')], [vdRef('correcao', 'perde', 'vence')]);
-    const arq = path.join(cwd, '.claude', 'esquadro', 'revisao', '1', 'mapa.json');
+    const arq = path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'mapa.json');
     const mj = JSON.parse(fs.readFileSync(arq, 'utf8'));
     mj.identico = true;
     fs.writeFileSync(arq, JSON.stringify(mj), 'utf8');
@@ -1607,7 +1607,7 @@ test('D503 E5: pelo CLI, lacuna sem arquivo:linha sai em vereditosDescartados', 
 // D503 (plano d503, Tarefa 5): o portao de fecho le se uma revisao CONTRA A REFERENCIA fechou na sessao. O apurar
 // conta esse fecho num balde proprio, alem do revisao_fechada; a revisao sem referencia nao entra nele.
 function contadoresDe(tmp, sessionId) {
-  return JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', sessionId + '.json'), 'utf8')).contadores || {};
+  return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', sessionId + '.json'), 'utf8')).contadores || {};
 }
 
 test('D503 T5: revisao com referencia que fecha conta revisao_referencia_fechada (e revisao_fechada), uma vez so', () => {

@@ -1,6 +1,6 @@
 ---
-name: leitor
-description: Agente de leitura do /esquadro:paralelo. Faz uma tarefa so de leitura (ler, buscar, contar, rodar comando que nao muda nada) e devolve o resultado com a evidencia. Abre leve, sem as instrucoes do projeto. Use dentro do /esquadro:paralelo, nunca sozinho.
+name: reader
+description: Agente de leitura do /sworn:parallel. Faz uma tarefa so de leitura (ler, buscar, contar, rodar comando que nao muda nada) e devolve o resultado com a evidencia. Abre leve, sem as instrucoes do projeto. Use dentro do /sworn:parallel, nunca sozinho.
 tools: Read, Grep, Glob, Bash, PowerShell
 omitClaudeMd: true
 ---

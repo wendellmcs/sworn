@@ -1,15 +1,23 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const RAIZ = path.join(__dirname, '..');
+// T2 (D623): sem cwd na entrada a abertura usa a pasta do processo. Na do repositorio ela subia ate o projeto real
+// (e migrava a pasta dele) e ligava o vigia da home real; aqui roda numa pasta vazia, com sessoes e vigia dentro dela.
+const VAZIA = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-io-'));
+test.after(() => fs.rmSync(VAZIA, { recursive: true, force: true }));
 
 function rodar(script, entrada) {
   return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
+    cwd: VAZIA,
     input: typeof entrada === 'string' ? entrada : JSON.stringify(entrada),
-    encoding: 'utf8'
+    encoding: 'utf8',
+    env: Object.assign({}, process.env, { SWORN_TMP: path.join(VAZIA, '_sessoes'), SWORN_VIGIA: path.join(VAZIA, '_vigia') })
   });
 }
 

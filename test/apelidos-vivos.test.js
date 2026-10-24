@@ -10,14 +10,14 @@ const config = require('../scripts/lib/config.js');
 
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'provar-apelidos.js');
-const PROVA = path.join('.claude', 'esquadro', 'apelidos-vivos.json');
+const PROVA = path.join('.claude', 'sworn', 'apelidos-vivos.json');
 
 const MAPA = { agentes: {
   escada: ['busca', 'arquiteto'],
   degraus: [{ agente: 'busca', apelido: 'barato' }, { agente: 'arquiteto', apelido: 'caro' }]
 } };
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro vivos-')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn vivos-')); }
 
 test('apelidos vivos: sem sondagem, tudo fica NAO PROVADO - e isso nao reprova', () => {
   const c = apelidos.cobertura(MAPA, null);
@@ -96,7 +96,7 @@ test('apelidos vivos: sondagem malformada nao vira prova nem estoura', () => {
   }
 });
 
-// Decisao 29: o `inspetor` guarda um apelido DENTRO do plugin. Ele entra na
+// Decisao 29: o `inspector` guarda um apelido DENTRO do plugin. Ele entra na
 // mesma conta que os apelidos do projeto - e sem repetir.
 test('apelidos vivos: o apelido que o PLUGIN declara entra na conta, sem repetir (decisao 29)', () => {
   const c = apelidos.cobertura(MAPA, null,
@@ -149,8 +149,8 @@ test('apelidos vivos: agentesDoPlugin - sem model: nao vira apelido, sem frontma
 });
 
 function semear(dir, mapa) {
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'),
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
     JSON.stringify(Object.assign({ versaoConfig: 1 }, mapa), null, 2), 'utf8');
   return dir;
 }
@@ -227,7 +227,7 @@ test('apelidos vivos: --plugin monta o roteiro so do plugin, sem pedir projeto.j
  * A ASSERCAO SOBRE ESTE AMBIENTE. E a unica que o skip cala.
  * Este repositorio e o do PLUGIN: nao tem .claude/ e nunca tera apelidos do
  * projeto, porque apelido nasce no projeto da pessoa (decisao 12). Mas o
- * plugin publica um apelido seu - o do `inspetor`, decisao 29 - e aqui e
+ * plugin publica um apelido seu - o do `inspector`, decisao 29 - e aqui e
  * ele que se sonda. Onde o plugin estiver instalado, este teste roda de
  * verdade - e reprova alto.
  * ------------------------------------------------------------------------- */

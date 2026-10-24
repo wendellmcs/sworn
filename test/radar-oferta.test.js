@@ -1,7 +1,7 @@
 'use strict';
 // Plano do radar, T3b (D611): o radar do usuario se oferece sozinho quando o pedido e de melhoria, sugestao ou
 // funcao nova. Molde: correcao.test.js. O detector e conservador de proposito: perder uma oferta e so nao oferecer
-// (o dono ainda roda /esquadro:radar); oferecer em relato de bug ou em pedido de commit e ruido. A fiacao no gancho
+// (o dono ainda roda /sworn:radar); oferecer em relato de bug ou em pedido de commit e ruido. A fiacao no gancho
 // (1 vez por sessao, chave, repo do plugin, subagente) esta em fiacao.test.js.
 const test = require('node:test');
 const assert = require('node:assert');
@@ -82,7 +82,7 @@ test('radar-oferta: a instrucao e ASCII puro (sai por hook) e traz o combinado',
     t.indexOf('0,30 a 0,60') === -1, 'o custo medido da busca por tema');
   assert.ok(t.indexOf('agora nao') !== -1, 'a opcao de adiar');
   assert.ok(t.indexOf('"oferecerRadar": false') !== -1, 'a opcao de nunca mais, com a chave');
-  assert.ok(t.indexOf('/esquadro:radar') !== -1, 'qual comando roda com o sim');
+  assert.ok(t.indexOf('/sworn:radar') !== -1, 'qual comando roda com o sim');
   assert.match(t, /busca por tema|tema deste pedido/, 'projetos parecidos com o tema do pedido');
   assert.match(t, /Nada roda sem o sim/);
   assert.match(t, /ignore/, 'quando nao e pedido de melhoria, ignora');

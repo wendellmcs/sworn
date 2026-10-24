@@ -1,5 +1,5 @@
 'use strict';
-// Bloco M / M2 (D435): o painel do plano em texto - o que o comando /esquadro-plano do mod responde
+// Bloco M / M2 (D435): o painel do plano em texto - o que o comando /sworn-plan do mod responde
 // (o chat da extensao do VS Code nao desenha mod). Mostra antes, a vista, o que o portao de fecho so
 // barra no fim: etapa com passo aberto nao esta concluida.
 const test = require('node:test');
@@ -41,13 +41,13 @@ test('plano 082 S5: plano concluido sai igual a cena do mock', () => {
   const plano = ['### Tarefa 1: chave `referencias` (0.8.0)', '### Tarefa 2: pacote com referência (0.8.0)',
     '### Tarefa 3: veredito e apuração (0.8.0)', '### Tarefa 4: textos e fecho da 0.8.0',
     '### Tarefa 5: gatilho automático (0.8.1)', '### Tarefa 6: init e fecho da 0.8.1'].join('\n- [x] a\n') + '\n- [x] a';
-  const arquivo = 'esquadro/.context/plans/2026-10-13-esquadro-pendencias-d503-plano.md';
-  const t = planoLib.painelTexto({ arquivo: arquivo, frente: 'esquadro-pendencias', sessoesDoPlano: 7 },
+  const arquivo = 'sworn/.context/plans/2026-10-13-sworn-pendencias-d503-plano.md';
+  const t = planoLib.painelTexto({ arquivo: arquivo, frente: 'sworn-pendencias', sessoesDoPlano: 7 },
     planoLib.parseItens(plano));
   assert.strictEqual(t, [
     '**Plano d503 — concluído (6 de 6 tarefas)**',
     '',
-    'frente esquadro-pendencias · ' + arquivo,
+    'frente sworn-pendencias · ' + arquivo,
     '',
     '- [x] Tarefa 1: chave `referencias` (0.8.0)',
     '- [x] Tarefa 2: pacote com referência (0.8.0)',
@@ -93,7 +93,7 @@ test('painelTexto: plano sem cabecalho "Tarefa N:" diz que nao consegue contar, 
 });
 
 test('plano.js --texto: le o plano ativo do projeto e imprime o painel', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-'));
   try {
     fs.writeFileSync(path.join(base, 'plano.md'), PLANO);
     planoLib.abrir(base, 'plano.md', 's1');
@@ -104,7 +104,7 @@ test('plano.js --texto: le o plano ativo do projeto e imprime o painel', () => {
 });
 
 test('plano.js --texto: sem plano ativo, saida 0 e o texto de como abrir', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-'));
   try {
     const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'plano.js'), '--texto'], { cwd: base, encoding: 'utf8' });
     assert.strictEqual(r.status, 0, r.stderr);
@@ -114,19 +114,19 @@ test('plano.js --texto: sem plano ativo, saida 0 e o texto de como abrir', () =>
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'plano.js');
 function painelEm(conteudoDoAtivo, args) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-'));
   try {
     fs.writeFileSync(path.join(base, 'plano.md'), PLANO);
     if (conteudoDoAtivo !== null) {
-      fs.mkdirSync(path.join(base, '.claude', 'esquadro'), { recursive: true });
-      fs.writeFileSync(path.join(base, '.claude', 'esquadro', 'plano-ativo.json'), conteudoDoAtivo);
+      fs.mkdirSync(path.join(base, '.claude', 'sworn'), { recursive: true });
+      fs.writeFileSync(path.join(base, '.claude', 'sworn', 'plano-ativo.json'), conteudoDoAtivo);
     }
     return spawnSync(process.execPath, [SCRIPT].concat(args || ['--texto']), { cwd: base, encoding: 'utf8' });
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 }
 
 // D442/3 (M-8/M-10/M-14 e o print do dono na s70): sem plano, o painel mandava rodar
-// `node <pasta do plugin esquadro>/scripts/plano.js` - o dono nao sabe que pasta e essa. O script sabe onde esta.
+// `node <pasta do plugin sworn>/scripts/plano.js` - o dono nao sabe que pasta e essa. O script sabe onde esta.
 test('D442/3: sem plano ativo, o painel diz o caminho real do plano.js, entre aspas', () => {
   const r = painelEm(null);
   assert.strictEqual(r.status, 0, r.stderr);
@@ -134,9 +134,9 @@ test('D442/3: sem plano ativo, o painel diz o caminho real do plano.js, entre as
   // Plano 082 (S5): o comando vai entre crases - copiavel, e o Markdown nao le <caminho do plano> como tag
   assert.ok(r.stdout.indexOf('`node "' + SCRIPT + '" --abrir <caminho do plano>`') !== -1, r.stdout);
   // caminho que nao e ASCII (R5) ou que o shell reinterpretaria: volta ao marcador, sem inventar
-  assert.ok(/<pasta do plugin esquadro>/.test(planoLib.painelTexto(null, [], 'C:/Usuários/zé/plano.js')));
-  assert.ok(/<pasta do plugin esquadro>/.test(planoLib.painelTexto(null, [], '/tmp/$x/plano.js')));
-  assert.ok(/<pasta do plugin esquadro>/.test(planoLib.painelTexto(null, [])));
+  assert.ok(/<pasta do plugin sworn>/.test(planoLib.painelTexto(null, [], 'C:/Usuários/zé/plano.js')));
+  assert.ok(/<pasta do plugin sworn>/.test(planoLib.painelTexto(null, [], '/tmp/$x/plano.js')));
+  assert.ok(/<pasta do plugin sworn>/.test(planoLib.painelTexto(null, [])));
 });
 
 // D442/10 (M-28): o --texto nao caia (conferido: saida 0 em 10 formas de arquivo torto), mas DIZIA "nenhum plano
@@ -149,7 +149,7 @@ test('D442/10: plano-ativo.json com BOM vale; JSON quebrado diz que existe mas n
     const r = painelEm(torto);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(!/nenhum plano ativo/i.test(r.stdout), torto + ' -> ' + r.stdout);
-    assert.ok(/^O arquivo \.claude\/esquadro\/plano-ativo\.json existe, mas não se lê/.test(r.stdout), torto + ' -> ' + r.stdout);
+    assert.ok(/^O arquivo \.claude\/sworn\/plano-ativo\.json existe, mas não se lê/.test(r.stdout), torto + ' -> ' + r.stdout);
     assert.ok(LIMPO.test(r.stdout) && semTagSolta(r.stdout), JSON.stringify(r.stdout));
   }
 });
@@ -157,7 +157,7 @@ test('D442/10: plano-ativo.json com BOM vale; JSON quebrado diz que existe mas n
 // D442/9 (M-23/M-24): o painel em texto ja nao contava tarefa sem caixa como feita (D436), mas a saida JSON
 // do plano.js (sem --texto) contava: `concluidas = tarefas - abertas`.
 test('D442/9: plano.js (JSON) nao conta tarefa sem caixa como concluida e diz quantas sao', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-'));
   try {
     fs.writeFileSync(path.join(base, 'plano.md'), '### Tarefa 1: A\n- [x] um\n### Tarefa 2: B\nsem caixas\n');
     planoLib.abrir(base, 'plano.md', 's1');
@@ -170,29 +170,29 @@ test('D442/9: plano.js (JSON) nao conta tarefa sem caixa como concluida e diz qu
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 
-// D476 (Tarefa 4 da 0.7.1): nada chamava `plano.js --abrir`, entao o /esquadro-plano dizia "nenhum plano ativo"
+// D476 (Tarefa 4 da 0.7.1): nada chamava `plano.js --abrir`, entao o /sworn-plan dizia "nenhum plano ativo"
 // numa sessao que trabalhava num plano. Sem plano-ativo.json, o plano vem da frente vinculada: o ULTIMO
 // "Plano: <caminho>" do Objetivo do arquivo da frente. Sem vinculo: uma frente com plano no disco -> ela.
 function projetoComFrentes(opcoes) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-frente-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-frente-'));
   const tmp = path.join(base, '_tmp');
-  fs.mkdirSync(path.join(base, '.claude', 'esquadro', 'escopos'), { recursive: true });
+  fs.mkdirSync(path.join(base, '.claude', 'sworn', 'escopos'), { recursive: true });
   fs.writeFileSync(path.join(base, 'plano.md'), opcoes.plano != null ? opcoes.plano : PLANO);
   fs.writeFileSync(path.join(base, 'velho.md'), '### Tarefa 1: Velha\n- [ ] nada\n');
   // D502: o escopo.md da raiz (o escopo em vigor da sessao sem vinculo)
   if (opcoes.escopo != null) {
-    fs.writeFileSync(path.join(base, '.claude', 'esquadro', 'escopo.md'), '# Escopo\n**Objetivo:** ' + opcoes.escopo + '\n## Dentro\n- x/**\n');
+    fs.writeFileSync(path.join(base, '.claude', 'sworn', 'escopo.md'), '# Escopo\n**Objetivo:** ' + opcoes.escopo + '\n## Dentro\n- x/**\n');
   }
   for (const nome of Object.keys(opcoes.frentes || {})) {
-    fs.writeFileSync(path.join(base, '.claude', 'esquadro', 'escopos', nome + '.md'),
+    fs.writeFileSync(path.join(base, '.claude', 'sworn', 'escopos', nome + '.md'),
       '# Escopo\n**Objetivo:** ' + opcoes.frentes[nome] + '\n## Dentro\n- x/**\n');
   }
   if (opcoes.vinculo) {
-    fs.mkdirSync(path.join(tmp, 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(tmp, 'esquadro', 's-frente.json'), JSON.stringify({ frente: opcoes.vinculo }));
+    fs.mkdirSync(path.join(tmp, 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'sworn', 's-frente.json'), JSON.stringify({ frente: opcoes.vinculo }));
   }
   if (opcoes.ativo) planoLib.abrir(base, opcoes.ativo, 's1');
-  const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+  const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.CLAUDE_SESSION_ID;
   try {
@@ -226,7 +226,7 @@ test('D502: as sessoes gastas vem das marcas do PLANO, nao das 40 do Objetivo da
     'tarefa feita = 2 sessões / 2 feitas)') !== -1, r.stdout);
 });
 
-const DO_ESCOPO = 'anotado no escopo desta sessão (.claude/esquadro/escopo.md) · velho.md';
+const DO_ESCOPO = 'anotado no escopo desta sessão (.claude/sworn/escopo.md) · velho.md';
 
 test('D502: sessao sem vinculo le o escopo.md da raiz antes das frentes', () => {
   const r = projetoComFrentes({ escopo: 'APP. Plano: velho.md', frentes: { so: 'outra frente. Plano: plano.md' } });
@@ -246,18 +246,18 @@ test('D502: a forma que o escopo da raiz ja escreve, plano `caminho.md` (minuscu
 });
 
 test('R1 D502: escopo.md da raiz que nao se le e dito; Plano: dele que nao existe no disco nao cai noutra frente', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-raiz-'));
-  const env = Object.assign({}, process.env, { ESQUADRO_TMP: path.join(base, '_tmp') });
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-raiz-'));
+  const env = Object.assign({}, process.env, { SWORN_TMP: path.join(base, '_tmp') });
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.CLAUDE_SESSION_ID;
   try {
-    fs.mkdirSync(path.join(base, '.claude', 'esquadro', 'escopo.md'), { recursive: true });
-    fs.mkdirSync(path.join(base, '.claude', 'esquadro', 'escopos'), { recursive: true });
+    fs.mkdirSync(path.join(base, '.claude', 'sworn', 'escopo.md'), { recursive: true });
+    fs.mkdirSync(path.join(base, '.claude', 'sworn', 'escopos'), { recursive: true });
     fs.writeFileSync(path.join(base, 'plano.md'), PLANO);
-    fs.writeFileSync(path.join(base, '.claude', 'esquadro', 'escopos', 'so.md'), '**Objetivo:** X. Plano: plano.md\n');
+    fs.writeFileSync(path.join(base, '.claude', 'sworn', 'escopos', 'so.md'), '**Objetivo:** X. Plano: plano.md\n');
     const r = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 'nada'], { cwd: base, encoding: 'utf8', env: env });
     assert.strictEqual(r.status, 0, r.stderr);
-    assert.ok(r.stdout.indexOf('Não consegui ler o escopo .claude/esquadro/escopo.md. Confira se ele é um arquivo') === 0, r.stdout);
+    assert.ok(r.stdout.indexOf('Não consegui ler o escopo .claude/sworn/escopo.md. Confira se ele é um arquivo') === 0, r.stdout);
     assert.ok(r.stdout.indexOf('frente so') === -1, r.stdout);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
   const p = projetoComFrentes({ escopo: 'APP. Plano: pendente.md', frentes: { so: 'X. Plano: plano.md' } });
@@ -265,7 +265,7 @@ test('R1 D502: escopo.md da raiz que nao se le e dito; Plano: dele que nao exist
   assert.ok(p.stdout.indexOf('frente so') === -1, p.stdout);
 });
 
-const SEM_VINCULO = 'frente so · plano.md · esta sessão não está ligada a ela; para ligar, edite .claude/esquadro/escopos/so.md';
+const SEM_VINCULO = 'frente so · plano.md · esta sessão não está ligada a ela; para ligar, edite .claude/sworn/escopos/so.md';
 
 test('D502: sem plano no escopo.md, cai na frente unica e diz que a sessao nao esta ligada a ela', () => {
   const r = projetoComFrentes({ escopo: 'APP sem plano anotado', frentes: { so: 'X. Plano: plano.md' } });
@@ -296,7 +296,7 @@ test('D476: sem vinculo e com VARIAS frentes com plano, o painel lista as frente
   assert.ok(LIMPO.test(r.stdout) && semTagSolta(r.stdout), JSON.stringify(r.stdout));
   assert.ok(r.stdout.indexOf('tarefas') === -1, r.stdout);
   assert.ok(r.stdout.indexOf('\n- fa: plano.md\n- fb: velho.md\n') !== -1, r.stdout);
-  assert.ok(r.stdout.indexOf('`.claude/esquadro/escopos/<frente>.md`') !== -1 && /--abrir/.test(r.stdout), r.stdout);
+  assert.ok(r.stdout.indexOf('`.claude/sworn/escopos/<frente>.md`') !== -1 && /--abrir/.test(r.stdout), r.stdout);
 });
 
 test('D476: plano-ativo.json presente manda, mesmo com a sessao vinculada a uma frente com outro plano', () => {
@@ -312,7 +312,7 @@ test('D476: frente vinculada sem "Plano:" no Objetivo diz isso, e nao pega o pla
   assert.ok(r.stdout.indexOf('tarefas') === -1, r.stdout);
   assert.ok(semTagSolta(r.stdout), r.stdout);
   assert.ok(r.stdout.indexOf('A frente f1 não declara plano no Objetivo (o parágrafo `**Objetivo:**` de ' +
-    '.claude/esquadro/escopos/f1.md). Anote no fim dele `Plano: <caminho>` (ou `` plano `<caminho>.md` ``, entre ' +
+    '.claude/sworn/escopos/f1.md). Anote no fim dele `Plano: <caminho>` (ou `` plano `<caminho>.md` ``, entre ' +
     'crases), ou abra um plano: `node ') === 0, r.stdout);
 });
 
@@ -459,19 +459,19 @@ test('R1: plano sem marca de sessao e com tarefa feita nao estima 0 sessoes', ()
 });
 
 test('R1: arquivo da frente vinculada que nao se le nao vira "nao tem Plano:"', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-ilegivel-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-ilegivel-'));
   try {
     const tmp = path.join(base, '_tmp');
-    fs.mkdirSync(path.join(base, '.claude', 'esquadro', 'escopos', 'f1.md'), { recursive: true });
-    fs.mkdirSync(path.join(tmp, 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(tmp, 'esquadro', 's-frente.json'), JSON.stringify({ frente: 'f1' }));
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+    fs.mkdirSync(path.join(base, '.claude', 'sworn', 'escopos', 'f1.md'), { recursive: true });
+    fs.mkdirSync(path.join(tmp, 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'sworn', 's-frente.json'), JSON.stringify({ frente: 'f1' }));
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     delete env.CLAUDE_CODE_SESSION_ID;
     delete env.CLAUDE_SESSION_ID;
     const r = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 's-frente'], { cwd: base, encoding: 'utf8', env: env });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.indexOf('não declara plano') === -1, r.stdout);
-    assert.ok(/^Não consegui ler o arquivo da frente f1 \(\.claude\/esquadro\/escopos\/f1\.md\)\. Confira se ele é um arquivo e se abre, e rode \/esquadro-plano de novo\.\n$/.test(r.stdout), r.stdout);
+    assert.ok(/^Não consegui ler o arquivo da frente f1 \(\.claude\/sworn\/escopos\/f1\.md\)\. Confira se ele é um arquivo e se abre, e rode \/sworn-plan de novo\.\n$/.test(r.stdout), r.stdout);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 
@@ -479,9 +479,9 @@ test('R1: varias frentes - o painel diz o que e frente e como ligar a sessao a u
   const t = planoLib.painelVariasFrentes([{ frente: 'fa', arquivo: 'a.md' }, { frente: 'fb', arquivo: 'b.md' }], null);
   assert.ok(LIMPO.test(t) && semTagSolta(t), JSON.stringify(t));
   assert.ok(t.indexOf('Nenhum plano ativo, e esta sessão não está ligada a nenhuma frente (frente = linha de trabalho com ' +
-    'arquivo próprio em .claude/esquadro/escopos/). Frentes com plano:\n\n- fa: a.md\n- fb: b.md\n\n') === 0, t);
-  assert.ok(t.indexOf('Para escolher, edite o arquivo da frente que você quer, `.claude/esquadro/escopos/<frente>.md` ' +
-    '(qualquer edição liga esta sessão a ela), e rode /esquadro-plano de novo. Ou abra um plano: `node ') !== -1, t);
+    'arquivo próprio em .claude/sworn/escopos/). Frentes com plano:\n\n- fa: a.md\n- fb: b.md\n\n') === 0, t);
+  assert.ok(t.indexOf('Para escolher, edite o arquivo da frente que você quer, `.claude/sworn/escopos/<frente>.md` ' +
+    '(qualquer edição liga esta sessão a ela), e rode /sworn-plan de novo. Ou abra um plano: `node ') !== -1, t);
 });
 
 // R2 da revisao cega D469 de scripts/lib/plano.js (sessao 101).
@@ -514,12 +514,12 @@ test('R2: estimativa com trabalho pela frente nunca sai 0 sessoes', () => {
 });
 
 test('R2: sem vinculo, frente cujo arquivo nao se le aparece na lista (e sozinha diz que nao se le)', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-ilegivel2-'));
-  const env = Object.assign({}, process.env, { ESQUADRO_TMP: path.join(base, '_tmp') });
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-ilegivel2-'));
+  const env = Object.assign({}, process.env, { SWORN_TMP: path.join(base, '_tmp') });
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.CLAUDE_SESSION_ID;
   try {
-    const escopos = path.join(base, '.claude', 'esquadro', 'escopos');
+    const escopos = path.join(base, '.claude', 'sworn', 'escopos');
     fs.mkdirSync(path.join(escopos, 'fa.md'), { recursive: true });
     const so = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 'nada'], { cwd: base, encoding: 'utf8', env: env });
     assert.ok(/^Não consegui ler o arquivo da frente fa/.test(so.stdout), so.stdout);
@@ -530,12 +530,12 @@ test('R2: sem vinculo, frente cujo arquivo nao se le aparece na lista (e sozinha
 });
 
 test('D476: plano.js --texto usa o leitor novo (plano no formato real, achado pela frente)', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-real-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-real-'));
   try {
-    fs.mkdirSync(path.join(base, '.claude', 'esquadro', 'escopos'), { recursive: true });
+    fs.mkdirSync(path.join(base, '.claude', 'sworn', 'escopos'), { recursive: true });
     fs.writeFileSync(path.join(base, 'real.md'), PLANO_REAL);
-    fs.writeFileSync(path.join(base, '.claude', 'esquadro', 'escopos', 'so.md'), '**Objetivo:** X. Plano: real.md\n');
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: path.join(base, '_tmp') });
+    fs.writeFileSync(path.join(base, '.claude', 'sworn', 'escopos', 'so.md'), '**Objetivo:** X. Plano: real.md\n');
+    const env = Object.assign({}, process.env, { SWORN_TMP: path.join(base, '_tmp') });
     delete env.CLAUDE_CODE_SESSION_ID;
     const r = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 'nada'], { cwd: base, encoding: 'utf8', env: env });
     assert.strictEqual(r.status, 0, r.stderr);
@@ -623,7 +623,7 @@ test('D509: [FEITO] na celula da etapa = feita; noutra celula nao conta; as caix
 test('D509: sem marca na tabela, deduz pela "ETAPA <id>" do Objetivo (anteriores feitas, ela em curso) e avisa', () => {
   const itens = planoLib.deduzirPeloEscopo(planoLib.parseItens(PLANO_TABELA), OBJETIVO_APP);
   assert.deepStrictEqual(itens.map(function (t) { return t.estado; }), ['feita', 'feita', 'feita', 'em curso', 'a fazer']);
-  const t = planoLib.painelTexto({ arquivo: 'plano.md', escopo: '.claude/esquadro/escopo.md' }, itens);
+  const t = planoLib.painelTexto({ arquivo: 'plano.md', escopo: '.claude/sworn/escopo.md' }, itens);
   assert.ok(LIMPO.test(t), JSON.stringify(t));
   assert.ok(t.indexOf('**Plano plano — 3 de 5 etapas**') === 0, t);
   assert.ok(t.indexOf('\n\nEstado pelo escopo: a tabela não tem [FEITO], então o painel segue o Objetivo do escopo (o ' +
@@ -660,7 +660,7 @@ test('D509: plano.js --texto mostra a tabela do plano do escopo com a deducao; p
   const r = projetoComFrentes({ escopo: OBJETIVO_APP, plano: PLANO_TABELA });
   assert.strictEqual(r.status, 0, r.stderr);
   assert.ok(LIMPO.test(r.stdout), JSON.stringify(r.stdout));
-  assert.ok(r.stdout.indexOf('\n\nanotado no escopo desta sessão (.claude/esquadro/escopo.md) · plano.md\n\n') !== -1, r.stdout);
+  assert.ok(r.stdout.indexOf('\n\nanotado no escopo desta sessão (.claude/sworn/escopo.md) · plano.md\n\n') !== -1, r.stdout);
   assert.ok(r.stdout.indexOf('3 de 5 etapas**') !== -1, r.stdout);
   assert.ok(r.stdout.indexOf('- [>] Etapa P3') !== -1, r.stdout);
   const aberto = projetoComFrentes({ escopo: OBJETIVO_APP, plano: PLANO_TABELA, ativo: 'plano.md' });
@@ -685,15 +685,15 @@ test('P2 #6: plano do Objetivo fora da pasta do projeto nao e lido, e o painel d
   assert.strictEqual(planoLib.dentroDoProjeto('/p', 'a/../x.md'), true);
   assert.strictEqual(planoLib.dentroDoProjeto('/p', '../x.md'), false);
   assert.strictEqual(planoLib.dentroDoProjeto('/p', 'a/../../x.md'), false);
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-fora-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-fora-'));
   const proj = path.join(base, 'proj');
-  const env = Object.assign({}, process.env, { ESQUADRO_TMP: path.join(base, '_tmp') });
+  const env = Object.assign({}, process.env, { SWORN_TMP: path.join(base, '_tmp') });
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.CLAUDE_SESSION_ID;
   try {
-    fs.mkdirSync(path.join(proj, '.claude', 'esquadro'), { recursive: true });
+    fs.mkdirSync(path.join(proj, '.claude', 'sworn'), { recursive: true });
     fs.writeFileSync(path.join(base, 'fora.md'), PLANO);
-    fs.writeFileSync(path.join(proj, '.claude', 'esquadro', 'escopo.md'), '**Objetivo:** X. Plano: ../fora.md\n');
+    fs.writeFileSync(path.join(proj, '.claude', 'sworn', 'escopo.md'), '**Objetivo:** X. Plano: ../fora.md\n');
     const r = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 'nada'], { cwd: proj, encoding: 'utf8', env: env });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(LIMPO.test(r.stdout) && semTagSolta(r.stdout), JSON.stringify(r.stdout));
@@ -705,14 +705,14 @@ test('P2 #6: plano do Objetivo fora da pasta do projeto nao e lido, e o painel d
 
 // Plano legivel cujo parse lanca: o `-r` troca a funcao da lib antes do plano.js rodar (o require e o mesmo objeto).
 function painelQueLanca(funcao) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-painel-lanca-'));
-  const env = Object.assign({}, process.env, { ESQUADRO_TMP: path.join(base, '_tmp') });
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-lanca-'));
+  const env = Object.assign({}, process.env, { SWORN_TMP: path.join(base, '_tmp') });
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.CLAUDE_SESSION_ID;
   try {
-    fs.mkdirSync(path.join(base, '.claude', 'esquadro'), { recursive: true });
+    fs.mkdirSync(path.join(base, '.claude', 'sworn'), { recursive: true });
     fs.writeFileSync(path.join(base, 'plano.md'), PLANO);
-    fs.writeFileSync(path.join(base, '.claude', 'esquadro', 'escopo.md'), '**Objetivo:** X. Plano: plano.md\n');
+    fs.writeFileSync(path.join(base, '.claude', 'sworn', 'escopo.md'), '**Objetivo:** X. Plano: plano.md\n');
     const pre = path.join(base, 'lanca.js');
     fs.writeFileSync(pre, 'require(' + JSON.stringify(path.join(__dirname, '..', 'scripts', 'lib', 'plano.js')) + ').' +
       funcao + ' = function () { throw new Error("quebrou"); };\n');
@@ -728,7 +728,7 @@ test('P2 #8 e #15: erro ao montar o painel de um plano lido nao vira "nao conseg
     // R1 da s43: a mensagem diz o que fazer agora. p7-11 (mock D532, S5): e o que copiar e onde colar.
     assert.strictEqual(r.stdout, 'Li o plano plano.md, mas o painel falhou ao contar as tarefas. Veja as tarefas direto ' +
       'no arquivo do plano. Para avisar o defeito, copie a mensagem entre parênteses (`quebrou`) e cole no chat com o ' +
-      'pedido "registrar defeito do esquadro".\n', funcao);
+      'pedido "registrar defeito do sworn".\n', funcao);
   }
 });
 

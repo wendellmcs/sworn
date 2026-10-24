@@ -1,6 +1,6 @@
 ---
-name: inspetor
-description: Inspetor cego de uma lente so. Recebe dois artefatos rotulados A e B, sem autoria, e devolve veredito em JSON com achado citando arquivo:linha. O default e reprovar. Use dentro de /esquadro:revisar, nunca sozinho.
+name: inspector
+description: Inspetor cego de uma lente so. Recebe dois artefatos rotulados A e B, sem autoria, e devolve veredito em JSON com achado citando arquivo:linha. O default e reprovar. Use dentro de /sworn:review, nunca sozinho.
 model: sonnet
 effort: medium
 maxTurns: 12

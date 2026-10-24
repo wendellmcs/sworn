@@ -9,9 +9,9 @@ const config = require('../scripts/lib/config.js');
 const BOM = String.fromCharCode(65279);
 
 function comProjeto(conteudo, fn) {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-config-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-config-'));
   try {
-    const pasta = path.join(cwd, '.claude', 'esquadro');
+    const pasta = path.join(cwd, '.claude', 'sworn');
     fs.mkdirSync(pasta, { recursive: true });
     if (conteudo !== null) {
       fs.writeFileSync(path.join(pasta, 'projeto.json'), conteudo, 'utf8');
@@ -23,31 +23,31 @@ function comProjeto(conteudo, fn) {
 }
 
 test('config: projeto.json com BOM carrega o objeto (D-A)', () => {
-  const json = JSON.stringify({ nome: 'esquadro', intocaveis: ['docs/plano-v1.md'] });
+  const json = JSON.stringify({ nome: 'sworn', intocaveis: ['docs/plano-v1.md'] });
   comProjeto(BOM + json, (cwd) => {
-    const bytes = fs.readFileSync(path.join(cwd, '.claude', 'esquadro', 'projeto.json'));
+    const bytes = fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'projeto.json'));
     assert.strictEqual(bytes.slice(0, 3).toString('hex'), 'efbbbf', 'arquivo de teste realmente tem BOM');
     const obj = config.carregarProjeto(cwd);
     assert.ok(obj, 'carregarProjeto nao devolveu null com BOM');
-    assert.strictEqual(obj.nome, 'esquadro');
+    assert.strictEqual(obj.nome, 'sworn');
     assert.deepStrictEqual(obj.intocaveis, ['docs/plano-v1.md']);
   });
 });
 
 test('config: projeto.json sem BOM carrega o mesmo objeto (controle)', () => {
-  const json = JSON.stringify({ nome: 'esquadro', intocaveis: ['docs/plano-v1.md'] });
+  const json = JSON.stringify({ nome: 'sworn', intocaveis: ['docs/plano-v1.md'] });
   comProjeto(json, (cwd) => {
-    const bytes = fs.readFileSync(path.join(cwd, '.claude', 'esquadro', 'projeto.json'));
+    const bytes = fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'projeto.json'));
     assert.notStrictEqual(bytes.slice(0, 3).toString('hex'), 'efbbbf', 'controle: este arquivo NAO tem BOM');
     const obj = config.carregarProjeto(cwd);
     assert.ok(obj);
-    assert.strictEqual(obj.nome, 'esquadro');
+    assert.strictEqual(obj.nome, 'sworn');
     assert.deepStrictEqual(obj.intocaveis, ['docs/plano-v1.md']);
   });
 });
 
 test('config: arquivo ausente devolve null', () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-config-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-config-'));
   try {
     assert.strictEqual(config.carregarProjeto(cwd), null);
   } finally {
@@ -70,9 +70,9 @@ test('config: cwd falsy devolve null', () => {
 // --- D124: carregarDesign nascia sem semBom, e a irmã dela 8 linhas acima ja tinha. ---
 
 function comDesign(conteudo, fn) {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-design-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-design-'));
   try {
-    const pasta = path.join(cwd, '.claude', 'esquadro');
+    const pasta = path.join(cwd, '.claude', 'sworn');
     fs.mkdirSync(pasta, { recursive: true });
     if (conteudo !== null) {
       fs.writeFileSync(path.join(pasta, 'design.json'), conteudo, 'utf8');
@@ -86,7 +86,7 @@ function comDesign(conteudo, fn) {
 test('config: design.json com BOM carrega o objeto (D124)', () => {
   const json = JSON.stringify({ cores: ['#ff6600'], antiReferencias: ['gradiente'] });
   comDesign(BOM + json, (cwd) => {
-    const bytes = fs.readFileSync(path.join(cwd, '.claude', 'esquadro', 'design.json'));
+    const bytes = fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'design.json'));
     assert.strictEqual(bytes.slice(0, 3).toString('hex'), 'efbbbf', 'arquivo de teste realmente tem BOM');
     const obj = config.carregarDesign(cwd);
     assert.ok(obj, 'null aqui DESLIGA o modulo de design em silencio, e nada avisa');
@@ -97,7 +97,7 @@ test('config: design.json com BOM carrega o objeto (D124)', () => {
 test('config: design.json sem BOM carrega o mesmo objeto (controle)', () => {
   const json = JSON.stringify({ cores: ['#ff6600'], antiReferencias: ['gradiente'] });
   comDesign(json, (cwd) => {
-    const bytes = fs.readFileSync(path.join(cwd, '.claude', 'esquadro', 'design.json'));
+    const bytes = fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'design.json'));
     assert.notStrictEqual(bytes.slice(0, 3).toString('hex'), 'efbbbf', 'controle: este arquivo NAO tem BOM');
     const obj = config.carregarDesign(cwd);
     assert.ok(obj);
@@ -112,17 +112,17 @@ test('config: design.json ausente devolve null - o modulo e opcional', () => {
   assert.strictEqual(config.carregarDesign(null), null);
 });
 
-// --- 0.3.3, item 27: o caminho de um arquivo de .claude/esquadro/ mora aqui, e o reinjecao o usa. ---
+// --- 0.3.3, item 27: o caminho de um arquivo de .claude/sworn/ mora aqui, e o reinjecao o usa. ---
 
-test("config: caminhoEmEsquadro monta <projeto>/.claude/esquadro/<nome> (0.3.3, item 27)", () => {
+test("config: caminhoEmSworn monta <projeto>/.claude/sworn/<nome> (0.3.3, item 27)", () => {
   const cwd = path.join(os.tmpdir(), "qualquer-projeto");
-  assert.strictEqual(config.caminhoEmEsquadro(cwd, "projeto.json"), path.join(cwd, ".claude", "esquadro", "projeto.json"));
-  assert.strictEqual(config.caminhoEmEsquadro(cwd, "regras.md"), path.join(cwd, ".claude", "esquadro", "regras.md"));
+  assert.strictEqual(config.caminhoEmSworn(cwd, "projeto.json"), path.join(cwd, ".claude", "sworn", "projeto.json"));
+  assert.strictEqual(config.caminhoEmSworn(cwd, "regras.md"), path.join(cwd, ".claude", "sworn", "regras.md"));
 });
 
-test("config: carregarProjeto le o arquivo que caminhoEmEsquadro aponta (0.3.3, item 27)", () => {
+test("config: carregarProjeto le o arquivo que caminhoEmSworn aponta (0.3.3, item 27)", () => {
   comProjeto(JSON.stringify({ nome: "a" }), (cwd) => {
-    assert.ok(fs.existsSync(config.caminhoEmEsquadro(cwd, "projeto.json")), "o caminho exportado e o do arquivo de verdade");
+    assert.ok(fs.existsSync(config.caminhoEmSworn(cwd, "projeto.json")), "o caminho exportado e o do arquivo de verdade");
     assert.strictEqual(config.carregarProjeto(cwd).nome, "a");
   });
 });

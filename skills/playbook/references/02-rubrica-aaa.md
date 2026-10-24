@@ -226,7 +226,7 @@ bloqueia a entrega, e bloquear por desenho aprovado é o dano que a lente existe
 | Contrato entre sistemas | as 10 de código |
 | Release | as 8 de tela e as 10 de código |
 
-Os números 1 a 8 são as lentes de tela desta rubrica. As de código são as do `/esquadro:revisar`,
+Os números 1 a 8 são as lentes de tela desta rubrica. As de código são as do `/sworn:review`,
 com a pergunta de cada uma em `LENTES`, em `scripts/lib/veredito.js` do plugin.
 
 **Não rodar as oito quando só quatro se aplicam.** Lente sem objeto devolve parecer vazio, e parecer

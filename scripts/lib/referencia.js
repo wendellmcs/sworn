@@ -4,7 +4,7 @@ const glob = require('./glob.js');
 const { TETO_DA_REFERENCIA } = require('./cegar.js');
 
 /**
- * Plano do REA, Tarefa 3 (D555, D580): a ficha do /esquadro:referencia. Logica pura: quem le o disco e grava e o
+ * Plano do REA, Tarefa 3 (D555, D580): a ficha do /sworn:reference. Logica pura: quem le o disco e grava e o
  * scripts/referencia.js. A skill sozinha nao garante o formato (escada do "menos codigo"): o grau e a origem de cada
  * achado, o estado do que ficou sem saber e o tamanho que cabe no R.txt (cegar.js) se conferem aqui, antes de a ficha
  * entrar na `referencias`. Forma (texto do mock, prints-rea/mock-rea.png, secao 2):
@@ -27,8 +27,8 @@ const CAB_CANDIDATOS = ['repo', 'licença', 'como entra', 'como melhora', 'esfor
 const ESFORCOS = ['p', 'm', 'g'];
 const VALORES = ['baixo', 'médio', 'medio', 'alto'];
 const VEREDITOS = ['adotar', 'inspiração', 'inspiracao', 'descartar'];
-// D580: uma ficha por tipo de entrega, em .claude/esquadro/referencias/<tipo>-<assunto>.md, sem subpasta.
-const RE_FICHA = /^\.claude\/esquadro\/referencias\/(tela|codigo|texto)-[^/]+\.md$/;
+// D580: uma ficha por tipo de entrega, em .claude/sworn/referencias/<tipo>-<assunto>.md, sem subpasta.
+const RE_FICHA = /^\.claude\/sworn\/referencias\/(tela|codigo|texto)-[^/]+\.md$/;
 
 /** As celulas de uma linha de tabela (`| a | b |`), sem as crases de volta do valor; `\|` nao separa. */
 function celulas(linha) {
@@ -121,7 +121,7 @@ function conferir(texto, opcoes) {
   }
   const bytes = Buffer.byteLength(String(texto), 'utf8');
   if (bytes > TETO_DA_REFERENCIA) {
-    problemas.push('a ficha tem ' + bytes + ' bytes e o /esquadro:revisar le inteira so ate 100 KB (' + TETO_DA_REFERENCIA + ')');
+    problemas.push('a ficha tem ' + bytes + ' bytes e o /sworn:review le inteira so ate 100 KB (' + TETO_DA_REFERENCIA + ')');
   }
   return Object.assign({
     problemas: problemas,
@@ -132,7 +132,7 @@ function conferir(texto, opcoes) {
   }, radar);
 }
 
-/** O tipo pelo caminho relativo a raiz do projeto (`\` ou `/`), ou null fora de .claude/esquadro/referencias/<tipo>-<assunto>.md. */
+/** O tipo pelo caminho relativo a raiz do projeto (`\` ou `/`), ou null fora de .claude/sworn/referencias/<tipo>-<assunto>.md. */
 function tipoDaFicha(rel) {
   const m = glob.normalizar(rel).match(RE_FICHA);
   return m ? m[1] : null;

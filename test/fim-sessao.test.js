@@ -1,6 +1,6 @@
 'use strict';
 // T11-2 (D366): o gancho SessionEnd apaga os arquivos de sessao parados ha mais de 7 dias em
-// %TEMP%/esquadro, e NUNCA o da sessao que fecha (o --resume mantem o session_id: apagar o da propria
+// %TEMP%/sworn, e NUNCA o da sessao que fecha (o --resume mantem o session_id: apagar o da propria
 // sessao perderia o vinculo da frente e refaria a foto do git status, o defeito da D46).
 const test = require('node:test');
 const assert = require('node:assert');
@@ -12,18 +12,18 @@ const { spawnSync } = require('node:child_process');
 const RAIZ = path.join(__dirname, '..');
 const DIA = 24 * 60 * 60 * 1000;
 
-/** estado.js carregado com ESQUADRO_TMP apontando para uma pasta nova (a raiz() le o ambiente a cada chamada). */
+/** estado.js carregado com SWORN_TMP apontando para uma pasta nova (a raiz() le o ambiente a cada chamada). */
 function comTmp(fn) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fim-sessao-'));
-  const antes = process.env.ESQUADRO_TMP;
-  process.env.ESQUADRO_TMP = base;
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fim-sessao-'));
+  const antes = process.env.SWORN_TMP;
+  process.env.SWORN_TMP = base;
   delete require.cache[require.resolve('../scripts/lib/estado.js')];
   const estado = require('../scripts/lib/estado.js');
   try {
-    fn(estado, path.join(base, 'esquadro'), base);
+    fn(estado, path.join(base, 'sworn'), base);
   } finally {
-    if (antes === undefined) delete process.env.ESQUADRO_TMP;
-    else process.env.ESQUADRO_TMP = antes;
+    if (antes === undefined) delete process.env.SWORN_TMP;
+    else process.env.SWORN_TMP = antes;
     fs.rmSync(base, { recursive: true, force: true });
   }
 }
@@ -294,14 +294,14 @@ function rodarFim(dir, entrada, bruto) {
     cwd: dir,
     encoding: 'utf8',
     input: bruto !== undefined ? bruto : JSON.stringify(entrada),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
   });
 }
 
 test('fim-sessao.js: roda com a entrada do SessionEnd, sai 0 calado, apaga o velho de outra sessao e poupa o da atual', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fim-script-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fim-script-'));
   try {
-    const pasta = path.join(dir, '_sessoes', 'esquadro');
+    const pasta = path.join(dir, '_sessoes', 'sworn');
     const agora = Date.now();
     const velhoOutro = criar(pasta, 'sessao-antiga.json', 10, agora);
     const velhoMeu = criar(pasta, 'sessao-hoje.json', 10, agora);
@@ -318,7 +318,7 @@ test('fim-sessao.js: roda com a entrada do SessionEnd, sai 0 calado, apaga o vel
 });
 
 test('fim-sessao.js: todas as razoes do SessionEnd saem 0', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fim-razoes-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fim-razoes-'));
   try {
     for (const reason of ['clear', 'resume', 'logout', 'prompt_input_exit', 'other', 'razao-nova']) {
       const r = rodarFim(dir, { session_id: 's-' + reason, cwd: dir, hook_event_name: 'SessionEnd', reason: reason });
@@ -328,9 +328,9 @@ test('fim-sessao.js: todas as razoes do SessionEnd saem 0', () => {
 });
 
 test('fim-sessao.js: entrada quebrada, vazia ou sem session_id sai 0 e nao apaga a sessao "sem-sessao"', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fim-quebrada-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fim-quebrada-'));
   try {
-    const pasta = path.join(dir, '_sessoes', 'esquadro');
+    const pasta = path.join(dir, '_sessoes', 'sworn');
     const semSessao = criar(pasta, 'sem-sessao.json', 20, Date.now());
     for (const bruto of ['', '   ', '{isso nao fecha', 'null', '42', '[]', '"texto"']) {
       const r = rodarFim(dir, null, bruto);
@@ -341,14 +341,14 @@ test('fim-sessao.js: entrada quebrada, vazia ou sem session_id sai 0 e nao apaga
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('fim-sessao.js: pasta de estado impossivel (ESQUADRO_TMP dentro de um arquivo) sai 0 sem erro', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fim-impossivel-'));
+test('fim-sessao.js: pasta de estado impossivel (SWORN_TMP dentro de um arquivo) sai 0 sem erro', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fim-impossivel-'));
   try {
     const arquivo = path.join(dir, 'e-um-arquivo');
     fs.writeFileSync(arquivo, 'x', 'utf8');
     const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'fim-sessao.js')], {
       cwd: dir, encoding: 'utf8', input: JSON.stringify({ session_id: 's', cwd: dir }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(arquivo, 'dentro') })
+      env: Object.assign({}, process.env, { SWORN_TMP: path.join(arquivo, 'dentro') })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(r.stderr, '', 'nao pode nem reclamar: ' + r.stderr);
@@ -356,7 +356,7 @@ test('fim-sessao.js: pasta de estado impossivel (ESQUADRO_TMP dentro de um arqui
 });
 
 test('fim-sessao.js: nao grava estado nenhum - nao cria a pasta nem o arquivo da sessao', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fim-sem-estado-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fim-sem-estado-'));
   try {
     const r = rodarFim(dir, { session_id: 'so-uma-vez', cwd: dir, hook_event_name: 'SessionEnd', reason: 'other' });
     assert.strictEqual(r.status, 0, r.stderr);

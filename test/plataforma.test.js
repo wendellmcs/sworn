@@ -18,7 +18,7 @@ const estado = require('../scripts/lib/estado.js');
 
 const RAIZ = path.join(__dirname, '..');
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro plataforma-')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn plataforma-')); }
 
 function semear(dir, rel, conteudo) {
   const alvo = path.join(dir, rel);
@@ -127,17 +127,17 @@ test('plataforma/injetavel: barra invertida vira barra normal, em qualquer siste
   assert.strictEqual(glob.casa('a/**/c.js', 'a\\b\\c.js'), true);
 });
 
-test('plataforma/injetavel: ESQUADRO_TMP manda em onde o estado e gravado', () => {
+test('plataforma/injetavel: SWORN_TMP manda em onde o estado e gravado', () => {
   const dir = pasta();
-  const antes = process.env.ESQUADRO_TMP;
-  process.env.ESQUADRO_TMP = dir;
+  const antes = process.env.SWORN_TMP;
+  process.env.SWORN_TMP = dir;
   try {
     const alvo = estado.caminhoSessao('s1');
-    assert.strictEqual(path.dirname(alvo), path.join(dir, 'esquadro'),
+    assert.strictEqual(path.dirname(alvo), path.join(dir, 'sworn'),
       'sem esta porta, a suite escreveria na pasta temporaria de verdade do sistema');
   } finally {
-    if (antes === undefined) delete process.env.ESQUADRO_TMP;
-    else process.env.ESQUADRO_TMP = antes;
+    if (antes === undefined) delete process.env.SWORN_TMP;
+    else process.env.SWORN_TMP = antes;
   }
 });
 

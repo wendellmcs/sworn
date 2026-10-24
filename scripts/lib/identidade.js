@@ -1,6 +1,6 @@
 'use strict';
 
-// Pedido 32 (plano dos pedidos 30-32, Tarefa 4): a identidade visual do esquadro, que ate aqui so existia desenhada
+// Pedido 32 (plano dos pedidos 30-32, Tarefa 4): a identidade visual do sworn, que ate aqui so existia desenhada
 // nos banners de assets/. Um acento so - o ambar - sobre os neutros do tema; o resto (texto, botao, barra) fica com o
 // desenho do motor. Na faixa do mod: a chave de tema `warning`, que segue o tema claro/escuro (D519), e no VS Code a
 // cor crua do banner escuro, porque la a chave nao pinta (D522, sonda da s53). O hooks/mods.tsx nao le Node e repete

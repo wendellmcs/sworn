@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'paralelo',
+  name: 'parallel',
   description: 'Roda tarefas independentes em paralelo, com teto de agentes, modelo barato e isolamento para quem edita',
   whenToUse: 'Tres ou mais tarefas que nao dependem umas das outras, depois que o usuario aceitou o custo',
   phases: [{ title: 'Tarefas', detail: 'um agente por tarefa, ate o teto' }],
@@ -94,9 +94,9 @@ function instrucao(t) {
 // parallel() troca a excecao por null e perde o porque: a excecao e pega aqui, por tarefa, com a mensagem.
 // agent() devolve null quando o usuario pula o agente ou ele morre por erro de API depois das tentativas.
 const SEM_RESPOSTA = 'o agente foi pulado ou morreu por erro de API, sem resposta'
-// Quem so le abre no agente leve do plugin (agents/leitor.md: sem CLAUDE.md, sem lista de skills, sem Edit/Write);
+// Quem so le abre no agente leve do plugin (agents/reader.md: sem CLAUDE.md, sem lista de skills, sem Edit/Write);
 // o agente padrao abria com ~56 mil tokens por tarefa. Quem edita segue no padrao, com as regras do projeto.
-const LEITOR = 'esquadro:leitor'
+const LEITOR = 'sworn:reader'
 phase('Tarefas')
 const saidas = await parallel(rodam.map((t) => () => agent(instrucao(t), Object.assign({
   label: 'tarefa ' + t.n + (t.edita ? ' (edita)' : ''),

@@ -15,7 +15,7 @@ const sanit = require('../scripts/lib/sanitacao.js');
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'exportar.js');
 
-function pasta(nome) { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro ' + nome + '-')); }
+function pasta(nome) { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn ' + nome + '-')); }
 
 function escrever(dir, rel, conteudo) {
   const alvo = path.join(dir, rel);

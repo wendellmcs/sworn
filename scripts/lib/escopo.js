@@ -4,12 +4,12 @@ const path = require('node:path');
 const glob = require('./glob.js');
 const textoLib = require('./texto.js');
 
-const ARQUIVO = '.claude/esquadro/escopo.md';
+const ARQUIVO = '.claude/sworn/escopo.md';
 
 // Escopo por frente: um projeto pode ter varias frentes de trabalho ao mesmo
 // tempo, cada uma com o seu arquivo nesta pasta. Editar o arquivo da frente
 // vincula a sessao a ela; sem vinculo, vale o escopo.md de sempre.
-const PASTA_FRENTES = '.claude/esquadro/escopos/';
+const PASTA_FRENTES = '.claude/sworn/escopos/';
 const NOME_DE_FRENTE = /^[a-zA-Z0-9_-]+$/;
 
 // O nome de frente que de fato vale no disco: o que vem do estado (arquivo em disco)
@@ -176,9 +176,9 @@ function ampliou(antes, depois) {
 // 0.3.2, item 12: a mensagem e lida num portao, sem a spec do lado. "marcha" e "trava" sao nomes
 // da spec, entao cada mensagem diz o que eles guardam. "trava N" fica: e o nome publico (README)
 // e os testes o prendem.
-const TRAVA_ESCOPO = 'esquadro - portao de escopo (trava 4 - o escopo da tarefa).';
+const TRAVA_ESCOPO = 'sworn - portao de escopo (trava 4 - o escopo da tarefa).';
 // 0.3.3, item 21: a trava 5 tem a sua constante ao lado da 4, com o mesmo texto de antes (os testes o prendem).
-const TRAVA_OUTRA_FRENTE = 'esquadro - outra frente de trabalho (trava 5 - arquivo de outra frente).';
+const TRAVA_OUTRA_FRENTE = 'sworn - outra frente de trabalho (trava 5 - arquivo de outra frente).';
 const O_QUE_E_MARCHA = 'o nivel de rigor que o projeto.json da a este caminho';
 
 // A2-04: o caminho sai por ascii() (R5); com acento ou caractere fora de ASCII, o escrito no aviso nao e o real.
@@ -305,7 +305,7 @@ function linhaDoVinculo(cwd, frente) {
   if (!frente) return null;
   const arquivo = arquivoEmVigor(cwd, frente);
   if (arquivo === ARQUIVO) return null;
-  return 'esquadro: esta sessao esta vinculada a frente ' + nomeSeguro(frente) + ' (' + arquivo +
+  return 'sworn: esta sessao esta vinculada a frente ' + nomeSeguro(frente) + ' (' + arquivo +
     ') - objetivo: ' + objetivoDaFrente(path.join(cwd, arquivo)) +
     '. Se a tarefa mudou, reescreva ' + arquivo + ' antes de editar.';
 }
@@ -325,7 +325,7 @@ function linhaDaHeranca(cwd) {
   const p2 = function (n) { return String(n).padStart(2, '0'); };
   const quando = d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' +
     p2(d.getHours()) + ':' + p2(d.getMinutes());
-  return 'esquadro: escopo herdado de ' + quando + ' - objetivo: ' + objetivo +
+  return 'sworn: escopo herdado de ' + quando + ' - objetivo: ' + objetivo +
     '. Se a tarefa mudou, reescreva ' + ARQUIVO + ' antes de editar.';
 }
 
@@ -365,7 +365,7 @@ function blocoDeFrentes(cwd, frente) {
     pastaDeFora = destinoForaDoProjeto(cwd, pasta);
   } catch (e) { pastaDeFora = false; }
   if (pastaDeFora) {
-    return 'esquadro: a pasta ' + PASTA_FRENTES + ' aponta para fora do projeto, entao nenhuma frente foi lida.';
+    return 'sworn: a pasta ' + PASTA_FRENTES + ' aponta para fora do projeto, entao nenhuma frente foi lida.';
   }
   let nomes = [];
   try {
@@ -386,7 +386,7 @@ function blocoDeFrentes(cwd, frente) {
     nomes = nomes.filter(function (n) { return n !== vinculado; });
   }
   if (!nomes.length) return null;
-  const linhas = ['esquadro: frentes de trabalho existentes:'];
+  const linhas = ['sworn: frentes de trabalho existentes:'];
   for (const n of nomes) {
     const nome = n.slice(0, n.length - 3);
     linhas.push('  - ' + ascii(nome) + ': ' + objetivoDaFrente(path.join(cwd, PASTA_FRENTES, n)));
@@ -399,10 +399,10 @@ function motivoIntocavel(alvo) {
   alvo = ascii(alvo);
   // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos.
   return [
-    'esquadro - arquivo intocavel: mexer nele e decisao do dono.',
+    'sworn - arquivo intocavel: mexer nele e decisao do dono.',
     '',
     // 0.3.3, item 25: diz onde a lista mora (o nome do campo e `intocaveis`).
-    'Este arquivo esta na lista "intocaveis" de .claude/esquadro/projeto.json:',
+    'Este arquivo esta na lista "intocaveis" de .claude/sworn/projeto.json:',
     '  - "' + alvo + '"',
     'Nem o escopo declarado libera este caminho.',
     '',

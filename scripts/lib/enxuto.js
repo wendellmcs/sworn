@@ -4,13 +4,13 @@
  * D553/D554 (0.9.0): o bloco "menos codigo" que a abertura injeta em toda sessao, depois do de qualidade de
  * resposta, no molde do de paralelismo (paralelismo.js). A ideia vem do ponytail (a escada antes de escrever
  * codigo); o texto e nosso. ASCII puro: sai por hook. O formato do comentario de atalho e o da D554 (rotulos, nao
- * virgula) e e o que o /esquadro:atalhos le.
+ * virgula) e e o que o /sworn:shortcuts le.
  */
 const CHAVE = 'menosCodigo';
 const TETO = 800;
 
 const BLOCO = [
-  '# esquadro - menos codigo (antes de escrever codigo)',
+  '# sworn - menos codigo (antes de escrever codigo)',
   '',
   'Suba a escada e pare no primeiro degrau que resolve:',
   '1. Precisa existir? O pedido nao exige: nao escreva.',
@@ -24,7 +24,7 @@ const BLOCO = [
   'Nunca se corta: validacao na fronteira, perda de dados, seguranca, acessibilidade.',
   'Atalho de proposito leva comentario: atalho: <o que>. limite: <ate onde vale>. trocar quando: <gatilho>.',
   'Vale para codigo; texto de documento fica fora.',
-  'Desligar neste projeto: "' + CHAVE + '": false em .claude/esquadro/projeto.json.'
+  'Desligar neste projeto: "' + CHAVE + '": false em .claude/sworn/projeto.json.'
 ].join('\n') + '\n';
 
 /** O bloco, ou null quando o projeto desligou. So o booleano `false` desliga (D388/D415). */

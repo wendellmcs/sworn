@@ -175,7 +175,7 @@ function afrouxou(antes, depois) {
 
 function motivo(alvo, achados) {
   const linhas = [
-    'esquadro: NEGADO - isto sobe a catraca (o limite fixo que segura um indicador), e subir catraca e decisao humana.',
+    'sworn: NEGADO - isto sobe a catraca (o limite fixo que segura um indicador), e subir catraca e decisao humana.',
     '',
     'Arquivo: ' + alvo
   ];

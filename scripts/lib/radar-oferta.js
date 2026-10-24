@@ -3,12 +3,12 @@
 const { veioDeSubagente } = require('./texto.js');
 
 /**
- * T3b (D611): o radar do usuario (/esquadro:radar) se oferece sozinho quando o dono pede melhoria, sugestao ou
+ * T3b (D611): o radar do usuario (/sworn:radar) se oferece sozinho quando o dono pede melhoria, sugestao ou
  * funcao nova. Aqui mora so o detector e o texto; quem busca e a skill, e so depois do sim dele. O gancho
  * (abrir-turno.js) nunca roda o radar.
  *
  * Molde: correcao.js. Conservador de proposito: perder uma oferta e so nao oferecer (o dono ainda roda
- * /esquadro:radar); oferecer em relato de bug ou em pedido de commit e ruido. Por isso cada padrao exige a cara
+ * /sworn:radar); oferecer em relato de bug ou em pedido de commit e ruido. Por isso cada padrao exige a cara
  * de PEDIDO DE MELHORIA DO PROJETO, nao so a palavra:
  * - "funcao"/"ferramenta"/"modulo"... so contam depois de um verbo de vontade ("quero adicionar uma funcao");
  *   sem ele, "crie uma funcao que soma" e tarefa de codigo, e so "funcionalidade"/"feature"/"recurso" bastam.
@@ -102,15 +102,15 @@ function ligada(projeto) {
 
 /** O que o modelo recebe quando o prompt parece pedido de melhoria. ASCII puro: sai por hook. Nada roda sem o sim. */
 const INSTRUCAO_DA_OFERTA = [
-  'esquadro: a mensagem do usuario parece um pedido de MELHORIA, sugestao ou funcao nova para o projeto dele.',
+  'sworn: a mensagem do usuario parece um pedido de MELHORIA, sugestao ou funcao nova para o projeto dele.',
   'Se for, faca nesta mesma resposta:',
   '1. Atenda o pedido.',
   '2. No fim, ofereca o radar pelo AskUserQuestion, em 3 opcoes:',
   '   (a) buscar projetos parecidos com o tema deste pedido (recomendada; custo estimado:',
   '   cerca de US$ 1,20 e 6 minutos numa sessao Sonnet, medido com 11 projetos lidos e 4 a fundo);',
   '   (b) agora nao;',
-  '   (c) nao oferecer mais neste projeto (grava "oferecerRadar": false em .claude/esquadro/projeto.json).',
-  'Nada roda sem o sim: com o (a), rode /esquadro:radar com a busca por tema (o tema e o deste pedido);',
+  '   (c) nao oferecer mais neste projeto (grava "oferecerRadar": false em .claude/sworn/projeto.json).',
+  'Nada roda sem o sim: com o (a), rode /sworn:radar com a busca por tema (o tema e o deste pedido);',
   'o (c) so grava a chave depois da escolha dele. Se o pedido nao for de melhoria ou de funcao nova',
   'do projeto (relato de bug, pergunta de codigo, commit), ignore este aviso.'
 ].join('\n');

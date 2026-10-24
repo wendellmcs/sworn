@@ -6,7 +6,7 @@ const path = require('node:path');
 const regra = require('../scripts/lib/regra.js');
 
 const RAIZ = path.join(__dirname, '..');
-const SKILL = path.join(RAIZ, 'skills', 'padrao', 'SKILL.md');
+const SKILL = path.join(RAIZ, 'skills', 'playbook', 'SKILL.md');
 
 function texto() { return fs.readFileSync(SKILL, 'utf8'); }
 

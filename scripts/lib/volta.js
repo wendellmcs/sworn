@@ -60,14 +60,14 @@ function duracao(ms) {
  * ASCII (o resumo o cita de qualquer jeito). Sem ele, o aviso diz que nao houve resumo e a opcao 1 e a de antes.
  */
 function motivo(r, resumo) {
-  const linhas = ['esquadro - este chat ficou ' + duracao(r.parado) + ' parado e o cache venceu: continuar aqui regrava ' +
+  const linhas = ['sworn - este chat ficou ' + duracao(r.parado) + ' parado e o cache venceu: continuar aqui regrava ' +
     milhar(Math.floor(r.contexto / 1000)) + ' mil tokens.', ''];
   if (r.continuar !== null) {
     linhas.push('Continuar neste chat: cerca de US$ ' + centavos(r.continuar) + ' (' + nomeDoModelo(r.modelo) + ').');
     linhas.push('Abrir um chat novo: cerca de US$ ' + centavos(r.novo) + '.');
   } else {
     const id = r.modelo ? '"' + String(r.modelo).replace(/[^\x20-\x7E]/g, '?') + '"' : 'deste chat';
-    linhas.push('Sem o valor em US$: o modelo ' + id + ' nao esta na tabela de precos do esquadro.');
+    linhas.push('Sem o valor em US$: o modelo ' + id + ' nao esta na tabela de precos do sworn.');
   }
   if (resumo) {
     const h = resumo.handoff;
@@ -81,7 +81,7 @@ function motivo(r, resumo) {
       '', 'Faca uma destas:', '  1. abra um chat novo e cole o prompt do ultimo handoff, se ele estiver em dia;');
   }
   linhas.push('  2. para seguir neste chat, mande a mensagem de novo: este aviso nao volta nesta pausa.',
-    '', 'Desligar neste projeto: "' + CHAVE + '": false em .claude/esquadro/projeto.json.');
+    '', 'Desligar neste projeto: "' + CHAVE + '": false em .claude/sworn/projeto.json.');
   return linhas.join('\n');
 }
 

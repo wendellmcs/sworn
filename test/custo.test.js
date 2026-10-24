@@ -91,26 +91,26 @@ test('A12-01: fork fora da escada conta como o topo - barrado em marcha rapida, 
 });
 
 // A2-06 (revisao completa, L2): os contadores do portao-agente rodavam sem try antes da negacao; com o
-// estado nao gravavel (ESQUADRO_TMP apontando para um ARQUIVO) o incrementar lancava, `io.blindar`
+// estado nao gravavel (SWORN_TMP apontando para um ARQUIVO) o incrementar lancava, `io.blindar`
 // liberava e o agente caro passava. Mesmo defeito do D420/SH-02 no portao-estilo.
 test('A2-06: estado nao gravavel nao libera o agente caro em marcha rapida', () => {
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
   const { spawnSync } = require('node:child_process');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-a206-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-a206-'));
   try {
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({
       marchaPadrao: 'padrao', marchas: { aaa: [], padrao: [], rapida: ['docs/**'] },
       agentes: { escada: ['busca', 'dev', 'arq', 'esp'] } }));
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'escopo.md'), '# Escopo\n**Objetivo:** t\n## Dentro\n- docs/**\n');
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'escopo.md'), '# Escopo\n**Objetivo:** t\n## Dentro\n- docs/**\n');
     const arquivo = path.join(dir, 'e-um-arquivo');
     fs.writeFileSync(arquivo, 'x');
     const entrada = JSON.stringify({ session_id: 'a206', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Agent',
       tool_input: { subagent_type: 'esp', prompt: 'p' } });
     const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'portao-agente.js')], {
-      cwd: dir, encoding: 'utf8', input: entrada, env: Object.assign({}, process.env, { ESQUADRO_TMP: arquivo }) });
+      cwd: dir, encoding: 'utf8', input: entrada, env: Object.assign({}, process.env, { SWORN_TMP: arquivo }) });
     assert.ok(/"permissionDecision"\s*:\s*"deny"/.test(r.stdout),
       'tinha de negar com o estado fora do ar; stdout ' + JSON.stringify(r.stdout) + ' stderr ' + r.stderr);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

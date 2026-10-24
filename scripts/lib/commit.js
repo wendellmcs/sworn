@@ -4,8 +4,8 @@
  * Plano 091 (#1, D558, D559): o portao do commit. Commit com arquivo de codigo mudado na sessao (Write/Edit, o
  * `arquivosTocados` do estado) que ainda difere do HEAD e nao tem revisao aprovada (`revisadosAprovados`, gravado pelo
  * apurar-ronda.js no "aprovado") e negado com a lista, a faixa de cada um (D485, a mesma do preparar-revisao.js) e a
- * ordem de rodar o /esquadro:revisar. Texto (.md, .txt) fica fora. A saida de emergencia e visivel: a marca
- * "# esquadro: sem-revisao" no comando, so depois do sim do dono. Texto do motivo em ASCII (D532), o do mock.
+ * ordem de rodar o /sworn:review. Texto (.md, .txt) fica fora. A saida de emergencia e visivel: a marca
+ * "# sworn: sem-revisao" no comando, so depois do sim do dono. Texto do motivo em ASCII (D532), o do mock.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,7 +13,7 @@ const git = require('./git.js');
 const veredito = require('./veredito.js');
 
 const MAX_CITADOS = 5;
-const MARCA = '# esquadro: sem-revisao';
+const MARCA = '# sworn: sem-revisao';
 
 /** O que esta entre aspas (mensagem, caminho) vira um marcador: nao e comando, e o `-C "pasta"` segue com argumento. */
 function semAspas(comando) {
@@ -32,7 +32,7 @@ function ehCommit(comando) {
 
 /** A marca de commit sem revisao, fora de aspas. */
 function semRevisao(comando) {
-  return typeof comando === 'string' && /#\s*esquadro:\s*sem-revisao\b/.test(semAspas(comando));
+  return typeof comando === 'string' && /#\s*sworn:\s*sem-revisao\b/.test(semAspas(comando));
 }
 
 /** A pasta onde o commit roda: o `git -C <pasta>`, ou o ultimo `cd <pasta>` antes do commit; sem nenhum, null. */
@@ -143,7 +143,7 @@ function motivo(lista) {
   if (lista.length > MAX_CITADOS) linhas.push('  - e mais ' + (lista.length - MAX_CITADOS));
   const atalhos = [];
   for (const p of lista) for (const n of (Array.isArray(p.atalhos) ? p.atalhos : [])) atalhos.push('"' + ascii(p.rel) + ':' + n + '"');
-  const passos = ['  1. rode /esquadro:revisar "<arquivo>" para cada um, ate sair "aprovado";'];
+  const passos = ['  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";'];
   if (atalhos.length) {
     linhas.push('Atalho novo sem gatilho:');
     for (const a of atalhos.slice(0, MAX_CITADOS)) linhas.push('  - ' + a);
@@ -152,7 +152,7 @@ function motivo(lista) {
   }
   passos.push('  ' + (passos.length + 1) + '. rode o commit de novo.');
   return [
-    'esquadro - commit parado: falta a revisao antes do commit.',
+    'sworn - commit parado: falta a revisao antes do commit.',
     '',
     'Arquivos de codigo mudados nesta sessao sem revisao aprovada:'
   ].concat(linhas, [
@@ -161,7 +161,7 @@ function motivo(lista) {
   ], passos, [
     'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
     'repita o commit com "' + MARCA + '" no fim do comando.',
-    'Desligar neste projeto: "portaoCommit": false em .claude/esquadro/projeto.json.'
+    'Desligar neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
   ]).join('\n');
 }
 

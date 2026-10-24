@@ -55,7 +55,7 @@ function permitido(tipo, marchaMax, projeto) {
     ok: false,
     // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos. "topo" era meia verdade: barra a metade cara.
     motivo: [
-      'esquadro - agente caro demais para um trabalho simples.',
+      'sworn - agente caro demais para um trabalho simples.',
       '',
       'Voce despachou ' + entreAspas(tipo) + ', da metade mais cara da escada deste projeto, mas o escopo',
       'declarado so toca caminho de marcha rapida (o nivel de rigor mais leve do projeto.json).',

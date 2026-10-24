@@ -40,7 +40,7 @@ function marcar(sessionId, fn) {
  * o proprio estado). O rastro pega CARONA na saida que o portao ja ia dar - o motivo da
  * negacao ou o `systemMessage` da liberacao - e nunca muda a decisao.
  */
-const AVISO_CONTADOR = 'esquadro: o contador desta ocorrencia nao foi gravado (estado da sessao nao gravavel); ' +
+const AVISO_CONTADOR = 'sworn: o contador desta ocorrencia nao foi gravado (estado da sessao nao gravavel); ' +
   'os totais do turno podem sair menores que o real. A decisao do portao nao mudou.';
 let contadorFalhou = false;
 
@@ -54,7 +54,7 @@ function negar(motivo) {
 /**
  * D420/PT-04: o projeto.json existe no disco? `config.carregarProjeto` devolve `null` para
  * AUSENTE e para PRESENTE-e-ilegivel (JSON quebrado, nao e objeto, pasta, sem permissao); so o
- * arquivo no disco separa os dois. Ausente e o normal antes do /esquadro:init; presente e
+ * arquivo no disco separa os dois. Ausente e o normal antes do /sworn:init; presente e
  * ilegivel e um projeto configurado com os portoes de escopo e intocaveis DESLIGADOS.
  * (A falha segue aberta de proposito: so a mensagem muda, nunca vira negacao.)
  *
@@ -64,12 +64,12 @@ function negar(motivo) {
  * contexto ela diria apenas "existe" - nao reuse sem repetir essa pre-condicao.
  */
 function projetoPresenteEIlegivel(cwd) {
-  try { return fs.existsSync(config.caminhoEmEsquadro(cwd, 'projeto.json')); } catch (err) { return false; }
+  try { return fs.existsSync(config.caminhoEmSworn(cwd, 'projeto.json')); } catch (err) { return false; }
 }
 
-const AVISO_PROJETO_ILEGIVEL = 'esquadro: .claude/esquadro/projeto.json existe mas nao se le: ' +
+const AVISO_PROJETO_ILEGIVEL = 'sworn: .claude/sworn/projeto.json existe mas nao se le: ' +
   'os portoes de escopo e de intocaveis estao DESLIGADOS ate corrigir. ' +
-  'Corrija o JSON (virgula sobrando, aspas). Rodar /esquadro:init de novo so serve se voce aceitar ' +
+  'Corrija o JSON (virgula sobrando, aspas). Rodar /sworn:init de novo so serve se voce aceitar ' +
   'refazer a configuracao: o init preserva o que consegue ler do projeto.json, e um arquivo que nao se le nao tem o que preservar.';
 
 /**
@@ -81,7 +81,7 @@ const AVISO_PROJETO_ILEGIVEL = 'esquadro: .claude/esquadro/projeto.json existe m
 function permitirComAviso(e, s, avisos) {
   if (avisos.length && !s.avisouTipoErrado) {
     marcar(e.session_id, function (x) { x.avisouTipoErrado = true; return x; });
-    return io.permitir({ systemMessage: 'esquadro: projeto.json com campo de tipo errado: ' + avisos.join('; ') });
+    return io.permitir({ systemMessage: 'sworn: projeto.json com campo de tipo errado: ' + avisos.join('; ') });
   }
   return io.permitir();
 }
@@ -125,7 +125,7 @@ io.blindar(function () {
       const avisosDaFrente = [];
       if (frenteAlvo) {
         try { estado.alterar(e.session_id, function (x) { x.frente = frenteAlvo.nome; return x; }); } catch (err) {
-          avisosDaFrente.push('esquadro: o vinculo desta sessao a frente "' + frenteAlvo.nome + '" nao foi gravado ' +
+          avisosDaFrente.push('sworn: o vinculo desta sessao a frente "' + frenteAlvo.nome + '" nao foi gravado ' +
             '(estado da sessao nao gravavel): a sessao segue regida pelo escopo.md, nao por esta frente.');
         }
       }
@@ -153,7 +153,7 @@ io.blindar(function () {
     // do Windows nao diferencia, e sem isto "GUIA.md" escapava da 5b por 1
     // caractere - decisivo em caminho de marcha rapida, onde o passo 5 nem chega
     // a ser avaliado. D49: a dobra acontece AQUI, e nao no git.js, porque a foto
-    // tem outro consumidor (a varredura do /esquadro:init) que mostra o nome do
+    // tem outro consumidor (a varredura do /sworn:init) que mostra o nome do
     // arquivo ao dono - e la o nome tem de ser o que esta no disco.
     // X2b: com a trava desligada a 5b nao dispara, e o fluxo SEGUE para os
     // passos 3-5 - nao vira `permitir`. Trava nenhuma pode virar bypass.
@@ -175,7 +175,7 @@ io.blindar(function () {
         return io.permitir({
           systemMessage: projetoPresenteEIlegivel(cwd)
             ? AVISO_PROJETO_ILEGIVEL
-            : 'esquadro: este projeto nao tem .claude/esquadro/projeto.json. Rode /esquadro:init para ligar o portao de escopo.'
+            : 'sworn: este projeto nao tem .claude/sworn/projeto.json. Rode /sworn:init para ligar o portao de escopo.'
         });
       }
       return io.permitir();
@@ -238,7 +238,7 @@ io.blindar(function () {
       try { estado.incrementar(e.session_id, 'catraca_afrouxada'); } catch (err) { contadorNaoGravou(); }
       return negar(catraca.motivo(alvo, frouxo));
     }
-    // Modulo opcional: sem .claude/esquadro/design.json, nada dispara.
+    // Modulo opcional: sem .claude/sworn/design.json, nada dispara.
     if (design.ehArquivoDeEstilo(alvo, projeto)) {
       const sistema = config.carregarDesign(cwd);
       const conteudo = (entrada.content !== undefined) ? entrada.content : entrada.new_string;

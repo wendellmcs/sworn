@@ -18,12 +18,12 @@ const apelidos = require('./lib/apelidos.js');
  * molde ganhar um campo, a sondagem passa a cobri-lo sem ninguem lembrar -
  * metodo em vez de resultado.
  *
- * Decisao 29: o plugin tambem publica agentes, em agents/, e o `inspetor`
+ * Decisao 29: o plugin tambem publica agentes, em agents/, e o `inspector`
  * guarda um apelido. Eles entram no roteiro como `doPlugin`; com --plugin, o
  * roteiro e so deles - o caso do repositorio do plugin, que nao tem projeto.
  */
 
-const PROVA = ['.claude', 'esquadro', 'apelidos-vivos.json'];
+const PROVA = ['.claude', 'sworn', 'apelidos-vivos.json'];
 
 function caminhoDaProva(cwd) {
   return path.join(String(cwd), PROVA[0], PROVA[1], PROVA[2]);
@@ -42,7 +42,7 @@ const projeto = soPlugin ? null : config.carregarProjeto(cwd);
 const SO_PLUGIN = 'Para sondar so os agentes do proprio plugin, rode com --plugin.\n';
 
 if (!soPlugin && !projeto) {
-  process.stdout.write('ERRO: rode /esquadro:init primeiro; nao achei .claude/esquadro/projeto.json\n');
+  process.stdout.write('ERRO: rode /sworn:init primeiro; nao achei .claude/sworn/projeto.json\n');
   process.stdout.write(SO_PLUGIN);
   process.exit(1);
 }
@@ -55,7 +55,7 @@ for (const d of mapa.lista) {
 
 if (!soPlugin && lista.length === 0) {
   process.stdout.write('NAO VERIFICAVEL: este projeto nao tem apelidos gravados.\n');
-  process.stdout.write('A entrevista do /esquadro:init pergunta; sem eles nao ha o que sondar.\n');
+  process.stdout.write('A entrevista do /sworn:init pergunta; sem eles nao ha o que sondar.\n');
   process.stdout.write(SO_PLUGIN);
   process.exit(1);
 }

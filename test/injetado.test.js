@@ -15,7 +15,7 @@ const inj = require('../scripts/lib/injetado.js');
 // brinquedo. Nenhum caminho real. A forma dos registros e a vista na transcricao real da s84 (plano, Tarefa 1).
 
 function pasta(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-injetado-' + nome + '-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-injetado-' + nome + '-'));
 }
 
 /** hooks.json de um plugin no cache: <cfg>/plugins/cache/<mercado>/<plugin>/<versao>/hooks/hooks.json */
@@ -136,10 +136,10 @@ test('injetado: aponta o texto que volta mais de 5 vezes, pela 1a linha, cortado
   } finally { fs.rmSync(c.cfg, { recursive: true, force: true }); }
 });
 
-test('injetado: o aviso do cd solto do proprio esquadro sai como no mock aprovado (D568)', () => {
+test('injetado: o aviso do cd solto do proprio sworn sai como no mock aprovado (D568)', () => {
   const shell = require('../scripts/lib/shell.js');
   assert.strictEqual(inj.cabeca(shell.avisoCdCorrigido({ achado: 'cd x' })),
-    'esquadro - cd solto corrigido: o comando rodou dentro de um subshell...');
+    'sworn - cd solto corrigido: o comando rodou dentro de um subshell...');
   assert.strictEqual(inj.cabeca('\n  curto  \nresto'), 'curto');
 });
 
@@ -256,7 +256,7 @@ test('injetado: auditar.js traz a chave injetado, pela sessao do ambiente e por 
 });
 
 test('injetado: a skill do auditar apresenta o item 1c a partir da chave injetado', () => {
-  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'auditar', 'SKILL.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'audit', 'SKILL.md'), 'utf8');
   const i = skill.indexOf('1c.');
   assert.ok(i !== -1, 'falta o item 1c no Passo 2');
   const item = skill.slice(i, skill.indexOf('\n2. ', i));

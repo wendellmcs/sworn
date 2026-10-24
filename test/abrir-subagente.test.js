@@ -2,7 +2,7 @@
 // Plano 090 Tarefa 3, ultimo subitem (s81): o bloco "menos codigo" tambem chega aos subagentes que escrevem codigo,
 // pelo SubagentStart. O contexto da abertura e so da conversa principal e nao chega ao subagente. Formato da doc
 // (code.claude.com/docs/en/hooks): hookSpecificOutput.additionalContext; a entrada traz agent_type. Os agentes que so
-// leem (inspetor, juiz-mesmo, leitor do esquadro; Explore e Plan do Claude Code) nao recebem.
+// leem (inspetor, juiz-mesmo, leitor do sworn; Explore e Plan do Claude Code) nao recebem.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -16,8 +16,8 @@ const SCRIPT = path.join(__dirname, '..', 'scripts', 'abrir-subagente.js');
 function pasta(projeto) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'esq-subag-'));
   if (projeto !== undefined) {
-    fs.mkdirSync(path.join(d, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(d, '.claude', 'esquadro', 'projeto.json'), JSON.stringify(projeto));
+    fs.mkdirSync(path.join(d, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(d, '.claude', 'sworn', 'projeto.json'), JSON.stringify(projeto));
   }
   return d;
 }
@@ -41,7 +41,7 @@ test('abrir-subagente: agente que escreve codigo recebe o bloco no formato JSON 
 
 test('abrir-subagente: os agentes que so leem nao recebem (saida vazia, exit 0)', () => {
   const cwd = pasta();
-  for (const tipo of ['esquadro:inspetor', 'esquadro:juiz-mesmo', 'esquadro:leitor', 'Explore', 'Plan']) {
+  for (const tipo of ['sworn:inspector', 'sworn:dedupe-judge', 'sworn:reader', 'Explore', 'Plan']) {
     const r = rodar({ hook_event_name: 'SubagentStart', agent_type: tipo, cwd });
     assert.strictEqual(r.status, 0, tipo);
     assert.strictEqual(r.saida, '', tipo + ' recebeu o bloco');

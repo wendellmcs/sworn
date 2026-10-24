@@ -57,9 +57,9 @@ test('agents-md: nenhum fato volatil no molde', () => {
 });
 
 function pastaComProjeto(t) {
-  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro agents-'));
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn agents-'));
   t.after(() => fs.rmSync(raiz, { recursive: true, force: true }));
-  const dir = path.join(raiz, '.claude', 'esquadro');
+  const dir = path.join(raiz, '.claude', 'sworn');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'projeto.json'), JSON.stringify(PROJETO, null, 2), 'utf8');
   return raiz;
@@ -106,7 +106,7 @@ test('agents-md: AGENTS.md que ja existe nao e tocado', (t) => {
 });
 
 test('agents-md: sem projeto.json para com erro legivel', (t) => {
-  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro vazio-'));
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn vazio-'));
   t.after(() => fs.rmSync(raiz, { recursive: true, force: true }));
   const r = rodar(raiz, ['--respostas', respostasEmArquivo(raiz), '--gravar']);
   assert.strictEqual(r.status, 1);

@@ -1,5 +1,5 @@
 'use strict';
-// Plano 082, Tarefa 5 (mock parte 3, S10): todo aviso de gancho com cabecalho "esquadro - " na mesma forma.
+// Plano 082, Tarefa 5 (mock parte 3, S10): todo aviso de gancho com cabecalho "sworn - " na mesma forma.
 // 1a linha diz o que falta em palavras do dono e fecha com ponto; linha em branco; caminhos entre aspas, um por
 // linha; o que fazer em "Faca uma destas:" numerado (ou "Faca assim:", quando so ha um caminho); a linha de
 // desligar (ou a de liberar, que e do dono) por ultimo. ASCII (R5): o texto sai de script e chega ao Claude.
@@ -27,7 +27,7 @@ const ASCII = /^[\n\x20-\x7E]*$/;
 function confereForma(nome, texto, o) {
   assert.ok(ASCII.test(texto), nome + ': fora de ASCII (R5): ' + JSON.stringify(texto));
   const linhas = texto.split('\n');
-  assert.match(linhas[0], /^esquadro - \S.*\.$/, nome + ': a 1a linha diz o que falta, com ponto: ' + linhas[0]);
+  assert.match(linhas[0], /^sworn - \S.*\.$/, nome + ': a 1a linha diz o que falta, com ponto: ' + linhas[0]);
   assert.strictEqual(linhas[1], '', nome + ': linha em branco depois da 1a');
   for (const c of (o.caminhos || [])) {
     assert.ok(linhas.some((l) => /^ +- "/.test(l) && l.indexOf('"' + c + '"') !== -1),
@@ -52,8 +52,8 @@ function confereForma(nome, texto, o) {
   assert.ok(!/\n\n\n/.test(texto) && !/\n$/.test(texto), nome + ': sem bloco vazio duplo nem quebra no fim');
 }
 
-const DESLIGAR = /^Desligar neste projeto: "[a-zA-Z]+": false em \.claude\/esquadro\/projeto\.json\.$/;
-const LIBERAR = /^So o dono libera: .*"comandosLiberados".* \.claude\/esquadro\/projeto\.json\.$/;
+const DESLIGAR = /^Desligar neste projeto: "[a-zA-Z]+": false em \.claude\/sworn\/projeto\.json\.$/;
+const LIBERAR = /^So o dono libera: .*"comandosLiberados".* \.claude\/sworn\/projeto\.json\.$/;
 
 test('T5: gatilho 3 (apelidos) na forma unica, com o arquivo do agente entre aspas', () => {
   const t = apelidos.motivo({ divergencias: [
@@ -143,7 +143,7 @@ test('T5: os quatro avisos de shell na forma unica', () => {
   // D569: a linha curta das vezes seguintes e uma linha so (sem o corpo da forma unica), ASCII e com a 1a linha dela
   const curto = shell.avisoCdCorrigido({ forma: 'bash', achado: 'cd x' }, true);
   assert.ok(ASCII.test(curto), curto);
-  assert.match(curto, /^esquadro - \S.*\.$/);
+  assert.match(curto, /^sworn - \S.*\.$/);
   assert.strictEqual(curto.split('\n').length, 1, curto);
 });
 
@@ -153,17 +153,17 @@ test('T5: os tres relatorios de comando abrem com a 1a linha na forma (o que e o
     itens: [{ arquivo: 'regras.md', linha: 4, texto: 'regra', temCicatriz: false }] };
   const tc = cicatriz.texto(r);
   assert.ok(ASCII.test(tc));
-  assert.match(tc.split('\n')[0], /^esquadro - \S.*\.$/);
+  assert.match(tc.split('\n')[0], /^sworn - \S.*\.$/);
   assert.ok(tc.indexOf('  - "regras.md:4"') !== -1, 'arquivo:linha entre aspas: ' + tc);
   const tb = cobertura.texto({ portoes: [], resumo: { total: 0, verificaveis: 0, naoVerificaveis: 0, garantidos: 0 } });
-  assert.match(tb.split('\n')[0], /^esquadro - \S.*\.$/);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-forma-'));
+  assert.match(tb.split('\n')[0], /^sworn - \S.*\.$/);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-forma-'));
   try {
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'contadores.json'), JSON.stringify({ cd_solto: 2 }), 'utf8');
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'), JSON.stringify({ cd_solto: 2 }), 'utf8');
     const u = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'uso.js')], { cwd: dir, encoding: 'utf8' });
     const linhas = u.stdout.split('\n');
-    assert.match(linhas[0], /^esquadro - \S.*\.$/, u.stdout);
+    assert.match(linhas[0], /^sworn - \S.*\.$/, u.stdout);
     assert.ok(linhas.some((l) => /^ +- ".*contadores\.json"$/.test(l)), 'o arquivo lido entre aspas: ' + u.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -175,7 +175,7 @@ test('084: aviso de volta a chat parado na forma unica, com e sem preco', () => 
     const r = volta.avaliar({ contexto: 318000, horario: agora - 188 * 60000, modelo: modelo }, agora);
     confereForma('volta ' + modelo, volta.motivo(r), { acao: 'destas', ultima: DESLIGAR });
     // 0.11.0 (D588): com o resumo e com o handoff em dia, a mesma forma
-    const resumo = { caminho: '.claude/esquadro/handoff/2026-10-22-retomar-d731fc49.md', chat: 'd731fc49', handoff: null };
+    const resumo = { caminho: '.claude/sworn/handoff/2026-10-22-retomar-d731fc49.md', chat: 'd731fc49', handoff: null };
     confereForma('volta resumo ' + modelo, volta.motivo(r, resumo), { acao: 'destas', ultima: DESLIGAR });
     confereForma('volta handoff ' + modelo, volta.motivo(r, Object.assign({}, resumo,
       { handoff: { caminho: '.context/plans/2026-10-22-x-handoff.md', emDia: true } })), { acao: 'destas', ultima: DESLIGAR });

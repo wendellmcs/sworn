@@ -1,7 +1,7 @@
 'use strict';
 // T11-1 = R-T20-09 [P0]: o `.css` escrito por comando de shell escapava do portao de design, que so
 // olhava Write|Edit. O portao novo (portao-estilo.js) e o segundo gancho da entrada Bash|PowerShell do
-// PreToolUse. Nao e trava: o botao de desligar dele e nao ter `.claude/esquadro/design.json`.
+// PreToolUse. Nao e trava: o botao de desligar dele e nao ter `.claude/sworn/design.json`.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -23,8 +23,8 @@ const SISTEMA = {
 /** Projeto de teste. `semDesign` / `semProjeto` desligam o modulo; `extra` entra no projeto.json. */
 function montar(opcoes) {
   const o = opcoes || {};
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-estilo-'));
-  const pasta = path.join(dir, '.claude', 'esquadro');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-estilo-'));
+  const pasta = path.join(dir, '.claude', 'sworn');
   fs.mkdirSync(pasta, { recursive: true });
   if (!o.semProjeto) {
     fs.writeFileSync(path.join(pasta, 'projeto.json'), JSON.stringify(Object.assign({ marchaPadrao: 'padrao' }, o.extra || {})), 'utf8');
@@ -39,7 +39,7 @@ function chamar(dir, ferramenta, comando, id) {
     encoding: 'utf8',
     input: JSON.stringify({ session_id: id || 'pe1', cwd: dir, hook_event_name: 'PreToolUse', tool_name: ferramenta,
       tool_input: { command: comando } }),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
   });
   assert.strictEqual(r.status, 0, r.stderr);
   assert.ok(!/portao falhou/.test(r.stderr || ''), 'o portao caiu e liberou por inercia: ' + r.stderr);
@@ -51,7 +51,7 @@ function motivoDe(r) {
 }
 
 function sessao(dir, id) {
-  try { return JSON.parse(fs.readFileSync(path.join(dir, '_sessoes', 'esquadro', (id || 'pe1') + '.json'), 'utf8')); } catch (e) { return null; }
+  try { return JSON.parse(fs.readFileSync(path.join(dir, '_sessoes', 'sworn', (id || 'pe1') + '.json'), 'utf8')); } catch (e) { return null; }
 }
 
 /** Cada item e [ferramenta, comando]: todos tem de ser negados / permitidos. */
@@ -274,7 +274,7 @@ test('T11-1 nega: caminho absoluto dentro do projeto, com barra normal ou invert
   const dir = montar();
   try {
     const dentro = path.join(dir, 'src', 'a.css');
-    const fora = path.join(os.tmpdir(), 'esquadro-estilo-fora-do-projeto', 'a.css');
+    const fora = path.join(os.tmpdir(), 'sworn-estilo-fora-do-projeto', 'a.css');
     todosNegados(dir, [
       ['Bash', 'echo x > "' + dentro.replace(/\\/g, '/') + '"'],
       ['PowerShell', "Set-Content -Path '" + dentro + "' -Value x"]
@@ -294,7 +294,7 @@ test('T11-1 nega: caminho absoluto dentro do projeto, com barra normal ou invert
 test('D396 n. 2: variavel definida no proprio comando vira o valor dela; fora do projeto passa, dentro nega', () => {
   const dir = montar();
   try {
-    const fora = path.join(os.tmpdir(), 'esquadro-estilo-fora-do-projeto');
+    const fora = path.join(os.tmpdir(), 'sworn-estilo-fora-do-projeto');
     const foraBarra = fora.replace(/\\/g, '/');
     todosPermitidos(dir, [
       ['Bash', 'OUT="' + foraBarra + '"; echo x > "$OUT/styles.scss"'],
@@ -504,7 +504,7 @@ test('T11-1 permite sem projeto.json: qualquer escrita de .css, mesmo com design
 });
 
 test('T11-1 permite: pasta sem .claude nenhum', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-estilo-vazio-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-estilo-vazio-'));
   try {
     todosPermitidos(dir, [['Bash', 'echo x > src/a.css']]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -527,7 +527,7 @@ test('T11-1: negar enche o balde estilo_por_shell, uma vez por negacao, e nada m
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('T11-1: a mensagem diz que o esquadro confere o design.json no Write e no Edit, cita o arquivo e nao ensina desvio', () => {
+test('T11-1: a mensagem diz que o sworn confere o design.json no Write e no Edit, cita o arquivo e nao ensina desvio', () => {
   const dir = montar();
   try {
     const m = motivoDe(chamar(dir, 'Bash', "cat > src/a.css <<'EOF'\n.x{color:#123456}\nEOF"));
@@ -565,7 +565,7 @@ test('T11-1: o portao-destrutivo continua igual - nao nega a escrita de .css (qu
     const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-destrutivo.js')], {
       cwd: dir, encoding: 'utf8',
       input: JSON.stringify({ session_id: 'pd', cwd: dir, tool_name: 'Bash', tool_input: { command: 'echo x > src/a.css' } }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+      env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(r.stdout, '', 'o destrutivo nao pode ganhar regra de estilo: ' + r.stdout);
@@ -588,7 +588,7 @@ test('T11-1: entrada quebrada, vazia ou sem comando sai 0, calado e sem estado',
     for (const bruto of brutos) {
       const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-estilo.js')], {
         cwd: dir, encoding: 'utf8', input: bruto,
-        env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+        env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
       });
       assert.strictEqual(r.status, 0, JSON.stringify(bruto) + ': ' + r.stderr);
       assert.ok(!/portao falhou/.test(r.stderr || ''), JSON.stringify(bruto) + ' estourou: ' + r.stderr);
@@ -601,10 +601,10 @@ test('T11-1: entrada quebrada, vazia ou sem comando sai 0, calado e sem estado',
 test('T11-1: design.json ou projeto.json quebrados desligam o modulo (sem estourar, sem negar)', () => {
   const dir = montar();
   try {
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'design.json'), '{isso nao fecha', 'utf8');
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'design.json'), '{isso nao fecha', 'utf8');
     todosPermitidos(dir, [['Bash', 'echo x > src/a.css']]);
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'design.json'), JSON.stringify(SISTEMA), 'utf8');
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), '{isso nao fecha', 'utf8');
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'design.json'), JSON.stringify(SISTEMA), 'utf8');
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), '{isso nao fecha', 'utf8');
     todosPermitidos(dir, [['Bash', 'echo x > src/a.css']]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -669,7 +669,7 @@ test('saude.js: estilo_por_shell e balde de bloqueio (nega), como o token_fora_d
 });
 
 // D420/SH-02: o contador `estilo_por_shell` rodava ANTES da negacao sem protecao. Com o diretorio de
-// estado nao gravavel (ESQUADRO_TMP apontando para um ARQUIVO) o incrementar lancava, `io.blindar`
+// estado nao gravavel (SWORN_TMP apontando para um ARQUIVO) o incrementar lancava, `io.blindar`
 // liberava e a escrita de estilo por shell PASSAVA. O contador e acessorio: a negacao vem primeiro.
 test('D420/SH-02: estado nao gravavel nao libera a escrita de estilo por shell', () => {
   const dir = montar();
@@ -681,7 +681,7 @@ test('D420/SH-02: estado nao gravavel nao libera a escrita de estilo por shell',
       encoding: 'utf8',
       input: JSON.stringify({ session_id: 'pe-sh02', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Bash',
         tool_input: { command: "cat > src/a.css <<'EOF'\n.x { color: #123456; }\nEOF" } }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: arquivo })
+      env: Object.assign({}, process.env, { SWORN_TMP: arquivo })
     });
     assert.ok(motivoDe(r), 'tinha de negar com o estado fora do ar; stdout ' + JSON.stringify(r.stdout) + ' stderr ' + r.stderr);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

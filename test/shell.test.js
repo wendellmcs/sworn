@@ -85,15 +85,15 @@ test('D244/achado 13: corpo de here-string do PowerShell nao e lido como comando
 });
 
 function hookDestrutivo(ferramenta, comando) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-shell-'));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-shell-tmp-'));
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'),
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-shell-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-shell-tmp-'));
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
     JSON.stringify({ versaoConfig: 1, plataforma: WIN }), 'utf8');
   const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'portao-destrutivo.js')], {
     input: JSON.stringify({ session_id: 'sh', cwd: dir, hook_event_name: 'PreToolUse', tool_name: ferramenta,
       tool_input: { command: comando } }),
-    encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+    encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
   });
   let json = null;
   try { json = JSON.parse(r.stdout); } catch (e) { json = null; }
@@ -418,7 +418,7 @@ test('D286: a instrucao do init (Passo 7b) usa formas que a trava aceita', () =>
 });
 
 test('D286: o bloco do `claude -p` em 06-ambiente.md usa forma que a trava aceita', () => {
-  const texto = lerDoPlugin(path.join('skills', 'padrao', 'references', '06-ambiente.md'));
+  const texto = lerDoPlugin(path.join('skills', 'playbook', 'references', '06-ambiente.md'));
   const i = texto.indexOf('## 8. Provar hook');
   assert.ok(i !== -1, 'nao achou a secao 8');
   const m = texto.slice(i).match(/```\r?\n([\s\S]*?)\r?\n```/);
@@ -555,7 +555,7 @@ const TABELA_REAL = fs.readFileSync(path.join(__dirname, '..', 'modelos', 'shell
  * caminho da tabela e relativo ao __dirname). `conteudo === null` = sem o arquivo.
  */
 function shellComTabela(conteudo) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-shell-tabela-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-shell-tabela-'));
   fs.mkdirSync(path.join(base, 'scripts', 'lib'), { recursive: true });
   fs.mkdirSync(path.join(base, 'modelos'), { recursive: true });
   fs.copyFileSync(path.join(__dirname, '..', 'scripts', 'lib', 'shell.js'), path.join(base, 'scripts', 'lib', 'shell.js'));
@@ -670,7 +670,7 @@ test('T1/F3-11: o aviso diz que o comando seguinte ja usa a tabela consertada (c
   const t = quebrada.avisoTabela(quebrada.problemasDaTabela(WIN, 'PowerShell'));
   assert.ok(!t.includes('sessao nova'), t);
   // Plano 082, Tarefa 5: o conserto e o "Faca assim:" da forma unica.
-  assert.ok(t.includes('Faca assim: conserte o arquivo no plugin esquadro; o comando seguinte ja usa a tabela consertada.'), t);
+  assert.ok(t.includes('Faca assim: conserte o arquivo no plugin sworn; o comando seguinte ja usa a tabela consertada.'), t);
   assert.ok(t.includes('Este aviso sai uma vez por sessao.'), t);
 });
 

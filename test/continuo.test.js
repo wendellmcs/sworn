@@ -13,7 +13,7 @@ const projetoLib = require('../scripts/lib/projeto.js');
 // Plano 091 (#9, D556/D559): o modo continuo passa a vir ligado; so o booleano false desliga.
 test('continuo: com false, o bloco so manda validar antes de pedir acao manual e diz como ligar a chave', () => {
   const b = c.bloco({ modoContinuo: false });
-  assert.ok(/^# esquadro - menos paradas/.test(b), 'titulo');
+  assert.ok(/^# sworn - menos paradas/.test(b), 'titulo');
   assert.ok(/valide voce mesmo/.test(b), 'validar pelo proprio agente');
   assert.ok(/credencial/.test(b) && /num pedido so/.test(b), 'o que pedir ao dono, junto');
   assert.ok(!/Modo continuo ligado/.test(b), 'desligado o bloco nao diz que esta ligado');
@@ -153,19 +153,19 @@ test('continuo: a linha curta do medidor conta so os gatilhos que podem disparar
   // de 6 e contexto 0 empatam; vale o 1o, como no bloco "Troca de chat").
   assert.strictEqual(r.curta, 'troca de chat em 6 bloqueios de portão');
   const cruzou = medidor.linhaDaSessao({ uso: null, amostras: [], medidas: saude.medir({ tokensDeContexto: 260000 }, null, true), avisouSaude: false });
-  assert.strictEqual(cruzou.curta, 'troque de chat → /esquadro:handoff');
+  assert.strictEqual(cruzou.curta, 'troque de chat → /sworn:handoff');
   // sem a chave, nada se cala: os 99 turnos disparam
   const sem = medidor.linhaDaSessao({ uso: null, amostras: [], medidas: saude.medir({ turnosComTrabalho: 99 }, null), avisouSaude: false });
-  assert.strictEqual(sem.curta, 'troque de chat → /esquadro:handoff');
+  assert.strictEqual(sem.curta, 'troque de chat → /sworn:handoff');
   const zero = medidor.linhaDaSessao({ uso: null, amostras: [], medidas: saude.medir({}, null), avisouSaude: false });
   assert.strictEqual(zero.curta, 'troca de chat em 15 respostas com trabalho real');
 });
 
-test('continuo: a esquadro:padrao e o README falam da chave e da validacao pelo proprio agente', () => {
+test('continuo: a sworn:playbook e o README falam da chave e da validacao pelo proprio agente', () => {
   const ler = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
-  const skill = ler('skills/padrao/SKILL.md');
+  const skill = ler('skills/playbook/SKILL.md');
   assert.ok(skill.indexOf('`modoContinuo`') !== -1, 'a skill nao cita a chave');
   assert.ok(/valid(?:e|ar) (?:você|pelo próprio agente)/.test(skill), 'a skill nao manda validar antes de pedir');
-  const readme = ler('README.md');
+  const readme = ler('GUIA.md');
   assert.ok(readme.indexOf('`modoContinuo`') !== -1, 'o README nao cita a chave');
 });

@@ -12,10 +12,10 @@ const { spawnSync } = require('node:child_process');
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'sessao.js');
 
 function cenario(fn) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-sessao-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-session-'));
   const projeto = path.join(base, 'projeto');
-  fs.mkdirSync(path.join(projeto, '.claude', 'esquadro'), { recursive: true });
-  fs.mkdirSync(path.join(base, 'esquadro'), { recursive: true });
+  fs.mkdirSync(path.join(projeto, '.claude', 'sworn'), { recursive: true });
+  fs.mkdirSync(path.join(base, 'sworn'), { recursive: true });
   try { fn({ base: base, projeto: projeto }); } finally { fs.rmSync(base, { recursive: true, force: true }); }
 }
 
@@ -24,7 +24,7 @@ function rodar(c, entrada) {
     cwd: c.projeto,
     input: typeof entrada === 'string' ? entrada : JSON.stringify(entrada),
     // Pedido 31: o gasto do mes le as transcricoes de CLAUDE_CONFIG_DIR/projects - a do teste, nunca a real.
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: c.base, CLAUDE_CONFIG_DIR: path.join(c.base, 'config') }),
+    env: Object.assign({}, process.env, { SWORN_TMP: c.base, CLAUDE_CONFIG_DIR: path.join(c.base, 'config') }),
     encoding: 'utf8'
   });
   assert.strictEqual(r.status, 0, r.stderr);
@@ -36,8 +36,8 @@ const USO = { startedAt: 0, context: { tokens: 46900, window: 1000000, percent: 
 test('sessao.js: soma turno + sessao e usa o limiar do projeto (a conta do portao-fecho)', () => {
   cenario(function (c) {
     // Plano 091 (#9): modoContinuo false - o gatilho de revisoes so conta com o modo continuo desligado
-    fs.writeFileSync(path.join(c.projeto, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ limiares: { revisoesFechadas: 5 }, modoContinuo: false }));
-    fs.writeFileSync(path.join(c.base, 'esquadro', 'sess-1.json'),
+    fs.writeFileSync(path.join(c.projeto, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ limiares: { revisoesFechadas: 5 }, modoContinuo: false }));
+    fs.writeFileSync(path.join(c.base, 'sworn', 'sess-1.json'),
       JSON.stringify({ contadoresSessao: { revisao_fechada: 3 }, contadores: { revisao_fechada: 2 } }));
     const r = rodar(c, { uso: USO, amostras: [], sessao: 'sess-1' });
     assert.strictEqual(r.cruzou, true, JSON.stringify(r));
@@ -55,7 +55,7 @@ test('sessao.js: sem estado e sem projeto -> limiares padrao, nada cruzou', () =
     assert.ok(/ · troca de chat em 203 mil tokens$/.test(r.curta), r.curta);
     assert.ok(r.longa.indexOf('- tamanho do contexto: 46.900 de 250.000 tokens') !== -1, r.longa);
     // controle: com modoContinuo false o padrao antigo volta (D445: 46.900 de 175.000).
-    fs.writeFileSync(path.join(c.projeto, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ modoContinuo: false }));
+    fs.writeFileSync(path.join(c.projeto, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ modoContinuo: false }));
     const antigo = rodar(c, { uso: USO, amostras: [], sessao: 'nao-existe' });
     assert.strictEqual(antigo.cruzou, false);
     assert.ok(/ · troca de chat em 128 mil tokens$/.test(antigo.curta), antigo.curta);
@@ -64,9 +64,9 @@ test('sessao.js: sem estado e sem projeto -> limiares padrao, nada cruzou', () =
 
 test('sessao.js: aviso ja dado na sessao aparece no medidor', () => {
   cenario(function (c) {
-    fs.writeFileSync(path.join(c.base, 'esquadro', 'sess-2.json'), JSON.stringify({ avisouSaude: true }));
+    fs.writeFileSync(path.join(c.base, 'sworn', 'sess-2.json'), JSON.stringify({ avisouSaude: true }));
     const r = rodar(c, { uso: USO, amostras: [], sessao: 'sess-2' });
-    assert.ok(/ · troca já avisada → \/esquadro:handoff$/.test(r.curta), r.curta);
+    assert.ok(/ · troca já avisada → \/sworn:handoff$/.test(r.curta), r.curta);
   });
 });
 
@@ -77,7 +77,7 @@ test('sessao.js: entrada que nao e JSON -> saida 0, curta mesmo assim e o erro d
     assert.ok(typeof r.curta === 'string' && /(^| · )troca de chat em 6 bloqueios de portão$/.test(r.curta), JSON.stringify(r));
     assert.ok(typeof r.erro === 'string' && r.erro.length > 0, JSON.stringify(r));
     // controle: com modoContinuo false o turno volta a ser o sinal mais perto
-    fs.writeFileSync(path.join(c.projeto, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ modoContinuo: false }));
+    fs.writeFileSync(path.join(c.projeto, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ modoContinuo: false }));
     const antigo = rodar(c, 'isto nao e json');
     assert.ok(typeof antigo.curta === 'string' && /(^| · )troca de chat em 15 respostas com trabalho real$/.test(antigo.curta), JSON.stringify(antigo));
     assert.ok(typeof antigo.erro === 'string' && antigo.erro.length > 0, JSON.stringify(antigo));
@@ -88,7 +88,7 @@ test('sessao.js: entrada que nao e JSON -> saida 0, curta mesmo assim e o erro d
 test('sessao.js: o gatilho de contexto usa uso.context.tokens ao vivo', () => {
   cenario(function (c) {
     // Plano 091 (#9): modoContinuo false - o limiar de 175.000 e o do modo continuo desligado (ligado e 250.000)
-    fs.writeFileSync(path.join(c.projeto, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ modoContinuo: false }));
+    fs.writeFileSync(path.join(c.projeto, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ modoContinuo: false }));
     const alto = Object.assign({}, USO, { context: { tokens: 260000, window: 1000000, percent: 26 } });
     const r = rodar(c, { uso: alto, amostras: [], sessao: 'nao-existe' });
     assert.strictEqual(r.cruzou, true, JSON.stringify(r));
@@ -100,7 +100,7 @@ test('sessao.js: o gatilho de contexto usa uso.context.tokens ao vivo', () => {
 // gatilho. Numero que nao e contagem de tokens fica fora: vale o gravado no estado.
 test('sessao.js: tokens ao vivo negativos ou infinitos nao entram no gatilho de contexto', () => {
   cenario(function (c) {
-    fs.writeFileSync(path.join(c.base, 'esquadro', 'sess-t.json'), JSON.stringify({ tokensDeContexto: 1234 }));
+    fs.writeFileSync(path.join(c.base, 'sworn', 'sess-t.json'), JSON.stringify({ tokensDeContexto: 1234 }));
     for (const tokens of ['-5', '1e400', '-1e400']) {
       const r = rodar(c, '{"uso":{"context":{"tokens":' + tokens + ',"window":1000000,"percent":5}},"amostras":[],"sessao":"sess-t"}');
       assert.ok(r.longa.indexOf('- tamanho do contexto: 1.234 de ') !== -1, tokens + ': ' + r.longa);
@@ -118,7 +118,7 @@ test('sessao.js: devolve a linha do plano (vazia sem plano)', () => {
     assert.strictEqual(rodar(c, { uso: USO, amostras: [], sessao: 'nao-existe' }).plano, '');
     fs.mkdirSync(path.join(c.projeto, 'p'));
     fs.writeFileSync(path.join(c.projeto, 'p', '2026-01-01-x-plano.md'), '### Tarefa 1: a\n- [x] p\n### Tarefa 2: b\n- [ ] p\n');
-    fs.writeFileSync(path.join(c.projeto, '.claude', 'esquadro', 'plano-ativo.json'),
+    fs.writeFileSync(path.join(c.projeto, '.claude', 'sworn', 'plano-ativo.json'),
       JSON.stringify({ arquivo: 'p/2026-01-01-x-plano.md', sessionId: 's' }));
     const comPlano = rodar(c, { uso: USO, amostras: [], sessao: 'nao-existe' });
     assert.strictEqual(comPlano.plano, 'plano x · 1 de 2 tarefas · próxima: Tarefa 2 — b');
@@ -151,7 +151,7 @@ test('sessao.js: gasto do mes (real + transcricoes) na curta, e `guardar` com o 
     assert.ok(r.guardar && r.guardar.historico['sess-g'].janelas.seven_day.ini === 30, JSON.stringify(r.guardar));
     const chave = Object.keys(r.guardar.gastoReal)[0];
     assert.deepStrictEqual(r.guardar.gastoReal[chave], { 'sess-g': 1 });
-    assert.ok(fs.existsSync(path.join(c.base, 'esquadro', 'cache', 'gasto-mes.json')), 'cache na pasta do estado');
+    assert.ok(fs.existsSync(path.join(c.base, 'sworn', 'cache', 'gasto-mes.json')), 'cache na pasta do estado');
   });
 });
 
@@ -162,10 +162,10 @@ test('sessao.js: devolve `botoes` na ordem de prioridade, com a resposta e o pad
     const nomes = (r) => (r.botoes || []).map((b) => b.nome);
     // sem projeto.json: o do init
     assert.deepStrictEqual(nomes(rodar(c, { uso: USO, amostras: [], sessao: 'nao-existe' })), ['init']);
-    fs.writeFileSync(path.join(c.projeto, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ marchas: { aaa: ['src/**'] } }));
-    fs.writeFileSync(path.join(c.base, 'esquadro', 'sess-b.json'), JSON.stringify({
+    fs.writeFileSync(path.join(c.projeto, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ marchas: { aaa: ['src/**'] } }));
+    fs.writeFileSync(path.join(c.base, 'sworn', 'sess-b.json'), JSON.stringify({
       arquivosTocados: [path.join(c.projeto, 'src', 'a.js')], esperaAprender: 4, auditoriaAvisou: true }));
-    const r = rodar(c, { uso: USO, amostras: [], sessao: 'sess-b', resposta: 'ofereco o /esquadro:paralelo', padrao: false });
+    const r = rodar(c, { uso: USO, amostras: [], sessao: 'sess-b', resposta: 'ofereco o /sworn:parallel', padrao: false });
     // 091 #5 (D557): a resposta que cita o paralelo nao acende botao (roda direto)
     assert.deepStrictEqual(nomes(r), ['aprender', 'auditar', 'padrao'], JSON.stringify(r.botoes));
     assert.deepStrictEqual(nomes(rodar(c, { uso: USO, amostras: [], sessao: 'sess-b', padrao: true })), ['aprender', 'auditar']);
@@ -175,14 +175,14 @@ test('sessao.js: devolve `botoes` na ordem de prioridade, com a resposta e o pad
     fs.mkdirSync(pasta, { recursive: true });
     for (let i = 0; i < calibracao.AMOSTRA_MINIMA.sessoes; i++) fs.writeFileSync(path.join(pasta, 's' + i + '.jsonl'), '');
     assert.ok(nomes(rodar(c, { uso: USO, amostras: [], sessao: 'nao-existe' })).indexOf('calibrar') !== -1);
-    assert.ok(fs.existsSync(path.join(c.base, 'esquadro', 'cache', 'calibrar.json')), 'marca do dia na pasta do estado');
+    assert.ok(fs.existsSync(path.join(c.base, 'sworn', 'cache', 'calibrar.json')), 'marca do dia na pasta do estado');
   });
 });
 
 test('sessao.js: cruzou acende o botao do handoff, em primeiro', () => {
   cenario(function (c) {
-    fs.writeFileSync(path.join(c.projeto, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ limiares: { revisoesFechadas: 1 }, modoContinuo: false })); // Plano 091 (#9): sem modoContinuo false a revisao nao cruza
-    fs.writeFileSync(path.join(c.base, 'esquadro', 'sess-h.json'), JSON.stringify({ contadores: { revisao_fechada: 1 } }));
+    fs.writeFileSync(path.join(c.projeto, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ limiares: { revisoesFechadas: 1 }, modoContinuo: false })); // Plano 091 (#9): sem modoContinuo false a revisao nao cruza
+    fs.writeFileSync(path.join(c.base, 'sworn', 'sess-h.json'), JSON.stringify({ contadores: { revisao_fechada: 1 } }));
     const r = rodar(c, { uso: USO, amostras: [], sessao: 'sess-h' });
     assert.strictEqual(r.cruzou, true);
     assert.strictEqual(r.botoes[0].nome, 'handoff', JSON.stringify(r.botoes));

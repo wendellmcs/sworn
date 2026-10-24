@@ -40,8 +40,8 @@ const COMANDO_CAVEMAN = '/caveman ';
 /** A 1a linha do bloco da qualidade: a marca que prova que o recurso chegou a sessao. */
 const MARCADOR_DO_BLOCO = qualidade.BLOCO.split('\n')[0];
 
-/** A 1a linha do que a abertura do esquadro escreve quando ha regras do projeto. */
-const CABECALHO_DA_ABERTURA = /^# esquadro - regras/m;
+/** A 1a linha do que a abertura do sworn escreve quando ha regras do projeto. */
+const CABECALHO_DA_ABERTURA = /^# sworn - regras/m;
 
 function perguntaDaCondicao(pergunta, condicao) {
   return condicao === 'caveman' ? COMANDO_CAVEMAN + pergunta : pergunta;
@@ -322,7 +322,7 @@ const SKILL_CAVEMAN = /(?:^|:)caveman$/i;
  * Devolve `{ ok, texto, aplicou, outputTokens, motivos }`.
  *
  * `aplicou` exige, todos:
- *   - a abertura do esquadro exatamente uma vez (cabecalho em UM hook_response de SessionStart): prova
+ *   - a abertura do sworn exatamente uma vez (cabecalho em UM hook_response de SessionStart): prova
  *     que o plugin carregou, e uma vez so. Sem isto a ausencia do bloco no padrao nao provaria nada;
  *   - o bloco presente SO no recurso;
  *   - o caveman ligado SO no caveman (a prova e a transcricao da sessao ou o resultado da skill);
@@ -370,17 +370,17 @@ function lerExecucao(linhas, opcoes) {
   });
 
   if (aberturas === 0) {
-    motivos.push('a abertura do esquadro nao apareceu nos hooks de SessionStart: o gancho de abertura nao rodou. ' +
+    motivos.push('a abertura do sworn nao apareceu nos hooks de SessionStart: o gancho de abertura nao rodou. ' +
       'Confira se o plugin foi carregado na sessao medida (a medicao o carrega com --plugin-dir) e se o node esta no PATH.');
   } else if (aberturas > 1) {
-    motivos.push('a abertura do esquadro apareceu ' + aberturas + ' vezes nos hooks de SessionStart: o plugin foi carregado duas vezes ' +
+    motivos.push('a abertura do sworn apareceu ' + aberturas + ' vezes nos hooks de SessionStart: o plugin foi carregado duas vezes ' +
       '(por exemplo a copia local, de --plugin-dir, mais a instalada pelo marketplace). Desligue uma das duas e rode de novo.');
   }
   if (falhas.length > 0) motivos.push('hook de SessionStart falhou: ' + falhas.join('; '));
   const querBloco = condicao === 'recurso';
   if (querBloco && comBloco === 0) motivos.push('o bloco de qualidade nao chegou a sessao do recurso');
   if (!querBloco && comBloco > 0) motivos.push('o bloco de qualidade apareceu na condicao ' + condicao +
-    ': ela tem de rodar sem o bloco. Confira o .claude/esquadro/projeto.json da pasta medida: a condicao ' + condicao +
+    ': ela tem de rodar sem o bloco. Confira o .claude/sworn/projeto.json da pasta medida: a condicao ' + condicao +
     ' precisa de "qualidadeDeResposta": false.');
   if (condicao === 'caveman') {
     if (!cavemanLigou) {
@@ -441,5 +441,5 @@ function lerExecucao(linhas, opcoes) {
 module.exports = {
   ACAO_DE_JULGAR, CONDICOES, RIVAIS, ORDENS, LENTE, COMANDO_CAVEMAN, MARCADOR_DO_BLOCO,
   perguntaDaCondicao, votoDoJuiz, resultadoDoPar, nomeDoPar, apurar, lerExecucao,
-  lerTranscricao, cavemanNaTranscricao, sessionIdDe
+  lerTranscricao, cavemanNaTranscricao, sessionIdDe, eventosDe, blocosDe
 };

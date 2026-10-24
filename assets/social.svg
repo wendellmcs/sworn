@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="titulo desc">
+  <title id="titulo">sworn</title>
+  <desc id="desc">Social preview: sworn, proof instead of claims. A Claude Code plugin with 8 gates and 9 commands. Beside it, literal lines of the end-of-turn gate message, in Portuguese.</desc>
+  <defs>
+    <pattern id="grade" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#1B222C" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="640" fill="#0D1117"/>
+  <rect width="1280" height="640" fill="url(#grade)"/>
+
+  <!-- o sworn: a mesma regua em L dos banners, na mesma escala -->
+  <g transform="translate(72 152)">
+    <path d="M0 0H56V200H232V256H0Z" fill="#E5E7EB"/>
+    <g stroke="#0D1117" stroke-width="3" stroke-linecap="round">
+      <path d="M56 24h-14M56 48h-9M56 72h-14M56 96h-9M56 120h-14M56 144h-9M56 168h-14"/>
+      <path d="M80 200v-14M104 200v-9M128 200v-14M152 200v-9M176 200v-14M200 200v-9"/>
+    </g>
+    <path d="M56 176H80V200" fill="none" stroke="#F59E0B" stroke-width="4"/>
+    <circle cx="160" cy="96" r="40" fill="#F59E0B"/>
+    <path d="M142 97l12 12l24-26" fill="none" stroke="#0D1117" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g font-family="'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text x="344" y="266" font-size="96" font-weight="700" letter-spacing="-3" fill="#F9FAFB">sworn</text>
+    <text x="348" y="320" font-size="31" fill="#D1D5DB">proof instead of claims</text>
+  </g>
+  <text x="349" y="370" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="17" fill="#9CA3AF">Claude Code hooks · zero tokens</text>
+
+  <!-- o portao: linhas literais do scripts/portao-fecho.js -->
+  <g transform="translate(868 180)">
+    <rect width="348" height="200" rx="12" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+    <rect x="0" y="0" width="5" height="200" rx="2" fill="#F59E0B"/>
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14">
+      <text x="24" y="40" fill="#F59E0B" font-weight="700">portao de fecho (trava 3)</text>
+      <text x="24" y="80" fill="#E5E7EB">Voce afirmou sucesso e nao</text>
+      <text x="24" y="102" fill="#E5E7EB">colou evidencia desta rodada.</text>
+      <text x="24" y="146" fill="#8B949E">Nao reescreva a frase para</text>
+      <text x="24" y="168" fill="#8B949E">escapar do portao. Rode, ou declare.</text>
+    </g>
+  </g>
+
+  <text x="72" y="560" font-family="'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="24" fill="#D1D5DB">A Claude Code plugin · 8 gates · 9 commands · MIT</text>
+</svg>

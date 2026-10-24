@@ -37,7 +37,7 @@ function ehRaizDeSi(dir) {
  * backup apontando para o bare). Devolve { base, bare, dono, dest }.
  */
 function cenario(nome, conteudo) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-vigiapx-' + nome + '-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-vigiapx-' + nome + '-'));
   const bare = path.join(base, 'bare.git');
   const trabalho = path.join(base, 'trabalho');
   const dono = path.join(base, 'dono');
@@ -161,7 +161,7 @@ test('arquivo inexistente no ramo: exit 1 sem criar novidades.md', () => {
 });
 
 test('sem --repo: uso no stderr, exit 2, nada gravado', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-vigiapx-uso-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-vigiapx-uso-'));
   try {
     const dest = path.join(base, 'destino');
     const r = puxar(['--destino', dest]);
@@ -174,11 +174,11 @@ test('sem --repo: uso no stderr, exit 2, nada gravado', () => {
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 
-test('sem --destino usa ESQUADRO_VIGIA (a mesma pasta que a abertura le)', () => {
+test('sem --destino usa SWORN_VIGIA (a mesma pasta que a abertura le)', () => {
   const c = cenario('env', RELATORIO);
   try {
     const r = spawnSync(process.execPath, [SCRIPT, '--repo', c.dono], {
-      encoding: 'utf8', windowsHide: true, env: Object.assign({}, process.env, { ESQUADRO_VIGIA: c.dest })
+      encoding: 'utf8', windowsHide: true, env: Object.assign({}, process.env, { SWORN_VIGIA: c.dest })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(fs.readFileSync(path.join(c.dest, 'novidades.md'), 'utf8'), RELATORIO);

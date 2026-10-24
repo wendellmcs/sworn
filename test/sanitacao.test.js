@@ -98,7 +98,7 @@ test('sanitacao: todo achado cita arquivo e linha - regra anti-teatro', () => {
 test('sanitacao: sessoesLocais le os IDs das transcricoes em <projects>/<projeto>/<id>.jsonl', () => {
   const fs = require('node:fs');
   const os = require('node:os');
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro sessoes-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sessoes-'));
   try {
     const id = '0f0f0f0f-' + '1111-4222-8333-444444444444';
     const projetos = path.join(home, '.claude', 'projects');
@@ -128,7 +128,7 @@ function comConfig(dir, fn) {
 test('sanitacao: sessoesLocais separa a pasta que nao existe da que nao abre', () => {
   const fs = require('node:fs');
   const os = require('node:os');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro sessoes-ruim-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sessoes-ruim-'));
   try {
     const arquivo = path.join(dir, 'projects');
     fs.writeFileSync(arquivo, 'nao sou pasta');
@@ -143,7 +143,7 @@ test('sanitacao: sessoesLocais separa a pasta que nao existe da que nao abre', (
 test('sanitacao: a classe sessao_local le as transcricoes de CLAUDE_CONFIG_DIR, como o resto do plugin', () => {
   const fs = require('node:fs');
   const os = require('node:os');
-  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro cfg-'));
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn cfg-'));
   try {
     const id = '0e0e0e0e-' + '1111-4222-8333-555555555555';
     fs.mkdirSync(path.join(cfg, 'projects', 'proj'), { recursive: true });
@@ -157,7 +157,7 @@ test('sanitacao: a classe sessao_local le as transcricoes de CLAUDE_CONFIG_DIR, 
 test('sanitacao: pasta de transcricoes que nao abre reprova o autoteste e tira o limpo do auditar', () => {
   const fs = require('node:fs');
   const os = require('node:os');
-  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro cfg-ruim-'));
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn cfg-ruim-'));
   const dir = repo();
   try {
     fs.writeFileSync(path.join(cfg, 'projects'), 'nao sou pasta');
@@ -275,7 +275,7 @@ const { spawnSync } = require('node:child_process');
 const SCRIPT = path.join(RAIZ, 'scripts', 'sanitar.js');
 
 function repo(comLeitura) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro sanitar-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sanitar-'));
   const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
   g(['init', '-q']);
   fs.writeFileSync(path.join(dir, 'a.txt'), comLeitura || 'nada aqui\n', 'utf8');
@@ -286,7 +286,7 @@ function repo(comLeitura) {
 }
 
 function repoComMensagemSuja() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro msg-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn msg-'));
   const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
   g(['init', '-q']);
   fs.writeFileSync(path.join(dir, 'a.txt'), 'nada aqui\n', 'utf8');
@@ -394,7 +394,7 @@ test('sanitar: a raiz sai COMO FOI PEDIDA, nunca resolvida', () => {
 });
 
 test('sanitar: sem git NAO devolve 0 - devolve 2, e diz que nao mediu', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro sem git-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sem git-'));
   const r = sanitar(dir);
   assert.strictEqual(r.status, 2, 'dizer "limpo" sobre o que nao leu e o silencio que isto quebra');
   assert.ok(/NAO DEU PARA MEDIR/.test(r.stderr), r.stderr);
@@ -503,7 +503,7 @@ test('sanitacao: o teste acima SABE reconhecer excecao que carrega peso', () => 
  * depois do ato irreversivel.
  */
 test('sanitar: repositorio SEM commit nenhum e medivel - 0 nao e o mesmo que nao sei', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro sem commit-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sem commit-'));
   spawnSync('git', ['init', '-q'], { cwd: dir, encoding: 'utf8', shell: false });
   fs.writeFileSync(path.join(dir, 'a.txt'), 'nada aqui\n', 'utf8');
   spawnSync('git', ['add', '-A'], { cwd: dir, encoding: 'utf8', shell: false });
@@ -521,7 +521,7 @@ test('sanitar: repositorio SEM commit nenhum e medivel - 0 nao e o mesmo que nao
 
 /** Controle: pasta que NAO e repositorio continua sendo 'nao sei', nao 'limpo'. */
 test('sanitar: pasta que nao e repositorio segue sendo NAO SEI, nao vazio', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro nao repo-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn nao repo-'));
   assert.strictEqual(sanit.semCommits(dir), false,
     'sem isto, qualquer pasta do disco passaria por repositorio limpo');
   assert.strictEqual(sanit.autoresDoHistorico(dir), null);
@@ -610,7 +610,7 @@ test('IN-01: sanitar com arquivo que nao abre devolve 2, nunca LIMPO', (t) => {
 // ── IN-02: UTF-16 (o que o PowerShell 5.1 grava com `>`) tambem e lido ───
 
 test('IN-02: arquivo UTF-16 com BOM e acusado como o UTF-8', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro utf16-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn utf16-'));
   const corpo = 'veja ' + CAMINHO_PESSOAL + '\r\n';
   const le = Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from(corpo, 'utf16le')]);
   const be = Buffer.concat([Buffer.from([0xFE, 0xFF]), Buffer.from(corpo, 'utf16le').swap16()]);
@@ -626,7 +626,7 @@ test('IN-02: arquivo UTF-16 com BOM e acusado como o UTF-8', () => {
 // ── IN-03: flag sem `g` num termo local travava o processo ───────────────
 
 test('IN-03: termo local com flags "i" (sem g) nao pendura a varredura', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro flags-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn flags-'));
   lerVocabulario(dir, { termos: [Object.assign({}, TERMO_SINTETICO, { flags: 'i' })] });
   const codigo = 'const s = require(' + JSON.stringify(path.join(RAIZ, 'scripts', 'lib', 'sanitacao.js')) + ');' +
     'const c = s.classes(' + JSON.stringify(dir) + ');' +
@@ -640,14 +640,14 @@ test('IN-03: termo local com flags "i" (sem g) nao pendura a varredura', () => {
 // ── IN-04: vocabulario privado nao some calado ───────────────────────────
 
 test('IN-04: vocabulario local gravado com BOM e lido', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro bom-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn bom-'));
   lerVocabulario(dir, { termos: [TERMO_SINTETICO] }, true);
   assert.strictEqual(sanit.termosLocais(dir).length, 1, 'o BOM do PowerShell zerava o vocabulario');
   assert.strictEqual(sanit.lerVocabularioLocal(dir).estado, 'ok');
 });
 
 test('IN-04: ausente, presente e valido, presente e invalido sao tres estados', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro vocab-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn vocab-'));
   assert.strictEqual(sanit.lerVocabularioLocal(dir).estado, 'ausente');
   lerVocabulario(dir, { termos: [TERMO_SINTETICO] });
   assert.strictEqual(sanit.lerVocabularioLocal(dir).estado, 'ok');
@@ -718,7 +718,7 @@ test('D430: URL com users nao e pasta pessoal; caminho do Windows em qualquer ca
   });
 });
 
-// == D419: sub-bloco S3 do esquadro-review-aaa, achados L1-11/12/14/16/17 ======
+// == D419: sub-bloco S3 do sworn-review-aaa, achados L1-11/12/14/16/17 ======
 
 // ── L1-11: e-mail sem ancora era quadratico em linha longa sem '@' ───────
 
@@ -751,7 +751,7 @@ test('L1-11: a ancora nao muda o que casa - e-mail no meio, colado e apos falha 
 // ── L1-12: saida grande do git nao pode virar "git mudo" ─────────────────
 
 test('L1-12: indice grande (saida do git > 1 MiB) nao vira null', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro grande-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn grande-'));
   const git = (args, entrada) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false, input: entrada });
   git(['init', '-q']);
   const blob = git(['hash-object', '-w', '--stdin'], '').stdout.trim();
@@ -792,7 +792,7 @@ test('L1-14: a caixa solta nao cria falso positivo - rota /users/ e /home de doc
 // ── L1-16: excecaoEm e padrao vazio do vocabulario local ─────────────────
 
 test('L1-16: excecaoEm que nao e lista e rejeitado com mensagem, nao lanca em varrerTexto', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro exc-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn exc-'));
   lerVocabulario(dir, { termos: [Object.assign({}, TERMO_SINTETICO, { excecaoEm: 'docs/nota.md' })] });
   const v = sanit.lerVocabularioLocal(dir);
   assert.strictEqual(v.termos.length, 0);
@@ -802,7 +802,7 @@ test('L1-16: excecaoEm que nao e lista e rejeitado com mensagem, nao lanca em va
 });
 
 test('L1-16: excecaoEm com item que nao e texto tambem e rejeitado; lista valida segue valendo', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro exc2-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn exc2-'));
   lerVocabulario(dir, { termos: [
     Object.assign({}, TERMO_SINTETICO, { chave: 'ruim', excecaoEm: ['ok.md', 7] }),
     Object.assign({}, TERMO_SINTETICO, { chave: 'boa', excecaoEm: ['ok.md'] })
@@ -813,7 +813,7 @@ test('L1-16: excecaoEm com item que nao e texto tambem e rejeitado; lista valida
 });
 
 test('L1-16: padrao que casa vazio e rejeitado, nao acusa toda linha', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro vazio-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn vazio-'));
   lerVocabulario(dir, { termos: [Object.assign({}, TERMO_SINTETICO, { chave: 'casa_vazio', padrao: 'x*' })] });
   const v = sanit.lerVocabularioLocal(dir);
   assert.strictEqual(v.termos.length, 0, 'o padrao x* entrou e casa em toda linha');
@@ -835,7 +835,7 @@ test('L1-16: sanitar com excecaoEm invalido devolve 2, nunca LIMPO nem excecao n
 // travar o sanitizador com saida 2. O que antes ia a `ilegiveis` (L1-17) agora vai
 // a `naoConferidos`; `ilegiveis` fica so para o que nao abriu.
 test('L1-17/D429-2: UTF-16 sem BOM e UTF-32 (NUL) vao a naoConferidos com motivo, nao a ilegiveis', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro nul-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn nul-'));
   const corpo = 'veja ' + CAMINHO_PESSOAL + '\r\n';
   fs.writeFileSync(path.join(dir, 'semBom.txt'), Buffer.from(corpo, 'utf16le'));
   const u32 = Buffer.alloc(corpo.length * 4);
@@ -852,7 +852,7 @@ test('L1-17/D429-2: UTF-16 sem BOM e UTF-32 (NUL) vao a naoConferidos com motivo
 });
 
 test('L1-17: UTF-16 com BOM (o que o PowerShell grava) segue lido e nao e declarado ilegivel', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro nul2-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn nul2-'));
   fs.writeFileSync(path.join(dir, 'le.txt'),
     Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from('veja ' + CAMINHO_PESSOAL + '\r\n', 'utf16le')]));
   const ilegiveis = [];
@@ -875,7 +875,7 @@ test('L1-17/D429-2: sanitar com UTF-16 sem BOM da LIMPO com o aviso "nao conferi
 // ── D429/2: binario pula com aviso ───────────────────────────────────────
 
 test('D429/2: binario com NUL nao esta em ilegiveis, esta em naoConferidos com o motivo', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro bin-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn bin-'));
   fs.writeFileSync(path.join(dir, 'img.bin'), Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x00, 0x00, 0x1A, 0x0A]));
   const ilegiveis = [];
   const naoConferidos = [];
@@ -887,7 +887,7 @@ test('D429/2: binario com NUL nao esta em ilegiveis, esta em naoConferidos com o
 });
 
 test('D429/2: erro de leitura continua em ilegiveis, nao em naoConferidos', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro bin2-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn bin2-'));
   const ilegiveis = [];
   const naoConferidos = [];
   sanit.varrerArquivos(dir, ['quebrado\0.txt'], sanit.CLASSES_GENERICAS, ilegiveis, naoConferidos);
@@ -981,7 +981,7 @@ test('A4-02: sanitar acusa o nome do autor do vocabulario local, com e-mail nore
   assert.ok(/S2\s+sintetica\s+\(historico do git\):/.test(r.stdout), r.stdout);
 });
 
-// ── A4-03 (revisao completa, L4): `docs/` fora e regra do export do esquadro, nao de todo projeto ──
+// ── A4-03 (revisao completa, L4): `docs/` fora e regra do export do sworn, nao de todo projeto ──
 
 test('A4-03: sanitar num projeto qualquer varre docs/ e nao diz que deixou docs/ de fora', () => {
   const dir = repo();
@@ -991,7 +991,7 @@ test('A4-03: sanitar num projeto qualquer varre docs/ e nao diz que deixou docs/
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
   assert.ok(/S1\s+caminho_de_maquina\s+docs\/guia\.md:1/.test(r.stdout), r.stdout);
   assert.ok(r.stdout.indexOf('Fora da superficie: docs/') === -1, r.stdout);
-  // o export do esquadro segue sem docs/ (D132 §1.3): a superficie publicavel e a do exportar.js
+  // o export do sworn segue sem docs/ (D132 §1.3): a superficie publicavel e a do exportar.js
   assert.strictEqual(sanit.superficiePublicavel(dir).indexOf('docs/guia.md'), -1);
   assert.ok(sanit.auditar(dir).achados.some((a) => a.arquivo === 'docs/guia.md'));
 });

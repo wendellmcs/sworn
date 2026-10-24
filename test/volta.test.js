@@ -19,7 +19,7 @@ const MIN = 60 * 1000;
 const AGORA = Date.parse('2026-10-17T12:00:00.000Z');
 
 function transcript(linhas) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-volta-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-volta-'));
   const f = path.join(dir, 's.jsonl');
   fs.writeFileSync(f, linhas.map(function (l) { return typeof l === 'string' ? l : JSON.stringify(l); }).join('\n') + '\n');
   return { dir: dir, f: f, fim: function () { fs.rmSync(dir, { recursive: true, force: true }); } };
@@ -31,9 +31,9 @@ function chamada(quando, modelo, contexto, extra) {
 }
 
 // O texto do mock aprovado da 0.11.0 (prints-0110/mock-0110.html, D588), letra por letra: o resumo gravado ao segurar.
-const RESUMO = '.claude/esquadro/handoff/2026-10-22-retomar-d731fc49.md';
+const RESUMO = '.claude/sworn/handoff/2026-10-22-retomar-d731fc49.md';
 const MOCK = [
-  'esquadro - este chat ficou 1 h 16 min parado e o cache venceu: continuar aqui regrava 461 mil tokens.',
+  'sworn - este chat ficou 1 h 16 min parado e o cache venceu: continuar aqui regrava 461 mil tokens.',
   '',
   'Continuar neste chat: cerca de US$ 3,69 (Opus 5.5).',
   'Abrir um chat novo: cerca de US$ 0,55.',
@@ -45,11 +45,11 @@ const MOCK = [
   '     Retome o chat d731fc49 pelo resumo ' + RESUMO + ': leia-o antes de qualquer coisa e siga de onde ele parou.',
   '  2. para seguir neste chat, mande a mensagem de novo: este aviso nao volta nesta pausa.',
   '',
-  'Desligar neste projeto: "avisoDeVolta": false em .claude/esquadro/projeto.json.'
+  'Desligar neste projeto: "avisoDeVolta": false em .claude/sworn/projeto.json.'
 ].join('\n');
 // Sem resumo (registro torto, disco cheio): a linha diz isso e a opcao 1 volta a ser a da 0.8.4 (mock D550).
 const MOCK_SEM_RESUMO = [
-  'esquadro - este chat ficou 3 h 08 min parado e o cache venceu: continuar aqui regrava 318 mil tokens.',
+  'sworn - este chat ficou 3 h 08 min parado e o cache venceu: continuar aqui regrava 318 mil tokens.',
   '',
   'Continuar neste chat: cerca de US$ 2,54 (Opus 5.5).',
   'Abrir um chat novo: cerca de US$ 0,55.',
@@ -60,7 +60,7 @@ const MOCK_SEM_RESUMO = [
   '  1. abra um chat novo e cole o prompt do ultimo handoff, se ele estiver em dia;',
   '  2. para seguir neste chat, mande a mensagem de novo: este aviso nao volta nesta pausa.',
   '',
-  'Desligar neste projeto: "avisoDeVolta": false em .claude/esquadro/projeto.json.'
+  'Desligar neste projeto: "avisoDeVolta": false em .claude/sworn/projeto.json.'
 ].join('\n');
 
 test('084: ultimaChamadaDoTranscript da contexto, horario e modelo da ultima chamada da linha principal', () => {
@@ -75,7 +75,7 @@ test('084: ultimaChamadaDoTranscript da contexto, horario e modelo da ultima cha
     assert.strictEqual(saude.contextoDoTranscript(t.f), 250000);
   } finally { t.fim(); }
   assert.strictEqual(saude.ultimaChamadaDoTranscript(null), null);
-  assert.strictEqual(saude.ultimaChamadaDoTranscript(path.join(os.tmpdir(), 'nao-existe-esquadro-volta.jsonl')), null);
+  assert.strictEqual(saude.ultimaChamadaDoTranscript(path.join(os.tmpdir(), 'nao-existe-sworn-volta.jsonl')), null);
   // sem horario legivel ou sem modelo: o campo vem null, o contexto vem
   const s = transcript([{ type: 'assistant', timestamp: 'ontem', message: { usage: { input_tokens: 7 } } }]);
   try {
@@ -118,7 +118,7 @@ test('084: a conta - continuar = contexto x escrita de 1 h; chat novo = 68.723 x
   assert.ok(Math.abs(r.continuar - 400000 * 20 / 1e6) < 1e-9, 'Fable 5.1: escrita de 1 h US$ 20/M');
   assert.ok(Math.abs(r.novo - 68723 * 20 / 1e6) < 1e-9);
   assert.strictEqual(volta.RECOMECO, 68723, 'mediana da 1a chamada de chat novo (D547)');
-  assert.match(volta.motivo(r), /^esquadro - este chat ficou 1 h 01 min parado .* 400 mil tokens\.$/m);
+  assert.match(volta.motivo(r), /^sworn - este chat ficou 1 h 01 min parado .* 400 mil tokens\.$/m);
   assert.match(volta.motivo(r), /cerca de US\$ 8,00 \(Fable 5\.1\)\./);
 });
 
@@ -146,7 +146,7 @@ test('084: modelo sem preco avisa sem o valor em dolar', () => {
     assert.ok(r, String(modelo) + ': tinha de avisar');
     const t = volta.motivo(r);
     assert.ok(!/US\$ \d/.test(t), 'sem valor em dolar: ' + t);
-    assert.match(t, /^esquadro - este chat ficou 2 h 00 min parado .* 250 mil tokens\.$/m);
+    assert.match(t, /^sworn - este chat ficou 2 h 00 min parado .* 250 mil tokens\.$/m);
     assert.match(t, /sem o valor em US\$|sem preco/i);
   }
 });
@@ -166,7 +166,7 @@ function abrir(dir, sessoes, id, transcriptPath, prompt) {
     cwd: dir, encoding: 'utf8',
     input: JSON.stringify({ session_id: id, cwd: dir, hook_event_name: 'UserPromptSubmit', prompt: prompt || 'segue',
       transcript_path: transcriptPath }),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: sessoes })
+    env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
   });
   assert.strictEqual(r.status, 0, r.stderr);
   return r.stdout.trim() ? JSON.parse(r.stdout) : null;
@@ -183,11 +183,11 @@ test('0.11.0: abrir-turno para a 1a mensagem da pausa na forma curta e deixa pas
     const um = abrir(t.dir, sessoes, 'v1', t.f);
     assert.ok(parou(um), 'a 1a mensagem tinha de parar: ' + JSON.stringify(um));
     assert.strictEqual(um.decision, undefined, 'a forma curta nao usa decision: block');
-    assert.match(um.stopReason, /^esquadro - este chat ficou 3 h 0[78] min parado/);
+    assert.match(um.stopReason, /^sworn - este chat ficou 3 h 0[78] min parado/);
     assert.match(um.stopReason, /Desligar neste projeto: "avisoDeVolta": false/);
     // o registro so tem a chamada, sem pedido do dono: sem resumo, e o aviso diz isso
     assert.match(um.stopReason, /^Sem resumo: nao consegui montar o resumo deste chat\.$/m);
-    assert.strictEqual(fs.existsSync(path.join(t.dir, '.claude', 'esquadro', 'handoff')), false);
+    assert.strictEqual(fs.existsSync(path.join(t.dir, '.claude', 'sworn', 'handoff')), false);
     const dois = abrir(t.dir, sessoes, 'v1', t.f);
     assert.ok(!parou(dois), 'a 2a mensagem tinha de passar: ' + JSON.stringify(dois));
   } finally { t.fim(); }
@@ -205,11 +205,11 @@ test('0.11.0: abrir-turno grava o resumo antes de parar e o aviso traz o prompt 
   try {
     const um = abrir(t.dir, sessoes, 'abcdef12-3456', t.f);
     assert.ok(parou(um), JSON.stringify(um));
-    const pasta = path.join(t.dir, '.claude', 'esquadro', 'handoff');
+    const pasta = path.join(t.dir, '.claude', 'sworn', 'handoff');
     const gravados = fs.readdirSync(pasta);
     assert.strictEqual(gravados.length, 1);
     assert.match(gravados[0], /^\d{4}-\d\d-\d\d-retomar-abcdef12\.md$/);
-    const rel = '.claude/esquadro/handoff/' + gravados[0];
+    const rel = '.claude/sworn/handoff/' + gravados[0];
     assert.ok(um.stopReason.split('\n').indexOf('Resumo deste chat gravado em ' + rel + ' (sem gastar nada).') !== -1, um.stopReason);
     assert.ok(um.stopReason.split('\n').indexOf('     Retome o chat abcdef12 pelo resumo ' + rel +
       ': leia-o antes de qualquer coisa e siga de onde ele parou.') !== -1, um.stopReason);
@@ -234,7 +234,7 @@ test('0.11.0: retomar.js que lanca no require nao cala o aviso - sai sem resumo'
       cwd: t.dir, encoding: 'utf8',
       input: JSON.stringify({ session_id: 'q1', cwd: t.dir, hook_event_name: 'UserPromptSubmit', prompt: 'segue',
         transcript_path: t.f }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: sessoes })
+      env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     const um = r.stdout.trim() ? JSON.parse(r.stdout) : null;
@@ -259,7 +259,7 @@ test('0.11.1: resumo torto que faz o motivo lancar nao cala o aviso - sai sem re
       cwd: t.dir, encoding: 'utf8',
       input: JSON.stringify({ session_id: 'q2', cwd: t.dir, hook_event_name: 'UserPromptSubmit', prompt: 'segue',
         transcript_path: t.f }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: sessoes })
+      env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     const um = r.stdout.trim() ? JSON.parse(r.stdout) : null;
@@ -276,8 +276,8 @@ test('084 Tarefa 3: abrir-turno nao segura - chave desligada, chat pequeno, tran
   try {
     // controle positivo na mesma pasta antes de desligar
     assert.ok(parou(abrir(t.dir, sessoes, 'c0', t.f)));
-    fs.mkdirSync(path.join(t.dir, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(t.dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ avisoDeVolta: false }));
+    fs.mkdirSync(path.join(t.dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(t.dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ avisoDeVolta: false }));
     const off = abrir(t.dir, sessoes, 'c1', t.f);
     assert.ok(!parou(off), 'desligado: ' + JSON.stringify(off));
     const peq = abrir(p.dir, sessoes, 'c2', p.f);

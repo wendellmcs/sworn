@@ -4,11 +4,11 @@ const { veioDeSubagente } = require('./texto.js');
 
 /**
  * Bloco A1 (D426): o dono CORRIGIU o comportamento do agente -> o plugin sugere transformar a correcao
- * em regra com /esquadro:aprender. Aqui mora so o detector e o texto; quem grava e a skill, e so depois
+ * em regra com /sworn:learn. Aqui mora so o detector e o texto; quem grava e a skill, e so depois
  * da aprovacao dele. O gancho (abrir-turno.js) nunca grava regra.
  *
  * Molde: saude.perguntaSobreSaude. Conservador de proposito, porque o erro dos dois lados custa
- * diferente: perder uma correcao e so nao sugerir (ele ainda pode rodar /esquadro:aprender); sugerir em
+ * diferente: perder uma correcao e so nao sugerir (ele ainda pode rodar /sworn:learn); sugerir em
  * relato de bug e ruido a cada pedido. Por isso cada padrao abaixo exige a cara de CORRECAO, nao so a
  * palavra: "o botao para de funcionar" e "o login nunca mais funcionou" sao relato de bug.
  * "pare de <verbo>" e imperativo; "para de" (sem o e) fica de fora de proposito, e o verbo do relato.
@@ -111,10 +111,10 @@ function ligada(projeto) {
 /** O que o modelo recebe quando o prompt parece uma correcao. ASCII puro: sai por hook. Plano 091 (#2, D559): ordem
  *  de rodar a skill na mesma resposta e perguntar em 3 opcoes; gravar segue so com o sim. */
 const INSTRUCAO_DA_CORRECAO = [
-  'esquadro: a mensagem do usuario parece uma CORRECAO ao seu comportamento.',
+  'sworn: a mensagem do usuario parece uma CORRECAO ao seu comportamento.',
   'Se for, e valer tambem para as proximas vezes, faca nesta mesma resposta:',
   '1. Atenda o pedido.',
-  '2. Rode /esquadro:aprender: ele monta a regra (gatilho -> acao).',
+  '2. Rode /sworn:learn: ele monta a regra (gatilho -> acao).',
   '3. Pergunte pelo AskUserQuestion, em 3 opcoes: gravar como esta (recomendada),',
   '   ajustar o texto antes, nao gravar.',
   'So grave com o sim. Se nao for correcao do seu comportamento (relato de bug,',

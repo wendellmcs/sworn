@@ -33,7 +33,7 @@ const doAmbiente = ['.claude/settings.json', '.claude/settings.local.json', '.mc
   .filter(function (rel) { return leuArquivo(cwd, rel); });
 const leituras = [];
 if (leuPackage) leituras.push('o package.json, para achar o script de teste');
-if (projeto) leituras.push('o .claude/esquadro/projeto.json, para saber o que o projeto declarou');
+if (projeto) leituras.push('o .claude/sworn/projeto.json, para saber o que o projeto declarou');
 if (doAmbiente.length) leituras.push(emLista(doAmbiente) + ', para detectar o ambiente');
 leituras.push('os arquivos de instrucao do projeto, so para contar linhas');
 

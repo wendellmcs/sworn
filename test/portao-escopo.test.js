@@ -12,7 +12,7 @@ function rodar(entrada, tmp) {
   const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-escopo.js')], {
     input: JSON.stringify(entrada),
     encoding: 'utf8',
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+    env: Object.assign({}, process.env, { SWORN_TMP: tmp })
   });
   let json = null;
   if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
@@ -36,15 +36,15 @@ function liberou(r) {
 }
 
 function montarProjeto(extra) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-proj-'));
-  fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
   const projeto = Object.assign({
     versaoConfig: 1,
     marchaPadrao: 'padrao',
     intocaveis: ['segredos/**'],
     marchas: { aaa: ['**/auth/**'], padrao: ['src/**'], rapida: ['docs/**', '**/*.md'] }
   }, extra || {});
-  fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify(projeto), 'utf8');
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify(projeto), 'utf8');
   return dir;
 }
 
@@ -63,7 +63,7 @@ function entrada(dir, arquivo, tmpSessao) {
 }
 
 function comTmp(fn) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-esc-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-esc-'));
   try { fn(base); } finally { fs.rmSync(base, { recursive: true, force: true }); }
 }
 
@@ -89,7 +89,7 @@ test('portao-escopo: marcha padrao sem escopo.md e negada', () => {
 test('portao-escopo: arquivo dentro do escopo declarado passa', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.js\n## Fora de escopo\n- o resto');
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.js\n## Fora de escopo\n- o resto');
     const r = rodar(entrada(dir, 'src/a.js'), tmp);
     liberou(r);
     fs.rmSync(dir, { recursive: true, force: true });
@@ -99,7 +99,7 @@ test('portao-escopo: arquivo dentro do escopo declarado passa', () => {
 test('portao-escopo: arquivo FORA do escopo declarado e negado (C8)', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.js\n## Fora de escopo\n- o resto');
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.js\n## Fora de escopo\n- o resto');
     const r = rodar(entrada(dir, 'src/b.js'), tmp);
     assert.strictEqual(negou(r), true);
     fs.rmSync(dir, { recursive: true, force: true });
@@ -109,7 +109,7 @@ test('portao-escopo: arquivo FORA do escopo declarado e negado (C8)', () => {
 test('portao-escopo: intocavel e negado mesmo estando no escopo (C10)', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- segredos/**\n');
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- segredos/**\n');
     const r = rodar(entrada(dir, 'segredos/chave.env'), tmp);
     assert.strictEqual(negou(r), true);
     assert.ok(r.json.hookSpecificOutput.permissionDecisionReason.includes('intocavel'));
@@ -123,7 +123,7 @@ test('portao-escopo D35: o escopo.md passa pelo passe livre (fixture que discrim
     // exige escopo ('**' casa tudo) e nao ha 'rapida' nem passe livre de sobra
     // para o teste passar por outro caminho que nao o que ele diz cobrir.
     const dir = montarProjeto({ marchas: { aaa: [], padrao: ['**'], rapida: [] } });
-    const r = rodar(entrada(dir, '.claude/esquadro/escopo.md'), tmp);
+    const r = rodar(entrada(dir, '.claude/sworn/escopo.md'), tmp);
     liberou(r);
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -132,7 +132,7 @@ test('portao-escopo D35: o escopo.md passa pelo passe livre (fixture que discrim
 test('portao-escopo D35: projeto.json NAO tem passe livre - cai na regra normal', () => {
   comTmp((tmp) => {
     const dir = montarProjeto({ marchas: { aaa: [], padrao: ['**'], rapida: [] } });
-    const r = rodar(entrada(dir, '.claude/esquadro/projeto.json'), tmp);
+    const r = rodar(entrada(dir, '.claude/sworn/projeto.json'), tmp);
     assert.strictEqual(negou(r), true);
     // F9: 'escopo.md' aparece em QUALQUER motivoSemEscopo, para qualquer alvo - nao
     // discrimina nada. 'projeto.json' e o alvo de verdade interpolado na mensagem.
@@ -144,8 +144,8 @@ test('portao-escopo D35: projeto.json NAO tem passe livre - cai na regra normal'
 test('portao-escopo D35: contadores.json NAO tem passe livre', () => {
   comTmp((tmp) => {
     const dir = montarProjeto({ marchas: { aaa: [], padrao: ['**'], rapida: [] } });
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.js\n');
-    const r = rodar(entrada(dir, '.claude/esquadro/contadores.json'), tmp);
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.js\n');
+    const r = rodar(entrada(dir, '.claude/sworn/contadores.json'), tmp);
     assert.strictEqual(negou(r), true);
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -154,13 +154,13 @@ test('portao-escopo D35: contadores.json NAO tem passe livre', () => {
 test('portao-escopo: reescrever escopo.md que ja existe conta ampliacao (desenho §5)', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.js\n');
-    rodar(entrada(dir, '.claude/esquadro/escopo.md'), tmp);
-    process.env.ESQUADRO_TMP = tmp;
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.js\n');
+    rodar(entrada(dir, '.claude/sworn/escopo.md'), tmp);
+    process.env.SWORN_TMP = tmp;
     delete require.cache[require.resolve('../scripts/lib/estado.js')];
     const estado = require('../scripts/lib/estado.js');
     assert.strictEqual(estado.ler('s1').contadores.escopo_ampliado, 1);
-    delete process.env.ESQUADRO_TMP;
+    delete process.env.SWORN_TMP;
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
@@ -171,14 +171,14 @@ test('portao-escopo D34: criar escopo.md do zero ja conta ampliacao', () => {
     // sem escopo.md no disco: a CRIACAO e que tem de ser contada, nao so a reescrita.
     const r = rodar({
       session_id: 's1', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'escopo.md'), content: '## Dentro\n- **\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'escopo.md'), content: '## Dentro\n- **\n' }
     }, tmp);
     liberou(r);
-    process.env.ESQUADRO_TMP = tmp;
+    process.env.SWORN_TMP = tmp;
     delete require.cache[require.resolve('../scripts/lib/estado.js')];
     const estado = require('../scripts/lib/estado.js');
     assert.strictEqual(estado.ler('s1').contadores.escopo_ampliado, 1);
-    delete process.env.ESQUADRO_TMP;
+    delete process.env.SWORN_TMP;
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
@@ -186,29 +186,29 @@ test('portao-escopo D34: criar escopo.md do zero ja conta ampliacao', () => {
 test('portao-escopo D34: encolher o escopo NAO conta ampliacao', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/**\n- test/**\n');
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/**\n- test/**\n');
 
     // F10: semeia um contador de outra trava ANTES do cenario, para o estado da
     // sessao existir de verdade. Sem isto, "contadores ausente" podia significar
     // tanto "nao ampliou" quanto "o estado nunca foi escrito" - a asserção provava
     // a coisa errada por acidente.
-    process.env.ESQUADRO_TMP = tmp;
+    process.env.SWORN_TMP = tmp;
     delete require.cache[require.resolve('../scripts/lib/estado.js')];
     require('../scripts/lib/estado.js').incrementar('s1', 'sem_escopo');
-    delete process.env.ESQUADRO_TMP;
+    delete process.env.SWORN_TMP;
 
     const r = rodar({
       session_id: 's1', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'escopo.md'), content: '## Dentro\n- src/**\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'escopo.md'), content: '## Dentro\n- src/**\n' }
     }, tmp);
     liberou(r);
-    process.env.ESQUADRO_TMP = tmp;
+    process.env.SWORN_TMP = tmp;
     delete require.cache[require.resolve('../scripts/lib/estado.js')];
     const estado = require('../scripts/lib/estado.js');
     const s = estado.ler('s1');
     assert.ok(s.contadores, 'o estado precisa existir de verdade (foi semeado antes do cenario)');
     assert.strictEqual(s.contadores.escopo_ampliado, undefined, 'encolher nao pode contar como ampliacao');
-    delete process.env.ESQUADRO_TMP;
+    delete process.env.SWORN_TMP;
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
@@ -221,26 +221,26 @@ test('portao-escopo D38: escopo.md com caixa trocada nao escapa do passe livre',
     const dir = montarProjeto();
     const r = rodar({
       session_id: 's1', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'Escopo.md'), content: '## Dentro\n- **\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'Escopo.md'), content: '## Dentro\n- **\n' }
     }, tmp);
     liberou(r);
-    process.env.ESQUADRO_TMP = tmp;
+    process.env.SWORN_TMP = tmp;
     delete require.cache[require.resolve('../scripts/lib/estado.js')];
     const estado = require('../scripts/lib/estado.js');
     assert.strictEqual(estado.ler('s1').contadores.escopo_ampliado, 1,
       'a burla de caixa tem de ser contada, nunca invisivel');
-    delete process.env.ESQUADRO_TMP;
+    delete process.env.SWORN_TMP;
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
 
 test('portao-escopo: projeto sem projeto.json libera e avisa uma vez so', () => {
   comTmp((tmp) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-cru-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-cru-'));
     const primeiro = rodar(entrada(dir, 'src/a.js'), tmp);
     const segundo = rodar(entrada(dir, 'src/b.js'), tmp);
     assert.strictEqual(negou(primeiro), false);
-    assert.ok(primeiro.json && primeiro.json.systemMessage.includes('/esquadro:init'));
+    assert.ok(primeiro.json && primeiro.json.systemMessage.includes('/sworn:init'));
     assert.strictEqual(segundo.json, null, 'nao repete o aviso');
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -280,7 +280,7 @@ test('portao-escopo D37: entrada hostil faz o portao LIBERAR, nunca travar (R6)'
 test('D244/defeito 7: arquivo declarado Fora e negado mesmo casando Dentro', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md',
+    escrever(dir, '.claude/sworn/escopo.md',
       '# Escopo\r\n**Objetivo:** x\r\n## Dentro\r\n- src/**\r\n## Fora de escopo\r\n- src/legado/** (nao mexer)\r\n');
     escrever(dir, 'src/legado/x.js', 'velho');
     escrever(dir, 'src/novo.js', 'velho');
@@ -294,7 +294,7 @@ test('D244/defeito 7: arquivo declarado Fora e negado mesmo casando Dentro', () 
 test('D244/defeito 7: Fora vale tambem em marcha rapida', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.js\n## Fora de escopo\n- docs/ata.md\n');
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.js\n## Fora de escopo\n- docs/ata.md\n');
     escrever(dir, 'docs/ata.md', 'velho');
     assert.ok(negou(rodar(entrada(dir, 'docs/ata.md'), tmp)));
   });
@@ -303,10 +303,10 @@ test('D244/defeito 7: Fora vale tambem em marcha rapida', () => {
 test('D244/defeito 7: a abertura avisa que o escopo e herdado, com objetivo e data', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '# Escopo\n**Objetivo:** fechar a tarefa antiga\n## Dentro\n- src/a.js\n');
+    escrever(dir, '.claude/sworn/escopo.md', '# Escopo\n**Objetivo:** fechar a tarefa antiga\n## Dentro\n- src/a.js\n');
     const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
       input: JSON.stringify({ session_id: 'her', cwd: dir, source: 'startup' }),
-      encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+      encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.match(r.stdout, /escopo herdado/);
@@ -320,7 +320,7 @@ test('D244/defeito 7: sem escopo.md, a abertura nao fala de heranca', () => {
     const dir = montarProjeto();
     const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
       input: JSON.stringify({ session_id: 'her2', cwd: dir, source: 'startup' }),
-      encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+      encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.doesNotMatch(r.stdout, /escopo herdado/);
@@ -330,11 +330,11 @@ test('D244/defeito 7: sem escopo.md, a abertura nao fala de heranca', () => {
 // ---------------------------------------------------- escopo por frente
 
 function lerEstado(tmp, sessionId) {
-  process.env.ESQUADRO_TMP = tmp;
+  process.env.SWORN_TMP = tmp;
   delete require.cache[require.resolve('../scripts/lib/estado.js')];
   const estado = require('../scripts/lib/estado.js');
   const s = estado.ler(sessionId);
-  delete process.env.ESQUADRO_TMP;
+  delete process.env.SWORN_TMP;
   return s;
 }
 
@@ -343,16 +343,16 @@ test('escopo por frente: Write em escopos/omni.md libera sem escopo previo e gra
     const dir = montarProjeto();
     const r = rodar({
       session_id: 's1', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'escopos', 'omni.md'), content: '## Dentro\n- src/a.js\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'escopos', 'omni.md'), content: '## Dentro\n- src/a.js\n' }
     }, tmp);
     liberou(r);
     assert.strictEqual(lerEstado(tmp, 's1').frente, 'omni');
 
-    escrever(dir, '.claude/esquadro/escopos/omni.md', '## Dentro\n- src/a.js\n');
+    escrever(dir, '.claude/sworn/escopos/omni.md', '## Dentro\n- src/a.js\n');
     liberou(rodar(entrada(dir, 'src/a.js'), tmp));
     const fora = rodar(entrada(dir, 'src/b.js'), tmp);
     assert.strictEqual(negou(fora), true);
-    assert.ok(fora.json.hookSpecificOutput.permissionDecisionReason.includes('.claude/esquadro/escopos/omni.md'),
+    assert.ok(fora.json.hookSpecificOutput.permissionDecisionReason.includes('.claude/sworn/escopos/omni.md'),
       fora.json.hookSpecificOutput.permissionDecisionReason);
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -361,22 +361,22 @@ test('escopo por frente: Write em escopos/omni.md libera sem escopo previo e gra
 test('escopo por frente: ampliar o Dentro do arquivo da frente conta escopo_ampliado, encolher nao', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopos/omni.md', '## Dentro\n- src/a.js\n');
+    escrever(dir, '.claude/sworn/escopos/omni.md', '## Dentro\n- src/a.js\n');
     liberou(rodar({
       session_id: 's1', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'escopos', 'omni.md'), content: '## Dentro\n- src/a.js\n- src/b.js\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'escopos', 'omni.md'), content: '## Dentro\n- src/a.js\n- src/b.js\n' }
     }, tmp));
     assert.strictEqual(lerEstado(tmp, 's1').contadores.escopo_ampliado, 1);
 
     // controle: encolher o Dentro nao pode contar como ampliacao (mesmo desenho do escopo.md)
-    process.env.ESQUADRO_TMP = tmp;
+    process.env.SWORN_TMP = tmp;
     delete require.cache[require.resolve('../scripts/lib/estado.js')];
     require('../scripts/lib/estado.js').incrementar('s2', 'sem_escopo');
-    delete process.env.ESQUADRO_TMP;
-    escrever(dir, '.claude/esquadro/escopos/outra.md', '## Dentro\n- src/c.js\n- src/d.js\n');
+    delete process.env.SWORN_TMP;
+    escrever(dir, '.claude/sworn/escopos/outra.md', '## Dentro\n- src/c.js\n- src/d.js\n');
     liberou(rodar({
       session_id: 's2', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'escopos', 'outra.md'), content: '## Dentro\n- src/c.js\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'escopos', 'outra.md'), content: '## Dentro\n- src/c.js\n' }
     }, tmp));
     const s2 = lerEstado(tmp, 's2');
     assert.ok(s2.contadores, 'o estado precisa existir de verdade');
@@ -388,8 +388,8 @@ test('escopo por frente: ampliar o Dentro do arquivo da frente conta escopo_ampl
 test('escopo por frente: sessao sem vinculo continua regida pelo escopo.md de hoje', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/geral.js\n');
-    escrever(dir, '.claude/esquadro/escopos/omni.md', '## Dentro\n- src/a.js\n');
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/geral.js\n');
+    escrever(dir, '.claude/sworn/escopos/omni.md', '## Dentro\n- src/a.js\n');
     const semVinculo = rodar({
       session_id: 'sv1', cwd: dir, tool_name: 'Write', tool_input: { file_path: path.join(dir, 'src', 'a.js') }
     }, tmp);
@@ -407,15 +407,15 @@ test('escopo por frente: duas frentes simultaneas nao se liberam uma a outra', (
     // os arquivos das duas frentes precisam existir DE VERDADE no disco: o
     // portao so simula a escrita que esta acontecendo agora (a do proprio
     // arquivo de frente), nao o resultado dela - por isso escreve-se antes.
-    escrever(dir, '.claude/esquadro/escopos/a.md', '## Dentro\n- src/so-a.js\n');
-    escrever(dir, '.claude/esquadro/escopos/b.md', '## Dentro\n- src/so-b.js\n');
+    escrever(dir, '.claude/sworn/escopos/a.md', '## Dentro\n- src/so-a.js\n');
+    escrever(dir, '.claude/sworn/escopos/b.md', '## Dentro\n- src/so-b.js\n');
     liberou(rodar({
       session_id: 'sA', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'escopos', 'a.md'), content: '## Dentro\n- src/so-a.js\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'escopos', 'a.md'), content: '## Dentro\n- src/so-a.js\n' }
     }, tmp));
     liberou(rodar({
       session_id: 'sB', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'escopos', 'b.md'), content: '## Dentro\n- src/so-b.js\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'escopos', 'b.md'), content: '## Dentro\n- src/so-b.js\n' }
     }, tmp));
     assert.strictEqual(lerEstado(tmp, 'sA').frente, 'a');
     assert.strictEqual(lerEstado(tmp, 'sB').frente, 'b');
@@ -424,7 +424,7 @@ test('escopo por frente: duas frentes simultaneas nao se liberam uma a outra', (
       session_id: 'sA', cwd: dir, tool_name: 'Write', tool_input: { file_path: path.join(dir, 'src', 'so-b.js') }
     }, tmp);
     assert.strictEqual(negou(aTentaB), true, 'a sessao A nao pode gravar o que so a frente B libera');
-    assert.ok(aTentaB.json.hookSpecificOutput.permissionDecisionReason.includes('.claude/esquadro/escopos/a.md'),
+    assert.ok(aTentaB.json.hookSpecificOutput.permissionDecisionReason.includes('.claude/sworn/escopos/a.md'),
       aTentaB.json.hookSpecificOutput.permissionDecisionReason);
     const bTentaA = rodar({
       session_id: 'sB', cwd: dir, tool_name: 'Write', tool_input: { file_path: path.join(dir, 'src', 'so-a.js') }
@@ -444,8 +444,8 @@ test('escopo por frente: duas frentes simultaneas nao se liberam uma a outra', (
 test('escopo por frente: frente aposentada (arquivo movido para fora de escopos/) volta a valer o escopo.md', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/geral.js\n');
-    const arquivoFrente = escrever(dir, '.claude/esquadro/escopos/omni.md', '## Dentro\n- src/a.js\n');
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/geral.js\n');
+    const arquivoFrente = escrever(dir, '.claude/sworn/escopos/omni.md', '## Dentro\n- src/a.js\n');
     liberou(rodar({
       session_id: 's1', cwd: dir, tool_name: 'Write', tool_input: { file_path: arquivoFrente, content: '## Dentro\n- src/a.js\n' }
     }, tmp));
@@ -463,7 +463,7 @@ test('escopo por frente: nome de frente invalido e negado sem gravar vinculo, e 
     const dir = montarProjeto();
     const r = rodar({
       session_id: 's1', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'escopos', 'onda 8.md'), content: '## Dentro\n- src/a.js\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'escopos', 'onda 8.md'), content: '## Dentro\n- src/a.js\n' }
     }, tmp);
     assert.strictEqual(negou(r), true);
     assert.ok(r.json.hookSpecificOutput.permissionDecisionReason.includes('nome de frente invalido'),
@@ -479,7 +479,7 @@ test('escopo por frente: nome de frente invalido e negado sem gravar vinculo, e 
 test('F6-04: o que o escopo declara "Fora" conta em fora_declarado; o que so nao esta no "Dentro" segue em fora_do_escopo', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/**\n## Fora de escopo\n- src/proibido.js\n');
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/**\n## Fora de escopo\n- src/proibido.js\n');
     const declarado = rodar({
       session_id: 'sd', cwd: dir, tool_name: 'Write', tool_input: { file_path: path.join(dir, 'src', 'proibido.js') }
     }, tmp);
@@ -489,7 +489,7 @@ test('F6-04: o que o escopo declara "Fora" conta em fora_declarado; o que so nao
     assert.strictEqual(sd.contadores.fora_do_escopo, undefined, 'declarado Fora nao conta mais em fora_do_escopo');
 
     // Controle do lado oposto: arquivo que so nao esta no "Dentro" (marcha padrao) segue no balde de sempre.
-    escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.js\n');
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.js\n');
     const naoListado = rodar({
       session_id: 'sf', cwd: dir, tool_name: 'Write', tool_input: { file_path: path.join(dir, 'src', 'b.js') }
     }, tmp);
@@ -505,11 +505,11 @@ test('F6-04: o que o escopo declara "Fora" conta em fora_declarado; o que so nao
 test('F2-16: frente vinculada cuja pasta e link para FORA do projeto nao libera o escopo (junction de verdade)', (t) => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-esc-fora-'));
+    const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-esc-fora-'));
     try {
       fs.writeFileSync(path.join(fora, 'x.md'), '## Dentro\n- src/a.js\n', 'utf8');
       try {
-        fs.symlinkSync(fora, path.join(dir, '.claude', 'esquadro', 'escopos'), 'junction');
+        fs.symlinkSync(fora, path.join(dir, '.claude', 'sworn', 'escopos'), 'junction');
       } catch (e) {
         t.skip('nao deu para criar link neste disco/usuario (' + (e && e.code) + ')');
         return;
@@ -517,7 +517,7 @@ test('F2-16: frente vinculada cuja pasta e link para FORA do projeto nao libera 
       // Vincula a sessao a frente x (escrever o arquivo da frente tem o passe livre).
       liberou(rodar({
         session_id: 'sl', cwd: dir, tool_name: 'Write',
-        tool_input: { file_path: path.join(dir, '.claude', 'esquadro', 'escopos', 'x.md'), content: '## Dentro\n- src/a.js\n' }
+        tool_input: { file_path: path.join(dir, '.claude', 'sworn', 'escopos', 'x.md'), content: '## Dentro\n- src/a.js\n' }
       }, tmp));
       assert.strictEqual(lerEstado(tmp, 'sl').frente, 'x');
       // O escopo "de fora" lista src/a.js, mas nao pode ser lido: sem escopo valido, a marcha padrao nega.
@@ -535,7 +535,7 @@ test('escopo por frente: a mesma pasta em caixa alta continua liberando e vincul
     const dir = montarProjeto();
     liberou(rodar({
       session_id: 's1', cwd: dir, tool_name: 'Write',
-      tool_input: { file_path: path.join(dir, '.claude', 'Esquadro', 'Escopos', 'omni.md'), content: '## Dentro\n- src/a.js\n' }
+      tool_input: { file_path: path.join(dir, '.claude', 'Sworn', 'Escopos', 'omni.md'), content: '## Dentro\n- src/a.js\n' }
     }, tmp));
     assert.strictEqual(lerEstado(tmp, 's1').frente, 'omni');
     fs.rmSync(dir, { recursive: true, force: true });
@@ -548,7 +548,7 @@ test('escopo por frente: a mesma pasta em caixa alta continua liberando e vincul
 // e secundario - a negacao nao pode depender dele (antes, o incrementar lancava, o blindar
 // liberava e o Write em arquivo intocavel passava).
 function comEstadoIngravavel(fn) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-inop-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-inop-'));
   const arquivo = path.join(base, 'e-um-arquivo');
   fs.writeFileSync(arquivo, 'x', 'utf8');
   try { fn(arquivo); } finally { fs.rmSync(base, { recursive: true, force: true }); }
@@ -571,7 +571,7 @@ test('D420/PT-03: estado inalteravel nao libera sem_escopo, fora_do_escopo, fora
     try {
       // padrao sem escopo.md
       assert.ok(negou(rodar(entrada(dir, 'src/a.js'), tmp)), 'sem_escopo passou');
-      escrever(dir, '.claude/esquadro/escopo.md',
+      escrever(dir, '.claude/sworn/escopo.md',
         '## Dentro\n- src/a.js\n- src/novo/**\n## Fora de escopo\n- docs/ata.md\n');
       escrever(dir, 'src/b.js', 'velho');
       assert.ok(negou(rodar(entrada(dir, 'src/b.js'), tmp)), 'fora_do_escopo passou');
@@ -586,7 +586,7 @@ test('D420/PT-03: estado inalteravel nao libera Edit que afrouxa catraca', () =>
   comEstadoIngravavel((tmp) => {
     const dir = montarProjeto();
     try {
-      escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.js\n');
+      escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.js\n');
       escrever(dir, 'src/a.js', 'velho');
       const base = rodar({
         session_id: 's1', cwd: dir, tool_name: 'Edit',
@@ -604,7 +604,7 @@ test('D420/PT-03: estado inalteravel nao libera Edit que afrouxa catraca', () =>
 
 // ---------------------------------------------------- S2/L1-7 e L1-8: falha de estado nao fica calada
 
-const ARQ_FRENTE = '.claude/esquadro/escopos/omni.md';
+const ARQ_FRENTE = '.claude/sworn/escopos/omni.md';
 
 function escreverFrente(dir, tmp) {
   return rodar({
@@ -651,7 +651,7 @@ test('S2/L1-8: contador que nao grava deixa rastro - na negacao (motivo) e na li
       // liberacao: ampliar o escopo.md conta escopo_ampliado; segue liberado, com aviso
       const l = rodar({
         session_id: 's1', cwd: dir, tool_name: 'Write',
-        tool_input: { file_path: path.join(dir, '.claude/esquadro/escopo.md'), content: '## Dentro\n- src/a.js\n' }
+        tool_input: { file_path: path.join(dir, '.claude/sworn/escopo.md'), content: '## Dentro\n- src/a.js\n' }
       }, tmp);
       liberou(l);
       assert.ok(l.json && typeof l.json.systemMessage === 'string' && l.json.systemMessage.includes('contador'),
@@ -670,7 +670,7 @@ test('S2/L1-8: contador gravavel - negacao e liberacao saem sem rastro de falha 
         n.json.hookSpecificOutput.permissionDecisionReason);
       const l = rodar({
         session_id: 's1', cwd: dir, tool_name: 'Write',
-        tool_input: { file_path: path.join(dir, '.claude/esquadro/escopo.md'), content: '## Dentro\n- src/a.js\n' }
+        tool_input: { file_path: path.join(dir, '.claude/sworn/escopo.md'), content: '## Dentro\n- src/a.js\n' }
       }, tmp);
       liberou(l);
       assert.strictEqual(l.json, null, JSON.stringify(l.json));
@@ -684,9 +684,9 @@ const JSON_COM_VIRGULA_SOBRANDO = '{"marchaPadrao":"padrao","intocaveis":["segre
 
 test('D420/PT-04: projeto.json invalido nao e "sem projeto": a mensagem diz a causa real', () => {
   comTmp((tmp) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ileg-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg-'));
     try {
-      escrever(dir, '.claude/esquadro/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
+      escrever(dir, '.claude/sworn/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
       const primeiro = rodar(entrada(dir, 'src/a.js'), tmp);
       liberou(primeiro);
       assert.ok(primeiro.json && primeiro.json.systemMessage, 'sem aviso algum');
@@ -701,9 +701,9 @@ test('D420/PT-04: projeto.json invalido nao e "sem projeto": a mensagem diz a ca
 
 test('D420/PT-04: projeto.json que nao e objeto tambem e ilegivel, e ausente continua "nao tem"', () => {
   comTmp((tmp) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ileg2-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg2-'));
     try {
-      escrever(dir, '.claude/esquadro/projeto.json', '5');
+      escrever(dir, '.claude/sworn/projeto.json', '5');
       const r = rodar(entrada(dir, 'src/a.js'), tmp);
       assert.match(r.json.systemMessage, /existe mas nao se le/);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -712,12 +712,12 @@ test('D420/PT-04: projeto.json que nao e objeto tambem e ilegivel, e ausente con
 
 test('D420/PT-04: a abertura avisa projeto.json ilegivel mesmo sem regras.md', () => {
   comTmp((tmp) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ileg3-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg3-'));
     try {
-      escrever(dir, '.claude/esquadro/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
+      escrever(dir, '.claude/sworn/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
       const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
         input: JSON.stringify({ session_id: 'ab-ileg', cwd: dir, source: 'startup' }),
-        encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+        encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
       });
       assert.strictEqual(r.status, 0, r.stderr);
       assert.match(r.stdout, /projeto\.json existe mas nao se le/);
@@ -728,16 +728,16 @@ test('D420/PT-04: a abertura avisa projeto.json ilegivel mesmo sem regras.md', (
 
 test('D420/PT-04: a abertura sem projeto.json NAO fala de ilegivel; com regras.md o aviso nao dobra', () => {
   comTmp((tmp) => {
-    const vazio = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ileg4-'));
-    const comRegras = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ileg5-'));
+    const vazio = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg4-'));
+    const comRegras = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg5-'));
     try {
       const abrir = (d, id) => spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
         input: JSON.stringify({ session_id: id, cwd: d, source: 'startup' }),
-        encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+        encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
       });
       assert.doesNotMatch(abrir(vazio, 'ab-aus').stdout, /existe mas nao se le/);
-      escrever(comRegras, '.claude/esquadro/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
-      escrever(comRegras, '.claude/esquadro/regras.md', '- ao editar -> rodar git status\n');
+      escrever(comRegras, '.claude/sworn/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
+      escrever(comRegras, '.claude/sworn/regras.md', '- ao editar -> rodar git status\n');
       const r = abrir(comRegras, 'ab-dup');
       assert.strictEqual((r.stdout.match(/existe mas nao se le/g) || []).length, 1, r.stdout);
     } finally {
@@ -766,7 +766,7 @@ function editar(dir, arquivo, antes, depois, id) {
 function registrarBusca(dir, tmp, id, ferramenta) {
   const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'marcar-trabalho.js')], {
     input: JSON.stringify({ session_id: id, cwd: dir, tool_name: ferramenta, tool_input: { file_path: path.join(dir, 'src/novo/x.js') } }),
-    encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+    encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
   });
   assert.strictEqual(r.status, 0, r.stderr);
 }
@@ -775,7 +775,7 @@ test('TS-01 (lote 3, D423): trava 7 - arquivo NOVO no escopo sem busca nega; Gre
   comTmp((tmp) => {
     const dir = montarProjeto();
     try {
-      escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/**\n- src/nomeado.js\n');
+      escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/**\n- src/nomeado.js\n');
       escrever(dir, 'src/velho.js', 'velho');
       // sem busca: nega, e pelo motivo da trava 7 (nao por outra via)
       const sem = rodar(comSessao(entrada(dir, 'src/novo/x.js'), 'ts01-sem'), tmp);
@@ -800,7 +800,7 @@ test('TS-02 (lote 3, D423): trava 8 - Edit que SOBE teto ou DESCE piso nega; mes
   comTmp((tmp) => {
     const dir = montarProjeto();
     try {
-      escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.js\n');
+      escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.js\n');
       escrever(dir, 'src/a.js', 'velho');
       const sobe = rodar(editar(dir, 'src/a.js', '"teto": 3', '"teto": 8'), tmp);
       assert.ok(negou(sobe), 'subir teto de 3 para 8 tinha de negar');
@@ -828,7 +828,7 @@ test('A2-02: trava 8 compara o arquivo inteiro - Write por cima, Edit so do nume
   comTmp((tmp) => {
     const dir = montarProjeto();
     try {
-      escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.js\n');
+      escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.js\n');
       escrever(dir, 'src/a.js', '{ "teto": 200, "nome": "a" }\n');
       const w = entrada(dir, 'src/a.js');
       w.tool_input.content = '{ "teto": 800, "nome": "a" }\n';
@@ -857,7 +857,7 @@ test('A12-02: NotebookEdit passa pelo portao de escopo - fora do escopo e intoca
   comTmp((tmp) => {
     const dir = montarProjeto();
     try {
-      escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.ipynb\n');
+      escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.ipynb\n');
       escrever(dir, 'src/a.ipynb', '{}');
       escrever(dir, 'src/b.ipynb', '{}');
       const nb = (rel) => ({ session_id: 'a1202', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'NotebookEdit',
@@ -875,8 +875,8 @@ test('A2-03: valor fora do sistema que ja estava no old_string nao barra o Edit;
   comTmp((tmp) => {
     const dir = montarProjeto();
     try {
-      escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/a.css\n');
-      escrever(dir, '.claude/esquadro/design.json',
+      escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.css\n');
+      escrever(dir, '.claude/sworn/design.json',
         JSON.stringify({ cores: ['#ffffff'], raios: ['4px'], espacos: ['8px'], sombras: [], antiReferencias: [] }));
       escrever(dir, 'src/a.css', '.a { padding: 13px; color: red }\n');
       liberou(rodar(editar(dir, 'src/a.css', '.a { padding: 13px; color: red }', '.a { padding: 13px; color: #ffffff }', 'a203-ctx'), tmp));
@@ -891,8 +891,8 @@ test('TS-03 (lote 3, D423): token_fora_do_sistema - Write (content) e Edit (new_
   comTmp((tmp) => {
     const dir = montarProjeto();
     try {
-      escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/app.css\n');
-      escrever(dir, '.claude/esquadro/design.json',
+      escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/app.css\n');
+      escrever(dir, '.claude/sworn/design.json',
         JSON.stringify({ cores: ['#ff6600', '#ffffff'], raios: ['4px'], espacos: ['4px', '8px'], sombras: [], antiReferencias: [] }));
       escrever(dir, 'src/app.css', '.a { color: #ff6600; }\n');
       const escrita = (conteudo, id) => {
@@ -912,7 +912,7 @@ test('TS-03 (lote 3, D423): token_fora_do_sistema - Write (content) e Edit (new_
       assert.match(motivoDeNegacao(eFora), /#ff0000/);
       liberou(rodar(editar(dir, 'src/app.css', 'color: #ff6600;', 'color: #ffffff;', 'ts03-e2'), tmp));
       // o modulo e opcional: a mesma cor, sem design.json, nao nega
-      fs.rmSync(path.join(dir, '.claude', 'esquadro', 'design.json'));
+      fs.rmSync(path.join(dir, '.claude', 'sworn', 'design.json'));
       liberou(rodar(editar(dir, 'src/app.css', 'color: #ff6600;', 'color: #ff0000;', 'ts03-sem'), tmp));
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
@@ -925,13 +925,13 @@ function carregarSkill(dir, tmp, skill, extra) {
   return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'marcar-trabalho.js')], {
     input: JSON.stringify(Object.assign({ session_id: 's1', cwd: dir, hook_event_name: 'PostToolUse',
       tool_name: 'Skill', tool_input: { skill: skill } }, extra || {})),
-    encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+    encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
   });
 }
 
 function projetoAaa(extra) {
   const dir = montarProjeto(extra);
-  escrever(dir, '.claude/esquadro/escopo.md', '## Dentro\n- src/**\n');
+  escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/**\n');
   escrever(dir, 'src/auth/login.js', 'x');
   escrever(dir, 'src/app.js', 'x');
   return dir;
@@ -944,16 +944,16 @@ test('091 #6: arquivo AAA sem o manual carregado e negado com o motivo do mock; 
       const r = rodar(entrada(dir, 'src/auth/login.js'), tmp);
       assert.ok(negou(r), 'AAA sem manual passou');
       assert.strictEqual(r.json.hookSpecificOutput.permissionDecisionReason, [
-        'esquadro - falta carregar o manual antes de editar arquivo de rigor maximo.',
+        'sworn - falta carregar o manual antes de editar arquivo de rigor maximo.',
         '',
         '"src/auth/login.js" e de marcha AAA neste projeto, e nenhum manual',
-        'de execucao (esquadro:padrao, ou o manual do projeto) foi carregado nesta sessao.',
+        'de execucao (sworn:playbook, ou o manual do projeto) foi carregado nesta sessao.',
         'Faca agora: carregue a skill pela ferramenta Skill e tente a edicao de novo.',
-        'Desligar neste projeto: "portaoManual": false em .claude/esquadro/projeto.json.'
+        'Desligar neste projeto: "portaoManual": false em .claude/sworn/projeto.json.'
       ].join('\n'));
-      assert.strictEqual(carregarSkill(dir, tmp, 'esquadro:revisar').status, 0);
+      assert.strictEqual(carregarSkill(dir, tmp, 'sworn:review').status, 0);
       assert.ok(negou(rodar(entrada(dir, 'src/auth/login.js'), tmp)), 'skill que nao e manual liberou');
-      const sessao = function () { return JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', 's1.json'), 'utf8')); };
+      const sessao = function () { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 's1.json'), 'utf8')); };
       // 091 T6: duas negacoes = uma ordem dada (a mesma pendencia)
       assert.strictEqual(sessao().contadores.ordem_manual_dada, 1);
       assert.strictEqual(carregarSkill(dir, tmp, 'padrao-aaa', { agent_id: 'sub-1' }).status, 0);
@@ -965,12 +965,12 @@ test('091 #6: arquivo AAA sem o manual carregado e negado com o motivo do mock; 
   });
 });
 
-test('091 #6: controles - arquivo de marcha padrao passa sem manual; "portaoManual": false desliga; esquadro:padrao libera', () => {
+test('091 #6: controles - arquivo de marcha padrao passa sem manual; "portaoManual": false desliga; sworn:playbook libera', () => {
   comTmp(function (tmp) {
     const dir = projetoAaa();
     try {
       liberou(rodar(entrada(dir, 'src/app.js'), tmp));
-      fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ versaoConfig: 1,
+      fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ versaoConfig: 1,
         marchaPadrao: 'padrao', marchas: { aaa: ['**/auth/**'], padrao: ['src/**'], rapida: [] }, portaoManual: false }));
       liberou(rodar(entrada(dir, 'src/auth/login.js'), tmp));
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -978,7 +978,7 @@ test('091 #6: controles - arquivo de marcha padrao passa sem manual; "portaoManu
   comTmp(function (tmp) {
     const dir = projetoAaa();
     try {
-      assert.strictEqual(carregarSkill(dir, tmp, 'esquadro:padrao').status, 0);
+      assert.strictEqual(carregarSkill(dir, tmp, 'sworn:playbook').status, 0);
       liberou(rodar(entrada(dir, 'src/auth/login.js'), tmp));
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });

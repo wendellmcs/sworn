@@ -104,7 +104,7 @@ function desalinhados(agentes) {
 
 function motivoDesalinhado(problemas) {
   return [
-    'esquadro: a escada e os degraus deste projeto nao contam a mesma historia.',
+    'sworn: a escada e os degraus deste projeto nao contam a mesma historia.',
     '',
     problemas.map(function (p) { return '  - ' + p; }).join('\n'),
     '',

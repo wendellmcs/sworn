@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-labelledby="titulo desc">
-  <title id="titulo">esquadro</title>
-  <desc id="desc">O agente prova em vez de afirmar. Ao lado, trechos literais da mensagem do portão de fecho: você afirmou sucesso e não colou evidência desta rodada; rode, ou declare.</desc>
+  <title id="titulo">sworn</title>
+  <desc id="desc">Proof instead of claims. Beside it, literal lines of the end-of-turn gate message, in Portuguese: you claimed success and pasted no evidence from this round; run it, or declare.</desc>
   <defs>
     <pattern id="grade" width="32" height="32" patternUnits="userSpaceOnUse">
       <path d="M32 0H0V32" fill="none" stroke="#1B222C" stroke-width="1"/>
@@ -9,7 +9,7 @@
   <rect width="1280" height="400" rx="20" fill="#0D1117"/>
   <rect width="1280" height="400" rx="20" fill="url(#grade)"/>
 
-  <!-- o esquadro: régua em L com marcas de medida e o visto de conferido -->
+  <!-- o sworn: régua em L com marcas de medida e o visto de conferido -->
   <g transform="translate(72 72)">
     <path d="M0 0H56V200H232V256H0Z" fill="#E5E7EB"/>
     <g stroke="#0D1117" stroke-width="3" stroke-linecap="round">
@@ -22,10 +22,10 @@
   </g>
 
   <g font-family="'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif">
-    <text x="344" y="186" font-size="96" font-weight="700" letter-spacing="-3" fill="#F9FAFB">esquadro</text>
-    <text x="348" y="240" font-size="31" fill="#D1D5DB">o agente prova em vez de afirmar</text>
+    <text x="344" y="186" font-size="96" font-weight="700" letter-spacing="-3" fill="#F9FAFB">sworn</text>
+    <text x="348" y="240" font-size="31" fill="#D1D5DB">proof instead of claims</text>
   </g>
-  <text x="349" y="290" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="17" fill="#9CA3AF">hooks do Claude Code · zero token</text>
+  <text x="349" y="290" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="17" fill="#9CA3AF">Claude Code hooks · zero tokens</text>
 
   <!-- o portão: linhas literais do scripts/portao-fecho.js -->
   <g transform="translate(868 100)">

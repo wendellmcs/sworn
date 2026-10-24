@@ -1,5 +1,5 @@
 ---
-name: padrao
+name: playbook
 description: Manual de execução portátil para qualquer projeto. Use no início de toda tarefa que não seja conversa pura — implementar, corrigir bug, planejar, revisar, auditar, mexer em UI, escrever doc, versionar, publicar, executar plano longo. Define a marcha de rigor (Rápida/Padrão/AAA), as lentes de inspeção (dez de código e oito de tela), o loop de julgamento cego com teto de rondas, os gatilhos contáveis de troca de chat, o formato obrigatório de decisão do dono e o que um "pronto" precisa provar. Adapta-se ao projeto por um adaptador declarado; sem ele, roda em modo degradado e declara o que não consegue verificar. Sobrepõe-se ao improviso; nunca ao pedido explícito do usuário.
 ---
 
@@ -57,7 +57,7 @@ Detalhe de cada marcha, com portões e evidência mínima: [01-marchas-e-gates.m
 
 1. **Procurar**, nesta ordem: `.claude/*/projeto.json` · `.claude/*/adaptador.md` ·
    a skill de execução do próprio projeto (em `.claude/skills/`, a que diz "Gerado por
-   `/esquadro:init`"; com mais de uma assim, perguntar ao dono qual vale; sem nenhuma assim, a escrita à
+   `/sworn:init`"; com mais de uma assim, perguntar ao dono qual vale; sem nenhuma assim, a escrita à
    mão que o projeto usa como manual de execução, se houver — a §1 vale para ela do mesmo jeito).
 2. **Achou** → usar os valores dele. Se o projeto reinjeta um arquivo de regras curto em toda sessão,
    **não repetir aqui o que ele já diz** — contexto repetido é contexto pago duas vezes.
@@ -142,20 +142,21 @@ portão nenhum enxerga — e vale justamente por isso, mesmo não sendo garantid
 nunca de memória nem do handoff.
 **Execute** — o menor conjunto de arquivos que resolve.
 **Verify** — rodar o que o portão da marcha exige, ou declarar explicitamente o que não rodou.
+Saída que mostra falha não verifica: corrige-se a causa e roda-se de novo o que ela afeta.
 **Complete** — resumo com evidência, riscos restantes e o que precisa de humano.
 
 Tarefa simples usa o mesmo raciocínio de forma compacta. "Rápido" nunca significa improvisado.
 
-**Cada peça na hora em que ajuda.** O esquadro tem comandos para momentos certos; ofereça-os ali, nunca
+**Cada peça na hora em que ajuda.** O sworn tem comandos para momentos certos; ofereça-os ali, nunca
 em toda tarefa, e só rode o que custa com o sim do dono:
 
-- pedido de função nova ou de melhoria no projeto → `/esquadro:radar` (projetos públicos parecidos);
-- marcha AAA sem referência que se abra → `/esquadro:referencia` (§4.1);
-- trabalho escrito, antes de dar por pronto → `/esquadro:revisar`;
-- antes de um release, ou ao fechar AAA de código → `/esquadro:atalhos` (atalho sem gatilho de troca);
-- skills e regras acumuladas → `/esquadro:auditar`; dúvida se o limiar de troca de chat serve →
-  `/esquadro:calibrar`;
-- correção do dono que vale para as próximas vezes → `/esquadro:aprender`.
+- pedido de função nova ou de melhoria no projeto → `/sworn:radar` (projetos públicos parecidos);
+- marcha AAA sem referência que se abra → `/sworn:reference` (§4.1);
+- trabalho escrito, antes de dar por pronto → `/sworn:review`;
+- antes de um release, ou ao fechar AAA de código → `/sworn:shortcuts` (atalho sem gatilho de troca);
+- skills e regras acumuladas → `/sworn:audit`; dúvida se o limiar de troca de chat serve →
+  `/sworn:calibrate`;
+- correção do dono que vale para as próximas vezes → `/sworn:learn`.
 
 ## 4. O padrão AAA
 
@@ -175,11 +176,11 @@ para responder sem régua: consistência interna. Não inventar uma régua.
 **A referência de topo, nomeada antes de começar.** Na marcha AAA, antes de fazer, nomeie a melhor peça
 que existe para este tipo de entrega, no mercado ou no próprio projeto. Ela tem de ser algo que se abre
 (arquivo, print, repositório), nunca uma lembrança. O projeto a declara em `referencias`, no
-`projeto.json`, por tipo (`tela`, `codigo`, `texto`), e o `/esquadro:revisar` a põe no pacote cego (as
+`projeto.json`, por tipo (`tela`, `codigo`, `texto`), e o `/sworn:review` a põe no pacote cego (as
 cópias A e B, sem dizer qual é o novo) como `R.txt`, o arquivo com o texto dela. Cada lente julga duas
 vezes: na ordem normal e numa 2ª passada com A e B trocados, e contra a referência só vale o que se repete
 nas duas. Pronto, contra ela, é empatar ou vencer em cada lente,
-nas duas ordens, sem lacuna P0/P1. Sem referência que se abra, ofereça o `/esquadro:referencia`: ele
+nas duas ordens, sem lacuna P0/P1. Sem referência que se abra, ofereça o `/sworn:reference`: ele
 estuda os líderes do mesmo tipo e, com o sim do dono, grava a ficha em `referencias`. Se não couber agora,
 diga "sem referência" e use o artefato irmão acima.
 
@@ -190,8 +191,8 @@ Cópias do mesmo revisor encontram o mesmo problema várias vezes; lentes distin
 que convivem e não se fundem: as **dez lentes de código**, em `LENTES`, e as **oito lentes de
 tela**, abaixo, em `LENTES_UI`, as duas listas em `scripts/lib/veredito.js` do plugin. Quais vão
 depende do que a mudança toca: só código, as dez de código; só tela, as oito de tela; código e
-tela, as duas famílias; na dúvida, as duas. É a regra do `/esquadro:revisar`, na tabela do Passo 2
-de `skills/revisar/SKILL.md`. Antes da família vem a faixa: mudança pequena vai a menos inspetores, pelo
+tela, as duas famílias; na dúvida, as duas. É a regra do `/sworn:review`, na tabela do Passo 2
+de `skills/review/SKILL.md`. Antes da família vem a faixa: mudança pequena vai a menos inspetores, pelo
 tamanho do diff, na outra tabela do mesmo Passo 2.
 
 1. Fidelidade ao design system
@@ -324,7 +325,7 @@ credencial, publicar ou implantar, tela com dado de cliente no login dele — e 
 
 **Aviso ou dica que um gancho põe na conversa tem teto:** sai uma vez por sessão, ou só a cada N vezes,
 nunca a cada chamada — cada repetição volta inteira ao contexto e disputa atenção com o que importa.
-O que já se repete, o `/esquadro:auditar` mostra (item 1c).
+O que já se repete, o `/sworn:audit` mostra (item 1c).
 
 **Modo contínuo (chave `modoContinuo` no `projeto.json`).** Ligado por padrão: só o booleano `false`
 desliga; sem a chave, com outro valor ou sem o arquivo, fica ligado. A abertura da sessão diz se está ligado. Ligado, só quatro
@@ -352,10 +353,10 @@ abertura de toda sessão; desligar: `"paralelismo": false` no `projeto.json`.
 - **Relatório de agente é alegação**, não fato: confira o crítico na fonte antes de dar por pronto.
 - **Freio de custo:** o modelo mais barato que resolve a tarefa (o mapa de modelos do projeto manda);
   no máximo 8 agentes por disparo. Rigor continua sendo eixo separado do custo.
-- **3 ou mais tarefas independentes: rode o `/esquadro:paralelo` direto**, sem perguntar, e diga numa
+- **3 ou mais tarefas independentes: rode o `/sworn:parallel` direto**, sem perguntar, e diga numa
   linha quantos agentes, qual modelo e o custo aproximado. O Claude Code só roda workflow com
-  pedido: a autorização dada uma vez no `/esquadro:init` é esse pedido; se ainda assim a ferramenta
-  recusar, diga ao dono em vez de contornar. Chamada: a ferramenta Workflow com `name: "esquadro:paralelo"` e
+  pedido: a autorização dada uma vez no `/sworn:init` é esse pedido; se ainda assim a ferramenta
+  recusar, diga ao dono em vez de contornar. Chamada: a ferramenta Workflow com `name: "sworn:parallel"` e
   `args` = lista de tarefas (`[{"tarefa": "...", "edita": false}]`). Ele aplica o freio sozinho: 8 por
   disparo (diz quais ficaram de fora), Haiku para quem só lê, Sonnet para quem edita, isolamento para
   quem edita, e devolve cada resultado com a evidência que o agente colou.
@@ -405,6 +406,11 @@ que ele sabe onde fica algo. Isso é diferente do formato de decisão acima, e o
 - **Evidência fresca da rodada atual, colada na resposta.** Memória não é evidência.
 - **O que não rodou, declarado como não rodado.** Silêncio sobre um teste equivale a mentir que
   passou.
+- **Cada pedido ligado à checagem que o prova, com o estado dela:** provado (com a saída), falhou ou
+  não testado. Sem evidência o item é "não testado", nunca entregue; comando que falhou, expirou ou
+  não rodou não verificou nada.
+- **Teste instável se corrige ou se remove, nunca se repete até passar.** Rodar de novo até sair
+  verde não é prova.
 - Arquivos alterados, listados.
 - Riscos remanescentes e o que precisa de humano.
 - Se um subitem ficou pendente, a etapa está **aberta** — não "completa com ressalva".

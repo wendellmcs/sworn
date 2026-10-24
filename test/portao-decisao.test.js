@@ -11,11 +11,11 @@ const SCRIPT = path.join(RAIZ, 'scripts', 'portao-decisao.js');
 
 /** Projeto temporario com espaco no caminho (o caso normal desta maquina). `projeto` null = sem projeto.json. */
 function comProjeto(projeto, fn) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro decisao-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn decisao-'));
   try {
     if (projeto !== null) {
-      fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-      fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify(projeto), 'utf8');
+      fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+      fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify(projeto), 'utf8');
     }
     fn(dir);
   } finally {
@@ -71,7 +71,7 @@ test('D387/portao-decisao: 2 opcoes barra, dizendo quantas e o que fazer', () =>
     assert.ok(negou(r), r.stdout);
     assert.match(motivo(r), /pergunta 1 tem 2 opcoes/);
     assert.match(motivo(r), /exatamente 3 opcoes, a recomendada em primeiro com \(Recomendado\) no rotulo/);
-    assert.match(motivo(r), /"portaoDecisao": false em \.claude\/esquadro\/projeto\.json/);
+    assert.match(motivo(r), /"portaoDecisao": false em \.claude\/sworn\/projeto\.json/);
     assert.ok(/^[\x20-\x7e\n]*$/.test(motivo(r)), 'o motivo sai em ASCII: ' + motivo(r));
   });
 });

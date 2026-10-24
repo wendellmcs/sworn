@@ -8,7 +8,7 @@ const catalogo = require('../scripts/lib/catalogo.js');
 
 const T0 = 1700000000000;
 function dias(n) { return n * catalogo.DIA; }
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro catalogo-')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn catalogo-')); }
 
 // ------------------------------------------------------- a janela e o desfecho
 

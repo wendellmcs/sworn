@@ -38,7 +38,7 @@ function preencher(moldeTexto, valores, projeto) {
   function fatia(tipo, nome, noCabecalho) {
     if (tipo === 'campo') {
       if (!existeCampo(projeto, nome)) return { texto: '(' + MARCA + ': campo ' + nome + ' nao existe em projeto.json)', marca: true };
-      return { texto: '`' + nome + '` de `.claude/esquadro/projeto.json` (leia de la, nao decore)', marca: false };
+      return { texto: '`' + nome + '` de `.claude/sworn/projeto.json` (leia de la, nao decore)', marca: false };
     }
     const resposta = v[nome];
     if (typeof resposta !== 'string' || resposta.trim() === '') {

@@ -1,7 +1,7 @@
 'use strict';
-// D615 (L9 do censo da D612): ficha de referencia que nao esta trabalhando - guardada em .claude/esquadro/referencias/
-// sem estar na chave `referencias` (o /esquadro:revisar nao a usa) ou estudada ha mais de 180 dias (os lideres mudam).
-// A abertura avisa cada uma UMA vez (marca em .claude/esquadro/), em ASCII. Sem a chave, quem fala e o aviso da D503.
+// D615 (L9 do censo da D612): ficha de referencia que nao esta trabalhando - guardada em .claude/sworn/referencias/
+// sem estar na chave `referencias` (o /sworn:review nao a usa) ou estudada ha mais de 180 dias (os lideres mudam).
+// A abertura avisa cada uma UMA vez (marca em .claude/sworn/), em ASCII. Sem a chave, quem fala e o aviso da D503.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -12,7 +12,7 @@ const { spawnSync } = require('node:child_process');
 const RAIZ = path.join(__dirname, '..');
 const RE = /fichas de referencia paradas/;
 
-function temp(nome) { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-fichas-' + nome + '-')); }
+function temp(nome) { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fichas-' + nome + '-')); }
 
 function escrever(dir, rel, conteudo) {
   const alvo = path.join(dir, rel);
@@ -24,7 +24,7 @@ function abrir(dir, id) {
   return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
     cwd: dir, encoding: 'utf8',
     input: JSON.stringify({ session_id: id, cwd: dir, source: 'startup' }),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes'), ESQUADRO_VIGIA: path.join(dir, '_vigia') })
+    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes'), SWORN_VIGIA: path.join(dir, '_vigia') })
   });
 }
 
@@ -33,12 +33,12 @@ function ficha(data) {
 }
 
 const HOJE = new Date().toISOString().slice(0, 10);
-const REF = '.claude/esquadro/referencias/';
+const REF = '.claude/sworn/referencias/';
 
 test('L9: ficha guardada fora de referencias e ficha velha sao avisadas uma vez, em ASCII; a ficha em uso e nova, nao', () => {
   const dir = temp('l9');
   try {
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ versaoConfig: 1,
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ versaoConfig: 1,
       referencias: { tela: [REF + 'tela-em-uso.md', REF + 'tela-velha.md'] } }));
     escrever(dir, REF + 'tela-em-uso.md', ficha(HOJE));
     escrever(dir, REF + 'tela-velha.md', ficha('2020-01-15'));
@@ -50,7 +50,7 @@ test('L9: ficha guardada fora de referencias e ficha velha sao avisadas uma vez,
     assert.ok(aviso.includes('tela-guardada.md') && /fora de "referencias"/.test(aviso), 'a guardada: ' + aviso);
     assert.ok(aviso.includes('tela-velha.md') && aviso.includes('2020-01-15') && /180 dias/.test(aviso), 'a velha: ' + aviso);
     assert.ok(!aviso.includes('tela-em-uso.md'), 'a ficha em uso e nova nao e parada: ' + aviso);
-    assert.ok(aviso.includes('/esquadro:referencia'), 'diz o que fazer');
+    assert.ok(aviso.includes('/sworn:reference'), 'diz o que fazer');
     assert.ok(/^[\x20-\x7E]*$/.test(aviso), 'fora de ASCII: ' + aviso);
     const de_novo = abrir(dir, 'l9b');
     assert.doesNotMatch(de_novo.stdout, RE, 'cada ficha avisada uma vez: ' + de_novo.stdout);
@@ -71,7 +71,7 @@ test('L9: controles - sem a chave referencias, sem pasta de fichas, ou com tudo 
   for (const [nome, projeto, fichas] of casos) {
     const dir = temp(nome);
     try {
-      escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify(projeto));
+      escrever(dir, '.claude/sworn/projeto.json', JSON.stringify(projeto));
       for (const f of Object.keys(fichas)) escrever(dir, REF + f, fichas[f]);
       const r = abrir(dir, nome);
       assert.strictEqual(r.status, 0, nome + ': ' + r.stderr);
@@ -86,9 +86,9 @@ test('L9: marca torta (JSON que nao e objeto) - o aviso sai mesmo assim', () => 
   for (const torta of ['5', '"x"', '[]', 'null']) {
     const dir = temp('marca-torta');
     try {
-      escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ versaoConfig: 1, referencias: { tela: [] } }));
+      escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ versaoConfig: 1, referencias: { tela: [] } }));
       escrever(dir, REF + 'tela-guardada.md', ficha(HOJE));
-      escrever(dir, '.claude/esquadro/referencia-fichas-avisadas.json', torta);
+      escrever(dir, '.claude/sworn/referencia-fichas-avisadas.json', torta);
       const r = abrir(dir, 'marca-torta');
       assert.strictEqual(r.status, 0, torta + ': ' + r.stderr);
       assert.match(r.stdout, RE, 'marca ' + torta + ' calou o aviso: ' + r.stdout);

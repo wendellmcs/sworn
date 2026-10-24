@@ -15,7 +15,7 @@ const gravar = process.argv.indexOf('--gravar') !== -1;
 const projeto = config.carregarProjeto(cwd);
 
 if (!projeto) {
-  process.stdout.write('ERRO: rode /esquadro:init primeiro; nao achei .claude/esquadro/projeto.json\n');
+  process.stdout.write('ERRO: rode /sworn:init primeiro; nao achei .claude/sworn/projeto.json\n');
   process.exit(1);
 }
 

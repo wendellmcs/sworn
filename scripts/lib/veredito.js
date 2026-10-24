@@ -86,7 +86,7 @@ function lenteCanonica(nome) {
 }
 
 /**
- * A regra de despacho da spec (decisao 8), a mesma da tabela do /esquadro:revisar: so codigo,
+ * A regra de despacho da spec (decisao 8), a mesma da tabela do /sworn:review: so codigo,
  * as 10; so tela, as 8; os dois, as 18. Nada declarado e duvida, e na duvida vao as duas
  * familias - nunca nenhuma, que seria uma revisao sem voto.
  */
@@ -481,7 +481,7 @@ function apurar(rondas, opcoes) {
     const presentes = new Set(ronda.map(function (vd) { return vd && lenteCanonica(vd.lente); }));
     const conhecidas = Array.from(presentes).filter(function (l) { return l && chaveDaLente(l) !== null; });
     const grave = 'grave o veredito de cada uma na pasta vereditos da ronda ' + (indice + 1) +
-      ' (Passo 2 do /esquadro:revisar) e rode de novo';
+      ' (Passo 2 do /sworn:review) e rode de novo';
     if (indice === 0) {
       const esperadas = lentesDaFaixa(faixa1);
       const faltam = esperadas ? esperadas.filter(function (l) { return !presentes.has(l); }) : [];
@@ -492,7 +492,7 @@ function apurar(rondas, opcoes) {
       if (!esperadas && conhecidas.length < MINIMO_DA_COMPLETA) {
         throw votoQueFalta('ronda 1 da faixa ' + faixa1 + ' com ' + conhecidas.length + ' lente(s) conhecida(s) (' +
           (conhecidas.join(', ') || 'nenhuma') + '): o minimo e ' + MINIMO_DA_COMPLETA + ' (a tabela de familias do ' +
-          'Passo 2 do /esquadro:revisar); chame as que faltam, ' + grave);
+          'Passo 2 do /sworn:review); chame as que faltam, ' + grave);
       }
       return;
     }
@@ -500,7 +500,7 @@ function apurar(rondas, opcoes) {
     if (naoVoltaram.length) {
       throw votoQueFalta('ronda ' + (indice + 1) + ' sem o voto da(s) lente(s) que acharam P0/P1 do lado novo na ronda ' +
         indice + ': ' + naoVoltaram.join(', ') + '. A ronda seguinte confere o proprio achado (Passo 4 do ' +
-        '/esquadro:revisar): ' + grave + '. Achado refutado na fonte vai em refutados.json e nao obriga a lente a voltar');
+        '/sworn:review): ' + grave + '. Achado refutado na fonte vai em refutados.json e nao obriga a lente a voltar');
     }
   }
 
@@ -527,7 +527,7 @@ function apurar(rondas, opcoes) {
         if (mapaDoTrabalho(mapaDaPassada)) continue;
         throw new Error('ronda ' + (indice + 1) + ordem + ' sem o mapa que diz qual lado e o trabalho ({ "A": "trabalho" ' +
           'ou "HEAD", "B": ... }, com ao menos um trabalho): sem ele a comparacao com a referencia nunca fecha. Prepare ' +
-          'a ronda de novo (Passo 1 do /esquadro:revisar) e rode de novo');
+          'a ronda de novo (Passo 1 do /sworn:review) e rode de novo');
       }
     }
     const mapaInv = comReferencia ? inv.mapa : null;

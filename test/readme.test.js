@@ -21,7 +21,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const RAIZ = path.join(__dirname, '..');
-const README = fs.readFileSync(path.join(RAIZ, 'README.md'), 'utf8');
+const README = fs.readFileSync(path.join(RAIZ, 'GUIA.md'), 'utf8');
 
 const NUMEROS = {
   'uma': 1, 'um': 1, 'duas': 2, 'dois': 2, 'tres': 3, 'três': 3, 'quatro': 4,
@@ -120,13 +120,13 @@ test('readme: toda skill do disco aparece no README', () => {
 test('readme: todo comando citado no README existe como skill ou workflow no disco', () => {
   const doDisco = new Set(fs.readdirSync(path.join(RAIZ, 'skills'), { withFileTypes: true })
     .filter((e) => e.isDirectory()).map((e) => e.name));
-  // D449 (0.6.2): workflow do plugin roda como /esquadro:<meta.name> (workflows/*.js na raiz do plugin)
+  // D449 (0.6.2): workflow do plugin roda como /sworn:<meta.name> (workflows/*.js na raiz do plugin)
   for (const f of fs.readdirSync(path.join(RAIZ, 'workflows')).filter((n) => n.endsWith('.js'))) {
     const nome = fs.readFileSync(path.join(RAIZ, 'workflows', f), 'utf8').match(/^  name: '([a-z-]+)',$/m);
     if (nome) doDisco.add(nome[1]);
   }
   const citados = new Set();
-  const re = /esquadro:([a-z-]+)/g;
+  const re = /sworn:([a-z-]+)/g;
   let m;
   while ((m = re.exec(README)) !== null) citados.add(m[1]);
   assert.ok(citados.size > 0, 'o README nao cita comando nenhum: o parser quebrou');
@@ -227,7 +227,7 @@ test('readme: diz o que NAO dispara, como conferir os ganchos e de que o gatilho
   const s = secao('Como funciona').corpo;
   assert.ok(/n[aã]o (?:se )?(?:conta|contam|dispara)[^.]*(?:erro|inflação|inflacao)/i.test(s) ||
     /(?:erro de medição|inflação de contexto)/.test(s), 'falta dizer o que o aviso NAO conta');
-  assert.ok(s.indexOf('esquadro: lendo o estado do repositorio') !== -1, 'falta o texto da abertura que prova que os ganchos rodam');
+  assert.ok(s.indexOf('sworn: lendo o estado do repositorio') !== -1, 'falta o texto da abertura que prova que os ganchos rodam');
   assert.ok(/`node`[^.\n]*PATH|PATH[^.\n]*`node`/.test(README), 'falta dizer que o node tem de estar no PATH');
   assert.ok(s.indexOf('gitOperation') !== -1 && s.indexOf('2.1.258') !== -1,
     'falta declarar a dependencia do gitOperation e a versao do Claude Code em que foi medida');
@@ -251,18 +251,18 @@ test('readme: ensina a atualizacao automatica pelo settings.json, porque o paine
   assert.ok(s.indexOf('extraKnownMarketplaces') !== -1 && s.indexOf('autoUpdate') !== -1 &&
     s.indexOf('settings.json') !== -1, 'falta o caminho pelo settings.json');
   assert.ok(/VS Code/.test(s), 'falta dizer que o painel do VS Code nao tem o botao');
-  assert.ok(/"esquadro-local"\s*:\s*\{[\s\S]*?"autoUpdate"\s*:\s*true/.test(s), 'falta o trecho literal do settings.json');
+  assert.ok(/"sworn-local"\s*:\s*\{[\s\S]*?"autoUpdate"\s*:\s*true/.test(s), 'falta o trecho literal do settings.json');
 });
 
 // D442/3 (M-8, M-10, M-11, M-13): o paragrafo dos comandos de mod nao dizia que a forma com dois-pontos nao
-// existe, nem a 3a causa de o comando faltar (o plugin antigo), nem o que /esquadro-plano responde sem plano
+// existe, nem a 3a causa de o comando faltar (o plugin antigo), nem o que /sworn-plan responde sem plano
 // (o dono achou que o plano "nao apareceu", s70).
 test('D442/3: o paragrafo dos mods diz o efeito dos dois-pontos, a causa plugin antigo e o painel sem plano', () => {
   const i = README.indexOf('**Ver os números a qualquer hora:**');
   assert.ok(i !== -1, 'sumiu o paragrafo dos mods');
   const p = README.slice(i, README.indexOf('\n\n', i));
   assert.ok(/dois-pontos[^.]*n[aã]o existe/.test(p), 'falta dizer que a forma com dois-pontos nao existe');
-  assert.ok(p.indexOf('claude plugin update esquadro@esquadro-local') !== -1, 'falta a causa plugin antigo, com o comando');
+  assert.ok(p.indexOf('claude plugin update sworn@sworn-local') !== -1, 'falta a causa plugin antigo, com o comando');
   assert.ok(p.indexOf('nenhum plano ativo') !== -1 && p.indexOf('--abrir') !== -1, 'falta o que o painel diz sem plano e como abrir');
 });
 
@@ -276,8 +276,8 @@ function nomes(pasta, ext) {
 }
 
 test('D499: o README cita cada skill, o workflow, cada agente, cada evento de gancho e cada painel', () => {
-  const skills = nomes('skills').map((s) => (s === 'padrao' ? '`padrao`' : 'esquadro:' + s));
-  const workflows = nomes('workflows', '.js').map((w) => 'esquadro:' + w.replace(/\.js$/, ''));
+  const skills = nomes('skills').map((s) => (s === 'playbook' ? '`playbook`' : 'sworn:' + s));
+  const workflows = nomes('workflows', '.js').map((w) => 'sworn:' + w.replace(/\.js$/, ''));
   const agentes = nomes('agents', '.md').map((a) => a.replace(/\.md$/, ''));
   const eventos = Object.keys(JSON.parse(fs.readFileSync(path.join(RAIZ, 'hooks', 'hooks.json'), 'utf8')).hooks);
   const mods = fs.readFileSync(path.join(RAIZ, 'hooks', 'mods.tsx'), 'utf8');
@@ -304,7 +304,7 @@ test('D499: o README cita cada chave do projeto.json e cada trava', () => {
 });
 
 test('D499: o README cita cada arquivo de modelos/ e cada referencia do padrao', () => {
-  assert.deepStrictEqual(faltamNoReadme(nomes('modelos').concat(nomes(path.join('skills', 'padrao', 'references')))), []);
+  assert.deepStrictEqual(faltamNoReadme(nomes('modelos').concat(nomes(path.join('skills', 'playbook', 'references')))), []);
 });
 
 test('D499 (D497/D498): o README conta a parte visual', () => {

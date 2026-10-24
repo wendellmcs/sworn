@@ -5,7 +5,7 @@ const path = require('node:path');
 const texto = require('./texto.js');
 
 function raiz() {
-  return path.join(process.env.ESQUADRO_TMP || os.tmpdir(), 'esquadro');
+  return path.join(process.env.SWORN_TMP || os.tmpdir(), 'sworn');
 }
 
 /** session_id vira nome de arquivo seguro: nada de '..' nem de barra. */
@@ -207,12 +207,12 @@ function incrementar(sessionId, chave) {
 
 /**
  * Descarrega os contadores do turno no arquivo duravel do projeto.
- * So grava se .claude/esquadro/ ja existir: projeto sem esquadro nao e poluido.
+ * So grava se .claude/sworn/ ja existir: projeto sem sworn nao e poluido.
  * Escrita atomica (D30): escreve em .tmp e renomeia. Preserva arquivo corrompido.
  */
 function descarregar(cwd, contadores) {
   if (!cwd || !contadores) return false;
-  const pasta = path.join(cwd, '.claude', 'esquadro');
+  const pasta = path.join(cwd, '.claude', 'sworn');
   if (!fs.existsSync(pasta)) return false;
   const arquivo = path.join(pasta, 'contadores.json');
   let dados = {};

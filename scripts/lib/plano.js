@@ -5,7 +5,7 @@ const escopoLib = require('./escopo.js');
 
 const RE_TAREFA = /^#{2,4}\s*Tarefa\s+(\d+)\s*[:.\-]\s*(.+?)\s*$/i;
 const RE_CAIXA = /^\s*-\s*\[( |x|X)\]/;
-const ATIVO = path.join('.claude', 'esquadro', 'plano-ativo.json');
+const ATIVO = path.join('.claude', 'sworn', 'plano-ativo.json');
 
 /** D514 #11: a caixa de passo conta no item de cima - a mesma regra no portao (parseTarefas) e no painel (parseItens). */
 function contarCaixa(atual, linha) {
@@ -443,7 +443,7 @@ function estimativaDeSessoes(sessoes, feitas, faltam) {
 }
 
 /*
- * Plano 082 (mock D532, S5): os paineis do /esquadro-plano sao lidos como Markdown no VS Code (D442/2) e saem com
+ * Plano 082 (mock D532, S5): os paineis do /sworn-plan sao lidos como Markdown no VS Code (D442/2) e saem com
  * acento (D532; era ASCII pela R5). Sem "painel do plano" no topo: o motor ja escreve o nome do plugin antes. O texto
  * que vem do plano ou do disco passa por `limpo`; comando, caminho com `<...>` e mensagem de erro vao por `codigo`
  * (o Markdown leria `<caminho do plano>` como tag e o apagaria).
@@ -481,7 +481,7 @@ function painelVariasFrentes(lista, script) {
     linhas.push('- ' + limpo(f.frente) + ': ' + (f.arquivo ? limpo(f.arquivo) : '(o arquivo da frente não se lê)'));
   }
   linhas.push('', 'Para escolher, edite o arquivo da frente que você quer, ' + codigo(escopoLib.PASTA_FRENTES + '<frente>.md') +
-    ' (qualquer edição liga esta sessão a ela), e rode /esquadro-plano de novo. Ou abra um plano: ' +
+    ' (qualquer edição liga esta sessão a ela), e rode /sworn-plan de novo. Ou abra um plano: ' +
     codigo(comandoDeAbrir(script)));
   return linhas.join('\n');
 }
@@ -490,7 +490,7 @@ function painelVariasFrentes(lista, script) {
 function painelFrenteIlegivel(frente, rel) {
   // R1 da revisao cega D502: sem frente, quem nao se le e o escopo.md da raiz.
   return 'Não consegui ler ' + (frente ? 'o arquivo da frente ' + limpo(frente) + ' (' + limpo(rel) + ')'
-    : 'o escopo ' + limpo(rel)) + '. Confira se ele é um arquivo e se abre, e rode /esquadro-plano de novo.';
+    : 'o escopo ' + limpo(rel)) + '. Confira se ele é um arquivo e se abre, e rode /sworn-plan de novo.';
 }
 
 /** D476: a frente vinculada nao declara plano no Objetivo. P2 #4: cita as duas formas que o leitor aceita. */
@@ -551,7 +551,7 @@ function alegaEtapaConcluida(texto) {
 
 function motivoSubitemAberto(tarefa) {
   return [
-    'esquadro - subitem pendente = etapa aberta.',
+    'sworn - subitem pendente = etapa aberta.',
     '',
     // Plano 083 (p3-13): sem a bronca do fim; ASCII pela R5 (aviso do gancho Stop, D532), sem o acento do painel.
     'A resposta da a etapa como concluida, mas a Tarefa ' + tarefa.n + ' ("' + tarefa.titulo + '")',
@@ -571,7 +571,7 @@ function motivoSubitemAberto(tarefa) {
  */
 function comandoDeAbrir(script) {
   const cabeEntreAspas = typeof script === 'string' && /^[\x20-\x7E]+$/.test(script) && !/[$`"]/.test(script);
-  return 'node ' + (cabeEntreAspas ? '"' + script + '"' : '<pasta do plugin esquadro>/scripts/plano.js') + ' --abrir <caminho do plano>';
+  return 'node ' + (cabeEntreAspas ? '"' + script + '"' : '<pasta do plugin sworn>/scripts/plano.js') + ' --abrir <caminho do plano>';
 }
 
 /** P2 #6: o plano do Objetivo fora da pasta do projeto - diz por que nao le e as duas saidas. */
@@ -589,12 +589,12 @@ function painelQueFalhou(arquivo, erro) {
   return 'Li o plano ' + limpo(arquivo) + ', mas o painel falhou ao contar as tarefas. Veja as tarefas direto no ' +
     'arquivo do plano. Para avisar o defeito, copie a mensagem entre parênteses (' +
     codigo(erro && erro.message ? erro.message : String(erro)) + ') e cole no chat com o pedido "registrar defeito do ' +
-    'esquadro".';
+    'sworn".';
 }
 
 /** D442/10: plano-ativo.json presente que nao se le (JSON quebrado, sem "arquivo") nao e "nenhum plano ativo". */
 function painelIlegivel(script) {
-  return 'O arquivo .claude/esquadro/plano-ativo.json existe, mas não se lê (JSON quebrado, ou sem o campo "arquivo"). ' +
+  return 'O arquivo .claude/sworn/plano-ativo.json existe, mas não se lê (JSON quebrado, ou sem o campo "arquivo"). ' +
     'Abra o plano de novo: ' + codigo(comandoDeAbrir(script));
 }
 
@@ -608,7 +608,7 @@ function avisoDeLinhasSemId(semId) {
 }
 
 /**
- * Bloco M / M2 (D435): o painel do plano em texto - o que o /esquadro-plano do mod responde. Mostra a vista o que o
+ * Bloco M / M2 (D435): o painel do plano em texto - o que o /sworn-plan do mod responde. Mostra a vista o que o
  * portao de fecho so barra no fim: passo aberto = tarefa aberta. Plano 082 (mock D532, S5): titulo "Plano X — N de M
  * tarefas" (ou "concluído"), linha fraca com a origem e o caminho, a lista e o bloco "Ritmo", em Markdown e com acento.
  * D442/3: `script` e o caminho do plano.js para o "como abrir"; sem ele, o marcador.
@@ -619,7 +619,7 @@ function avisoDeLinhasSemId(semId) {
  */
 function painelTexto(ativo, tarefas, script) {
   if (!ativo || !ativo.arquivo) {
-    return 'Nenhum plano ativo nesta sessão: não há .claude/esquadro/plano-ativo.json nem plano anotado na frente ou no ' +
+    return 'Nenhum plano ativo nesta sessão: não há .claude/sworn/plano-ativo.json nem plano anotado na frente ou no ' +
       'escopo. Para abrir um: ' + codigo(comandoDeAbrir(script));
   }
   const lista = Array.isArray(tarefas) ? tarefas : [];
@@ -738,7 +738,7 @@ const TITULO_NA_LINHA = 48;
 
 /**
  * Plano 082 (p7-2): teto, em bytes no disco, do plano que a faixa le a cada medida. Acima dele a faixa fica vazia, e o
- * /esquadro-plano (que roda so quando pedido) le igual. Plano 083 (p3-12): se um plano de verdade passar de 1 MB e a
+ * /sworn-plan (que roda so quando pedido) le igual. Plano 083 (p3-12): se um plano de verdade passar de 1 MB e a
  * faixa sumir, o teto se sobe aqui (o teste do p7-2 le este numero).
  */
 const TETO_DO_PLANO = 1024 * 1024;
@@ -785,7 +785,7 @@ function contaDoPlano(lista, nFeitas) {
  * que o status do VS Code desenha uma linha so. `ativo` e `tarefas` como no painelTexto. Sem plano, ou plano sem
  * tarefa contavel, '' (a faixa nao mostra nada). A proxima e a mesma do painel: a 1a aberta ou em curso.
  * Plano 082 (mock D532, S1): " · " entre as partes, a unidade depois da conta, "concluído" quando nada falta, e acento
- * (D532: a sonda da Tarefa 1 viu o acento inteiro na faixa; o painel do /esquadro-plano ganhou acento na Tarefa 4).
+ * (D532: a sonda da Tarefa 1 viu o acento inteiro na faixa; o painel do /sworn-plan ganhou acento na Tarefa 4).
  */
 function linhaDoPlano(ativo, tarefas) {
   if (!ativo || !ativo.arquivo) return '';
@@ -819,7 +819,7 @@ function linhaDoPlano(ativo, tarefas) {
  * Pedido 30: a linha do plano desta sessao, para o scripts/sessao.js (roda a cada medida). Acha o plano na ordem do
  * `plano.js --texto` - plano-ativo.json legivel, senao o da frente vinculada (`frente`) ou o do escopo.md. O que no
  * painel vira explicacao (varias frentes, ilegivel, sem plano, fora do projeto, erro) aqui e '': a faixa so mostra
- * plano lido; o /esquadro-plano segue dizendo o porque. Pedido 70 (D541, revoga em parte a D502): a frente unica com
+ * plano lido; o /sworn-plan segue dizendo o porque. Pedido 70 (D541, revoga em parte a D502): a frente unica com
  * plano, sem vinculo (`semVinculo`), tambem e '' - chat sem plano nao mostra o de outra frente; o painel segue nela.
  */
 function linhaDoPlanoDaSessao(cwd, frente) {
@@ -834,7 +834,7 @@ function linhaDoPlanoDaSessao(cwd, frente) {
       alvo = achado;
     }
     const abs = caminhoDoPlano(cwd, alvo.arquivo);
-    // p7-2: roda a cada medida; plano acima do teto nao se le (a faixa fica vazia, o /esquadro-plano segue lendo).
+    // p7-2: roda a cada medida; plano acima do teto nao se le (a faixa fica vazia, o /sworn-plan segue lendo).
     if (fs.statSync(abs).size > TETO_DO_PLANO) return '';
     const texto = fs.readFileSync(abs, 'utf8');
     return linhaDoPlano(alvo, deduzirPeloEscopo(parseItens(texto), alvo.objetivo));

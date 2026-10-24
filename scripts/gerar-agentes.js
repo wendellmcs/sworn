@@ -17,14 +17,14 @@ const gravar = process.argv.indexOf('--gravar') !== -1;
 const projeto = config.carregarProjeto(cwd);
 
 if (!projeto) {
-  process.stdout.write('ERRO: rode /esquadro:init primeiro; nao achei .claude/esquadro/projeto.json\n');
+  process.stdout.write('ERRO: rode /sworn:init primeiro; nao achei .claude/sworn/projeto.json\n');
   process.exit(1);
 }
 
 const lista = degrausLib.normalizar((projeto.agentes || {}).degraus);
 if (lista.length === 0) {
   process.stdout.write('ERRO: este projeto nao tem degraus gravados.\n');
-  process.stdout.write('A entrevista do /esquadro:init pergunta, e sem eles nao ha o que gerar:\n');
+  process.stdout.write('A entrevista do /sworn:init pergunta, e sem eles nao ha o que gerar:\n');
   process.stdout.write('nem nome de agente, nem apelido para escrever no frontmatter.\n');
   process.exit(1);
 }

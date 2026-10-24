@@ -12,8 +12,8 @@
  *
  * Regras de desenho:
  * - So roda com projeto.json carregado. Sem ele a auditoria varreria o repositorio inteiro (caro) e a
- *   marca criaria .claude/esquadro/ num projeto que nunca foi configurado.
- * - A marca (.claude/esquadro/auditoria.json, { "ultima": "<ISO>", "ordens": { <foto dos contadores de ordem> } })
+ *   marca criaria .claude/sworn/ num projeto que nunca foi configurado.
+ * - A marca (.claude/sworn/auditoria.json, { "ultima": "<ISO>", "ordens": { <foto dos contadores de ordem> } })
  *   e gravada DEPOIS de auditar, tenha
  *   avisado ou nao, e tambem quando a auditoria falha: repetir o custo e o ruido a cada abertura seria
  *   pior que esperar os N dias. Marca ilegivel ou ausente = vencida. Data no futuro (relogio voltou) =
@@ -42,7 +42,7 @@ const CHAVE_ATALHOS = 'atalhosNaAbertura';
 const MARCA_ATALHOS = 'atalhos-revisao.json';
 const PADROES = { diasEntreAuditorias: 7, diasSkillParada: 90, diasEntreAtalhos: 30 };
 const MAX_POR_CATEGORIA = 5;
-const ATALHOS_LISTADOS = 10; // mock D576: o resto pelo /esquadro:atalhos
+const ATALHOS_LISTADOS = 10; // mock D576: o resto pelo /sworn:shortcuts
 const DIA_MS = 24 * 60 * 60 * 1000;
 
 function ehObjeto(p) {
@@ -70,7 +70,7 @@ function emMs(agora) {
 /** Instante da ultima auditoria (ou da `marca` pedida), em ms; null se a marca nao existe ou nao se le. */
 function lerMarca(cwd, marca) {
   try {
-    const m = JSON.parse(textoLib.semBom(fs.readFileSync(config.caminhoEmEsquadro(cwd, marca || MARCA), 'utf8')));
+    const m = JSON.parse(textoLib.semBom(fs.readFileSync(config.caminhoEmSworn(cwd, marca || MARCA), 'utf8')));
     const t = ehObjeto(m) ? Date.parse(m.ultima) : NaN;
     return isFinite(t) ? t : null;
   } catch (e) {
@@ -93,7 +93,7 @@ function vencida(cwd, projeto, agora, marca, nomeDias) {
 /** Plano 091 T6: a foto dos contadores de ordem que a auditoria anterior guardou na marca; sem ela, null. */
 function lerFoto(cwd) {
   try {
-    const m = JSON.parse(textoLib.semBom(fs.readFileSync(config.caminhoEmEsquadro(cwd, MARCA), 'utf8')));
+    const m = JSON.parse(textoLib.semBom(fs.readFileSync(config.caminhoEmSworn(cwd, MARCA), 'utf8')));
     return ehObjeto(m) && ehObjeto(m.ordens) ? m.ordens : null;
   } catch (e) {
     return null;
@@ -106,7 +106,7 @@ function lerFoto(cwd) {
  */
 function gravarMarca(cwd, agora, ordens, nome) {
   try {
-    const alvo = config.caminhoEmEsquadro(cwd, nome || MARCA);
+    const alvo = config.caminhoEmSworn(cwd, nome || MARCA);
     fs.mkdirSync(path.dirname(alvo), { recursive: true });
     const marca = { ultima: new Date(emMs(agora)).toISOString() };
     if (ehObjeto(ordens)) marca.ordens = ordens;
@@ -238,11 +238,11 @@ function avisoDosAtalhos(cwd, projeto, opcoes) {
     gravarMarca(cwd, agora, null, MARCA_ATALHOS);
     const a = require('./escopo.js').ascii;
     const plural = function (n, um, varios) { return n + ' ' + (n === 1 ? um : varios); };
-    const cabeca = 'esquadro: atalhos registrados (revisao a cada ' + a(dias(projeto, 'diasEntreAtalhos')) + ' dias): ';
+    const cabeca = 'sworn: atalhos registrados (revisao a cada ' + a(dias(projeto, 'diasEntreAtalhos')) + ' dias): ';
     // revisao 092: a falha nao cala por 30 dias; sai com a causa e o proximo passo
-    if (v.erro) return cabeca + 'a busca falhou (' + a(v.erro).slice(0, 120) + '); rode /esquadro:atalhos para ver o detalhe.';
+    if (v.erro) return cabeca + 'a busca falhou (' + a(v.erro).slice(0, 120) + '); rode /sworn:shortcuts para ver o detalhe.';
     const falha = v.falhas.length ? plural(v.falhas.length, 'repositorio nao varrido', 'repositorios nao varridos') +
-      ' (o git nao respondeu): ' + v.falhas.map(a).join('; ') + '; rode /esquadro:atalhos de dentro dele.' : '';
+      ' (o git nao respondeu): ' + v.falhas.map(a).join('; ') + '; rode /sworn:shortcuts de dentro dele.' : '';
     const achados = v.achados;
     if (!achados.length) return falha ? cabeca + 'nenhum atalho achado; ' + falha : '';
     const arquivos = new Set(achados.map(function (x) { return x.arquivo; })).size;
@@ -253,7 +253,7 @@ function avisoDosAtalhos(cwd, projeto, opcoes) {
       linhas.push('- ' + a(x.arquivo + ':' + x.linha) + '  ' + a(x.oque));
       linhas.push(x.gatilho ? '    trocar quando: ' + a(x.gatilho) : '    sem gatilho');
     }
-    if (achados.length > ATALHOS_LISTADOS) linhas.push('(+' + (achados.length - ATALHOS_LISTADOS) + ' nao listados: rode /esquadro:atalhos)');
+    if (achados.length > ATALHOS_LISTADOS) linhas.push('(+' + (achados.length - ATALHOS_LISTADOS) + ' nao listados: rode /sworn:shortcuts)');
     if (falha) linhas.push(falha);
     return linhas.concat([
       'Faca no seu primeiro turno, depois de atender o pedido:',
@@ -261,7 +261,7 @@ function avisoDosAtalhos(cwd, projeto, opcoes) {
       '2. Se algum venceu (ou nao tem gatilho), leve ao usuario pelo',
       '   AskUserQuestion, em 3 opcoes, com o custo. Nao troque nada sem o sim.',
       '   Se nenhum venceu, nao diga nada.',
-      'Desligar: "' + CHAVE_ATALHOS + '": false em .claude/esquadro/projeto.json.'
+      'Desligar: "' + CHAVE_ATALHOS + '": false em .claude/sworn/projeto.json.'
     ]).join('\n');
   } catch (e) {
     return '';
@@ -301,20 +301,20 @@ function avisoDaAuditoria(cwd, projeto, opcoes) {
       // Plano 091 (#3, D559): o fim e ordem ao modelo (rodar a auditoria completa e levar os cortes em 3 opcoes),
       // nao so informacao; cortar segue so com o sim do dono. Sem nada a cortar, so a retroalimentacao (se houver).
       texto = linhas.length ? [
-        'esquadro: auditoria automatica (a cada ' + ascii(cada) + ' dias)' + ACHOU,
+        'sworn: auditoria automatica (a cada ' + ascii(cada) + ' dias)' + ACHOU,
         linhas.map(function (l) { return '- ' + l; }).join('\n')
       ].concat(retro, [
         'Faca no seu primeiro turno, depois de atender o pedido:',
-        '1. Rode /esquadro:auditar para ver o detalhe.',
+        '1. Rode /sworn:audit para ver o detalhe.',
         '2. Leve os cortes ao usuario pelo AskUserQuestion, em 3 opcoes, com o',
         '   recomendado primeiro e o custo de cada um. Nao corte nada sem o sim.',
-        'Desligar: "' + CHAVE + '": false em .claude/esquadro/projeto.json.'
-      ]).join('\n') : (retro.length ? ['esquadro: auditoria automatica (a cada ' + ascii(cada) + ' dias): nada a cortar.']
+        'Desligar: "' + CHAVE + '": false em .claude/sworn/projeto.json.'
+      ]).join('\n') : (retro.length ? ['sworn: auditoria automatica (a cada ' + ascii(cada) + ' dias): nada a cortar.']
         .concat(retro).join('\n') : '');
     } catch (e) {
       // A foto das ordens avanca na marca abaixo: a retroalimentacao do intervalo sai aqui, senao se perderia.
-      texto = ['esquadro: auditoria automatica falhou (' + ascii(textoLib.causaDoErro(e)).slice(0, 120) +
-        '); rode /esquadro:auditar'].concat(retro).join('\n');
+      texto = ['sworn: auditoria automatica falhou (' + ascii(textoLib.causaDoErro(e)).slice(0, 120) +
+        '); rode /sworn:audit'].concat(retro).join('\n');
     }
     gravarMarca(cwd, agora, totais);
     return texto;

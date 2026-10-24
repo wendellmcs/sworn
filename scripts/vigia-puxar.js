@@ -10,7 +10,7 @@
  *
  * Uso: node vigia-puxar.js --repo <pasta do clone> [--remote backup] [--ramo claude/vigia]
  *                          [--arquivo vigia/novidades.md] [--destino <pasta>]
- * Destino padrao: a pasta do vigia (ESQUADRO_VIGIA ou ~/.claude/esquadro/vigia).
+ * Destino padrao: a pasta do vigia (SWORN_VIGIA ou ~/.claude/sworn/vigia).
  *
  * Passos: `git fetch` do ramo (sem prompt de credencial, 60 s de limite) e `git show FETCH_HEAD:<arquivo>`.
  * So grava se o conteudo tiver a linha `semana: AAAA-MM-DD` valida (mesmo parser da abertura): arquivo

@@ -132,10 +132,10 @@ function trocarModel(bruto, apelido) {
 // chamador; os valores de cada lado saem por agente, logo abaixo.
 function motivo(r) {
   const linhas = [
-    'esquadro - o modelo de alguns agentes nao bate com o mapa deste projeto.',
+    'sworn - o modelo de alguns agentes nao bate com o mapa deste projeto.',
     '',
     'Estes agentes declaram um modelo (`model:`) diferente do que a entrevista gravou no mapa',
-    '(campo "agentes" de .claude/esquadro/projeto.json):'
+    '(campo "agentes" de .claude/sworn/projeto.json):'
   ];
   // A1-08: nome e arquivo vem do dono e podem ter acento; o aviso sai em ASCII (R5), e o nome sem acento nao e o real.
   let mudou = false;
@@ -157,10 +157,10 @@ function motivo(r) {
 /**
  * Os agentes que o PROPRIO plugin publica em agents/, com o que cada um declara.
  *
- * Decisao 29: o `inspetor` guarda um apelido de modelo DENTRO do plugin - a
+ * Decisao 29: o `inspector` guarda um apelido de modelo DENTRO do plugin - a
  * unica excecao declarada a regra de nao guardar nome de modelo. Por isso ele
  * entra na sondagem do H4 como os apelidos do projeto entram; sem isso, o
- * /esquadro:revisar quebraria em silencio no dia em que o apelido mudar.
+ * /sworn:review quebraria em silencio no dia em que o apelido mudar.
  *
  * Le a pasta de verdade, nao uma lista: agente novo no plugin entra sozinho, e
  * os campos sao os que o frontmatter de cada um declara. Sem pasta, lista vazia.

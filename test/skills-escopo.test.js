@@ -1,6 +1,6 @@
 'use strict';
 // Lote 2 (D422), IN-08 e DC-05: uma SKILL que manda o agente gravar com Write em
-// .claude/esquadro/** tem de avisar que, com projeto.json no disco, o portao de escopo
+// .claude/sworn/** tem de avisar que, com projeto.json no disco, o portao de escopo
 // (trava 4) nega essa gravacao em marcha padrao sem escopo - e o que fazer. Sem o aviso
 // o agente trava no meio do roteiro e improvisa. Padrao copiado de init (catalogo.json,
 // Passo 7e) e de auditar.
@@ -27,8 +27,8 @@ test('init: o re-init manda declarar o escopo antes dos Writes em projeto.json e
   const s0b = secao(skill('init'), 'Passo 0b');
   assert.ok(/escopo\.md/.test(s0b), 'Passo 0b nao cita o escopo.md');
   assert.ok(/Dentro/.test(s0b), 'Passo 0b nao diz que vai em "Dentro"');
-  assert.ok(s0b.includes('.claude/esquadro/projeto.json'), 'Passo 0b nao lista o projeto.json no escopo');
-  assert.ok(s0b.includes('.claude/esquadro/design.json'), 'Passo 0b nao lista o design.json no escopo');
+  assert.ok(s0b.includes('.claude/sworn/projeto.json'), 'Passo 0b nao lista o projeto.json no escopo');
+  assert.ok(s0b.includes('.claude/sworn/design.json'), 'Passo 0b nao lista o design.json no escopo');
 });
 
 test('init: Passo 5b e Passo 7 lembram do escopo no ponto do Write (IN-08)', () => {
@@ -41,8 +41,8 @@ test('init: Passo 5b e Passo 7 lembram do escopo no ponto do Write (IN-08)', () 
 });
 
 test('revisar: avisa que o portao de escopo pode negar o Write em revisao/** e diz o que fazer (DC-05)', () => {
-  const r = skill('revisar');
-  assert.ok(r.includes('.claude/esquadro/revisao/**'),
-    'o revisar nao diz que o escopo precisa cobrir .claude/esquadro/revisao/**');
+  const r = skill('review');
+  assert.ok(r.includes('.claude/sworn/revisao/**'),
+    'o revisar nao diz que o escopo precisa cobrir .claude/sworn/revisao/**');
   assert.ok(/portao de escopo|portão de escopo/.test(r), 'o revisar nao nomeia o portao que nega');
 });

@@ -1,6 +1,6 @@
 'use strict';
-// D451 (0.6.2): o /esquadro:init pergunta UMA vez se autoriza o /esquadro:paralelo e grava a regra de permissao
-// `Workflow(esquadro:paralelo)` no .claude/settings.local.json do projeto, por script (JSON, nunca texto).
+// D451 (0.6.2): o /sworn:init pergunta UMA vez se autoriza o /sworn:parallel e grava a regra de permissao
+// `Workflow(sworn:parallel)` no .claude/settings.local.json do projeto, por script (JSON, nunca texto).
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -9,10 +9,10 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'autorizar-paralelo.js');
-const REGRA = 'Workflow(esquadro:paralelo)';
+const REGRA = 'Workflow(sworn:parallel)';
 
 function comDir(fn) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-autorizar-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-autorizar-'));
   try { fn(dir); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 function rodar(dir, ...args) {
@@ -85,7 +85,7 @@ test('autorizar --conferir: so le, e diz se ja esta autorizado (o init pergunta 
 });
 
 test('autorizar: regra em permissions.deny vence a allow -> nao diz autorizado (D452)', () => {
-  for (const negada of [REGRA, 'Workflow', 'Workflow(*)', 'Workflow(esquadro:*)']) {
+  for (const negada of [REGRA, 'Workflow', 'Workflow(*)', 'Workflow(sworn:*)']) {
     comDir((dir) => {
       fs.mkdirSync(path.join(dir, '.claude'));
       const bruto = JSON.stringify({ permissions: { allow: [REGRA], deny: [negada] } });
@@ -118,7 +118,7 @@ test('autorizar: de uma subpasta, grava na raiz do repositorio, nao num .claude 
 test('autorizar: deny de outro workflow nao bloqueia (D452)', () => {
   comDir((dir) => {
     fs.mkdirSync(path.join(dir, '.claude'));
-    fs.writeFileSync(local(dir), JSON.stringify({ permissions: { deny: ['Workflow(outro)', 'Workflow(esquadro:revisar*)'] } }));
+    fs.writeFileSync(local(dir), JSON.stringify({ permissions: { deny: ['Workflow(outro)', 'Workflow(sworn:review*)'] } }));
     const r = rodar(dir);
     assert.strictEqual(r.status, 0, r.stdout);
     assert.strictEqual(r.json.autorizado, true);

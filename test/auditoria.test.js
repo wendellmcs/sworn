@@ -13,7 +13,7 @@ const SCRIPT = path.join(__dirname, '..', 'scripts', 'auditar.js');
 // Fixture em pasta temporaria criada pelo teste. Nunca o MEMORY.md real.
 
 function pasta(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-auditoria-' + nome + '-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-auditoria-' + nome + '-'));
 }
 
 /** Grava um MEMORY.md de brinquedo e devolve o caminho (Buffer ou texto, sem tocar em mais nada). */
@@ -303,7 +303,7 @@ test('memoria: auditar.js --memoria mede; sem o argumento, ou com ele vazio, diz
 // Cada teste abaixo foi escrito antes da mudanca e visto falhar contra o codigo da 0.3.4.
 
 function regrasMd(dir, conteudo) {
-  const alvo = path.join(dir, '.claude', 'esquadro', 'regras.md');
+  const alvo = path.join(dir, '.claude', 'sworn', 'regras.md');
   fs.mkdirSync(path.dirname(alvo), { recursive: true });
   fs.writeFileSync(alvo, conteudo);
   return alvo;
@@ -338,7 +338,7 @@ test('regras (A): sem regras.md diz "nao lidas" com ENOENT e o motivo, sem ser e
     assert.ok(/regras\.md/.test(r.regras.motivo), r.regras.motivo);
     assert.ok(!/erro/i.test(r.regras.motivo), 'ausencia nao e erro: ' + r.regras.motivo);
     // T4 (ronda 1, microcopy): o motivo diz o que fazer, nao so o que nao rodou.
-    assert.ok(/\/esquadro:init/.test(r.regras.motivo), 'faltou dizer o que fazer: ' + r.regras.motivo);
+    assert.ok(/\/sworn:init/.test(r.regras.motivo), 'faltou dizer o que fazer: ' + r.regras.motivo);
     assert.deepStrictEqual(r.contradicoes, []);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -347,12 +347,12 @@ test('regras (A): regras.md que existe e nao se le diz "nao lidas" com o codigo,
   const dir = pasta('regras-ilegivel');
   try {
     // uma pasta no lugar do arquivo: existe, e nao se le (EISDIR, nao ENOENT)
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn', 'regras.md'), { recursive: true });
     const r = aud.auditar(dir, {});
     assert.strictEqual(r.regras.lidas, false);
     assert.strictEqual(r.regras.causa, 'EISDIR');
     assert.ok(/EISDIR/.test(r.regras.motivo) && /regras\.md/.test(r.regras.motivo), r.regras.motivo);
-    assert.ok(/rode \/esquadro:auditar de novo/.test(r.regras.motivo), 'faltou dizer o que fazer: ' + r.regras.motivo);
+    assert.ok(/rode \/sworn:audit de novo/.test(r.regras.motivo), 'faltou dizer o que fazer: ' + r.regras.motivo);
     assert.deepStrictEqual(r.contradicoes, []);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -445,7 +445,7 @@ test('memoria (H): o metodo diz que a linha cortada no meio conta como de fora',
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-// ---------------------------------------------------------------- esquadro-pendencias T5 (F3-09, F3-19, F3-18, F3-22)
+// ---------------------------------------------------------------- sworn-pendencias T5 (F3-09, F3-19, F3-18, F3-22)
 
 // F3-09: a linha cujo TEXTO termina exatamente no byte 25.000, com o \n no byte seguinte, esta dentro.
 test('memoria (F3-09): linha que termina no byte 25.000 com LF logo depois conta como dentro', () => {
@@ -488,7 +488,7 @@ test('regras (F3-18): erro sem code vira "regras.md ilegivel: <motivo>", nao "(E
     assert.strictEqual(r.regras.lidas, false);
     assert.ok(r.regras.motivo.includes('regras.md ilegivel: Error: linha 3 quebrada'), r.regras.motivo);
     assert.ok(!/\(ERRO\)/.test(r.regras.motivo) && !/nao consegui ler/.test(r.regras.motivo), r.regras.motivo);
-    assert.ok(/rode \/esquadro:auditar de novo/.test(r.regras.motivo), 'faltou dizer o que fazer: ' + r.regras.motivo);
+    assert.ok(/rode \/sworn:audit de novo/.test(r.regras.motivo), 'faltou dizer o que fazer: ' + r.regras.motivo);
     assert.deepStrictEqual(r.contradicoes, []);
   } finally {
     regraLib.parseRegras = original;
@@ -504,7 +504,7 @@ test('auditoria (F3-22): as mensagens de leitura traduzem o codigo, e o campo ca
     assert.strictEqual(mem.causa, 'ENOENT');
     assert.ok(mem.motivo.includes('(nao existe (ENOENT))'), mem.motivo);
     assert.ok(/confira o caminho/.test(mem.motivo), 'a dica por codigo continua: ' + mem.motivo);
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro', 'regras.md'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn', 'regras.md'), { recursive: true });
     const r = aud.auditar(dir, {});
     assert.strictEqual(r.regras.causa, 'EISDIR');
     assert.ok(r.regras.motivo.includes('(e uma pasta (EISDIR))'), r.regras.motivo);
@@ -556,8 +556,8 @@ test('peso (D370): auditar.js sem projeto.json pesa o CLAUDE.md como candidata; 
     const sem = rodar().peso;
     assert.strictEqual(sem.fontes, 'candidatas');
     assert.ok(sem.porArquivo.some(function (p) { return p.arquivo === 'CLAUDE.md'; }));
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({ fontesCanonicas: [] }));
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ fontesCanonicas: [] }));
     const com = rodar().peso;
     assert.strictEqual(com.fontes, 'declaradas');
     assert.strictEqual(com.total, 0);
@@ -565,22 +565,22 @@ test('peso (D370): auditar.js sem projeto.json pesa o CLAUDE.md como candidata; 
 });
 
 // D615 (L10 do censo da D612): as skills do PLUGIN entram na auditoria so no cruzamento com as do projeto - o corpo
-// delas carrega so quando chamadas, entao o peso nao muda. Caso real do workspace do dono: padrao-aaa x esquadro:padrao.
+// delas carrega so quando chamadas, entao o peso nao muda. Caso real do workspace do dono: padrao-aaa x sworn:playbook.
 test('auditoria (D615): skill do projeto que disputa o gatilho de uma skill do plugin e apontada em doPlugin', () => {
   const dir = pasta('plugin-cruzado');
   try {
-    const plugin = fs.readFileSync(path.join(__dirname, '..', 'skills', 'revisar', 'SKILL.md'), 'utf8');
+    const plugin = fs.readFileSync(path.join(__dirname, '..', 'skills', 'review', 'SKILL.md'), 'utf8');
     const desc = plugin.match(/^description:\s*(.+)$/m)[1];
     fs.mkdirSync(path.join(dir, '.claude', 'skills', 'minha-revisao'), { recursive: true });
     fs.writeFileSync(path.join(dir, '.claude', 'skills', 'minha-revisao', 'SKILL.md'),
       '---\nname: minha-revisao\ndescription: ' + desc + '\n---\n\n# minha revisao\n');
     const r = aud.auditar(dir, { fontesCanonicas: [] });
     assert.ok(r.doPlugin, 'a saida traz as skills do plugin');
-    assert.ok(r.doPlugin.skills.includes('esquadro:revisar') && r.doPlugin.skills.includes('esquadro:radar'));
-    const par = r.doPlugin.sobreposicoes.filter(function (s) { return s.a === 'minha-revisao' && s.b === 'esquadro:revisar'; });
+    assert.ok(r.doPlugin.skills.includes('sworn:review') && r.doPlugin.skills.includes('sworn:radar'));
+    const par = r.doPlugin.sobreposicoes.filter(function (s) { return s.a === 'minha-revisao' && s.b === 'sworn:review'; });
     assert.strictEqual(par.length, 1, JSON.stringify(r.doPlugin.sobreposicoes));
     // so o cruzamento: par entre duas skills do plugin nao e assunto do projeto
-    assert.ok(r.doPlugin.sobreposicoes.every(function (s) { return s.b.indexOf('esquadro:') === 0 && s.a.indexOf('esquadro:') !== 0; }));
+    assert.ok(r.doPlugin.sobreposicoes.every(function (s) { return s.b.indexOf('sworn:') === 0 && s.a.indexOf('sworn:') !== 0; }));
     // o peso nao soma o plugin
     assert.ok(!r.peso.porArquivo.some(function (p) { return /revisar/.test(p.arquivo) && !/minha-revisao/.test(p.arquivo); }));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

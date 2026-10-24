@@ -1,14 +1,14 @@
 ---
 name: {{texto:slug}}
-description: Manual de execucao do projeto {{texto:nome}}. Use no inicio de toda tarefa que nao seja conversa pura. Define a marcha de rigor, os portoes proprios deste projeto, o que nao se toca e quem decide. Gerado por /esquadro:init.
+description: Manual de execucao do projeto {{texto:nome}}. Use no inicio de toda tarefa que nao seja conversa pura. Define a marcha de rigor, os portoes proprios deste projeto, o que nao se toca e quem decide. Gerado por /sworn:init.
 ---
 
 # {{texto:nome}} — manual de execução
 
-> **Gerado por `/esquadro:init` em {{texto:dataGeracao}}.** Documento **derivado**: a fonte de
-> verdade das regras executáveis é `.claude/esquadro/projeto.json` e `.claude/esquadro/regras.md`.
+> **Gerado por `/sworn:init` em {{texto:dataGeracao}}.** Documento **derivado**: a fonte de
+> verdade das regras executáveis é `.claude/sworn/projeto.json` e `.claude/sworn/regras.md`.
 > Onde esta skill e a configuração divergirem, **vence a configuração** — ela é lida por máquina.
-> Corrigir esta skill é trabalho de humano, ou de `/esquadro:aprender` com aprovação.
+> Corrigir esta skill é trabalho de humano, ou de `/sworn:learn` com aprovação.
 
 ## 1. Precedência das fontes
 
@@ -37,7 +37,8 @@ São eixos independentes: modelo barato em marcha AAA é o desenho correto, não
 **Review** — ler o contexto real antes de opinar. Reler o trecho do plano no arquivo, nunca de
 memória nem do handoff.
 **Execute** — o menor conjunto de arquivos que resolve.
-**Verify** — rodar o que a marcha exige, ou declarar o que não rodou.
+**Verify** — rodar o que a marcha exige, ou declarar o que não rodou. Saída que mostra falha não
+verifica.
 **Complete** — resumo com evidência, riscos restantes e o que precisa de humano.
 
 Tarefa simples usa o mesmo raciocínio de forma compacta. "Rápido" nunca significa improvisado.
@@ -47,13 +48,16 @@ Tarefa simples usa o mesmo raciocínio de forma compacta. "Rápido" nunca signif
 O comando que prova que está pronto é {{campo:provaDePronto}}.
 
 **Evidência é a saída literal da rodada atual, colada na resposta** — com comando e resultado.
-Memória não é evidência. O que não rodou é declarado como não rodado, com o motivo. Falha
+Memória não é evidência. Cada pedido fica ligado à checagem que o prova, com o estado: provado,
+falhou ou não testado — sem evidência é "não testado". Saída que mostra falha não é prova, e teste
+instável se corrige ou se remove, nunca se repete até passar. O que não rodou é declarado como não
+rodado, com o motivo. Falha
 pré-existente só vale com prova: rodada anterior ao diff, ou demonstração de que os arquivos lidos
 pelo teste que falhou não estão no diff.
 
 ## 5. Portões próprios deste projeto
 
-Além do que o `esquadro` já cobra por mecanismo:
+Além do que o `sworn` já cobra por mecanismo:
 
 {{texto:portoes}}
 
@@ -93,7 +97,7 @@ Esta seção vence qualquer impulso de "deixar perfeito".
 
 Se o rito e um guarda-corpo colidirem, **vence o guarda-corpo** — e o conflito vira decisão do dono.
 
-## 10. O que o `esquadro` já cobra por mecanismo — não repetir aqui
+## 10. O que o `sworn` já cobra por mecanismo — não repetir aqui
 
 Estes itens **não precisam** estar escritos nesta skill: eles acontecem com ou sem ela carregada,
 inclusive depois de compactação de contexto.
@@ -107,8 +111,8 @@ inclusive depois de compactação de contexto.
 | Custo | Agente do topo da escada em trabalho só de marcha rápida |
 | Design | Valor cru fora dos tokens declarados |
 
-Revisão cega: `/esquadro:revisar`. Troca de chat: `/esquadro:handoff`. Regra nova:
-`/esquadro:aprender`. Contagem de disparos: `node "<plugin>/scripts/uso.js"`, com `<plugin>` = a pasta do
+Revisão cega: `/sworn:review`. Troca de chat: `/sworn:handoff`. Regra nova:
+`/sworn:learn`. Contagem de disparos: `node "<plugin>/scripts/uso.js"`, com `<plugin>` = a pasta do
 plugin instalado (o `uso.js` mora no plugin, não neste projeto).
 
 ## 11. O que este projeto NÃO promete

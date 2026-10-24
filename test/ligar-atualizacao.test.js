@@ -7,17 +7,17 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 /**
- * D598 (revisao completa, A11-02): o /esquadro:init pergunta e, com o sim, liga a atualizacao automatica do
- * marketplace `esquadro-local` no settings.json do usuario - a forma provada na s15 (decisoes.md:13444):
- * `extraKnownMarketplaces.esquadro-local.autoUpdate = true`, com o `source` que o Claude Code ja conhece.
+ * D598 (revisao completa, A11-02): o /sworn:init pergunta e, com o sim, liga a atualizacao automatica do
+ * marketplace `sworn-local` no settings.json do usuario - a forma provada na s15 (decisoes.md:13444):
+ * `extraKnownMarketplaces.sworn-local.autoUpdate = true`, com o `source` que o Claude Code ja conhece.
  * Tudo roda numa pasta de config de mentira (CLAUDE_CONFIG_DIR), nunca na do dono.
  */
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'ligar-atualizacao.js');
-const SOURCE = { source: 'git', url: 'https://github.com/fulano/esquadro.git' };
+const SOURCE = { source: 'git', url: 'https://github.com/fulano/sworn.git' };
 
 function config(arquivos) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-atualiza-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-atualiza-'));
   for (const [rel, conteudo] of Object.entries(arquivos || {})) {
     const alvo = path.join(dir, rel);
     fs.mkdirSync(path.dirname(alvo), { recursive: true });
@@ -26,7 +26,7 @@ function config(arquivos) {
   return dir;
 }
 
-const CONHECIDO = { 'plugins/known_marketplaces.json': { 'esquadro-local': { source: SOURCE, installLocation: 'x' } } };
+const CONHECIDO = { 'plugins/known_marketplaces.json': { 'sworn-local': { source: SOURCE, installLocation: 'x' } } };
 
 function rodar(dir, args) {
   const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: dir });
@@ -54,22 +54,22 @@ test('ligar-atualizacao: sem settings.json, grava a entrada com o source do know
     const r = rodar(dir, ['--gravar']);
     assert.strictEqual(r.status, 0, r.saida);
     assert.ok(r.saida.includes('LIGADA'), r.saida);
-    assert.deepStrictEqual(settings(dir), { extraKnownMarketplaces: { 'esquadro-local': { source: SOURCE, autoUpdate: true } } });
+    assert.deepStrictEqual(settings(dir), { extraKnownMarketplaces: { 'sworn-local': { source: SOURCE, autoUpdate: true } } });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('ligar-atualizacao: preserva o resto do settings.json e o source que ja estava la', () => {
-  const proprio = { source: 'directory', path: 'D:/meu/esquadro' };
+  const proprio = { source: 'directory', path: 'D:/meu/sworn' };
   const antes = {
     model: 'x', hooks: { Stop: [] },
-    extraKnownMarketplaces: { outro: { source: SOURCE }, 'esquadro-local': { source: proprio, autoUpdate: false } }
+    extraKnownMarketplaces: { outro: { source: SOURCE }, 'sworn-local': { source: proprio, autoUpdate: false } }
   };
   const dir = config(Object.assign({ 'settings.json': antes }, CONHECIDO));
   try {
     const r = rodar(dir, ['--gravar']);
     assert.strictEqual(r.status, 0, r.saida);
     const depois = settings(dir);
-    assert.deepStrictEqual(depois.extraKnownMarketplaces['esquadro-local'], { source: proprio, autoUpdate: true });
+    assert.deepStrictEqual(depois.extraKnownMarketplaces['sworn-local'], { source: proprio, autoUpdate: true });
     assert.deepStrictEqual(depois.extraKnownMarketplaces.outro, antes.extraKnownMarketplaces.outro);
     assert.strictEqual(depois.model, 'x');
     assert.deepStrictEqual(depois.hooks, { Stop: [] });
@@ -78,37 +78,37 @@ test('ligar-atualizacao: preserva o resto do settings.json e o source que ja est
 });
 
 test('ligar-atualizacao: entrada com source proprio liga mesmo sem o known_marketplaces.json', () => {
-  const dir = config({ 'settings.json': { extraKnownMarketplaces: { 'esquadro-local': { source: SOURCE, autoUpdate: false } } } });
+  const dir = config({ 'settings.json': { extraKnownMarketplaces: { 'sworn-local': { source: SOURCE, autoUpdate: false } } } });
   try {
     const r = rodar(dir, ['--gravar']);
     assert.strictEqual(r.status, 0, r.saida);
-    assert.deepStrictEqual(settings(dir).extraKnownMarketplaces['esquadro-local'], { source: SOURCE, autoUpdate: true });
+    assert.deepStrictEqual(settings(dir).extraKnownMarketplaces['sworn-local'], { source: SOURCE, autoUpdate: true });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('ligar-atualizacao: source vazio ou que nao e objeto na entrada e trocado pelo do known_marketplaces (R1)', () => {
   for (const ruim of [null, '', 'x', 0, {}, { source: '' }, { url: 'u' }]) {
-    const dir = config(Object.assign({ 'settings.json': { extraKnownMarketplaces: { 'esquadro-local': { source: ruim } } } }, CONHECIDO));
+    const dir = config(Object.assign({ 'settings.json': { extraKnownMarketplaces: { 'sworn-local': { source: ruim } } } }, CONHECIDO));
     try {
       const r = rodar(dir, ['--gravar']);
       assert.strictEqual(r.status, 0, JSON.stringify(ruim) + ': ' + r.saida);
-      assert.deepStrictEqual(settings(dir).extraKnownMarketplaces['esquadro-local'], { source: SOURCE, autoUpdate: true },
+      assert.deepStrictEqual(settings(dir).extraKnownMarketplaces['sworn-local'], { source: SOURCE, autoUpdate: true },
         JSON.stringify(ruim));
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }
 });
 
 test('ligar-atualizacao: entrada que ja existe sem source recebe o do known_marketplaces', () => {
-  const dir = config(Object.assign({ 'settings.json': { extraKnownMarketplaces: { 'esquadro-local': {} } } }, CONHECIDO));
+  const dir = config(Object.assign({ 'settings.json': { extraKnownMarketplaces: { 'sworn-local': {} } } }, CONHECIDO));
   try {
     const r = rodar(dir, ['--gravar']);
     assert.strictEqual(r.status, 0, r.saida);
-    assert.deepStrictEqual(settings(dir).extraKnownMarketplaces['esquadro-local'], { source: SOURCE, autoUpdate: true });
+    assert.deepStrictEqual(settings(dir).extraKnownMarketplaces['sworn-local'], { source: SOURCE, autoUpdate: true });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('ligar-atualizacao: ja ligada diz isso e nao regrava, nem com --gravar', () => {
-  const texto = JSON.stringify({ extraKnownMarketplaces: { 'esquadro-local': { source: SOURCE, autoUpdate: true } } });
+  const texto = JSON.stringify({ extraKnownMarketplaces: { 'sworn-local': { source: SOURCE, autoUpdate: true } } });
   const dir = config({ 'settings.json': texto });
   try {
     const r = rodar(dir, ['--gravar']);
@@ -125,7 +125,7 @@ test('ligar-atualizacao: settings.json com BOM utf8 e lido', () => {
     assert.strictEqual(r.status, 0, r.saida);
     const depois = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8').replace(/^\uFEFF/, ''));
     assert.strictEqual(depois.model, 'x');
-    assert.strictEqual(depois.extraKnownMarketplaces['esquadro-local'].autoUpdate, true);
+    assert.strictEqual(depois.extraKnownMarketplaces['sworn-local'].autoUpdate, true);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -134,8 +134,8 @@ test('ligar-atualizacao: settings.json que nao se le como objeto JSON e recusado
     'JSON quebrado': '{ "model": ',
     'UTF-16 com BOM': Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from('{"model":"x"}', 'utf16le')]),
     'lista': '[]',
-    'extraKnownMarketplaces que nao e objeto': JSON.stringify({ extraKnownMarketplaces: ['esquadro-local'] }),
-    'entrada que nao e objeto': JSON.stringify({ extraKnownMarketplaces: { 'esquadro-local': true } })
+    'extraKnownMarketplaces que nao e objeto': JSON.stringify({ extraKnownMarketplaces: ['sworn-local'] }),
+    'entrada que nao e objeto': JSON.stringify({ extraKnownMarketplaces: { 'sworn-local': true } })
   };
   for (const [nome, conteudo] of Object.entries(casos)) {
     const dir = config(Object.assign({ 'settings.json': conteudo }, CONHECIDO));
@@ -147,7 +147,7 @@ test('ligar-atualizacao: settings.json que nao se le como objeto JSON e recusado
       assert.ok(r.saida.includes('Enable auto-update') && r.saida.includes('rode de novo'), nome + ': ' + r.saida);
       if (/extraKnownMarketplaces|entrada/.test(nome)) {
         // R2: a forma esperada vai na propria mensagem, nao "a do README"
-        assert.ok(r.saida.includes('"extraKnownMarketplaces": { "esquadro-local": {'), nome + ': ' + r.saida);
+        assert.ok(r.saida.includes('"extraKnownMarketplaces": { "sworn-local": {'), nome + ': ' + r.saida);
         // D603: o source real, nao "{ ... }", que o usuario nao sabe preencher
         assert.ok(r.saida.includes('"source": ' + JSON.stringify(SOURCE)), nome + ': ' + r.saida);
         assert.ok(r.saida.indexOf('...') === -1, nome + ': ' + r.saida);
@@ -158,13 +158,13 @@ test('ligar-atualizacao: settings.json que nao se le como objeto JSON e recusado
 });
 
 test('ligar-atualizacao: forma errada sem o known_marketplaces mostra o source publico do README (D603)', () => {
-  const dir = config({ 'settings.json': JSON.stringify({ extraKnownMarketplaces: { 'esquadro-local': true } }) });
+  const dir = config({ 'settings.json': JSON.stringify({ extraKnownMarketplaces: { 'sworn-local': true } }) });
   try {
     const r = rodar(dir, ['--gravar']);
     assert.strictEqual(r.status, 1, r.saida);
-    assert.ok(r.saida.includes('"source": {"source":"git","url":"https://github.com/wendellmcs/esquadro.git"}'), r.saida);
-    const readme = fs.readFileSync(path.join(RAIZ, 'README.md'), 'utf8');
-    assert.ok(readme.includes('"source": { "source": "git", "url": "https://github.com/wendellmcs/esquadro.git" }'),
+    assert.ok(r.saida.includes('"source": {"source":"git","url":"https://github.com/wendellmcs/sworn.git"}'), r.saida);
+    const readme = fs.readFileSync(path.join(RAIZ, 'GUIA.md'), 'utf8');
+    assert.ok(readme.includes('"source": { "source": "git", "url": "https://github.com/wendellmcs/sworn.git" }'),
       'o README mudou o source publico; mude o do script junto');
     assert.ok(r.saida.indexOf('...') === -1 && r.saida.indexOf('<') === -1, r.saida);
     // D603 (conferencia): sem o marketplace no known_marketplaces, o /plugin nao o lista - nenhuma recusa o oferece
@@ -179,19 +179,19 @@ test('ligar-atualizacao: forma errada sem o known_marketplaces mostra o source p
   const comConhecido = config(Object.assign({ 'settings.json': '{ "model": ' }, CONHECIDO));
   try {
     const r = rodar(comConhecido, ['--gravar']);
-    assert.ok(r.saida.includes('/plugin, aba Marketplaces, esquadro-local, Enable auto-update'), r.saida);
+    assert.ok(r.saida.includes('/plugin, aba Marketplaces, sworn-local, Enable auto-update'), r.saida);
   } finally { fs.rmSync(comConhecido, { recursive: true, force: true }); }
 });
 
 test('ligar-atualizacao: sem o marketplace em lugar nenhum, recusa e manda instalar primeiro', () => {
   for (const extra of [{}, { 'plugins/known_marketplaces.json': { outro: { source: SOURCE } } },
-    { 'plugins/known_marketplaces.json': { 'esquadro-local': { source: 'git' } } },
-    { 'plugins/known_marketplaces.json': { 'esquadro-local': { source: {} } } }]) {
+    { 'plugins/known_marketplaces.json': { 'sworn-local': { source: 'git' } } },
+    { 'plugins/known_marketplaces.json': { 'sworn-local': { source: {} } } }]) {
     const dir = config(Object.assign({ 'settings.json': { model: 'x' } }, extra));
     try {
       const r = rodar(dir, ['--gravar']);
       assert.strictEqual(r.status, 1, r.saida);
-      assert.ok(r.saida.includes('claude plugin marketplace add wendellmcs/esquadro'), r.saida);
+      assert.ok(r.saida.includes('claude plugin marketplace add wendellmcs/sworn'), r.saida);
       assert.ok(r.saida.indexOf('<repositorio') === -1, 'comando com lacuna que o usuario nao sabe preencher: ' + r.saida);
       // D603: o /plugin nao lista marketplace que nao esta instalado; oferecer o caminho la seria falso
       assert.ok(r.saida.indexOf('/plugin') === -1, r.saida);

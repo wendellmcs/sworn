@@ -54,7 +54,7 @@ function modificados(cwd) {
   // o portao nunca alcanca (relativoAoProjeto devolve null), entao sai da lista.
   // D49: o nome sai como esta no disco. A dobra de caixa da D45 mora no ponto de
   // comparacao (portao-escopo.js), e nao aqui: esta lista tem outro consumidor -
-  // a varredura do /esquadro:init - que mostra o nome do arquivo ao dono.
+  // a varredura do /sworn:init - que mostra o nome do arquivo ao dono.
   function aoCwd(caminho) {
     if (pre === '') return caminho;
     return caminho.indexOf(pre) === 0 ? caminho.slice(pre.length) : null;

@@ -61,7 +61,7 @@ test('veredito: mudanca com UI despacha as duas familias', () => {
 });
 
 // Ronda 2 do 8c.10: "Codigo sempre" mandava as 9 de codigo tambem na mudanca so de tela, contra
-// a regra da spec (decisao 8) e a tabela do /esquadro:revisar. So tela, as 8. Nada declarado e
+// a regra da spec (decisao 8) e a tabela do /sworn:review. So tela, as 8. Nada declarado e
 // duvida, e na duvida vao as duas - nunca nenhuma, que seria revisao sem voto.
 test('veredito: mudanca so de tela despacha so a familia de tela; na duvida, as duas', () => {
   assert.deepStrictEqual(v.familiasPara(false, true), ['ui']);
@@ -273,7 +273,7 @@ test('D244/defeito 3: a mesma linha do mesmo lado e o mesmo achado, mesmo com o 
   assert.strictEqual(r.motivo, 'duas rondas secas seguidas: aprovado', JSON.stringify(r));
 });
 
-// D475 (s99): na R3 da skills/padrao/SKILL.md (0.7.0) a microcopy citou P1 em trabalho:302, mesma chave do P1 da R2,
+// D475 (s99): na R3 da skills/playbook/SKILL.md (0.7.0) a microcopy citou P1 em trabalho:302, mesma chave do P1 da R2,
 // mas a linha 302 tinha sido REESCRITA entre as rondas. Mesmo numero com outro texto e evidencia nova, nao repeticao.
 test('D475: linha reescrita entre rondas e evidencia nova: o P1 da ronda seguinte molha; texto igual segue repeticao', () => {
   const mic = (arquivo) => ({ lente: 'microcopy', melhor: 'A',
@@ -298,7 +298,7 @@ test('D475: linha reescrita entre rondas e evidencia nova: o P1 da ronda seguint
 });
 
 test('D244/defeito 3: arquivo citado com caminho ainda acha o lado', () => {
-  const r = v.apurar([[P1('.claude/esquadro/revisao/1/B.txt', 10)]], { mapas: [TRAB_A] });
+  const r = v.apurar([[P1('.claude/sworn/revisao/1/B.txt', 10)]], { mapas: [TRAB_A] });
   assert.strictEqual(r.secas, 1);
 });
 
@@ -326,7 +326,7 @@ test('D244/defeito 3: sem mapas (chamada antiga), a conta e a de antes', () => {
 // T14 ronda 1 (lente correcao): o inspetor que cita "A.txt:120" no campo arquivo perdia o lado, e
 // o achado do lado antigo voltava a molhar - o defeito 3 de novo, calado.
 test('T14: arquivo citado com a linha colada ainda acha o lado', () => {
-  for (const arq of ['A.txt:120', 'A.txt:120-124', '.claude/esquadro/revisao/1/A.txt:7']) {
+  for (const arq of ['A.txt:120', 'A.txt:120-124', '.claude/sworn/revisao/1/A.txt:7']) {
     const r = v.apurar([[P1(arq, 120)]], { mapas: [TRAB_B] });
     assert.strictEqual(r.secas, 1, arq + ' e do lado HEAD: ' + JSON.stringify(r));
     assert.strictEqual(r.achadosDoLadoAntigo.length, 1, arq);
@@ -418,7 +418,7 @@ test('0.3.3/item 1: ronda sem nenhum veredito e recusada e diz qual ronda; nao e
   assert.strictEqual(v.apurar([seca, seca]).motivo, 'duas rondas secas seguidas: aprovado');
 });
 
-// Frente esquadro-pendencias, T2 do plano dos 82.
+// Frente sworn-pendencias, T2 do plano dos 82.
 test('T2/F2-14: apurar sem nenhuma ronda (lista vazia, ou o que nao e lista) lanca "nenhuma ronda para apurar"', () => {
   for (const entrada of [[], undefined, null, 'x', {}, 5]) {
     assert.throws(() => v.apurar(entrada), /nenhuma ronda para apurar/, JSON.stringify(entrada));

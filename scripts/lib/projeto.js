@@ -13,7 +13,7 @@ const CHAVES = [
 
 // D503: chave que pode faltar sem erro, mas que validar() confere quando vem. `referencias` e a peca de topo contra a
 // qual a revisao compara, por tipo, cada um uma lista de caminho ou URL (por isso fora de conferirCaminhos).
-// Plano 090 Tarefa 5: `marcaDeAtalho`, a marca do /esquadro:atalhos (padrao `atalho`), uma palavra.
+// Plano 090 Tarefa 5: `marcaDeAtalho`, a marca do /sworn:shortcuts (padrao `atalho`), uma palavra.
 const CHAVES_OPCIONAIS = ['referencias', 'marcaDeAtalho'];
 const TIPOS_REFERENCIA = ['tela', 'codigo', 'texto'];
 
@@ -427,13 +427,13 @@ function intocaveisInertes(projeto, arquivos, cwd) {
 
 function motivoInerte(inertes) {
   return [
-    'esquadro: ATENCAO - ' + inertes.length + ' padrao(oes) de `intocaveis` nao pegam arquivo nenhum:',
+    'sworn: ATENCAO - ' + inertes.length + ' padrao(oes) de `intocaveis` nao pegam arquivo nenhum:',
     inertes.map(function (p) { return '  - ' + p; }).join('\n'),
     'Padrao que nao casa nada nao protege nada. Se a pasta ainda nao existe, esta certo;',
     'se e typo, o arquivo que voce quis proteger esta desprotegido AGORA.'
   ].concat(inertes.some(function (p) { return FORA_DO_GLOB.test(String(p).trim()); })
-    ? ['O esquadro so entende * e **: escreva "pasta/**" em vez de "pasta/", e um padrao para cada extensao em vez de {a,b}.']
-    : [], ['Confira em .claude/esquadro/projeto.json, chave `intocaveis`.']).join('\n');
+    ? ['O sworn so entende * e **: escreva "pasta/**" em vez de "pasta/", e um padrao para cada extensao em vez de {a,b}.']
+    : [], ['Confira em .claude/sworn/projeto.json, chave `intocaveis`.']).join('\n');
 }
 
 module.exports = {

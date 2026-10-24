@@ -22,7 +22,7 @@ const PLANO = [
 ].join('\n');
 
 function tmp(arquivos) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-plano-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-plan-'));
   for (const [rel, txt] of Object.entries(arquivos || {})) {
     const alvo = path.join(dir, rel);
     fs.mkdirSync(path.dirname(alvo), { recursive: true });
@@ -210,7 +210,7 @@ test('plano.js --abrir: sem --sessao grava o dono de CLAUDE_CODE_SESSION_ID (DC-
     const r = spawnSync(process.execPath, [path.join(RAIZ_PLUGIN, 'scripts', 'plano.js'), '--abrir', 'docs/p.md'],
       { cwd: dir, encoding: 'utf8', env: env });
     assert.strictEqual(r.status, 0, r.stderr);
-    const gravado = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'esquadro', 'plano-ativo.json'), 'utf8'));
+    const gravado = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'sworn', 'plano-ativo.json'), 'utf8'));
     assert.strictEqual(gravado.sessionId, 'sessao-real-x', 'gravou o dono errado: ' + JSON.stringify(gravado));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -218,13 +218,13 @@ test('plano.js --abrir: sem --sessao grava o dono de CLAUDE_CODE_SESSION_ID (DC-
 test('abertura.js: o aviso de plano alheio cita um caminho REAL, nunca a variavel nao expandida (DC-02)', () => {
   const dir = tmp({ 'docs/p.md': PLANO });
   try {
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'plano-ativo.json'),
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'plano-ativo.json'),
       JSON.stringify({ arquivo: 'docs/p.md', sessionId: 'dono-outro', tarefa: null }), 'utf8');
     const r = spawnSync(process.execPath, [path.join(RAIZ_PLUGIN, 'scripts', 'abertura.js')], {
       cwd: dir, encoding: 'utf8',
       input: JSON.stringify({ session_id: 'eu-mesmo', cwd: dir, source: 'startup' }),
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: path.join(dir, '_sessoes') })
+      env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.includes('proxima-decisao'), 'faltou o comando no aviso: ' + r.stdout);
@@ -258,7 +258,7 @@ test('plano.js --proxima-decisao: arquivo ausente avisa no stderr; pasta sai 1 (
 
 // Pedido 30 (plano dos pedidos 30-32, Tarefa 2): o plano em uma linha, para a faixa do mod (a sonda da s53 provou que
 // o status do VS Code desenha uma linha so). Nome curto do arquivo, feitas de total, a proxima.
-const D503 = { arquivo: '.context/plans/2026-10-13-esquadro-pendencias-d503-plano.md', frente: 'esquadro-pendencias' };
+const D503 = { arquivo: '.context/plans/2026-10-13-sworn-pendencias-d503-plano.md', frente: 'sworn-pendencias' };
 
 // Plano 082, Tarefa 2 (mock D532, S1): separador " · ", a unidade depois da conta (p7-9), "—" entre o id e o titulo, e
 // acento (D532: a faixa e excecao a R5).
@@ -327,11 +327,11 @@ test('s131 par.5: o travessao do titulo chega ao painel do plano inteiro, nem hi
 test('pedido 30: linhaDoPlanoDaSessao - pelo plano-ativo.json, pela frente, e vazia sem plano', () => {
   const dir = tmp({
     'p/2026-01-01-x-plano.md': PLANO,
-    '.claude/esquadro/plano-ativo.json': JSON.stringify({ arquivo: 'p/2026-01-01-x-plano.md', sessionId: 's' })
+    '.claude/sworn/plano-ativo.json': JSON.stringify({ arquivo: 'p/2026-01-01-x-plano.md', sessionId: 's' })
   });
   const frente = tmp({
     'docs/2026-01-02-fr-y-plano.md': PLANO,
-    '.claude/esquadro/escopos/fr.md': '# Escopo\n**Objetivo:** algo. Plano: `docs/2026-01-02-fr-y-plano.md`\n## Dentro\n- x/**\n'
+    '.claude/sworn/escopos/fr.md': '# Escopo\n**Objetivo:** algo. Plano: `docs/2026-01-02-fr-y-plano.md`\n## Dentro\n- x/**\n'
   });
   const vazio = tmp({});
   try {
@@ -346,22 +346,22 @@ test('pedido 30: linhaDoPlanoDaSessao - pelo plano-ativo.json, pela frente, e va
 
 test('pedido 30: linhaDoPlanoDaSessao - a frente vinculada escolhe entre varias; ilegivel e fora do projeto dao vazio', () => {
   const frente = (nome, plano) => '# Escopo\n**Objetivo:** ' + nome + '. Plano: `' + plano + '`\n## Dentro\n- x/**\n';
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-linha-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-linha-'));
   const dir = path.join(base, 'proj');
   const escrever = (rel, txt) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), txt); };
   try {
     escrever('docs/2026-01-02-a-plano.md', PLANO);
     escrever('docs/2026-01-02-b-plano.md', '### Tarefa 1: so\n- [ ] p\n');
-    escrever('.claude/esquadro/escopos/a.md', frente('a', 'docs/2026-01-02-a-plano.md'));
-    escrever('.claude/esquadro/escopos/b.md', frente('b', 'docs/2026-01-02-b-plano.md'));
+    escrever('.claude/sworn/escopos/a.md', frente('a', 'docs/2026-01-02-a-plano.md'));
+    escrever('.claude/sworn/escopos/b.md', frente('b', 'docs/2026-01-02-b-plano.md'));
     assert.strictEqual(plano.linhaDoPlanoDaSessao(dir, 'b'), 'plano b · 0 de 1 tarefa · próxima: Tarefa 1 — so');
     assert.strictEqual(plano.linhaDoPlanoDaSessao(dir, null), '', 'duas frentes sem vinculo: o painel pede para escolher');
     // Plano fora do projeto: o painel diz que nao le; a linha fica vazia.
     fs.writeFileSync(path.join(base, '2026-01-02-fora-plano.md'), PLANO);
-    escrever('.claude/esquadro/escopos/b.md', frente('b', '../2026-01-02-fora-plano.md'));
+    escrever('.claude/sworn/escopos/b.md', frente('b', '../2026-01-02-fora-plano.md'));
     assert.strictEqual(plano.linhaDoPlanoDaSessao(dir, 'b'), '');
     // plano-ativo.json que nao se le nao cai na frente (D442/10, como no painel).
-    escrever('.claude/esquadro/plano-ativo.json', '{ quebrado');
+    escrever('.claude/sworn/plano-ativo.json', '{ quebrado');
     assert.strictEqual(plano.linhaDoPlanoDaSessao(dir, 'a'), '');
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
@@ -370,13 +370,13 @@ test('pedido 30: linhaDoPlanoDaSessao - a frente vinculada escolhe entre varias;
 test('pedido 70 (D541): a faixa fica vazia sem vinculo; o plano do escopo.md da raiz segue na faixa', () => {
   const dir = tmp({
     'docs/2026-01-02-fr-y-plano.md': PLANO,
-    '.claude/esquadro/escopos/fr.md': '# Escopo\n**Objetivo:** algo. Plano: `docs/2026-01-02-fr-y-plano.md`\n## Dentro\n- x/**\n'
+    '.claude/sworn/escopos/fr.md': '# Escopo\n**Objetivo:** algo. Plano: `docs/2026-01-02-fr-y-plano.md`\n## Dentro\n- x/**\n'
   });
   try {
     assert.strictEqual(plano.acharPlanoDaFrente(dir, null).semVinculo, true, 'o painel segue achando a frente unica');
     assert.strictEqual(plano.linhaDoPlanoDaSessao(dir, null), '', 'chat sem plano nao mostra o plano de outra frente');
     assert.strictEqual(plano.linhaDoPlanoDaSessao(dir, 'fr'), 'plano y · 1 de 2 tarefas · próxima: Tarefa 2 — marcha');
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'escopo.md'),
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'escopo.md'),
       '# Escopo\n**Objetivo:** raiz. Plano: `docs/2026-01-02-fr-y-plano.md`\n## Dentro\n- x/**\n');
     // Sem frente nao ha prefixo a tirar do nome (nomeCurto): "fr-y".
     assert.strictEqual(plano.linhaDoPlanoDaSessao(dir, null), 'plano fr-y · 1 de 2 tarefas · próxima: Tarefa 2 — marcha');
@@ -403,13 +403,13 @@ test('083 T4 (p3-4): titulo e id do plano com Markdown chegam ao painel escapado
 test('083 T4 (p3-13): o motivo do subitem aberto diz o que falta sem bronca, em ASCII', () => {
   const m = plano.motivoSubitemAberto(plano.parseTarefas(PLANO)[1]);
   assert.ok(!/ressalva|Ou esta completa|Voce disse/.test(m), m);
-  assert.ok(/^esquadro - subitem pendente = etapa aberta\.\n\n/.test(m) && /\nFaca uma destas:\n {2}1\. /.test(m), m);
+  assert.ok(/^sworn - subitem pendente = etapa aberta\.\n\n/.test(m) && /\nFaca uma destas:\n {2}1\. /.test(m), m);
   assert.ok(/^[\x20-\x7E\n]+$/.test(m), 'ASCII (R5)');
 });
 
 test('083 T4 (p3-23): o modo JSON diz a causa de nao ler o plano', () => {
-  const pasta = tmp({ 'p/uma-pasta/x.md': PLANO, '.claude/esquadro/plano-ativo.json': JSON.stringify({ arquivo: 'p/uma-pasta' }) });
-  const falta = tmp({ '.claude/esquadro/plano-ativo.json': JSON.stringify({ arquivo: 'p/nao-existe.md' }) });
+  const pasta = tmp({ 'p/uma-pasta/x.md': PLANO, '.claude/sworn/plano-ativo.json': JSON.stringify({ arquivo: 'p/uma-pasta' }) });
+  const falta = tmp({ '.claude/sworn/plano-ativo.json': JSON.stringify({ arquivo: 'p/nao-existe.md' }) });
   try {
     const script = path.join(RAIZ_PLUGIN, 'scripts', 'plano.js');
     const a = spawnSync(process.execPath, [script], { cwd: pasta, encoding: 'utf8' });
@@ -460,7 +460,7 @@ test('082 T6 (p7-16): abrir que nao grava diz o arquivo, a causa e o que fazer, 
   const dir = tmp({ 'docs/p.md': PLANO, '.claude': 'um arquivo onde devia haver pasta' });
   try {
     assert.throws(() => plano.abrir(dir, 'docs/p.md', 's'), (e) => {
-      // Plano 083 (p3-14): com acento, sem "esquadro:" e com a causa em palavras antes do codigo.
+      // Plano 083 (p3-14): com acento, sem "sworn:" e com a causa em palavras antes do codigo.
       assert.ok(/^Não consegui gravar .*plano-ativo\.json: um arquivo ocupa o lugar de uma pasta no caminho \(E[A-Z]+\)\./
         .test(e.message), e.message);
       assert.ok(e.message.indexOf('o plano não foi aberto.') !== -1, e.message);

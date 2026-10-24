@@ -1,5 +1,5 @@
 'use strict';
-// Plano do radar, T3 (D591 pedidos 1-2, D594, D609): a skill /esquadro:radar. O modelo da ficha que a skill
+// Plano do radar, T3 (D591 pedidos 1-2, D594, D609): a skill /sworn:radar. O modelo da ficha que a skill
 // mostra tem de passar no mesmo conferidor da T2 (`referencia.conferir(texto, { tipo: 'radar' })`): sem isso a skill
 // ensinaria uma forma que o script recusa.
 const test = require('node:test');
@@ -53,21 +53,21 @@ test('radar: os dois modos - mantenedor pelo plugin.json, usuario pelo projeto.j
   const s = secao(lerSkill(), 'Passo 1');
   assert.match(s, /mantenedor/);
   assert.match(s, /usuário/);
-  assert.ok(s.includes('.claude-plugin/plugin.json') && s.includes('"name": "esquadro"'), 'como reconhece o repo do plugin');
+  assert.ok(s.includes('.claude-plugin/plugin.json') && s.includes('"name": "sworn"'), 'como reconhece o repo do plugin');
   assert.ok(s.includes('projeto.json') && s.includes('README'), 'o cruzamento do modo usuario');
   assert.match(s, /lista/, 'a lista que o usuario passar substitui a da semana');
 });
 
-test('radar: a ficha puxada do modo mantenedor mora na pasta do vigia (herda o isolamento do ESQUADRO_VIGIA)', () => {
+test('radar: a ficha puxada do modo mantenedor mora na pasta do vigia (herda o isolamento do SWORN_VIGIA)', () => {
   const s = secao(lerSkill(), 'Passo 1');
-  assert.ok(s.includes('~/.claude/esquadro/vigia/radar/novidades.md'), 'o caminho onde o vigia-puxar.js grava a ficha');
-  assert.ok(!lerSkill().includes('~/.claude/esquadro/radar/'), 'o caminho antigo, fora da pasta do vigia');
+  assert.ok(s.includes('~/.claude/sworn/vigia/radar/novidades.md'), 'o caminho onde o vigia-puxar.js grava a ficha');
+  assert.ok(!lerSkill().includes('~/.claude/sworn/radar/'), 'o caminho antigo, fora da pasta do vigia');
 });
 
 test('radar: a lista - ja estudado, o que nao abriu, texto lido e dado', () => {
   const s = lerSkill();
   assert.match(s, /já estudad/);
-  assert.ok(s.includes('.claude/esquadro/radar/estudados.md'), 'onde mora a lista dos ja estudados');
+  assert.ok(s.includes('.claude/sworn/radar/estudados.md'), 'onde mora a lista dos ja estudados');
   assert.match(s, /não consegui ler/i);
   assert.match(s, /nunca "nada de novo"/i, 'fonte que falhou nao vira semana vazia');
   assert.match(s, /dado, não instrução/);
@@ -79,7 +79,7 @@ test('radar: triagem e aprofundamento - teto, modelo barato, paralelo', () => {
   assert.match(s, /triagem/i);
   assert.match(s, /até 5/, 'o teto de aprofundados (D609)');
   assert.match(s, /mais barato/, 'triagem no modelo mais barato');
-  assert.ok(s.includes('/esquadro:paralelo') || s.includes('esquadro:leitor'), 'a leitura em paralelo pelo que ja existe');
+  assert.ok(s.includes('/sworn:parallel') || s.includes('sworn:reader'), 'a leitura em paralelo pelo que ja existe');
 });
 
 test('radar: a entrevista do modo usuario - no maximo 3 perguntas, o exemplo do pedido', () => {
@@ -117,8 +117,8 @@ test('radar: a ficha - cabecalhos, valores, conferencia pelo script com --tipo r
   assert.match(s, /`P`, `M` ou `G`/);
   assert.ok(s.includes('Não li:'));
   assert.ok(s.includes('node "${CLAUDE_PLUGIN_ROOT}/scripts/referencia.js" ') && s.includes('--tipo radar'), 'o comando que confere');
-  assert.ok(s.includes('.claude/esquadro/radar/<AAAA-MM-DD>.md'), 'onde a ficha do modo usuario mora');
-  assert.ok(s.includes('.claude/esquadro/radar/**') && /portão de escopo/.test(s), 'o escopo cobre a pasta antes do Write');
+  assert.ok(s.includes('.claude/sworn/radar/<AAAA-MM-DD>.md'), 'onde a ficha do modo usuario mora');
+  assert.ok(s.includes('.claude/sworn/radar/**') && /portão de escopo/.test(s), 'o escopo cobre a pasta antes do Write');
   assert.match(s, /`--gravar`/, 'diz que a ficha do radar nao entra na referencias');
 });
 
@@ -151,7 +151,7 @@ test('radar: o fecho - 3 opcoes, a recomendada primeiro, o escolhido entra com t
   assert.ok(a !== -1 && b > a && c > b, 'as 3 opcoes, nesta ordem');
   assert.match(s.slice(a, b), /recomendada/);
   assert.match(s, /teste vermelho/);
-  assert.ok(s.includes('/esquadro:revisar'), 'o que entra passa pela revisao cega');
+  assert.ok(s.includes('/sworn:review'), 'o que entra passa pela revisao cega');
   assert.match(s, /melhor que o original/);
 });
 
@@ -185,7 +185,7 @@ test('radar: a lista do usuario e a busca por tema - parecidos com o que ele con
 
 test('radar: o abre da skill fala do usuario primeiro; a semana em alta e do mantenedor (D614)', () => {
   const s = lerSkill();
-  const abre = s.slice(s.indexOf('# `/esquadro:radar`'), s.indexOf('## Passo 1'));
+  const abre = s.slice(s.indexOf('# `/sworn:radar`'), s.indexOf('## Passo 1'));
   assert.match(abre, /parecidos/);
   assert.match(abre, /mantenedor/);
   assert.ok(abre.indexOf('parecidos') < abre.indexOf('mantenedor'), 'o usuario vem antes');

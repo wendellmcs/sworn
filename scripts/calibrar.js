@@ -9,14 +9,14 @@ const continuo = require('./lib/continuo.js');
 const { LIMIARES_PADRAO, limiaresValidos } = require('./lib/saude.js');
 
 /**
- * Item 2 da 0.7 (D466/D467): o calibrador por projeto (skill /esquadro:calibrar).
+ * Item 2 da 0.7 (D466/D467): o calibrador por projeto (skill /sworn:calibrate).
  *   node calibrar.js [--pasta <transcricoes>]  le e imprime o relatorio (so numeros), nao grava nada
  *   node calibrar.js --gravar <tokens>          poe limiares.tokensDeContexto no projeto.json (so com o sim do dono)
  *   node calibrar.js --manter                   grava o limiar em vigor, o "manter" do dono (D539; so com o sim dele)
  * Sem --pasta, procura as transcricoes do projeto em <CLAUDE_CONFIG_DIR ou ~/.claude>/projects/.
  * Saida: JSON; na falha, `erro` e exit 1.
  */
-const RELATIVO = '.claude/esquadro/projeto.json';
+const RELATIVO = '.claude/sworn/projeto.json';
 const MINIMO = 50000;
 
 function valor(nome) {
@@ -51,8 +51,8 @@ if (process.argv.indexOf('--gravar') !== -1 || manter) {
     sair(1, { gravou: false, erro: (manter ? '--manter' : '--gravar') + ' pede um numero inteiro de tokens, de ' + MINIMO +
       ' ate abaixo do alarme (' + alarme + '); veio "' + bruto + '"' });
   }
-  const arquivo = config.caminhoEmEsquadro(raiz, 'projeto.json');
-  if (!fs.existsSync(arquivo)) sair(1, { gravou: false, erro: 'sem ' + RELATIVO + ' neste projeto: rode /esquadro:init antes' });
+  const arquivo = config.caminhoEmSworn(raiz, 'projeto.json');
+  if (!fs.existsSync(arquivo)) sair(1, { gravou: false, erro: 'sem ' + RELATIVO + ' neste projeto: rode /sworn:init antes' });
   let obj;
   try { obj = JSON.parse(texto.semBom(fs.readFileSync(arquivo, 'utf8'))); } catch (e) {
     sair(1, { gravou: false, erro: RELATIVO + ' nao e JSON valido (' + e.message + '); corrija e rode de novo' });

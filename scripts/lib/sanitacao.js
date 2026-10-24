@@ -323,7 +323,7 @@ function correrGit(raiz, args) {
  * o que preserva o .sanitacao-local.json fora da varredura: o vocabulario
  * privado se acusaria inteiro.
  *
- * A4-03: `fora` omitido = FORA_DO_PUBLICO, que e regra do export do PROPRIO esquadro (D132 §1.3). O `auditar` de
+ * A4-03: `fora` omitido = FORA_DO_PUBLICO, que e regra do export do PROPRIO sworn (D132 §1.3). O `auditar` de
  * um projeto qualquer passa [], porque ali `docs/` vai a publico como o resto.
  */
 function superficiePublicavel(raiz, fora) {
@@ -466,7 +466,7 @@ function autoresDoHistorico(raiz) {
   return Object.keys(vistos);
 }
 
-const SEP = '\u0001ESQUADRO\u0001';
+const SEP = '\u0001SWORN\u0001';
 
 function mensagensDoHistorico(raiz) {
   const bruto = correrGit(raiz, ['log', '--format=%H%n%B' + SEP]);

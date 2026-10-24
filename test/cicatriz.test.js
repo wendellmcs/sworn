@@ -17,7 +17,7 @@ const SCRIPT = path.join(RAIZ, 'scripts', 'cicatriz.js');
 const BARRA = String.fromCharCode(92);
 
 /** Foco de revisao 5: caminho com espaco e acento e o caso normal, nao a borda. */
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro cicatriz ação-')); }
+function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn cicatriz ação-')); }
 
 function escrever(dir, rel, conteudo) {
   const alvo = path.join(dir, rel);

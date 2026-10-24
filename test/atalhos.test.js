@@ -1,5 +1,5 @@
 'use strict';
-// Plano 090 Tarefa 5: /esquadro:atalhos. O alvo do texto e o mock aprovado (prints-090/mock-090.png, secao 3, D554).
+// Plano 090 Tarefa 5: /sworn:shortcuts. O alvo do texto e o mock aprovado (prints-090/mock-090.png, secao 3, D554).
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -162,7 +162,7 @@ function rodar(cwd) {
 }
 
 test('CLI: rastreado e novo nao ignorado entram; ignorado e node_modules ficam fora; nada muda no disco', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-atalhos-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-atalhos-'));
   try {
     git(dir, ['init', '-q']);
     escrever(dir, '.gitignore', 'node_modules/\nfora.js\n');
@@ -189,7 +189,7 @@ test('CLI: rastreado e novo nao ignorado entram; ignorado e node_modules ficam f
 });
 
 test('CLI: repositorio sem atalho conta os arquivos; marcaDeAtalho do projeto.json vale', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-atalhos-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-atalhos-'));
   try {
     git(dir, ['init', '-q']);
     escrever(dir, 'a.js', '// nada\n');
@@ -198,7 +198,7 @@ test('CLI: repositorio sem atalho conta os arquivos; marcaDeAtalho do projeto.js
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.startsWith('Nenhum atalho registrado.'), r.stdout);
     assert.ok(r.stdout.includes('em 2 arquivos ('), r.stdout);
-    escrever(dir, '.claude/esquadro/projeto.json', JSON.stringify({ marcaDeAtalho: 'divida' }));
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ marcaDeAtalho: 'divida' }));
     r = rodar(dir);
     assert.ok(r.stdout.includes('(marca: divida, ponytail, shortcut)') && r.stdout.includes('b.js\n  :1   so com a marca'), r.stdout);
   } finally {
@@ -207,7 +207,7 @@ test('CLI: repositorio sem atalho conta os arquivos; marcaDeAtalho do projeto.js
 });
 
 test('CLI: fora de repositorio git diz por que e sai com 1', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-atalhos-sem-git-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-atalhos-sem-git-'));
   try {
     const r = rodar(dir);
     assert.strictEqual(r.status, 1);
@@ -215,4 +215,27 @@ test('CLI: fora de repositorio git diz por que e sai com 1', () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Suite carregada (s129): o git do repositorio de dentro estourou o prazo e a auditoria de 7 dias contou 2 atalhos em
+// vez de 3 (auditoria-periodica.test.js, D576). Todo git da varredura leva o mesmo prazo, de 60 s.
+test('atalhos: todo git que a varredura chama tem prazo de pelo menos 60 s (o rev-parse nao fica no padrao de 5 s)', () => {
+  const gitLib = require('../scripts/lib/git.js');
+  const original = gitLib.correr;
+  const prazos = [];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-atalhos-prazo-'));
+  try {
+    gitLib.correr = function (cwd, args, opcoes) {
+      prazos.push(args[0] + ':' + (opcoes && opcoes.timeout));
+      return original.call(this, cwd, args, opcoes);
+    };
+    spawnSync('git', ['init', '-q'], { cwd: dir });
+    fs.writeFileSync(path.join(dir, 'a.js'), '// atalho: x\n');
+    atalhos.doRepositorio(dir, {});
+  } finally {
+    gitLib.correr = original;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  assert.ok(prazos.length >= 3, 'esperava rev-parse e os dois ls-files: ' + prazos.join(', '));
+  for (const p of prazos) assert.ok(Number(p.split(':')[1]) >= 60000, 'git com prazo curto: ' + prazos.join(', '));
 });

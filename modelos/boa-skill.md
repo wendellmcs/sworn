@@ -1,6 +1,6 @@
 # O que é uma boa skill de projeto
 
-Referência lida por `/esquadro:init` antes de preencher o molde, e por `/esquadro:aprender` antes de
+Referência lida por `/sworn:init` antes de preencher o molde, e por `/sworn:learn` antes de
 propor regra. **Critério sem falha de origem é decoração e não entra nesta lista.**
 
 | # | Critério | Falha de origem |

@@ -1,6 +1,6 @@
 'use strict';
 // Bloco A1 (D426): quando o dono CORRIGE o comportamento do agente, o plugin sugere transformar a
-// correcao em regra (/esquadro:aprender). O detector e conservador: relato de bug e resposta a
+// correcao em regra (/sworn:learn). O detector e conservador: relato de bug e resposta a
 // pergunta nao sao correcao. Cada frase abaixo e uma decisao, nao um exemplo solto.
 const test = require('node:test');
 const assert = require('node:assert');
@@ -99,16 +99,16 @@ test('correcao: entrada que nao e texto nunca dispara nem estoura', () => {
   }
 });
 
-test('correcao: INSTRUCAO_DA_CORRECAO e ASCII, curta, e manda atender, RODAR o /esquadro:aprender e perguntar em 3 opcoes (D556/D559)', () => {
+test('correcao: INSTRUCAO_DA_CORRECAO e ASCII, curta, e manda atender, RODAR o /sworn:learn e perguntar em 3 opcoes (D556/D559)', () => {
   const t = correcao.INSTRUCAO_DA_CORRECAO;
   assert.ok(/^[\x20-\x7E\n]+$/.test(t), 'tem de ser ASCII: ' + JSON.stringify(t));
   assert.ok(t.length < 900, 'instrucao longa demais: ' + t.length);
   // Plano 091, Tarefa 3 (#2): o texto do mock aprovado (prints-091, D559), linha por linha.
   assert.strictEqual(t, [
-    'esquadro: a mensagem do usuario parece uma CORRECAO ao seu comportamento.',
+    'sworn: a mensagem do usuario parece uma CORRECAO ao seu comportamento.',
     'Se for, e valer tambem para as proximas vezes, faca nesta mesma resposta:',
     '1. Atenda o pedido.',
-    '2. Rode /esquadro:aprender: ele monta a regra (gatilho -> acao).',
+    '2. Rode /sworn:learn: ele monta a regra (gatilho -> acao).',
     '3. Pergunte pelo AskUserQuestion, em 3 opcoes: gravar como esta (recomendada),',
     '   ajustar o texto antes, nao gravar.',
     'So grave com o sim. Se nao for correcao do seu comportamento (relato de bug,',
@@ -130,26 +130,26 @@ test('correcao: a chave sugerirAprender desliga so com false; ausente, outro val
 
 // PA1-5: esperaAprender corrompido no estado da sessao (texto, null, objeto, lista, negativo, gigante) nao pode
 // valer 0 e liberar a sugestao a cada prompt: valor invalido = espera cheia. Roda o gancho como processo, com a
-// mesma fiacao do fiacao.test.js (ESQUADRO_TMP isolado), e pre-grava o estado da sessao.
+// mesma fiacao do fiacao.test.js (SWORN_TMP isolado), e pre-grava o estado da sessao.
 const RAIZ = path.join(__dirname, '..');
 
 function abrirComEstado(dir, id, esperaAprender, prompt) {
   const sessoes = path.join(dir, '_sessoes');
-  fs.mkdirSync(path.join(sessoes, 'esquadro'), { recursive: true });
+  fs.mkdirSync(path.join(sessoes, 'sworn'), { recursive: true });
   const reg = esperaAprender === undefined ? {} : { esperaAprender: esperaAprender };
-  fs.writeFileSync(path.join(sessoes, 'esquadro', id + '.json'), JSON.stringify(reg), 'utf8');
+  fs.writeFileSync(path.join(sessoes, 'sworn', id + '.json'), JSON.stringify(reg), 'utf8');
   const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abrir-turno.js')], {
     cwd: dir, encoding: 'utf8',
     input: JSON.stringify({ session_id: id, cwd: dir, hook_event_name: 'UserPromptSubmit', prompt: prompt }),
-    env: Object.assign({}, process.env, { ESQUADRO_TMP: sessoes })
+    env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
   });
   assert.strictEqual(r.status, 0, r.stderr);
-  const estado = JSON.parse(fs.readFileSync(path.join(sessoes, 'esquadro', id + '.json'), 'utf8'));
+  const estado = JSON.parse(fs.readFileSync(path.join(sessoes, 'sworn', id + '.json'), 'utf8'));
   return { sugeriu: !!r.stdout.trim(), espera: estado.esperaAprender };
 }
 
 test('correcao (PA1-5): esperaAprender invalido no estado vale espera cheia, nunca 0', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-correcao-espera-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-correcao-espera-'));
   try {
     const cheia = correcao.ESPERA_ENTRE_SUGESTOES;
     for (const [rotulo, valor] of [['texto', 'abc'], ['texto numerico', '3'], ['null', null], ['objeto', { a: 1 }],
@@ -219,17 +219,17 @@ test('correcao (D429/4): linha gigante nao trava (regex linear)', () => {
 
 // Plano 091 T6: a sugestao do aprender e uma ordem: conta "dada" nos contadores do turno; a skill do aprender a cumpre.
 test('091 T6: a ordem do aprender conta dada no abrir-turno e cumprida quando a skill roda', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-correcao-ordem-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-correcao-ordem-'));
   try {
     abrirComEstado(dir, 'ord', 0, 'você errou');
     const sessoes = path.join(dir, '_sessoes');
-    const ler = function () { return JSON.parse(fs.readFileSync(path.join(sessoes, 'esquadro', 'ord.json'), 'utf8')); };
+    const ler = function () { return JSON.parse(fs.readFileSync(path.join(sessoes, 'sworn', 'ord.json'), 'utf8')); };
     assert.strictEqual(ler().contadores.ordem_aprender_dada, 1);
     assert.deepStrictEqual(ler().ordensPendentes, ['aprender']);
     const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'marcar-trabalho.js')], {
-      cwd: dir, encoding: 'utf8', env: Object.assign({}, process.env, { ESQUADRO_TMP: sessoes }),
+      cwd: dir, encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: sessoes }),
       input: JSON.stringify({ session_id: 'ord', cwd: dir, hook_event_name: 'PostToolUse', tool_name: 'Skill',
-        tool_input: { skill: 'esquadro:aprender' } })
+        tool_input: { skill: 'sworn:learn' } })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(ler().contadores.ordem_aprender_cumprida, 1);

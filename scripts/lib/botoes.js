@@ -18,7 +18,7 @@ const calibracao = require('./calibracao.js');
 const ORDEM = ['handoff', 'revisar', 'aprender', 'init', 'auditar', 'calibrar', 'padrao'];
 
 function botao(nome, texto, rotulo, comando) {
-  return { nome: nome, texto: texto, rotulo: rotulo, comando: comando || '/esquadro:' + nome };
+  return { nome: nome, texto: texto, rotulo: rotulo, comando: comando || '/sworn:' + nome };
 }
 
 /** Algum arquivo da sessao, relativo a raiz, resolve para `aaa`? Lista torta = nenhum. */
@@ -34,7 +34,7 @@ function temArquivoAaa(arquivos, projeto, raiz) {
  * Os botoes que valem agora, na ordem de ORDEM. Entrada (o que o sessao.js ja tem):
  * - `cruzou`: o gatilho contavel da troca de chat (medidor);
  * - `s`: o estado da sessao (arquivosTocados, contadores, esperaAprender, auditoriaAvisou);
- * - `projeto`, `raiz`, `temProjeto` (existe .claude/esquadro/projeto.json);
+ * - `projeto`, `raiz`, `temProjeto` (existe .claude/sworn/projeto.json);
  * - `padraoCarregado`: o mod viu a skill carregada;
  * - `contarConversas()`: as conversas do projeto, chamada so quando o resto do calibrar ja vale (custa um readdir).
  */
@@ -53,18 +53,18 @@ function daSessao(entrada) {
     const comRef = marcha.aaaComReferencia(s.arquivosTocados, projeto, e.raiz);
     if (comRef.length) {
       lista.push(botao('revisar', 'Você mudou arquivo de rigor máximo e nenhuma revisão contra a referência do projeto fechou.', 'revisar',
-        '/esquadro:revisar ' + argumento(comRef[0])));
+        '/sworn:review ' + argumento(comRef[0])));
     }
   }
 
   // O abrir-turno.js poe a espera cheia no prompt em que sugere o aprender; o prompt seguinte ja a desce.
   if (s.esperaAprender === correcao.ESPERA_ENTRE_SUGESTOES) {
-    lista.push(botao('aprender', 'Isso pareceu uma correção sua: dá para virar regra das próximas vezes.', 'virar regra'));
+    lista.push(botao('aprender', 'Isso pareceu uma correção sua: dá para virar regra das próximas vezes.', 'virar regra', '/sworn:learn'));
   }
 
-  if (e.temProjeto === false) lista.push(botao('init', 'Este projeto ainda não tem o esquadro configurado.', 'configurar'));
+  if (e.temProjeto === false) lista.push(botao('init', 'Este projeto ainda não tem o sworn configurado.', 'configurar'));
 
-  if (s.auditoriaAvisou === true) lista.push(botao('auditar', 'A auditoria automática achou regras ou skills para cortar.', 'ver o que cortar'));
+  if (s.auditoriaAvisou === true) lista.push(botao('auditar', 'A auditoria automática achou regras ou skills para cortar.', 'ver o que cortar', '/sworn:audit'));
 
   // O calibrar grava no projeto.json: so com ele carregado. "Nunca calibrado" = sem limiares.tokensDeContexto (o init
   // nao grava).
@@ -75,12 +75,12 @@ function daSessao(entrada) {
     let n = 0;
     try { n = e.contarConversas(); } catch (err) { n = 0; }
     if (n >= calibracao.AMOSTRA_MINIMA.sessoes) {
-      lista.push(botao('calibrar', 'Já há ' + n + ' conversas salvas: dá para calibrar quando trocar de chat.', 'calibrar'));
+      lista.push(botao('calibrar', 'Já há ' + n + ' conversas salvas: dá para calibrar quando trocar de chat.', 'calibrar', '/sworn:calibrate'));
     }
   }
 
   if (e.padraoCarregado !== true && temArquivoAaa(s.arquivosTocados, projeto, e.raiz)) {
-    lista.push(botao('padrao', 'Você mudou arquivo de rigor máximo sem carregar o manual.', 'carregar o manual'));
+    lista.push(botao('padrao', 'Você mudou arquivo de rigor máximo sem carregar o manual.', 'carregar o manual', '/sworn:playbook'));
   }
 
   // Plano 082 (p5-33): a ordem e a de ORDEM, nao a dos if acima (as duas podiam divergir sem aviso).

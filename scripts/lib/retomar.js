@@ -9,7 +9,7 @@ const { CLASSES_GENERICAS } = require('./sanitacao.js');
 // Plano volta-resumo (D586, mock D588): ao segurar a volta a chat parado, o gancho monta um resumo do registro do
 // chat (o transcript, uma linha JSON por entrada) por script, sem o Claude: custo zero no chat parado. O resumo NAO e
 // o handoff do modelo (skills/handoff/SKILL.md): e a ponte barata para o chat novo, que o le e, se precisar, roda o
-// /esquadro:handoff ali. Texto fixo em ASCII, como os avisos de gancho (D532); o que veio do chat sai como veio.
+// /sworn:handoff ali. Texto fixo em ASCII, como os avisos de gancho (D532); o que veio do chat sai como veio.
 
 const PEDIDOS = 5;
 const RESPOSTAS = 3;
@@ -22,7 +22,7 @@ const TETO = 10 * 1024;
 // lento levou 100 ms (13,6 MB); com este limite, o resumo inteiro (git e plano juntos) levou 71-87 ms nos de 7 a 19 MB.
 const BLOCO = 1024 * 1024;
 const LIMITE_DE_LEITURA = 8 * 1024 * 1024;
-const PASTA = '.claude/esquadro/handoff';
+const PASTA = '.claude/sworn/handoff';
 const OMITIDO = '[segredo omitido]';
 
 // Blocos que o harness injeta na mensagem do dono: saem com o conteudo. O <pasted_content> e o que o dono colou:
@@ -31,7 +31,7 @@ const INJETADOS = /<(system-reminder|browser_instruction|ide_selection|ide_opene
 const COLADO = /<\/?pasted_content\b[^>]*>/g;
 const COMANDO = /<(command-name|command-args)>([\s\S]*?)<\/\1>/g;
 const SEGREDO = new RegExp(CLASSES_GENERICAS.filter(function (c) { return c.chave === 'segredo'; })[0].padrao.source, 'g');
-const RESUMO_DO_ESQUADRO = /(^|[\\/])\d{4}-\d{2}-\d{2}-retomar-[^\\/]*\.md$/i;
+const RESUMO_DO_SWORN = /(^|[\\/])\d{4}-\d{2}-\d{2}-retomar-[^\\/]*\.md$/i;
 
 function textoDoConteudo(c) {
   if (typeof c === 'string') return c;
@@ -99,7 +99,7 @@ function processar(linha, acc) {
       const alvo = b.input.file_path || b.input.notebook_path;
       if (typeof alvo !== 'string' || !alvo) continue;
       if (acc.arquivos.length < ARQUIVOS && acc.arquivos.indexOf(alvo) === -1) acc.arquivos.push(alvo);
-      if (!acc.handoff && saude.ehArquivoDeHandoff(alvo) && !RESUMO_DO_ESQUADRO.test(alvo)) {
+      if (!acc.handoff && saude.ehArquivoDeHandoff(alvo) && !RESUMO_DO_SWORN.test(alvo)) {
         acc.handoff = { caminho: alvo, horario: Date.parse(o.timestamp) };
       }
     }
@@ -217,7 +217,7 @@ function juntar(d, arquivos) {
   return [
     '# Resumo para retomar o chat ' + String(d.sessao).slice(0, 8),
     '',
-    'Gerado pelo esquadro em ' + dia(d.agora) + ' ' + hora(d.agora) + ', ao segurar a volta' +
+    'Gerado pelo sworn em ' + dia(d.agora) + ' ' + hora(d.agora) + ', ao segurar a volta' +
       (conta.length ? ' (' + conta.join('; ') + ')' : '') +
       '. Montado por script a partir do registro do chat: nao e o handoff do modelo.',
     '',
@@ -235,7 +235,7 @@ function juntar(d, arquivos) {
     '',
     '## Para o chat novo',
     'Confira no disco (git status, plano, ledger) antes de agir: este resumo e um retrato do registro, nao uma verificacao.',
-    'Se precisar de handoff completo, rode /esquadro:handoff.',
+    'Se precisar de handoff completo, rode /sworn:handoff.',
     ''
   ]).join('\n');
 }
@@ -258,7 +258,7 @@ function montar(d) {
   return texto;
 }
 
-/** Grava em .claude/esquadro/handoff/AAAA-MM-DD-retomar-<8 do id>.md: o mesmo chat no mesmo dia regrava o mesmo arquivo. */
+/** Grava em .claude/sworn/handoff/AAAA-MM-DD-retomar-<8 do id>.md: o mesmo chat no mesmo dia regrava o mesmo arquivo. */
 function gravar(raiz, sessao, agora, texto) {
   const id = String(sessao == null ? '' : sessao).slice(0, 8);
   if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error('id de sessao invalido para nome de arquivo');

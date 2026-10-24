@@ -37,7 +37,7 @@ test('saude: soma de bloqueios de portao dispara', () => {
 test('saude: nome do gatilho aparece no aviso, para nao virar sensacao', () => {
   const r = saude.avaliar({ contadores: { revisao_fechada: 2 } });
   assert.ok(r.aviso.includes('revis'));
-  assert.ok(r.aviso.includes('/esquadro:handoff'));
+  assert.ok(r.aviso.includes('/sworn:handoff'));
   assert.ok(/^[\x20-\x7E\n]+$/.test(r.aviso), 'aviso tem de ser ASCII (R5)');
 });
 
@@ -92,14 +92,14 @@ test('T10-2/3: valor que nao e numero no estado nunca dispara (estado corrompido
 
 test('D412: arquivo de handoff = .md com data na frente e "handoff" no nome ou na pasta', () => {
   for (const p of [
-    '.claude/esquadro/handoff/2026-10-10-esquadro-decisor-local-bateria-s35.md',
+    '.claude/sworn/handoff/2026-10-10-sworn-decisor-local-bateria-s35.md',
     'C:\\obra\\app\\.context\\plans\\2026-10-10-item4-fechado-handoff.md',
-    '/c/proj/esquadro/.context/plans/2026-10-08-esquadro-pendencias-sequencia-unica-handoff.md',
+    '/c/proj/sworn/.context/plans/2026-10-08-sworn-pendencias-sequencia-unica-handoff.md',
     'plans/2026-10-10-HANDOFF-x.MD'
   ]) assert.strictEqual(saude.ehArquivoDeHandoff(p), true, p);
   for (const p of [
     'skills/handoff/SKILL.md',              // a skill, nao um handoff
-    '.claude/esquadro/handoff/notas.md',     // sem data na frente
+    '.claude/sworn/handoff/notas.md',     // sem data na frente
     'docs/handoff.md',
     '.context/plans/2026-10-10-plano.md',    // data sem "handoff"
     '.context/plans/2026-10-10-x-handoff.txt',
@@ -110,7 +110,7 @@ test('D412: arquivo de handoff = .md com data na frente e "handoff" no nome ou n
 
 test('D412: bloco de codigo = cerca em linha propria com corpo nao vazio, de qualquer linguagem', () => {
   for (const t of [
-    'Prompt:\n```\nRetomando o esquadro\n```',
+    'Prompt:\n```\nRetomando o sworn\n```',
     'Prompt:\n```text\nRetomando\nlinha 2\n```\nfim',
     '  ```md\n# titulo\n  ```',
     '~~~\nRetomando\n~~~',
@@ -189,12 +189,12 @@ test('D417: arquivosTocados que nao e lista nunca dispara (estado corrompido nao
 test('D412: com o prompt ja colado, a instrucao da saude nao manda colar de novo', () => {
   const g = ['3 decisoes do dono respondidas (limiar 3)'];
   const normal = saude.instrucaoAoModelo(g);
-  assert.ok(normal.indexOf('/esquadro:handoff') !== -1 && /Cole o prompt/.test(normal), 'controle: ' + normal);
+  assert.ok(normal.indexOf('/sworn:handoff') !== -1 && /Cole o prompt/.test(normal), 'controle: ' + normal);
   for (const t of [saude.instrucaoAoModelo(g, true)]) {
     assert.ok(t.indexOf(g[0]) !== -1, 'tem de citar o gatilho: ' + t);
     assert.ok(/chat novo/.test(t), 'tem de mandar dizer que e hora de abrir chat novo: ' + t);
     assert.ok(!/Cole o prompt/.test(t), 'mandou colar de novo: ' + t);
-    assert.ok(!/Rode \/esquadro:handoff/.test(t), 'mandou rodar o handoff de novo: ' + t);
+    assert.ok(!/Rode \/sworn:handoff/.test(t), 'mandou rodar o handoff de novo: ' + t);
     assert.ok(/nao cole/.test(t) && /acima/.test(t), 'tem de mandar apontar para o bloco acima: ' + t);
     assert.ok(/sigo/.test(t), 'tem de proibir o "sigo?": ' + t);
     assert.ok(/^[\x20-\x7E\n]+$/.test(t), 'tem de ser ASCII (R5): ' + JSON.stringify(t));
@@ -218,7 +218,7 @@ const osT = require('node:os');
 const pathT = require('node:path');
 
 function transcript(linhas) {
-  const dir = fsT.mkdtempSync(pathT.join(osT.tmpdir(), 'esquadro-ctx-'));
+  const dir = fsT.mkdtempSync(pathT.join(osT.tmpdir(), 'sworn-ctx-'));
   const f = pathT.join(dir, 's.jsonl');
   fsT.writeFileSync(f, linhas.map(function (l) { return typeof l === 'string' ? l : JSON.stringify(l); }).join('\n') + '\n');
   return { f: f, fim: function () { fsT.rmSync(dir, { recursive: true, force: true }); } };
@@ -266,7 +266,7 @@ test('083 T6 (p7-21): avisoDeSaude sem gatilho devolve null, sem lancar; com gat
   for (const g of [null, undefined, [], 'x']) {
     for (const alarme of [false, true]) assert.strictEqual(saude.avisoDeSaude(g, alarme), null, JSON.stringify(g) + ' ' + alarme);
   }
-  assert.match(saude.avisoDeSaude(['3 decisoes'], false), /^esquadro - hora de abrir chat novo\.\n/);
+  assert.match(saude.avisoDeSaude(['3 decisoes'], false), /^sworn - hora de abrir chat novo\.\n/);
 });
 
 test('D464: o alarme respeita o limiar do projeto', () => {
@@ -293,7 +293,7 @@ test('D445: contextoDoTranscript le so a cauda (transcript grande) e devolve nul
     assert.strictEqual(saude.contextoDoTranscript(t.f), 160010);
   } finally { t.fim(); }
   assert.strictEqual(saude.contextoDoTranscript(null), null);
-  assert.strictEqual(saude.contextoDoTranscript(pathT.join(osT.tmpdir(), 'nao-existe-esquadro.jsonl')), null);
+  assert.strictEqual(saude.contextoDoTranscript(pathT.join(osT.tmpdir(), 'nao-existe-sworn.jsonl')), null);
   const vazio = transcript([{ type: 'user', message: { content: 'oi' } }]);
   try { assert.strictEqual(saude.contextoDoTranscript(vazio.f), null); } finally { vazio.fim(); }
 });
@@ -309,4 +309,78 @@ test('D445: o gatilho de contexto cruza no limiar, respeita o do projeto e ignor
   assert.strictEqual(r.disparou, true);
   assert.ok(/176000 tokens de contexto \(limiar 175000\)/.test(r.aviso), r.aviso);
   assert.ok(/^[\x20-\x7E\n]+$/.test(r.aviso), 'aviso ASCII (R5)');
+});
+
+// D634 (7b/8): os testes da cauda do transcript - o ultimo rodado e se a prova declarada rodou depois da ultima edicao.
+// Forma medida na s129: comando com saida diferente de 0 volta com is_error true e "Exit code N" no conteudo.
+function cmd(id, comando, extra) {
+  return Object.assign({ type: 'assistant', message: { content: [{ type: 'tool_use', id: id, name: 'Bash', input: { command: comando } }] } }, extra || {});
+}
+function res(id, conteudo, erro) {
+  return { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: conteudo, is_error: erro === true }] } };
+}
+function edita(id, arquivo, nome) {
+  return { type: 'assistant', message: { content: [{ type: 'tool_use', id: id, name: nome || 'Edit', input: { file_path: arquivo } }] } };
+}
+
+test('D634: testesDoTranscript acha o ultimo teste rodado e se ele falhou (pelo is_error ou pela saida)', () => {
+  const t = transcript([cmd('a', 'npm test'), res('a', 'Exit code 1\n# fail 2', true), cmd('b', 'ls'), res('b', 'x')]);
+  try {
+    assert.deepStrictEqual(saude.testesDoTranscript(t.f, null).ultimoTeste, { comando: 'npm test', falhou: true });
+  } finally { t.fim(); }
+  const passou = transcript([cmd('a', 'npm test'), res('a', 'Exit code 1', true), cmd('b', 'node --test test/'), res('b', '# pass 3\n# fail 0')]);
+  try {
+    assert.deepStrictEqual(saude.testesDoTranscript(passou.f, null).ultimoTeste, { comando: 'node --test test/', falhou: false });
+  } finally { passou.fim(); }
+  // saida 0 por causa do pipe, mas a saida mostra falha
+  const pipe = transcript([cmd('a', 'npm test 2>&1 | tail -5'), res('a', '# pass 1\n# fail 2')]);
+  try { assert.strictEqual(saude.testesDoTranscript(pipe.f, null).ultimoTeste.falhou, true); } finally { pipe.fim(); }
+  // linha de subagente nao conta; PowerShell conta como Bash
+  const sub = transcript([cmd('a', 'pytest -q'), res('a', '3 passed'), cmd('b', 'pytest -q', { isSidechain: true }), res('b', 'Exit code 1', true)]);
+  try { assert.strictEqual(saude.testesDoTranscript(sub.f, null).ultimoTeste.falhou, false); } finally { sub.fim(); }
+  const ps = { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'p', name: 'PowerShell', input: { command: 'npm test' } }] } };
+  const tps = transcript([ps, res('p', 'Exit code 1', true)]);
+  try { assert.strictEqual(saude.testesDoTranscript(tps.f, null).ultimoTeste.falhou, true); } finally { tps.fim(); }
+  // is_error sozinho basta; conteudo em lista de blocos de texto tambem e lido
+  const erro = transcript([cmd('a', 'npm test'), res('a', 'algo deu errado', true)]);
+  try { assert.strictEqual(saude.testesDoTranscript(erro.f, null).ultimoTeste.falhou, true); } finally { erro.fim(); }
+  const lista = transcript([cmd('a', 'npm test'), res('a', [{ type: 'text', text: '# pass 1' }, { type: 'text', text: '# fail 3' }])]);
+  try { assert.strictEqual(saude.testesDoTranscript(lista.f, null).ultimoTeste.falhou, true); } finally { lista.fim(); }
+});
+
+test('D634: sem teste na cauda, ultimoTeste e null; sem transcript legivel, a funcao devolve null', () => {
+  const t = transcript([cmd('a', 'git status'), res('a', 'ok')]);
+  try { assert.strictEqual(saude.testesDoTranscript(t.f, null).ultimoTeste, null); } finally { t.fim(); }
+  assert.strictEqual(saude.testesDoTranscript(null, null), null);
+  assert.strictEqual(saude.testesDoTranscript(pathT.join(osT.tmpdir(), 'nao-existe-sworn.jsonl'), 'npm test'), null);
+});
+
+test('D634: provaPendente quando a prova declarada nao rodou depois da ultima edicao de codigo', () => {
+  const prova = 'cd "Meu App"; node tools/run.mjs --group=all';
+  const rodaProva = '( cd "Meu App" && node tools/run.mjs --group=all )';
+  const casos = [
+    [[edita('e', 'src/a.js')], true, 'editou e nunca rodou'],
+    [[cmd('a', rodaProva), res('a', 'ok'), edita('e', 'src/a.js')], true, 'rodou antes da edicao'],
+    [[edita('e', 'src/a.js'), cmd('a', rodaProva), res('a', 'ok')], false, 'rodou depois da edicao'],
+    [[cmd('a', rodaProva), res('a', 'ok'), edita('e', 'docs/notas.md')], false, 'so editou documento'],
+    [[cmd('a', 'git status'), res('a', 'ok')], false, 'nao editou nada'],
+    [[edita('e', 'src/a.js'), cmd('a', 'node tools/outro.mjs'), res('a', 'ok')], true, 'rodou outro comando'],
+    [[edita('e', 'src/b.ts', 'Write'), cmd('a', rodaProva), res('a', 'ok'), edita('f', 'src/c.ts', 'MultiEdit')], true, 'MultiEdit tambem edita'],
+    [[cmd('a', rodaProva), res('a', 'ok'), edita('e', 'src/b.ts', 'Write')], true, 'Write tambem edita'],
+    [[edita('e', 'src/a.js'), cmd('a', 'node tools/run.mjs --group=all'), res('a', 'ok')], false, 'o cd do agente e dele: sem cd tambem e a prova']
+  ];
+  for (const [linhas, esperado, nome] of casos) {
+    const t = transcript(linhas);
+    try { assert.strictEqual(saude.testesDoTranscript(t.f, prova).provaPendente, esperado, nome); } finally { t.fim(); }
+  }
+  // sem prova declarada nao ha pendencia; a prova declarada conta como teste mesmo fora da lista fixa
+  const t = transcript([edita('e', 'src/a.js'), cmd('a', rodaProva), res('a', 'Exit code 1', true)]);
+  try {
+    const r = saude.testesDoTranscript(t.f, prova);
+    assert.deepStrictEqual(r.ultimoTeste, { comando: rodaProva, falhou: true });
+    assert.strictEqual(saude.testesDoTranscript(t.f, null).provaPendente, false);
+  } finally { t.fim(); }
+  // prova de dois passos: rodar so um deles nao e rodar a prova
+  const meia = transcript([edita('e', 'src/a.js'), cmd('a', 'npm test'), res('a', '# fail 0')]);
+  try { assert.strictEqual(saude.testesDoTranscript(meia.f, 'npm run build && npm test').provaPendente, true); } finally { meia.fim(); }
 });

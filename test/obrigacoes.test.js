@@ -18,10 +18,10 @@ const path = require('node:path');
 const ob = require('../scripts/lib/obrigacoes.js');
 
 const RAIZ = path.join(__dirname, '..');
-const MANUAL = path.join(RAIZ, 'skills', 'padrao');
+const MANUAL = path.join(RAIZ, 'skills', 'playbook');
 
 function manualDeMentira(skill, refs) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro obrig '));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn obrig '));
   fs.writeFileSync(path.join(dir, 'SKILL.md'), skill, 'utf8');
   if (refs) {
     fs.mkdirSync(path.join(dir, 'references'));
@@ -190,7 +190,7 @@ test('obrigacoes: a mesma obrigacao dita duas vezes conta uma vez so', () => {
 // ── bordas ───────────────────────────────────────────────────────────────
 
 test('obrigacoes: diretorio que nao existe devolve inventario vazio, nao estoura', () => {
-  for (const ruim of [null, undefined, '', path.join(os.tmpdir(), 'esquadro nao existe 404')]) {
+  for (const ruim of [null, undefined, '', path.join(os.tmpdir(), 'sworn nao existe 404')]) {
     const inv = ob.inventario(ruim);
     assert.strictEqual(inv.ok, false, JSON.stringify(ruim));
     assert.deepStrictEqual(inv.obrigacoes, []);
@@ -279,7 +279,7 @@ test('D244/defeito 8: todo id do experimento e unico, e o [NADA] fala da linha c
 
 test('obrigacoes: o manual do plugin rende o inventario que o experimento julga', () => {
   const inv = ob.inventario(MANUAL);
-  assert.ok(inv.ok, 'sem skills/padrao nao ha inventario - e a T32 quem o cria');
+  assert.ok(inv.ok, 'sem skills/playbook nao ha inventario - e a T32 quem o cria');
   assert.strictEqual(inv.arquivos.length, 7, 'o manual absorvido tem 7 arquivos');
 
   const pisos = { marcha: 3, lente: 8, 'marcha-3-aaa': 9, '5-guarda-corpos-inviolaveis': 8,

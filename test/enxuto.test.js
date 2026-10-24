@@ -9,7 +9,7 @@ const projetoLib = require('../scripts/lib/projeto.js');
 
 test('enxuto: o bloco traz a escada de 7 degraus, na ordem, e manda parar no primeiro que resolve', () => {
   const b = e.BLOCO;
-  assert.ok(/^# esquadro - menos codigo/.test(b), 'titulo');
+  assert.ok(/^# sworn - menos codigo/.test(b), 'titulo');
   assert.ok(/pare no primeiro degrau que resolve/.test(b), 'parar no primeiro degrau');
   const degraus = [/^1\. Precisa existir\?/m, /^2\. Ja existe no projeto\?.*arquivo:linha/m, /^3\. A linguagem ja faz/m,
     /^4\. A plataforma ja faz/m, /^5\. Uma dependencia ja instalada faz\?/m, /^6\. Cabe em uma linha\?/m,

@@ -200,8 +200,8 @@ test('destrutivo: motivo e ASCII puro e nomeia o comando', () => {
 });
 
 test('git D49: fora de repo devolve null (nao consegui), nao lista vazia (arvore limpa)', () => {
-  const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-sem-git-'));
-  const limpo = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-git-limpo-'));
+  const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-sem-git-'));
+  const limpo = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-git-limpo-'));
   try {
     assert.strictEqual(git.modificados(fora), null,
       'fora de repositorio o git falha, e falha e null - senao a guarda da D46 congela');
@@ -232,7 +232,7 @@ test('git D49: fora de repo devolve null (nao consegui), nao lista vazia (arvore
 });
 
 test('git: enxerga arquivo modificado e nao rastreado', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-git-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-git-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
     g(['init', '-q']);
@@ -253,13 +253,13 @@ test('git: enxerga arquivo modificado e nao rastreado', () => {
 });
 
 test('portao-destrutivo: nega rm -rf e libera npm test', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-dest-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-dest-'));
   try {
     const chamar = (comando) => {
       const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-destrutivo.js')], {
         input: JSON.stringify({ session_id: 's1', cwd: tmp, tool_name: 'Bash', tool_input: { command: comando } }),
         encoding: 'utf8',
-        env: Object.assign({}, process.env, { ESQUADRO_TMP: tmp })
+        env: Object.assign({}, process.env, { SWORN_TMP: tmp })
       });
       try { return JSON.parse(r.stdout); } catch (e) { return null; }
     };
@@ -272,7 +272,7 @@ test('portao-destrutivo: nega rm -rf e libera npm test', () => {
 });
 
 test('git D41: em subpasta, o caminho volta relativo ao cwd que o portao usa', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-git-sub-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-git-sub-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
     g(['init', '-q']);
@@ -468,23 +468,23 @@ test('destrutivo D48: comando que apenas cita um destrutivo e barrado - limite d
 });
 
 test('D45: a trava 5b nao se escapa trocando a caixa do caminho', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-d45-'));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-d45-tmp-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d45-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d45-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
     g(['init', '-q']);
     g(['config', 'user.email', 'teste@exemplo.com']);
     g(['config', 'user.name', 'teste']);
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     // `**/*.md` e marcha RAPIDA: o passo 5 do portao devolve permitir antes de
     // chegar ao escopo, entao a 5b e a UNICA barreira. Sem esta escolha de
     // fixture o teste passaria tambem contra o codigo velho, pela via
     // `fora_do_escopo`, e nao discriminaria nada.
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({
       versaoConfig: 1, marchaPadrao: 'padrao', intocaveis: ['segredos/**'],
       marchas: { aaa: ['**/auth/**'], padrao: ['src/**'], rapida: ['**/*.md'] }
     }), 'utf8');
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'escopo.md'),
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'escopo.md'),
       '# Escopo\n**Objetivo:** exercitar a 5b\n## Dentro\n- src/app.js\n', 'utf8');
     fs.writeFileSync(path.join(dir, 'guia.md'), 'um', 'utf8');
     g(['add', '-A']);
@@ -492,7 +492,7 @@ test('D45: a trava 5b nao se escapa trocando a caixa do caminho', () => {
     // outra frente mexeu em guia.md ANTES desta sessao abrir
     fs.writeFileSync(path.join(dir, 'guia.md'), 'outra frente', 'utf8');
 
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
       input: JSON.stringify({ session_id: 'd45', cwd: dir, source: 'startup' }),
       encoding: 'utf8', env: env
@@ -545,32 +545,32 @@ test('D45: a trava 5b nao se escapa trocando a caixa do caminho', () => {
 // TS-04 (lote 3, D423): o D45 acima so tem a FOTO em minuscula; o lado `p` (a foto) nunca trazia maiuscula,
 // entao tirar o `.toLowerCase()` de `String(p)` na 5b passava despercebido. Aqui o git guarda `Guia.md`.
 test('TS-04 (lote 3, D423): a 5b dobra a caixa tambem do lado da FOTO - foto com Guia.md nega guia.md e GUIA.MD', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ts04-'));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-ts04-tmp-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ts04-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ts04-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
     g(['init', '-q']);
     g(['config', 'user.email', 'teste@exemplo.com']);
     g(['config', 'user.name', 'teste']);
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     // marcha RAPIDA para `.md`: o passo 5 devolve permitir, e a 5b e a UNICA barreira (mesma razao do D45)
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({
       versaoConfig: 1, marchaPadrao: 'padrao', intocaveis: ['segredos/**'],
       marchas: { aaa: ['**/auth/**'], padrao: ['src/**'], rapida: ['**/*.md'] }
     }), 'utf8');
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'escopo.md'),
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'escopo.md'),
       '# Escopo\n**Objetivo:** exercitar a 5b\n## Dentro\n- src/app.js\n', 'utf8');
     fs.writeFileSync(path.join(dir, 'Guia.md'), 'um', 'utf8');
     g(['add', '-A']);
     g(['commit', '-q', '-m', 'inicial']);
     fs.writeFileSync(path.join(dir, 'Guia.md'), 'outra frente', 'utf8');
 
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
       input: JSON.stringify({ session_id: 'ts04', cwd: dir, source: 'startup' }),
       encoding: 'utf8', env: env
     });
-    const foto = JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', 'ts04.json'), 'utf8')).gitAbertura;
+    const foto = JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'ts04.json'), 'utf8')).gitAbertura;
     assert.deepStrictEqual(foto, ['Guia.md'], 'pre-condicao: a foto tem de guardar a maiuscula do git');
     const escrever = (rel) => {
       const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-escopo.js')], {
@@ -599,8 +599,8 @@ test('TS-04 (lote 3, D423): a 5b dobra a caixa tambem do lado da FOTO - foto com
 });
 
 test('D46: SessionStart em compact nao refaz a foto do git', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-d46-'));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-d46-tmp-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d46-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d46-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
     g(['init', '-q']);
@@ -612,12 +612,12 @@ test('D46: SessionStart em compact nao refaz a foto do git', () => {
     g(['commit', '-q', '-m', 'inicial']);
     fs.writeFileSync(path.join(dir, 'guia.md'), 'outra frente', 'utf8');
 
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     const abrir = (source) => spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
       input: JSON.stringify({ session_id: 'd46', cwd: dir, source: source }),
       encoding: 'utf8', env: env
     });
-    const foto = () => JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', 'd46.json'), 'utf8')).gitAbertura;
+    const foto = () => JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'd46.json'), 'utf8')).gitAbertura;
 
     // Conferir o exit: sem isto o teste nao distingue "a guarda funcionou" de
     // "a invocacao morreu" - as duas deixam o arquivo de estado intacto.
@@ -648,7 +648,7 @@ test('D46: SessionStart em compact nao refaz a foto do git', () => {
       { input: JSON.stringify(Object.assign({ session_id: 'd46', cwd: dir }, extra)),
         encoding: 'utf8', env: env });
     const estadoBruto = () => {
-      try { return JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', 'd46.json'), 'utf8')); }
+      try { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'd46.json'), 'utf8')); }
       catch (e) { return null; }
     };
 
@@ -722,9 +722,9 @@ test('destrutivo D50: aspas em volta de um token, e o sufixo .exe', () => {
 });
 
 test('D49: a foto que falhou nao congela a sessao', () => {
-  const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-d49-fora-'));
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-d49-repo-'));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-d49-tmp-'));
+  const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d49-fora-'));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d49-repo-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d49-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: repo, encoding: 'utf8', shell: false });
     g(['init', '-q']);
@@ -735,13 +735,13 @@ test('D49: a foto que falhou nao congela a sessao', () => {
     g(['commit', '-q', '-m', 'inicial']);
     fs.writeFileSync(path.join(repo, 'guia.md'), 'outra frente', 'utf8');
 
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     const abrir = (cwd, source) => spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
       input: JSON.stringify({ session_id: 'd49', cwd: cwd, source: source }),
       encoding: 'utf8', env: env
     });
     const estadoDe = () => {
-      try { return JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', 'd49.json'), 'utf8')); }
+      try { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'd49.json'), 'utf8')); }
       catch (e) { return {}; }
     };
 
@@ -768,7 +768,7 @@ test('D49: a foto que falhou nao congela a sessao', () => {
 });
 
 test('D49: a foto guarda o nome como esta no disco, e quem dobra a caixa e o portao', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-d49-caixa-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d49-caixa-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
     g(['init', '-q']);
@@ -780,7 +780,7 @@ test('D49: a foto guarda o nome como esta no disco, e quem dobra a caixa e o por
     g(['commit', '-q', '-m', 'inicial']);
     fs.writeFileSync(path.join(dir, 'src', 'Componente.js'), 'dois', 'utf8');
     // O contrato esta declarado no plano da T1; o segundo consumidor e a
-    // varredura do `/esquadro:init`, que mostra esta lista ao dono - procure
+    // varredura do `/sworn:init`, que mostra esta lista ao dono - procure
     // o simbolo `modificados: git.modificados(cwd)` em `docs/plano-v1.md`.
     // Ponteiro por SIMBOLO e nao por numero (licao da D57).
     assert.deepStrictEqual(git.modificados(dir), ['src/Componente.js'],
@@ -1145,24 +1145,24 @@ test('destrutivo D55: o `^` vale nas comparacoes de TOKEN que decidem barrar', (
 });
 
 test('D51/5b: arquivo de outra frente DECLARADO no escopo passa - e so ele', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-5b-esc-'));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-5b-esc-tmp-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-5b-esc-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-5b-esc-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
     g(['init', '-q']);
     g(['config', 'user.email', 'teste@exemplo.com']);
     g(['config', 'user.name', 'teste']);
-    fs.mkdirSync(path.join(dir, '.claude', 'esquadro'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     // `**/*.md` e marcha RAPIDA: o passo 5 do portao devolve permitir antes de
     // olhar escopo, entao a 5b (passo 2) e a UNICA barreira nestes caminhos.
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'projeto.json'), JSON.stringify({
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({
       versaoConfig: 1, marchaPadrao: 'padrao', intocaveis: ['segredos/**'],
       marchas: { aaa: ['**/auth/**'], padrao: ['src/**'], rapida: ['**/*.md'] }
     }), 'utf8');
     // ARMADILHA JA MEDIDA: declarar `**/*.md` ou `src/**` aqui desligaria a 5b
     // INTEIRA, e este teste passaria contra qualquer codigo. O escopo declara
     // UM arquivo - o da rota de escape - e mais nada.
-    fs.writeFileSync(path.join(dir, '.claude', 'esquadro', 'escopo.md'),
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'escopo.md'),
       '# Escopo\n**Objetivo:** exercitar a rota de escape da 5b\n' +
       '## Dentro\n- guia.md\n## Fora de escopo\n- notas.md\n', 'utf8');
     fs.writeFileSync(path.join(dir, 'guia.md'), 'um', 'utf8');
@@ -1173,13 +1173,13 @@ test('D51/5b: arquivo de outra frente DECLARADO no escopo passa - e so ele', () 
     fs.writeFileSync(path.join(dir, 'guia.md'), 'outra frente', 'utf8');
     fs.writeFileSync(path.join(dir, 'notas.md'), 'outra frente tambem', 'utf8');
 
-    const env = Object.assign({}, process.env, { ESQUADRO_TMP: tmp });
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     const abertura = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
       input: JSON.stringify({ session_id: '5besc', cwd: dir, source: 'startup' }),
       encoding: 'utf8', env: env
     });
     assert.strictEqual(abertura.status, 0, 'a abertura tem de rodar');
-    const foto = JSON.parse(fs.readFileSync(path.join(tmp, 'esquadro', '5besc.json'), 'utf8')).gitAbertura;
+    const foto = JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', '5besc.json'), 'utf8')).gitAbertura;
     assert.deepStrictEqual(foto.slice().sort(), ['guia.md', 'notas.md'],
       'os DOIS tem de estar na foto, senao o teste nao discrimina: ' + JSON.stringify(foto));
 
@@ -2974,16 +2974,16 @@ test('D420/TS-08: escrita direta de disco barra com o motivo certo; citar o nome
 
 // D420/SH-02 e TS-06: o portao e chamado como processo, como o gancho real.
 function chamarPortaoDestrutivo(comando, tmpEstado, projetoJson, ferramenta) {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-dest-cwd-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-dest-cwd-'));
   try {
     if (projetoJson) {
-      fs.mkdirSync(path.join(cwd, '.claude', 'esquadro'), { recursive: true });
-      fs.writeFileSync(path.join(cwd, '.claude', 'esquadro', 'projeto.json'), JSON.stringify(projetoJson));
+      fs.mkdirSync(path.join(cwd, '.claude', 'sworn'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'projeto.json'), JSON.stringify(projetoJson));
     }
     const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-destrutivo.js')], {
       input: JSON.stringify({ session_id: 's-d420', cwd: cwd, tool_name: ferramenta || 'Bash', tool_input: { command: comando } }),
       encoding: 'utf8',
-      env: Object.assign({}, process.env, { ESQUADRO_TMP: tmpEstado })
+      env: Object.assign({}, process.env, { SWORN_TMP: tmpEstado })
     });
     let saida = null;
     try { saida = JSON.parse(r.stdout); } catch (e) { /* stdout vazio = permitiu */ }
@@ -2994,7 +2994,7 @@ function chamarPortaoDestrutivo(comando, tmpEstado, projetoJson, ferramenta) {
 }
 
 test('D420/TS-06: padrao de regex INVALIDO em comandosLiberados nao libera nada (rm -rf segue negado)', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-dest-ts06-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-dest-ts06-'));
   try {
     const projeto = { comandosLiberados: ['(erro', 'nada-a-ver'] };
     const negado = chamarPortaoDestrutivo('rm -rf ./build', tmp, projeto);
@@ -3009,11 +3009,11 @@ test('D420/TS-06: padrao de regex INVALIDO em comandosLiberados nao libera nada 
 });
 
 test('D420/SH-02: estado nao gravavel nao libera o comando destrutivo (o contador e acessorio)', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-dest-sh02-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-dest-sh02-'));
   const arquivo = path.join(tmp, 'e-um-arquivo');
   fs.writeFileSync(arquivo, 'x');
   try {
-    // ESQUADRO_TMP aponta para um ARQUIVO: o mkdir do diretorio de estado lanca ENOTDIR
+    // SWORN_TMP aponta para um ARQUIVO: o mkdir do diretorio de estado lanca ENOTDIR
     // D486 (s108): o cd solto que o Bash corrige nao passa pelo contador; o que segue negado (fim em barra) passa
     for (const cmd of ['rm -rf ./build', 'git push --force origin main', 'cd .. && ls \\']) {
       const saida = chamarPortaoDestrutivo(cmd, arquivo);

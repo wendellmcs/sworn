@@ -41,7 +41,7 @@ function contar(cwd, projeto, candidatos) {
   const alvos = [];
   const fontes = escolherFontes(projeto, candidatos);
   for (const f of fontes.lista) alvos.push(f);
-  alvos.push(path.join('.claude', 'esquadro', 'regras.md'));
+  alvos.push(path.join('.claude', 'sworn', 'regras.md'));
   for (const s of ambiente.detectar(cwd).skills) alvos.push(path.join('.claude', 'skills', s, 'SKILL.md'));
 
   // D396 n. 11: o mesmo arquivo citado duas vezes (fonte declarada que tambem e regras.md ou SKILL.md,

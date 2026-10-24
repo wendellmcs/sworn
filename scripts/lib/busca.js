@@ -67,7 +67,7 @@ function nomeadoNoEscopo(alvo, esc) {
 
 function motivo(alvo) {
   return [
-    'esquadro: NEGADO - arquivo novo sem ter procurado o que ja existe.',
+    'sworn: NEGADO - arquivo novo sem ter procurado o que ja existe.',
     '',
     'Alvo: ' + alvo + '  (nao existe ainda: isto e criacao, nao edicao)',
     '',

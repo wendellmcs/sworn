@@ -10,20 +10,20 @@ const projetoLib = require('../scripts/lib/projeto.js');
 
 test('paralelismo: o bloco diz seguir sem esperar, isolar quem edita, relatorio e alegacao, freio e a oferta', () => {
   const b = p.BLOCO;
-  assert.ok(/^# esquadro - trabalho em paralelo/.test(b), 'titulo');
+  assert.ok(/^# sworn - trabalho em paralelo/.test(b), 'titulo');
   assert.ok(/segundo plano/.test(b) && /siga com a proxima tarefa que nao depende/.test(b), 'seguir sem esperar');
   assert.ok(/isolation: worktree/.test(b), 'quem edita roda isolado');
   assert.ok(/alegacao/.test(b) && /na fonte/.test(b), 'relatorio de agente e alegacao');
   assert.ok(/mais barato que resolve/.test(b), 'freio: modelo mais barato');
   // Plano 091 #5 (D557, mock D559): roda direto, sem perguntar e sem condicao de init; diz agentes, modelo e custo.
-  assert.ok(b.split('\n').indexOf('4. 3 ou mais tarefas independentes: rode o /esquadro:paralelo direto, sem perguntar; ' +
+  assert.ok(b.split('\n').indexOf('4. 3 ou mais tarefas independentes: rode o /sworn:parallel direto, sem perguntar; ' +
     'diga numa linha quantos agentes, qual modelo e o custo. Teto de 8 agentes e o modelo mais barato que resolve ' +
     'seguem valendo.') !== -1, 'item 4 do mock: ' + b);
   assert.ok(!/depois do sim|ofereca|init/.test(b), 'sobrou a oferta ou a condicao de init: ' + b);
 });
 
 test('paralelismo: o teto do bloco e o mesmo do workflow (um numero so)', () => {
-  const wf = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'paralelo.js'), 'utf8');
+  const wf = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'parallel.js'), 'utf8');
   const m = wf.match(/^const TETO_PADRAO = (\d+)$/m);
   assert.ok(m, 'sumiu o TETO_PADRAO do workflow');
   assert.ok(p.BLOCO.indexOf('no maximo ' + m[1] + ' agentes por disparo') !== -1, 'o bloco cita outro teto: ' + p.BLOCO);
@@ -56,13 +56,13 @@ test('paralelismo: a chave e de liga/desliga do projeto.json (aviso de tipo, nao
 // Os tres lugares de texto: a skill portatil (regra inteira), o init (pergunta uma vez e grava) e o README.
 const lerT = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
-test('paralelismo: a esquadro:padrao traz a regra inteira e a oferta do /esquadro:paralelo', () => {
-  const t = lerT('skills/padrao/SKILL.md');
+test('paralelismo: a sworn:playbook traz a regra inteira e a oferta do /sworn:parallel', () => {
+  const t = lerT('skills/playbook/SKILL.md');
   const i = t.indexOf('## 6-bis. Trabalho em paralelo');
   const f = t.indexOf('## 7. ');
   assert.ok(i !== -1 && f > i, 'falta a secao 6-bis antes da 7');
   const s = t.slice(i, f);
-  for (const trecho of ['segundo plano', 'isolation: worktree', 'alegação', 'mais barato', '/esquadro:paralelo', 'custo', '8 agentes']) {
+  for (const trecho of ['segundo plano', 'isolation: worktree', 'alegação', 'mais barato', '/sworn:parallel', 'custo', '8 agentes']) {
     assert.ok(s.indexOf(trecho) !== -1, 'a secao nao diz: ' + trecho);
   }
 });
@@ -80,8 +80,8 @@ test('paralelismo: o init confere antes, pergunta uma vez em 3 opcoes e grava pe
 });
 
 test('paralelismo: o README documenta o workflow, a chave e a autorizacao', () => {
-  const t = lerT('README.md');
-  for (const trecho of ['/esquadro:paralelo', '`paralelismo`', 'Workflow(esquadro:paralelo)', 'settings.local.json']) {
+  const t = lerT('GUIA.md');
+  for (const trecho of ['/sworn:parallel', '`paralelismo`', 'Workflow(sworn:parallel)', 'settings.local.json']) {
     assert.ok(t.indexOf(trecho) !== -1, 'o README nao cita ' + trecho);
   }
 });

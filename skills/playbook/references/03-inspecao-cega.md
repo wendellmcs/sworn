@@ -24,7 +24,7 @@ Artefato mutilado produz veredito inválido, e o inspetor não tem como saber qu
 reporta o corte como se fosse defeito do código, e o voto dele contamina a ronda inteira.
 
 **Regra: entregar o arquivo inteiro.** Comparar duas versões? `git show HEAD:<path>` de um lado, o
-arquivo do disco do outro. Sem fatiar. A exceção é o recorte que o `/esquadro:revisar` faz sozinho nas
+arquivo do disco do outro. Sem fatiar. A exceção é o recorte que o `/sworn:review` faz sozinho nas
 faixas pequenas: ele marca cada vão, mantém os números de linha e avisa o inspetor.
 
 **Se precisar fatiar** — arquivo grande demais, ou o alvo é um trecho isolado — então, antes de
@@ -80,7 +80,7 @@ achado bem evidenciado vale mesmo que o inspetor tenha adivinhado os lados.
 
 Uma lente por inspetor, **lentes distintas**, nunca cópias do mesmo revisor. São duas famílias: as
 oito lentes de tela, com lista e critérios em [02-rubrica-aaa.md](02-rubrica-aaa.md), e as dez
-lentes de código do `/esquadro:revisar`. Só as lentes aplicáveis ao tipo de mudança — tabela no
+lentes de código do `/sworn:review`. Só as lentes aplicáveis ao tipo de mudança — tabela no
 fim daquele arquivo.
 
 Cada inspetor recebe: os artefatos A/B, a sua lente (uma só), o baseline nomeado, a proibição e a

@@ -131,13 +131,13 @@ function problemasDaTabela(plataforma, ferramenta) {
 }
 
 // Os avisos deste arquivo seguem a forma unica dos avisos de gancho, conferida em test/forma-aviso.test.js: a 1a linha
-// "esquadro - <o que houve>." e uma linha em branco; o corpo; uma linha em branco e "Faca uma destas:" numerado (ou
+// "sworn - <o que houve>." e uma linha em branco; o corpo; uma linha em branco e "Faca uma destas:" numerado (ou
 // "Faca assim:", quando ha um caminho so); a liberacao, que e do dono, por ultimo. Em ASCII (R5).
 
 function motivo(comando, problemas, tentativa) {
   const c = String(comando);
   const linhas = [
-    'esquadro - comando escrito no idioma de shell errado para esta plataforma.',
+    'sworn - comando escrito no idioma de shell errado para esta plataforma.',
     '',
     'Comando: ' + (c.length > 120 ? c.slice(0, 120) + '...(' + c.length + ' caracteres)' : c),
     '',
@@ -152,7 +152,7 @@ function motivo(comando, problemas, tentativa) {
     // O agravante da F16: o reflexo e tentar outra variacao do MESMO idioma.
     linhas.push('Esta e a tentativa ' + tentativa + ' com sintaxe da plataforma errada. Troque de idioma, nao de variacao.');
   } else {
-    linhas.push('A plataforma deste projeto esta no campo "plataforma" de .claude/esquadro/projeto.json:');
+    linhas.push('A plataforma deste projeto esta no campo "plataforma" de .claude/sworn/projeto.json:');
     linhas.push('leia de la, nao infira a cada comando.');
   }
   linhas.push('');
@@ -169,7 +169,7 @@ function motivo(comando, problemas, tentativa) {
  * que a trava de idioma esta desligada - por inteiro (arquivo) ou so naquelas regras - ate consertar.
  */
 function avisoTabela(problemas) {
-  const linhas = ['esquadro - a tabela de idioma do PowerShell nao esta valendo; o comando rodou normalmente.', ''];
+  const linhas = ['sworn - a tabela de idioma do PowerShell nao esta valendo; o comando rodou normalmente.', ''];
   for (const p of problemas) {
     linhas.push(p.tipo === 'arquivo'
       ? '  - "' + p.onde + '" do plugin nao se leu: ' + p.causa
@@ -180,7 +180,7 @@ function avisoTabela(problemas) {
     : 'A trava de idioma esta DESLIGADA so para as regras acima; as outras seguem valendo.');
   linhas.push('Este aviso sai uma vez por sessao.');
   linhas.push('');
-  linhas.push('Faca assim: conserte o arquivo no plugin esquadro; o comando seguinte ja usa a tabela consertada.');
+  linhas.push('Faca assim: conserte o arquivo no plugin sworn; o comando seguinte ja usa a tabela consertada.');
   return linhas.join('\n');
 }
 
@@ -543,7 +543,7 @@ function motivoCdSolto(comando, achado) {
   const ps = !!achado && achado.forma === 'powershell';
   const teto = !!achado && achado.teto === true;
   const linhas = [
-    'esquadro - cd solto: a pasta mudada ficaria valendo para os comandos seguintes.',
+    'sworn - cd solto: a pasta mudada ficaria valendo para os comandos seguintes.',
     '',
     'Comando: ' + String(comando).slice(0, 300)
   ];
@@ -575,7 +575,7 @@ function motivoCdSolto(comando, achado) {
     for (const resto of o.slice(1)) linhas.push(resto);
   });
   linhas.push('');
-  linhas.push('So o dono libera: ele acrescenta o padrao em "comandosLiberados" de .claude/esquadro/projeto.json.');
+  linhas.push('So o dono libera: ele acrescenta o padrao em "comandosLiberados" de .claude/sworn/projeto.json.');
   return linhas.map(ascii).join('\n');
 }
 
@@ -596,9 +596,9 @@ function envolverEmSubshell(comando, achado) {
  * entao o aviso nao tem "Faca uma destas". D569: inteiro na 1a vez da sessao; `deNovo` da a linha curta das seguintes.
  */
 function avisoCdCorrigido(achado, deNovo) {
-  if (deNovo) return 'esquadro - cd solto corrigido de novo (subshell): ( cd "<pasta>" && <comando> ), ou git -C "<pasta>".';
+  if (deNovo) return 'sworn - cd solto corrigido de novo (subshell): ( cd "<pasta>" && <comando> ), ou git -C "<pasta>".';
   return [
-    'esquadro - cd solto corrigido: o comando rodou dentro de um subshell, ( ... ).',
+    'sworn - cd solto corrigido: o comando rodou dentro de um subshell, ( ... ).',
     '',
     'O ' + (achado ? achado.achado : 'cd') + ' mudaria a pasta para os comandos seguintes; no subshell a pasta volta sozinha.',
     'Da proxima vez, escreva assim: ( cd "<pasta>" && <comando> ), ou git -C "<pasta>" sem mudar de pasta.'

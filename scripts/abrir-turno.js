@@ -91,7 +91,7 @@ io.blindar(function () {
         if (parece && espera === 0) {
           sugerir = true;
           s.esperaAprender = correcao.ESPERA_ENTRE_SUGESTOES;
-          // Plano 091 T6: a ordem de rodar o /esquadro:aprender foi dada (lib/ordens.js).
+          // Plano 091 T6: a ordem de rodar o /sworn:learn foi dada (lib/ordens.js).
           s.ordensPendentes = require('./lib/ordens.js').marcarDada(s, 'aprender');
         } else if (espera > 0) {
           s.esperaAprender = espera - 1;

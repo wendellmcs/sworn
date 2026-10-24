@@ -7,7 +7,7 @@ const projetoLib = require('./lib/projeto.js');
 const regraLib = require('./lib/regra.js');
 
 const cwd = process.argv[2] || process.cwd();
-const alvo = path.join(cwd, '.claude', 'esquadro', 'projeto.json');
+const alvo = path.join(cwd, '.claude', 'sworn', 'projeto.json');
 
 // Ler e interpretar falham por motivos diferentes. Dizer "nao consegui ler" quando a
 // leitura funcionou e o JSON e que estava quebrado manda procurar no lugar errado.
@@ -41,7 +41,7 @@ if (r.ok) {
   process.stdout.write('OK: projeto.json valido (' + alvo + ')\n');
   // A1/D10: o regras.md e opcional - projeto sem regras semeadas continua valido.
   // Existindo, ele passa pelo mesmo portao: gatilho -> acao, e nenhum fato volatil.
-  const arquivoRegras = path.join(cwd, '.claude', 'esquadro', 'regras.md');
+  const arquivoRegras = path.join(cwd, '.claude', 'sworn', 'regras.md');
   if (fs.existsSync(arquivoRegras)) {
     const vr = regraLib.validarArquivo(fs.readFileSync(arquivoRegras, 'utf8'));
     if (!vr.ok) {

@@ -15,7 +15,7 @@ const gatilho = (arg('gatilho') || '').trim();
 const acao = (arg('acao') || '').trim();
 const gravar = process.argv.indexOf('--gravar') !== -1;
 // A4-04: a raiz do projeto, nao a pasta atual - a regra gravada numa subpasta nunca era lida pela abertura.
-const alvo = config.caminhoEmEsquadro(config.raizDoProjeto(process.cwd()), 'regras.md');
+const alvo = config.caminhoEmSworn(config.raizDoProjeto(process.cwd()), 'regras.md');
 
 if (!gatilho || !acao) {
   process.stdout.write("uso: propor-regra.js --gatilho '<quando>' --acao '<o que fazer>' [--gravar]\n");

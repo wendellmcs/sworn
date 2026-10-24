@@ -59,7 +59,7 @@ try {
   // Pedido 32 (Tarefa 4 subitem 3): os botoes por comando, na ordem de prioridade; o mod desenha o primeiro.
   resposta.botoes = require('./lib/botoes.js').daSessao({
     cruzou: resposta.cruzou, s: s, projeto: projeto, raiz: raiz,
-    temProjeto: fs.existsSync(config.caminhoEmEsquadro(raiz, 'projeto.json')),
+    temProjeto: fs.existsSync(config.caminhoEmSworn(raiz, 'projeto.json')),
     padraoCarregado: entrada.padrao === true,
     contarConversas: function () {
       return require('./lib/botoes.js').conversasDoProjeto(require('./lib/calibracao.js').pastaDasTranscricoes(raiz),

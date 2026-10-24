@@ -20,11 +20,11 @@ if (decisoes) {
   let st = null;
   try { st = fs.statSync(alvo); } catch (e) { st = null; }
   if (st && !st.isFile()) {
-    process.stderr.write('esquadro: ' + alvo + ' nao e um arquivo; passe o arquivo de decisoes e rode de novo\n');
+    process.stderr.write('sworn: ' + alvo + ' nao e um arquivo; passe o arquivo de decisoes e rode de novo\n');
     process.exit(1);
   }
   if (!st) {
-    process.stderr.write('esquadro: ' + alvo + ' nao existe. O 1 so vale se o projeto ainda nao tem decisao registrada; senao, confira o caminho e rode de novo\n');
+    process.stderr.write('sworn: ' + alvo + ' nao existe. O 1 so vale se o projeto ainda nao tem decisao registrada; senao, confira o caminho e rode de novo\n');
   }
   process.stdout.write(String(planoLib.proximaDecisao(alvo)) + '\n');
   process.exit(0);

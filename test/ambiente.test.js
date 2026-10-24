@@ -9,7 +9,7 @@ const instrucoes = require('../scripts/lib/instrucoes.js');
 const rubrica = require('../scripts/lib/rubrica.js');
 
 function montar(arquivos) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esquadro-amb-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-amb-'));
   for (const [rel, txt] of Object.entries(arquivos)) {
     const alvo = path.join(dir, rel);
     fs.mkdirSync(path.dirname(alvo), { recursive: true });
@@ -80,7 +80,7 @@ test('ambiente: settings.json, settings.local.json e .mcp.json com BOM sao lidos
 test('instrucoes: conta item de lista e item numerado nas fontes canonicas', () => {
   const dir = montar({
     'CLAUDE.md': '# t\n\n- regra um\n- regra dois\n1. regra tres\n\nparagrafo solto nao conta.\n',
-    '.claude/esquadro/regras.md': '- ao editar -> rodar git status\n'
+    '.claude/sworn/regras.md': '- ao editar -> rodar git status\n'
   });
   try {
     const r = instrucoes.contar(dir, { fontesCanonicas: ['CLAUDE.md'] });
@@ -198,15 +198,15 @@ test('instrucoes: com 2 argumentos segue como antes e diz nenhuma/declaradas; ca
 test('instrucoes: o mesmo arquivo citado duas vezes conta uma vez so', () => {
   const dir = montar({
     'CLAUDE.md': '- a\n- b\n',
-    '.claude/esquadro/regras.md': '- c\n',
+    '.claude/sworn/regras.md': '- c\n',
     '.claude/skills/x/SKILL.md': '- d\n'
   });
   try {
-    const r = instrucoes.contar(dir, { fontesCanonicas: ['CLAUDE.md', './CLAUDE.md', '.claude/esquadro/regras.md',
+    const r = instrucoes.contar(dir, { fontesCanonicas: ['CLAUDE.md', './CLAUDE.md', '.claude/sworn/regras.md',
       '.claude/skills/x/SKILL.md'] });
     assert.strictEqual(r.total, 4, 'contou em dobro: ' + JSON.stringify(r.porArquivo));
     assert.deepStrictEqual(r.porArquivo.map((p) => p.arquivo).sort(),
-      ['.claude/esquadro/regras.md', '.claude/skills/x/SKILL.md', 'CLAUDE.md']);
+      ['.claude/skills/x/SKILL.md', '.claude/sworn/regras.md', 'CLAUDE.md']);
     // onde o disco ignora caixa `claude.md` e o mesmo arquivo; onde nao ignora, ele nao existe e conta 0
     assert.strictEqual(instrucoes.contar(dir, { fontesCanonicas: ['CLAUDE.md', 'claude.md'] }).total, 4);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

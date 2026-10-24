@@ -5,8 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 
 /**
- * D451: a autorizacao do /esquadro:paralelo, dada UMA vez no /esquadro:init. Grava a regra de permissao
- * `Workflow(esquadro:paralelo)` em `permissions.allow` do `.claude/settings.local.json` da pasta atual (o
+ * D451: a autorizacao do /sworn:parallel, dada UMA vez no /sworn:init. Grava a regra de permissao
+ * `Workflow(sworn:parallel)` em `permissions.allow` do `.claude/settings.local.json` da pasta atual (o
  * arquivo pessoal do projeto, fora do git por padrao do Claude Code). Com `--conferir`, so le.
  *
  * Por script e nao por Write: o arquivo pode ter outras permissoes do dono, e mexer em JSON por texto e o
@@ -18,7 +18,7 @@ const path = require('node:path');
  * contem a pasta atual (de uma subpasta, nao cria um .claude ali); fora de repositorio, na pasta atual.
  * Regra igual (ou `Workflow` inteiro) em `permissions.deny` vence a allow: sai 1, nunca "autorizado".
  */
-const REGRA = 'Workflow(esquadro:paralelo)';
+const REGRA = 'Workflow(sworn:parallel)';
 const RELATIVO = '.claude/settings.local.json';
 
 // A pasta pessoal nao e projeto: um .git nela (dotfiles) faria gravar em ~/.claude, que vale para todo projeto.
@@ -58,13 +58,13 @@ if (allow !== undefined && !Array.isArray(allow)) {
   sair(1, { autorizado: false, gravou: false, erro: 'permissions.allow em ' + RELATIVO + ' nao e lista; o esperado e "allow": [ "regra 1", "regra 2" ]; corrija e rode de novo' });
 }
 const deny = obj.permissions && obj.permissions.deny;
-// `Workflow` inteiro, ou `Workflow(<padrao>)` cujo padrao (com * de curinga) casa com esquadro:paralelo
+// `Workflow` inteiro, ou `Workflow(<padrao>)` cujo padrao (com * de curinga) casa com sworn:parallel
 function negaEste(r) {
   if (r === 'Workflow') return true;
   const m = typeof r === 'string' && r.match(/^Workflow\((.*)\)$/);
   if (!m) return false;
   const re = new RegExp('^' + m[1].split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
-  return re.test('esquadro:paralelo');
+  return re.test('sworn:parallel');
 }
 const negada = Array.isArray(deny) ? deny.filter(negaEste)[0] : undefined;
 if (negada) {

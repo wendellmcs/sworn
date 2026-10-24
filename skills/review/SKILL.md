@@ -1,10 +1,10 @@
 ---
-name: revisar
+name: review
 description: Revisao cega A/B de um arquivo mudado. Rotula os dois lados sem autoria, despacha inspetores de lentes distintas com default reprovar, e apura por script com teto de 3 rondas. Use quando o trabalho estiver escrito e antes de dar por pronto.
 argument-hint: "<caminho do arquivo mudado>"
 ---
 
-# `/esquadro:revisar` — a revisão cega
+# `/sworn:review` — a revisão cega
 
 Falha de origem: **eu sou otimista ao julgar o meu próprio código.** Gerador e avaliador têm os
 mesmos pesos; quando eu reviso o que escrevi, eu não leio o código, eu re-derivo o raciocínio que o
@@ -14,7 +14,7 @@ produziu — e o raciocínio que produziu o bug reproduz o bug.
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/preparar-revisao.js" --arquivo <caminho> [--completa]
 
-O script escreve `A.txt`, `B.txt` e `mapa.json` em `.claude/esquadro/revisao/<arquivo>/<n>/`: cada
+O script escreve `A.txt`, `B.txt` e `mapa.json` em `.claude/sworn/revisao/<arquivo>/<n>/`: cada
 arquivo tem a sua base, e `<n>` é a ronda dele. O `<arquivo>` é o id do arquivo: cada `/` do caminho
 vira `__`, cada caractere fora de letras, números, `.`, `_` e `-` vira `_`, e um id só de dígitos
 ganha um `_` na frente (regra da função `idDoArquivo`, em `scripts/lib/cegar.js`). O
@@ -80,10 +80,10 @@ revisões com ela, se 2 de cada 3 achados dela tiverem sido refutados na fonte, 
 `SAEM_SO_LOGICA` e sai do arquivo só de lógica, como `escopo`. Validação na fronteira, perda de dados,
 segurança e acessibilidade nunca são excesso: achado dela contra isso é refutado. Atalho deliberado,
 com o comentário `atalho: <o que>. limite: <até onde vale>. trocar quando: <gatilho>.`, é dívida
-declarada, não excesso; o que não traz o gatilho o `/esquadro:atalhos` lista — rode-o antes de um release.
+declarada, não excesso; o que não traz o gatilho o `/sworn:shortcuts` lista — rode-o antes de um release.
 
 Leia as lentes do arquivo, **não de memória**. Despache todos no mesmo disparo, **um subagente
-`esquadro:inspetor` por lente**.
+`sworn:inspector` por lente**.
 
 Briefing de cada um, exatamente nesta forma:
 
@@ -117,11 +117,11 @@ a de uma ronda. Ele nunca barra e nunca sobrescreve arquivo que já existe. Ante
 arquivo por lente despachada** em `vereditos/` (lista a pasta e conta), e, com referência, também em
 `invertida/vereditos/`. O que o hook avisou que não gravou, ou que
 não está lá, grave à mão, como `<lente>.json` (a chave da lente), com o JSON que o inspetor devolveu, no caminho
-`vereditos` da saída do Passo 1. **Em projeto configurado, o `Write` em `.claude/esquadro/revisao/**.json` pode ser
+`vereditos` da saída do Passo 1. **Em projeto configurado, o `Write` em `.claude/sworn/revisao/**.json` pode ser
 negado pelo portão de escopo** (a "trava 4": ela só deixa gravar o que o escopo declarado da tarefa cobre). O
-escopo declarado fica em `.claude/esquadro/escopo.md`; se a sessão trabalha numa frente (uma linha de trabalho
-paralela do mesmo projeto), fica em `.claude/esquadro/escopos/<frente>.md`, o arquivo da frente. Acrescente
-`.claude/esquadro/revisao/**` à seção "Dentro" do que estiver em vigor, com `Edit`, sem apagar o resto, e grave
+escopo declarado fica em `.claude/sworn/escopo.md`; se a sessão trabalha numa frente (uma linha de trabalho
+paralela do mesmo projeto), fica em `.claude/sworn/escopos/<frente>.md`, o arquivo da frente. Acrescente
+`.claude/sworn/revisao/**` à seção "Dentro" do que estiver em vigor, com `Edit`, sem apagar o resto, e grave
 de novo (o portão não barra a edição do próprio arquivo de escopo, mas conta a ampliação e a avisa no fecho do
 turno). Se o escopo em vigor é de outra tarefa ou de outra sessão, peça o OK do dono antes de ampliá-lo e tire a
 linha de volta quando a revisão fechar. **Se a edição do escopo também for negada, ou o dono não autorizar a
@@ -159,7 +159,7 @@ Quem decide se a ronda foi seca é o script, não você. Cole a saída dele na r
   novo; `lentesAtras` (as que perdem, estão incompletas ou têm lacuna P0/P1); e `pronta`. Achado da 2ª passada
   sai com `passada: 2`: o `A.txt` dela é outro arquivo, então a refutação dele leva `"passada": 2`.
 - **Achados vizinhos podem ser o mesmo defeito.** Se a saída traz `paresCandidatos` não vazio, despache **um**
-  subagente `esquadro:juiz-mesmo` com a lista inteira (com mais de 50 pares, lotes de até 50, um subagente por
+  subagente `sworn:dedupe-judge` com a lista inteira (com mais de 50 pares, lotes de até 50, um subagente por
   lote, no mesmo disparo). Grave o que ele devolver em `mesmos.json`, na mesma pasta do `refutados.json`, pelo
   Write: `[{ "novo": "<chave>", "outro": "<chave>", "resposta": "sim" }]`, e rode o script de novo. A saída passa
   a trazer `provaveisMesmos`. **Nada na contagem muda:** o achado novo segue molhando a ronda. Se ele for repetição
@@ -173,7 +173,7 @@ caractere, o script para com erro). A saída traz `revisaoFechadaContada` para v
 Rodar o script de novo numa revisão já fechada **não conta outra vez**: o fecho fica registrado na
 base (`fechada.json`) e a saída diz que já foi contada. Preparar de novo um arquivo cuja revisão já
 fechou começa **revisão nova**: o `preparar-revisao.js` move a base inteira para
-`.claude/esquadro/revisao-fechada/<arquivo>/<carimbo>/` (nada se apaga; a saída diz o destino em
+`.claude/sworn/revisao-fechada/<arquivo>/<carimbo>/` (nada se apaga; a saída diz o destino em
 `arquivada`) e a ronda volta a ser a 1, com o teto de 3 inteiro. O fecho da revisão nova conta de novo.
 
 ## Passo 4 — rondas seguintes
