@@ -119,13 +119,13 @@ test('orquestracao: todo script de entrada roda por gancho, por outra peca ou es
 // aprovado (D529) - mudar pede mock novo, sem ganho no caso "falta referencia".
 test('ligacao L2: o manual manda rodar o /sworn:reference quando a AAA nao tem referencia', () => {
   const s = ler('skills/playbook/SKILL.md');
-  const i = s.indexOf('**A referência de topo, nomeada antes de começar.**');
+  const i = s.indexOf('**The top reference, named before starting.**');
   assert.ok(i !== -1, 'o paragrafo da referencia de topo');
   assert.ok(s.slice(i, i + 1600).includes('/sworn:reference'), 'no paragrafo da referencia de topo');
 });
 
 test('ligacao L3 e L5: o candidato escolhido no radar e estudado pelo /sworn:reference e entra com atalho: e a lente enxuto', () => {
-  const s = secao(ler('skills/radar/SKILL.md'), 'Passo 6');
+  const s = secao(ler('skills/radar/SKILL.md'), 'Step 6');
   assert.ok(s.includes('/sworn:reference'), 'o estudo do candidato escolhido');
   assert.ok(s.includes('atalho:'), 'o formato do atalho deliberado (D554)');
   assert.match(s, /enxuto/, 'a lente enxuto do /sworn:review');
@@ -143,7 +143,7 @@ test('ligacao L6: o manual chama o radar, os atalhos e o calibrar nos momentos d
 });
 
 test('ligacao L7: o init fecha mostrando os proximos comandos', () => {
-  const s = secao(ler('skills/init/SKILL.md'), 'Passo 8');
+  const s = secao(ler('skills/init/SKILL.md'), 'Step 8');
   for (const c of ['/sworn:reference', '/sworn:radar', '/sworn:shortcuts', '/sworn:audit', '/sworn:calibrate']) {
     assert.ok(s.includes(c), c);
   }

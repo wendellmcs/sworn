@@ -1,129 +1,130 @@
-# Verificação e evidência
+# Verification and evidence
 
-O comando concreto que prova um pronto neste projeto está em `{{campo:provaDePronto}}`. Este arquivo
-trata do que vale como prova, e de como não se enganar com o próprio instrumento.
-
----
-
-## 1. O que conta como evidência
-
-- **Fresca**: saída da rodada atual, colada na resposta. Memória de uma rodada anterior não é
-  evidência.
-- **Completa**: se um comando falhou, colar a falha. Silêncio sobre um teste equivale a afirmar que
-  passou.
-- **Declarada**: o que não rodou é listado como não rodado, com o motivo (ambiente, credencial,
-  ferramenta ausente).
-- **É saída, não código-fonte.** Colar o trecho do programa não prova que ele rodou. O que prova é o
-  que ele imprimiu.
-- **É rastro, não prosa.** "O portão me barrou" é relato do modelo. O contador gravado no arquivo, o
-  exit code, a linha do log — isso é evidência. Quando der para deixar rastro em disco, preparar o
-  rastro **antes** da rodada; é o que transforma relato em prova.
-- **Número medido: editar, contar, gravar — nessa ordem.** Número que descreve um arquivo (linhas,
-  folga de teto, contagem) se tira **depois da última edição**, nunca junto: a correção que mexe no
-  arquivo invalida a medida que a acompanha. **Conte por script**, pelo método do teste, nunca por
-  `wc -l` nem por `grep -c` (que conta linhas, não ocorrências). Lista dentro do próprio documento
-  também se conta por script, depois de escrita.
-- **Foto de página: use o protocolo de depuração (CDP), não o navegador headless pela linha de
-  comando.** O headless chamado pelo shell pode devolver exit 0 antes de gravar o arquivo (o `ls`
-  seguinte diz "não existe" e parece falha), ignorar a âncora da URL e não gravar página muito alta —
-  medido num navegador no Windows; exit 0 não prova a foto, o arquivo aberto prova. O CDP, em
-  porta própria e esperando por condição, não por tempo, tira a foto que se pediu.
-
-**Uma linha de saída basta.** Resposta curta não é resposta sem prova: um bloco de uma linha cumpre o
-portão, e é mais barato colar a prova do que consertar depois uma afirmação sem ela.
+The concrete command that proves a done in this project is in `{{campo:provaDePronto}}`. This file
+covers what counts as proof, and how not to be fooled by your own instrument.
 
 ---
 
-## 2. A regra do medidor — mutação plantada
+## 1. What counts as evidence
 
-**Todo medidor novo precisa de um controle que acuse uma mutação plantada. Sem isso, o número não
-vale.**
+- **Fresh**: output from the current run, pasted into the answer. Memory of an earlier run is not
+  evidence.
+- **Complete**: if a command failed, paste the failure. Silence about a test amounts to claiming it
+  passed.
+- **Declared**: what didn't run is listed as not run, with the reason (environment, credential,
+  missing tool).
+- **It is output, not source code.** Pasting the program's excerpt doesn't prove it ran. What proves
+  it is what it printed.
+- **It is a trace, not prose.** "The gate blocked me" is the model's account. The counter written to
+  the file, the exit code, the log line — that is evidence. When it is possible to leave a trace on
+  disk, prepare the trace **before** the run; that is what turns an account into proof.
+- **Measured number: edit, count, write — in that order.** A number that describes a file (lines,
+  cap headroom, count) is taken **after the last edit**, never together with it: the fix that touches
+  the file invalidates the measurement that goes with it. **Count by script**, with the test's
+  method, never by `wc -l` nor `grep -c` (which counts lines, not occurrences). A list inside the
+  document itself is also counted by script, after it is written.
+- **Page screenshot: use the debugging protocol (CDP), not the command-line headless browser.** The
+  headless browser called from the shell may return exit 0 before writing the file (the following
+  `ls` says "does not exist" and looks like a failure), ignore the URL anchor and not write a very
+  tall page — measured in a browser on Windows; exit 0 doesn't prove the screenshot, the opened file
+  does. CDP, on its own port and waiting on a condition, not on time, takes the screenshot that was
+  asked for.
 
-Vale para: script de contagem, teste novo, catraca, lente que mede, grep que sustenta uma conclusão,
-qualquer coisa que produza um número que vá ser usado para decidir.
-
-O procedimento é curto:
-
-1. Rodar o medidor no estado atual e anotar o número.
-2. **Plantar de propósito** o defeito que ele deveria pegar — uma linha, num arquivo, revertida em
-   seguida.
-3. Rodar de novo. **O número tem de mudar, e mudar na direção certa.**
-4. Reverter a mutação e confirmar que o número voltou.
-
-Se o medidor não acusar a mutação plantada, ele não está medindo o que você acha que mede — e todo
-número que ele já deu está sob suspeita, inclusive os que confirmaram o que você esperava.
-
-**A mutação tem duas provas.** Apagar **todas** as ocorrências do que o teste vigia prova que ele
-*sabe* reprovar; apagar **só a ocorrência que carrega o sentido** (o aviso, a regra, a opção) prova que
-ele olha o *lugar certo*. Se a segunda sobrevive, a asserção olha o texto inteiro e se contenta com a
-mesma palavra em outro ponto. É onde a sonda de localidade costuma achar a frouxidão: a fixture que dá
-a ordem certa por acaso, o controle negativo de um lado só, a frase de sucesso impressa sempre.
-
-**Teste novo escrito vermelho de propósito pode esconder o próprio falso positivo.** Ele fica vermelho
-por dois motivos e o protótipo só mostra um: depois de escrever a correção, **rode o teste contra o
-texto ou código certo** antes de fechar a lista dos vermelhos. Todo comentário novo que afirma uma
-ordem ("X vem antes de Y") ganha uma sonda que inverte X e Y.
-
-**Verificar o instrumento antes de acusar o instrumentado.** Quando a medição contradiz o que o
-código parece fazer, o suspeito nº 1 é o medidor, não o código. Essa ordem economiza rodadas
-inteiras.
-
-**Comparar estrutura avaliada, nunca substring.** Contar ocorrências de texto para concluir sobre
-comportamento é o erro de medição mais comum e mais convincente: o número sai bonito e está errado.
-Usar parser, AST, API estruturada — o que o formato oferecer.
-
-**Medição própria vence parecer**, mesmo parecer caro, mesmo marcado P0. Um parecer que afirma um
-número é uma alegação sobre uma medição, não a medição.
+**One line of output is enough.** A short answer is not an answer without proof: a one-line block
+satisfies the gate, and it is cheaper to paste the proof than to fix later a claim that lacked it.
 
 ---
 
-## 3. Catraca não é teste comum
+## 2. The gauge rule — planted mutation
 
-Catraca é um teste com baseline: ele não pergunta "está certo?", pergunta "piorou desde a última
-vez?".
+**Every new gauge needs a control that flags a planted mutation. Without that, the number is worth
+nothing.**
 
-Quando uma catraca acusa regressão, a saída correta é **remover a causa**, nunca subir o baseline.
-Subir baseline é decisão humana registrada — e o arquivo de baseline costuma estar sob edição de
-outra frente, o que faz de mexer nele uma colisão quase garantida.
+It applies to: counting script, new test, ratchet, lens that measures, grep that supports a
+conclusion, anything that produces a number that will be used to decide.
+
+The procedure is short:
+
+1. Run the gauge in the current state and note the number.
+2. **Plant on purpose** the defect it should catch — one line, in one file, reverted right after.
+3. Run again. **The number must change, and change in the right direction.**
+4. Revert the mutation and confirm the number went back.
+
+If the gauge doesn't flag the planted mutation, it isn't measuring what you think it measures — and
+every number it has already given is under suspicion, including those that confirmed what you
+expected.
+
+**The mutation has two proofs.** Deleting **all** the occurrences of what the test watches proves it
+*knows how* to fail; deleting **only the occurrence that carries the meaning** (the warning, the
+rule, the option) proves it looks at the *right place*. If the second survives, the assertion looks at
+the whole text and is satisfied with the same word at another point. That is where the locality probe
+usually finds the looseness: the fixture that gives the right order by chance, the one-sided negative
+control, the success phrase that is always printed.
+
+**A new test written red on purpose can hide its own false positive.** It goes red for two reasons
+and the prototype shows only one: after writing the fix, **run the test against the right text or
+code** before closing the list of reds. Every new comment that asserts an order ("X comes before Y")
+gets a probe that swaps X and Y.
+
+**Verify the instrument before accusing the instrumented.** When the measurement contradicts what the
+code seems to do, suspect #1 is the gauge, not the code. That order saves whole runs.
+
+**Compare evaluated structure, never substring.** Counting text occurrences to conclude about
+behavior is the most common and most convincing measurement error: the number looks good and is
+wrong. Use a parser, AST, structured API — whatever the format offers.
+
+**Your own measurement beats an opinion**, even an expensive opinion, even one marked P0. An opinion
+that states a number is a claim about a measurement, not the measurement.
 
 ---
 
-## 4. Declarar o limite antes de executar, não no fecho
+## 3. A ratchet is not an ordinary test
 
-Antes de prometer uma evidência no plano, conferir que ela existe:
+A ratchet is a test with a baseline: it doesn't ask "is it right?", it asks "did it get worse since
+last time?".
 
-1. **existe gerador/ferramenta para esta área?**
-2. **o ambiente que ela exige está de pé?** (porta, credencial, serviço, navegador)
-
-Se qualquer resposta for não, **dizer no plano, antes de começar**, qual portão vai rodar por leitura
-de código em vez de por artefato. Descobrir isso no fecho já é tarde: o plano prometeu uma prova que
-não existia, e o que sobra é escolher entre entregar sem prova ou refazer.
-
-**Leitura de código não é consolo.** Uma lente bem instruída soma os paddings da cadeia e verifica as
-propriedades relevantes — isso responde "vaza?" com aritmética. O artefato responde melhor, mas a
-ausência dele não dispensa a pergunta.
-
-**Cobertura parcial é declarada, nunca implícita.** Se a ferramenta cobre 4 das 12 áreas, dizer quais
-4. "Rodei o visual" quando o gerador só existe para um terço das telas é uma afirmação verdadeira que
-comunica uma falsidade.
+When a ratchet flags a regression, the correct way out is to **remove the cause**, never to raise the
+baseline. Raising the baseline is a recorded human decision — and the baseline file is usually being
+edited by another front, which makes touching it an almost guaranteed collision.
 
 ---
 
-## 5. Falha nova contra falha pré-existente
+## 4. Declare the limit before executing, not at close-out
 
-"Já falhava" **exige prova**, e a prova é uma destas duas:
+Before promising evidence in the plan, check that it exists:
 
-- a saída da suíte **antes** de editar, colada; ou
-- a demonstração de que os arquivos lidos pelo teste que falhou **não estão no diff**.
+1. **is there a generator/tool for this area?**
+2. **is the environment it requires up?** (port, credential, service, browser)
 
-Sem uma das duas, "já falhava" é suposição — e é exatamente assim que uma regressão entra
-despercebida, com o agente de boa-fé.
+If either answer is no, **say in the plan, before starting**, which gate will run by code reading
+instead of by artifact. Finding this out at close-out is already late: the plan promised a proof that
+didn't exist, and what is left is choosing between delivering without proof or redoing the work.
+
+**Code reading is not a consolation prize.** A well-instructed lens adds up the paddings of the chain
+and checks the relevant properties — that answers "does it overflow?" with arithmetic. The artifact
+answers better, but its absence doesn't excuse the question.
+
+**Partial coverage is declared, never implicit.** If the tool covers 4 of the 12 areas, say which 4.
+"I ran the visual" when the generator only exists for a third of the screens is a true statement that
+communicates a falsehood.
 
 ---
 
-## 6. Proporcionalidade
+## 5. New failure versus pre-existing failure
 
-Mudança que possa quebrar o produto exige teste proporcional ao risco. A tabela de portões por marcha
-está em [01-marchas-e-gates.md](01-marchas-e-gates.md).
+"It already failed" **requires proof**, and the proof is one of these two:
 
-Regra que não tem exceção: **se não rodou teste, declarar explicitamente que não rodou.**
+- the suite output **before** editing, pasted; or
+- the demonstration that the files read by the failing test **are not in the diff**.
+
+Without one of the two, "it already failed" is a guess — and that is exactly how a regression gets in
+unnoticed, with the agent in good faith.
+
+---
+
+## 6. Proportionality
+
+A change that could break the product requires a test proportional to the risk. The table of gates
+per gear is in [01-marchas-e-gates.md](01-marchas-e-gates.md).
+
+A rule with no exception: **if no test ran, declare explicitly that it didn't run.**

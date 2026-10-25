@@ -298,7 +298,7 @@ test('agentes: o molde cheio traz effort, tools, maxTurns e a secao de escalada'
   assert.strictEqual(f.campos.effort, 'medium');
   assert.strictEqual(f.campos.tools, 'Read, Grep, mcp__x__y');
   assert.strictEqual(f.campos.maxTurns, '20');
-  assert.ok(bruto.includes('## Quando parar e escalar'), bruto);
+  assert.ok(bruto.includes('## When to stop and escalate'), bruto);
 });
 
 test('agentes: escalaPara do degrau do meio e o proximo; a do ultimo aponta quem decide', (t) => {
@@ -306,7 +306,7 @@ test('agentes: escalaPara do degrau do meio e o proximo; a do ultimo aponta quem
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   const secao = (nome) => {
     const bruto = fs.readFileSync(agentes.caminho(raiz, nome), 'utf8');
-    const i = bruto.indexOf('## Quando parar e escalar');
+    const i = bruto.indexOf('## When to stop and escalate');
     assert.ok(i !== -1, nome + ' sem a secao');
     return bruto.slice(i, bruto.indexOf('\n## ', i + 5) === -1 ? undefined : bruto.indexOf('\n## ', i + 5));
   };

@@ -1,79 +1,79 @@
 ---
 name: handoff
-description: Gera o texto de continuacao para um chat novo, com tudo que o proximo precisa para continuar exatamente de onde parou. Use quando um gatilho contavel de saude de contexto disparar, quando fechar uma etapa de plano longo, ou quando o usuario pedir.
-argument-hint: "[nome curto do trabalho]"
+description: Generates the continuation text for a new chat, with everything the next one needs to continue exactly where this one stopped. Use when a countable context-health trigger fires, when closing a stage of a long plan, or when the user asks.
+argument-hint: "[short name of the work]"
 ---
 
-# `/sworn:handoff` — a ponte entre chats
+# `/sworn:handoff` — the bridge between chats
 
-O desvio começa quando o plano passa a ser executado de memória. **Handoff é ponte entre chats, não
-substituto do plano.**
+Drift starts when the plan begins to be executed from memory. **Handoff is a bridge between chats, not a
+substitute for the plan.**
 
-**Chat novo que partiu de um resumo** (`handoff/AAAA-MM-DD-retomar-<id>.md`, gravado pelo aviso de volta a chat
-parado): o resumo é um retrato mecânico do registro do chat antigo, não este handoff. Leia-o, confira no disco o que
-ele diz (passo 1) e, se o trabalho pede ponte completa, escreva o handoff aqui, no chat novo — nunca no chat parado,
-que regravaria a conversa inteira.
+**New chat that started from a summary** (`handoff/AAAA-MM-DD-retomar-<id>.md`, written by the notice for returning to a
+stopped chat): the summary is a mechanical snapshot of the old chat's log, not this handoff. Read it, check on disk what
+it says (step 1) and, if the work calls for a full bridge, write the handoff here, in the new chat — never in the stopped chat,
+which would rewrite the entire conversation.
 
-## Passo 1 — conferir os fatos no disco, não na memória
+## Step 1 — check the facts on disk, not from memory
 
-Rode, e cole a saída:
+Run, and paste the output:
 
     git -C . rev-parse HEAD
     git -C . rev-parse --abbrev-ref HEAD
     git -C . status --short
     node "${CLAUDE_PLUGIN_ROOT}/scripts/uso.js"
 
-**Número que vai para o handoff se lê do disco.** Nunca do handoff anterior, e nunca de memória.
+**A number that goes into the handoff is read from disk.** Never from the previous handoff, and never from memory.
 
-## Passo 2 — escrever o arquivo
+## Step 2 — write the file
 
-Em `.claude/sworn/handoff/AAAA-MM-DD-<slug>.md`, com **todas** estas seções:
+In `.claude/sworn/handoff/AAAA-MM-DD-<slug>.md`, with **all** of these sections:
 
-1. **Ordem de leitura** — caminho absoluto do plano, do ledger e do handoff anterior, na ordem.
-2. **Topologia** — cada repositório envolvido, com branch e **SHA do HEAD**, colados do passo 1.
-3. **Onde estamos** — em que etapa do plano, e qual é a próxima, **com o texto da etapa conferido no
-   arquivo**, não parafraseado. Com estudo em andamento, o caminho de cada ficha: a do radar
-   (`.claude/sworn/radar/<AAAA-MM-DD>.md`) e a de referência (`.claude/sworn/referencias/`), e se ela
-   já entrou em `referencias` ou espera o sim do dono — senão o chat novo estuda tudo de novo.
-4. **Decisões humanas já tomadas** — na forma "não perguntar de novo", com a data.
-5. **Pendências e bloqueios que NÃO são achado desta sessão** — falha pré-existente é isto, e sem
-   esta seção o próximo chat vai "descobrir" e perder tempo. **Pendência não fica arrastada de handoff
-   em handoff**: lista que só cresce não tem dono. Antes do prompt, leve cada pendência nova ao dono,
-   juntas e em 3 opções, e escreva aqui só o que já foi decidido ou o que tem dono e lugar declarados.
-6. **Erros de método que custaram tempo** — para não se repetirem.
-7. **Arquivos de terceiros deixados intocados** — do `git status` do passo 1.
-8. **Prompt pronto para colar**, em bloco de código.
+1. **Reading order** — absolute path of the plan, the ledger and the previous handoff, in order.
+2. **Topology** — each repository involved, with branch and **HEAD SHA**, pasted from step 1.
+3. **Where we are** — at which stage of the plan, and which is next, **with the stage's text checked in the
+   file**, not paraphrased. With a study in progress, the path of each sheet: the radar one
+   (`.claude/sworn/radar/<AAAA-MM-DD>.md`) and the reference one (`.claude/sworn/referencias/`), and whether it
+   has already entered `referencias` or is waiting for the owner's yes — otherwise the new chat studies everything again.
+4. **Human decisions already made** — in the form "do not ask again", with the date.
+5. **Pending items and blockers that are NOT findings of this session** — a pre-existing failure is this, and without
+   this section the next chat will "discover" it and lose time. **A pending item is not dragged from handoff
+   to handoff**: a list that only grows has no owner. Before the prompt, take each new pending item to the owner,
+   all of them at once and in 3 options, and write here only what was already decided or what has an owner and place declared.
+6. **Method errors that cost time** — so they are not repeated.
+7. **Third-party files left untouched** — from the `git status` of step 1.
+8. **Ready-to-paste prompt**, in a code block.
 
-**Nunca inclua segredo, credencial ou dado de cliente.**
+**Never include a secret, credential or customer data.**
 
-Se a sessão trabalha num plano, deixe o painel do plano (`/sworn-plan`) achá-lo no chat novo:
+If the session works on a plan, let the plan panel (`/sworn-plan`) find it in the new chat:
 
-- no fim do **Objetivo** do escopo em vigor (o arquivo da frente em `.claude/sworn/escopos/`, ou
-  `.claude/sworn/escopo.md` sem frente), a linha `Plano: <caminho do plano>`, com o caminho entre
-  crases se tiver espaço. Plano novo: troque o `Plano:` antigo, não acrescente outro;
-- em cada caixa que esta sessão marcar no plano, a marca dela: `- [x] passo (sN: o que foi feito)`. Caixa
-  marcada por sessão anterior não recebe o N desta. As sessões gastas e a estimativa do painel saem dessas
-  marcas. **O N da sessão:** se ela já gravou a sua nota `(sessao N, ...)` no Objetivo, é o N dessa nota. Se
-  ainda não gravou, leia o disco: o maior número já usado entre as notas do Objetivo do escopo em vigor e as
-  marcas `(sN` do plano, mais 1 (1 se não há nenhum); grave a nota com ele antes de marcar caixas ou linhas
-  de tabela. A nota e todas as marcas da sessão, em caixa ou em linha de tabela, levam esse N.
-  Duas sessões abertas ao mesmo tempo podem chegar ao mesmo N: ao gravar a nota, se o N já está na nota
-  de outra sessão, use o seguinte. O painel conta os N distintos: número pulado não muda a conta, e
-  sessão que não deixou marca não entra nela;
-- plano com as etapas numa tabela (1ª coluna `Etapa`, `Fase`, `Item`...): na etapa que a sessão fechou,
-  `[FEITO]` na 1ª célula, depois do id copiado da tabela (`| **P2 motor** [FEITO] | ...`), e a marca da
-  sessão `(sN: o que foi feito)` na última célula da mesma linha. Sem nenhuma marca na tabela, o painel
-  deduz pela `ETAPA <id>` do Objetivo (as anteriores feitas, ela em curso) e avisa que deduziu; a 1ª marca
-  `[FEITO]` encerra a dedução, então, ao pôr a primeira, ponha `[FEITO]` também em cada etapa anterior já
-  feita, senão o painel passa a dá-las como não feitas. Nessas anteriores, quando as notas do Objetivo
-  dizem qual sessão as fechou, ponha também a marca dela, com o N dela (`(s3: o que foi feito)`); sem
-  marca, a etapa conta como feita, mas a sessão que a fechou fica fora das sessões gastas.
+- at the end of the **Objetivo** of the scope in force (the front's file in `.claude/sworn/escopos/`, or
+  `.claude/sworn/escopo.md` with no front), the line `Plano: <path of the plan>`, with the path in
+  backticks if it has a space. New plan: replace the old `Plano:`, do not add another;
+- on each box this session ticks in the plan, its mark: `- [x] step (sN: what was done)`. A box
+  ticked by an earlier session does not get this session's N. The sessions spent and the panel's estimate come from these
+  marks. **The session's N:** if it has already written its note `(sessao N, ...)` in the Objetivo, it is that note's N. If
+  it has not yet, read the disk: the highest number already used among the notes in the Objetivo of the scope in force and the
+  marks `(sN` of the plan, plus 1 (1 if there is none); write the note with it before ticking boxes or table
+  rows. The note and all the session's marks, in a box or in a table row, carry that N.
+  Two sessions open at the same time may arrive at the same N: when writing the note, if the N is already in another session's
+  note, use the next one. The panel counts the distinct Ns: a skipped number does not change the count, and a
+  session that left no mark does not enter it;
+- plan with the stages in a table (1st column `Etapa`, `Fase`, `Item`...): on the stage the session closed,
+  `[FEITO]` in the 1st cell, after the id copied from the table (`| **P2 motor** [FEITO] | ...`), and the
+  session's mark `(sN: what was done)` in the last cell of the same row. With no mark at all in the table, the panel
+  deduces from the `ETAPA <id>` in the Objetivo (the earlier ones done, that one in progress) and warns that it deduced; the 1st
+  `[FEITO]` mark ends the deduction, so, when placing the first, also place `[FEITO]` on every earlier stage already
+  done, or the panel starts to treat them as not done. On those earlier ones, when the Objetivo's notes
+  say which session closed them, also place its mark, with its N (`(s3: what was done)`); with no
+  mark, the stage counts as done, but the session that closed it stays out of the sessions spent.
 
-## Passo 3 — oferecer a troca, na mesma resposta
+## Step 3 — offer the switch, in the same response
 
-Não basta gerar o arquivo. Na **mesma resposta**:
+Generating the file is not enough. In the **same response**:
 
-1. diga com todas as letras que é hora de abrir chat novo, **citando qual gatilho disparou**;
-2. **cole o prompt pronto no chat, em bloco de código** — o usuário tem de copiar sem abrir nada;
-3. **não pergunte "sigo?" antes de oferecer a troca.** A troca vem primeiro; se ele preferir
-   continuar, ele diz.
+1. say in so many words that it is time to open a new chat, **citing which trigger fired**;
+2. **paste the ready prompt in the chat, in a code block** — the user must be able to copy without opening anything;
+3. **do not ask "shall I continue?" before offering the switch.** The switch comes first; if they prefer to
+   continue, they say so.

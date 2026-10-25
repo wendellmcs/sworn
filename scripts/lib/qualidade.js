@@ -19,7 +19,8 @@ const BLOCO = [
   '5. Evidencia: no bloco, so a linha que prova. Sai: o log inteiro. Fica: "tests 12 | pass 12 | fail 0".',
   '6. Nao repetir o que o usuario acabou de ler ou decidir: citar onde esta. A resposta final fecha sozinha: o que mudou e o que falta, mesmo bloqueada.',
   '',
-  'Valem no idioma de quem pergunta. Texto gravado em arquivo (plano, decisao, handoff) fica fora.',
+  // D656 (camada 1): a linha de idioma vira regra de resposta; texto novo ao modelo nasce em ingles.
+  "Reply in the user's language; the rules hold in any. Files you write (plan, decision, handoff) are out.",
   'Desligar neste projeto: "' + CHAVE + '": false em .claude/sworn/projeto.json.'
 ].join('\n') + '\n';
 

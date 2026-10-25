@@ -174,7 +174,7 @@ test('D244/defeito 9: a skill revisar e o inspetor mandam ler a regua', () => {
 
 test('D244/defeito 10: a skill revisar manda declarar o que nao foi inspecionado', () => {
   const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
-  assert.match(skill, /n[aã]o foi inspecionado/i);
+  assert.match(skill, /was not inspected/i);
 });
 
 // Ronda 1 do 8c.5: o --arquivo aceitava '..' e caminho absoluto. O de fora era lido e
@@ -610,7 +610,7 @@ test('0.3.3/item 2: base sem fechada.json (revisao em andamento) segue como ante
 test('0.3.3/item 2: a skill revisar diz o que acontece com a revisao ja fechada', () => {
   const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   assert.match(skill, /revisao-fechada/, 'a skill tem de citar a pasta de arquivo');
-  assert.doesNotMatch(skill, /Ronda nova depois do fecho/, 'a frase antiga descrevia o defeito');
+  assert.doesNotMatch(skill, /New round after the close/, 'a frase antiga descrevia o defeito');
 });
 
 // 0.3.3, item 9: o status do `git show` sozinho nao separa "arquivo novo" de "objeto que nao se le"

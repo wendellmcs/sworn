@@ -1,31 +1,31 @@
 # AGENTS.md — {{texto:projeto}}
 
-Este arquivo é o resumo que viaja. A fonte completa está em `.claude/sworn/`, e onde os dois
-divergirem, vale o que estiver lá.
+This file is the summary that travels. The full source is in `.claude/sworn/`, and where the two
+diverge, what is there prevails.
 
-## Como se trabalha aqui
+## How we work here
 
 {{texto:comoSeTrabalha}}
 
-## Antes de editar
+## Before editing
 
-O escopo do trabalho se declara antes de gravar, nos caminhos que este projeto marcou como
-exigentes. O mapa está em {{campo:marchas}}.
+The scope of the work is declared before writing, on the paths this project marked as
+demanding. The map is in {{campo:marchas}}.
 
-O que não se toca está em {{campo:intocaveis}}. Essa lista não se reduz sem decisão humana.
+What is not touched is in {{campo:intocaveis}}. That list is not reduced without a human decision.
 
-## Antes de dizer que terminou
+## Before saying it is done
 
-Cole a saída de {{campo:provaDePronto}}. O que não rodou se declara como não rodado — silêncio sobre
-uma verificação equivale a dizer que ela passou. Saída que mostra falha não prova nada: cada pedido
-fica provado, falhou ou não testado, e teste instável se corrige ou se remove, nunca se repete até
-passar.
+Paste the output of {{campo:provaDePronto}}. What didn't run is declared as not run — silence about
+a check is the same as saying it passed. Output that shows a failure proves nothing: each request
+is proved, failed or not tested, and a flaky test is fixed or removed, never rerun until it
+passes.
 
-## Quando a decisão não é sua
+## When the decision is not yours
 
-Leve a {{campo:quemDecide}}, em três opções, a recomendada em primeiro lugar e marcada como tal,
-cada uma dizendo a consequência prática e o custo.
+Take it to {{campo:quemDecide}}, in three options, the recommended one first and marked as such,
+each stating the practical consequence and the cost.
 
-## O que este projeto NÃO promete
+## What this project does NOT promise
 
 {{texto:naoPromete}}

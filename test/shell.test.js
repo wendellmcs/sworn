@@ -402,7 +402,7 @@ function lerDoPlugin(rel) { return fs.readFileSync(path.join(RAIZ_PLUGIN, rel), 
 
 test('D286: a instrucao do init (Passo 7b) usa formas que a trava aceita', () => {
   const texto = lerDoPlugin(path.join('skills', 'init', 'SKILL.md'));
-  const i = texto.indexOf('Rode os tr');
+  const i = texto.indexOf('Run the three');
   assert.ok(i !== -1, 'nao achou a frase dos tres geradores no Passo 7b');
   const paragrafo = texto.slice(i, texto.indexOf('\n\n', i));
   const trechos = paragrafo.match(/`[^`]+`/g) || [];
@@ -419,7 +419,7 @@ test('D286: a instrucao do init (Passo 7b) usa formas que a trava aceita', () =>
 
 test('D286: o bloco do `claude -p` em 06-ambiente.md usa forma que a trava aceita', () => {
   const texto = lerDoPlugin(path.join('skills', 'playbook', 'references', '06-ambiente.md'));
-  const i = texto.indexOf('## 8. Provar hook');
+  const i = texto.indexOf('## 8. Proving a hook');
   assert.ok(i !== -1, 'nao achou a secao 8');
   const m = texto.slice(i).match(/```\r?\n([\s\S]*?)\r?\n```/);
   assert.ok(m, 'nao achou o bloco de exemplo da secao 8');

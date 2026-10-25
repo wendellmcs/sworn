@@ -144,6 +144,87 @@ test('evidencia D639: "nao passa" nao e ressalva, nem falando de teste; "ainda f
   assert.strictEqual(ev.declaraRessalva('Pronto, mas os testes ainda falham no Linux.'), true);
 });
 
+// D656 (camada 1): quem responde em ingles alega, ressalva e admite falha em ingles. O corpus de falso positivo
+// vem nos dois idiomas: o padrao novo nao pode pegar o que o antigo deixava passar.
+
+test('evidencia D656: alegacao em ingles e reconhecida, como a em portugues', () => {
+  for (const t of ['Done.', 'Fixed the parser.', 'All tests pass.', 'The tests passed.', 'The suite passes now.',
+    'It works now.', 'It works.', 'The hook is working.', 'Implemented the new gate.', 'Resolved the conflict.',
+    'Completed the migration.', 'All set.', 'It worked.', 'No errors left.', 'Ran without errors.', 'CI is green.',
+    'Everything is green.', 'The PR is ready.', 'All good.', 'It’s working now.', 'It’s ready.',
+    'I implemented the gate.', 'We resolved the conflict.', 'The issue is resolved.', 'Completed and pushed.',
+    'The parser is implemented now.', 'Step 2: completed.', 'It’s ready, and the docs too.',
+    'The build is ready and tested.', 'The bug is resolved\nNext: the docs.', 'The PR is ready\r\nNext: the docs.',
+    'We have resolved the conflict.', 'I’ve completed the migration.', 'Summary\nImplemented the gate.',
+    'The issue is resolved', '- Implemented the gate', '**Implemented** the gate.', '1) Resolved the conflict',
+    'I successfully implemented the gate.', 'I have fully implemented it.']) {
+    assert.strictEqual(ev.analisar(t).alegaSucesso, true, 'devia alegar: ' + t);
+    assert.strictEqual(ev.deveBloquear(t), true, 'sem bloco e sem ressalva, barra: ' + t);
+  }
+});
+
+test('evidencia D656: o que nao alega segue sem alegar, em portugues e em ingles (falso positivo)', () => {
+  for (const t of ['The routes file lives in src/routes.js.', 'I passed the flag --strict to the linter.',
+    'The value passed to the function is a string.', 'Here is how it works: the hook reads stdin.',
+    'Is the build ready for review?', 'The green button opens the panel.', 'If there are no errors, the hook stays silent.',
+    'This resolves to the plugin folder.', 'Pending: the parser and the docs.', 'Which option do you prefer?',
+    'The test checks that the flag is passed through.', 'Once the work is complete, I will run the suite.',
+    // D659: "is ready", "completed", "implemented" e "resolved" que seguem descrevendo nao alegam.
+    'The server is ready to accept connections once you set the env var.', 'The loader completed in 2s by design.',
+    'The ticket was resolved by the DNS team last week.', 'The feature is implemented in the old module, not here.',
+    'Requests are ready for retry after 5 seconds.', 'Implementedness is a made-up word.',
+    'O arquivo de rotas fica em src/rotas.js.', 'Abri o arquivo e li a funcao.', 'Segui para o proximo passo.',
+    'Qual opcao voce prefere?', 'Falta decidir o nome.', 'O valor passado para a funcao e texto.']) {
+    assert.strictEqual(ev.analisar(t).alegaSucesso, false, 'falso positivo: ' + t);
+  }
+});
+
+test('evidencia D659: os padroes com lookbehind rodam em tempo linear (o gancho le texto do modelo)', () => {
+  for (const t of [' '.repeat(50000) + 'completed x', '.' + ' '.repeat(50000) + 'x', 'is ready' + ' '.repeat(50000) + 'x',
+    'completed' + ' '.repeat(50000) + 'x', '\n'.repeat(50000) + 'implemented x']) {
+    const t0 = Date.now();
+    ev.analisar(t);
+    assert.ok(Date.now() - t0 < 200, 'lento: ' + JSON.stringify(t.slice(0, 12)));
+  }
+});
+
+test('evidencia D656: "nao rodei" em ingles libera a alegacao, como em portugues', () => {
+  for (const t of ['Implemented. I didn\'t run the tests: no runner here.', 'Fixed, but I did not test it on Windows.',
+    'Done; the suite has not been run yet.', 'Fixed. I haven\'t run the suite.', 'Implemented; untested on Linux.',
+    'Done, but I couldn\'t reproduce the bug.', 'Fixed. I was not able to run the e2e tests.',
+    'Implemented; the docs still need to be tested.', 'Done; the migration is yet to be verified.',
+    'Fixed. I didn’t run the suite.']) {
+    assert.strictEqual(ev.analisar(t).declaraNaoRodou, true, 'devia ser ressalva: ' + t);
+    assert.strictEqual(ev.deveBloquear(t), false, t);
+  }
+  // controle: instrucao ao usuario e saida limpa nao sao ressalva - seguem barrando
+  for (const t of ['Done. You need to run npm install first.', 'Fixed. Run the suite with npm test.', 'Done; nothing failed.',
+    'Pronto. Rode a suite com npm test.']) {
+    assert.strictEqual(ev.deveBloquear(t), true, 'ressalva falsa: ' + t);
+  }
+});
+
+test('evidencia D656: "ainda falha" em ingles libera; "was still failing" e a causa contada e barra', () => {
+  const bloco = '\n```\n# fail 1\n```';
+  for (const t of ['Fixed the parser, but the date test keeps failing.', 'Implemented; the test continues to fail on Windows.',
+    'Done, but CI is still red.', 'Implemented, but the date test still fails.', 'Done; two tests are still failing.']) {
+    assert.strictEqual(ev.declaraRessalva(t), true, 'devia ser ressalva: ' + t);
+    assert.strictEqual(ev.deveBloquearPorFalha(t + bloco), false, t);
+  }
+  for (const t of ['Fixed: the test was still failing because of the path.', 'Done. The tests were still failing before the fix.']) {
+    assert.strictEqual(ev.declaraRessalva(t), false, 'a causa contada nao e ressalva: ' + t);
+    assert.strictEqual(ev.deveBloquearPorFalha(t + bloco), true, t);
+  }
+});
+
+test('evidencia D656: o motivo ensina tambem a frase em ingles que libera', () => {
+  const bloco = '\n```\n# fail 1\n```';
+  assert.ok(/"still fails"/.test(ev.MOTIVO_FALHA) && /"did not run"/.test(ev.MOTIVO_FALHA), ev.MOTIVO_FALHA);
+  assert.strictEqual(ev.deveBloquearPorFalha('Implemented, but the date test still fails.' + bloco), false);
+  assert.strictEqual(ev.deveBloquearPorFalha('Implemented. I did not run the full suite.' + bloco), false);
+  assert.ok(/"still fails"/.test(ev.motivoTesteVermelho('npm test')), 'o motivo do teste vermelho usa a mesma pergunta');
+});
+
 test('evidencia D634: MOTIVO_FALHA e ASCII (R5), diz o que fazer e traz a regra do teste instavel', () => {
   assert.ok(/^[\x20-\x7E\n]+$/.test(ev.MOTIVO_FALHA), 'MOTIVO_FALHA tem caractere fora de ASCII');
   assert.ok(/mostra falha/.test(ev.MOTIVO_FALHA));

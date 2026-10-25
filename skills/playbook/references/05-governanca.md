@@ -1,141 +1,143 @@
-# Governança, fontes e handoff
+# Governance, sources and handoff
 
 ---
 
-## 1. Ordem de leitura, antes de alterar qualquer coisa
+## 1. Reading order, before changing anything
 
-As fontes concretas e a ordem entre elas são do projeto — `{{campo:fontesCanonicas}}`. O que é
-universal é a **forma**:
+The concrete sources and the order among them belong to the project — `{{campo:fontesCanonicas}}`.
+What is universal is the **form**:
 
-1. A fonte que o projeto declarou canônica, na ordem em que ele a declarou.
-2. Produto e design, quando a tarefa for de UI, UX ou crítica visual.
-3. Regra de negócio consolidada.
-4. Log de decisões humanas já tomadas.
-5. Código atual — que é o último elo, não o primeiro: código mostra o que é, não o que deveria ser.
+1. The source the project declared canonical, in the order it declared it.
+2. Product and design, when the task is UI, UX or visual critique.
+3. Consolidated business rule.
+4. Log of human decisions already taken.
+5. Current code — which is the last link, not the first: code shows what is, not what should be.
 
-Confirmar fato com busca no repositório. **Inferência deve ser marcada como inferência**, e afirmação
-verificada deve ser marcada como verificada. Um relatório em que as duas se parecem obriga quem lê a
-reconferir tudo.
-
----
-
-## 2. Registro de decisão humana
-
-Confirmada uma decisão com `{{campo:quemDecide}}`, ela vai para `{{texto:ondeRegistrar}}` com:
-
-- **data**;
-- o que se perguntou, em uma frase;
-- as opções apresentadas e **qual foi escolhida**;
-- a consequência aceita, quando houver custo;
-- a forma "não perguntar de novo".
-
-**Decisão que quebra uma regra fica registrada como quebra**, não como exceção silenciosa. Quebra
-registrada é governança; quebra silenciosa é dívida que ninguém sabe que existe.
-
-**Se a mesma regra vem sendo quebrada por rotina, o defeito é da regra.** Duas quebras registradas da
-mesma regra não pedem uma terceira quebra: pedem uma decisão sobre recalibrá-la.
-
-**Ao registrar em documento append-only numerado, ler o último número no disco** — nunca do handoff.
-Ver a seção do Passo -1 em [01-marchas-e-gates.md](01-marchas-e-gates.md).
-
-**Decisão anunciada é decisão gravada, na mesma resposta.** Dizer "registrada" sem ter gravado é
-perder a decisão: outra frente toma o número, e o chat seguinte conclui que nada aconteceu. O
-**ledger é um arquivo só** — fragmento ao lado, em outro formato, é invisível para quem retoma. Ao
-retomar, antes de crer em "não rodou", liste a pasta de material por data e procure a prova.
-
-**Toda hora escrita em arquivo vem depois do `date`, e em outro turno.** Rode o `date` sozinho e só na
-resposta seguinte escreva o texto com a hora lida. Hora digitada no mesmo comando (ou no mesmo Write)
-do `date` é palpite, e palpite de hora erra para frente. Se a hora tiver de entrar num texto grande
-escrito antes, deixe um marcador e troque por script depois do `date`.
-
-**Espelho:** se o projeto mantém duas cópias da mesma regra em arquivos diferentes, alterar as duas
-no mesmo conjunto de mudanças, e conferir qual das duas é a fonte.
+Confirm facts with a repository search. **Inference must be marked as inference**, and a verified
+statement must be marked as verified. A report in which the two look alike forces the reader to
+recheck everything.
 
 ---
 
-## 3. Conjunto de mudanças — "tocou X, tem de ter tocado Y"
+## 2. Human decision record
 
-A falha mais cara de qualquer projeto com mais de um artefato é a **publicação assimétrica**: um lado
-do par sobe e o outro não, e o contrato quebra em produção.
+Once a decision is confirmed with `{{campo:quemDecide}}`, it goes to `{{texto:ondeRegistrar}}` with:
 
-Antes de fechar, conferir os pares que o projeto declarou. As formas mais comuns:
+- the **date**;
+- what was asked, in one sentence;
+- the options presented and **which one was chosen**;
+- the accepted consequence, when there is a cost;
+- the "don't ask again" form.
 
-| Forma | Exemplo |
+**A decision that breaks a rule is recorded as a break**, not as a silent exception. A recorded break
+is governance; a silent break is a debt nobody knows exists.
+
+**If the same rule keeps being broken as routine, the defect is in the rule.** Two recorded breaks of
+the same rule don't call for a third break: they call for a decision about recalibrating it.
+
+**When recording in a numbered append-only document, read the last number from disk** — never from
+the handoff. See the Step -1 section in [01-marchas-e-gates.md](01-marchas-e-gates.md).
+
+**An announced decision is a recorded decision, in the same answer.** Saying "recorded" without having
+written it is losing the decision: another front takes the number, and the next chat concludes that
+nothing happened. The **ledger is a single file** — a fragment beside it, in another format, is
+invisible to whoever resumes. When resuming, before believing "it didn't run", list the material
+folder by date and look for the proof.
+
+**Every time written to a file comes after the `date`, and in another turn.** Run `date` alone and
+only in the next answer write the text with the time read. A time typed in the same command (or the
+same Write) as the `date` is a guess, and a guess at the time errs forward. If the time must go into a
+large text written earlier, leave a marker and swap it by script after the `date`.
+
+**Mirror:** if the project keeps two copies of the same rule in different files, change both in the
+same change set, and check which of the two is the source.
+
+---
+
+## 3. Change set — "touched X, must have touched Y"
+
+The most expensive failure of any project with more than one artifact is **asymmetric publishing**:
+one side of the pair goes up and the other doesn't, and the contract breaks in production.
+
+Before closing, check the pairs the project declared. The most common forms:
+
+| Form | Example |
 |---|---|
-| par atômico entre camadas | tocou o backend → tem de ter tocado o cliente compatível |
-| espelho de documento | tocou a fonte → tem de ter tocado a cópia |
-| função visível nova | tocou a feature → tem de ter tocado permissões, ajuda, testes e docs |
-| ferramenta nova recorrente | tocou a ferramenta → tem de ter documentado onde ela vive |
+| atomic pair across layers | touched the backend → must have touched the compatible client |
+| document mirror | touched the source → must have touched the copy |
+| new visible function | touched the feature → must have touched permissions, help, tests and docs |
+| new recurring tool | touched the tool → must have documented where it lives |
 
-**Antes de qualquer ação irreversível** (publicar, promover, apagar remoto): salvar a versão anterior
-e **registrar o caminho de rollback por escrito**. O gesto é o que costuma faltar, não a intenção.
+**Before any irreversible action** (publish, promote, delete remote): save the previous version and
+**record the rollback path in writing**. The gesture is what usually goes missing, not the intention.
 
 ---
 
-## 4. Higiene documental
+## 4. Document hygiene
 
-- Procurar doc existente **antes** de criar novo. Linkar, não duplicar. E dizer o que se procurou.
-- Doc novo declara: objetivo, status, fonte de verdade, relação com os docs existentes, e se é
-  canônico / derivado / adaptador / histórico.
-- Planos concluídos, auditorias antigas e specs superadas vão para área de arquivo.
-- **Não versionar lixo:** log, HAR, screenshot, relatório, zip, cache, temporário, dump, credencial,
-  saída de ferramenta.
-- Arquivo obsoleto, duplicado ou mal localizado: **não apagar por conta própria.** Registrar em
+- Look for an existing doc **before** creating a new one. Link, don't duplicate. And say what was
+  searched.
+- A new doc declares: goal, status, source of truth, relation to the existing docs, and whether it is
+  canonical / derived / adapter / historical.
+- Completed plans, old audits and superseded specs go to an archive area.
+- **Don't version junk:** log, HAR, screenshot, report, zip, cache, temporary, dump, credential,
+  tool output.
+- Obsolete, duplicated or misplaced file: **don't delete on your own.** Record it in
   `{{texto:ondeRegistrar}}`.
-- Ao fechar mudança documental, conferir coerência de índices e links.
-- **Regra que aponta para o que não existe mais está mentindo.** Ao mover ou renomear, grepar as
-  referências ao caminho antigo. Referência morta é pior que ausência: ela dá confiança falsa.
+- When closing a documentation change, check that indexes and links are coherent.
+- **A rule that points to what no longer exists is lying.** When moving or renaming, grep the
+  references to the old path. A dead reference is worse than an absence: it gives false confidence.
 
 ---
 
-## 5. Planos e handoff
+## 5. Plans and handoff
 
-**Plano local:** objetivo, fora de escopo, contexto lido, arquivos prováveis, passos, critérios de
-aceite, testes recomendados, riscos e perguntas bloqueantes.
+**Local plan:** goal, out of scope, context read, probable files, steps, acceptance criteria,
+recommended tests, risks and blocking questions.
 
-**Handoff** em `{{texto:ondeHandoff}}`. Gatilhos contáveis e a obrigação de oferecer a troca de chat
-estão no `SKILL.md` §6. Conteúdo obrigatório:
+**Handoff** in `{{texto:ondeHandoff}}`. Countable triggers and the obligation to offer the chat
+switch are in `SKILL.md` §6. Mandatory content:
 
-- caminho absoluto do plano, do ledger e do handoff anterior, **na ordem de leitura**;
-- topologia dos repositórios, branch e **SHA do HEAD** de cada um;
-- em que etapa do plano estamos e qual é a próxima, com o texto da etapa **conferido no arquivo**;
-- decisões humanas já tomadas ("não perguntar de novo");
-- pendências, bloqueios e falhas pré-existentes que **não** são achado desta sessão;
-- erros de método que custaram tempo, para não se repetirem;
-- **prompt pronto para colar, em bloco de código.**
+- absolute path of the plan, the ledger and the previous handoff, **in reading order**;
+- topology of the repositories, branch and **HEAD SHA** of each;
+- which stage of the plan we are in and which is next, with the stage text **checked in the file**;
+- human decisions already taken ("don't ask again");
+- pending items, blockers and pre-existing failures that are **not** a finding of this session;
+- method errors that cost time, so they are not repeated;
+- **ready-to-paste prompt, in a code block.**
 
-Nunca incluir segredo, credencial ou dado de cliente no handoff.
+Never include a secret, credential or customer data in the handoff.
 
-**Regra dura de plano longo:** reler o trecho do plano **no arquivo** antes de escrever qualquer
-brief. Handoff é ponte entre chats, não substitui o plano. Achado no meio do caminho é desvio
-temporário: registrar, resolver e **voltar explicitamente ao plano**, dizendo em qual etapa se está
-retomando. Adição ao plano não é mudança de plano — não reescrever nem reordenar por causa dela.
-Desvio deliberado do texto do plano exige decisão humana registrada. **Etapa só é completa quando
-todos os subitens estão feitos** — subitem pendente = etapa aberta.
-
----
-
-## 6. Ferramentas e dependências
-
-- Skill só quando a tarefa corresponde claramente ao gatilho.
-- Biblioteca ou ferramenta adotada: com versão, tag ou commit **fixado**. Sem referência
-  reprodutível, não adotar.
-- **Nunca `latest`**, nem faixa aberta em manifesto, nem upgrade automático, nem atualização
-  silenciosa.
-- Atualização revisada por fonte primária (doc oficial, changelog, release, aviso de segurança).
-  "Mais recente" não significa "melhor".
-- Testar atualização em fase isolada, com testes e rollback, antes de promover.
-- Ferramenta recorrente nova: documentar onde o projeto guarda isso, e nos docs de verificação se ela
-  afeta como se prova um pronto.
+**Hard rule of a long plan:** reread the plan's excerpt **in the file** before writing any brief.
+Handoff is a bridge between chats, it doesn't replace the plan. A finding along the way is a temporary
+deviation: record it, resolve it and **go back to the plan explicitly**, saying which stage you are
+resuming. An addition to the plan is not a change of plan — don't rewrite or reorder because of it. A
+deliberate deviation from the plan text requires a recorded human decision. **A stage is complete only
+when all its subitems are done** — pending subitem = open stage.
 
 ---
 
-## 7. Ambiente
+## 6. Tools and dependencies
 
-As armadilhas de shell, encoding e índice do git — as que custam sessão inteira quando pegam — estão
-em [06-ambiente.md](06-ambiente.md). Ler antes de escrever script, hook, ou mexer no índice.
+- Skill only when the task clearly matches the trigger.
+- Adopted library or tool: with a **pinned** version, tag or commit. Without a reproducible
+  reference, don't adopt.
+- **Never `latest`**, nor an open range in a manifest, nor automatic upgrade, nor silent update.
+- Update reviewed against a primary source (official doc, changelog, release, security advisory).
+  "Most recent" doesn't mean "better".
+- Test an update in an isolated phase, with tests and rollback, before promoting.
+- New recurring tool: document where the project keeps it, and in the verification docs if it affects
+  how "done" is proven.
 
-**Credencial que o classificador de permissão barra não se contorna.** Medição que exige token vivo
-(do perfil do navegador, da sessão de quem decide) vira **script pronto, com passo a passo clique a
-clique para o dono rodar** — o script imprime o estado (existe ou não) e, no máximo, um prefixo de
-hash, **nunca o segredo**. Registre no ledger que a medição ficou com o dono e o que ela decide.
+---
+
+## 7. Environment
+
+The shell, encoding and git index traps — the ones that cost a whole session when they hit — are in
+[06-ambiente.md](06-ambiente.md). Read before writing a script, a hook, or touching the index.
+
+**A credential that the permission classifier blocks is not worked around.** A measurement that
+requires a live token (from the browser profile, from the decider's session) becomes a **ready-made
+script, with a click-by-click walkthrough for the owner to run** — the script prints the state
+(exists or not) and, at most, a hash prefix, **never the secret**. Record in the ledger that the
+measurement was left with the owner and what it decides.

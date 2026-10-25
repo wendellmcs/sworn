@@ -24,7 +24,7 @@ function secao(texto, prefixo) {
 }
 
 test('init: o re-init manda declarar o escopo antes dos Writes em projeto.json e design.json (IN-08)', () => {
-  const s0b = secao(skill('init'), 'Passo 0b');
+  const s0b = secao(skill('init'), 'Step 0b');
   assert.ok(/escopo\.md/.test(s0b), 'Passo 0b nao cita o escopo.md');
   assert.ok(/Dentro/.test(s0b), 'Passo 0b nao diz que vai em "Dentro"');
   assert.ok(s0b.includes('.claude/sworn/projeto.json'), 'Passo 0b nao lista o projeto.json no escopo');
@@ -33,9 +33,9 @@ test('init: o re-init manda declarar o escopo antes dos Writes em projeto.json e
 
 test('init: Passo 5b e Passo 7 lembram do escopo no ponto do Write (IN-08)', () => {
   const init = skill('init');
-  for (const prefixo of ['Passo 5b', 'Passo 7 ']) {
+  for (const prefixo of ['Step 5b', 'Step 7 ']) {
     const s = secao(init, prefixo);
-    assert.ok(/escopo\.md/.test(s) && /Passo 0b/.test(s),
+    assert.ok(/escopo\.md/.test(s) && /Step 0b/.test(s),
       prefixo + ' manda gravar sem lembrar do escopo do re-init (Passo 0b)');
   }
 });
@@ -44,5 +44,5 @@ test('revisar: avisa que o portao de escopo pode negar o Write em revisao/** e d
   const r = skill('review');
   assert.ok(r.includes('.claude/sworn/revisao/**'),
     'o revisar nao diz que o escopo precisa cobrir .claude/sworn/revisao/**');
-  assert.ok(/portao de escopo|portão de escopo/.test(r), 'o revisar nao nomeia o portao que nega');
+  assert.ok(/scope gate/.test(r), 'o revisar nao nomeia o portao que nega');
 });

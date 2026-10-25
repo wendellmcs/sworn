@@ -4,7 +4,7 @@
     { "padrao": "\\bclaude-(opus|sonnet|haiku|fable)[\\w.-]*", "tipo": "nome de modelo" },
     { "padrao": "\\b(gpt|gemini|llama|mistral)[\\w.-]*\\d", "tipo": "nome de modelo" },
     { "padrao": "(R\\$|US\\$|\\$)\\s?\\d", "tipo": "preco" },
-    { "padrao": "\\b(PreToolUse|PostToolUse|SessionStart|SessionEnd|Stop|SubagentStop|UserPromptSubmit|PreCompact|PostCompact|FileChanged|TaskCompleted|PostToolBatch|InstructionsLoaded)\\b", "tipo": "nome de evento de hook" },
+    { "padrao": "\\b(PreToolUse|PostToolUse|SessionStart|SessionEnd|Stop|SubagentStop|UserPromptSubmit|PreCompact|PostCompact|FileChanged|TaskCompleted|PostToolBatch|InstructionsLoaded)\\b", "tipo": "nome de evento de hook", "sensivel": true },
     { "padrao": "\\s--[a-z][a-z0-9-]{2,}", "tipo": "flag de linha de comando" }
   ]
 }

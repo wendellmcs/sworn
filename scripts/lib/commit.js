@@ -66,6 +66,15 @@ function inspetores(faixa, estilo) {
 
 const chave = function (p) { return path.resolve(String(p)).toLowerCase(); };
 
+/** Texto fica fora do portao (do commit e, D655, do fecho da marcha AAA). */
+function ehTexto(p) { return /\.(md|markdown|txt)$/i.test(String(p)); }
+
+/** D655: `arquivo` esta na lista de aprovados (a mesma comparacao do `pendentes`). Lista torta = nenhum. */
+function aprovado(aprovados, arquivo) {
+  const k = chave(arquivo);
+  return (Array.isArray(aprovados) ? aprovados : []).some(function (a) { return typeof a === 'string' && chave(a) === k; });
+}
+
 /** A raiz do repositorio git de `pasta`, ou null fora de repositorio. */
 function topo(pasta) {
   const s = git.correr(pasta, ['rev-parse', '--show-toplevel']);
@@ -77,7 +86,7 @@ function topo(pasta) {
  * null. Fora de repositorio ele mediria "novo": quem chama confere o repositorio antes (`pendentes`, D575). `estilo` vem do chamador (regra do design.js, relativa a raiz do projeto).
  */
 function medir(abs, estilo) {
-  if (/\.(md|markdown|txt)$/i.test(abs) || !fs.existsSync(abs)) return null;
+  if (ehTexto(abs) || !fs.existsSync(abs)) return null;
   const pasta = path.dirname(abs);
   const nome = path.basename(abs);
   const novo = git.correr(pasta, ['cat-file', '-e', 'HEAD:./' + nome]) === null;
@@ -177,4 +186,4 @@ function comAprovado(aprovados, arquivo) {
 }
 
 module.exports = { MARCA, ehCommit, semRevisao, pastaDoComando, inspetores, topo, pendentes, motivo, semAprovado,
-  comAprovado };
+  comAprovado, ehTexto, aprovado };

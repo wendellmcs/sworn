@@ -261,6 +261,6 @@ test('injetado: a skill do auditar apresenta o item 1c a partir da chave injetad
   assert.ok(i !== -1, 'falta o item 1c no Passo 2');
   const item = skill.slice(i, skill.indexOf('\n2. ', i));
   assert.ok(item.indexOf('`injetado`') !== -1, 'o item 1c nao cita a chave injetado');
-  assert.ok(/n[aã]o medido/i.test(item), 'o item 1c nao diz o que fazer quando nao mediu');
-  assert.ok(/mais de 5/.test(item), 'o item 1c nao cita o "volta mais de 5 vezes"');
+  assert.ok(/not measured/i.test(item), 'o item 1c nao diz o que fazer quando nao mediu');
+  assert.ok(/more than 5/.test(item), 'o item 1c nao cita o "volta mais de 5 vezes"');
 });

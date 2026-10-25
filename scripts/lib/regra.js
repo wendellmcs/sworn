@@ -6,7 +6,8 @@ const VOLATEIS = (function () {
   try {
     const bruto = fs.readFileSync(path.join(__dirname, '..', '..', 'modelos', 'volateis.json'), 'utf8');
     return (JSON.parse(bruto).volateis || []).map(function (v) {
-      return { re: new RegExp(v.padrao, 'i'), tipo: v.tipo };
+      // D656 (T3): "sensivel" = maiuscula conta - o evento Stop e PascalCase, "stop" e a palavra inglesa.
+      return { re: new RegExp(v.padrao, v.sensivel === true ? '' : 'i'), tipo: v.tipo };
     });
   } catch (e) {
     return [];

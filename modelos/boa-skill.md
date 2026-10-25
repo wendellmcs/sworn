@@ -1,32 +1,32 @@
-# O que é uma boa skill de projeto
+# What a good project skill is
 
-Referência lida por `/sworn:init` antes de preencher o molde, e por `/sworn:learn` antes de
-propor regra. **Critério sem falha de origem é decoração e não entra nesta lista.**
+Reference read by `/sworn:init` before filling the template, and by `/sworn:learn` before
+proposing a rule. **A criterion without a root failure is decoration and does not belong in this list.**
 
-| # | Critério | Falha de origem |
+| # | Criterion | Root failure |
 |---|---|---|
-| 1 | **`gatilho → ação`, nunca proibição solta.** "Não faça hardening" não tem âncora e só se ativa se eu lembrar dela; "ao encontrar problema de segurança fora do escopo → registrar e avisar" é convocada pela própria ação | aderência que cai com o contexto |
-| 2 | **Valor executável mora em arquivo e é citado por nome, nunca copiado.** Comando, versão, flag e preço mudam; nome de campo não | compactação que perde a literalidade; conhecimento com data de corte |
-| 3 | **A descrição diz QUANDO usar, não o que a skill faz.** É a única linha que decide se ela é invocada | aderência que cai com o contexto |
-| 4 | **Nomeia a referência.** Token literal e tela irmã já aprovada, jamais "deixe bonito" — veredito estético sem referência é infalsificável e sobrevive a qualquer revisão | estética julgada sem referência |
-| 5 | **Anti-referência explícita.** Dizer o que a coisa **não** pode parecer é verificável; dizer o que ela deve parecer, não é | estética julgada sem referência |
-| 6 | **Seção própria para o que NÃO se promete.** Dito agora, não descoberto no fim | decisão escondida numa muralha de texto |
-| 7 | **Declara se é canônico, derivado ou histórico.** Documento velho sem carimbo é obedecido como lei viva | o que se lê vira o que se obedece |
-| 8 | **Cada regra traz a dor de origem ao lado.** Regra sem cicatriz é opinião, e opinião não sobrevive à discordância | princípio do projeto |
-| 9 | **Verificável.** "Seja claro" não é critério; "formato de fecho fixo com quatro partes" é | decisão escondida numa muralha de texto |
-| 10 | **Curta, com teto declarado.** Cada instrução compete por atenção com todas as outras | aderência que cai com o contexto |
-| 11 | **Não repete o que um portão já cobra.** Duplicação é peso morto que acelera exatamente a doença que o harness veio curar | aderência que cai com o contexto |
-| 12 | **Decisão do dono em 3 opções, a recomendada marcada, com consequência e custo** | decisão escondida numa muralha de texto |
+| 1 | **`trigger → action`, never a loose prohibition.** "Don't do hardening" has no anchor and only activates if I remember it; "on finding a security problem out of scope → record and warn" is summoned by the action itself | adherence that drops as context grows |
+| 2 | **Executable value lives in a file and is cited by name, never copied.** Command, version, flag and price change; field name doesn't | compaction that loses literalness; knowledge with a cutoff date |
+| 3 | **The description says WHEN to use, not what the skill does.** It is the only line that decides whether it is invoked | adherence that drops as context grows |
+| 4 | **Names the reference.** Literal token and an already approved sibling screen, never "make it pretty" — an aesthetic verdict without a reference is unfalsifiable and survives any review | aesthetics judged without a reference |
+| 5 | **Explicit anti-reference.** Saying what the thing must **not** look like is verifiable; saying what it should look like is not | aesthetics judged without a reference |
+| 6 | **A section of its own for what is NOT promised.** Said now, not discovered at the end | decision hidden in a wall of text |
+| 7 | **Declares whether it is canonical, derived or historical.** An old document without a stamp is obeyed as living law | what is read becomes what is obeyed |
+| 8 | **Each rule carries its origin pain beside it.** A rule without a scar is opinion, and opinion doesn't survive disagreement | project principle |
+| 9 | **Verifiable.** "Be clear" is not a criterion; "fixed close-out format with four parts" is | decision hidden in a wall of text |
+| 10 | **Short, with a declared cap.** Each instruction competes for attention with all the others | adherence that drops as context grows |
+| 11 | **Doesn't repeat what a gate already enforces.** Duplication is dead weight that speeds up exactly the disease the harness came to cure | adherence that drops as context grows |
+| 12 | **Owner decision in 3 options, the recommended one marked, with consequence and cost** | decision hidden in a wall of text |
 
-## Como reconhecer uma skill ruim, em cinco segundos
+## How to recognize a bad skill, in five seconds
 
-- Começa com "sempre" ou "nunca" e não diz **quando**.
-- Repete um número que também está num arquivo de configuração.
-- Tem elogio, missão ou valor de marca.
-- Diz "use bom senso".
-- Cresceu por acumulação: ninguém nunca tirou nada dela.
+- Starts with "always" or "never" and doesn't say **when**.
+- Repeats a number that is also in a configuration file.
+- Has praise, a mission or brand values.
+- Says "use common sense".
+- Grew by accumulation: nobody ever took anything out of it.
 
-## O teste final
+## The final test
 
-Leia a skill e pergunte: **o que exatamente eu faria diferente amanhã por causa desta linha?**
-Se a resposta for "nada de concreto", a linha sai.
+Read the skill and ask: **what exactly would I do differently tomorrow because of this line?**
+If the answer is "nothing concrete", the line goes.

@@ -1,202 +1,202 @@
-# Marchas e portões
+# Gears and gates
 
-Três marchas de rigor. A marcha é escolhida no Passo 0, antes de ler código, e é **declarada na
-resposta** ("Marcha Padrão: bugfix delimitado").
+Three gears of rigor. The gear is chosen in Step 0, before reading code, and is **declared in the
+answer** ("Standard gear: scoped bugfix").
 
-Lembrete do `SKILL.md` §2: **a marcha que você classifica é piso, nunca teto.** Se o projeto declarou
-o mapa `caminho → marcha` (`{{campo:marchas}}`), ele vence, e vence sempre para cima.
+Reminder from `SKILL.md` §2: **the gear you classify is a floor, never a cap.** If the project declared
+the `path → gear` map (`{{campo:marchas}}`), it wins, and always wins upward.
 
 ---
 
-## Passo -1 — quem mais está mexendo aqui
+## Step -1 — who else is working here
 
-**Antes de editar qualquer arquivo, em qualquer marcha**, rodar no repositório alvo:
+**Before editing any file, in any gear**, run in the target repository:
 
 ```
 git status --short
 ```
 
-Todo arquivo já modificado e não commitado **pertence a outra frente de trabalho** até prova em
-contrário. Não é rascunho abandonado, e não é convite.
+Every file already modified and not committed **belongs to another front of work** until proven
+otherwise. It is not an abandoned draft, and it is not an invitation.
 
-- **Não editar arquivo que já aparece modificado**, mesmo que a mudança seja "pequena" ou "óbvia".
-- Se o objetivo **exige** tocar num deles: parar e levar a `{{campo:quemDecide}}` no formato de 3
-  opções (`SKILL.md` §7). Isso é decisão dele, não julgamento técnico do agente.
-- **Reconferir no fecho.** O conjunto muda durante a tarefa: outra sessão abre arquivo novo enquanto
-  esta trabalha. O `git status` do começo não vale como evidência no fim.
-- **Listar na resposta** os arquivos de terceiros que foram deixados intocados. Isso prova que a
-  verificação aconteceu, e protege quem vier depois de achar que o diff é todo seu.
+- **Do not edit a file that already shows as modified**, even if the change is "small" or "obvious".
+- If the goal **requires** touching one of them: stop and take it to `{{campo:quemDecide}}` in the 3-option
+  format (`SKILL.md` §7). That is their decision, not the agent's technical judgment.
+- **Recheck at close-out.** The set changes during the task: another session opens a new file while this one
+  works. The `git status` from the start does not count as evidence at the end.
+- **List in the answer** the third-party files that were left untouched. This proves the check
+  happened, and protects whoever comes next from thinking the diff is all yours.
 
-**Um workspace pode ter vários repositórios.** `git status` na raiz **não enxerga** repositório
-aninhado que tenha o próprio `.git`. Rodar em cada repo que a tarefa toca, e listar os três estados
-separadamente. Confiar no status da raiz e editar dentro de um repo filho é como se edita, sem saber,
-54 linhas não commitadas de outra sessão.
+**A workspace can have several repositories.** `git status` at the root **does not see** a nested
+repository that has its own `.git`. Run it in each repo the task touches, and list the three states
+separately. Trusting the root status and editing inside a child repo is how you edit, unknowingly,
+54 uncommitted lines from another session.
 
-**Sinais de que há sessão concorrente**, mesmo sem ninguém avisar: arquivo de baseline modificado;
-teste de contrato modificado sem código correspondente; folha de estilo modificada sem tarefa de UI
-aberta; documento de log de decisões crescendo.
+**Signs that there is a concurrent session**, even if nobody warns: baseline file modified;
+contract test modified with no corresponding code; stylesheet modified with no UI task
+open; decision-log document growing.
 
-### Documento append-only com numeração sequencial
+### Append-only document with sequential numbering
 
-Log de decisões, changelog, registro de achados: **ler o último número no disco antes de escrever**,
-nunca no handoff nem na memória.
+Decision log, changelog, findings record: **read the last number on disk before writing**,
+never in the handoff nor in memory.
 
 ```
 grep -n "^[0-9]\+\. " <arquivo> | tail -3
 ```
 
-Handoff é uma foto do passado; com sessão concorrente, ele mente sobre o presente — e duas sessões
-que leem o mesmo handoff gravam **o mesmo número** para decisões diferentes. Se a colisão já
-aconteceu: renumerar **a sua** (a posterior no arquivo) e **nunca tocar no texto da outra sessão**.
-Provar com `git diff --numstat`: remoções = 0.
+A handoff is a photo of the past; with a concurrent session, it lies about the present — and two sessions
+that read the same handoff write **the same number** for different decisions. If the collision has already
+happened: renumber **yours** (the later one in the file) and **never touch the other session's text**.
+Prove it with `git diff --numstat`: removals = 0.
 
-**`git add` nominal, sempre.** Nunca `git add .` nem `-A` — a árvore tem arquivo de outra frente o
-tempo todo, e commitar arquivo compartilhado leva o trabalho da outra sessão junto. Isso é decisão de
-`{{campo:quemDecide}}`, não julgamento do agente.
+**`git add` by name, always.** Never `git add .` nor `-A` — the tree has another front's file
+all the time, and committing a shared file takes the other session's work along. That is the decision of
+`{{campo:quemDecide}}`, not the agent's judgment.
 
-**Nunca subir baseline de catraca** para fazer um teste passar. Além de mascarar dívida, arquivo de
-baseline é justamente o que uma frente de limpeza está editando — mexer nele é colisão quase
-garantida. A saída correta é remover a causa.
-
----
-
-## Marcha 1 — Rápida
-
-**Gatilho:** typo, texto de interface sem mudança de significado, comentário, docstring, rename
-local, formatação, config pontual. **Até 2 arquivos.** Zero lógica nova. Nada visível ao usuário muda
-de comportamento.
-
-**Agente:** o mais barato que resolve — camada de edição mecânica.
-
-**Portões:**
-- Menor diff possível; estilo do arquivo preservado.
-- `git diff --check` limpo.
-- Arquivos alterados listados na resposta.
-
-**Evidência mínima:** o diff e a lista de arquivos.
-
-**Não usar Rápida quando:** o texto alterado é um dos rótulos canônicos do produto
-(`{{texto:rotulosCanonicos}}`), ou a config tocada governa permissão, build, publicação ou endpoint.
-Isso é AAA. **Rótulo canônico não é detectável por caminho de arquivo** — é o agente que tem de
-reconhecer, e por isso está escrito aqui.
+**Never raise a ratchet baseline** to make a test pass. Besides masking debt, a baseline file
+is precisely what a cleanup front is editing — touching it is an almost
+guaranteed collision. The correct way out is to remove the cause.
 
 ---
 
-## Marcha 2 — Padrão
+## Gear 1 — Fast
 
-**Gatilho:** correção de bug de causa conhecida, feature de escopo claro, refactor delimitado a um
-módulo, teste novo, documentação técnica.
+**Trigger:** typo, interface text with no change of meaning, comment, docstring, local rename,
+formatting, one-off config. **Up to 2 files.** Zero new logic. Nothing visible to the user changes
+behavior.
 
-**Agente:** camada de desenvolvimento. Escala para raciocínio profundo se aparecer decisão
-arquitetural, bug de causa não isolada ou risco de segurança.
+**Agent:** the cheapest that solves it — mechanical-editing tier.
 
-**Portões:**
-- Contexto real lido antes de editar — código, não suposição.
-- Menor diff seguro; nomes, IDs, chaves de armazenamento e ordem de carga preservados.
-- **Uma revisão independente**: outro agente, sem herdar as conclusões do primeiro, olhando o diff.
-  **Nenhum mecanismo determinístico força isto** — é o portão da marcha Padrão que mais depende de
-  disciplina, e o primeiro a sumir quando a pressa aperta.
-- A prova de pronto da área afetada — `{{campo:provaDePronto}}`.
-- `git diff --check` limpo.
+**Gates:**
+- Smallest possible diff; file style preserved.
+- `git diff --check` clean.
+- Files changed listed in the answer.
 
-**Evidência mínima:** saída da prova de pronto colada, veredito do revisor, lista de arquivos.
+**Minimum evidence:** the diff and the file list.
 
-**Sobe para AAA quando:** durante a execução aparecer qualquer gatilho da marcha 3. A marcha pode
-subir no meio do caminho; nunca desce.
+**Do not use Fast when:** the changed text is one of the product's canonical labels
+(`{{texto:rotulosCanonicos}}`), or the config touched governs permission, build, publishing or an endpoint.
+That is AAA. **A canonical label is not detectable by file path** — it is the agent who has to
+recognize it, and that is why it is written here.
 
 ---
 
-## Marcha 3 — AAA
+## Gear 2 — Standard
 
-**Gatilho — qualquer um destes:**
+**Trigger:** bug fix with a known cause, feature of clear scope, refactor bounded to a
+module, new test, technical documentation.
 
-- mudança visível ao usuário (UI, layout, texto de estado, ícone);
-- release ou bump de versão;
-- mudança de contrato entre sistemas (verbo, auth, campo obrigatório, formato de resposta);
-- permissões, perfis, papéis, telas administrativas;
-- segurança, dados sensíveis, revogação, replay;
-- refactor amplo ou que cruze módulos;
-- **bug intermitente, ou que já resistiu a uma tentativa**;
-- execução de etapa de plano longo;
-- qualquer caminho que `{{campo:marchas}}` marque como AAA.
+**Agent:** development tier. Escalates to deep reasoning if an architectural decision, a bug
+of unisolated cause or a security risk appears.
 
-Note que **os três em destaque não são inferíveis do caminho do arquivo** — "já resistiu a uma
-tentativa", "é release", "é etapa de plano longo" são fatos da conversa, não do disco. Mecanismo
-nenhum os pega; o agente tem de declarar.
+**Gates:**
+- Real context read before editing — code, not assumption.
+- Smallest safe diff; names, IDs, storage keys and load order preserved.
+- **One independent review**: another agent, without inheriting the first one's conclusions, looking at the diff.
+  **No deterministic mechanism forces this** — it is the Standard-gear gate that depends most on
+  discipline, and the first to vanish when haste tightens.
+- The done-proof of the affected area — `{{campo:provaDePronto}}`.
+- `git diff --check` clean.
 
-**Agente:** camada de raciocínio profundo. A camada máxima no gate crítico — segurança, readiness de
-release, decisão de difícil reversão.
+**Minimum evidence:** output of the done-proof pasted, reviewer's verdict, file list.
 
-**Portões — todos obrigatórios:**
+**Rises to AAA when:** during execution any trigger of gear 3 appears. The gear can
+rise midway; it never goes down.
 
-1. **Plano escrito antes de editar**: objetivo, fora de escopo, arquivos prováveis, riscos, critério
-   de aceite. Para plano longo, **reler o trecho do plano no arquivo**, nunca de memória nem do
+---
+
+## Gear 3 — AAA
+
+**Trigger — any one of these:**
+
+- user-visible change (UI, layout, state text, icon);
+- release or version bump;
+- contract change between systems (verb, auth, required field, response format);
+- permissions, profiles, roles, admin screens;
+- security, sensitive data, revocation, replay;
+- broad refactor or one that crosses modules;
+- **intermittent bug, or one that has already resisted an attempt**;
+- execution of a stage of a long plan;
+- any path that `{{campo:marchas}}` marks as AAA.
+
+Note that **the three highlighted ones are not inferable from the file path** — "has already resisted an
+attempt", "is a release", "is a stage of a long plan" are facts of the conversation, not of the disk. No mechanism
+catches them; the agent has to declare.
+
+**Agent:** deep-reasoning tier. The maximum tier at the critical gate — security, release
+readiness, hard-to-reverse decision.
+
+**Gates — all mandatory:**
+
+1. **Plan written before editing**: goal, out of scope, likely files, risks, acceptance
+   criterion. For a long plan, **re-read the plan excerpt in the file**, never from memory nor from the
    handoff.
-2. **Contagem antes do brief**: grepar o repositório inteiro, não só os arquivos que já se pretende
-   tocar, e colocar a contagem por arquivo no brief. Brief com número errado gera escopo errado.
-3. **Loop de inspeção cega** — as lentes da mudança (dez de código, oito de tela), teto de 3
-   rondas, parada em 2 rondas secas. Ver [03-inspecao-cega.md](03-inspecao-cega.md).
-4. **A prova de pronto completa** — `{{campo:provaDePronto}}`, sem parar no primeiro erro, para ver
-   todas as falhas de uma vez. **Separar falha nova de falha pré-existente com evidência** — rodar
-   antes de editar, ou mostrar que os arquivos lidos pelo teste que falhou não estão no diff. "Já
-   falhava" sem prova é suposição, e é assim que uma regressão entra despercebida.
-5. **Um punhado de testes citados não é aprovação.** Se a suíte do projeto for grande, passar em três
-   contratos rápidos dá sinal cedo e **não** prova nada: classes inteiras de erro ficam fora deles.
-   Só a prova de pronto completa fecha o portão.
-6. **Evidência visual quando houver mudança visual — se o projeto tiver como gerá-la.**
-   **Passo 0 do portão, nesta ordem:** (a) existe gerador para esta área? (b) o ambiente responde?
-   Se qualquer resposta for não, **declarar no plano, antes de executar**, que a lente 3 vai rodar por
-   leitura de código e estilo. Descobrir isso no fecho já é tarde — o plano prometeu evidência que
-   não existia. Com gerador, a regressão de tela se prova por **comparação automática de print antes
-   × depois** das mesmas telas e viewports, apontando o que mudou fora do pedido; sem o instrumento,
-   declarar que a comparação foi a olho.
-7. **Gate de release** se o artefato publicável mudou.
-8. **Documentação no mesmo conjunto de mudanças**: toda função visível nova atualiza permissões,
-   telas administrativas, ajuda, testes e docs juntos. O par "tocou X, tem de ter tocado Y" está em
+2. **Count before the brief**: grep the whole repository, not only the files you already intend to
+   touch, and put the per-file count in the brief. A brief with a wrong number produces wrong scope.
+3. **Blind inspection loop** — the lenses of the change (ten for code, eight for screen), cap of 3
+   rounds, stop at 2 dry rounds. See [03-inspecao-cega.md](03-inspecao-cega.md).
+4. **The complete done-proof** — `{{campo:provaDePronto}}`, without stopping at the first error, to see
+   all the failures at once. **Separate a new failure from a pre-existing one with evidence** — run
+   before editing, or show that the files read by the failing test are not in the diff. "It already
+   failed" without proof is an assumption, and that is how a regression gets in unnoticed.
+5. **A handful of cited tests is not approval.** If the project's suite is large, passing three quick
+   contracts gives an early signal and proves **nothing**: whole classes of error stay outside them.
+   Only the complete done-proof closes the gate.
+6. **Visual evidence when there is a visual change — if the project has a way to generate it.**
+   **Step 0 of the gate, in this order:** (a) is there a generator for this area? (b) does the environment respond?
+   If either answer is no, **declare in the plan, before executing**, that lens 3 will run by
+   reading code and style. Discovering this at close-out is already too late — the plan promised evidence that
+   did not exist. With a generator, screen regression is proven by **automatic comparison of screenshots before
+   × after** of the same screens and viewports, pointing out what changed outside the request; without the instrument,
+   declare that the comparison was by eye.
+7. **Release gate** if the publishable artifact changed.
+8. **Documentation in the same change set**: every new visible feature updates permissions,
+   admin screens, help, tests and docs together. The pair "touched X, must have touched Y" is in
    [05-governanca.md](05-governanca.md).
-9. **Decisão humana no fecho** quando houver risco aberto, escolha de produto, ou release.
+9. **Human decision at close-out** when there is open risk, a product choice, or a release.
 
-**Evidência mínima:** saída de cada comando colada, vereditos das rondas com contagem de agentes,
-caminho dos artefatos gerados, e a lista do que **não** rodou com o motivo.
+**Minimum evidence:** output of each command pasted, verdicts of the rounds with agent count,
+path of the generated artifacts, and the list of what did **not** run with the reason.
 
-**Entrega do fecho que não bloqueia — roteiro de teste de uso, em função visível nova.** Não é
-portão: o fecho sai sem ele esperar resposta, mas o roteiro vai ao dono junto. A tarefa que o usuário
-vai fazer, em uma frase; 5 usuários reais, um de cada vez, fazendo sem ajuda enquanto alguém observa
-calado; anotar onde cada um travou. Cinco acham a maior parte dos problemas de uso (cerca de 85%, pela
-curva de Nielsen e Landauer); mais que isso repete o já visto.
+**Close-out deliverable that does not block — usage-test script, for a new visible feature.** It is not a
+gate: the close-out goes out without waiting for an answer, but the script goes to the owner along with it. The task the user
+will do, in one sentence; 5 real users, one at a time, doing it without help while someone watches
+silently; note where each one got stuck. Five find most of the usability problems (about 85%, by the
+Nielsen and Landauer curve); more than that repeats what was already seen.
 
 ---
 
-## Regra de dúvida — os dois eixos
+## Doubt rule — the two axes
 
-| Eixo | Regra |
+| Axis | Rule |
 |---|---|
-| Qual **modelo** usar | Na dúvida, o mais barato. Os agentes escalam sozinhos. |
-| Qual **marcha** aplicar | Na dúvida, a mais rigorosa. |
+| Which **model** to use | When in doubt, the cheapest. Agents escalate on their own. |
+| Which **gear** to apply | When in doubt, the strictest. |
 
-Não são a mesma decisão. Um agente barato executando um texto de estado de erro numa tela visível é
-modelo barato em marcha AAA — portão completo. Isso é o desenho correto, não uma contradição.
+They are not the same decision. A cheap agent executing an error-state text on a visible screen is
+a cheap model in AAA gear — full gate. That is the correct design, not a contradiction.
 
 ---
 
-## Delegação
+## Delegation
 
-- Perguntas conversacionais ou que já se sabe responder: responder direto, sem delegar.
-- **Busca e leitura vão para a camada mais barata que sabe ler** — localizar arquivo, achar função,
-  responder "onde está X", mapear estrutura. É a delegação mais fácil de esquecer, e a mais barata.
-- **Agente que edita por casamento exato de texto não vai para o degrau mais barato**, e sim para o do
-  meio. A edição que falha vira escalada, e escalada refaz a tarefa inteira: um único retrabalho anula
-  a diferença de preço entre os dois degraus. Busca e leitura, que não editam, seguem no mais barato.
-- **Subagente que cai com limite de uso (erro 429) não espera o reset: relance o mesmo brief em outro
-  modelo.** O limite é por modelo, e trocar destrava na hora. Registre que a ronda mudou de modelo e
-  **conte o agente caído** no total declarado — custo é informação. Modelo mais barato serve para ronda
-  de verificação, com pergunta específica e fatos já provados no brief; não para a primeira ronda, que
-  é a que descobre.
-- Tarefas independentes podem ir em paralelo para agentes diferentes, num único disparo.
-- Após delegar, **repassar ao usuário o resultado relevante** — o relatório do subagente não aparece
-  para ele. Nenhum mecanismo garante isso; é regra de texto e some se não for lembrada.
-- **Relatório de subagente é alegação, não fato.** Conferir antes de agir sobre ele — sobretudo
-  quando o parecer contradiz uma medição sua. Ver a regra do medidor em
+- Conversational questions or ones already known how to answer: answer directly, without delegating.
+- **Search and reading go to the cheapest rung that can read** — locate a file, find a function,
+  answer "where is X", map structure. It is the delegation easiest to forget, and the cheapest.
+- **An agent that edits by exact text match does not go to the cheapest rung**, but to the middle
+  one. A failed edit becomes an escalation, and escalation redoes the whole task: a single rework cancels
+  the price difference between the two rungs. Search and reading, which do not edit, stay on the cheapest.
+- **A subagent that falls over with a usage limit (error 429) does not wait for the reset: relaunch the same brief on another
+  model.** The limit is per model, and switching unblocks at once. Record that the round changed model and
+  **count the fallen agent** in the declared total — cost is information. A cheaper model fits a verification
+  round, with a specific question and facts already proven in the brief; not the first round, which
+  is the one that discovers.
+- Independent tasks can go in parallel to different agents, in a single dispatch.
+- After delegating, **pass the relevant result on to the user** — the subagent's report does not appear
+  to them. No mechanism guarantees this; it is a text rule and it vanishes if not remembered.
+- **A subagent report is a claim, not a fact.** Check it before acting on it — above all
+  when the opinion contradicts a measurement of yours. See the meter rule in
   [04-verificacao.md](04-verificacao.md).
-- Se subagentes estiverem indisponíveis, aplicar o mesmo ciclo no agente controlador — tarefa
-  isolada, auto-revisão explícita, verificação — e **registrar a limitação**.
+- If subagents are unavailable, apply the same cycle in the controlling agent — isolated
+  task, explicit self-review, verification — and **record the limitation**.

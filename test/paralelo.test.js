@@ -50,19 +50,19 @@ test('paralelo: o script nao usa o que o runtime proibe (relogio, acaso, modulo,
 
 test('paralelo: sem tarefas, para antes de gastar agente e diz como chamar', async () => {
   for (const a of [undefined, [], {}, { tarefas: [] }, 'texto solto']) {
-    await assert.rejects(rodar(a), /passe args como lista de tarefas/, JSON.stringify(a));
+    await assert.rejects(rodar(a), /pass args as a list of tasks/, JSON.stringify(a));
   }
-  await assert.rejects(rodar([{ tarefa: '  ' }]), /tarefa 1 sem texto/);
-  await assert.rejects(rodar([{ tarefa: 'a', modelo: 'fable' }]), /modelo "fable" fora de haiku\/sonnet\/opus/);
-  await assert.rejects(rodar([{ tarefa: 'a', esforco: 'max' }]), /esforco "max" fora/);
-  await assert.rejects(rodar({ tarefas: ['a'], teto: 0 }), /teto tem de ser inteiro/);
+  await assert.rejects(rodar([{ tarefa: '  ' }]), /task 1 has no text/);
+  await assert.rejects(rodar([{ tarefa: 'a', modelo: 'fable' }]), /modelo "fable" not in haiku\/sonnet\/opus/);
+  await assert.rejects(rodar([{ tarefa: 'a', esforco: 'max' }]), /esforco "max" not in/);
+  await assert.rejects(rodar({ tarefas: ['a'], teto: 0 }), /teto must be an integer/);
   // revisao cega da 0.6.2: "true" em texto rodava como leitura, em haiku e sem copia isolada, calado
   for (const v of ['true', 1, 'sim', null]) {
-    await assert.rejects(rodar([{ tarefa: 'a', edita: v }]), /tarefa 1: edita .* tem de ser true ou false/, JSON.stringify(v));
+    await assert.rejects(rodar([{ tarefa: 'a', edita: v }]), /task 1: edita .* must be true or false/, JSON.stringify(v));
   }
   // ronda 2: chave com nome errado era ignorada calada ("edit": true rodava sem copia isolada)
-  await assert.rejects(rodar([{ tarefa: 'a', edit: true }]), /tarefa 1: chave "edit" desconhecida/);
-  await assert.rejects(rodar([{ tarefa: 'a', model: 'opus' }]), /chave "model" desconhecida; as chaves sao tarefa, edita, modelo, esforco/);
+  await assert.rejects(rodar([{ tarefa: 'a', edit: true }]), /task 1: unknown key "edit"/);
+  await assert.rejects(rodar([{ tarefa: 'a', model: 'opus' }]), /unknown key "model"; the keys are tarefa, edita, modelo, esforco/);
   const ok = await rodar([{ tarefa: 'a', edita: false }]);
   assert.strictEqual(ok.chamadas[0].opts.model, 'haiku');
 });
@@ -79,9 +79,9 @@ test('paralelo: modelo barato por padrao (haiku le, sonnet edita) e worktree so 
   assert.deepStrictEqual(chamadas.map((c) => c.opts.isolation), [undefined, 'worktree', undefined]);
   assert.ok(chamadas.every((c) => c.opts.schema && c.opts.schema.required.indexOf('evidencia') !== -1), 'todo agente devolve evidencia');
   assert.ok(/ondeFicou/.test(chamadas[1].prompt) && !/ondeFicou/.test(chamadas[0].prompt), 'so quem edita diz onde ficou a copia');
-  assert.ok(chamadas.every((c) => /Nao faca commit/.test(c.prompt)), 'nenhum agente commita');
+  assert.ok(chamadas.every((c) => /Do not commit/.test(c.prompt)), 'nenhum agente commita');
   // D452: tarefa de leitura (texto solto ou edita false) nao pode editar a arvore viva, que nao tem copia isolada
-  const leitura = /so de leitura: nao crie, edite nem apague arquivo/;
+  const leitura = /This task is read-only: do not create, edit or delete files/;
   assert.ok(leitura.test(chamadas[0].prompt) && leitura.test(chamadas[2].prompt), 'quem le e proibido de editar');
   assert.ok(!leitura.test(chamadas[1].prompt), 'quem edita nao recebe a proibicao');
   assert.ok(/"edita": true/.test(chamadas[0].prompt), 'diz como pedir a edicao: ' + chamadas[0].prompt);
@@ -122,12 +122,12 @@ test('paralelo: o agente leve avisa que Measure-Object -Line pula linha vazia (D
   const corpo = t.replace(/^---\r?\n[\s\S]*?\r?\n---/, '');
   const linha = corpo.split(/\r?\n/).find((l) => /Measure-Object -Line/.test(l)) || '';
   assert.ok(linha, 'o corpo do leitor nao cita Measure-Object -Line');
-  assert.ok(/pula linha vazia/.test(linha), 'a linha nao diz que pula linha vazia: ' + linha);
+  assert.ok(/skips empty lines/.test(linha), 'a linha nao diz que pula linha vazia: ' + linha);
   assert.ok(/wc -l/.test(corpo) && /\(Get-Content -LiteralPath [^)]*\)\.Count/.test(corpo),
     'o leitor nao diz como contar certo nos dois shells');
   // revisao cega da 0.6.5, ronda 2: sem quebra de linha no fim, `wc -l` da 1 e `.Count` da 2 (medido em 'a\nb')
-  const fim = corpo.split(/\r?\n/).find((l) => /quebra de linha/.test(l)) || '';
-  assert.ok(/wc -l/.test(fim) && /uma a menos/.test(fim) && /qual comando usou/.test(fim),
+  const fim = corpo.split(/\r?\n/).find((l) => /line break/.test(l)) || '';
+  assert.ok(/wc -l/.test(fim) && /one less/.test(fim) && /which command you used/.test(fim),
     'o leitor nao avisa que wc -l e .Count divergem sem quebra de linha no fim: ' + fim);
 });
 
@@ -136,7 +136,7 @@ test('paralelo: teto de 8 por padrao, 16 no maximo, e o que ficou de fora e dito
   const a = await rodar(dez);
   assert.strictEqual(a.chamadas.length, 8);
   assert.deepStrictEqual(a.r.naoRodaram.map((t) => t.n), [9, 10]);
-  assert.ok(a.logs.some((l) => /NAO rodaram: 9, 10/.test(l)), JSON.stringify(a.logs));
+  assert.ok(a.logs.some((l) => /did NOT run: 9, 10/.test(l)), JSON.stringify(a.logs));
   const vinte = Array.from({ length: 20 }, (_, i) => 'tarefa ' + (i + 1));
   const b = await rodar({ tarefas: vinte, teto: 50 });
   assert.strictEqual(b.chamadas.length, 16, 'teto acima de 16 vira 16');
@@ -152,9 +152,9 @@ test('paralelo: agente que morre vira respondeu false, e o resultado volta como 
   assert.strictEqual(r.resultados[0].respondeu, true);
   assert.strictEqual(r.resultados[0].resumo, 'feito a');
   assert.strictEqual(r.resultados[1].respondeu, false);
-  assert.ok(/pulado|morreu/.test(r.resultados[1].motivo), 'null diz o porque: ' + r.resultados[1].motivo);
+  assert.ok(/skipped|died/.test(r.resultados[1].motivo), 'null diz o porque: ' + r.resultados[1].motivo);
   assert.strictEqual(r.resultados[0].motivo, undefined, 'quem respondeu nao ganha motivo');
-  assert.ok(/alegacao/.test(r.aviso) && /confira/.test(r.aviso), r.aviso);
+  assert.ok(/claim/.test(r.aviso) && /check/.test(r.aviso), r.aviso);
 });
 
 test('paralelo: agente que lanca erro vira respondeu false COM a mensagem do erro (revisao cega da 0.6.2)', async () => {

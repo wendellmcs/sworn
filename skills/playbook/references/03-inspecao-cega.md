@@ -1,95 +1,96 @@
-# Protocolo de inspeção cega
+# Blind inspection protocol
 
-O rito que transforma "revisar" em veredito com evidência.
-
----
-
-## 1. Preparar o material
-
-**Baseline (o padrão de comparação).** Sempre dois elementos, nomeados na resposta:
-
-1. os valores literais da régua declarada — `{{texto:reguaDeComparacao}}`;
-2. o artefato irmão de melhor acabamento **já aprovado** — `{{texto:artefatoDeReferencia}}`.
-
-Se o projeto não declarou nenhum dos dois, **dizer isso ao inspetor**. Ele passa a julgar
-consistência interna, e o veredito sai marcado como "sem régua externa". Inspetor sem baseline que
-não sabe que está sem baseline inventa uma, e a dele nunca é a sua.
-
-**Artefatos.** Para mudança visual, gerar as imagens por viewport antes e depois. Para mudança de
-código, o diff e os arquivos tocados.
-
-### Integridade do artefato — verificar ANTES de despachar
-
-Artefato mutilado produz veredito inválido, e o inspetor não tem como saber que foi mutilado. Ele
-reporta o corte como se fosse defeito do código, e o voto dele contamina a ronda inteira.
-
-**Regra: entregar o arquivo inteiro.** Comparar duas versões? `git show HEAD:<path>` de um lado, o
-arquivo do disco do outro. Sem fatiar. A exceção é o recorte que o `/sworn:review` faz sozinho nas
-faixas pequenas: ele marca cada vão, mantém os números de linha e avisa o inspetor.
-
-**Se precisar fatiar** — arquivo grande demais, ou o alvo é um trecho isolado — então, antes de
-despachar:
-
-- a fatia começa e termina em **fronteira de função**, nunca no meio de uma;
-- a **mesma** fronteira lógica nos dois lados (não a mesma linha: a versão nova é mais longa, e
-  cortar as duas em `[224..350]` decapita a nova);
-- conferir que toda função citada no brief está **completa** na fatia;
-- avisar o inspetor de que é um recorte, e de qual escopo — para ele reportar "não consigo ver" em
-  vez de "está ausente".
-
-**Cegar.** Antes de entregar ao inspetor:
-
-- renomear para `A` e `B`, sem "antes"/"depois", sem número de versão, sem data no nome;
-- **alternar a ordem** entre inspetores — `A` nem sempre é o mesmo lado;
-- remover do brief qualquer menção de autoria ("implementei", "minha mudança", "o novo");
-- não dizer qual resultado se espera.
-
-O inspetor que sabe qual lado é o "novo" confirma o trabalho em vez de julgá-lo.
-
-### O que a cegueira não esconde
-
-A cegueira é parcial, e fingir que é total leva a confiar demais no placar:
-
-- **Contagem de linhas.** O lado que ganhou código é maior. 667 contra 631 entrega o jogo a quem
-  reparar.
-- **Comentário que descreve a correção.** Um `// isso ficava girando para sempre` diz qual lado é o
-  depois. Não é motivo para tirar o comentário do código — é motivo para não confiar cegamente no
-  voto.
-- **Ler o repositório vivo.** Se o inspetor abrir o arquivo em disco, ele vê qual variante está lá.
-
-### A proibição, e a exceção que a torna útil
-
-**Proibir explicitamente:** abrir os arquivos de código do repositório, ler o histórico de commits,
-abrir plano, handoff ou log de decisões. Fazer qualquer um desses **invalida o veredito dele**.
-
-**Permitir explicitamente, e mandar usar:** os documentos de referência que definem a régua. O
-inspetor precisa deles para julgar contra algo que não seja o próprio gosto. Proibir tudo em bloco
-produz inspetor sem critério, que é o mesmo que inspetor inútil.
-
-**Avisar quando a fonte de referência estiver congelada de propósito.** Se a régua está deliberadamente
-atrasada em relação ao código — porque uma migração está em curso, por exemplo — e ninguém avisar, o
-inspetor reporta a defasagem inteira como achado, e a ronda vira ruído.
-
-Consequência prática: o placar A/B é sinal, **não prova**. O que vale no veredito é o achado com
-`arquivo:linha`, que se sustenta sozinho. Um "MELHOR: B" sem achado citado não vale nada — e um
-achado bem evidenciado vale mesmo que o inspetor tenha adivinhado os lados.
+The rite that turns "review" into a verdict with evidence.
 
 ---
 
-## 2. Despachar as lentes
+## 1. Prepare the material
 
-Uma lente por inspetor, **lentes distintas**, nunca cópias do mesmo revisor. São duas famílias: as
-oito lentes de tela, com lista e critérios em [02-rubrica-aaa.md](02-rubrica-aaa.md), e as dez
-lentes de código do `/sworn:review`. Só as lentes aplicáveis ao tipo de mudança — tabela no
-fim daquele arquivo.
+**Baseline (the comparison standard).** Always two elements, named in the answer:
 
-Cada inspetor recebe: os artefatos A/B, a sua lente (uma só), o baseline nomeado, a proibição e a
-exceção da §1, e a instrução de **tentar reprovar**. O default do inspetor é encontrar problema, não
-aprovar.
+1. the literal values of the declared ruler — `{{texto:reguaDeComparacao}}`;
+2. the sibling artifact with the best finish that is **already approved** — `{{texto:artefatoDeReferencia}}`.
+
+If the project declared neither, **tell the inspector so**. It then judges internal consistency, and
+the verdict comes out marked "no external ruler". An inspector with no baseline that doesn't know it
+has none invents one, and its baseline is never yours.
+
+**Artifacts.** For a visual change, generate the images per viewport before and after. For a code
+change, the diff and the touched files.
+
+### Artifact integrity — check BEFORE dispatching
+
+A mutilated artifact produces an invalid verdict, and the inspector has no way to know it was
+mutilated. It reports the cut as if it were a code defect, and its vote contaminates the whole round.
+
+**Rule: hand over the whole file.** Comparing two versions? `git show HEAD:<path>` on one side, the
+file on disk on the other. No slicing. The exception is the cut that `/sworn:review` makes by itself
+on small bands: it marks each gap, keeps the line numbers and warns the inspector.
+
+**If you need to slice** — file too big, or the target is an isolated stretch — then, before
+dispatching:
+
+- the slice starts and ends on a **function boundary**, never in the middle of one;
+- the **same** logical boundary on both sides (not the same line: the new version is longer, and
+  cutting both at `[224..350]` decapitates the new one);
+- check that every function cited in the brief is **complete** in the slice;
+- tell the inspector it is a cut, and of what scope — so it reports "can't see" instead of
+  "absent".
+
+**Blinding.** Before handing over to the inspector:
+
+- rename to `A` and `B`, with no "before"/"after", no version number, no date in the name;
+- **alternate the order** between inspectors — `A` is not always the same side;
+- remove from the brief any mention of authorship ("I implemented", "my change", "the new one");
+- don't say which result is expected.
+
+An inspector that knows which side is the "new" one confirms the work instead of judging it.
+
+### What blinding does not hide
+
+Blinding is partial, and pretending it is total leads to trusting the score too much:
+
+- **Line count.** The side that gained code is bigger. 667 against 631 gives the game away to whoever
+  notices.
+- **A comment that describes the fix.** A `// isso ficava girando para sempre` says which side is the
+  after. It is not a reason to remove the comment from the code — it is a reason not to trust the
+  vote blindly.
+- **Reading the live repository.** If the inspector opens the file on disk, it sees which variant is
+  there.
+
+### The prohibition, and the exception that makes it useful
+
+**Explicitly forbid:** opening the repository's code files, reading the commit history, opening the
+plan, handoff or decision log. Doing any of these **invalidates its verdict**.
+
+**Explicitly allow, and tell it to use:** the reference documents that define the ruler. The
+inspector needs them to judge against something other than its own taste. Forbidding everything in
+bulk produces an inspector with no criteria, which is the same as a useless inspector.
+
+**Warn when the reference source is frozen on purpose.** If the ruler is deliberately behind the
+code — because a migration is under way, for example — and nobody warns, the inspector reports the
+whole lag as a finding, and the round turns into noise.
+
+Practical consequence: the A/B score is a signal, **not proof**. What counts in the verdict is the
+finding with `arquivo:linha`, which stands on its own. A "MELHOR: B" with no cited finding is worth
+nothing — and a well-evidenced finding is worth something even if the inspector guessed the sides.
 
 ---
 
-## 3. Formato do veredito
+## 2. Dispatch the lenses
+
+One lens per inspector, **distinct lenses**, never copies of the same reviewer. There are two
+families: the eight screen lenses, with list and criteria in [02-rubrica-aaa.md](02-rubrica-aaa.md),
+and the ten code lenses of `/sworn:review`. Only the lenses that apply to the type of change — table
+at the end of that file.
+
+Each inspector receives: the A/B artifacts, its lens (just one), the named baseline, the prohibition
+and the exception from §1, and the instruction to **try to fail it**. The inspector's default is to
+find a problem, not to approve.
+
+---
+
+## 3. Verdict format
 
 ```
 LENTE: <nome>
@@ -99,99 +100,103 @@ ACHADOS:
   - [P0|P1|P2] <descrição> — evidência: <arquivo:linha> ou <viewport + coordenada do print>
 ```
 
-**Regra anti-teatro.** Veredito sem achado citado com evidência **não conta no cômputo da ronda**.
-Elogio não é resultado. Se o inspetor não encontrou nada, ele diz o que procurou e onde procurou.
+**Anti-theater rule.** A verdict without a finding cited with evidence **does not count in the
+round's tally**. Praise is not a result. If the inspector found nothing, it says what it looked for
+and where it looked.
 
 ---
 
-## 4. Convergência
+## 4. Convergence
 
-- **Ronda seca** = nenhum achado novo de severidade **P1 ou acima**.
-- **Duas rondas secas consecutivas** → aprovado. Encerra o loop.
-- **Teto de 3 rondas.**
-- Terceira ronda com **P0 ou P1 aberto** → **parar**. Levar a `{{campo:quemDecide}}` com três opções
-  (formato no `SKILL.md` §7) e registrar o que sobrou em `{{texto:ondeRegistrar}}`.
-- **P2 nunca reabre ronda.** Vira registro, não vira correção.
+- **Dry round** = no new finding of severity **P1 or above**.
+- **Two consecutive dry rounds** → approved. The loop ends.
+- **Cap of 3 rounds.**
+- Third round with **P0 or P1 open** → **stop**. Take it to `{{campo:quemDecide}}` with three options
+  (format in `SKILL.md` §7) and record what is left in `{{texto:ondeRegistrar}}`.
+- **P2 never reopens a round.** It becomes a record, not a fix.
 
-Entre rondas: corrigir apenas P0 e P1, e apenas dentro do escopo pedido. Corrigir P2 é o começo do
-scope creep que os guarda-corpos proíbem.
+Between rounds: fix only P0 and P1, and only within the requested scope. Fixing P2 is the start of
+the scope creep that the guardrails forbid.
 
-### Quando o conserto vira o defeito
+### When the fix becomes the defect
 
-Se o achado da ronda N atinge **a correção feita na ronda N-1**, o loop parou de convergir e virou
-uma sequência de remendos. Sinal duro: aconteceu duas rondas seguidas.
+If the round N finding hits **the fix made in round N-1**, the loop stopped converging and turned
+into a sequence of patches. Hard signal: it happened two rounds in a row.
 
-**A saída não é uma ronda a mais.** É parar de consertar e rodar **uma varredura adversarial única
-sobre a causa** — enumerar a classe inteira do defeito antes de escrever a próxima linha de conserto.
-Um rito de 3 rondas que vira um de 12 não descobriu mais coisas: descobriu o próprio desenho, tarde.
+**The way out is not one more round.** It is to stop fixing and run **a single adversarial sweep over
+the cause** — enumerate the whole class of the defect before writing the next line of fix. A
+3-round rite that becomes a 12-round one didn't discover more things: it discovered its own design,
+late.
 
-Se mesmo assim não fechar, isso é decisão de `{{campo:quemDecide}}`, com três opções — e uma delas é
-sempre "fechar com o defeito registrado e não corrigido".
+If it still doesn't close, that is a decision for `{{campo:quemDecide}}`, with three options — and
+one of them is always "close with the defect recorded and not fixed".
 
-### Estreitar as rondas seguintes — a ronda 1 é a cara
+### Narrow the following rounds — round 1 is the expensive one
 
-A ronda 1 roda **todas** as lentes aplicáveis: é ela que descobre. As seguintes **verificam**, e
-verificar é mais barato que descobrir.
+Round 1 runs **all** applicable lenses: it is the one that discovers. The following ones **verify**,
+and verifying is cheaper than discovering.
 
-**Ronda 2+ chama apenas as lentes que tiveram achado P0/P1 contra o próprio trabalho.** Lente que só
-reportou defeito pré-existente, ou que aprovou sem ressalva, não volta.
+**Round 2+ calls only the lenses that had a P0/P1 finding against the work itself.** A lens that only
+reported a pre-existing defect, or that approved with no caveat, doesn't come back.
 
-Ordem de grandeza para uma mudança pequena: 8 na ronda 1, 4 a 5 na ronda 2, 2 a 3 na ronda 3.
-Repetir 8 em toda ronda é ~24 agentes para um alvo de 40 linhas — desproporcional, e a evidência não
-melhora.
+Order of magnitude for a small change: 8 in round 1, 4 to 5 in round 2, 2 to 3 in round 3.
+Repeating 8 in every round is ~24 agents for a 40-line target — disproportionate, and the evidence
+doesn't improve.
 
-**Reformular o brief da lente que reincidir.** Se a lente 4 achou um atributo de estado preso, a
-ronda 2 dela não pede "inspecione acessibilidade" de novo: pede **rastrear o ciclo de vida do
-atributo em cada caminho de execução, com os números de linha de cada set e cada reset**. Pergunta
-específica devolve resposta verificável; pergunta genérica devolve o mesmo parecer da ronda anterior.
+**Rewrite the brief of the lens that relapses.** If lens 4 found a stuck state attribute, its round 2
+doesn't ask "inspect accessibility" again: it asks to **trace the attribute's lifecycle in every
+execution path, with the line numbers of each set and each reset**. A specific question returns a
+verifiable answer; a generic question returns the same opinion as the previous round.
 
-**Declarar o total ao usuário.** Quantos agentes por ronda, e quantos no total.
+**Declare the total to the user.** How many agents per round, and how many in total.
 
-### Achado repetido não reabre ronda
+### A repeated finding does not reopen a round
 
-Uma lente que reafirma na ronda 2 o mesmo achado da ronda 1 — mesma evidência, mesmo `arquivo:linha`
-— **não** torna a ronda molhada. Ronda seca é ausência de achado **novo** de P1 ou acima.
+A lens that restates in round 2 the same finding from round 1 — same evidence, same `arquivo:linha` —
+does **not** make the round wet. A dry round is the absence of a **new** finding of P1 or above.
 
-Sem essa regra o loop nunca converge: um achado fora de escopo, corretamente registrado e corretamente
-não corrigido, reapareceria em toda ronda e consumiria o teto de 3 sozinho.
+Without this rule the loop never converges: an out-of-scope finding, correctly recorded and correctly
+not fixed, would reappear in every round and consume the cap of 3 by itself.
 
-Achado que **volta com evidência diferente** é novo. Achado que volta idêntico é o mesmo achado.
-
----
-
-## 5. A lente pode errar a medição, não só o julgamento
-
-Parecer de lente **não vence medição própria** — mesmo lente cara, mesmo achado marcado P0.
-
-Um inspetor que conta ocorrências, mede largura ou afirma cobertura está **medindo**, e medição de
-lente tem o mesmo defeito de qualquer medidor: pode estar contando a coisa errada. Antes de aceitar
-um número que vem de um parecer, reproduzir o número. Se divergir, **o instrumento é o suspeito
-primeiro** — ver a regra do medidor em [04-verificacao.md](04-verificacao.md).
-
-Isto não é desconfiança do modelo: é a mesma regra que se aplica a qualquer ferramenta nova.
+A finding that **comes back with different evidence** is new. A finding that comes back identical is
+the same finding.
 
 ---
 
-## 6. O que reportar ao usuário
+## 5. The lens can get the measurement wrong, not just the judgment
 
-- quantas rondas rodaram e por que parou (2 secas / teto atingido);
-- **quantos agentes rodaram por ronda** — custo é informação;
-- achados P0/P1 corrigidos, com o diff;
-- achados P2 registrados, com o caminho do registro;
-- o que **não** foi inspecionado e por quê.
+A lens's opinion **does not beat your own measurement** — even an expensive lens, even a finding
+marked P0.
+
+An inspector that counts occurrences, measures width or asserts coverage is **measuring**, and a
+lens's measurement has the same defect as any gauge: it may be counting the wrong thing. Before
+accepting a number that comes from an opinion, reproduce the number. If it diverges, **the instrument
+is the first suspect** — see the gauge rule in [04-verificacao.md](04-verificacao.md).
+
+This is not distrust of the model: it is the same rule that applies to any new tool.
 
 ---
 
-## 7. Script de referência
+## 6. What to report to the user
 
-Modelo para um orquestrador de subagentes. Ajustar as lentes ao tipo de mudança; **não** rodar as
-oito quando só quatro se aplicam.
+- how many rounds ran and why it stopped (2 dry / cap reached);
+- **how many agents ran per round** — cost is information;
+- P0/P1 findings fixed, with the diff;
+- P2 findings recorded, with the path of the record;
+- what was **not** inspected and why.
+
+---
+
+## 7. Reference script
+
+Template for a subagent orchestrator. Adjust the lenses to the type of change; **don't** run all
+eight when only four apply.
 
 ```javascript
 export const meta = {
   name: 'inspecao-cega-aaa',
-  description: 'Loop de inspecao cega do Padrao AAA - lentes distintas, teto de 3 rondas',
-  phases: [{ title: 'Inspecionar' }, { title: 'Consolidar' }],
+  description: 'AAA Standard blind inspection loop - distinct lenses, cap of 3 rounds',
+  phases: [{ title: 'Inspect' }, { title: 'Consolidate' }],
 }
 
 const LENTES = [
@@ -226,18 +231,18 @@ const historico = []
 let secas = 0
 
 for (let ronda = 1; ronda <= 3 && secas < 2; ronda++) {
-  phase('Inspecionar')
+  phase('Inspect')
   const vereditos = (await parallel(LENTES.map((lente, i) => () =>
     agent(
-      `Inspecione os artefatos A e B pela lente "${lente}".\n` +
-      `Voce NAO sabe qual e o anterior. Ordem embaralhada: ${i % 2 ? 'B primeiro' : 'A primeiro'}.\n` +
-      `Baseline: a regua declarada pelo projeto + o artefato de referencia aprovado.\n` +
-      `Criterios: a secao da sua lente na rubrica das oito lentes de tela.\n` +
-      `PROIBIDO abrir arquivos de codigo do repositorio, historico de commits, plano ou handoff.\n` +
-      `PERMITIDO e recomendado ler os documentos de referencia que definem a regua.\n` +
-      `Seu default e REPROVAR. Todo achado cita arquivo:linha ou viewport+coordenada.\n` +
-      `Achado sem evidencia citada nao conta.`,
-      { label: `ronda${ronda}:${lente}`, phase: 'Inspecionar', schema: VEREDITO }
+      `Inspect artifacts A and B through the lens "${lente}".\n` +
+      `You do NOT know which one is the previous one. Shuffled order: ${i % 2 ? 'B first' : 'A first'}.\n` +
+      `Baseline: the ruler declared by the project + the approved reference artifact.\n` +
+      `Criteria: the section of your lens in the rubric of the eight screen lenses.\n` +
+      `FORBIDDEN to open the repository's code files, commit history, plan or handoff.\n` +
+      `ALLOWED and recommended: read the reference documents that define the ruler.\n` +
+      `Your default is to FAIL it. Every finding cites arquivo:linha or viewport+coordinate.\n` +
+      `A finding without cited evidence does not count.`,
+      { label: `round${ronda}:${lente}`, phase: 'Inspect', schema: VEREDITO }
     )
   ))).filter(Boolean)
 
@@ -250,10 +255,10 @@ for (let ronda = 1; ronda <= 3 && secas < 2; ronda++) {
 
   const bloqueantes = novos.filter(a => a.severidade !== 'P2')
   secas = bloqueantes.length === 0 ? secas + 1 : 0
-  log(`Ronda ${ronda}: ${novos.length} achados novos (${bloqueantes.length} bloqueantes), ${secas} secas seguidas`)
+  log(`Round ${ronda}: ${novos.length} new findings (${bloqueantes.length} blocking), ${secas} dry in a row`)
 }
 
-phase('Consolidar')
+phase('Consolidate')
 const todos = historico.flatMap(h => h.novos)
 return {
   rondas: historico.length,
@@ -264,17 +269,17 @@ return {
 }
 ```
 
-O script **não corrige nada**. Ele produz o veredito. A correção de P0/P1 acontece entre rondas, no
-fluxo normal, respeitando os guarda-corpos.
+The script **fixes nothing**. It produces the verdict. The P0/P1 fix happens between rounds, in the
+normal flow, respecting the guardrails.
 
 ---
 
-## 8. Sem orquestrador disponível
+## 8. No orchestrator available
 
-O rito não depende da ferramenta. Fallback obrigatório: despachar as lentes como subagentes
-individuais em paralelo, num único disparo, aplicar as mesmas regras de cegueira e convergência à
-mão, e **registrar que o loop rodou em modo manual**.
+The rite doesn't depend on the tool. Mandatory fallback: dispatch the lenses as individual subagents
+in parallel, in a single burst, apply the same blinding and convergence rules by hand, and **record
+that the loop ran in manual mode**.
 
-Se o harness proibir subagentes sem pedido explícito, isso **não** é a skill proibindo — é o ambiente.
-Nesse caso: pedir autorização, ou declarar o loop como **não rodado**. Nunca declarar aprovado um
-rito que não aconteceu.
+If the harness forbids subagents without an explicit request, that is **not** the skill forbidding —
+it is the environment. In that case: ask for authorization, or declare the loop **not run**. Never
+declare approved a rite that didn't happen.

@@ -1,233 +1,233 @@
-# Rubrica AAA — as oito lentes de tela
+# AAA rubric — the eight screen lenses
 
-Uma lente por inspetor. Cada inspetor responde **a pergunta da sua lente**, cita **evidência
-obrigatória**, e classifica cada achado em P0 / P1 / P2.
+One lens per inspector. Each inspector answers **the question of its lens**, cites **mandatory
+evidence**, and classifies each finding as P0 / P1 / P2.
 
-**Regra que vale para as oito:** achado que não cita `arquivo:linha` ou `viewport + coordenada do
-print` não é achado. É opinião, e não conta no veredito.
+**Rule that holds for all eight:** a finding that does not cite `arquivo:linha` or `viewport + coordinate of the
+screenshot` is not a finding. It is opinion, and does not count in the verdict.
 
-**Como este arquivo funciona.** A *pergunta* e o *corte de severidade* de cada lente são universais e
-estão escritos aqui. Os *valores* contra os quais se compara são do projeto e entram por fatia. Lente
-cuja fatia está vazia **diz que está vazia** e julga só consistência interna — nunca inventa a régua.
-
----
-
-## Lente 1 — Fidelidade ao design system
-
-**Pergunta:** todo valor visual usado existe na régua declarada, ou foi inventado?
-
-**Régua:** `{{texto:reguaDeComparacao}}`. Para ser utilizável, ela precisa enumerar, com valores
-literais: **cores** (ação, neutros, semânticos) · **raios** · **espaçamentos** · **escalas
-tipográficas** (família, tamanho, peso, altura de linha) · **sombras nomeadas** · **medidas fixas**
-recorrentes. Qualquer valor fora dessas listas é achado.
-
-**Princípios que costumam acompanhar uma régua** — confirmar quais valem aqui, não presumir:
-
-- **cor de ação tem significado**: a cor primária marca ação, estado ativo, foco ou seleção; em
-  decoração, ela se remove;
-- **contraste antes de elegância**: texto e placeholder legíveis antes de sutis;
-- **estado semântico é só estado**: as cores de sucesso/aviso/erro/informação nunca viram categoria
-  nem decoração;
-- **escala de produto**: tipografia fixa, não fluida por viewport, quando o produto é denso;
-- **elevação tem vocabulário fechado**: sombra só onde a régua manda (modal, dropdown, foco, hover
-  real); superfície em repouso usa borda ou tom.
-
-**P0:** contraste ilegível. **P1:** valor inventado, sombra fora do vocabulário, cor de ação usada
-como decoração. **P2:** valor válido porém inconsistente com o artefato de referência.
+**How this file works.** The *question* and the *severity cutoff* of each lens are universal and
+are written here. The *values* compared against belong to the project and come in by slice. A lens
+whose slice is empty **says it is empty** and judges only internal consistency — it never invents the ruler.
 
 ---
 
-## Lente 2 — Estados obrigatórios
+## Lens 1 — Design system fidelity
 
-**Pergunta:** todo controle e toda região com dados tem os estados que precisa, ou só o caminho feliz?
+**Question:** does every visual value used exist in the declared ruler, or was it invented?
 
-**Checklist (universal):** default · hover · focus-visible · disabled (opacidade reduzida mas ainda
-legível) · loading/busy (marcado semanticamente, cliques repetidos bloqueados) · error · empty ·
+**Ruler:** `{{texto:reguaDeComparacao}}`. To be usable, it needs to enumerate, with literal values:
+**colors** (action, neutrals, semantic) · **radii** · **spacings** · **type
+scales** (family, size, weight, line height) · **named shadows** · recurring **fixed
+measures**. Any value outside these lists is a finding.
+
+**Principles that usually accompany a ruler** — confirm which hold here, do not presume:
+
+- **action color has meaning**: the primary color marks action, active state, focus or selection; in
+  decoration, it is removed;
+- **contrast before elegance**: text and placeholder legible before subtle;
+- **semantic state is only state**: the success/warning/error/info colors never become a category
+  nor decoration;
+- **product scale**: fixed typography, not fluid by viewport, when the product is dense;
+- **elevation has a closed vocabulary**: shadow only where the ruler says so (modal, dropdown, focus, real
+  hover); a surface at rest uses border or tone.
+
+**P0:** illegible contrast. **P1:** invented value, shadow outside the vocabulary, action color used
+as decoration. **P2:** valid value but inconsistent with the reference artifact.
+
+---
+
+## Lens 2 — Required states
+
+**Question:** does every control and every region with data have the states it needs, or only the happy path?
+
+**Checklist (universal):** default · hover · focus-visible · disabled (reduced opacity but still
+legible) · loading/busy (marked semantically, repeated clicks blocked) · error · empty ·
 selected.
 
-**Regras de conteúdo dos estados:**
+**Content rules of the states:**
 
-- **Erro** declara a fonte, a categoria da causa e a **próxima ação segura**. Erro genérico é achado.
-- **Vazio** explica qual fonte ou filtro está faltando. Vazio silencioso é achado.
-- **Loading** usa skeleton ou progresso local quando o conteúdo tem forma conhecida.
-- **Sucesso parcial é estado de primeira classe** — quando o dado vem de várias fontes e uma falha,
-  isso nunca colapsa em erro genérico.
+- **Error** declares the source, the category of the cause and the **next safe action**. A generic error is a finding.
+- **Empty** explains which source or filter is missing. Silent empty is a finding.
+- **Loading** uses skeleton or local progress when the content has a known shape.
+- **Partial success is a first-class state** — when the data comes from several sources and one fails,
+  this never collapses into a generic error.
 
-**Evidência dos estados:** o componente visto sozinho, com todos os estados da checklist lado a lado
-— a página dele no catálogo de componentes do projeto, se houver um; sem catálogo, uma página de
-estados montada para a revisão (pode ser a página Artifact da escolha visual). Estado que só aparece
-navegando o fluxo inteiro passa despercebido.
+**Evidence of the states:** the component seen alone, with all the checklist states side by side
+— its page in the project's component catalog, if there is one; without a catalog, a states page
+assembled for the review (it can be the Artifact page of the visual choice). A state that only appears by
+navigating the whole flow goes unnoticed.
 
-**P0:** ação assíncrona sem loading que permite clique duplo destrutivo. **P1:** qualquer estado da
-checklist ausente, ou erro/vazio sem a informação exigida. **P2:** estado presente mas com microcopy
-melhorável.
-
----
-
-## Lente 3 — Responsividade e overflow
-
-**Pergunta:** algum valor operacional vaza, ou algum layout quebra, em algum dos viewports?
-
-**Viewports obrigatórios:** `{{texto:viewports}}`. Sem essa fatia, testar os que o projeto
-comprovadamente suporta — e **dizer quais foram testados**. Inventar um viewport que o produto não
-atende gera achado falso; omitir um que ele atende deixa passar bug real.
-
-**Verificar:** `min-width: 0` nos filhos de flex/grid; wrap, truncate ou scroll **intencional** para
-e-mail, domínio, protocolo, JSON, comando, nome longo, chip e botão; layout multi-coluna colapsando
-estruturalmente no **ponto de colapso declarado** — `{{texto:pontoDeColapso}}`; dropdown fora de
-contexto com overflow clipado (ou `fixed`/portal/nativo).
-
-**Sem ponto de colapso declarado, a lente não se cala: cobra colapso abaixo de tablet
-(`max-width: 768px`) e diz no parecer que usou o padrão.** Fatia vazia autoriza declarar a ausência;
-nunca autoriza abandonar a verificação. Medido em 2026-08-17: com o critério escrito como *"no ponto
-declarado"* e nenhum ponto declarado no adaptador, o inspetor deixou passar um cabeçalho de duas
-colunas que não colapsa nem no menor viewport suportado — a régua que trazia o critério concreto pegou
-o mesmo defeito. **Critério sem valor não é critério.**
-
-**Overflow de valor operacional é bug de design, não detalhe.**
-
-**P0:** overflow visível ou conteúdo inacessível em qualquer viewport da lista. **P1:** scroll
-horizontal no body, colapso que esconde controle. **P2:** densidade fora do padrão do artefato de
-referência.
+**P0:** async action with no loading that allows a destructive double click. **P1:** any state of the
+checklist missing, or error/empty without the required information. **P2:** state present but with microcopy
+that can be improved.
 
 ---
 
-## Lente 4 — Acessibilidade
+## Lens 3 — Responsiveness and overflow
 
-**Pergunta:** funciona por teclado e é percebível sem depender de cor?
+**Question:** does any operational value leak, or does any layout break, at any of the viewports?
 
-**Checklist (universal):** WCAG AA prático no contraste · foco **visível** (nunca apenas remover o
-outline nativo; se a régua nomeia um anel de foco, é ele) · todo controle alcançável e operável por
-teclado · rótulo acessível ou semântica nativa onde o elemento não é autoexplicativo · status
-**nunca** só por cor (ícone, texto ou forma junto) · movimento curto, guiado por estado, respeitando
-`prefers-reduced-motion` · alvos dimensionados para uso repetido, e no mínimo **24 × 24 px** (WCAG
-2.2, critério 2.5.8, nível AA), salvo as exceções do critério: alvo menor cujo círculo de 24 px de
-diâmetro, centrado nele, não cruza outro alvo nem o círculo de outro alvo menor; link dentro de
-frase; a mesma função em outro controle da página que cumpre os 24 px; tamanho decidido pelo
-navegador, sem estilo do autor; ou tamanho essencial para a informação.
+**Mandatory viewports:** `{{texto:viewports}}`. Without this slice, test the ones the project
+demonstrably supports — and **say which were tested**. Inventing a viewport the product does not
+serve produces a false finding; omitting one it serves lets a real bug through.
 
-**"Status só por cor" tem exemplo literal, e ele é P0.** Um badge, ponto, bolinha, barra ou célula
-**sem texto e sem rótulo acessível**, distinguido apenas pela cor de fundo, **é** status só por cor.
-Isso é **P0** — não é P1 de "rótulo acessível ausente". A pergunta que decide: *se a cor for removida,
-sobra alguma informação?* Se não sobra, é P0.
+**Check:** `min-width: 0` on flex/grid children; **intentional** wrap, truncate or scroll for
+email, domain, protocol, JSON, command, long name, chip and button; multi-column layout collapsing
+structurally at the **declared collapse point** — `{{texto:pontoDeColapso}}`; dropdown out of
+context with clipped overflow (or `fixed`/portal/native).
 
-> Medido em 2026-08-17: sem esse exemplo escrito, **dois inspetores independentes** acharam os dois
-> badges vazios coloridos e classificaram os dois como P1 de rótulo ausente. As duas réguas já
-> mandavam P0 para "status nunca só por cor" — e as duas foram rebaixadas na aplicação. Regra sem
-> exemplo é regra que se aplica errado.
+**With no declared collapse point, the lens does not go quiet: it demands collapse below tablet
+(`max-width: 768px`) and says in its opinion that it used the default.** An empty slice authorizes declaring the absence;
+it never authorizes abandoning the check. Measured on 2026-08-17: with the criterion written as *"at the declared
+point"* and no point declared in the adapter, the inspector let through a two-column header
+that does not collapse even at the smallest supported viewport — the ruler that carried the concrete criterion caught
+the same defect. **A criterion without a value is not a criterion.**
 
-**"Seleção só por classe" também é achado, e a pergunta que decide é a mesma.** Aba, chip, item de
-lista ou botão de segmento cujo estado *selecionado* existe apenas como classe de estilo (`.active`,
-`.selected`), sem nada que exponha esse estado à camada de acessibilidade, **é P1** — quem usa leitor
-de tela ouve o item selecionado exatamente igual aos outros. Vira **P0** quando, tirando a cor, nada
-distingue o selecionado do não selecionado. **Não vale** quando o controle nativo já carrega o
-estado; aí exigir atributo extra é falso positivo.
+**Overflow of an operational value is a design bug, not a detail.**
 
-> Medido em 2026-08-17: num projeto real, a aba ativa de um modal marcava seleção só pela classe
-> `active`, e o estilo dessa classe mudava apenas fundo, cor e borda. **14 inspetores cegos**
-> passaram por essa aba e nenhum abriu achado — nenhuma das duas réguas medidas nomeava o caso.
-> Seleção é o estado mais comum de toda interface de abas, e era o único que a lente não citava.
-
-**P0:** foco removido sem substituto, controle inalcançável por teclado, status só por cor.
-**P1:** contraste abaixo de AA, rótulo acessível ausente onde a semântica não basta, estado de
-seleção só em classe de estilo, alvo abaixo de 24 × 24 px fora das exceções. **P2:** alvo que cumpre
-o mínimo mas é pequeno para uso repetido.
+**P0:** visible overflow or inaccessible content at any viewport in the list. **P1:** horizontal
+scroll on the body, collapse that hides a control. **P2:** density outside the reference artifact's
+standard.
 
 ---
 
-## Lente 5 — Microcopy
+## Lens 4 — Accessibility
 
-**Pergunta:** o texto é a linguagem que o usuário-alvo deste produto já conhece?
+**Question:** does it work by keyboard and is it perceivable without depending on color?
 
-**Checklist:** **rótulos canônicos preservados exatamente** — `{{texto:rotulosCanonicos}}` · tom
-consistente com o resto do produto · placeholder descreve o valor esperado · sem jargão de marketing,
-sem exclamação, sem tratamento infantilizado · mensagem de erro nomeia a fonte · idioma da interface
-uniforme.
+**Checklist (universal):** practical WCAG AA on contrast · **visible** focus (never just removing the native
+outline; if the ruler names a focus ring, that is it) · every control reachable and operable by
+keyboard · accessible label or native semantics where the element is not self-explanatory · status
+**never** by color alone (icon, text or shape alongside) · short motion, driven by state, respecting
+`prefers-reduced-motion` · targets sized for repeated use, and at minimum **24 × 24 px** (WCAG
+2.2, criterion 2.5.8, level AA), except the criterion's exceptions: a smaller target whose 24 px
+diameter circle, centered on it, crosses neither another target nor the circle of another smaller target; link inside a
+sentence; the same function in another control on the page that meets the 24 px; size decided by the
+browser, with no author styling; or size essential to the information.
 
-**P0:** rótulo canônico alterado. **P1:** idioma trocado no meio da UI, tom fora do padrão,
-placeholder decorativo. **P2:** frase melhorável.
+**"Status by color alone" has a literal example, and it is P0.** A badge, dot, ball, bar or cell
+**with no text and no accessible label**, distinguished only by background color, **is** status by color alone.
+That is **P0** — it is not a P1 of "accessible label missing". The question that decides: *if the color is removed,
+is any information left?* If none is left, it is P0.
 
----
+> Measured on 2026-08-17: without this example written down, **two independent inspectors** found the two
+> empty colored badges and classified both as P1 for a missing label. Both rulers already
+> mandated P0 for "status never by color alone" — and both were downgraded in application. A rule without
+> an example is a rule that gets applied wrong.
 
-## Lente 6 — Anti-referências visuais
+**"Selection by class alone" is also a finding, and the question that decides is the same.** A tab, chip, list
+item or segment button whose *selected* state exists only as a style class (`.active`,
+`.selected`), with nothing that exposes that state to the accessibility layer, **is P1** — whoever uses a screen
+reader hears the selected item exactly the same as the others. It becomes **P0** when, removing the color, nothing
+tells the selected from the unselected. **It does not apply** when the native control already carries the
+state; there, demanding an extra attribute is a false positive.
 
-**Pergunta:** isso parece o que este produto é, ou parece outra categoria de produto?
+> Measured on 2026-08-17: in a real project, a modal's active tab marked selection only by the class
+> `active`, and that class's style changed only background, color and border. **14 blind inspectors**
+> went through that tab and none opened a finding — neither of the two rulers measured named the case.
+> Selection is the most common state of every tabbed interface, and it was the only one the lens did not cite.
 
-**O que este produto não pode parecer:** `{{texto:antiReferencias}}`.
-
-Sem essa fatia, a lente pergunta a versão fraca — *"há aqui um sistema visual paralelo ao que já
-existe no produto?"* — e **declara que está sem lista**. A lista importa porque ela inverte por
-projeto: o que é defeito num painel operacional é requisito numa página de marketing.
-
-Lista de partida para **produto operacional denso**, a confirmar com o dono: decoração card-heavy ·
-card aninhado · glassmorphism · gradiente gratuito · movimento ornamental · cantos exagerados · texto
-com gradiente · grid de fundo decorativo · ilustração "sketchy" · fundo listrado · template de
-hero-metric · borda lateral grossa como decoração genérica de card · layout de landing page.
-
-**P1** para qualquer item da lista declarada. **P2** para deriva sutil de densidade.
-
----
-
-## Lente 7 — Correção e regressão
-
-**Pergunta:** o que já funcionava continua funcionando?
-
-**Checklist:** a prova de pronto da área passa (`{{campo:provaDePronto}}`) · nomes, IDs e chaves de
-armazenamento intactos · ordem de carga e pontos de entrada preservados · dados estruturados
-manipulados por parser/API, não por texto frágil · sem refatoração oportunista no diff · nenhuma
-mudança em arquivo não relacionado ao objetivo · nada tocado em `{{campo:intocaveis}}` · resposta ao
-clique: em tela web, o **INP** (Interaction to Next Paint, o tempo do clique até a tela responder) é
-bom até **200 ms** e ruim acima de **500 ms** (web.dev, percentil 75); sem medição, a lente diz que
-não mediu, e não presume.
-
-**P0:** regressão funcional, ordem de carga alterada, chave de armazenamento renomeada, intocável
-tocado. **P1:** teste falhando, teste removido, INP medido acima de 500 ms. **P2:** dívida técnica
-observada, INP medido entre 200 e 500 ms.
+**P0:** focus removed with no substitute, control unreachable by keyboard, status by color alone.
+**P1:** contrast below AA, accessible label missing where semantics are not enough, selection state only in
+a style class, target below 24 × 24 px outside the exceptions. **P2:** target that meets
+the minimum but is small for repeated use.
 
 ---
 
-## Lente 8 — Governança e segurança
+## Lens 5 — Microcopy
 
-**Pergunta:** a permissão e o sigilo continuam corretos?
+**Question:** is the text the language the target user of this product already knows?
 
-**Checklist:** a fonte de verdade de permissão do projeto é respeitada · UI restrita **não renderiza**
-antes de o acesso efetivo estar confirmado · desligar a permissão esconde a UI **e** bloqueia o
-caminho de serviço por trás dela · toda mutação destrutiva passa por confirmação explícita · nenhum
-segredo em log, screenshot, captura de rede, relatório, contexto de prompt ou documentação derivada ·
-função visível nova atualiza permissões, telas administrativas, ajuda, testes e docs **no mesmo
-conjunto de mudanças**.
+**Checklist:** **canonical labels preserved exactly** — `{{texto:rotulosCanonicos}}` · tone
+consistent with the rest of the product · placeholder describes the expected value · no marketing jargon,
+no exclamation marks, no infantilizing treatment · error message names the source · uniform interface
+language.
 
-**P0:** segredo exposto, UI restrita renderizada antes da confirmação, mutação destrutiva sem
-confirmação. **P1:** permissão sem espelho nos lugares que a declaram. **P2:** observação de
-governança.
-
-**O modelo de ameaça é do projeto, não da lente** — `{{campo:modeloDeAmeaca}}` e
-`{{texto:guardaCorposDoProjeto}}`. Em projeto que declarou o risco como aceito, **propor hardening
-não solicitado é achado da lente, não mérito dela**. Em projeto público, ou que seja ele próprio um
-mecanismo de segurança, a regra se inverte. Ler a fatia antes de julgar.
-
-**Antes de abrir P0 de segurança, três conferências obrigatórias.** Primeiro, os **chamadores reais**,
-não o caminho hipotético: se nenhum chega ao estado que você supôs, não há achado. Segundo, **leitura
-não é mutação**: o portão de mutação não barrar uma leitura é o desenho, não o defeito. Terceiro,
-**desenho deliberado não é falha**: padrão repetido e coerente em todo o módulo é intenção até prova em
-contrário. **Sem conseguir confirmar a intenção, o achado nasce P2 com pergunta, nunca P0** — P0
-bloqueia a entrega, e bloquear por desenho aprovado é o dano que a lente existe para evitar.
+**P0:** canonical label altered. **P1:** language switched mid-UI, tone outside the standard,
+decorative placeholder. **P2:** sentence that can be improved.
 
 ---
 
-## Aplicação por tipo de mudança
+## Lens 6 — Visual anti-references
 
-| Mudança | Lentes obrigatórias |
+**Question:** does this look like what this product is, or like another category of product?
+
+**What this product must not look like:** `{{texto:antiReferencias}}`.
+
+Without this slice, the lens asks the weak version — *"is there a visual system here parallel to the one that already
+exists in the product?"* — and **declares that it has no list**. The list matters because it inverts per
+project: what is a defect in an operational panel is a requirement on a marketing page.
+
+Starter list for a **dense operational product**, to be confirmed with the owner: card-heavy decoration ·
+nested card · glassmorphism · gratuitous gradient · ornamental motion · exaggerated corners · text
+with gradient · decorative background grid · "sketchy" illustration · striped background · hero-metric
+template · thick side border as generic card decoration · landing-page layout.
+
+**P1** for any item of the declared list. **P2** for subtle density drift.
+
+---
+
+## Lens 7 — Correctness and regression
+
+**Question:** does what already worked keep working?
+
+**Checklist:** the area's done-proof passes (`{{campo:provaDePronto}}`) · names, IDs and storage
+keys intact · load order and entry points preserved · structured data
+handled by parser/API, not by fragile text · no opportunistic refactoring in the diff · no
+change in a file unrelated to the goal · nothing touched in `{{campo:intocaveis}}` · response to a
+click: on a web screen, the **INP** (Interaction to Next Paint, the time from the click until the screen responds) is
+good up to **200 ms** and bad above **500 ms** (web.dev, 75th percentile); without a measurement, the lens says it
+did not measure, and does not presume.
+
+**P0:** functional regression, load order altered, storage key renamed, untouchable
+touched. **P1:** failing test, removed test, INP measured above 500 ms. **P2:** technical debt
+observed, INP measured between 200 and 500 ms.
+
+---
+
+## Lens 8 — Governance and security
+
+**Question:** are permission and secrecy still correct?
+
+**Checklist:** the project's source of truth for permission is respected · restricted UI **does not render**
+before effective access is confirmed · turning the permission off hides the UI **and** blocks the
+service path behind it · every destructive mutation goes through explicit confirmation · no
+secret in log, screenshot, network capture, report, prompt context or derived documentation ·
+new visible feature updates permissions, admin screens, help, tests and docs **in the same
+change set**.
+
+**P0:** exposed secret, restricted UI rendered before confirmation, destructive mutation without
+confirmation. **P1:** permission without a mirror in the places that declare it. **P2:** governance
+observation.
+
+**The threat model belongs to the project, not to the lens** — `{{campo:modeloDeAmeaca}}` and
+`{{texto:guardaCorposDoProjeto}}`. In a project that declared the risk as accepted, **proposing unrequested
+hardening is a finding this lens raises, not a merit of the work**. In a public project, or one that is itself a
+security mechanism, the rule inverts. Read the slice before judging.
+
+**Before opening a security P0, three mandatory checks.** First, the **real callers**,
+not the hypothetical path: if none reaches the state you assumed, there is no finding. Second, **reading
+is not mutation**: the mutation gate not blocking a read is the design, not the defect. Third,
+**deliberate design is not a flaw**: a pattern repeated and coherent across the whole module is intent until proven
+otherwise. **If you cannot confirm the intent, the finding is born P2 with a question, never P0** — P0
+blocks delivery, and blocking over an approved design is the harm the lens exists to avoid.
+
+---
+
+## Application by type of change
+
+| Change | Mandatory lenses |
 |---|---|
-| Estilo / layout / componente visual | 1, 2, 3, 4, 6, 7 |
-| Texto de UI | 1, 5 |
-| Função visível nova | as 8 de tela e as 10 de código |
-| Lógica sem UI | as 10 de código |
-| Contrato entre sistemas | as 10 de código |
-| Release | as 8 de tela e as 10 de código |
+| Style / layout / visual component | 1, 2, 3, 4, 6, 7 |
+| UI text | 1, 5 |
+| New visible feature | the 8 screen lenses and the 10 code lenses |
+| Logic without UI | the 10 code lenses |
+| Contract between systems | the 10 code lenses |
+| Release | the 8 screen lenses and the 10 code lenses |
 
-Os números 1 a 8 são as lentes de tela desta rubrica. As de código são as do `/sworn:review`,
-com a pergunta de cada uma em `LENTES`, em `scripts/lib/veredito.js` do plugin.
+Numbers 1 to 8 are the screen lenses of this rubric. The code ones are those of `/sworn:review`,
+with each one's question in `LENTES`, in `scripts/lib/veredito.js` of the plugin.
 
-**Não rodar as oito quando só quatro se aplicam.** Lente sem objeto devolve parecer vazio, e parecer
-vazio contamina o cômputo da ronda.
+**Do not run all eight when only four apply.** A lens without an object returns an empty opinion, and an empty
+opinion contaminates the round count.

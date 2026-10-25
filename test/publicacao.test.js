@@ -42,6 +42,13 @@ const MERCADO = json('.claude-plugin/marketplace.json');
 const CHANGELOG = ler('CHANGELOG.md');
 const README = ler('GUIA.md');
 
+// Os textos de skill traduzidos para o ingles trazem os numeros por extenso em ingles.
+const NUMEROS_EN = {
+  'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+  'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
+  'sixteen': 16, 'seventeen': 17, 'eighteen': 18
+};
+
 const NUMEROS = {
   // Plano 083, Tarefa 7 (sobra 3): o CHANGELOG antigo ganhou acento ("teto de três rondas").
   'tres': 3, 'três': 3, 'quatro': 4,
@@ -211,20 +218,20 @@ test('publicacao: a skill padrao conta as duas familias de lentes, com os numero
   const arquivos = ['SKILL.md'].concat(fs.readdirSync(path.join(dir, 'references'))
     .filter((f) => f.endsWith('.md')).map((f) => 'references/' + f));
   const FAMILIA = { tela: veredito.LENTES_UI.length, codigo: veredito.LENTES.length };
-  const numero = (p) => (/^\d+$/.test(p) ? Number(p) : NUMEROS[p.toLowerCase()]);
+  const numero = (p) => (/^\d+$/.test(p) ? Number(p) : NUMEROS_EN[p.toLowerCase()]);
   const soltas = [];
   const erradas = [];
   const naSkill = { tela: 0, codigo: 0 };
   for (const rel of arquivos) {
     const texto = fs.readFileSync(path.join(dir, rel), 'utf8');
     // "4.2 Lentes distintas" e numero de secao, nao contagem: o numero nao vem colado a ponto.
-    for (const m of texto.matchAll(/(?<![\p{L}\d.])([\p{L}\d]+)\s+lentes(?!\s+de\s+(?:tela|c[oó]digo))/giu)) {
+    for (const m of texto.matchAll(/(?<![\p{L}\d.])([\p{L}\d]+)\s+lenses/giu)) {
       if (numero(m[1]) !== undefined) soltas.push(rel + ': "' + m[0] + '"');
     }
-    for (const m of texto.matchAll(/([\p{L}\d]+)(?:\s+lentes)?\s+de\s+(tela|c[oó]digo)/giu)) {
+    for (const m of texto.matchAll(/([\p{L}\d]+)\s+(?:for\s+(screens?|code)|(screen|code)\s+lenses)/giu)) {
       const n = numero(m[1]);
       if (n === undefined) continue;
-      const fam = m[2].toLowerCase() === 'tela' ? 'tela' : 'codigo';
+      const fam = (m[2] || m[3]).toLowerCase().startsWith('screen') ? 'tela' : 'codigo';
       if (rel === 'SKILL.md') naSkill[fam] += 1;
       if (n !== FAMILIA[fam]) erradas.push(rel + ': "' + m[0] + '" (o codigo tem ' + FAMILIA[fam] + ')');
     }
@@ -234,18 +241,18 @@ test('publicacao: a skill padrao conta as duas familias de lentes, com os numero
   assert.ok(naSkill.tela > 0 && naSkill.codigo > 0, 'o SKILL.md tem de contar as duas familias: ' +
     JSON.stringify(naSkill));
   const rubrica = fs.readFileSync(path.join(dir, 'references', '02-rubrica-aaa.md'), 'utf8').split('\n');
-  for (const mudanca of ['Lógica sem UI', 'Contrato entre sistemas']) {
+  for (const mudanca of ['Logic without UI', 'Contract between systems']) {
     const linha = rubrica.find((l) => l.startsWith('| ' + mudanca + ' |'));
-    assert.ok(linha && /de c[oó]digo/.test(linha), 'a rubrica manda "' + mudanca + '" para outra familia: ' + linha);
+    assert.ok(linha && /code lenses/.test(linha), 'a rubrica manda "' + mudanca + '" para outra familia: ' + linha);
   }
   // Ronda 2 do 8c.10: a secao 4.2 dizia que as nove de codigo vao "em toda mudanca". A regra de
   // despacho e a tabela do Passo 2 do revisar; a secao aponta para ela, e ela bate com o codigo.
   const skill = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8');
   const secao = skill.slice(skill.indexOf('### 4.2'), skill.indexOf('### 4.3'));
   assert.ok(secao.includes('skills/review/SKILL.md'), 'a secao 4.2 tem de apontar para a tabela do revisar');
-  assert.ok(!/em toda mudan/.test(secao), 'a secao 4.2 manda as de codigo em toda mudanca: ' + secao);
+  assert.ok(!/(?:in|on|for) every change/.test(secao), 'a secao 4.2 manda as de codigo em toda mudanca: ' + secao);
   const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8').split('\n');
-  const despacho = { 'Só código': FAMILIA.codigo, 'Só tela': FAMILIA.tela, 'Código e tela': FAMILIA.codigo + FAMILIA.tela };
+  const despacho = { 'Code only': FAMILIA.codigo, 'Screen only': FAMILIA.tela, 'Code and screen': FAMILIA.codigo + FAMILIA.tela };
   for (const [mudanca, n] of Object.entries(despacho)) {
     const linha = revisar.find((l) => l.startsWith('| ' + mudanca + ' |'));
     assert.ok(linha && linha.includes('**' + n + '**'), 'o revisar manda "' + mudanca + '" com outro numero: ' + linha);
@@ -270,22 +277,22 @@ function secaoDaPadrao(ancora) {
 }
 
 test('publicacao: a padrao traz, na secao da decisao, a regra do tamanho das opcoes por inteiro', () => {
-  const s = secaoDaPadrao('Decisão tomada vai para');
-  assert.ok(/tr[êe]s op[çc][õo]es/i.test(s), 'sumiu a exigencia de tres opcoes');
-  assert.ok(/recomendada/i.test(s), 'sumiu a marcacao da recomendada');
-  assert.ok(/uma ou duas frases/i.test(s), 'sumiu o tamanho: uma ou duas frases por opcao');
-  assert.ok(/consequ[êe]ncia/i.test(s), 'a opcao tem de levar a consequencia dentro');
-  assert.ok(/custo/i.test(s), 'a opcao tem de levar o custo dentro');
-  assert.ok(/mais que duas frases[^.]*esconde duas escolhas[^.]*se separam/i.test(s),
+  const s = secaoDaPadrao('A decision made goes to');
+  assert.ok(/three options/i.test(s), 'sumiu a exigencia de tres opcoes');
+  assert.ok(/recommended/i.test(s), 'sumiu a marcacao da recomendada');
+  assert.ok(/one or two sentences/i.test(s), 'sumiu o tamanho: uma ou duas frases por opcao');
+  assert.ok(/consequence/i.test(s), 'a opcao tem de levar a consequencia dentro');
+  assert.ok(/cost/i.test(s), 'a opcao tem de levar o custo dentro');
+  assert.ok(/more than two sentences[^.]*hides two choices[^.]*get separated/i.test(s),
     'sumiu o sinal de que opcao com mais de duas frases esconde duas escolhas, e elas se separam');
   assert.ok(!/economia/i.test(s), 'a secao da decisao ainda aponta para a skill que saiu');
 });
 
 test('publicacao: a padrao aponta, na secao do pronto, para o bloco de qualidade de resposta da abertura', () => {
-  const s = secaoDaPadrao('Evidência fresca');
-  assert.ok(/bloco de qualidade de resposta/i.test(s), 'o pronto nao aponta para o bloco de qualidade de resposta');
-  assert.ok(/abertura/i.test(s), 'o ponteiro tem de dizer que o bloco vem da abertura da sessao');
-  assert.ok(/regras 1 e 5/i.test(s), 'o ponteiro tem de dizer quais regras do bloco: 1 e 5');
+  const s = secaoDaPadrao('Fresh evidence');
+  assert.ok(/response-quality block/i.test(s), 'o pronto nao aponta para o bloco de qualidade de resposta');
+  assert.ok(/opening/i.test(s), 'o ponteiro tem de dizer que o bloco vem da abertura da sessao');
+  assert.ok(/rules 1 and 5/i.test(s), 'o ponteiro tem de dizer quais regras do bloco: 1 e 5');
   assert.ok(!/economia/i.test(s), 'a secao do pronto ainda aponta para a skill que saiu');
 });
 
@@ -299,12 +306,12 @@ test('publicacao: a linha "So logica" do revisar diz LENTES menos SAEM_SO_LOGICA
   saem.forEach((k) => assert.ok(veredito.LENTES.some((l) => l.chave === k), 'lente que sai nao existe: ' + k));
   const n = veredito.LENTES.length - saem.length;
   const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8').split('\n');
-  const linha = revisar.find((l) => l.startsWith('| Só lógica '));
+  const linha = revisar.find((l) => l.startsWith('| Logic only '));
   assert.ok(linha, 'a tabela do Passo 2 do revisar nao tem a linha "Só lógica"');
   assert.ok(linha.includes('**' + n + '**'), 'so logica tem de dizer LENTES menos SAEM_SO_LOGICA: ' + linha);
   saem.forEach((k) => assert.ok(linha.includes('`' + k + '`'), 'a linha tem de nomear a lente que sai (' + k + '): ' + linha));
   assert.match(linha, /SAEM_SO_LOGICA/, 'a linha tem de apontar a constante, nao a lista de memoria: ' + linha);
-  assert.match(revisar.join('\n'), new RegExp('na d[uú]vida, as ' + veredito.LENTES.length + '\\b', 'i'),
+  assert.match(revisar.join('\n'), new RegExp('when in doubt, the ' + veredito.LENTES.length + '\\b', 'i'),
     'o revisar tem de dizer que na duvida vao as ' + veredito.LENTES.length);
   const m = README.match(/\*\*(\S+)\*\* quando [ée] s[oó] l[oó]gica/);
   assert.ok(m, 'a linha do /sworn:review no README nao diz o caso so logica');
@@ -325,11 +332,11 @@ test('D485: a tabela de faixas do revisar diz as lentes e os cortes do veredito.
     lentes.forEach((k) => assert.ok(linha.includes('`' + k + '`'), 'a faixa ' + faixa + ' nao nomeia ' + k + ': ' + linha));
   }
   const completa = linhas.find((l) => l.startsWith('| `completa` |'));
-  assert.ok(completa && /tabela de fam[ií]lias/i.test(completa), 'a completa tem de mandar para a tabela de familias: ' + completa);
-  assert.ok(revisar.includes('até ' + veredito.FAIXA_UMA_ATE + ' linhas'), 'o corte da faixa uma nao e o do codigo');
-  assert.ok(revisar.includes('até ' + veredito.FAIXA_DUAS_ATE + ' linhas'), 'o corte da faixa duas nao e o do codigo');
-  assert.match(revisar, /subir de faixa, nunca descer/i, 'falta a regra de que a faixa so sobe');
-  assert.ok(revisar.indexOf('| `uma` |') < revisar.indexOf('| Só lógica '), 'a faixa vem antes da tabela de familias');
+  assert.ok(completa && /table of families/i.test(completa), 'a completa tem de mandar para a tabela de familias: ' + completa);
+  assert.ok(revisar.includes('up to ' + veredito.FAIXA_UMA_ATE + ' changed lines'), 'o corte da faixa uma nao e o do codigo');
+  assert.ok(revisar.includes('up to ' + veredito.FAIXA_DUAS_ATE + ' lines'), 'o corte da faixa duas nao e o do codigo');
+  assert.match(revisar, /move up a band, never down/i, 'falta a regra de que a faixa so sobe');
+  assert.ok(revisar.indexOf('| `uma` |') < revisar.indexOf('| Logic only '), 'a faixa vem antes da tabela de familias');
 });
 
 // D486 (s107): na faixa pequena, A e B sao recortes. O briefing do revisar ganha a linha do recorte quando a saida
@@ -339,17 +346,17 @@ test('D486: o revisar e o inspetor dizem o que fazer com o recorte do trecho mud
   assert.match(revisar, /`trecho`/, 'o revisar nao fala do campo trecho da saida');
   assert.ok(revisar.includes('[fora do trecho: linhas a-b]'), 'o revisar nao diz a marca do vao');
   // o que o inspetor le e o briefing: a linha do recorte leva a marca e o "nao consigo ver"
-  const brief = revisar.split('\n').find((l) => l.startsWith('> A e B são recortes'));
-  assert.ok(brief && brief.includes('[fora do trecho: linhas a-b]') && /n[aã]o consigo ver/.test(brief),
+  const brief = revisar.split('\n').find((l) => l.startsWith('> A and B are excerpts'));
+  assert.ok(brief && brief.includes('[fora do trecho: linhas a-b]') && /I can't see it/.test(brief),
     'o briefing do recorte nao diz a marca nem o "nao consigo ver": ' + brief);
-  assert.ok(!/Entregue o \*\*arquivo inteiro\*\* ao inspetor\./.test(revisar), 'o revisar ainda manda sempre o arquivo inteiro');
+  assert.ok(!/Deliver the \*\*whole file\*\* to the inspector\./.test(revisar), 'o revisar ainda manda sempre o arquivo inteiro');
   const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
   assert.ok(inspetor.includes('[fora do trecho'), 'o inspetor nao sabe da marca do vao');
-  assert.match(inspetor, /n[aã]o consigo ver/i, 'o inspetor tem de dizer "nao consigo ver" sobre o que esta fora');
+  assert.match(inspetor, /I can't see it/i, 'o inspetor tem de dizer "nao consigo ver" sobre o que esta fora');
   // s108, ronda 1 da Tarefa 3: 5 de 6 P1 das faixas pequenas eram inferencia sobre o que ficou fora do recorte.
   // O que depende do vao sai no maximo P2, no briefing e no inspetor.
-  assert.ok(/no m[aá]ximo P2/.test(brief), 'o briefing do recorte tem de limitar a P2 o que depende do vao: ' + brief);
-  assert.ok(/no m[aá]ximo P2/.test(inspetor), 'o inspetor tem de limitar a P2 o que depende do vao');
+  assert.ok(/at most P2/.test(brief), 'o briefing do recorte tem de limitar a P2 o que depende do vao: ' + brief);
+  assert.ok(/at most P2/.test(inspetor), 'o inspetor tem de limitar a P2 o que depende do vao');
 });
 
 // L3 (s104): subir a completa tem flag (A3-04); a aprovacao com achado descartado manda ler vereditosDescartados
@@ -358,7 +365,7 @@ test('L3: o revisar cita --completa, manda ler vereditosDescartados e diz que o 
   const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   assert.ok(revisar.includes('--completa'), 'o revisar nao diz como subir a completa');
   assert.ok(revisar.includes('`vereditosDescartados`'), 'o revisar nao manda ler os descartados');
-  assert.match(revisar, /lente que achou P0 ou P1 e n[aã]o voltou/i, 'o revisar nao diz que a lente tem de voltar');
+  assert.match(revisar, /lens that found P0 or P1 and didn't come back/i, 'o revisar nao diz que a lente tem de voltar');
 });
 
 // Ronda 2 do Passo 8b: "oito travas" batia o README com o CHANGELOG e o manifesto, e o
@@ -378,6 +385,8 @@ const TRAVA_DO_BALDE = {
   handoff_sem_prompt: null,
   // D503 (0.8.1): portao proprio da referencia de topo, com chave propria (portaoReferencia) como o do handoff
   fecho_sem_referencia: null,
+  // D655: portao proprio da revisao aprovada no fecho da marcha AAA, com chave propria (portaoRevisao)
+  fecho_sem_revisao: null,
   // Plano 091 (#6, D559): portao proprio do manual antes de arquivo AAA, com chave propria (portaoManual)
   sem_manual: null,
   // Plano 091 (#1, D558/D559): portao proprio da revisao antes do commit, com chave propria (portaoCommit)
@@ -409,14 +418,14 @@ const ORDINAIS = { 'quarta': 4, 'quinta': 5, 'sexta': 6, 'setima': 7, 'oitava': 
 // Ronda 2 do Passo 8b: "seis perguntas" esta no CHANGELOG e no README, e nada contava
 // as perguntas que a skill do init de fato faz, nem o campo que cada uma grava.
 test('publicacao: as perguntas do init sao as que o CHANGELOG e o README contam', () => {
-  const p4 = ler('skills/init/SKILL.md').split(/^## /m).filter((s) => /^Passo 4 /.test(s))[0];
+  const p4 = ler('skills/init/SKILL.md').split(/^## /m).filter((s) => /^Step 4 /.test(s))[0];
   assert.ok(p4, 'sumiu o Passo 4 do init');
   const perguntas = p4.split(/\n(?=\d+\. \*\*)/).slice(1);
-  const titulo = p4.match(/^Passo 4 — as (\S+) perguntas/);
+  const titulo = p4.match(/^Step 4 — the (\S+) questions/);
   assert.ok(titulo, 'o Passo 4 nao diz quantas perguntas faz');
-  assert.strictEqual(perguntas.length, NUMEROS[titulo[1]], 'o titulo do Passo 4 conta outras perguntas');
+  assert.strictEqual(perguntas.length, NUMEROS_EN[titulo[1]], 'o titulo do Passo 4 conta outras perguntas');
   // cada pergunta grava um campo que o projeto.json aceita, e nenhuma o mesmo que outra
-  const campos = perguntas.map((t) => (t.match(/grav(?:a|e em) `(\w+)/i) || [])[1]);
+  const campos = perguntas.map((t) => (t.match(/(?:writes|write to) `(\w+)/i) || [])[1]);
   assert.deepStrictEqual(campos.filter((c) => projetoLib.CHAVES.indexOf(c) === -1), [],
     'pergunta sem campo do projeto.json: ' + campos.join(', '));
   assert.strictEqual(new Set(campos).size, perguntas.length, 'duas perguntas gravam o mesmo campo');
@@ -596,77 +605,77 @@ const secaoDoInit = (inicio) => {
 const plano = (s) => s.replace(/\n>/g, '\n').replace(/\s+/g, ' ');
 
 test('T11-3: o Passo 2c do init diz que o peso conta candidatos a fonte quando instrucoes.fontes e candidatas', () => {
-  const p = plano(secaoDoInit('Passo 2c'));
+  const p = plano(secaoDoInit('Step 2c'));
   assert.ok(/instrucoes\.fontes/.test(p), 'o passo nao cita o campo instrucoes.fontes');
   assert.ok(/`candidatas`/.test(p), 'o passo nao diz o valor candidatas');
-  assert.ok(/candidatos? a fonte can/i.test(p), 'o passo nao diz que o numero conta candidatos a fonte canonica');
-  assert.ok(/ainda n[ãa]o confirmados/i.test(p), 'o passo nao diz que ainda nao estao confirmados');
-  assert.ok(/pergunta 2 do Passo 4/.test(p), 'o passo nao manda para a pergunta 2 do Passo 4');
-  assert.ok(/junto com o n[úu]mero/i.test(p), 'o passo nao manda dizer isso ao dono junto com o numero');
+  assert.ok(/canonical-source candidates/i.test(p), 'o passo nao diz que o numero conta candidatos a fonte canonica');
+  assert.ok(/not yet confirmed/i.test(p), 'o passo nao diz que ainda nao estao confirmados');
+  assert.ok(/question 2 of Step 4/.test(p), 'o passo nao manda para a pergunta 2 do Passo 4');
+  assert.ok(/together with the number/i.test(p), 'o passo nao manda dizer isso ao dono junto com o numero');
 });
 
 test('T11-5: o Passo 4b pergunta onde cada coisa se registra, depois do 4 e antes do 5, sem virar a 7a pergunta', () => {
   const t = ler('skills/init/SKILL.md');
-  const i4 = t.indexOf('\n## Passo 4 ');
-  const i4b = t.indexOf('\n## Passo 4b');
-  const i5 = t.indexOf('\n## Passo 5 ');
+  const i4 = t.indexOf('\n## Step 4 ');
+  const i4b = t.indexOf('\n## Step 4b');
+  const i5 = t.indexOf('\n## Step 5 ');
   assert.ok(i4 !== -1 && i4b !== -1 && i5 !== -1, 'faltou o Passo 4, o 4b ou o 5');
   assert.ok(i4 < i4b && i4b < i5, 'o 4b tem de vir depois do 4 e antes do 5');
-  const p = plano(secaoDoInit('Passo 4b'));
-  assert.ok(/^ ## Passo 4b [—-] onde cada coisa se registra/.test(p), 'titulo do 4b');
-  assert.ok(/log de decis[õo]es/i.test(p), 'faltou o destino: log de decisoes');
-  assert.ok(/d[úu]vidas (ainda )?abertas/i.test(p), 'faltou o destino: duvidas abertas');
+  const p = plano(secaoDoInit('Step 4b'));
+  assert.ok(/^ ## Step 4b [—-] where each thing is recorded/.test(p), 'titulo do 4b');
+  assert.ok(/decision log/i.test(p), 'faltou o destino: log de decisoes');
+  assert.ok(/still-open questions/i.test(p), 'faltou o destino: duvidas abertas');
   assert.ok(/ledger/i.test(p), 'faltou o destino: ledger do plano em execucao');
   assert.ok(/ondeRegistrar/.test(p), 'o 4b nao cita a fatia ondeRegistrar');
   assert.ok(/AskUserQuestion/.test(p), 'o 4b nao usa AskUserQuestion');
-  assert.ok(/Passo 3b/.test(p), 'o 4b nao manda oferecer so nome da listagem do Passo 3b');
-  assert.ok(/N[ãa]o crie os arquivos|n[ãa]o cri(e|ar) os arquivos/i.test(p), 'o 4b nao diz que nao cria os arquivos');
-  assert.ok(/Passo 7c/.test(p) && /decisoes/.test(p), 'o 4b nao diz que a resposta vai para a fatia decisoes do 7c');
-  assert.ok(/N[ãa]o gravar/.test(p) && /lugar nenhum/.test(p),
+  assert.ok(/Step 3b/.test(p), 'o 4b nao manda oferecer so nome da listagem do Passo 3b');
+  assert.ok(/Do not create the files/i.test(p), 'o 4b nao diz que nao cria os arquivos');
+  assert.ok(/Step 7c/.test(p) && /decisoes/.test(p), 'o 4b nao diz que a resposta vai para a fatia decisoes do 7c');
+  assert.ok(/Don't save/.test(p) && /not saved anywhere/.test(p),
     'o 4b nao avisa que, com "Nao gravar" a skill no 7c, a resposta nao fica gravada em lugar nenhum');
   // o 4b nao e a 7a pergunta do Passo 4 (ondeRegistrar nao e campo do projeto.json)
   assert.strictEqual(projetoLib.CHAVES.indexOf('ondeRegistrar'), -1);
-  const p4 = secaoDoInit('Passo 4 ');
+  const p4 = secaoDoInit('Step 4 ');
   assert.ok(!/ondeRegistrar/.test(p4), 'o Passo 4 nao pode carregar a pergunta do 4b');
 });
 
 // D503 (plano d503, Tarefa 6, 1o subitem): a referencia de topo e perguntada no fim do 4b (o Passo 4 segue com seis
 // perguntas), grava `referencias`, e a opcao de nunca usar grava `{}`, que cala o aviso da abertura.
 test('D503 T6: o 4b pergunta a referencia de topo e grava referencias; o Passo 4 nao a carrega', () => {
-  const p = plano(secaoDoInit('Passo 4b'));
-  assert.ok(/refer[êe]ncia de topo/i.test(p), 'o 4b nao pergunta a referencia de topo');
+  const p = plano(secaoDoInit('Step 4b'));
+  assert.ok(/top reference/i.test(p), 'o 4b nao pergunta a referencia de topo');
   assert.ok(/`referencias`/.test(p), 'o 4b nao diz que grava a chave referencias');
   assert.ok(/`tela`/.test(p) && /`codigo`/.test(p) && /`texto`/.test(p), 'o 4b nao diz os tres tipos');
   assert.ok(/`"referencias": \{\}`/.test(p), 'o 4b nao diz que "nunca" grava o objeto vazio');
-  assert.ok(/avisa uma vez/.test(p), 'o 4b nao diz que, sem a chave, a abertura avisa uma vez');
-  assert.ok(/seis perguntas/.test(p), 'o 4b nao diz por que a pergunta mora nele (as seis do Passo 4)');
-  assert.ok(!/referencias/.test(secaoDoInit('Passo 4 ')), 'o Passo 4 nao pode carregar a pergunta da referencia');
-  assert.ok(/`referencias`/.test(plano(secaoDoInit('Passo 7 '))), 'o Passo 7 nao diz quando gravar referencias');
+  assert.ok(/warns once/.test(p), 'o 4b nao diz que, sem a chave, a abertura avisa uma vez');
+  assert.ok(/six questions/.test(p), 'o 4b nao diz por que a pergunta mora nele (as seis do Passo 4)');
+  assert.ok(!/referencias/.test(secaoDoInit('Step 4 ')), 'o Passo 4 nao pode carregar a pergunta da referencia');
+  assert.ok(/`referencias`/.test(plano(secaoDoInit('Step 7 '))), 'o Passo 7 nao diz quando gravar referencias');
 });
 
 test('T11-5: a linha decisoes do Passo 7c remete ao 4b e nao pergunta de novo', () => {
-  const linha = secaoDoInit('Passo 7c').split('\n').filter((l) => /^\| `decisoes` \|/.test(l))[0];
+  const linha = secaoDoInit('Step 7c').split('\n').filter((l) => /^\| `decisoes` \|/.test(l))[0];
   assert.ok(linha, 'sumiu a linha decisoes do 7c');
-  assert.ok(/Passo 4b/.test(linha), 'a linha decisoes nao remete ao Passo 4b');
-  assert.ok(/sem perguntar de novo/i.test(linha), 'a linha decisoes nao diz que nao se pergunta de novo');
+  assert.ok(/Step 4b/.test(linha), 'a linha decisoes nao remete ao Passo 4b');
+  assert.ok(/without asking again/i.test(linha), 'a linha decisoes nao diz que nao se pergunta de novo');
 });
 
 test('D396 n. 12, 17, 20, 21, 26, 28: os textos de skill e README dizem o que o codigo faz', () => {
-  const p4b = plano(secaoDoInit('Passo 4b'));
-  assert.ok(/uma pergunta por lugar/.test(p4b), 'n. 17: o 4b nao diz que e uma pergunta por lugar (3 lugares != 3 opcoes)');
-  const naoGravar = plano(secaoDoInit('Passo 7c')).match(/\*\*N[ãa]o gravar\*\*[^*]*/);
+  const p4b = plano(secaoDoInit('Step 4b'));
+  assert.ok(/one question per place/.test(p4b), 'n. 17: o 4b nao diz que e uma pergunta por lugar (3 lugares != 3 opcoes)');
+  const naoGravar = plano(secaoDoInit('Step 7c')).match(/\*\*Don't save\*\*[^*]*/);
   assert.ok(naoGravar, 'n. 20: sumiu a opcao Nao gravar do 7c');
-  assert.ok(!/nada se perde/.test(naoGravar[0]) && /Passo 4b/.test(naoGravar[0]),
+  assert.ok(!/nothing is lost/.test(naoGravar[0]) && /Step 4b/.test(naoGravar[0]),
     'n. 20: o Nao gravar do 7c tem de dizer que a resposta do 4b se perde');
-  assert.ok(/Gerado por `\/sworn:init`"; com mais de uma/.test(p4b), 'n. 21: o re-init nao diz qual skill e a do projeto');
+  assert.ok(/Gerado por `\/sworn:init`"; with more than one/.test(p4b), 'n. 21: o re-init nao diz qual skill e a do projeto');
   const padrao = plano(ler('skills/playbook/SKILL.md'));
-  assert.ok(/Gerado por `\/sworn:init`"; com mais de uma assim, perguntar ao dono/.test(padrao),
+  assert.ok(/Gerado por `\/sworn:init`"; with more than one like that, ask the owner/.test(padrao),
     'n. 21: o Passo 0-bis nao diz qual skill e a do projeto');
   // sessao 27: so a gerada deixava de fora a skill de execucao escrita a mao, que a secao 1 diz que vence
-  assert.ok(/perguntar ao dono qual vale; sem nenhuma assim, a escrita [àa] m[ãa]o/.test(padrao),
+  assert.ok(/ask the owner which one applies; with none like that, the handwritten one/.test(padrao),
     'sessao 27: o Passo 0-bis exclui a skill de execucao escrita a mao');
   const revisar = ler('skills/review/SKILL.md');
-  assert.ok(!/~50 pares/.test(revisar) && /com mais de 50 pares, lotes de at[ée] 50/.test(revisar), 'n. 26: lote do juiz ambiguo');
+  assert.ok(!/~50 pairs/.test(revisar) && /with more than 50 pairs, batches of up to 50/.test(revisar), 'n. 26: lote do juiz ambiguo');
   const i = README.indexOf('\n## Como desligar uma trava');
   const f = README.indexOf('\n## ', i + 4);
   assert.ok(i !== -1 && /"portaoDecisao": false/.test(README.slice(i, f)), 'n. 28: o portaoDecisao fora de Como desligar');
@@ -756,8 +765,8 @@ test('D447: inspetor e juiz-mesmo tem tools fechada so de leitura e omitClaudeMd
 
 test('D387: o Passo 3 do revisar manda despachar sworn:dedupe-judge e gravar o mesmos.json', () => {
   const t = ler('skills/review/SKILL.md');
-  const i = t.indexOf('## Passo 3');
-  const f = t.indexOf('## Passo 4');
+  const i = t.indexOf('## Step 3');
+  const f = t.indexOf('## Step 4');
   assert.ok(i !== -1 && f > i, 'sumiu o Passo 3 do revisar');
   const passo3 = t.slice(i, f);
   assert.ok(passo3.includes('sworn:dedupe-judge'), 'o Passo 3 nao cita o sworn:dedupe-judge');
@@ -795,38 +804,38 @@ const secao = (s, de, ate) => {
 };
 
 test('D497: a escolha visual prefere a pagina Artifact e cai na imagem sem a ferramenta', () => {
-  const p = secao(ler('skills/playbook/SKILL.md'), '**Escolha visual:', '**Ação manual do dono');
-  assert.ok(/p[áa]gina Artifact/.test(p), 'D497: o paragrafo nao cita a pagina Artifact');
-  assert.ok(/claro e escuro/.test(p), 'D497: o paragrafo nao pede claro e escuro');
-  assert.ok(/notebook/.test(p) && /celular/.test(p), 'D497: o paragrafo nao pede notebook e celular');
+  const p = secao(ler('skills/playbook/SKILL.md'), '**Visual choice:', '**A manual action by the owner');
+  assert.ok(/Artifact page/.test(p), 'D497: o paragrafo nao cita a pagina Artifact');
+  assert.ok(/light and dark/.test(p), 'D497: o paragrafo nao pede claro e escuro');
+  assert.ok(/laptop/.test(p) && /phone/.test(p), 'D497: o paragrafo nao pede notebook e celular');
   // revisao R1 da 0.7.6: celular atropelava o viewport que o projeto tirou; a pagina pulava a espera do envio
-  assert.ok(/larguras de tela que o projeto declara \(sem declara[çc][ãa]o/.test(p), 'D497: as larguras nao seguem as que o projeto declara');
+  assert.ok(/screen widths the project declares \(with no declaration/.test(p), 'D497: as larguras nao seguem as que o projeto declara');
   // revisao R2: sem larguras declaradas, celular so entra se o produto roda em celular
-  assert.ok(/celular s[óo] se ele roda em celular/.test(p), 'D497: sem declaracao, a largura de celular entra mesmo sem o produto rodar nela');
-  assert.ok(/[Oo] rito [ée] o da imagem[^.]*turno seguinte/.test(p), 'D497: a pagina nao segue o rito da imagem (envio, depois as 3 opcoes)');
-  assert.ok(/[Ss]em a ferramenta[^.]*imagem/.test(p), 'D497: o paragrafo nao diz que sem a ferramenta cai na imagem');
-  assert.ok(/s[óo] (com )?dado fict[íi]cio/i.test(p), 'D497: o paragrafo nao manda usar so dado ficticio');
+  assert.ok(/phone one only if it runs on a phone/.test(p), 'D497: sem declaracao, a largura de celular entra mesmo sem o produto rodar nela');
+  assert.ok(/[Tt]he rite is that of the image[^.]*next turn/.test(p), 'D497: a pagina nao segue o rito da imagem (envio, depois as 3 opcoes)');
+  assert.ok(/[Ww]ithout the tool[^.]*image/.test(p), 'D497: o paragrafo nao diz que sem a ferramenta cai na imagem');
+  assert.ok(/fictitious data only/i.test(p), 'D497: o paragrafo nao manda usar so dado ficticio');
 });
 
 test('D498: as lentes 2, 4 e 7 da rubrica de tela dizem catalogo, alvo de 24 px e INP', () => {
   const r = ler('skills/playbook/references/02-rubrica-aaa.md');
-  const l2 = secao(r, '## Lente 2', '## Lente 3');
-  assert.ok(/cat[áa]logo de componentes/.test(l2) && /p[áa]gina de estados/.test(l2), 'D498 n. 2: a Lente 2 nao cita catalogo ou pagina de estados');
-  const l4 = secao(r, '## Lente 4', '## Lente 5');
+  const l2 = secao(r, '## Lens 2', '## Lens 3');
+  assert.ok(/component catalog/.test(l2) && /states page/.test(l2), 'D498 n. 2: a Lente 2 nao cita catalogo ou pagina de estados');
+  const l4 = secao(r, '## Lens 4', '## Lens 5');
   assert.ok(/24 × 24 px/.test(l4) && /2\.5\.8/.test(l4), 'D498 n. 5: a Lente 4 nao cita o alvo de 24 x 24 px (WCAG 2.5.8)');
   assert.ok(/\*\*P1:\*\*[^*]*24 × 24/.test(l4), 'D498 n. 5: alvo abaixo de 24 x 24 px nao e P1 na Lente 4');
   // revisao R2: na WCAG 2.5.8 o controle equivalente cumpre os 24 px; "do mesmo tamanho" isentava o alvo pequeno
-  assert.ok(/outro controle da p[áa]gina que cumpre os 24 px/.test(l4) && !/do mesmo tamanho/.test(l4),
+  assert.ok(/another control on the page that meets the 24 px/.test(l4) && !/of the same size/.test(l4),
     'D498 n. 5: a excecao do controle equivalente nao exige que ele cumpra os 24 px');
-  const l7 = secao(r, '## Lente 7', '## Lente 8');
+  const l7 = secao(r, '## Lens 7', '## Lens 8');
   assert.ok(/INP/.test(l7) && /200 ms/.test(l7) && /500 ms/.test(l7), 'D498 n. 4: a Lente 7 nao cita o INP com 200 e 500 ms');
   assert.ok(/\*\*P1:\*\*[^*]*500 ms/.test(l7), 'D498 n. 4: INP medido acima de 500 ms nao e P1 na Lente 7');
 });
 
 test('D498: a Marcha AAA pede comparacao de print antes x depois e entrega o roteiro de 5 usuarios', () => {
-  const m = secao(ler('skills/playbook/references/01-marchas-e-gates.md'), '## Marcha 3', '## Regra de d');
-  assert.ok(/compara[çc][ãa]o (autom[áa]tica )?de print antes × depois/.test(m), 'D498 n. 1: o portao visual nao cita a comparacao de print');
-  assert.ok(/5 usu[áa]rios/.test(m) && /n[ãa]o bloqueia/.test(m), 'D498 n. 3: a Marcha AAA nao entrega o roteiro de 5 usuarios sem bloquear');
+  const m = secao(ler('skills/playbook/references/01-marchas-e-gates.md'), '## Gear 3', '## Doubt rule');
+  assert.ok(/(automatic )?comparison of screenshots before × after/.test(m), 'D498 n. 1: o portao visual nao cita a comparacao de print');
+  assert.ok(/5 real users/.test(m) && /does not block/.test(m), 'D498 n. 3: a Marcha AAA nao entrega o roteiro de 5 usuarios sem bloquear');
 });
 
 // D503 (plano d503, Tarefa 4): a regra 1 do prompt - a referencia de topo e nomeada antes de fazer e se abre -
@@ -834,13 +843,13 @@ test('D498: a Marcha AAA pede comparacao de print antes x depois e entrega o rot
 test('D503: a 4.1 do padrao manda nomear antes a referencia de topo que se abre e aponta referencias e o revisar', () => {
   const s = secao(ler('skills/playbook/SKILL.md'), '### 4.1', '### 4.2');
   assert.ok(s.includes('{{texto:artefatoDeReferencia}}'), 'a 4.1 perdeu o artefatoDeReferencia');
-  assert.match(s, /antes de (come[çc]ar|fazer)/i, 'a 4.1 nao diz que a referencia se nomeia antes de fazer');
-  assert.match(s, /se abre/, 'a 4.1 nao exige referencia que se abre');
-  assert.match(s, /nunca uma lembran[çc]a/, 'a 4.1 aceita referencia de memoria');
+  assert.match(s, /before (starting|doing)/i, 'a 4.1 nao diz que a referencia se nomeia antes de fazer');
+  assert.match(s, /can be opened/, 'a 4.1 nao exige referencia que se abre');
+  assert.match(s, /never a recollection/, 'a 4.1 aceita referencia de memoria');
   assert.match(s, /`referencias`/, 'a 4.1 nao aponta a chave referencias do projeto.json');
   assert.match(s, /\/sworn:review/, 'a 4.1 nao aponta a revisao que usa a referencia');
-  assert.match(s, /nas duas ordens/, 'a 4.1 nao diz a regra de pronto contra a referencia');
-  assert.match(s, /sem refer[êe]ncia/, 'a 4.1 nao diz o que fazer sem referencia');
+  assert.match(s, /in both orders/, 'a 4.1 nao diz a regra de pronto contra a referencia');
+  assert.match(s, /no reference/, 'a 4.1 nao diz o que fazer sem referencia');
 });
 
 // ── L6 da revisao completa: o texto diz o que o codigo faz ─────────────────
@@ -855,16 +864,16 @@ test('A4-06: a skill gerada nao manda rodar script do plugin como se morasse no 
 test('A4-07: o aprender diz que o propor-regra.js RECUSA quebra de linha (D434)', () => {
   assert.match(ler('scripts/propor-regra.js'), /RECUSADA: o gatilho ou a acao tem quebra de linha\. Nada foi gravado\./);
   const p = plano(ler('skills/learn/SKILL.md'));
-  assert.ok(!/n[ãa]o recusa texto com duas linhas/i.test(p), 'a skill ainda diz que o script nao recusa');
-  assert.ok(!/grava assim mesmo/i.test(p), 'a skill ainda diz que o script grava a regra partida');
-  assert.match(p, /recusa .{0,80}RECUSADA/, 'a skill nao diz que o script recusa, com a palavra que ele imprime');
+  assert.ok(!/(?:does not|doesn't) refuse text with two lines/i.test(p), 'a skill ainda diz que o script nao recusa');
+  assert.ok(!/writes (?:it )?anyway/i.test(p), 'a skill ainda diz que o script grava a regra partida');
+  assert.match(p, /refuses .{0,80}RECUSADA/, 'a skill nao diz que o script recusa, com a palavra que ele imprime');
 });
 
 test('A8-01: o Passo 5 do init nao diz que aaa e padrao barram igual (o portao do manual so olha aaa)', () => {
   assert.match(ler('scripts/portao-escopo.js'), /marcha === 'aaa' && projeto\.portaoManual !== false/);
-  const p = plano(secaoDoInit('Passo 5 '));
-  assert.ok(!/barram exatamente igual/.test(p), 'o Passo 5 ainda diz que aaa e padrao barram igual');
-  assert.ok(!/n[ãa]o [ée], hoje, uma trava mais apertada/.test(p), 'o Passo 5 ainda diz que aaa nao aperta mais');
+  const p = plano(secaoDoInit('Step 5 '));
+  assert.ok(!/block exactly the same/.test(p), 'o Passo 5 ainda diz que aaa e padrao barram igual');
+  assert.ok(!/is not, today, a (?:stricter|tighter) (?:lock|gate)/.test(p), 'o Passo 5 ainda diz que aaa nao aperta mais');
   assert.match(p, /`aaa`.{0,200}manual/, 'o Passo 5 nao diz que aaa exige o manual');
   assert.match(p, /portaoManual"?: false/, 'o Passo 5 nao diz a chave que desliga o portao do manual');
 });
@@ -874,9 +883,9 @@ test('A8-02: o aprender diz o que o gancho manda - rodar na mesma resposta e per
   assert.match(ordem, /nesta mesma resposta/);
   assert.match(ordem, /em 3 opcoes/);
   const p = plano(ler('skills/learn/SKILL.md'));
-  assert.ok(!/oferece em uma linha/.test(p), 'a skill ainda diz que o agente so oferece em uma linha');
-  assert.match(p, /na mesma resposta/, 'a skill nao diz que roda na mesma resposta');
-  assert.match(p, /3 op[çc][õo]es/, 'a skill nao diz que pergunta em 3 opcoes');
+  assert.ok(!/offers in one line/.test(p), 'a skill ainda diz que o agente so oferece em uma linha');
+  assert.match(p, /in the same response/, 'a skill nao diz que roda na mesma resposta');
+  assert.match(p, /3 options/, 'a skill nao diz que pergunta em 3 opcoes');
 });
 
 test('A11-01: o que o init manda escrever (Passos 3, 4 e 8) nao e lido como alegacao de sucesso pelo fecho', () => {

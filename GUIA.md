@@ -821,6 +821,7 @@ um módulo opcional, ou têm a própria chave. Cada um abaixo diz o que faz e co
 | Estilo (`scripts/portao-estilo.js`, antes de `Bash` e `PowerShell`) | com `.claude/sworn/design.json` declarado, nega o arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`, que o portão de escopo confere | não ter o `design.json` (módulo opcional, sem trava) |
 | Prompt do handoff (`scripts/portao-fecho.js`, no fim do turno) | barra o turno que gravou um arquivo de handoff e não colou o prompt em bloco de código na resposta final | `"portaoHandoff": false` (ver "Como desligar uma trava") |
 | Referência de topo (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo mudado na sessão é da marcha AAA, o tipo dele tem `referencias` declarada e nenhuma revisão contra ela fechou na sessão; a mensagem diz o comando, `/sworn:review <arquivo>` | `"portaoReferencia": false` (ver "Como desligar uma trava") |
+| Revisão aprovada (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo de código mudado na sessão é da marcha AAA e não tem revisão aprovada (a mesma que libera o commit), com ou sem `referencias`; a mensagem cita os arquivos e o comando, `/sworn:review <arquivo>` | `"portaoRevisao": false` (ver "Como desligar uma trava") |
 | Qualidade de resposta (a abertura) | injeta as seis regras de clareza das respostas no chat; não barra nada | `"qualidadeDeResposta": false` (ver "Qualidade de resposta") |
 | Vigia (a abertura) | mostra uma vez a "novidade da semana" do plugin e a conta do radar da semana; só para quem mantém o plugin | **desligado por padrão**, menos no repositório do próprio plugin; `"vigia": true` liga, `false` desliga |
 
@@ -857,7 +858,7 @@ sworn: ATENCAO - valor de tipo errado em .claude/sworn/projeto.json: portaoDecis
 ~~~
 
 E a conferência final do `/sworn:init` (`scripts/validar.js`) reprova o arquivo com a mesma frase, `<chave> tem
-de ser true ou false`. O `vigia` é o contrário (só `true` liga), e `"true"` entre aspas também não liga. A lista das quinze chaves, com o padrão de cada uma, está em "O `projeto.json` chave por chave".
+de ser true ou false`. O `vigia` é o contrário (só `true` liga), e `"true"` entre aspas também não liga. A lista das dezesseis chaves, com o padrão de cada uma, está em "O `projeto.json` chave por chave".
 
 ---
 
@@ -878,7 +879,7 @@ injetado pela abertura da sessão, **ligado por padrão**. O bloco, literal:
 5. Evidencia: no bloco, so a linha que prova. Sai: o log inteiro. Fica: "tests 12 | pass 12 | fail 0".
 6. Nao repetir o que o usuario acabou de ler ou decidir: citar onde esta. A resposta final fecha sozinha: o que mudou e o que falta, mesmo bloqueada.
 
-Valem no idioma de quem pergunta. Texto gravado em arquivo (plano, decisao, handoff) fica fora.
+Reply in the user's language; the rules hold in any. Files you write (plan, decision, handoff) are out.
 Desligar neste projeto: "qualidadeDeResposta": false em .claude/sworn/projeto.json.
 ```
 
@@ -890,7 +891,7 @@ O "Sai/Fica" de cada regra está no próprio bloco: o que cortar e o que escreve
   pulada — por isso o recurso não entra na conta das oito travas.
 - **Funciona sem `/sworn:init`.** Sem `projeto.json`, o bloco é tudo o que a abertura imprime.
 - **Subagente não recebe.** Inferido, não medido: a abertura roda na sessão principal, e o bloco chega a ela.
-- **Custo:** 986 caracteres por abertura, e nenhum por turno.
+- **Custo:** 994 caracteres por abertura, e nenhum por turno.
 
 ### O placar da medição
 
@@ -1666,6 +1667,16 @@ arquivo mudado na sessão resolve para a marcha `aaa`; o tipo dele (`texto` para
 `referencias`, nada muda. Desliga com `"portaoReferencia": false` no `projeto.json`; `travas.fecho: false` não o
 desliga.
 
+**O portão da revisão aprovada** vale para todo arquivo da marcha `aaa`, com ou sem `referencias`. Ele barra o fim do
+turno cuja resposta alega entrega quando um arquivo de código mudado na sessão resolve para a marcha `aaa` e não tem
+revisão aprovada: a revisão cega que terminou em "aprovado" (duas rondas secas), a mesma que libera o commit. Texto
+(`.md`, `.txt`) e arquivo apagado ficam fora, como no commit; arquivo editado de novo depois de aprovado volta a
+cobrar. A mensagem dá três saídas: rodar `/sworn:review <arquivo>` até "aprovado"; no teto de 3 rondas, parar e pedir
+ao usuário que escolha entre corrigir e conferir uma vez, entregar sem revisão com o motivo, ou revisar tudo de novo;
+ou dizer ao usuário que a entrega fica sem revisão, e por quê ("sem revisão", "without review"
+na resposta liberam). O arquivo que o portão da referência já cita no turno não sai de novo. Marcha `padrao` e
+`rapida` não mudam. Desliga com `"portaoRevisao": false` no `projeto.json`; `travas.fecho: false` não o desliga.
+
 ---
 
 ## O `projeto.json` chave por chave
@@ -1707,6 +1718,7 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 | `portaoDecisao` | o portão da pergunta ao dono (3 opções, a recomendada em primeiro) | ligado; `false` desliga |
 | `portaoHandoff` | o portão do prompt do handoff no chat | ligado; `false` desliga |
 | `portaoReferencia` | o portão da referência de topo: barra a entrega AAA sem revisão contra a `referencias` na sessão | ligado; `false` desliga |
+| `portaoRevisao` | o portão da revisão aprovada: barra a entrega com arquivo de código da marcha AAA mudado na sessão sem revisão aprovada | ligado; `false` desliga |
 | `portaoManual` | o portão do manual: nega editar arquivo da marcha AAA enquanto o manual de execução (skill com "padrao" no nome) não foi carregado na sessão | ligado; `false` desliga |
 | `portaoCommit` | o portão do commit (`scripts/portao-commit.js`): nega o `git commit` enquanto um arquivo de código mudado na sessão não tem revisão aprovada; diz a faixa e quantos inspetores cada um pede, e aponta o atalho novo sem "trocar quando:" | ligado; `false` desliga |
 | `paralelismo` | as regras de trabalho em paralelo que a abertura injeta | ligado; `false` desliga |
@@ -1726,7 +1738,7 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 
 | Chave | O que `false` faz | Padrão |
 |---|---|---|
-| `travas.fecho` | desliga a cobrança de evidência no fim do turno (trava 3); o portão do prompt do handoff e o da referência de topo não desligam com ela | `true` |
+| `travas.fecho` | desliga a cobrança de evidência no fim do turno (trava 3); o portão do prompt do handoff, o da referência de topo e o da revisão aprovada não desligam com ela | `true` |
 | `travas.destrutivo` | desliga o bloqueio de comando destrutivo e o do `cd` solto, juntos (trava 5) | `true` |
 | `travas.outraFrente` | desliga o bloqueio de escrita em arquivo que outra frente já mexeu (trava 5) | `true` |
 | `travas.escopo` | nada: a chave é exigida pelo schema, mas nenhum portão a lê (ver "Como desligar uma trava") | `true` |

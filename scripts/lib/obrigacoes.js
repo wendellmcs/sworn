@@ -64,7 +64,10 @@ const RE_SOLTA = /^\*\*((?:(?!\*\*)[\s\S]){12,200})\*\*[.\s]*$/;
  */
 const MARCADORES = [
   /obrigat/i, /inviol/i, /precisa ter/i, /proibid/i, /jamais/i,
-  /nunca/i, /sempre/i, /tem de/i, /cont[a\u00e1]ve/i, /pedir decis/i
+  /nunca/i, /sempre/i, /tem de/i, /cont[a\u00e1]ve/i, /pedir decis/i,
+  // D656 (T3): o manual do plugin agora e ingles; os mesmos marcadores em ingles.
+  /required|mandatory/i, /must have/i, /forbidden|prohibited/i, /\bnever\b/i, /\balways\b/i, /\bmust\b/i,
+  /countable/i, /\bask\b[\w ]{0,20} for a decision/i
 ];
 
 const LIMITE_ANUNCIO = 160;

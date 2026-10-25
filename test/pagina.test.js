@@ -18,7 +18,8 @@ const RAIZ = path.join(__dirname, '..');
 const ler = (rel) => fs.readFileSync(path.join(RAIZ, rel), 'utf8').replace(/\r\n/g, '\n');
 const LEIAME = { en: 'README.md', pt: 'README.pt-BR.md' };
 const GUIA = 'GUIA.md';
-const TETO_DE_LINHAS = 200;
+// A vitrine completa (pedido 3) trocou o README curto: o teto subiu de 200 para 300 por decisao do dono.
+const TETO_DE_LINHAS = 300;
 
 /** O texto entre os marcadores do trecho `nome`. */
 function trecho(texto, nome, rel) {
@@ -94,6 +95,8 @@ test('pagina: os numeros da medicao sao os do medicao/resultado.txt, nos dois id
 // O grafico desenha a mesma conta: 60 execucoes = LARGURA px; a barra de zero e um toco de 2 px, para se ver.
 const LARGURA = 560;
 const GRAFICOS = ['assets/medicao-en.svg', 'assets/medicao-pt.svg'];
+// Pedido 3 (vitrine completa): o mapa de onde o plugin se pendura na sessao, um por idioma.
+const FIGURAS_GANCHOS = { en: 'assets/ganchos-en.svg', pt: 'assets/ganchos-pt.svg' };
 
 test('pagina: os graficos da medicao dizem e desenham os numeros do resultado.txt', () => {
   const { sem, com, veredito } = resultado();
@@ -134,8 +137,8 @@ function contraste(a, b) {
   return (x + 0.05) / (y + 0.05);
 }
 
-test('pagina: os graficos da medicao tem contraste AA nos dois temas', () => {
-  for (const rel of GRAFICOS) {
+test('pagina: os graficos da medicao e a figura dos ganchos tem contraste AA nos dois temas', () => {
+  for (const rel of GRAFICOS.concat(Object.values(FIGURAS_GANCHOS))) {
     const estilo = ler(rel).match(/<style>([\s\S]*?)<\/style>/)[1];
     const i = estilo.indexOf('@media (prefers-color-scheme: dark)');
     assert.ok(i !== -1, rel + ': sem o tema escuro');
@@ -192,6 +195,61 @@ test('pagina: as travas dos READMEs sao as da tabela do guia', () => {
     const nums = linhasDeTabela(trecho(t, 'travas', rel)).map((l) => Number((l.match(/^\|\s*(\d+)\s*\|/) || [])[1]));
     assert.deepStrictEqual(nums, doGuia, rel + ': a tabela de travas difere da do guia');
   });
+});
+
+// Pedido 3: a figura dos ganchos mostra cada evento e cada script ligado no hooks.json; gancho novo sem figura reprova.
+test('pagina: a figura dos ganchos de cada idioma mostra cada evento e cada script do hooks.json', () => {
+  const hooks = JSON.parse(ler('hooks/hooks.json')).hooks;
+  assert.ok(hooks && typeof hooks === 'object', 'o hooks.json nao tem a chave "hooks"');
+  const scripts = new Set();
+  // Nome vazio casaria com qualquer figura no cita() abaixo: falso verde. Por isso evento e script nao podem ser ''.
+  for (const [evento, grupos] of Object.entries(hooks)) {
+    assert.ok(evento && Array.isArray(grupos), 'evento "' + evento + '" sem nome ou sem a lista de grupos no hooks.json');
+    for (const g of grupos) {
+      assert.ok(g && Array.isArray(g.hooks), 'grupo de ' + evento + ' sem a lista "hooks" no hooks.json');
+      for (const h of g.hooks) {
+        const nome = h && Array.isArray(h.args) && typeof h.args[0] === 'string' ? path.basename(h.args[0]) : '';
+        assert.ok(nome, 'gancho de ' + evento + ' sem o caminho do script em args[0] no hooks.json: o leitor nao acha o script');
+        scripts.add(nome);
+      }
+    }
+  }
+  const esperados = Object.keys(hooks).concat(Array.from(scripts));
+  assert.ok(scripts.size > 0, 'nenhum script no hooks.json: o leitor quebrou');
+  // Nome inteiro, nao pedaco: "Stop" nao vale por estar dentro de "SubagentStop".
+  const cita = (texto, nome) => new RegExp('(^|[^A-Za-z-])' + nome.replace(/[.]/g, '\\.') + '(?![A-Za-z-])').test(texto);
+  cada((rel, t, lingua) => {
+    const fig = FIGURAS_GANCHOS[lingua];
+    const visivel = Array.from(ler(fig).matchAll(/<text[^>]*>([^<]*)<\/text>/g)).map((m) => m[1]).join('\n');
+    assert.deepStrictEqual(esperados.filter((n) => !cita(visivel, n)), [],
+      fig + ': evento ou script do hooks.json fora da figura; acrescente o nome a ' + fig);
+    assert.ok(t.indexOf('src="' + fig + '"') !== -1, rel + ' nao mostra a figura dos ganchos do seu idioma (' + fig + ')');
+  });
+});
+
+// D662: as travas seguem oito; os portoes fora da conta tem tabela propria. Cada chave portao* de liga/desliga esta
+// nela, e o numero dito no titulo da secao e no topo da pagina e o das linhas, nos dois idiomas.
+const POR_EXTENSO = { seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11 };
+test('pagina: a tabela dos portoes fora da conta cita cada chave portao* do codigo, e os numeros ditos sao os das linhas', () => {
+  const chaves = require('../scripts/lib/projeto.js').CHAVES_LIGA_DESLIGA.filter((k) => /^portao/.test(k));
+  assert.ok(chaves.length > 0, 'nenhuma chave portao* no projeto.js: o leitor quebrou');
+  const contagens = [];
+  cada((rel, t) => {
+    const s = trecho(t, 'portoes', rel);
+    const linhas = linhasDeTabela(s);
+    contagens.push(linhas.length);
+    assert.deepStrictEqual(chaves.filter((k) => s.indexOf('`' + k + '`') === -1), [], rel + ': portao com chave propria fora da tabela');
+    const titulo = t.slice(0, t.indexOf('<!-- pagina:portoes -->')).split('\n').filter((l) => /^### /.test(l)).pop();
+    assert.ok(titulo, rel + ': falta o titulo ### da secao antes da tabela dos portoes');
+    const nt = (titulo.match(/^### (?:Mais )?(\S+) (?:more gates|portões)/i) || [])[1];
+    assert.strictEqual(POR_EXTENSO[String(nt).toLowerCase()], linhas.length,
+      rel + ': o titulo "' + titulo + '" diz ' + nt + ' e a tabela tem ' + linhas.length + ' linhas');
+    const topo = t.match(/(\S+) more gates outside that count|mais (\S+) portões fora dessa conta/);
+    assert.ok(topo, rel + ': sumiu do topo a frase que conta os portoes fora das oito travas');
+    assert.strictEqual(POR_EXTENSO[(topo[1] || topo[2]).toLowerCase()], linhas.length,
+      rel + ': o topo diz "' + topo[0] + '" e a tabela tem ' + linhas.length + ' linhas');
+  });
+  assert.strictEqual(new Set(contagens).size, 1, 'os dois idiomas contam portoes diferentes: ' + contagens);
 });
 
 test('pagina: todo link relativo aponta para arquivo que existe, e cada idioma aponta o outro e o guia', () => {

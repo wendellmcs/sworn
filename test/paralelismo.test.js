@@ -58,19 +58,19 @@ const lerT = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 test('paralelismo: a sworn:playbook traz a regra inteira e a oferta do /sworn:parallel', () => {
   const t = lerT('skills/playbook/SKILL.md');
-  const i = t.indexOf('## 6-bis. Trabalho em paralelo');
+  const i = t.indexOf('## 6-bis. Parallel work');
   const f = t.indexOf('## 7. ');
   assert.ok(i !== -1 && f > i, 'falta a secao 6-bis antes da 7');
   const s = t.slice(i, f);
-  for (const trecho of ['segundo plano', 'isolation: worktree', 'alegação', 'mais barato', '/sworn:parallel', 'custo', '8 agentes']) {
+  for (const trecho of ['background', 'isolation: worktree', 'claim', 'cheapest', '/sworn:parallel', 'cost', '8 agents']) {
     assert.ok(s.indexOf(trecho) !== -1, 'a secao nao diz: ' + trecho);
   }
 });
 
 test('paralelismo: o init confere antes, pergunta uma vez em 3 opcoes e grava pelo script', () => {
   const t = lerT('skills/init/SKILL.md');
-  const i = t.indexOf('## Passo 5c');
-  const f = t.indexOf('## Passo 6 ');
+  const i = t.indexOf('## Step 5c');
+  const f = t.indexOf('## Step 6 ');
   assert.ok(i !== -1 && f > i, 'falta o Passo 5c antes do Passo 6');
   const s = t.slice(i, f);
   assert.ok(s.indexOf('autorizar-paralelo.js" --conferir') !== -1, 'falta conferir antes de perguntar');

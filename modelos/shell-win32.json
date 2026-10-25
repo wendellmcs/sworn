@@ -1,19 +1,19 @@
 {
   "quando": { "so": "win32" },
   "regras": [
-    { "padrao": "(^|\\s)/tmp(/|\\s|$)", "achado": "/tmp", "sugestao": "$env:TEMP", "motivo": "Windows nao tem /tmp" },
-    { "padrao": "2>\\s*/dev/null", "achado": "2>/dev/null", "sugestao": "2>$null", "motivo": "nao existe /dev/null no Windows" },
-    { "padrao": "(^|\\s)which(\\s|$)", "achado": "which", "sugestao": "(Get-Command nome).Source", "motivo": "which nao existe no PowerShell" },
-    { "padrao": "(^|\\s)touch(\\s|$)", "achado": "touch", "sugestao": "if (-not (Test-Path p)) { New-Item -ItemType File p }", "motivo": "touch nao existe; New-Item -Force TRUNCA arquivo existente" },
-    { "padrao": "(^|\\s)head(\\s|$)", "achado": "head", "sugestao": "Get-Content arq -TotalCount N", "motivo": "head nao existe no PowerShell" },
-    { "padrao": "(^|\\s)tail(\\s|$)", "achado": "tail", "sugestao": "Get-Content arq -Tail N", "motivo": "tail nao existe no PowerShell" },
-    { "padrao": "<<\\s*'?[A-Za-z_]+'?", "achado": "heredoc", "sugestao": "here-string @'...'@ com o fecho na coluna 0", "motivo": "PowerShell nao tem heredoc de shell" },
-    { "padrao": "mkdir\\s+-p", "achado": "mkdir -p", "sugestao": "New-Item -ItemType Directory -Force caminho", "motivo": "-p nao e flag do PowerShell" },
-    { "padrao": "\\brm\\s+-[a-zA-Z]*r", "achado": "rm -r", "sugestao": "Remove-Item -Recurse -Force", "motivo": "rm recursivo do bash" },
-    { "padrao": "\\bexport\\s+[A-Z_]+=", "achado": "export VAR=", "sugestao": "$env:VAR = 'valor'", "motivo": "export nao existe no PowerShell" }
+    { "padrao": "(^|\\s)/tmp(/|\\s|$)", "achado": "/tmp", "sugestao": "$env:TEMP", "motivo": "Windows has no /tmp" },
+    { "padrao": "2>\\s*/dev/null", "achado": "2>/dev/null", "sugestao": "2>$null", "motivo": "there is no /dev/null on Windows" },
+    { "padrao": "(^|\\s)which(\\s|$)", "achado": "which", "sugestao": "(Get-Command nome).Source", "motivo": "which doesn't exist in PowerShell" },
+    { "padrao": "(^|\\s)touch(\\s|$)", "achado": "touch", "sugestao": "if (-not (Test-Path p)) { New-Item -ItemType File p }", "motivo": "touch doesn't exist; New-Item -Force TRUNCATES an existing file" },
+    { "padrao": "(^|\\s)head(\\s|$)", "achado": "head", "sugestao": "Get-Content arq -TotalCount N", "motivo": "head doesn't exist in PowerShell" },
+    { "padrao": "(^|\\s)tail(\\s|$)", "achado": "tail", "sugestao": "Get-Content arq -Tail N", "motivo": "tail doesn't exist in PowerShell" },
+    { "padrao": "<<\\s*'?[A-Za-z_]+'?", "achado": "heredoc", "sugestao": "here-string @'...'@ with the closing at column 0", "motivo": "PowerShell has no shell heredoc" },
+    { "padrao": "mkdir\\s+-p", "achado": "mkdir -p", "sugestao": "New-Item -ItemType Directory -Force caminho", "motivo": "-p is not a PowerShell flag" },
+    { "padrao": "\\brm\\s+-[a-zA-Z]*r", "achado": "rm -r", "sugestao": "Remove-Item -Recurse -Force", "motivo": "bash recursive rm" },
+    { "padrao": "\\bexport\\s+[A-Z_]+=", "achado": "export VAR=", "sugestao": "$env:VAR = 'valor'", "motivo": "export doesn't exist in PowerShell" }
   ],
   "regrasPowerShell51": [
-    { "padrao": "\\s&&\\s", "achado": "&&", "sugestao": "; if ($?) { ... }", "motivo": "PowerShell 5.1 nao tem operador &&" },
-    { "padrao": "\\s\\|\\|\\s", "achado": "||", "sugestao": "; if (-not $?) { ... }", "motivo": "PowerShell 5.1 nao tem operador ||" }
+    { "padrao": "\\s&&\\s", "achado": "&&", "sugestao": "; if ($?) { ... }", "motivo": "PowerShell 5.1 has no && operator" },
+    { "padrao": "\\s\\|\\|\\s", "achado": "||", "sugestao": "; if (-not $?) { ... }", "motivo": "PowerShell 5.1 has no || operator" }
   ]
 }

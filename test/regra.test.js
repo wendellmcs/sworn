@@ -44,6 +44,16 @@ test('regra: nome de evento de hook cravado e recusado (D10)', () => {
   assert.strictEqual(regra.validarRegra('ao fechar -> conferir o PostToolUse').ok, false);
 });
 
+// D656 (T3): evento de hook e PascalCase; a palavra inglesa "stop" (e "stop" em qualquer frase) nao e o evento Stop.
+test('regra: "stop" minusculo e prosa, nao o evento Stop - o nome do evento continua recusado', () => {
+  assert.strictEqual(regra.validarRegra('when the scope grows -> stop and ask the owner').ok, true);
+  assert.strictEqual(regra.validarRegra('ao fechar -> conferir o gancho Stop').ok, false);
+  assert.strictEqual(regra.validarRegra('ao fechar -> conferir o SubagentStop').ok, false);
+  assert.strictEqual(regra.validarRegra('when closing -> check the sessionstart hook').ok, true);
+  // so o evento e sensivel: o resto dos fatos volateis segue casando em qualquer caixa
+  assert.strictEqual(regra.validarRegra('ao escolher modelo -> usar o CLAUDE-SONNET-4').ok, false);
+});
+
 test('regra: flag de linha de comando cravada e recusada (D10)', () => {
   assert.strictEqual(regra.validarRegra('ao rodar teste -> passar --fail-fast').ok, false);
 });
@@ -162,8 +172,8 @@ test('regra: nucleo reinjeta as regras do projeto, e cita a fonte', () => {
  */
 test('R-T10-49: no roteiro do init, semear as regras vem ANTES de gravar o projeto.json', () => {
   const skill = fs.readFileSync(path.join(__dirname, '..', 'skills', 'init', 'SKILL.md'), 'utf8');
-  const semear = skill.indexOf('semear as regras');
-  const gravar = skill.indexOf('gravar e validar');
+  const semear = skill.indexOf('seed the rules');
+  const gravar = skill.indexOf('write and validate');
   assert.ok(semear !== -1, 'nao achei o passo de semear as regras no SKILL.md');
   assert.ok(gravar !== -1, 'nao achei o passo de gravar e validar no SKILL.md');
   assert.ok(

@@ -155,7 +155,9 @@ const BALDES_DE_BLOQUEIO = [
   // D412: handoff gravado no turno sem o prompt no chat.
   'handoff_sem_prompt',
   // D503 (0.8.1): entrega AAA sem revisao contra a referencia de topo na sessao.
-  'fecho_sem_referencia'
+  'fecho_sem_referencia',
+  // D655: entrega com arquivo AAA mudado sem revisao aprovada na sessao.
+  'fecho_sem_revisao'
 ];
 
 /**

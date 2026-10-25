@@ -31,26 +31,26 @@ test('gatilho 2: a secao existe na skill do padrao', () => {
  */
 test('gatilho 2: a skill manda rodar no agente principal e PROIBE delegar', () => {
   const s = secao();
-  assert.ok(/agente principal/i.test(s), 'nao diz onde roda');
-  assert.ok(/subagente/i.test(s), 'nao fala de subagente');
-  assert.ok(/(nunca|nao) a? ?delegue|nunca delegue/i.test(s), 'nao proibe a delegacao: ' + s.slice(0, 200));
+  assert.ok(/main agent/i.test(s), 'nao diz onde roda');
+  assert.ok(/subagent/i.test(s), 'nao fala de subagente');
+  assert.ok(/never delegate/i.test(s),'nao proibe a delegacao: ' + s.slice(0, 200));
 });
 
 test('gatilho 2: a skill avisa do verde falso do subagente', () => {
-  assert.ok(/verde falso/i.test(secao()), 'nao diz o que da errado ao delegar');
+  assert.ok(/false green/i.test(secao()), 'nao diz o que da errado ao delegar');
 });
 
 /** A segunda armadilha medida no H1: a sonda colou a tabela do proprio projeto. */
 test('gatilho 2: a skill proibe tirar nome de modelo de arquivo do projeto', () => {
   const s = secao();
-  assert.ok(/arquivo do projeto/i.test(s), 'nao avisa da contaminacao pelo projeto');
-  assert.ok(/mente/i.test(s), 'nao diz que a conferencia mente nesse caso');
+  assert.ok(/project file/i.test(s), 'nao avisa da contaminacao pelo projeto');
+  assert.ok(/lies/i.test(s), 'nao diz que a conferencia mente nesse caso');
 });
 
 test('gatilho 2: a skill le o mapa do disco, por comando, e nao de memoria', () => {
   const s = secao();
   assert.ok(s.includes('portao-apelido.js'), 'nao manda rodar o que imprime o mapa');
-  assert.ok(/de memoria|de mem[oó]ria/i.test(s), 'nao proibe ler de memoria');
+  assert.ok(/from memory/i.test(s), 'nao proibe ler de memoria');
 });
 
 test('gatilho 2: o comando que a skill manda rodar existe de verdade', () => {
@@ -61,26 +61,26 @@ test('gatilho 2: o comando que a skill manda rodar existe de verdade', () => {
 
 test('gatilho 2: a skill trata divergencia como sinal, nao como veredito', () => {
   const s = secao();
-  assert.ok(/detector de fumaca|detector de fuma[çc]a/i.test(s));
-  assert.ok(/dono/i.test(s), 'nao diz quem decide');
+  assert.ok(/smoke detector/i.test(s));
+  assert.ok(/owner/i.test(s), 'nao diz quem decide');
 });
 
 test('gatilho 2: a skill proibe gravar a conclusao na configuracao sozinha', () => {
   const s = secao();
   assert.ok(/projeto\.json/.test(s), 'nao nomeia o arquivo que nao se escreve sozinho');
-  assert.ok(/3 op[çc][õo]es|3 opcoes/i.test(s), 'nao manda levar em 3 opcoes ao dono');
+  assert.ok(/3 options/i.test(s), 'nao manda levar em 3 opcoes ao dono');
 });
 
 /** Spec 9.6: prometer garantia onde ha instrucao e a mentira que o relatorio
  *  de cobertura depois teria de desmentir. */
 test('gatilho 2: a skill declara que isto e instrucao e pode ser pulada', () => {
   const s = secao();
-  assert.ok(/pode ser pulada/i.test(s));
-  assert.ok(/garantid/i.test(s), 'nao diz qual e a guarda garantida');
+  assert.ok(/can be skipped/i.test(s));
+  assert.ok(/guaranteed/i.test(s), 'nao diz qual e a guarda garantida');
 });
 
 test('gatilho 2: sem catalogo do harness, a skill manda DECLARAR', () => {
-  assert.ok(/degradado/i.test(secao()), 'nao preve o caso de nao haver catalogo');
+  assert.ok(/degraded/i.test(secao()), 'nao preve o caso de nao haver catalogo');
 });
 
 /**

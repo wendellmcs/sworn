@@ -731,12 +731,12 @@ test('fiacao: o inspetor devolve a pasta vereditos e o briefing da skill a passa
   const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
   assert.ok(/"vereditos":/.test(inspetor), 'o formato do JSON do inspetor nao tem o campo vereditos');
   const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
-  const briefing = skill.slice(skill.indexOf('Briefing de cada um'), skill.indexOf('A linha da r'));
+  const briefing = skill.slice(skill.indexOf('Briefing of each one'), skill.indexOf('The ruler line only'));
   assert.ok(/vereditos/.test(briefing), 'o briefing nao passa o caminho da pasta vereditos');
-  const passo2 = skill.slice(skill.indexOf('## Passo 2'), skill.indexOf('## Passo 3'));
+  const passo2 = skill.slice(skill.indexOf('## Step 2'), skill.indexOf('## Step 3'));
   assert.ok(/hook/.test(passo2) && /gravar-veredito/.test(passo2), 'o Passo 2 nao diz que o hook grava');
-  assert.ok(!/Grave cada resposta no caminho/.test(skill), 'a instrucao de gravar cada resposta a mao continua');
-  assert.ok(/um\s+arquivo por lente/.test(passo2), 'o Passo 2 nao manda conferir um arquivo por lente');
+  assert.ok(!/Write each (response|answer) (to|at) the path/.test(skill), 'a instrucao de gravar cada resposta a mao continua');
+  assert.ok(/one\s+file per dispatched lens/.test(passo2), 'o Passo 2 nao manda conferir um arquivo por lente');
 });
 
 test('D503: fiacao da referencia - o inspetor devolve vsReferencia e lacunas; a skill passa R.txt e a 2a passada e diz o custo', () => {
@@ -745,31 +745,31 @@ test('D503: fiacao da referencia - o inspetor devolve vsReferencia e lacunas; a 
   assert.match(inspetor, /"lacunas":/, 'o JSON do inspetor nao tem lacunas');
   assert.match(inspetor, /R\.txt/, 'o inspetor nao sabe do R.txt');
   const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
-  const passo2 = skill.slice(skill.indexOf('## Passo 2'), skill.indexOf('## Passo 3'));
+  const passo2 = skill.slice(skill.indexOf('## Step 2'), skill.indexOf('## Step 3'));
   assert.match(passo2, /R\.txt/, 'o Passo 2 nao passa o R.txt');
   assert.match(passo2, /`invertida\.vereditos`/, 'o briefing da 2a passada nao troca a pasta de vereditos');
-  assert.match(passo2, /`invertida\.a` e `invertida\.b`/, 'o briefing da 2a passada nao troca os dois arquivos');
-  assert.match(passo2, /dobr/i, 'o Passo 2 nao diz que o custo dobra');
-  const passo3 = skill.slice(skill.indexOf('## Passo 3'), skill.indexOf('## Passo 4'));
+  assert.match(passo2, /`invertida\.a` and `invertida\.b`/, 'o briefing da 2a passada nao troca os dois arquivos');
+  assert.match(passo2, /doubles/i, 'o Passo 2 nao diz que o custo dobra');
+  const passo3 = skill.slice(skill.indexOf('## Step 3'), skill.indexOf('## Step 4'));
   assert.match(passo3, /`referencia`/, 'o Passo 3 nao fala do campo referencia da saida');
   assert.match(passo3, /"passada": 2/, 'o Passo 3 nao diz como refutar achado da 2a passada');
-  const passo5 = skill.slice(skill.indexOf('## Passo 5'), skill.indexOf('## Passo 6'));
-  assert.match(passo5, /só aprovam quando toda lente empata ou vence a referência nas duas ordens/,
+  const passo5 = skill.slice(skill.indexOf('## Step 5'), skill.indexOf('## Step 6'));
+  assert.match(passo5, /only approve when every lens ties or beats the reference in both orders/,
     'o Passo 5 nao diz a parada com referencia');
-  assert.match(passo5, /\| teto de 3 rondas com P0\/P1 aberto ou a referência não alcançada \|/, 'o teto nao cita a referencia');
+  assert.match(passo5, /\| cap of 3 rounds with P0\/P1 open or the reference not reached \|/, 'o teto nao cita a referencia');
 });
 
 // Plano 082, Tarefa 6 (p4-2, p4-3, p4-4): o inspetor sabe ler cada bloco do R.txt, o que devolver contra a referencia
 // quando nao a ve, e o "nao tem acesso" nao contradiz a regua.md e o R.txt.
 test('082 T6 (p4-2, p4-3, p4-4): o inspetor le os blocos do R.txt e sabe o que devolver contra a referencia sem ve-la', () => {
   const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
-  const ref = inspetor.slice(inspetor.indexOf('## Quando o briefing passa um `R.txt`'), inspetor.indexOf('## Proveni'));
+  const ref = inspetor.slice(inspetor.indexOf('## When the briefing passes an `R.txt`'), inspetor.indexOf('## Provenance'));
   for (const t of ['=== referencia i de n: <entrada> ===', '`\\===`', '(imagem ou binario: abra com Read em "<caminho>")',
-    '(maior que o teto do R.txt', '(URL:', '(NAO ACHADA', '`vsReferencia` e `lacunas` saem dos blocos que você leu']) {
+    '(maior que o teto do R.txt', '(URL:', '(NAO ACHADA', '`vsReferencia` and `lacunas` come from the blocks you read']) {
     assert.ok(ref.indexOf(t) !== -1, 'falta na secao do R.txt: ' + t);
   }
-  const prov = inspetor.slice(inspetor.indexOf('## Proveni'));
-  assert.ok(!/nada al[eé]m dos dois arquivos/.test(prov), 'o "nada alem dos dois arquivos" contradiz a regua.md e o R.txt');
+  const prov = inspetor.slice(inspetor.indexOf('## Provenance'));
+  assert.ok(!/nothing (beyond|besides|other than) the two files/.test(prov), 'o "nada alem dos dois arquivos" contradiz a regua.md e o R.txt');
   assert.match(prov, /regua\.md/);
   assert.match(prov, /"vsReferencia": \{ "A": "perde", "B": "perde" \}/, 'o "nao sei" nao diz o que devolver contra a referencia');
   assert.match(prov, /"lacunas": \[\]/);

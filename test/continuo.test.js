@@ -165,7 +165,7 @@ test('continuo: a sworn:playbook e o README falam da chave e da validacao pelo p
   const ler = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
   const skill = ler('skills/playbook/SKILL.md');
   assert.ok(skill.indexOf('`modoContinuo`') !== -1, 'a skill nao cita a chave');
-  assert.ok(/valid(?:e|ar) (?:você|pelo próprio agente)/.test(skill), 'a skill nao manda validar antes de pedir');
+  assert.ok(/validate by the agent itself/.test(skill), 'a skill nao manda validar antes de pedir');
   const readme = ler('GUIA.md');
   assert.ok(readme.indexOf('`modoContinuo`') !== -1, 'o README nao cita a chave');
 });

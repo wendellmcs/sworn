@@ -6,7 +6,19 @@ const ALEGACOES = [
   /\bpassou\b/i, /\bpassaram\b/i, /\btestes? ok\b/i, /\btudo ok\b/i,
   /\bcorrigid[oa]s?\b/i, /\bresolvid[oa]s?\b/i, /\bimplementad[oa]s?\b/i,
   /\btudo cert[oa]\b/i, /\bdeu cert[oa]\b/i, /\bsem erros?\b/i, /\bverde\b/i,
-  /\ball tests? (pass|passed|passing)/i, /\bworks? now\b/i, /\bfixed\b/i, /\bdone\b/i
+  /\ball tests? (pass|passed|passing)/i, /\bworks? now\b/i, /\bfixed\b/i, /\bdone\b/i,
+  // D656: os equivalentes em ingles. Palavra que tambem descreve sem alegar ("passed to", "how it works", "green
+  // button") so com o sujeito ou a forma que alega; o corpus de falso positivo esta no teste.
+  /\b(?:tests?|suite|checks?|build|ci|specs?|everything) (?:now |all )?(?:pass|passes|passed)\b/i,
+  /(?<!\bhow )\bit works\b/i, /\b(?:is|are|it['’]s) (?:now )?working\b/i,
+  // D659: "implemented", "resolved" e "completed" so alegam abrindo a frase (ou depois de I/we) ou fechando-a; "is
+  // ready" so fechando. Seguindo a descrever ("completed in 2s", "ready to accept") nao alegam. Abrir a frase inclui
+  // item de lista ("- ", "1. ") e negrito; depois de I/we cabe um advérbio em -ly ("I successfully implemented").
+  /(?<=(?:^|[.!?;:\n])\s*(?:(?:[-*+•]|\d+[.)])\s+)?(?:\*\*|__)?|\b(?:I|we)(?:['’]ve| have)? (?:[a-z]+ly )?)\b(?:implemented|resolved|completed)\b/i,
+  /\b(?:implemented|resolved|completed)(?=[ \t]*(?:[.,;:!?)\r\n]|$)|\s+(?:and|now|too|already|successfully)\b)/i,
+  /\ball (?:set|good)\b/i, /\b(?:it|that|this) worked\b/i, /\b(?:without|zero) errors?\b/i,
+  /\bno (?:more )?errors? (?:left|now|remain)/i, /\b(?:is|are|all|now|back to) green\b/i,
+  /\b(?:is|are|it['’]s) ready(?=[ \t]*(?:[.,;:!?)\r\n]|$)|\s+(?:and|now|too|already)\b)/i
 ];
 
 // Declaracao explicita do que NAO rodou. Vale como evidencia honesta.
@@ -14,7 +26,11 @@ const NAO_RODOU = [
   /n[ãa]o rodei/i, /n[ãa]o executei/i, /n[ãa]o rod(ou|aram)/i, /n[ãa]o testei/i,
   /n[ãa]o foi testad/i, /n[ãa]o testad[oa]/i, /falta rodar/i, /falta testar/i,
   /declaro que n[ãa]o/i, /n[ãa]o consegui (rodar|executar|verificar|testar|reproduzir)/i,
-  /n[ãa]o verifiqu/i, /not (run|tested|verified)/i
+  /n[ãa]o verifiqu/i, /not (run|tested|verified)/i,
+  // D656: os equivalentes em ingles. "you need to run" e instrucao ao usuario, nao ressalva: so "still need".
+  /\b(?:did|have|has|was|were)(?: not|n['’]t) (?:yet )?(?:been )?(?:run|ran|execut|test|verif)/i, /\buntested\b/i,
+  /\b(?:could not|couldn['’]t|(?:was|were)(?: not|n['’]t) able to|unable to) (?:run|execute|verify|test|reproduce)/i,
+  /\bstill (?:needs?|has|have) to (?:be )?(?:run|test|verif)/i, /\byet to be (?:run|tested|verified)/i
 ];
 
 // Um bloco so vale como evidencia se parecer saida de comando (desenho §71):
@@ -68,7 +84,10 @@ const RESUMO_SEM_FALHA = [/\bfail(?:s|ed|ures?)?[ \t]*[:=]?[ \t]*0\b/i, /\b0[ \t
 // e a frase que libera e a que MOTIVO_FALHA ensina ("diga que ainda falha").
 const AINDA_FALHA = [
   /ainda falh(?:a|am|ou|aram|ando)\b/i, /(?:continua|continuam|segue|seguem|est[aá]|est[aã]o) falhando/i,
-  /still fail/i, /(?:is|are) (?:still )?failing/i
+  // D656: "was still failing" e a causa contada, como "ainda falhava"; "keeps failing", "continues to fail" e "still red"
+  // sao o "continua falhando".
+  /(?<!\b(?:was|were) )\bstill fail/i, /(?:is|are) (?:still )?failing/i, /\bkeeps? failing\b/i, /\bcontinues? to fail\b/i,
+  /\bstill (?:broken|red)\b/i
 ];
 
 function textoMostraFalha(texto) {
@@ -81,6 +100,20 @@ function textoMostraFalha(texto) {
 function declaraRessalva(texto) {
   const prosa = semBlocos(texto);
   return NAO_RODOU.concat(AINDA_FALHA).some(function (r) { return r.test(prosa); });
+}
+
+// D655: a prosa declara que a entrega fica sem revisao - a saida aberta do portao da revisao na marcha AAA (fecho).
+const SEM_REVISAO = [
+  /\bsem (?:a |uma )?revis[aã]o\b/i, /n[aã]o (?:rodei|fiz|passei por|passou por) (?:a |uma )?revis[aã]o/i,
+  /\bwithout (?:a |the |any )?(?:blind )?review/i, /\bskipp(?:ed|ing) (?:the )?(?:blind )?review/i,
+  /\breview (?:was |is )?(?:not run|not done|skipped)/i,
+  /\bno (?:blind )?review\b(?!\s+(?:finding|issue|comment|note)s?\b)/i
+];
+
+/** D655: a declaracao de entrega sem revisao, fora dos blocos de codigo, em portugues ou ingles. */
+function declaraSemRevisao(texto) {
+  const prosa = semBlocos(texto);
+  return SEM_REVISAO.some(function (r) { return r.test(prosa); });
 }
 
 /**
@@ -99,6 +132,7 @@ const PERGUNTA_FINAL = [
   'Faca uma destas, e responda de novo:',
   '  1. corrija, rode de novo e cole a saida que passa; ou',
   '  2. diga que ainda falha, ou o que nao rodou, e por que.',
+  '     In English: say it "still fails", or what you "did not run", and why.',
   '',
   'Teste instavel se corrige ou se remove: rodar de novo ate passar nao e prova.'
 ];
@@ -155,4 +189,4 @@ const MOTIVO = [
 ].join('\n');
 
 module.exports = { ALEGACOES, NAO_RODOU, semBlocos, analisar, deveBloquear, MOTIVO, blocosDeSaida,
-  textoMostraFalha, deveBloquearPorFalha, declaraRessalva, MOTIVO_FALHA, motivoTesteVermelho, motivoProvaNaoRodou };
+  textoMostraFalha, deveBloquearPorFalha, declaraRessalva, declaraSemRevisao, MOTIVO_FALHA, motivoTesteVermelho, motivoProvaNaoRodou };

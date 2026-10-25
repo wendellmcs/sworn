@@ -1,221 +1,221 @@
 ---
 name: review
-description: Revisao cega A/B de um arquivo mudado. Rotula os dois lados sem autoria, despacha inspetores de lentes distintas com default reprovar, e apura por script com teto de 3 rondas. Use quando o trabalho estiver escrito e antes de dar por pronto.
-argument-hint: "<caminho do arquivo mudado>"
+description: Blind A/B review of a changed file. Labels the two sides without authorship, dispatches inspectors with distinct lenses and a default of reject, and tallies by script with a cap of 3 rounds. Use when the work is written and before calling it done.
+argument-hint: "<path of the changed file>"
 ---
 
-# `/sworn:review` — a revisão cega
+# `/sworn:review` — the blind review
 
-Falha de origem: **eu sou otimista ao julgar o meu próprio código.** Gerador e avaliador têm os
-mesmos pesos; quando eu reviso o que escrevi, eu não leio o código, eu re-derivo o raciocínio que o
-produziu — e o raciocínio que produziu o bug reproduz o bug.
+Original failure: **I am optimistic when judging my own code.** Generator and evaluator have the
+same weights; when I review what I wrote, I don't read the code, I re-derive the reasoning that
+produced it — and the reasoning that produced the bug reproduces the bug.
 
-## Passo 1 — preparar o pacote cego
+## Step 1 — prepare the blind package
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/preparar-revisao.js" --arquivo <caminho> [--completa]
 
-O script escreve `A.txt`, `B.txt` e `mapa.json` em `.claude/sworn/revisao/<arquivo>/<n>/`: cada
-arquivo tem a sua base, e `<n>` é a ronda dele. O `<arquivo>` é o id do arquivo: cada `/` do caminho
-vira `__`, cada caractere fora de letras, números, `.`, `_` e `-` vira `_`, e um id só de dígitos
-ganha um `_` na frente (regra da função `idDoArquivo`, em `scripts/lib/cegar.js`). O
-caminho exato vem na saída (`a`, `b`, `vereditos` e `base`); use o que a saída diz, não reconstrua.
-**Você não abre `mapa.json`, e nenhum inspetor recebe o caminho dele.**
+The script writes `A.txt`, `B.txt` and `mapa.json` in `.claude/sworn/revisao/<arquivo>/<n>/`: each
+file has its own base, and `<n>` is its round. The `<arquivo>` is the file id: each `/` in the path
+becomes `__`, each character outside letters, digits, `.`, `_` and `-` becomes `_`, and an id made only of digits
+gets a `_` in front (rule of the `idDoArquivo` function, in `scripts/lib/cegar.js`). The
+exact path comes in the output (`a`, `b`, `vereditos` and `base`); use what the output says, don't rebuild it.
+**You don't open `mapa.json`, and no inspector receives its path.**
 
-Quando o `projeto.json` declara `referencias` para o tipo do arquivo (texto, tela ou código), a saída traz
-também `referencia` (o caminho do `R.txt`, a referência de topo) e `invertida` (`a`, `b` e `vereditos`): o
-pacote tem uma 2ª passada, com A e B trocados (Passo 2).
+When `projeto.json` declares `referencias` for the file's type (text, screen or code), the output also brings
+`referencia` (the path of `R.txt`, the top reference) and `invertida` (`a`, `b` and `vereditos`): the
+package has a 2nd pass, with A and B swapped (Step 2).
 
-**Vários arquivos = uma base cada.** Prepare, inspecione e apure um arquivo por vez; cada um tem as
-suas rondas e o seu teto de 3. Se a saída avisar "formato antigo", há uma revisão da 0.3.0 em
-andamento em pastas numeradas soltas: ela segue na base única até acabar.
+**Several files = one base each.** Prepare, inspect and tally one file at a time; each has
+its own rounds and its own cap of 3. If the output warns "formato antigo", there is a 0.3.0 review
+in progress in loose numbered folders: it continues on the single base until it ends.
 
-Não fatie à mão. Fatia que corta função no meio faz o inspetor reportar o corte como defeito e
-contamina a ronda. Na faixa `completa` (Passo 2), `A.txt` e `B.txt` são o arquivo inteiro. Nas faixas
-pequenas, quando a saída traz `trecho`, o próprio script já recortou: cada lado leva só o trecho mudado,
-com a margem de `trecho.margem` linhas, nos números de linha do arquivo; as linhas de fora estão em
-branco e a primeira de cada vão diz `[fora do trecho: linhas a-b]`.
+Don't slice by hand. A slice that cuts a function in the middle makes the inspector report the cut as a defect and
+contaminates the round. In the `completa` band (Step 2), `A.txt` and `B.txt` are the whole file. In the small
+bands, when the output brings `trecho`, the script already cut it: each side carries only the changed excerpt,
+with a margin of `trecho.margem` lines, in the file's line numbers; the lines outside are
+blank and the first of each gap says `[fora do trecho: linhas a-b]`.
 
-## Passo 2 — ronda 1: a faixa da mudança, depois as lentes da família certa
+## Step 2 — round 1: the change band, then the lenses of the right family
 
-**Primeiro a faixa: a revisão é proporcional ao diff** (decisão do dono, 2026-10-12). A saída do Passo 1 traz
-`faixa`, `lentes` e `linhasMudadas` (o lado maior do diff contra o HEAD: linhas removidas ou acrescentadas).
-As lentes de cada faixa estão em `scripts/lib/veredito.js` → `lentesDaFaixa`.
+**First the band: the review is proportional to the diff** (owner's decision, 2026-10-12). The output of Step 1 brings
+`faixa`, `lentes` and `linhasMudadas` (the larger side of the diff against HEAD: lines removed or added).
+The lenses of each band are in `scripts/lib/veredito.js` → `lentesDaFaixa`.
 
-| `faixa` | Quando | Quantos inspetores |
+| `faixa` | When | How many inspectors |
 |---|---|---|
-| `uma` | até 3 linhas mudadas: só comentário, número ou frase curta | **1**: `correcao` |
-| `duas` | até 40 linhas de lógica, com teste vermelho e mutação já rodados | **2**: `correcao` e `borda` |
-| `texto` | texto (`.md`, `.markdown`, `.txt`) com mais de 3 linhas mudadas | **2**: `correcao` e `microcopy` |
-| `completa` | arquivo novo, mais de 40 linhas de lógica, estilo, igual ao HEAD ou sem medida | a tabela de famílias, abaixo |
+| `uma` | up to 3 changed lines: only a comment, a number or a short phrase | **1**: `correcao` |
+| `duas` | up to 40 lines of logic, with a red test and mutation already run | **2**: `correcao` and `borda` |
+| `texto` | text (`.md`, `.markdown`, `.txt`) with more than 3 changed lines | **2**: `correcao` and `microcopy` |
+| `completa` | new file, more than 40 lines of logic, style, equal to HEAD or unmeasured | the table of families, below |
 
-O script mede linhas, não sentido. **Você pode subir de faixa, nunca descer:** 3 linhas que mudam lógica sobem a
-`duas`; `duas` sem teste vermelho e mutação rodados sobe a `completa`; mudança que monta tela sobe a `completa`.
-Para subir à `completa`, passe `--completa` no Passo 1: o pacote sai com o arquivo inteiro, sem recorte. Se a ronda já
-foi preparada sem ele, apague a pasta dela, que ainda não tem vereditos, e prepare de novo com a flag.
-Diga ao usuário a faixa usada e, se subiu, por quê. A regra de parada (Passo 5) é a mesma em toda faixa.
+The script measures lines, not meaning. **You can move up a band, never down:** 3 lines that change logic go up to
+`duas`; `duas` without a red test and mutation run goes up to `completa`; a change that builds a screen goes up to `completa`.
+To go up to `completa`, pass `--completa` in Step 1: the package comes out with the whole file, with no excerpt. If the round was already
+prepared without it, delete its folder, which has no verdicts yet, and prepare again with the flag.
+Tell the user the band used and, if you went up, why. The stop rule (Step 5) is the same in every band.
 
-**Duas famílias, por decisão do dono.** Elas divergem **por desenho**:
-a de código julga código, a de UI julga tela. Não se fundem.
+**Two families, by owner's decision.** They diverge **by design**:
+the code one judges code, the UI one judges screens. They are not merged.
 
-| O que mudou | Quantos inspetores | Onde estão as lentes |
+| What changed | How many inspectors | Where the lenses are |
 |---|---|---|
-| Só lógica (não é de estilo e não monta tela) | **7** | `scripts/lib/veredito.js` → `LENTES` sem as de `SAEM_SO_LOGICA` (`design`, `medidor`, `escopo`) |
-| Só código | **10** | `scripts/lib/veredito.js` → `LENTES` |
-| Só tela | **8** | `scripts/lib/veredito.js` → `LENTES_UI` |
-| Código e tela | **18** | as duas listas |
+| Logic only (not style and doesn't build a screen) | **7** | `scripts/lib/veredito.js` → `LENTES` without those in `SAEM_SO_LOGICA` (`design`, `medidor`, `escopo`) |
+| Code only | **10** | `scripts/lib/veredito.js` → `LENTES` |
+| Screen only | **8** | `scripts/lib/veredito.js` → `LENTES_UI` |
+| Code and screen | **18** | both lists |
 
-**A mudança toca tela** quando o escopo declarado inclui arquivo de estilo
-(`scripts/lib/design.js` → `ehArquivoDeEstilo`) ou markup que o projeto renderiza.
-Na dúvida, **as duas famílias** — a marcha mais rigorosa ganha.
+**The change touches a screen** when the declared scope includes a style file
+(`scripts/lib/design.js` → `ehArquivoDeEstilo`) or markup that the project renders.
+When in doubt, **both families** — the stricter gear wins.
 
-**Arquivo só de lógica** — que não é de estilo e não monta tela — dispensa a lente `design` (decisão
-do dono, 2026-09-29) e, desde 2026-10-11, também `medidor` e `escopo` (na ronda 1 de 41 revisões, 11 de 13 e
-5 de 6 achados delas foram refutados na fonte): são 7 inspetores, as de `LENTES` sem as de
-`SAEM_SO_LOGICA`. Na dúvida, as 10 — elas só saem quando é claro que o arquivo não é de estilo e não
-monta tela.
+**A logic-only file** — one that is not style and doesn't build a screen — skips the `design` lens (owner's
+decision, 2026-09-29) and, since 2026-10-11, also `medidor` and `escopo` (in round 1 of 41 reviews, 11 of 13 and
+5 of 6 of their findings were refuted at the source): that is 7 inspectors, the ones in `LENTES` without those in
+`SAEM_SO_LOGICA`. When in doubt, the 10 — they only leave out when it is clear the file is not style and doesn't
+build a screen.
 
-**Lente `enxuto` (código que não precisava existir, desde a 0.9.0)** — nasce em observação, porque lente
-que julga "a mais" já foi refutada na fonte em 5 de 6 achados (`escopo`). **Regra de saída:** depois de 10
-revisões com ela, se 2 de cada 3 achados dela tiverem sido refutados na fonte, ela entra em
-`SAEM_SO_LOGICA` e sai do arquivo só de lógica, como `escopo`. Validação na fronteira, perda de dados,
-segurança e acessibilidade nunca são excesso: achado dela contra isso é refutado. Atalho deliberado,
-com o comentário `atalho: <o que>. limite: <até onde vale>. trocar quando: <gatilho>.`, é dívida
-declarada, não excesso; o que não traz o gatilho o `/sworn:shortcuts` lista — rode-o antes de um release.
+**Lens `enxuto` (code that didn't need to exist, since 0.9.0)** — born under observation, because a lens
+that judges "too much" was already refuted at the source in 5 of 6 findings (`escopo`). **Exit rule:** after 10
+reviews with it, if 2 of every 3 of its findings were refuted at the source, it goes into
+`SAEM_SO_LOGICA` and leaves the logic-only file, like `escopo`. Validation at the boundary, data loss,
+security and accessibility are never excess: a finding of its against these is refuted. A deliberate shortcut,
+with the comment `atalho: <o que>. limite: <até onde vale>. trocar quando: <gatilho>.`, is declared
+debt, not excess; the ones that don't carry the trigger are listed by `/sworn:shortcuts` — run it before a release.
 
-Leia as lentes do arquivo, **não de memória**. Despache todos no mesmo disparo, **um subagente
-`sworn:inspector` por lente**.
+Read the lenses from the file, **not from memory**. Dispatch them all in the same burst, **one `sworn:inspector`
+subagent per lens**.
 
-Briefing de cada um, exatamente nesta forma:
+Briefing of each one, exactly in this form:
 
-> Sua lente é **<titulo>** (`<chave>`): <pergunta>.
-> Leia apenas estes dois arquivos: `<caminho de A.txt>` e `<caminho de B.txt>`.
-> Leia também `<caminho de regua.md>`: é a régua do projeto. Achado de valor fora da régua cita o valor dela.
-> Pasta de vereditos: `<caminho de vereditos>`. Não a abra: copie o caminho, sem mexer, no campo `vereditos` do JSON, e ponha a chave da lente (`<chave>`) no campo `lente`.
-> Não abra o repositório. Não abra `mapa.json`. Devolva só o JSON do seu formato.
+> Your lens is **<titulo>** (`<chave>`): <pergunta>.
+> Read only these two files: `<caminho de A.txt>` and `<caminho de B.txt>`.
+> Also read `<caminho de regua.md>`: it is the project's ruler. A finding about a value outside the ruler cites the ruler's value.
+> Verdicts folder: `<caminho de vereditos>`. Don't open it: copy the path, untouched, into the `vereditos` field of the JSON, and put the lens key (`<chave>`) in the `lente` field.
+> Don't open the repository. Don't open `mapa.json`. Return only the JSON of your format.
 
-Quando a saída do Passo 1 traz `trecho`, acrescente ao briefing, logo depois da linha dos dois arquivos:
+When the output of Step 1 brings `trecho`, add to the briefing, right after the line with the two files:
 
-> A e B são recortes: só o trecho mudado, com margem. A linha `[fora do trecho: linhas a-b]` marca o que ficou de fora, e as linhas em branco depois dela são esse vão. O vão não é defeito: se a resposta depender do que está fora, diga "não consigo ver", e esse achado é no máximo P2.
+> A and B are excerpts: only the changed excerpt, with margin. The line `[fora do trecho: linhas a-b]` marks what was left out, and the blank lines after it are that gap. The gap is not a defect: if the answer depends on what is outside, say "I can't see it", and that finding is at most P2.
 
-A linha da régua só entra quando a saída do Passo 1 traz `regua` com um caminho. Quando traz
-`semRegua`, diga ao usuário que a revisão rodou **sem régua do projeto** — o inspetor julgou pelo
-bom senso, não pelo sistema declarado.
+The ruler line only goes in when the output of Step 1 brings `regua` with a path. When it brings
+`semRegua`, tell the user the review ran **without a project ruler** — the inspector judged by
+common sense, not by the declared system.
 
-**Com referência** (a saída do Passo 1 traz `referencia`), acrescente ao briefing, depois da linha da régua:
+**With a reference** (the output of Step 1 brings `referencia`), add to the briefing, after the ruler line:
 
-> Leia também `<caminho de R.txt>`: é a referência de topo, nomeada (não é A nem B). Julgue cada lado contra ela e devolva `vsReferencia` e `lacunas`, como diz o seu formato.
+> Also read `<caminho de R.txt>`: it is the top reference, named (it is not A or B). Judge each side against it and return `vsReferencia` and `lacunas`, as your format says.
 
-E despache a **2ª passada**: as mesmas lentes de novo, um subagente por lente, com o mesmo briefing trocando
-os dois arquivos por `invertida.a` e `invertida.b` e a pasta de vereditos por `invertida.vereditos`
-(`<ronda>/invertida/vereditos`). É a ordem A/B trocada: contra a referência, só vale o que se repete nas duas
-ordens (decisão do dono, 2026-10-13). As duas passadas podem ir no mesmo disparo. **O custo dobra**: cada lente roda
-duas vezes; diga isso ao usuário junto do número de agentes.
+And dispatch the **2nd pass**: the same lenses again, one subagent per lens, with the same briefing swapping
+the two files for `invertida.a` and `invertida.b` and the verdicts folder for `invertida.vereditos`
+(`<ronda>/invertida/vereditos`). It is the swapped A/B order: against the reference, only what repeats in both
+orders counts (owner's decision, 2026-10-13). The two passes can go in the same burst. **The cost doubles**: each lens runs
+twice; tell the user that along with the number of agents.
 
-**Quem grava é o hook** (`scripts/gravar-veredito.js`, no `SubagentStop` do inspetor e no handback do subagente): ele
-tira o JSON da resposta e o grava em `<lente>.json` na pasta `vereditos` que o inspetor devolveu, conferindo que é
-a de uma ronda. Ele nunca barra e nunca sobrescreve arquivo que já existe. Antes do Passo 3, **confira que há um
-arquivo por lente despachada** em `vereditos/` (lista a pasta e conta), e, com referência, também em
-`invertida/vereditos/`. O que o hook avisou que não gravou, ou que
-não está lá, grave à mão, como `<lente>.json` (a chave da lente), com o JSON que o inspetor devolveu, no caminho
-`vereditos` da saída do Passo 1. **Em projeto configurado, o `Write` em `.claude/sworn/revisao/**.json` pode ser
-negado pelo portão de escopo** (a "trava 4": ela só deixa gravar o que o escopo declarado da tarefa cobre). O
-escopo declarado fica em `.claude/sworn/escopo.md`; se a sessão trabalha numa frente (uma linha de trabalho
-paralela do mesmo projeto), fica em `.claude/sworn/escopos/<frente>.md`, o arquivo da frente. Acrescente
-`.claude/sworn/revisao/**` à seção "Dentro" do que estiver em vigor, com `Edit`, sem apagar o resto, e grave
-de novo (o portão não barra a edição do próprio arquivo de escopo, mas conta a ampliação e a avisa no fecho do
-turno). Se o escopo em vigor é de outra tarefa ou de outra sessão, peça o OK do dono antes de ampliá-lo e tire a
-linha de volta quando a revisão fechar. **Se a edição do escopo também for negada, ou o dono não autorizar a
-ampliação: pare.** Diga ao dono quais vereditos ficaram sem gravar e deixe a decisão com ele; não grave por
-shell nem por outro caminho que contorne o portão. Tudo isto vale também para `refutados.json` e
-`mesmos.json` do Passo 3.
+**The hook writes** (`scripts/gravar-veredito.js`, on the inspector's `SubagentStop` and on the subagent's handback): it
+pulls the JSON out of the response and writes it to `<lente>.json` in the `vereditos` folder the inspector returned, checking that it is
+that of a round. It never blocks and never overwrites a file that already exists. Before Step 3, **check that there is
+one file per dispatched lens** in `vereditos/` (list the folder and count), and, with a reference, also in
+`invertida/vereditos/`. Whatever the hook warned it didn't write, or that
+isn't there, write by hand, as `<lente>.json` (the lens key), with the JSON the inspector returned, at the path
+`vereditos` from the output of Step 1. **In a configured project, the `Write` to `.claude/sworn/revisao/**.json` can be
+denied by the scope gate** ("lock 4": it only lets you write what the task's declared scope covers). The
+declared scope is in `.claude/sworn/escopo.md`; if the session works on a front (a parallel line of work
+of the same project), it is in `.claude/sworn/escopos/<frente>.md`, the front's file. Add
+`.claude/sworn/revisao/**` to the "Dentro" section of whichever is in force, with `Edit`, without erasing the rest, and write
+again (the gate doesn't block the edit of the scope file itself, but it counts the expansion and flags it at the close-out
+of the turn). If the scope in force belongs to another task or another session, ask the owner's OK before expanding it and take the
+line back out when the review closes. **If the scope edit is also denied, or the owner doesn't authorize the
+expansion: stop.** Tell the owner which verdicts were left unwritten and leave the decision to them; don't write through
+the shell or any other path that circumvents the gate. All of this also applies to `refutados.json` and
+`mesmos.json` of Step 3.
 
-**Declare ao usuário quantos agentes rodaram.** Custo é informação dele, não detalhe seu.
+**Tell the user how many agents ran.** Cost is their information, not your detail.
 
-## Passo 3 — apurar por script, nunca por julgamento
+## Step 3 — tally by script, never by judgment
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/apurar-ronda.js" --arquivo <caminho>
 
-O `--arquivo` é o mesmo do Passo 1 e escolhe a base dele. Sem ele, o script acha a base sozinho se
-houver uma só; com mais de uma, para com erro que lista os arquivos.
+The `--arquivo` is the same as in Step 1 and chooses its base. Without it, the script finds the base by itself if
+there is only one; with more than one, it stops with an error that lists the files.
 
-Quem decide se a ronda foi seca é o script, não você. Cole a saída dele na resposta.
+Who decides whether the round was dry is the script, not you. Paste its output into the response.
 
-- **O script confere as lentes que votaram.** O `mapa.json` leva a faixa: a ronda 1 sem alguma lente da faixa (na
-  `completa`, com menos de 7 lentes conhecidas) e a ronda com alguma lente que achou P0 ou P1 e não voltou param com
-  `ERRO`, como a ronda sem veredito. Grave o voto que falta e rode de novo.
-- **Achado fora do formato** (severidade que não é P0, P1 nem P2; sem `arquivo:linha`) é descartado e não molha a
-  ronda. Quando a revisão aprova com algum, o `motivo` diz quantos: leia `vereditosDescartados` antes de dar por
-  aprovado. P0 ou P1 descartado que for defeito real se corrige, e o arquivo passa por revisão nova.
-- **Só o lado novo molha a ronda.** O script lê o `mapa.json` de cada ronda: P0/P1 citado no lado
-  antigo (o que a mudança conserta, ou já existia) sai em `achadosDoLadoAntigo` — informação, não
-  bloqueio. Você continua sem abrir o `mapa.json`: quem o lê é o script.
-- **Achado refutado na fonte primária** vai em `refutados.json`, na base do arquivo (a pasta `base`
-  da saída do Passo 1):
+- **The script checks which lenses voted.** The `mapa.json` carries the band: round 1 without some lens of the band (in
+  `completa`, with fewer than 7 known lenses) and a round with some lens that found P0 or P1 and didn't come back stop with
+  `ERRO`, like a round without a verdict. Write the missing vote and run again.
+- **A finding outside the format** (severity that is not P0, P1 or P2; no `arquivo:linha`) is discarded and does not wet the
+  round. When the review approves with any, the `motivo` says how many: read `vereditosDescartados` before calling it
+  approved. A discarded P0 or P1 that is a real defect gets fixed, and the file goes through a new review.
+- **Only the new side wets the round.** The script reads the `mapa.json` of each round: a P0/P1 cited on the old
+  side (what the change fixes, or what already existed) goes to `achadosDoLadoAntigo` — information, not a
+  block. You still don't open `mapa.json`: the script reads it.
+- **A finding refuted at the primary source** goes in `refutados.json`, in the file's base (the `base` folder
+  of the output of Step 1):
   `[{ "ronda": 2, "lente": "design", "arquivo": "B.txt", "linha": 471, "severidade": "P1", "prova": "<arquivo:linha ou comando>" }]`.
-  A `severidade` é a do achado: refutar o P1 de uma linha não derruba o P0 da mesma linha. Sem `prova`
-  ou sem `severidade`, o script para com erro. A saída lista os refutados para o dono conferir.
-- **Com referência**, a saída traz `referencia` (sem ela, `null`): `lentes`, cada uma com `ordem1`, `ordem2` e
-  `resultado` (`vence`, `empata`, `perde` ou `incompleta`, pela última ronda que a chamou); `lacunas` do lado
-  novo; `lentesAtras` (as que perdem, estão incompletas ou têm lacuna P0/P1); e `pronta`. Achado da 2ª passada
-  sai com `passada: 2`: o `A.txt` dela é outro arquivo, então a refutação dele leva `"passada": 2`.
-- **Achados vizinhos podem ser o mesmo defeito.** Se a saída traz `paresCandidatos` não vazio, despache **um**
-  subagente `sworn:dedupe-judge` com a lista inteira (com mais de 50 pares, lotes de até 50, um subagente por
-  lote, no mesmo disparo). Grave o que ele devolver em `mesmos.json`, na mesma pasta do `refutados.json`, pelo
-  Write: `[{ "novo": "<chave>", "outro": "<chave>", "resposta": "sim" }]`, e rode o script de novo. A saída passa
-  a trazer `provaveisMesmos`. **Nada na contagem muda:** o achado novo segue molhando a ronda. Se ele for repetição
-  de algo já corrigido, prove isso na fonte e use o `refutados.json`; a palavra do juiz não é prova. Juiz que
-  falha ou não responde: siga sem `mesmos.json`, e a saída é a de sempre.
+  The `severidade` is the finding's: refuting the P1 of a line doesn't take down the P0 of the same line. Without `prova`
+  or without `severidade`, the script stops with an error. The output lists the refuted ones for the owner to check.
+- **With a reference**, the output brings `referencia` (without it, `null`): `lentes`, each with `ordem1`, `ordem2` and
+  `resultado` (`vence`, `empata`, `perde` or `incompleta`, by the last round that called it); `lacunas` of the new
+  side; `lentesAtras` (those that lose, are incomplete or have a P0/P1 gap); and `pronta`. A finding of the 2nd pass
+  comes out with `passada: 2`: its `A.txt` is another file, so its refutation carries `"passada": 2`.
+- **Neighboring findings may be the same defect.** If the output brings a non-empty `paresCandidatos`, dispatch **one**
+  `sworn:dedupe-judge` subagent with the whole list (with more than 50 pairs, batches of up to 50, one subagent per
+  batch, in the same burst). Write what it returns to `mesmos.json`, in the same folder as `refutados.json`, with
+  Write: `[{ "novo": "<chave>", "outro": "<chave>", "resposta": "sim" }]`, and run the script again. The output then
+  brings `provaveisMesmos`. **Nothing in the count changes:** the new finding still wets the round. If it is a repeat
+  of something already fixed, prove that at the source and use `refutados.json`; the judge's word is not proof. A judge that
+  fails or doesn't answer: proceed without `mesmos.json`, and the output is the usual one.
 
-Quando a revisão **fecha**, o próprio script conta um `revisao_fechada` — é o gatilho contável de
-troca de chat, e nada mais no plugin o incrementa. Ele descobre a sessão sozinho; passe
-`--sessao <id>` só se precisar forçar (o id leva só letras, números, `_` e `-`; sem valor ou com outro
-caractere, o script para com erro). A saída traz `revisaoFechadaContada` para você conferir.
-Rodar o script de novo numa revisão já fechada **não conta outra vez**: o fecho fica registrado na
-base (`fechada.json`) e a saída diz que já foi contada. Preparar de novo um arquivo cuja revisão já
-fechou começa **revisão nova**: o `preparar-revisao.js` move a base inteira para
-`.claude/sworn/revisao-fechada/<arquivo>/<carimbo>/` (nada se apaga; a saída diz o destino em
-`arquivada`) e a ronda volta a ser a 1, com o teto de 3 inteiro. O fecho da revisão nova conta de novo.
+When the review **closes**, the script itself counts one `revisao_fechada` — it is the countable trigger for
+a chat switch, and nothing else in the plugin increments it. It discovers the session by itself; pass
+`--sessao <id>` only if you need to force it (the id carries only letters, digits, `_` and `-`; with no value or with another
+character, the script stops with an error). The output brings `revisaoFechadaContada` for you to check.
+Running the script again on an already closed review **does not count again**: the close-out is recorded in the
+base (`fechada.json`) and the output says it was already counted. Preparing again a file whose review has already
+closed starts a **new review**: `preparar-revisao.js` moves the whole base to
+`.claude/sworn/revisao-fechada/<arquivo>/<carimbo>/` (nothing is deleted; the output gives the destination in
+`arquivada`) and the round goes back to 1, with the full cap of 3. The new review's close-out counts again.
 
-## Passo 4 — rondas seguintes
+## Step 4 — following rounds
 
-- **Ronda 1 descobre; as seguintes verificam.**
-- A ronda 2 chama **só as lentes que acharam P0 ou P1**, com o briefing reformulado em pergunta
-  específica sobre o próprio achado. Ordem de grandeza, na faixa `completa`: **10 → 4 → 2**.
-- Com referência, ela chama também as lentes de `referencia.lentesAtras`, nas duas passadas.
-- Se nenhuma lente achou P0 ou P1, a ronda seguinte chama **ao menos uma** (a de correção): ronda sem
-  nenhum veredito não é ronda seca, e o `apurar-ronda.js` para com erro.
-- Antes de cada nova ronda, corrija o que a anterior achou e rode `preparar-revisao.js` de novo.
+- **Round 1 discovers; the following ones verify.**
+- Round 2 calls **only the lenses that found P0 or P1**, with the briefing reformulated as a specific
+  question about its own finding. Order of magnitude, in the `completa` band: **10 → 4 → 2**.
+- With a reference, it also calls the lenses of `referencia.lentesAtras`, in both passes.
+- If no lens found P0 or P1, the next round calls **at least one** (the correctness one): a round with
+  no verdict at all is not a dry round, and `apurar-ronda.js` stops with an error.
+- Before each new round, fix what the previous one found and run `preparar-revisao.js` again.
 
-## Passo 5 — parar
+## Step 5 — stopping
 
-O `apurar-ronda.js` diz quando parar.
+`apurar-ronda.js` says when to stop.
 
-Com referência, duas rondas secas só aprovam quando toda lente empata ou vence a referência nas duas ordens,
-sem lacuna P0/P1 do lado novo (`referencia.pronta`). **Referência não alcançada** é o contrário: alguma lente
-fica atrás dela numa das ordens, ou sobra lacuna P0/P1. Antes da ronda 3, a revisão não encerrou: o `motivo`
-lista as lentes que ficaram atrás, e a próxima ronda as chama. Na ronda 3, é o teto.
+With a reference, two dry rounds only approve when every lens ties or beats the reference in both orders,
+with no P0/P1 gap on the new side (`referencia.pronta`). **Reference not reached** is the opposite: some lens
+falls behind it in one of the orders, or a P0/P1 gap remains. Before round 3, the review has not ended: the `motivo`
+lists the lenses that fell behind, and the next round calls them. In round 3, it is the cap.
 
-Três saídas possíveis:
+Three possible outcomes:
 
-| `motivo` | O que você faz |
+| `motivo` | What you do |
 |---|---|
-| duas rondas secas (com referência: e `referencia.pronta`) | Aprovado. Feche dizendo quantos agentes rodaram, em quantas rondas |
-| teto de 3 rondas com P0/P1 aberto ou a referência não alcançada | **Para.** Leva ao dono com exatamente 3 opções, a recomendada marcada. O que sobrar vira registro |
-| ainda não encerrou (inclui a referência não alcançada antes da ronda 3) | Corrige e roda a próxima ronda, com as lentes que o `motivo` lista |
+| two dry rounds (with a reference: and `referencia.pronta`) | Approved. Close by saying how many agents ran, in how many rounds |
+| cap of 3 rounds with P0/P1 open or the reference not reached | **Stop.** Take it to the owner with exactly 3 options, the recommended one marked. What is left becomes a record |
+| hasn't ended yet (includes the reference not reached before round 3) | Fix and run the next round, with the lenses the `motivo` lists |
 
-## Passo 6 — o que não foi inspecionado
+## Step 6 — what was not inspected
 
-O fecho lista **todo arquivo mudado no escopo que não passou por esta revisão**, e por quê
-(escolha de custo, arquivo gerado, fora da família de lentes). Arquivo novo passa, com um lado
-vazio: diga que nele a cegueira não existe. Silêncio sobre o que não foi inspecionado equivale a
-dizer que foi.
+The close-out lists **every changed file in scope that did not go through this review**, and why
+(cost choice, generated file, outside the family of lenses). A new file goes through, with one side
+empty: say that in it the blindness does not exist. Silence about what was not inspected is the same as
+saying it was.
 
-## O que esta revisão não faz
+## What this review does not do
 
-- **Não julga se a interface ficou bonita.** Sem print, a lente visual responde "vaza?" e não
-  responde "está bom?". Dito agora, não descoberto no fim.
-- **A cegueira é parcial.** Contagem de linhas e comentário de correção entregam qual lado é o novo.
-  Por isso o placar A/B é **sinal**, e o achado com `arquivo:linha` é a **prova** — ele se sustenta
-  mesmo que o inspetor tenha adivinhado os lados.
-- **P2 não vira correção.** Achado fora do escopo do pedido é registro. Qualidade máxima se aplica ao
-  que foi pedido, jamais à ampliação do pedido.
+- **It doesn't judge whether the interface came out nice.** Without a screenshot, the visual lens answers "does it overflow?" and doesn't
+  answer "is it good?". Said now, not discovered at the end.
+- **The blindness is partial.** Line count and a fix comment give away which side is the new one.
+  That is why the A/B score is a **signal**, and the finding with `arquivo:linha` is the **proof** — it holds up
+  even if the inspector guessed the sides.
+- **P2 doesn't become a fix.** A finding outside the scope of the request is a record. Maximum quality applies to
+  what was requested, never to expanding the request.

@@ -82,7 +82,12 @@ function encerrarTurno(e, s, avisoExtra) {
 // tira o numero e numerosDaAlegacao.
 const RE_ALEGA_N = [
   /\b(?:tarefa|etapa|onda|fase)s?\s+((?:n[º°.]\s*)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?(?:\s*(?:,|e)\s*(?:(?:tarefa|etapa|onda|fase)s?\s+)?(?:n[º°.]\s*)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?)*)\s*(?:[:\-–—]\s*)?(?:j[aá]\s+)?(?:est[aá] |est[aã]o |foi |foram )?(?:conclu[ií]d|fechad|finalizad|pronta|complet(?:[ao]s?|ad[ao]s?)\b)/gi,
-  /\b(?:conclu(?:[ií](?:mos|ram|u|d[ao]s?)?)|(?:fech|finaliz|complet)(?:ei|ou|amos|aram|ad[ao]s?))\s+(?:(?:as|os|a|o)\s*)?(?:tarefa|etapa|onda|fase)s?\s+((?:n[º°.]\s*)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?(?:\s*(?:,|e)\s*(?:(?:tarefa|etapa|onda|fase)s?\s+)?(?:n[º°.]\s*)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?)*)/gi
+  /\b(?:conclu(?:[ií](?:mos|ram|u|d[ao]s?)?)|(?:fech|finaliz|complet)(?:ei|ou|amos|aram|ad[ao]s?))\s+(?:(?:as|os|a|o)\s*)?(?:tarefa|etapa|onda|fase)s?\s+((?:n[º°.]\s*)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?(?:\s*(?:,|e)\s*(?:(?:tarefa|etapa|onda|fase)s?\s+)?(?:n[º°.]\s*)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?)*)/gi,
+  // D656: as mesmas duas formas em ingles ("Task 3 is done", "Finished tasks 1 and 2"). "finished",
+  // "closed" e "complete(d)" seguidos de objeto sao verbo, nao estado ("Task 3: complete tests", "Phase 2 closed the
+  // loop"): seguidos de palavra, so alegam com "and", "now", "in" e afins. A 2a forma nao vale depois de "not"/"n't"/"never".
+  /\b(?:task|step|stage|wave|phase)s?\s+(\d+(?:\.\d+)*(?:[a-z](?![a-z]))?(?:\s*(?:,|and)\s*(?:(?:task|step|stage|wave|phase)s?\s+)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?)*)\s*(?:[:\-–—]\s*)?(?:(?:is|are|was|were|has been|have been) )?(?:already )?(?:done|(?:finished|closed|completed?)(?! (?!(?:and|now|too|already|yet|in|on|at|with|by|for)\b)[a-z]))\b/gi,
+  /(?<!\bnot |n['’]t |\bnever )\b(?:completed|finished|closed|wrapped up)\s+(?:the\s+)?(?:task|step|stage|wave|phase)s?\s+(\d+(?:\.\d+)*(?:[a-z](?![a-z]))?(?:\s*(?:,|and)\s*(?:(?:task|step|stage|wave|phase)s?\s+)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?)*)/gi
 ];
 
 /** D442/8: os numeros de Tarefa N que a alegacao cita. So o inteiro puro: "7b" e "1.2" nao sao cabecalho
@@ -164,6 +169,41 @@ function semRevisaoDeReferencia(e, s, projeto, cwd) {
   ]).join('\n');
 }
 
+/** D655 (plano pedidos-aaa-idioma-readme, T1): o motivo quando a resposta alega entrega e um arquivo mudado na sessao
+ *  resolve para `aaa` sem revisao aprovada (`marcha.aaaSemRevisao`, o que o portao do commit aceita), com ou sem
+ *  referencia. `jaCobrados` sao os que o motivo da referencia ja cita no turno: nao saem duas vezes. Declarar a
+ *  entrega sem revisao (`evidencia.declaraSemRevisao`) libera. So `"portaoRevisao": false` desliga, como o
+ *  portaoReferencia. Texto ao modelo em ingles (D656), ASCII (R5). */
+function semRevisaoAprovada(e, s, projeto, cwd, jaCobrados) {
+  if (!projeto || projeto.portaoRevisao === false) return null;
+  const msg = e.last_assistant_message;
+  if (!evidencia.analisar(msg).alegaSucesso || evidencia.declaraSemRevisao(msg)) return null;
+  const arquivos = require('./lib/marcha.js').aaaSemRevisao(s.arquivosTocados, s.revisadosAprovados, projeto, cwd)
+    .filter(function (a) { return jaCobrados.indexOf(a) === -1; });
+  if (!arquivos.length) return null;
+  const ascii = require('./lib/escopo.js').ascii;
+  const citados = arquivos.slice(0, MAX_CITADOS).map(function (a) { return '  - "' + ascii(a) + '"'; });
+  if (arquivos.length > MAX_CITADOS) citados.push('  - and ' + (arquivos.length - MAX_CITADOS) + ' more');
+  return [
+    'sworn - the review is missing on a strictest-rigor file.',
+    '',
+    'You said the work is done, and you changed files that this project puts in the',
+    'strictest rigor level (list "marchas.aaa" in .claude/sworn/projeto.json) with no',
+    'approved review in this session:'
+  ].concat(citados, [
+    '',
+    'Do one of these:',
+    '  1. run /sworn:review "<file>" for each one, until it says "aprovado";',
+    '  2. if 3 rounds pass without approval, stop and ask the user to pick one of',
+    '     3 options: fix and recheck once, deliver "without review" with the',
+    '     reason, or run a new full review;',
+    '  3. or tell the user why this delivery goes "without review" (those words',
+    '     in your answer release this check).',
+    '',
+    'Turn off in this project: "portaoRevisao": false in .claude/sworn/projeto.json.'
+  ]).join('\n');
+}
+
 /** D634: o motivo quando a prova existe mas o resultado dela nao sustenta a alegacao - o bloco colado mostra falha
  *  (7a), o ultimo teste rodado na sessao falhou (7b) ou a provaDePronto nao rodou depois da ultima edicao de codigo
  *  (8). Declarar o que nao rodou, ou que a falha segue, sempre libera. O transcript so e lido quando ha alegacao. */
@@ -215,14 +255,21 @@ io.blindar(function () {
     const semPrompt = handoffSemPrompt(e, s, projeto);
     // D503: como o do handoff, calculado antes do retorno da trava 3 desligada; todo caminho abaixo com ele barra.
     const semReferencia = semRevisaoDeReferencia(e, s, projeto, cwd);
-    // Plano 082 (p7-25): o motivo da referencia entra so por aqui, e sempre depois dos outros do turno (o do handoff,
-    // o barrar soma no fim).
-    const daReferencia = semReferencia ? [semReferencia] : [];
+    // D655: o da revisao aprovada, calculado aqui pelo mesmo motivo, sem repetir os arquivos que o da referencia ja cita.
+    const semRevisao = semRevisaoAprovada(e, s, projeto, cwd,
+      semReferencia ? require('./lib/marcha.js').aaaComReferencia(s.arquivosTocados, projeto, cwd) : []);
+    // Plano 082 (p7-25) e D655: os motivos de revisao que faltam (o da referencia e, depois dele, o da revisao aprovada)
+    // entram so por aqui, e sempre depois dos outros do turno (o do handoff, o barrar soma no fim).
+    const daRevisao = (semReferencia ? [semReferencia] : []).concat(semRevisao ? [semRevisao] : []);
     if (semReferencia) {
       s.contadores = s.contadores || {};
       s.contadores.fecho_sem_referencia = (s.contadores.fecho_sem_referencia || 0) + 1;
     }
-    if (travas.fecho === false) return (semPrompt || semReferencia) ? barrar(e, s, daReferencia, semPrompt) : encerrarTurno(e, s);
+    if (semRevisao) {
+      s.contadores = s.contadores || {};
+      s.contadores.fecho_sem_revisao = (s.contadores.fecho_sem_revisao || 0) + 1;
+    }
+    if (travas.fecho === false) return daRevisao.length || semPrompt ? barrar(e, s, daRevisao, semPrompt) : encerrarTurno(e, s);
 
     const planoLib = require('./lib/plano.js');
     const ativo = planoLib.lerAtivo(cwd);
@@ -240,14 +287,14 @@ io.blindar(function () {
       if (aberta) {
         s.contadores = s.contadores || {};
         s.contadores.subitem_pendente = (s.contadores.subitem_pendente || 0) + 1;
-        return barrar(e, s, [planoLib.motivoSubitemAberto(aberta)].concat(daReferencia), semPrompt);
+        return barrar(e, s, [planoLib.motivoSubitemAberto(aberta)].concat(daRevisao), semPrompt);
       }
     }
 
     const semEvidencia = evidencia.deveBloquear(e.last_assistant_message);
     // D634: se a falta de bloco nao barrou, o resultado da prova; conta no mesmo balde (a evidencia nao sustenta a alegacao).
     const semResultado = semEvidencia ? null : motivoDoResultado(e, projeto);
-    if (!semEvidencia && !semResultado && !semPrompt && !semReferencia) return encerrarTurno(e, s, planoIlegivel);
+    if (!semEvidencia && !semResultado && !semPrompt && !daRevisao.length) return encerrarTurno(e, s, planoIlegivel);
 
     const motivos = [];
     if (planoIlegivel) motivos.push(planoIlegivel);
@@ -256,6 +303,6 @@ io.blindar(function () {
       s.contadores.fecho_sem_evidencia = (s.contadores.fecho_sem_evidencia || 0) + 1;
       motivos.push(semEvidencia ? evidencia.MOTIVO : semResultado);
     }
-    barrar(e, s, motivos.concat(daReferencia), semPrompt);
+    barrar(e, s, motivos.concat(daRevisao), semPrompt);
   });
 });

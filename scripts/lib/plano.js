@@ -3,7 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const escopoLib = require('./escopo.js');
 
-const RE_TAREFA = /^#{2,4}\s*Tarefa\s+(\d+)\s*[:.\-]\s*(.+?)\s*$/i;
+// D660: o plano em ingles conta igual - Task = Tarefa aqui; Step/Stage = Etapa, Wave = Onda, Phase = Fase no RE_ITEM.
+const RE_TAREFA = /^#{2,4}\s*(?:Tarefa|Task)\s+(\d+)\s*[:.\-]\s*(.+?)\s*$/i;
 const RE_CAIXA = /^\s*-\s*\[( |x|X)\]/;
 const ATIVO = path.join('.claude', 'sworn', 'plano-ativo.json');
 
@@ -59,7 +60,7 @@ function parseTarefas(texto) {
 
 // D476: o painel le o formato real dos planos (o da 0.7 usa "### Item N —" sem caixas). So o painel: o portao de
 // fecho segue no parseTarefas, porque nenhum teste prova que o formato largo nao barraria plano antigo a toa.
-const RE_ITEM = /^#{2,4}\s*(Tarefa|Item|Etapa|Onda|Fase)\s+(\d+[a-z]?)\s*(?::|\.|-|—|–)\s*(.+?)\s*$/i;
+const RE_ITEM = /^#{2,4}\s*(Tarefa|Item|Etapa|Onda|Fase|Task|Step|Stage|Wave|Phase)\s+(\d+[a-z]?)\s*(?::|\.|-|—|–)\s*(.+?)\s*$/i;
 const RE_FEITO = /\s*(?:\[feito\]|\(feito\))/ig;
 
 /**
@@ -80,7 +81,7 @@ function estadoDoItem(t) {
 // Censo s40 dos planos reais: so a 1a tabela com linha de id vale (o plano do APP parte 1 tem, depois das etapas,
 // "| Item | Onde |" com os pedidos 51-63), id repetido conta uma vez (tabela de resultado, I0 em 4 linhas), e plano
 // com caixa de passo em cabecalho ignora tabela (as caixas mandam; tabela-resumo das tarefas duplicaria).
-const RE_TIPO_TABELA = /^(Tarefa|Item|Etapa|Onda|Fase)s?$/i;
+const RE_TIPO_TABELA = /^(Tarefa|Item|Etapa|Onda|Fase|Task|Step|Stage|Wave|Phase)s?$/i;
 const RE_SEP_TABELA = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/;
 const ID_ETAPA = '[A-Za-z]{0,3}\\d+[a-z]?(?:[.\\-]\\d+[a-z]?)*';
 const RE_ID_CELULA = new RegExp('^(' + ID_ETAPA + ')(?!\\w)\\s*(?:[:.\\-—–]\\s*)?(.*)$');
@@ -545,8 +546,14 @@ function proximaDecisao(arquivoDeDecisoes) {
 // ("completa", "completado"): com o separador, "Tarefa 3: completar os testes" alegava.
 const RE_CONCLUIDA = /\b(?:tarefa|etapa|onda|fase)s? (?:(?:n[º°.] ?)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?(?: ?(?:,|e) ?(?:n[º°.] ?)?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?)* ?)?(?:[:\-–—] ?)?(?:j[aá] )?(?:est[aá] |est[aã]o |foi |foram )?(?:conclu[ií]d|fechad|finalizad|pronta|complet(?:[ao]s?|ad[ao]s?)\b)|\b(?:conclu(?:[ií](?:mos|ram|u|d[ao]s?)?)|(?:fech|finaliz|complet)(?:ei|ou|amos|aram|ad[ao]s?)) (?:(?:as|os|a|o) )?(?:tarefa|etapa|onda|fase)s?\b/i;
 
+// D656: as mesmas duas formas em ingles, como no RE_ALEGA_N. "finished", "closed" e "complete(d)" seguidos de objeto
+// sao verbo, nao estado ("Task 3: complete tests"): seguidos de palavra, so alegam com "and", "now", "in" e afins. A 2a
+// forma nao vale depois de "not"/"n't"/"never" ("I have not completed task 3").
+const RE_CONCLUIDA_EN = /\b(?:task|step|stage|wave|phase)s? (?:\d+(?:\.\d+)*(?:[a-z](?![a-z]))?(?: ?(?:,|and) ?\d+(?:\.\d+)*(?:[a-z](?![a-z]))?)* ?)?(?:[:\-–—] ?)?(?:(?:is|are|was|were|has been|have been) )?(?:already )?(?:done|(?:finished|closed|completed?)(?! (?!(?:and|now|too|already|yet|in|on|at|with|by|for)\b)[a-z]))\b|(?<!\bnot |n['’]t |\bnever )\b(?:completed|finished|closed|wrapped up) (?:the )?(?:task|step|stage|wave|phase)s?\b/i;
+
 function alegaEtapaConcluida(texto) {
-  return RE_CONCLUIDA.test(String(texto == null ? '' : texto).replace(/\s+/g, ' '));
+  const t = String(texto == null ? '' : texto).replace(/\s+/g, ' ');
+  return RE_CONCLUIDA.test(t) || RE_CONCLUIDA_EN.test(t);
 }
 
 function motivoSubitemAberto(tarefa) {
@@ -755,6 +762,8 @@ function nomeCurto(ativo) {
 // Plano 082 (p7-9): a unidade da conta, pelo tipo das linhas (os de RE_ITEM); singular no total 1.
 const UNIDADE = { tarefa: ['tarefa', 'tarefas'], etapa: ['etapa', 'etapas'], fase: ['fase', 'fases'],
   onda: ['onda', 'ondas'], item: ['item', 'itens'] };
+UNIDADE.task = UNIDADE.tarefa; UNIDADE.step = UNIDADE.etapa; UNIDADE.stage = UNIDADE.etapa;
+UNIDADE.wave = UNIDADE.onda; UNIDADE.phase = UNIDADE.fase;
 
 /** Uma linha so: espaco, tab e quebra viram um espaco (o texto vem do plano, que o dono escreve). */
 function umaLinha(v) { return String(v === undefined || v === null ? '' : v).replace(/\s+/g, ' ').trim(); }

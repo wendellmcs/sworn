@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.15.0 — entrega de rigor máximo só com revisão aprovada, o sworn em inglês e página nova
+
+O agente não dá mais por pronta uma entrega de rigor máximo sem revisão cega aprovada. O sworn passa a entender
+inglês além de português e responde no idioma de quem pergunta. A página do repositório mostra tudo que o plugin faz,
+com o motivo de cada peça.
+
+**Novo**
+
+- **"Pronto" em arquivo de rigor máximo só com revisão aprovada.** Quando o agente diz que a entrega está pronta e
+  mudou na sessão um arquivo de código da lista de rigor máximo (`marchas.aaa` no `projeto.json`) sem revisão cega
+  aprovada, a resposta é barrada: o turno não termina, e o agente recebe uma mensagem e continua. Vale com ou sem
+  `referencias`. Revisão cega é a do `/sworn:review`: inspetores comparam a versão antiga e a nova sem saber qual é
+  qual. Aprovada é a revisão que passou duas rodadas seguidas sem problema grave novo, a mesma que libera o commit.
+- A mensagem cita os arquivos e dá ao agente três saídas:
+  1. rodar `/sworn:review` até "aprovado";
+  2. se 3 rodadas passarem sem aprovação, parar e pedir ao usuário que escolha entre três caminhos: corrigir e mandar
+     um inspetor conferir só o conserto; entregar sem revisão, com o motivo; ou começar a revisão de novo;
+  3. sem revisar, dizer por conta própria na resposta que a entrega fica "sem revisão", e por quê.
+- Texto (`.md`, `.txt`) e arquivo apagado ficam fora; arquivos das listas `marchas.padrao` e `marchas.rapida` não mudam.
+  Desliga com `"portaoRevisao": false` no `projeto.json`.
+- Para quem mantém o plugin: são **27 baldes** de contador: 21 que negam, 6 que só contam. Balde é uma categoria do
+  contador de eventos que o sworn soma no projeto (`.claude/sworn/contadores.json`); os que negam somam as vezes em que uma trava barrou o agente, os
+  outros só registram que algo aconteceu. O novo soma as entregas barradas sem revisão.
+
+**Inglês e português**
+
+- **A resposta segue o idioma de quem pergunta.** O bloco de qualidade de resposta, injetado em toda sessão, manda o
+  agente responder no idioma do usuário.
+- **O fecho entende alegação em inglês.** "all tests pass", "it works", "fixed", "Task 3 is done", "Finished tasks 1
+  and 2" contam como dizer que está pronto; "did not run", "couldn't verify", "still fails" contam como declarar o que
+  não rodou ou ainda falha. Palavra que só descreve não alega: "completed in 2s", "ready to accept", "how it works".
+- **Plano escrito em inglês é contado.** Tarefas e itens marcados com Task, Step, Stage, Wave ou Phase entram na conta
+  de subitem aberto; antes, um plano em inglês dava zero tarefas e a trava não via nada.
+- **Skills, agentes, modelos e o comando paralelo em inglês.** O texto das skills, dos agentes, dos modelos e do
+  workflow saiu do português; os comandos e o que eles fazem não mudam. As mensagens que os ganchos (os scripts que o
+  Claude Code roda a cada evento, como abrir a sessão ou encerrar o turno) mostram ao agente e ao usuário seguem em
+  português.
+- O `/sworn:learn` não recusa mais uma regra em inglês só por ter a palavra "stop". Ele recusa regra que crava nome de
+  evento de gancho, e o evento `Stop` agora só casa escrito com maiúscula.
+
+**Página**
+
+- README reescrito como vitrine, em inglês e português: abre com um bloqueio real e mostra, por problema, as oito
+  travas com o porquê, os portões que se desligam por uma chave do `projeto.json`, os blocos injetados, a troca de chat, os painéis, a revisão
+  cega por dentro, os comandos, os agentes e o workflow.
+- Figura nova dos ganchos: cada evento e o script que ele chama, clara e escura, nos dois idiomas.
+
 ## 0.14.0 — o esquadro agora se chama sworn, e o fecho olha o resultado da prova
 
 O plugin muda de nome e os comandos passam a ser em inglês; a pasta de configuração migra sozinha. O portão de fecho

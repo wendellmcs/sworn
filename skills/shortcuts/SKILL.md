@@ -1,57 +1,58 @@
 ---
 name: shortcuts
-description: Lista os atalhos deliberados do repositório - comentários com a marca atalho: (ou ponytail:, shortcut:) que dizem o que foi simplificado, até onde vale e quando trocar - e aponta os que não têm gatilho de troca. Use quando quiser saber que dívida de simplificação o código carrega, antes de um release ou quando o dono perguntar.
+description: Lists the repository's deliberate shortcuts - comments with the atalho: mark (or ponytail:, shortcut:) that say what was simplified, how far it holds and when to replace it - and points out those with no replacement trigger. Use when you want to know what simplification debt the code carries, before a release or when the owner asks.
 ---
 
-# `/sworn:shortcuts` — o que foi simplificado de propósito
+# `/sworn:shortcuts` — what was simplified on purpose
 
-Atalho deliberado é bom enquanto alguém lembra dele. O bloco "menos código" pede que todo atalho
-leve um comentário com três rótulos, e esta skill junta esses comentários numa lista só, para a
-dívida não ficar esquecida no meio do código.
+A deliberate shortcut is good as long as someone remembers it. The "less code" block asks that every shortcut
+carry a comment with three labels, and this skill gathers those comments into a single list, so the
+debt is not forgotten in the middle of the code.
 
-O comentário, numa linha, depois de `//`, `#`, `--`, `/*` ou `<!--`:
-`// atalho: <o que foi simplificado>. limite: <até onde vale>. trocar quando: <gatilho>.`
+The comment, on one line, after `//`, `#`, `--`, `/*` or `<!--`:
+`// atalho: <what was simplified>. limite: <how far it holds>. trocar quando: <trigger>.`
 
-"limite:" e "trocar quando:" são rótulos, não vírgulas: uma vírgula dentro da frase não quebra a
-leitura. Sem rótulo nenhum, o texto inteiro vira o "o que" e o atalho sai como `sem-gatilho`.
+"limite:" and "trocar quando:" are labels, written exactly like this in any language (the script recognizes only
+these), not commas: a comma inside the sentence does not break the
+reading. With no label at all, the whole text becomes the "what" and the shortcut comes out as `sem-gatilho`.
 
-## Passo 1 — listar
+## Step 1 — list
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/atalhos.js"
 
-Rode na pasta do repositório. O script só lê: varre os arquivos que o git rastreia e os novos que ele
-não ignora (o que o `.gitignore` cobre, `.git` e `node_modules` ficam fora), pula binário e arquivo
-acima de 1 MB, e não muda nada. Fora de um repositório git ele diz por que e sai com código 1.
+Run in the repository folder. The script only reads: it scans the files git tracks and the new ones it does
+not ignore (what `.gitignore` covers, `.git` and `node_modules` stay out), skips binaries and files
+above 1 MB, and changes nothing. Outside a git repository it says why and exits with code 1.
 
-A marca padrão é `atalho`; `ponytail` e `shortcut` também contam, para quem já usa. Outra marca vai
-na chave `marcaDeAtalho` do `.claude/sworn/projeto.json` (uma palavra só), e então ela substitui
+The default mark is `atalho`; `ponytail` and `shortcut` also count, for those who already use them. Another mark goes
+in the `marcaDeAtalho` key of `.claude/sworn/projeto.json` (one word only), and then it replaces
 `atalho`.
 
-## Passo 2 — mostrar
+## Step 2 — show
 
-Mostre a saída inteira, como veio: o painel já vem agrupado por arquivo, com a linha de cada atalho,
-o resumo e, quando há atalho sem gatilho, o conselho de escrever o "trocar quando:".
+Show the entire output, as it came: the panel already comes grouped by file, with the line of each shortcut,
+the summary and, when there is a shortcut with no trigger, the advice to write the "trocar quando:".
 
-- **Atalho sem gatilho** é o que importa apontar: sem gatilho, ninguém sabe quando trocar. Proponha
-  o gatilho em uma linha por atalho, lendo o código em volta; **não edite o comentário** sem o dono
-  pedir.
-- **"Nenhum atalho registrado."** não quer dizer código sem atalho: quer dizer que nenhum foi
-  marcado. A linha de baixo diz em quantos arquivos o script procurou.
+- **A shortcut with no trigger** is what matters to point out: with no trigger, nobody knows when to replace it. Propose
+  the trigger in one line per shortcut, reading the surrounding code; **do not edit the comment** unless the owner
+  asks.
+- **"Nenhum atalho registrado."** does not mean code with no shortcuts: it means none was
+  marked. The line below says in how many files the script searched.
 
-## Sozinha, a cada 30 dias
+## On its own, every 30 days
 
-Na abertura da sessão, num projeto com `projeto.json`, o sworn mostra a lista completa (com e sem
-gatilho) no máximo uma vez a cada 30 dias, com a ordem de conferir se algum "trocar quando" já
-aconteceu e, se aconteceu, levar ao dono em 3 opções. Varre a pasta aberta e os repositórios logo
-abaixo dela (um workspace que guarda os projetos em repositórios próprios não fica de fora); lista até
-10 atalhos, e o resto fica para esta skill. Sem atalho, nada sai. A data fica em
-`.claude/sworn/atalhos-revisao.json`; o prazo muda em `limiares.diasEntreAtalhos`, e
-`"atalhosNaAbertura": false` desliga. Quando um atalho aparecer ali, rode esta skill para o detalhe.
+When a session opens, in a project with `projeto.json`, sworn shows the full list (with and without
+a trigger) at most once every 30 days, with the instruction to check whether any "trocar quando" has already
+happened and, if so, take it to the owner in 3 options. It scans the open folder and the repositories right
+below it (a workspace that keeps its projects in separate repositories is not left out); it lists up to
+10 shortcuts, and the rest is left to this skill. With no shortcut, nothing is shown. The date is kept in
+`.claude/sworn/atalhos-revisao.json`; the interval changes in `limiares.diasEntreAtalhos`, and
+`"atalhosNaAbertura": false` turns it off. When a shortcut shows up there, run this skill for the detail.
 
-## O que esta skill NÃO faz
+## What this skill does NOT do
 
-- **Não acha atalho sem marca.** Ela lê comentário, não código: simplificação sem o comentário não
-  aparece. Achar código que não precisava existir é trabalho da revisão (`/sworn:review`).
-- **Não lê comentário de várias linhas.** O atalho tem de caber na linha da marca.
-- **Não julga se o atalho ainda vale.** Ela mostra o gatilho; quem confere se ele já disparou é você,
-  lendo o código, e quem decide trocar é o dono.
+- **Does not find a shortcut with no mark.** It reads comments, not code: a simplification without the comment does not
+  appear. Finding code that did not need to exist is the review's job (`/sworn:review`).
+- **Does not read multi-line comments.** The shortcut must fit on the mark's line.
+- **Does not judge whether the shortcut still holds.** It shows the trigger; whoever checks whether it has fired is you,
+  reading the code, and whoever decides to replace it is the owner.

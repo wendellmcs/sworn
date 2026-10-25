@@ -163,7 +163,13 @@ test('N1: alegaEtapaConcluida e linear - 50 mil espacos/caracteres em todas as f
     'digitos': 'tarefa ' + '1'.repeat(50000) + 'x',
     'lista longa': 'tarefa 1' + ' e 1'.repeat(12500) + 'x',
     'nomes repetidos': 'tarefa '.repeat(7000) + 'x',
-    'verbo e artigo repetidos': 'conclui a '.repeat(5000) + 'x'
+    'verbo e artigo repetidos': 'conclui a '.repeat(5000) + 'x',
+    // D656: as formas em ingles
+    'task 1+sp+x': 'task 1' + sp + 'x',
+    'finished the+sp+x': 'finished the' + sp + 'x',
+    'lista longa em ingles': 'task 1' + ' and 1'.repeat(10000) + 'x',
+    'nomes repetidos em ingles': 'task '.repeat(10000) + 'x',
+    'nao repetido': 'not '.repeat(10000) + 'completed x'
   };
   Object.keys(formas).forEach((nome) => {
     const ini = performance.now();
@@ -472,4 +478,44 @@ test('082 T6 (p7-16): abrir que nao grava diz o arquivo, a causa e o que fazer, 
     assert.ok(r.stderr.indexOf('Não consegui gravar ') === 0, r.stderr);
     assert.ok(!/\n\s+at /.test(r.stderr), 'stack trace no stderr: ' + r.stderr);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// D660: plano em ingles ("## Task N") dava 0 tarefas e 0 itens - o painel ficava vazio e a alegacao em ingles nao
+// cobrava o subitem aberto. Task/Step/Stage/Wave/Phase contam como Tarefa/Etapa/Etapa/Onda/Fase.
+test('D660: parseTarefas le "Task N" como le "Tarefa N", e so ele (Step/Stage/Wave/Phase seguem fora, como Etapa)', () => {
+  const pt = plano.parseTarefas('## Tarefa 1: A\n- [ ] a\n- [x] b\n## Tarefa 2. B\n- [x] c');
+  const en = plano.parseTarefas('## Task 1: A\n- [ ] a\n- [x] b\n## task 2. B\n- [x] c');
+  assert.deepStrictEqual(en.map(function (t) { return [t.n, t.titulo, t.abertos, t.total]; }),
+    [[1, 'A', 1, 2], [2, 'B', 0, 1]]);
+  assert.deepStrictEqual(en.map(function (t) { return [t.n, t.abertos, t.total]; }),
+    pt.map(function (t) { return [t.n, t.abertos, t.total]; }));
+  assert.deepStrictEqual(plano.parseTarefas('## Step 1: A\n- [ ] a\n## Phase 2: B\n- [ ] b'), []);
+  assert.deepStrictEqual(plano.parseTarefas('## Etapa 1: A\n- [ ] a'), []);
+  // A palavra inteira: "Tasks 1:" e "Taskforce 1:" nao sao cabecalho de tarefa.
+  assert.deepStrictEqual(plano.parseTarefas('## Tasks 1: A\n- [ ] a\n## Taskforce 2: B\n- [ ] b\n## Task3: C\n- [ ] c'), []);
+  const m = plano.motivoSubitemAberto(en[0]);
+  assert.ok(m.indexOf('Tarefa 1 ("A")') !== -1 && m.indexOf('1 de 2 passos') !== -1, m);
+});
+
+test('D660: parseItens le Task/Step/Stage/Wave/Phase como Tarefa/Etapa/Onda/Fase, nos cabecalhos e na tabela', () => {
+  const itens = plano.parseItens('## Phase 1: G\n### Task 1: A\n- [x] a\n### Step 2a - B\n- [ ] b\n' +
+    '### Stage 3 — C [FEITO]\n### Wave 4. D\n- [x] d');
+  assert.deepStrictEqual(itens.map(function (t) { return [t.tipo, t.id, t.titulo, t.estado]; }), [
+    ['Task', '1', 'A', 'feita'], ['Step', '2a', 'B', 'aberta'], ['Stage', '3', 'C', 'feita'], ['Wave', '4', 'D', 'feita']]);
+  const tabela = plano.parseItens('| Tasks | What |\n|---|---|\n| T1 [FEITO] | x |\n| T2 | y |');
+  assert.deepStrictEqual(tabela.map(function (t) { return [t.tipo, t.id, t.estado]; }),
+    [['Task', 'T1', 'feita'], ['Task', 'T2', 'sem marca']]);
+  assert.deepStrictEqual(plano.parseItens('## Tasks overview\n- [ ] a\n## Taskforce 1: x\n- [ ] b'), []);
+  assert.deepStrictEqual(plano.parseItens('| Taskforce | What |\n|---|---|\n| T1 | x |'), []);
+});
+
+test('D660: a faixa conta tarefas, etapas, ondas e fases em ingles com a unidade do tipo', () => {
+  const ativo = { arquivo: 'docs/x-plano.md' };
+  const linha = function (texto) { return plano.linhaDoPlano(ativo, plano.parseItens(texto)); };
+  assert.ok(linha('### Task 1: A\n- [x] a\n### Task 2: B\n- [ ] b').indexOf(' 1 de 2 tarefas ') !== -1,
+    linha('### Task 1: A\n- [x] a\n### Task 2: B\n- [ ] b'));
+  assert.ok(linha('### Step 1: A\n- [x] a\n### Step 2: B\n- [ ] b').indexOf(' 1 de 2 etapas ') !== -1);
+  assert.ok(linha('### Stage 1: A\n- [x] a\n### Stage 2: B\n- [ ] b').indexOf(' 1 de 2 etapas ') !== -1);
+  assert.ok(linha('### Wave 1: A\n- [x] a\n### Wave 2: B\n- [ ] b').indexOf(' 1 de 2 ondas ') !== -1);
+  assert.ok(linha('### Phase 1: A\n- [x] a\n### Phase 2: B\n- [ ] b').indexOf(' 1 de 2 fases ') !== -1);
 });

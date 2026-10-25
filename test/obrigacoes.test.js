@@ -143,13 +143,17 @@ test('obrigacoes: cada marcador pega um caso real e um marcador falso nao pega',
   const positivos = ['Portoes obrigatorios:', 'Guarda-corpos inviolaveis',
     'O que um pronto precisa ter', 'E proibido isto:', 'Jamais faca assim:',
     'Nunca suba a catraca:', 'Sempre cole a saida:', 'Tem de valer sempre:',
-    'Gatilhos contaveis:', 'Como pedir decisao ao dono'];
+    'Gatilhos contaveis:', 'Como pedir decisao ao dono',
+    // D656 (T3): os mesmos em ingles - o manual do plugin agora e ingles.
+    'Mandatory gates:', 'What a done must have', 'It is forbidden:', 'Never raise the ratchet:',
+    'Always paste the output:', 'It must hold:', 'Countable triggers:', 'How to ask the owner for a decision'];
   assert.strictEqual(positivos.length, ob.MARCADORES.length,
     'todo marcador tem de ter um caso que o prova - senao entrou sem ganhar o lugar');
   positivos.forEach((p, i) => {
     assert.ok(ob.MARCADORES[i].test(p), 'marcador ' + i + ' nao pegou o proprio caso: ' + p);
   });
-  for (const neutro of ['Exemplos de uso', 'Referencias', 'O que esta skill e']) {
+  for (const neutro of ['Exemplos de uso', 'Referencias', 'O que esta skill e', 'Usage examples', 'References',
+    'What this skill is', 'If you need to slice', 'Ask the owner', 'Nevertheless, mustard']) {
     for (const re of ob.MARCADORES) {
       assert.ok(!re.test(neutro), 'marcador ' + re + ' pegou prosa neutra: ' + neutro);
     }
@@ -282,8 +286,9 @@ test('obrigacoes: o manual do plugin rende o inventario que o experimento julga'
   assert.ok(inv.ok, 'sem skills/playbook nao ha inventario - e a T32 quem o cria');
   assert.strictEqual(inv.arquivos.length, 7, 'o manual absorvido tem 7 arquivos');
 
-  const pisos = { marcha: 3, lente: 8, 'marcha-3-aaa': 9, '5-guarda-corpos-inviolaveis': 8,
-    '6-saude-de-contexto': 8, '7-como-pedir-decisao': 5, '8-o-que-um': 5 };
+  // D656 (T3): as familias saem dos cabecalhos, agora em ingles (Marcha -> Gear, Lente -> Lens); pisos iguais.
+  const pisos = { gear: 3, lens: 8, 'gear-3-aaa': 9, '5-inviolable-guardrails': 8,
+    '6-context-health-and': 8, '7-how-to-ask': 5, '8-what-a-done': 5 };
   for (const familia of Object.keys(pisos)) {
     const n = inv.porFamilia[familia] || 0;
     assert.ok(n >= pisos[familia],

@@ -67,4 +67,31 @@ function aaaComReferencia(arquivos, projeto, raiz) {
   return achados;
 }
 
-module.exports = { NIVEL, resolverMarcha, exigeEscopo, podeSubir, aaaComReferencia };
+/**
+ * D655 (plano pedidos-aaa-idioma-readme, T1): os arquivos mudados que resolvem para `aaa` sem revisao aprovada - o que
+ * o portao do commit aceita (`revisadosAprovados`, `commit.aprovado`). Como no commit, texto e arquivo que nao existe
+ * ficam fora; diferente dele, nao pergunta ao git se difere do HEAD: o Stop roda a cada fim de turno, e o arquivo
+ * editado e devolvido ao HEAD e raro. Relativos a raiz, a 1a grafia vista (a caixa como no aaaComReferencia).
+ */
+function aaaSemRevisao(arquivos, aprovados, projeto, raiz) {
+  if (!Array.isArray(arquivos)) return [];
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const caminhoLib = require('./caminho.js');
+  const commit = require('./commit.js');
+  const chave = CAIXA_IGUAL ? function (r) { return r.toLowerCase(); } : function (r) { return r; };
+  const vistos = new Set();
+  const achados = [];
+  for (const arquivo of arquivos) {
+    if (typeof arquivo !== 'string') continue;
+    const rel = caminhoLib.relativoAoProjeto(arquivo, raiz);
+    if (!rel || vistos.has(chave(rel)) || commit.ehTexto(rel) || resolverMarcha(rel, projeto) !== 'aaa') continue;
+    const abs = path.resolve(raiz, rel);
+    if (commit.aprovado(aprovados, abs) || !fs.existsSync(abs)) continue;
+    achados.push(rel);
+    vistos.add(chave(rel));
+  }
+  return achados;
+}
+
+module.exports = { NIVEL, resolverMarcha, exigeEscopo, podeSubir, aaaComReferencia, aaaSemRevisao };

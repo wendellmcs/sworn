@@ -928,6 +928,56 @@ test('L2-fec-1: RE_ALEGA_N concorda com plano.alegaEtapaConcluida (paridade) e e
   }
 });
 
+// D656 (camada 1): a alegacao de etapa em ingles, com a mesma paridade fecho x plano e o mesmo numero extraido.
+test('D656: RE_ALEGA_N e plano.alegaEtapaConcluida reconhecem a alegacao em ingles (paridade) e o numero', () => {
+  const plano = require('../scripts/lib/plano.js');
+  const casos = [];
+  for (const nome of ['task', 'step', 'stage', 'phase', 'wave']) {
+    for (const aux of ['', 'is ', 'was ', 'has been ', 'is already ']) {
+      for (const p of ['done', 'complete', 'completed', 'finished', 'closed']) {
+        casos.push({ texto: 'The ' + nome + ' 3 ' + aux + p + '.', n: 3 });
+        casos.push({ texto: 'The ' + nome + ' ' + aux + p + '.', n: null });
+      }
+    }
+    for (const verbo of ['completed', 'finished', 'closed', 'wrapped up']) {
+      casos.push({ texto: 'I ' + verbo + ' the ' + nome + ' 3.', n: 3 });
+      casos.push({ texto: 'I ' + verbo + ' the ' + nome + '.', n: null });
+    }
+  }
+  casos.push(
+    { texto: 'Tasks 1 and 2 done.', n: [1, 2] },
+    { texto: 'Steps 3, 4 and 5 are finished.', n: [3, 4, 5] },
+    { texto: 'Tasks 1 and 2 have been completed.', n: [1, 2] },
+    { texto: 'Task 3: done.', n: [3] },
+    { texto: 'Task 3 - complete.', n: [3] },
+    { texto: 'Finished tasks 1 and 2.', n: [1, 2] },
+    { texto: 'Wave 7b closed.', n: [] },
+    { texto: 'Task 1.2 done.', n: [] },
+    // R1 da revisao cega: o participio seguido de palavra so alega quando ela nao e objeto ("and", "now", "in"...)
+    { texto: 'Task 3 complete, moving on.', n: [3] },
+    { texto: 'Step 1 done, now running the build.', n: [1] },
+    { texto: 'Task 3 finished and tested.', n: [3] },
+    { texto: 'Task 3 is closed now.', n: [3] },
+    { texto: 'Phase 2 finished in 3 minutes.', n: [2] }
+  );
+  assert.ok(casos.length > 200, 'corpus pequeno demais: ' + casos.length);
+  for (const c of casos) {
+    assert.strictEqual(plano.alegaEtapaConcluida(c.texto), true, 'o corpus supoe que alega: ' + c.texto);
+    const esperado = c.n === null ? [] : Array.isArray(c.n) ? c.n : [c.n];
+    assert.deepStrictEqual(numerosCitados(c.texto), esperado, 'numero extraido: ' + c.texto);
+  }
+  // controles (falso positivo), em ingles e em portugues: nao alegam e nao rendem numero
+  for (const t of ['Task 3 is pending.', 'I opened task 3.', 'Ticket 3 was closed.', 'Task 3 in progress.',
+    'Tasks 1 and 2 are not done yet.', 'I will finish task 3.', 'Before closing the step, I run the suite.',
+    'Finishing phase 2.', 'To complete wave 7 the test is missing.', 'Task 3: complete the tests.',
+    'I have not completed task 3.', 'I haven\'t finished the step 2.', 'Step 2 is not complete.',
+    'Task 3: complete tests next.', 'Phase 2 closed the loop.', 'Step 2 finished the migration.', 'Task 4: complete everything.',
+    'A tarefa 3 esta pendente.', 'Vou concluir a tarefa 3.']) {
+    assert.strictEqual(plano.alegaEtapaConcluida(t), false, 'nao devia alegar: ' + t);
+    assert.deepStrictEqual(numerosCitados(t), [], t);
+  }
+});
+
 test('L2-fec-2: alegacao com mais de um numero ("tarefa 1 e 2") cobra todos, nao so o primeiro ou o ultimo', () => {
   comTmp((tmp) => {
     const texto = '## Tarefa 1: primeira\n- [x] a\n\n## Tarefa 2: segunda\n- [x] b\n- [ ] c\n';
@@ -948,7 +998,9 @@ test('L2-fec-2: alegacao com mais de um numero ("tarefa 1 e 2") cobra todos, nao
 
 test('L2-fec-7: RE_ALEGA_N nao degrada com uma sequencia longa de espacos (tempo linear)', () => {
   const sp = ' '.repeat(50000);
-  const entradas = ['fechei' + sp + 'x', 'fechei' + sp + 'a' + sp + 'x', 'tarefa' + sp + '1' + sp + 'x', 'tarefa 1' + sp + 'x'];
+  const entradas = ['fechei' + sp + 'x', 'fechei' + sp + 'a' + sp + 'x', 'tarefa' + sp + '1' + sp + 'x', 'tarefa 1' + sp + 'x',
+    'finished' + sp + 'x', 'finished' + sp + 'the' + sp + 'x', 'task' + sp + '1' + sp + 'x', 'task 1' + sp + 'x',
+    'tasks 1' + sp + 'and' + sp + '2' + sp + 'x'];
   for (const re of reAlegaN()) {
     for (const t of entradas) {
       const r = new RegExp(re.source, re.flags);
@@ -1195,6 +1247,146 @@ test('082 T5: o portao da referencia diz o que falta como a cena S10 do mock (ca
     assert.ok(r.json && r.json.decision === 'block', 'tinha de barrar: ' + r.stdout);
     assert.strictEqual(r.json.reason, CENA_S10);
   });
+});
+
+// ------------------------------- D655 (plano pedidos-aaa-idioma-readme, T1): entrega AAA sem revisao aprovada
+
+const SO_AAA = { marchas: { aaa: ['src/**'] } };
+
+/** Grava o arquivo no disco e o marca como mudado na sessao (o portao, como o do commit, pula o que nao existe). */
+function mudar(tmp, id, dir, arquivo) {
+  fs.mkdirSync(path.dirname(path.join(dir, arquivo)), { recursive: true });
+  fs.writeFileSync(path.join(dir, arquivo), 'x\n', 'utf8');
+  return gravar(tmp, id, dir, 'Edit', arquivo);
+}
+
+/** O que o apurar-ronda.js grava no "aprovado": o caminho absoluto em revisadosAprovados. */
+function aprovar(tmp, id, abs) {
+  const arq = path.join(tmp, 'sworn', id + '.json');
+  const s = JSON.parse(fs.readFileSync(arq, 'utf8'));
+  s.revisadosAprovados = require('../scripts/lib/commit.js').comAprovado(s.revisadosAprovados, abs);
+  fs.writeFileSync(arq, JSON.stringify(s), 'utf8');
+}
+
+const CENA_REVISAO = [
+  'sworn - the review is missing on a strictest-rigor file.',
+  '',
+  'You said the work is done, and you changed files that this project puts in the',
+  'strictest rigor level (list "marchas.aaa" in .claude/sworn/projeto.json) with no',
+  'approved review in this session:',
+  '  - "src/a b.js"',
+  '  - "src/c.js"',
+  '',
+  'Do one of these:',
+  '  1. run /sworn:review "<file>" for each one, until it says "aprovado";',
+  '  2. if 3 rounds pass without approval, stop and ask the user to pick one of',
+  '     3 options: fix and recheck once, deliver "without review" with the',
+  '     reason, or run a new full review;',
+  '  3. or tell the user why this delivery goes "without review" (those words',
+  '     in your answer release this check).',
+  '',
+  'Turn off in this project: "portaoRevisao": false in .claude/sworn/projeto.json.'
+].join('\n');
+
+test('D655 T1: entrega alegada + arquivo AAA mudado sem revisao aprovada (sem referencia) -> barra com a cena e conta o balde', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'rev', SO_AAA);
+    mudar(tmp, 'rev', dir, path.join('src', 'a b.js'));
+    mudar(tmp, 'rev', dir, path.join('src', 'c.js'));
+    const r = fecho(tmp, 'rev', dir, ENTREGA);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(r.json && r.json.decision === 'block', 'tinha de barrar: ' + r.stdout);
+    assert.strictEqual(r.json.reason, CENA_REVISAO);
+    assert.strictEqual(sessaoDe(tmp, 'rev').contadores.fecho_sem_revisao, 1);
+    assert.strictEqual(fecho(tmp, 'rev', dir, ENTREGA).json, null, 'uma vez por turno: a segunda passada libera');
+  });
+});
+
+test('D655 T1: a revisao aprovada libera; o arquivo editado de novo depois dela volta a cobrar', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'rev-ok', SO_AAA);
+    mudar(tmp, 'rev-ok', dir, path.join('src', 'a.js'));
+    aprovar(tmp, 'rev-ok', path.join(dir, 'src', 'a.js'));
+    assert.strictEqual(fecho(tmp, 'rev-ok', dir, ENTREGA).json, null, 'aprovado: passa');
+    mudar(tmp, 'rev-ok', dir, path.join('src', 'a.js'));
+    const r = fecho(tmp, 'rev-ok', dir, ENTREGA);
+    assert.ok(r.json && r.json.decision === 'block', 'editado depois de aprovado: ' + r.stdout);
+    // o teto (fechada sem "aprovado") nao entra em revisadosAprovados: o balde revisao_fechada sozinho nao libera
+    const dir2 = projetoCom(tmp, 'rev-teto', SO_AAA);
+    mudar(tmp, 'rev-teto', dir2, path.join('src', 'a.js'));
+    const arq = path.join(tmp, 'sworn', 'rev-teto.json');
+    const s = JSON.parse(fs.readFileSync(arq, 'utf8'));
+    s.contadores = Object.assign({}, s.contadores, { revisao_fechada: 1 });
+    fs.writeFileSync(arq, JSON.stringify(s), 'utf8');
+    const t = fecho(tmp, 'rev-teto', dir2, ENTREGA);
+    assert.ok(t.json && t.json.decision === 'block', 'fechada sem aprovado nao libera: ' + t.stdout);
+  });
+});
+
+test('D655 T1: controles - sem alegacao, fora da AAA, texto, arquivo que nao existe, chave desligada, declarado sem revisao', () => {
+  comTmp((tmp) => {
+    const casos = [
+      ['c-sem-alegacao', SO_AAA, path.join('src', 'a.js'), 'Anotado; sigo na proxima tarefa.', true],
+      ['c-fora-aaa', SO_AAA, path.join('lib', 'a.js'), ENTREGA, true],
+      ['c-texto', SO_AAA, path.join('src', 'guia.md'), ENTREGA, true],
+      ['c-nao-existe', SO_AAA, path.join('src', 'a.js'), ENTREGA, false],
+      ['c-desligado', Object.assign({ portaoRevisao: false }, SO_AAA), path.join('src', 'a.js'), ENTREGA, true],
+      ['c-declara-pt', SO_AAA, path.join('src', 'a.js'), ENTREGA + '\n\nEntrego sem revisao cega: o dono pediu so o rascunho.', true],
+      ['c-declara-en', SO_AAA, path.join('src', 'a.js'), ENTREGA + '\n\nThis ships without review: the owner asked for a draft.', true]
+    ];
+    for (const [id, conteudo, arquivo, mensagem, existe] of casos) {
+      const dir = projetoCom(tmp, id, conteudo);
+      if (existe) mudar(tmp, id, dir, arquivo); else gravar(tmp, id, dir, 'Edit', arquivo);
+      const r = fecho(tmp, id, dir, mensagem);
+      assert.strictEqual(r.status, 0, id + ': ' + r.stderr);
+      assert.strictEqual(r.json, null, id + ': nao devia barrar: ' + r.stdout);
+    }
+  });
+});
+
+test('D655 T1: chave propria - travas.fecho false nao desliga o portao da revisao', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'rev-trava', Object.assign({ travas: { fecho: false } }, SO_AAA));
+    mudar(tmp, 'rev-trava', dir, path.join('src', 'a.js'));
+    const r = fecho(tmp, 'rev-trava', dir, 'Pronto.');
+    assert.ok(r.json && r.json.decision === 'block', 'tinha de barrar: ' + r.stdout);
+    assert.match(r.json.reason, /portaoRevisao/, r.json.reason);
+    assert.ok(r.json.reason.indexOf('trava 3') === -1, 'a trava 3 esta desligada: ' + r.json.reason);
+  });
+});
+
+test('D655 T1: arquivo que o portao da referencia ja cobra nao sai duas vezes; o outro AAA sai no motivo da revisao', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'rev-ref', { marchas: { aaa: ['src/**'] }, referencias: { tela: ['ref/topo.css'] } });
+    mudar(tmp, 'rev-ref', dir, path.join('src', 'a.css'));
+    const so = fecho(tmp, 'rev-ref', dir, ENTREGA);
+    assert.ok(so.json && so.json.decision === 'block', so.stdout);
+    assert.match(so.json.reason, /portaoReferencia/, 'o da referencia cobra: ' + so.json.reason);
+    assert.ok(!/portaoRevisao/.test(so.json.reason), 'o mesmo arquivo nao sai de novo: ' + so.json.reason);
+    assert.strictEqual(fecho(tmp, 'rev-ref', dir, ENTREGA).json, null, 'a segunda passada fecha o turno');
+    mudar(tmp, 'rev-ref', dir, path.join('src', 'b.js'));
+    const os2 = fecho(tmp, 'rev-ref', dir, ENTREGA);
+    assert.ok(os2.json && /portaoReferencia/.test(os2.json.reason) && /portaoRevisao/.test(os2.json.reason), os2.stdout);
+    assert.ok(os2.json.reason.indexOf('"src/b.js"') !== -1 && os2.json.reason.split('"src/a.css"').length === 2,
+      'a.css so no da referencia, b.js no da revisao: ' + os2.json.reason);
+  });
+});
+
+test('D655 T1: a chave nova e o balde novo estao nas listas', () => {
+  assert.ok(require('../scripts/lib/projeto.js').CHAVES_LIGA_DESLIGA.indexOf('portaoRevisao') !== -1);
+  assert.ok(require('../scripts/lib/saude.js').BALDES_DE_BLOQUEIO.indexOf('fecho_sem_revisao') !== -1);
+});
+
+test('D655 T1: declaraSemRevisao - a declaracao de entrega sem revisao, nos dois idiomas, fora dos blocos', () => {
+  const ev = require('../scripts/lib/evidencia.js');
+  const sim = ['Fica sem revisao porque e rascunho.', 'Entrego sem a revisão cega.', 'Nao rodei a revisao.',
+    'Não fiz a revisão: faltou tempo.', 'Shipping this without review.', 'I skipped the review on purpose.',
+    'The blind review was not run.', 'No review this time: it is a draft.'];
+  const nao = ['A revisao aprovou o arquivo.', 'Revisão cega aprovada em duas rondas.', 'Review approved.',
+    'Rodei a revisao e saiu aprovado.', 'Pronto.\n```\nsem revisao\n```', 'The review passed.',
+    'There were no review findings.', 'No review comments are left open.'];
+  for (const t of sim) assert.strictEqual(ev.declaraSemRevisao(t), true, 'devia reconhecer: ' + t);
+  for (const t of nao) assert.strictEqual(ev.declaraSemRevisao(t), false, 'falso positivo: ' + t);
 });
 
 // Plano 082, Tarefa 6 (p7-25): o motivo da referencia entra por um caminho so e sempre depois dos outros (subitem,

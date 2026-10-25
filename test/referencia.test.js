@@ -333,20 +333,20 @@ test('skill: como o comando comeca (mock secao 1) - tipo pelo projeto.json, lide
   const s = lerSkill();
   assert.match(s, /^---\nname: reference\n/);
   assert.ok(s.includes('projeto.json'), 'o tipo sai do projeto.json');
-  assert.match(s, /busca pública/);
-  assert.match(s, /hora/);
-  assert.match(s, /já estudad/, 'produto ja estudado aparece e nao e proposto');
+  assert.match(s, /public search/);
+  assert.match(s, /time of the measurement/);
+  assert.match(s, /already studied/, 'produto ja estudado aparece e nao e proposto');
   assert.match(s, /AskUserQuestion/);
-  for (const c of ['o que se vê', 'estados e fluxos', 'textos', 'rede e desempenho']) assert.ok(s.includes(c), 'camada: ' + c);
-  assert.match(s, /instalar/, 'a camada 2 exige instalar');
-  assert.match(s, /sim do dono/);
-  assert.match(s, /tela na web/, 'a camada 4 so para quem tem tela na web');
+  for (const c of ['what you see', 'states and flows', 'texts', 'network and performance']) assert.ok(s.includes(c), 'camada: ' + c);
+  assert.match(s, /install/, 'a camada 2 exige instalar');
+  assert.match(s, /owner's yes/);
+  assert.match(s, /web screen/, 'a camada 4 so para quem tem tela na web');
   assert.match(s, /login/);
-  assert.match(s, /aba do dono/, 'D580: com login, so a aba do dono');
+  assert.match(s, /owner's tab/, 'D580: com login, so a aba do dono');
   assert.match(s, /CDP/, 'foto pelo CDP');
   assert.match(s, /04-verificacao\.md/);
-  assert.match(s, /credencial/);
-  assert.match(s, /código nem arte/);
+  assert.match(s, /credential/);
+  assert.match(s, /code or art/);
 });
 
 test('skill: a ficha (mock secao 2) - formato que o script confere, origem, grau, quem agiu, sem saber, Nao li', () => {
@@ -359,29 +359,29 @@ test('skill: a ficha (mock secao 2) - formato que o script confere, origem, grau
   }
   assert.ok(s.includes('## O que ficou sem saber'));
   assert.ok(s.includes('Não li:'));
-  assert.match(s, /"não achei"/i);
+  assert.match(s, /"not found"/i);
   assert.ok(s.includes('node "${CLAUDE_PLUGIN_ROOT}/scripts/referencia.js"'), 'o comando do script');
   assert.match(s, /100 KB/);
   assert.ok(s.includes('.claude/sworn/referencias/**'), 'o escopo precisa cobrir a pasta da ficha');
-  assert.match(s, /portão de escopo/);
+  assert.match(s, /scope gate/);
 });
 
 test('init: o Passo 4b oferece o /sworn:reference a quem nao tem referencia (Tarefa 4)', () => {
   const init = fs.readFileSync(path.join(RAIZ, 'skills', 'init', 'SKILL.md'), 'utf8').replace(/\r\n/g, '\n');
-  const i = init.indexOf('**Por último, a referência de topo**');
-  const j = init.indexOf('\n## Passo 5', i);
+  const i = init.indexOf('**Last, the top reference**');
+  const j = init.indexOf('\n## Step 5', i);
   assert.ok(i !== -1 && j > i, 'sumiu o trecho da referencia de topo no Passo 4b');
   const trecho = init.slice(i, j);
-  assert.match(trecho, /sem candidato[^.]*\/sworn:reference/, 'a opcao 1 sem candidato oferece o comando');
-  assert.match(trecho, /Para nomear depois[^"]*\/sworn:reference/, 'a opcao 2 diz o comando ao dono');
+  assert.match(trecho, /with no candidate[^.]*\/sworn:reference/, 'a opcao 1 sem candidato oferece o comando');
+  assert.match(trecho, /To name it later[^"]*\/sworn:reference/, 'a opcao 2 diz o comando ao dono');
 });
 
 test('skill: o fecho (mock secao 3) - 3 opcoes, a recomendada primeiro, --gravar so com o sim', () => {
   const s = lerSkill();
-  const a = s.indexOf('Sim, como referência de');
-  const b = s.indexOf('Guardar sem usar ainda');
-  const c = s.indexOf('Estudar mais antes');
+  const a = s.indexOf('Yes, as the reference for');
+  const b = s.indexOf('Keep it without using it yet');
+  const c = s.indexOf('Study more first');
   assert.ok(a !== -1 && b > a && c > b, 'as 3 opcoes do mock, nesta ordem');
-  assert.match(s.slice(a, b), /recomendada/);
+  assert.match(s.slice(a, b), /recommended/);
   assert.ok(s.includes('--gravar'), 'o sim grava pelo script');
 });

@@ -118,28 +118,28 @@ test('gatilho 1: todo motivo deliberado tem uma skill que o dispara', () => {
 
 test('gatilho 1: o init consulta DEPOIS de gravar e ANTES de fechar', () => {
   const t = ler('skills/init/SKILL.md');
-  const gravar = t.indexOf('\n## Passo 7 ');
+  const gravar = t.indexOf('\n## Step 7 ');
   const consulta = t.indexOf('catalogo.js" --motivo instalacao');
-  const fechar = t.indexOf('\n## Passo 8 ');
+  const fechar = t.indexOf('\n## Step 8 ');
   assert.ok((gravar !== -1) && (fechar !== -1), 'sumiu o Passo 7 ou o Passo 8 do init');
   assert.ok(consulta !== -1, 'o init nao dispara a consulta com o motivo instalacao');
   assert.ok((gravar < consulta) && (consulta < fechar),
     'a consulta tem de vir depois de gravar (Passo 7) e antes de fechar (Passo 8)');
   // o passo cita o Passo 1b do auditar como fonte do procedimento: ele tem de existir
-  assert.ok(ler('skills/audit/SKILL.md').includes('\n## Passo 1b'), 'sumiu o Passo 1b do auditar');
+  assert.ok(ler('skills/audit/SKILL.md').includes('\n## Step 1b'), 'sumiu o Passo 1b do auditar');
 });
 
 test('gatilho 1: o init registra pelo script, e diz por que nao pelo Write', () => {
-  const s = secao(ler('skills/init/SKILL.md'), '## Passo 7e');
+  const s = secao(ler('skills/init/SKILL.md'), '## Step 7e');
   assert.ok(s.includes('catalogo.js" --registrar'), 'o passo nao da o comando de registro');
-  assert.ok(/`Write`/.test(s) && /port[aã]o de escopo/.test(s), 'nao diz por que o Write nao serve');
+  assert.ok(/`Write`/.test(s) && /scope gate/.test(s), 'nao diz por que o Write nao serve');
 });
 
 test('gatilho 1: o init avisa que atualizar o plugin nao repete a conferencia', () => {
   // por paragrafo: a secao ja cita o /sworn:audit em outro item, e a secao
   // inteira passaria mesmo sem dizer o que rodar depois de atualizar
-  const sobre = secao(ler('skills/init/SKILL.md'), '## Passo 7e')
-    .split(/\r?\n\r?\n/).filter((p) => /atualiz/.test(p));
+  const sobre = secao(ler('skills/init/SKILL.md'), '## Step 7e')
+    .split(/\r?\n\r?\n/).filter((p) => /updat/.test(p));
   assert.ok(sobre.length > 0, 'nao fala de atualizacao');
   assert.ok(sobre.some((p) => p.includes('/sworn:audit')),
     'fala de atualizacao sem dizer o que rodar depois: ' + sobre.join(' | ').slice(0, 200));
@@ -147,7 +147,7 @@ test('gatilho 1: o init avisa que atualizar o plugin nao repete a conferencia', 
 
 test('gatilho 1: a secao do init nao crava nome de modelo nenhum', () => {
   const sujas = [];
-  for (const linha of secao(ler('skills/init/SKILL.md'), '## Passo 7e').split(/\r?\n/)) {
+  for (const linha of secao(ler('skills/init/SKILL.md'), '## Step 7e').split(/\r?\n/)) {
     for (const vol of regra.VOLATEIS) {
       if (vol.tipo === 'nome de modelo' && vol.re.test(linha)) sujas.push(linha.trim());
     }

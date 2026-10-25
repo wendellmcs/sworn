@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="728" viewBox="0 0 720 728" role="img" aria-labelledby="titulo desc">
+  <title id="titulo">Where sworn hooks into a session</title>
+  <desc id="desc">Eight hook events, from the opening of the session to its end, each with the scripts that run there. SessionStart, abertura.js: your rules, the scope and five blocks come back. UserPromptSubmit, abrir-turno.js: an expensive return to an idle chat is stopped once, and a correction becomes a rule proposal. PreToolUse on Write and Edit, portao-escopo.js: scope, untouchables, another session's files, search first, ratchet, manual and design tokens. PreToolUse on Bash and PowerShell, portao-destrutivo.js, portao-estilo.js and portao-commit.js: destructive command, shell syntax, stray cd, style by shell and commit without review. PreToolUse on Task and Agent, portao-agente.js and portao-apelido.js: top-tier agent on light work, and the model nickname, which only warns. PreToolUse on AskUserQuestion, portao-decisao.js: exactly 3 options, the recommended one first. PostToolUse, SubagentStart and SubagentStop, marcar-trabalho.js, abrir-subagente.js and gravar-veredito.js: they count work, searches, decisions and commits, give the less-code block to subagents and save review verdicts. Stop, portao-fecho.js: proof, open sub-item, handoff prompt, review and reference, and when to switch chats. SessionEnd, fim-sessao.js: cleans session files idle for more than 7 days. A solid amber dot marks the moments that can deny or hand the turn back; a gray ring, the ones that only inject, count or clean.</desc>
+  <style>
+    .fundo { fill: #FBFAF6; }
+    .borda { fill: none; stroke: #E5E1D6; }
+    .linha { stroke: #E5E1D6; }
+    .forte { fill: #111827; }
+    .fraco { fill: #6B7280; }
+    .sem { fill: #858B94; }
+    .com { fill: #B45309; }
+    @media (prefers-color-scheme: dark) {
+      .fundo { fill: #0D1117; }
+      .borda { stroke: #30363D; }
+      .linha { stroke: #30363D; }
+      .forte { fill: #E5E7EB; }
+      .fraco { fill: #8B949E; }
+      .sem { fill: #6B7280; }
+      .com { fill: #F59E0B; }
+    }
+  </style>
+  <rect class="fundo" width="720" height="728" rx="12"/>
+  <rect class="borda" x="0.75" y="0.75" width="718.5" height="726.5" rx="11.25" stroke-width="1.5"/>
+
+  <g font-family="'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text class="forte" x="40" y="44" font-size="20" font-weight="700">Where sworn hooks into a session</text>
+    <text class="fraco" x="40" y="68" font-size="14">Eight hook events, from the opening to the end; PreToolUse has one row per tool</text>
+
+    <path class="linha" d="M48 103V615" stroke-width="2"/>
+
+    <circle class="sem" cx="48" cy="103" r="6"/><circle class="fundo" cx="48" cy="103" r="3"/>
+    <text class="forte" x="68" y="108" font-size="14" font-weight="600">SessionStart</text>
+    <text class="fraco" x="68" y="126" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">abertura.js</text>
+    <text class="forte" x="68" y="145" font-size="13">Opens, resumes or compacts: your rules, the scope and five blocks come back.</text>
+
+    <circle class="com" cx="48" cy="167" r="6"/>
+    <text class="forte" x="68" y="172" font-size="14" font-weight="600">UserPromptSubmit</text>
+    <text class="fraco" x="68" y="190" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">abrir-turno.js</text>
+    <text class="forte" x="68" y="209" font-size="13">Your message: an idle big chat is stopped once with the cost; a correction becomes a proposal.</text>
+
+    <circle class="com" cx="48" cy="231" r="6"/>
+    <text class="forte" x="68" y="236" font-size="14" font-weight="600">PreToolUse · Write, Edit</text>
+    <text class="fraco" x="68" y="254" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-escopo.js</text>
+    <text class="forte" x="68" y="273" font-size="13">Scope, untouchables, another session's files, search first, ratchet, manual, tokens.</text>
+
+    <circle class="com" cx="48" cy="295" r="6"/>
+    <text class="forte" x="68" y="300" font-size="14" font-weight="600">PreToolUse · Bash, PowerShell</text>
+    <text class="fraco" x="68" y="318" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-destrutivo.js · portao-estilo.js · portao-commit.js</text>
+    <text class="forte" x="68" y="337" font-size="13">Destructive command, shell syntax, stray cd, style by shell, commit without review.</text>
+
+    <circle class="com" cx="48" cy="359" r="6"/>
+    <text class="forte" x="68" y="364" font-size="14" font-weight="600">PreToolUse · Task, Agent</text>
+    <text class="fraco" x="68" y="382" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-agente.js · portao-apelido.js</text>
+    <text class="forte" x="68" y="401" font-size="13">Top-tier agent on light work; the model nickname (warns only).</text>
+
+    <circle class="com" cx="48" cy="423" r="6"/>
+    <text class="forte" x="68" y="428" font-size="14" font-weight="600">PreToolUse · AskUserQuestion</text>
+    <text class="fraco" x="68" y="446" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-decisao.js</text>
+    <text class="forte" x="68" y="465" font-size="13">A question to you: exactly 3 options, the recommended one first.</text>
+
+    <circle class="sem" cx="48" cy="487" r="6"/><circle class="fundo" cx="48" cy="487" r="3"/>
+    <text class="forte" x="68" y="492" font-size="14" font-weight="600">PostToolUse · SubagentStart · SubagentStop</text>
+    <text class="fraco" x="68" y="510" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">marcar-trabalho.js · abrir-subagente.js · gravar-veredito.js</text>
+    <text class="forte" x="68" y="529" font-size="13">Counts work, searches, decisions, commits; less code to subagents; saves verdicts.</text>
+
+    <circle class="com" cx="48" cy="551" r="6"/>
+    <text class="forte" x="68" y="556" font-size="14" font-weight="600">Stop</text>
+    <text class="fraco" x="68" y="574" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-fecho.js</text>
+    <text class="forte" x="68" y="593" font-size="13">End of the turn: proof, open sub-item, handoff prompt, review, reference; when to switch chats.</text>
+
+    <circle class="sem" cx="48" cy="615" r="6"/><circle class="fundo" cx="48" cy="615" r="3"/>
+    <text class="forte" x="68" y="620" font-size="14" font-weight="600">SessionEnd</text>
+    <text class="fraco" x="68" y="638" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">fim-sessao.js</text>
+    <text class="forte" x="68" y="657" font-size="13">Cleans session files idle for more than 7 days.</text>
+
+    <circle class="com" cx="48" cy="695" r="6"/>
+    <text class="fraco" x="62" y="700" font-size="13">can deny or hand the turn back</text>
+    <circle class="sem" cx="282" cy="695" r="6"/><circle class="fundo" cx="282" cy="695" r="3"/>
+    <text class="fraco" x="296" y="700" font-size="13">only injects, counts or cleans</text>
+  </g>
+</svg>

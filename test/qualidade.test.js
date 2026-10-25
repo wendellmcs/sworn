@@ -14,7 +14,8 @@ test('qualidade: as 6 regras na ordem, a linha de idioma e a de desligar', () =>
     assert.ok(i > ultimo, 'regra fora do bloco ou fora de ordem: ' + r);
     ultimo = i;
   }
-  assert.ok(q.BLOCO.includes('Valem no idioma de quem pergunta.'), 'sumiu a linha de idioma');
+  // D656 (camada 1): a linha de idioma manda responder no idioma do usuario, nao so diz onde as regras valem
+  assert.ok(/^Reply in the user's language; the rules hold in any\. /m.test(q.BLOCO), 'sumiu a linha de idioma');
   assert.ok(/^Desligar neste projeto: /m.test(q.BLOCO), 'sumiu a linha de desligar');
 });
 
