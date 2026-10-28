@@ -12,6 +12,11 @@ const MARCAS_ACEITAS = ['ponytail', 'shortcut'];
 const PALAVRA = /^[A-Za-z][A-Za-z0-9_-]*$/;
 const PREFIXOS = ['<!--', '//', '/*', '--', '#'];
 const ASPAS = ['"', "'", '`'];
+// Os dois rotulos da nota depois do "o que"; a fonte unica do nome deles.
+const ROTULO = { limite: 'limite', gatilho: 'trocar quando' };
+const ROTULO_NO_INICIO = new RegExp('^(' + ROTULO.limite + '|' + ROTULO.gatilho + '):', 'i');
+const FRASE_FECHADA = /[.!?]$/;
+const FIM_DE_BLOCO = /(\*\/|-->)\s*$/;
 
 function ehMarca(v) { return typeof v === 'string' && PALAVRA.test(v); }
 
@@ -43,22 +48,92 @@ function limpo(t) {
   return s === '' ? null : s;
 }
 
-/** { oque, limite, gatilho } da linha com a marca num comentario, ou null. Rotulo que falta vem null. */
-function lerLinha(linha, listaDeMarcas) {
-  const resto = comentario(String(linha));
+function semFecho(t) { return t.replace(/\s*(\*\/|-->)\s*$/, ''); }
+
+// A marca diferencia caixa: "Atalho:" com maiuscula e palavra comum num comentario, nao a convencao.
+function reMarca(listaDeMarcas) { return new RegExp('^\\s*(?:' + listaDeMarcas.join('|') + '):(.*)$'); }
+
+/** Onde o rotulo `nome` aparece em `texto` (palavra inteira, sem diferenciar caixa), ou null. */
+function rotuloEm(texto, nome) { return new RegExp('\\b' + nome + ':', 'i').exec(texto); }
+
+/**
+ * A linha com a marca num comentario, lida uma vez so, ou null. `corpo`: o texto depois da marca. `nota`: o comentario
+ * inteiro, aparado e sem fecho. `emBloco`: o comentario abriu `/*` ou `<!--`. `fechou`: a linha termina em `*\/` ou `-->`.
+ */
+function linhaDaMarca(linha, listaDeMarcas) {
+  const crua = String(linha);
+  const resto = comentario(crua);
   if (resto === null) return null;
-  // A marca diferencia caixa: "Atalho:" com maiuscula e palavra comum num comentario, nao a convencao.
-  const re = new RegExp('^\\s*(?:' + listaDeMarcas.join('|') + '):(.*)$');
-  const m = re.exec(resto.replace(/\s*(\*\/|-->)\s*$/, ''));
+  const m = reMarca(listaDeMarcas).exec(semFecho(resto));
   if (!m) return null;
-  let corpo = m[1];
-  let gatilho = null;
-  let limite = null;
-  const t = /\btrocar quando:/i.exec(corpo);
-  if (t) { gatilho = limpo(corpo.slice(t.index + t[0].length)); corpo = corpo.slice(0, t.index); }
-  const l = /\blimite:/i.exec(corpo);
-  if (l) { limite = limpo(corpo.slice(l.index + l[0].length)); corpo = corpo.slice(0, l.index); }
-  return { oque: limpo(corpo) || '', limite: limite, gatilho: gatilho };
+  return {
+    corpo: m[1],
+    nota: semFecho(resto).trim(),
+    // D690: o que vem antes do texto do comentario termina no prefixo que abre bloco
+    emBloco: /(\/\*|<!--)$/.test(crua.slice(0, crua.length - resto.length)),
+    fechou: FIM_DE_BLOCO.test(crua)
+  };
+}
+
+/** { oque, limite, gatilho } do texto depois da marca. Rotulo que falta vem null. */
+function rotulos(corpo) {
+  const lidos = { limite: null, gatilho: null };
+  // D690: o rotulo que aparece por ultimo sai primeiro, para que nenhum leve o texto do outro, em qualquer ordem
+  const presentes = Object.keys(ROTULO)
+    .map(function (campo) { return { campo: campo, achado: rotuloEm(corpo, ROTULO[campo]) }; })
+    .filter(function (r) { return r.achado; })
+    .sort(function (a, b) { return b.achado.index - a.achado.index; });
+  for (const r of presentes) {
+    lidos[r.campo] = limpo(corpo.slice(r.achado.index + r.achado[0].length));
+    corpo = corpo.slice(0, r.achado.index);
+  }
+  return { oque: limpo(corpo) || '', limite: lidos.limite, gatilho: lidos.gatilho };
+}
+
+/** { oque, limite, gatilho } da linha com a marca num comentario, ou null. So a linha: a de baixo fica com o `varrer`. */
+function lerLinha(linha, listaDeMarcas) {
+  const marca = linhaDaMarca(linha, listaDeMarcas);
+  return marca && rotulos(marca.corpo);
+}
+
+/**
+ * O texto da linha que e so comentario (aparado, sem `*\/` ou `-->` no fim), ou null se ela comeca com codigo. Com
+ * `emBloco` (o comentario de cima abriu `/*` ou `<!--` sem fechar), a linha inteira e comentario, com ou sem ` * ` na
+ * frente, e so a que abre com o fecho volta null.
+ */
+function soComentario(crua, emBloco) {
+  const inicio = crua.trimStart();
+  if (emBloco) return /^(\*\/|-->)/.test(inicio) ? null : semFecho(inicio.replace(/^\*\s?/, '')).trim();
+  if (!PREFIXOS.some(function (p) { return inicio.startsWith(p); })) return null;
+  return semFecho(comentario(crua) || '').trim();
+}
+
+/**
+ * D687/D689: as linhas logo abaixo da `marca` (a de `linhaDaMarca`, na linha `i`) que abrem com rotulo ainda nao usado
+ * (`limite:`, `trocar quando:`), em `aceitas`, e a `nota` com elas no fim. So conta a linha que e so comentario (a que
+ * e codigo com comentario no fim nao conta; dentro de bloco `/*` ou `<!--` aberto, toda linha ate o fecho), nao vazia
+ * e sem marca, depois de linha sem `*\/` ou `-->` no fim; rotulo repetido abre outra nota.
+ * A linha sem rotulo nao entra: nenhuma regra de texto separa a quebra da frase de cima de um comentario alheio
+ * (D689). `paraEmSemRotulo` diz que a leitura parou numa linha dessas.
+ */
+function continuacao(linhas, i, marca, listaDeMarcas) {
+  const outraMarca = reMarca(listaDeMarcas);
+  const aceitas = [];
+  let nota = marca.nota;
+  let fechou = marca.fechou;
+  let paraEmSemRotulo = false;
+  for (let j = i + 1; j < linhas.length && !fechou; j++) {
+    const crua = linhas[j].replace(/\r$/, '');
+    const texto = soComentario(crua, marca.emBloco);
+    if (!texto || outraMarca.test(texto)) break; // codigo, comentario vazio ou outra marca
+    const rotulo = ROTULO_NO_INICIO.exec(texto);
+    if (!rotulo) { paraEmSemRotulo = true; break; }
+    if (rotuloEm(nota, rotulo[1])) break; // rotulo repetido abre outra nota
+    aceitas.push(texto);
+    nota += ' ' + texto;
+    fechou = FIM_DE_BLOCO.test(crua);
+  }
+  return { aceitas: aceitas, nota: nota, paraEmSemRotulo: paraEmSemRotulo };
 }
 
 /**
@@ -72,8 +147,14 @@ function varrer(arquivos, ler, listaDeMarcas) {
     if (typeof texto !== 'string' || texto.indexOf('\u0000') !== -1) continue;
     const linhas = texto.split('\n');
     for (let i = 0; i < linhas.length; i++) {
-      const a = lerLinha(linhas[i].replace(/\r$/, ''), listaDeMarcas);
-      if (a) achados.push({ arquivo: arquivo, linha: i + 1, oque: a.oque, limite: a.limite, gatilho: a.gatilho });
+      const marca = linhaDaMarca(linhas[i].replace(/\r$/, ''), listaDeMarcas);
+      if (!marca) continue;
+      const c = continuacao(linhas, i, marca, listaDeMarcas);
+      const a = rotulos([marca.corpo].concat(c.aceitas).join(' '));
+      const achado = { arquivo: arquivo, linha: i + 1, oque: a.oque, limite: a.limite, gatilho: a.gatilho };
+      // D689: a nota acabou sem . ! ? e logo abaixo vem comentario sem rotulo, que pode ser o resto da frase
+      if (c.paraEmSemRotulo && !FRASE_FECHADA.test(c.nota)) achado.talvezCortado = true;
+      achados.push(achado);
     }
   }
   return achados;
@@ -101,17 +182,25 @@ function painel(achados, totalDeArquivos, listaDeMarcas) {
   const linhas = ['Atalhos registrados (marca: ' + listaDeMarcas.join(', ') + ')', ''];
   let atual = null;
   let semGatilho = 0;
+  let semPonto = 0;
   for (const a of ordem) {
     if (a.arquivo !== atual) { linhas.push(a.arquivo); atual = a.arquivo; }
     linhas.push('  ' + (':' + a.linha).padEnd(largura) + ' ' + a.oque);
-    if (a.limite) linhas.push(recuo + 'limite: ' + a.limite);
-    if (a.gatilho) linhas.push(recuo + 'trocar quando: ' + a.gatilho);
+    if (a.limite) linhas.push(recuo + ROTULO.limite + ': ' + a.limite);
+    if (a.gatilho) linhas.push(recuo + ROTULO.gatilho + ': ' + a.gatilho);
     else { linhas.push(recuo + 'sem-gatilho'); semGatilho++; }
+    if (a.talvezCortado) { linhas.push(recuo + 'sem ponto final: a linha de baixo ficou de fora'); semPonto++; }
   }
   const arquivos = new Set(ordem.map(function (a) { return a.arquivo; })).size;
   linhas.push('', plural(ordem.length, 'atalho', 'atalhos') + ' em ' + plural(arquivos, 'arquivo', 'arquivos') + '; ' +
     (semGatilho === 0 ? 'todos com gatilho.' : semGatilho + ' sem gatilho.'));
-  if (semGatilho > 0) linhas.push('Atalho sem gatilho vira dívida esquecida: escreva "trocar quando: ..." no comentário.');
+  if (semGatilho > 0) {
+    linhas.push('Atalho sem gatilho vira dívida esquecida: escreva "' + ROTULO.gatilho + ': ..." no comentário.');
+  }
+  if (semPonto > 0) {
+    linhas.push('Sem ponto final: só entra a linha de baixo que começa com "' + ROTULO.limite + ':" ou "' +
+      ROTULO.gatilho + ':". Termine a frase na mesma linha ou comece a de baixo com o rótulo.');
+  }
   return linhas.join('\n');
 }
 

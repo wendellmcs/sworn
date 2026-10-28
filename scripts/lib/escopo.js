@@ -290,14 +290,31 @@ function avisoHeranca(cwd, frente) {
  * lista precisa saber qual das duas e. F2-19 / F3-22: a causa vem traduzida (`texto.causaDoErro`),
  * e `oArquivo` diz de qual arquivo e o proximo passo ("da frente"; o escopo.md herdado passa "do escopo").
  */
-function objetivoDaFrente(arquivoAbsoluto, oArquivo) {
+function objetivoDaFrente(arquivoAbsoluto, oArquivo, detalhe) {
   try {
     const esc = parse(fs.readFileSync(arquivoAbsoluto, 'utf8'));
-    return ascii(esc.objetivo || '(sem objetivo)').slice(0, 200);
+    return resumoDoObjetivo(esc.objetivo || '(sem objetivo)', detalhe);
   } catch (e) {
     return 'nao se leu o arquivo (' + ascii(textoLib.causaDoErro(e)) + '); confira a permissao do arquivo ' +
       (oArquivo || 'da frente');
   }
+}
+
+// Nota de sessao no Objetivo: `(sessao N, ...)`, com um nivel de parenteses dentro ("(D671)").
+const NOTA_DE_SESSAO = /\(sessao \d+(?:[^()]|\([^()]*\))*\)/g;
+
+/**
+ * Item 11 (D674): frente que acumula notas de sessao tem o comeco do Objetivo velho e a situacao de hoje no fim. Com
+ * `detalhe` (o caminho do arquivo da frente), o resumo e o comeco, a ultima nota, o plano e onde ler o resto; sem notas
+ * ou sem `detalhe`, os 200 primeiros caracteres, como antes. `plano.js` importa este arquivo: o require e tardio.
+ */
+function resumoDoObjetivo(objetivo, detalhe) {
+  const notas = objetivo.match(NOTA_DE_SESSAO);
+  if (!detalhe || !notas) return ascii(objetivo).slice(0, 200);
+  const inicio = objetivo.slice(0, objetivo.search(NOTA_DE_SESSAO)).trim();
+  const plano = require('./plano.js').planoDoObjetivo(objetivo);
+  return ascii(inicio).slice(0, 100) + (inicio.length > 100 ? '...' : '') + ' | agora: ' +
+    ascii(notas[notas.length - 1]).slice(0, 200) + (plano ? ' | plano: ' + ascii(plano) : '') + ' | detalhe em ' + detalhe;
 }
 
 /** A linha da frente vinculada, ou null quando nao ha vinculo, ou a frente sumiu do disco. */
@@ -306,7 +323,7 @@ function linhaDoVinculo(cwd, frente) {
   const arquivo = arquivoEmVigor(cwd, frente);
   if (arquivo === ARQUIVO) return null;
   return 'sworn: esta sessao esta vinculada a frente ' + nomeSeguro(frente) + ' (' + arquivo +
-    ') - objetivo: ' + objetivoDaFrente(path.join(cwd, arquivo)) +
+    ') - objetivo: ' + objetivoDaFrente(path.join(cwd, arquivo), null, arquivo) +
     '. Se a tarefa mudou, reescreva ' + arquivo + ' antes de editar.';
 }
 
@@ -389,7 +406,7 @@ function blocoDeFrentes(cwd, frente) {
   const linhas = ['sworn: frentes de trabalho existentes:'];
   for (const n of nomes) {
     const nome = n.slice(0, n.length - 3);
-    linhas.push('  - ' + ascii(nome) + ': ' + objetivoDaFrente(path.join(cwd, PASTA_FRENTES, n)));
+    linhas.push('  - ' + ascii(nome) + ': ' + objetivoDaFrente(path.join(cwd, PASTA_FRENTES, n), null, PASTA_FRENTES + ascii(n)));
   }
   linhas.push('Editar o arquivo da frente vincula esta sessao a ela; sem vinculo vale ' + ARQUIVO + '.');
   return linhas.join('\n');

@@ -72,4 +72,49 @@ function permitido(tipo, marchaMax, projeto) {
   };
 }
 
-module.exports = { ESCADA_PADRAO, nivelDoAgente, marchaMaximaDoEscopo, permitido };
+/**
+ * D678 T2: agente dos `degraus` chamado com `model` ou `effort` diferente da tabela do projeto. O que a chamada passa
+ * vence o frontmatter do agente (sonda d2/run8): sem esta conferencia a tabela nao valeria. Campo que a chamada nao
+ * traz e "nao sei" (binario velho sem `effort`; o arquivo do agente decide) e passa; degrau sem apelido ou sem
+ * esforco gravado nao compara esse campo.
+ */
+function chamadaDaTabela(tipo, entrada, projeto) {
+  const lista = degraus.normalizar(projeto && projeto.agentes && projeto.agentes.degraus);
+  const i = lista.findIndex(function (d) { return d.agente === tipo; });
+  if (i === -1) return { ok: true, motivo: null };
+  const tabela = [['model', lista[i].apelido], ['effort', lista[i].esforco]]
+    .filter(function (c) { return typeof c[1] === 'string' && c[1] !== ''; });
+  const chamada = entrada || {};
+  const errados = tabela.filter(function (c) {
+    const v = chamada[c[0]];
+    return v !== undefined && v !== null && v !== '' && v !== c[1];
+  });
+  if (errados.length === 0) return { ok: true, motivo: null };
+
+  // Valor que nao e texto sai em JSON: o String() cru lancava com {"toString": 1}, e o `io.blindar` do portao liberava.
+  const campo = function (c, v) { return c[0] + ' ' + entreAspas(typeof v === 'string' ? v : JSON.stringify(v)); };
+  const acima = lista[i + 1];
+  return {
+    ok: false,
+    motivo: [
+      'sworn - chamada fora da tabela da escada.',
+      '',
+      'Voce chamou ' + entreAspas(tipo) + ' com ' +
+        errados.map(function (c) { return campo(c, chamada[c[0]]); }).join(' e ') + ',',
+      'e a escada deste projeto (agentes.degraus no projeto.json) diz ' +
+        tabela.map(function (c) { return campo(c, c[1]); }).join(' e ') + '.',
+      'O que a chamada passa vence o que o arquivo do agente declara.',
+      '',
+      'Faca uma destas:',
+      '  1. chame de novo como a tabela diz:',
+      '     Agent({ subagent_type: ' + entreAspas(tipo) + ', ' +
+        tabela.map(function (c) { return c[0] + ': ' + entreAspas(c[1]); }).join(', ') + ', ... })',
+      '     ou sem model e effort, e o agente usa o que o arquivo dele declara;'
+    ].concat(acima ? ['  2. se a tarefa pede mais que este degrau, chame o de cima da escada: ' +
+      entreAspas(acima.agente) + ';'] : [], [
+      '  ' + (acima ? 3 : 2) + '. se a tabela esta errada, corrija agentes.degraus no projeto.json.'
+    ]).join('\n')
+  };
+}
+
+module.exports = { ESCADA_PADRAO, nivelDoAgente, marchaMaximaDoEscopo, permitido, chamadaDaTabela };

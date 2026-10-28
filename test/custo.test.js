@@ -90,6 +90,61 @@ test('A12-01: fork fora da escada conta como o topo - barrado em marcha rapida, 
   assert.strictEqual(custo.permitido('fork', 'rapida', comFork).ok, true, 'fork posto na escada pelo dono vale onde ele pos');
 });
 
+// D678 T2: o que a chamada passa vence o frontmatter do agente (sonda d2/run8); a tabela dos degraus so vale se o
+// portao ler a chamada. Campo que a chamada nao traz e "nao sei" (binario velho sem effort; o arquivo decide): passa.
+const COM_DEGRAUS = { agentes: { degraus: [
+  { agente: 'busca-rapida', apelido: 'haiku', esforco: 'low' },
+  { agente: 'desenvolvedor', apelido: 'sonnet', esforco: 'medium' },
+  { agente: 'arquiteto', apelido: 'opus' }
+] } };
+
+test('D678 T2: degrau chamado com model ou effort fora da tabela e negado, com a chamada certa escrita', () => {
+  const r = custo.chamadaDaTabela('desenvolvedor', { model: 'opus', effort: 'medium' }, COM_DEGRAUS);
+  assert.strictEqual(r.ok, false);
+  assert.ok(r.motivo.includes('Voce chamou "desenvolvedor" com model "opus",'), r.motivo);
+  assert.ok(r.motivo.includes('(agentes.degraus no projeto.json) diz model "sonnet" e effort "medium".'), r.motivo);
+  assert.ok(r.motivo.includes('Agent({ subagent_type: "desenvolvedor", model: "sonnet", effort: "medium", ... })'), r.motivo);
+  assert.ok(r.motivo.includes('chame o de cima da escada: "arquiteto"'), r.motivo);
+  assert.ok(/^[\x20-\x7E\n]+$/.test(r.motivo), 'motivo tem de ser ASCII (R5)');
+  const so = custo.chamadaDaTabela('desenvolvedor', { model: 'sonnet', effort: 'high' }, COM_DEGRAUS);
+  assert.strictEqual(so.ok, false, 'so o effort fora da tabela tambem nega');
+  assert.ok(so.motivo.includes('com effort "high",'), so.motivo);
+  const os2 = custo.chamadaDaTabela('busca-rapida', { model: 'opus', effort: 'max' }, COM_DEGRAUS);
+  assert.ok(os2.motivo.includes('com model "opus" e effort "max",'), os2.motivo);
+});
+
+test('D678 T2: chamada como a tabela, sem os campos, fora dos degraus ou sem o campo gravado passa', () => {
+  const ok = (tipo, entrada, projeto) => custo.chamadaDaTabela(tipo, entrada, projeto || COM_DEGRAUS).ok;
+  assert.ok(ok('desenvolvedor', { model: 'sonnet', effort: 'medium' }));
+  assert.ok(ok('desenvolvedor', {}), 'sem os campos o arquivo do agente decide');
+  assert.ok(ok('desenvolvedor', { effort: 'medium' }), 'sem model: nao sei');
+  assert.ok(ok('desenvolvedor', { model: 'sonnet' }), 'sem effort: binario velho');
+  assert.ok(ok('desenvolvedor', { model: '', effort: null }), 'campo vazio ou null tambem e nao sei');
+  assert.ok(ok('arquiteto', { model: 'opus', effort: 'max' }), 'degrau sem esforco gravado nao compara o effort');
+  assert.ok(ok('a', { model: 'opus' }, { agentes: { degraus: ['a', 'b'] } }), 'degrau sem apelido nao compara o model');
+  assert.ok(ok('sworn:inspector', { model: 'opus' }), 'fora dos degraus o portao nao opina');
+  assert.ok(ok('fork', { model: 'opus' }));
+  assert.ok(ok('desenvolvedor', { model: 'opus' }, { marchas: {} }), 'sem degraus o portao nao opina');
+});
+
+test('D678 T2: no topo da escada nao ha degrau de cima; valor com aspa ou quebra sai escapado numa linha', () => {
+  const r = custo.chamadaDaTabela('arquiteto', { model: 'son"net\nx' }, COM_DEGRAUS);
+  assert.strictEqual(r.ok, false);
+  assert.ok(!/de cima da escada/.test(r.motivo), r.motivo);
+  assert.ok(r.motivo.includes('\n  2. se a tabela esta errada'), 'sem o degrau de cima a opcao da tabela e a 2: ' + r.motivo);
+  assert.ok(r.motivo.split('\n').indexOf('Voce chamou "arquiteto" com model "son\\"net x",') !== -1, r.motivo);
+});
+
+// R1 da revisao da T2 (estados, borda): o String() cru lancava TypeError com {"toString": 1} no model, e o
+// `io.blindar` do portao liberava a chamada que tinha de negar.
+test('D678 T2: valor que nao e texto nao derruba a conferencia; nega com o valor escrito em JSON', () => {
+  for (const v of [{ toString: 1 }, [{ toString: 1 }], { a: 1 }]) {
+    const r = custo.chamadaDaTabela('desenvolvedor', { model: v }, COM_DEGRAUS);
+    assert.strictEqual(r.ok, false, JSON.stringify(v));
+    assert.ok(r.motivo.includes('com model "' + JSON.stringify(v).replace(/"/g, '\\"') + '",'), r.motivo);
+  }
+});
+
 // A2-06 (revisao completa, L2): os contadores do portao-agente rodavam sem try antes da negacao; com o
 // estado nao gravavel (SWORN_TMP apontando para um ARQUIVO) o incrementar lancava, `io.blindar`
 // liberava e o agente caro passava. Mesmo defeito do D420/SH-02 no portao-estilo.

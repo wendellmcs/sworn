@@ -41,6 +41,22 @@ an inspection finding still requires `arquivo:linha` of the **code**, which is v
 audited does not choose their own level of rigor. With no declared map, `{{campo:marchaPadrao}}` applies;
 with neither, the table above applies.
 
+Then set the effort by the gear — the effort only; the model does not change by skill:
+
+- Fast → call the skill `sworn:effort-low`;
+- AAA → call the skill `sworn:effort-high`;
+- Standard → no level skill: the session effort.
+
+The effort of a level skill lasts only until the end of the turn that called it: the next turn, even in the same chat,
+is back at the session effort (measured by sworn on Claude Code 2.1.311). So, in a Fast or AAA task, call the skill of
+the gear at the start of each turn of the task (each new message from the user while the task goes on), before any
+other tool — not only here in Step 0.
+
+When the gear goes up during the task (the map above, or a change that turned out bigger), call the skill of the new
+gear at that moment, and from then on at the start of each turn. From Fast to Standard, Standard has no skill and the
+low effort may still be on until the end of the turn: call `sworn:effort-high` in that turn, because there is no skill
+that brings back the session effort and more effort than the gear asks is the safe side; from the next turn on, no skill.
+
 Two axes that get confused and are not the same thing:
 
 - **When in doubt between two models, go down** — start with the cheapest. Agents escalate on their own.
@@ -317,6 +333,10 @@ Handoff in `{{texto:ondeHandoff}}`. Mandatory content in
 [05-governanca.md](references/05-governanca.md).
 
 **If the doubt "is it time yet?" came up, it already was.**
+
+**Living note.** While a plan task is in progress, write the progress in the plan file as you go (the task's box, or
+one line of what is already done), not only at the end: a chat switch in the middle of the task then loses nothing.
+With a plan in the session, 5 replies with work without the plan file changing bring the plugin's reminder.
 
 **Always: validate by the agent itself before asking for manual action.** Run the test, open the browser
 (Claude in Chrome or CDP), read the result. Ask `{{campo:quemDecide}}` only for what only they can do —

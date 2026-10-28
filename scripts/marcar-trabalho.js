@@ -106,6 +106,17 @@ io.blindar(function () {
       }
       return s;
     });
+    // Item 13 (D674): o agente principal que le um handoff vira o dono dele (retomar.reclamar); se outra sessao o pegou
+    // ha menos de 24 h, o aviso entra no contexto. Falha cala: a leitura ja aconteceu e o turno segue.
+    let aviso = null;
+    try {
+      const lido = (e.tool_input || {}).file_path;
+      if (String(e.tool_name || '').toLowerCase() === 'read' && !e.agent_id && saude.ehArquivoDeHandoff(lido)) {
+        const raiz = require('./lib/config.js').raizDoProjeto(e.cwd || process.cwd());
+        aviso = require('./lib/retomar.js').reclamar(raiz, require('node:path').resolve(raiz, lido), e.session_id, Date.now());
+      }
+    } catch (err) { aviso = null; }
+    if (aviso) return io.permitir({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: aviso } });
     io.permitir();
   });
 });

@@ -43,7 +43,9 @@ if (tem('mapa')) {
     divergencias: r.divergencias,
     naoDeclarados: r.naoDeclarados,
     semArquivo: r.semArquivo,
-    foraDoMapa: r.foraDoMapa
+    foraDoMapa: r.foraDoMapa,
+    esforcoDivergente: r.esforcoDivergente,
+    esforcoNaoDeclarado: r.esforcoNaoDeclarado
   }, null, 2) + '\n');
   process.exit(0);
 }
@@ -60,8 +62,11 @@ if (tem('corrigir')) {
     process.exit(1);
   }
   const r = conferirAqui(cwd);
-  const d = r.divergencias.filter(function (x) { return x.agente === alvo; })[0];
-  if (!d) {
+  const deste = function (x) { return x.agente === alvo; };
+  // D678 T1: o modelo e o esforco do mesmo agente se consertam no mesmo ato e na mesma direcao.
+  const d = r.divergencias.filter(deste)[0];
+  const de = r.esforcoDivergente.filter(deste)[0];
+  if (!d && !de) {
     // Recusar aqui nao e preciosismo: sem divergencia nao ha o que consertar, e
     // escrever assim mesmo seria gravar na pasta de alguem sem motivo nenhum.
     process.stdout.write('NADA A CORRIGIR: "' + alvo + '" nao esta divergindo agora.\n');
@@ -70,14 +75,16 @@ if (tem('corrigir')) {
 
   if (destino === 'arquivo') {
     // A1-15: pelo arquivo que o --mapa mostra, nao pelo nome - o `name:` do frontmatter pode diferir dele.
-    const arquivo = agentesLib.caminho(cwd, String(d.arquivo).replace(/\.md$/, ''));
+    const arquivo = agentesLib.caminho(cwd, String((d || de).arquivo).replace(/\.md$/, ''));
     let bruto;
     try { bruto = fs.readFileSync(arquivo, 'utf8'); }
     catch (e) {
       process.stdout.write('ERRO: nao consegui ler ' + arquivo + ': ' + e.message + '\n');
       process.exit(1);
     }
-    const t = apelidos.trocarModel(bruto, d.gravado);
+    let t = { ok: true, texto: bruto, motivo: null };
+    if (d) t = apelidos.trocarModel(t.texto, d.gravado);
+    if (t.ok && de) t = apelidos.trocarCampo(t.texto, 'effort', de.gravado);
     if (!t.ok) {
       process.stdout.write('RECUSADO: ' + t.motivo + '\n');
       process.stdout.write('Este arquivo e trabalho de alguem; corrija a mao.\n');
@@ -85,8 +92,14 @@ if (tem('corrigir')) {
     }
     fs.writeFileSync(arquivo, t.texto, 'utf8');
     process.stdout.write('CORRIGIDO ' + arquivo + '\n');
-    process.stdout.write('  antes: model: ' + d.declarado + '\n');
-    process.stdout.write('  agora: model: ' + d.gravado + '\n');
+    if (d) {
+      process.stdout.write('  antes: model: ' + d.declarado + '\n');
+      process.stdout.write('  agora: model: ' + d.gravado + '\n');
+    }
+    if (de) {
+      process.stdout.write('  antes: effort: ' + de.declarado + '\n');
+      process.stdout.write('  agora: effort: ' + de.gravado + '\n');
+    }
     process.exit(0);
   }
 
@@ -94,7 +107,10 @@ if (tem('corrigir')) {
   const obj = config.carregarProjeto(cwd);
   let achou = false;
   for (const degrau of ((obj.agentes || {}).degraus || [])) {
-    if (degrau.agente === alvo) { degrau.apelido = d.declarado; achou = true; }
+    if (degrau.agente !== alvo) continue;
+    if (d) degrau.apelido = d.declarado;
+    if (de) degrau.esforco = de.declarado;
+    achou = true;
   }
   if (!achou) {
     process.stdout.write('ERRO: "' + alvo + '" nao esta nos degraus gravados.\n');
@@ -102,8 +118,14 @@ if (tem('corrigir')) {
   }
   fs.writeFileSync(cfg, JSON.stringify(obj, null, 2) + '\n', 'utf8');
   process.stdout.write('CORRIGIDO ' + cfg + '\n');
-  process.stdout.write('  antes: ' + alvo + ' -> ' + d.gravado + '\n');
-  process.stdout.write('  agora: ' + alvo + ' -> ' + d.declarado + '\n');
+  if (d) {
+    process.stdout.write('  antes: ' + alvo + ' -> ' + d.gravado + '\n');
+    process.stdout.write('  agora: ' + alvo + ' -> ' + d.declarado + '\n');
+  }
+  if (de) {
+    process.stdout.write('  antes: ' + alvo + ' -> esforco ' + de.gravado + '\n');
+    process.stdout.write('  agora: ' + alvo + ' -> esforco ' + de.declarado + '\n');
+  }
   process.exit(0);
 }
 
@@ -118,11 +140,14 @@ io.blindar(function () {
     // de cobertura (T41) refaz a conferencia por conta propria, e e ele que nao
     // deixa o caso passar calado, o unico desfecho proibido.
     estado.alterar(e.session_id, function (s) {
-      s.gatilho3 = { verificavel: r.verificavel, motivo: r.motivo, divergentes: r.divergencias.length };
+      s.gatilho3 = {
+        verificavel: r.verificavel, motivo: r.motivo, divergentes: r.divergencias.length,
+        esforcoDivergentes: r.esforcoDivergente.length
+      };
       return s;
     });
 
-    if (!r.verificavel || r.divergencias.length === 0) return io.permitir();
+    if (!r.verificavel || r.divergencias.length + r.esforcoDivergente.length === 0) return io.permitir();
 
     estado.incrementar(e.session_id, 'apelido_divergente');
     const s = estado.ler(e.session_id);

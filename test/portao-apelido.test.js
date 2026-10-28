@@ -293,6 +293,56 @@ test('portao-apelido --corrigir --para mapa: conserta o outro lado', () => {
   });
 });
 
+// D678 T1: o esforco entra no mesmo aviso e no mesmo conserto que o modelo.
+const DOIS_ESFORCO = [{ agente: 'busca', apelido: 'barato', esforco: 'low' }, { agente: 'arquiteto', apelido: 'caro', esforco: 'high' }];
+
+test('D678 T1: effort: divergente avisa (sem negar) e o --mapa traz os baldes do esforco', () => {
+  comTmp((tmp) => {
+    const dir = projeto(DOIS_ESFORCO);
+    agente(dir, 'busca', '---\nname: busca\nmodel: barato\neffort: high\n---\n');
+    agente(dir, 'arquiteto', '---\nname: arquiteto\nmodel: caro\n---\n');
+    const r = hook(dir, tmp, 'e1');
+    liberou(r);
+    assert.ok(r.json && /effort: high/.test(r.json.systemMessage), 'tinha de avisar do esforco: ' + r.stdout);
+    const j = JSON.parse(cli(dir, ['--mapa']).stdout);
+    assert.deepStrictEqual(j.esforcoDivergente.map((x) => x.agente), ['busca']);
+    assert.deepStrictEqual(j.esforcoNaoDeclarado.map((x) => x.agente), ['arquiteto']);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+test('D678 T1: --corrigir --para arquivo conserta o effort: e o aviso some', () => {
+  comTmp((tmp) => {
+    const dir = projeto(DOIS_ESFORCO);
+    agente(dir, 'busca', '---\nname: busca\nmodel: caro\neffort: high\n---\ncorpo\n');
+    agente(dir, 'arquiteto', '---\nname: arquiteto\nmodel: caro\neffort: high\n---\n');
+    const c = cli(dir, ['--corrigir', 'busca', '--para', 'arquivo']);
+    assert.strictEqual(c.status, 0, c.stdout + c.stderr);
+    const depois = fs.readFileSync(agentesLib.caminho(dir, 'busca'), 'utf8');
+    assert.strictEqual(depois, '---\nname: busca\nmodel: barato\neffort: low\n---\ncorpo\n');
+    const r = hook(dir, tmp, 'e2');
+    liberou(r);
+    assert.strictEqual(r.json, null, 'depois de corrigir o aviso tinha de sumir: ' + r.stdout);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+test('D678 T1: --corrigir --para mapa grava o esforco do arquivo no degrau', () => {
+  comTmp((tmp) => {
+    const dir = projeto(DOIS_ESFORCO);
+    agente(dir, 'busca', '---\nname: busca\nmodel: barato\neffort: medium\n---\n');
+    agente(dir, 'arquiteto', '---\nname: arquiteto\nmodel: caro\neffort: high\n---\n');
+    const c = cli(dir, ['--corrigir', 'busca', '--para', 'mapa']);
+    assert.strictEqual(c.status, 0, c.stdout + c.stderr);
+    const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), 'utf8'));
+    assert.deepStrictEqual(cfg.agentes.degraus[0], { agente: 'busca', apelido: 'barato', esforco: 'medium' });
+    const r = hook(dir, tmp, 'e3');
+    liberou(r);
+    assert.strictEqual(r.json, null, r.stdout);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 test('portao-apelido --corrigir: agente que nao diverge e RECUSADO, nao reescrito', () => {
   const dir = projeto(DOIS);
   agente(dir, 'busca', '---\nname: busca\nmodel: barato\n---\n');

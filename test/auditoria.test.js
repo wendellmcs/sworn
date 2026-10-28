@@ -585,3 +585,120 @@ test('auditoria (D615): skill do projeto que disputa o gatilho de uma skill do p
     assert.ok(!r.peso.porArquivo.some(function (p) { return /revisar/.test(p.arquivo) && !/minha-revisao/.test(p.arquivo); }));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// Colheita 10-20, item 15 (D674): a auditoria mostra a idade de cada memoria e de cada regra e aponta a fria (mais de 90
+// dias sem mudar) e a duplicada, sem IA. Aposentar e proposta: nada se move sozinho.
+const DIA = 86400000;
+
+test('item 15: memorias - idade pelo mtime, fria acima de 90 dias, duplicada pela description', () => {
+  const dir = pasta('idade');
+  try {
+    const agora = Date.parse('2026-10-25T12:00:00Z');
+    const caminho = memoria(dir, '- [A](a.md)\n');
+    const nota = function (nome, desc, dias) {
+      const f = path.join(dir, nome);
+      fs.writeFileSync(f, '---\nname: ' + nome + '\ndescription: ' + desc + '\n---\ncorpo\n');
+      fs.utimesSync(f, new Date(agora - dias * DIA), new Date(agora - dias * DIA));
+    };
+    nota('a.md', 'deploy do backend publicado junto com a extensao sempre', 120);
+    nota('b.md', 'perfil do dono e preferencias de idioma', 3);
+    nota('c.md', 'deploy do backend sempre publicado com a extensao junto', 10);
+    fs.mkdirSync(path.join(dir, 'sub'));
+    const m = aud.idadeDasMemorias(caminho, agora);
+    assert.strictEqual(m.medida, true);
+    assert.deepStrictEqual(m.lista.map(function (x) { return [x.arquivo, x.dias, x.fria]; }),
+      [['a.md', 120, true], ['b.md', 3, false], ['c.md', 10, false]]);
+    assert.deepStrictEqual(m.frias, ['a.md']);
+    assert.strictEqual(m.duplicadas.length, 1);
+    assert.deepStrictEqual([m.duplicadas[0].a, m.duplicadas[0].b], ['a.md', 'c.md']);
+    assert.strictEqual(aud.idadeDasMemorias(null, agora).medida, false, 'sem caminho: nao medida, com o motivo');
+    assert.ok(aud.idadeDasMemorias(null, agora).motivo);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('item 15: regras - idade pelo git blame do regras.md; sem git, dias null (nao sei)', () => {
+  const dir = pasta('regras-idade');
+  try {
+    const agora = Date.parse('2026-10-25T12:00:00Z');
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    const arq = path.join(dir, '.claude', 'sworn', 'regras.md');
+    fs.writeFileSync(arq, '# Regras\n\n- ao commitar -> rodar a suite\n');
+    const regras = aud.idadeDasRegras(dir, require('../scripts/lib/regra.js').parseRegras(fs.readFileSync(arq, 'utf8')), agora);
+    assert.deepStrictEqual(regras, [{ linha: 3, gatilho: 'ao commitar', dias: null, fria: false }], 'fora do git: nao sei');
+    const git = function (args, env) {
+      const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', env: Object.assign({}, process.env, env || {}) });
+      assert.strictEqual(r.status, 0, r.stderr);
+    };
+    git(['init', '-q']);
+    git(['add', '.']);
+    const velho = new Date(agora - 200 * DIA).toISOString();
+    git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'r'], { GIT_AUTHOR_DATE: velho, GIT_COMMITTER_DATE: velho });
+    fs.appendFileSync(arq, '- ao publicar -> mostrar o cartao\n');
+    const lidas = require('../scripts/lib/regra.js').parseRegras(fs.readFileSync(arq, 'utf8'));
+    const idades = aud.idadeDasRegras(dir, lidas, agora);
+    assert.deepStrictEqual(idades.map(function (r) { return [r.gatilho, r.dias, r.fria]; }),
+      [['ao commitar', 200, true], ['ao publicar', 0, false]]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('item 15: auditar devolve memorias e idadeDasRegras', () => {
+  const dir = pasta('auditar-idade');
+  try {
+    const caminho = memoria(dir, '- x\n');
+    const r = aud.auditar(dir, {}, { memoria: caminho });
+    assert.strictEqual(r.memorias.medida, true);
+    assert.ok(Array.isArray(r.idadeDasRegras));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Revisao cega do lote 2 (s157): os P1 conferidos na fonte, com teste vermelho antes.
+test('item 15: pasta no lugar do MEMORY.md nao mede a pasta de cima', () => {
+  const dir = pasta('memoria-pasta');
+  try {
+    fs.mkdirSync(path.join(dir, 'mem'));
+    fs.writeFileSync(path.join(dir, 'vizinha.md'), 'x\n');
+    const m = aud.idadeDasMemorias(path.join(dir, 'mem'), Date.now());
+    assert.strictEqual(m.medida, false);
+    assert.strictEqual(m.causa, 'EISDIR');
+    assert.match(m.motivo, /passe o arquivo MEMORY\.md/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('item 15: memoria e memorias dao a mesma causa quando o MEMORY.md nao se mede', () => {
+  const dir = pasta('memoria-causa');
+  try {
+    const r = aud.auditar(dir, {}, { memoria: ['x'] });
+    assert.strictEqual(r.memoria.causa, 'caminho-invalido');
+    assert.strictEqual(r.memorias.causa, 'caminho-invalido');
+    fs.mkdirSync(path.join(dir, 'mem'));
+    const p = aud.auditar(dir, {}, { memoria: 'mem' });
+    assert.strictEqual(p.memoria.causa, 'EISDIR');
+    assert.strictEqual(p.memorias.causa, 'EISDIR');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('item 15: memoria que nao se le entra em ilegiveis, com a causa; nao some calada', () => {
+  const dir = pasta('memoria-ilegivel');
+  const ler = fs.readFileSync;
+  try {
+    const caminho = memoria(dir, '- x\n');
+    const f = path.join(dir, 'trancada.md');
+    fs.writeFileSync(f, '---\ndescription: x\n---\n');
+    fs.readFileSync = function (p) {
+      if (path.resolve(String(p)) === path.resolve(f)) { const e = new Error('negado'); e.code = 'EACCES'; throw e; }
+      return ler.apply(fs, arguments);
+    };
+    const m = aud.idadeDasMemorias(caminho, Date.now());
+    fs.readFileSync = ler;
+    assert.strictEqual(m.medida, true);
+    assert.deepStrictEqual(m.lista.map(function (x) { return x.arquivo; }), ['trancada.md']);
+    assert.deepStrictEqual(m.ilegiveis, [{ arquivo: 'trancada.md', causa: 'EACCES' }]);
+    assert.deepStrictEqual(aud.idadeDasMemorias(path.join(dir, 'MEMORY.md'), Date.now()).ilegiveis, [], 'sem erro, lista vazia');
+  } finally { fs.readFileSync = ler; fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('item 15: pasta das memorias que nao se lista diz o que conferir', () => {
+  const m = aud.idadeDasMemorias(path.join(os.tmpdir(), 'sworn-nao-existe-' + process.pid, 'MEMORY.md'), Date.now());
+  assert.strictEqual(m.medida, false);
+  assert.match(m.motivo, /confira/);
+});

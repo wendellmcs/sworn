@@ -384,3 +384,171 @@ test('D634: provaPendente quando a prova declarada nao rodou depois da ultima ed
   const meia = transcript([edita('e', 'src/a.js'), cmd('a', 'npm test'), res('a', '# fail 0')]);
   try { assert.strictEqual(saude.testesDoTranscript(meia.f, 'npm run build && npm test').provaPendente, true); } finally { meia.fim(); }
 });
+
+// D704 (pedido 14): o handoff so depois que os agentes em segundo plano da sessao terminarem. Sinal medido nas sondas
+// s173/s174: <sessao>/subagents/agent-<id>.meta.json nasce sem `finished` e ganha "finished": true ao terminar; o
+// parado por TaskStop nao ganha, e a ultima linha do .jsonl dele e "[Request interrupted by user for tool use]".
+const { spawnSync: spawnT } = require('node:child_process');
+const TRABALHANDO = [
+  { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'tarefa' }] } },
+  { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'node x.js' } }] } }
+];
+const INTERROMPIDO = { type: 'user', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] } };
+const fundo = function (descricao, extra) {
+  return Object.assign({ agentType: 'sworn:reader', description: descricao, requestShape: 'background' }, extra || {});
+};
+// <config>/projects/p/sessao-x.jsonl e a pasta da sessao ao lado, como o Claude Code grava; espaco no caminho de proposito.
+function sessaoComAgentes(agentes) {
+  const base = fsT.mkdtempSync(pathT.join(osT.tmpdir(), 'sworn agentes-'));
+  const dir = pathT.join(base, 'projects', 'p');
+  const sub = pathT.join(dir, 'sessao-x', 'subagents');
+  fsT.mkdirSync(sub, { recursive: true });
+  fsT.writeFileSync(pathT.join(dir, 'sessao-x.jsonl'), '');
+  for (const a of agentes) {
+    if (a.meta !== undefined) {
+      fsT.writeFileSync(pathT.join(sub, 'agent-' + a.id + '.meta.json'), typeof a.meta === 'string' ? a.meta : JSON.stringify(a.meta));
+    }
+    if (!a.linhas) continue;
+    const f = pathT.join(sub, 'agent-' + a.id + '.jsonl');
+    fsT.writeFileSync(f, a.linhas.map(function (l) { return JSON.stringify(l) + '\n'; }).join(''));
+    if (a.mtime) fsT.utimesSync(f, a.mtime / 1000, a.mtime / 1000);
+  }
+  return { base: base, transcricao: pathT.join(dir, 'sessao-x.jsonl'), sub: sub,
+    fim: function () { fsT.rmSync(base, { recursive: true, force: true }); } };
+}
+
+test('D704: agentesRodando conta so o de fundo sem finished, nao parado e com escrita recente', () => {
+  const agora = Date.now();
+  const s = sessaoComAgentes([
+    { id: 'a1', meta: fundo('Inspetor R1 correcao'), linhas: TRABALHANDO },
+    { id: 'a2', meta: fundo('Ja terminou', { finished: true }), linhas: TRABALHANDO },
+    { id: 'a3', meta: fundo('Parado pelo TaskStop'), linhas: TRABALHANDO.concat([INTERROMPIDO]) },
+    { id: 'a4', meta: fundo('Morto sem marca'), linhas: TRABALHANDO, mtime: agora - saude.SILENCIO_DO_AGENTE_MS - 60000 },
+    { id: 'a5', meta: { agentType: 'Explore', description: 'Primeiro plano', requestShape: 'foreground' }, linhas: TRABALHANDO },
+    { id: 'a6', meta: '{torto', linhas: TRABALHANDO },
+    { id: 'a7', meta: fundo('Recem-nascido, sem .jsonl ainda') },
+    { id: 'a8', meta: fundo('Inventário só leitura'), linhas: TRABALHANDO },
+    { id: 'a9', meta: fundo('Interrompido e retomado'), linhas: TRABALHANDO.concat([INTERROMPIDO]).concat(TRABALHANDO) }
+  ]);
+  try {
+    fsT.writeFileSync(pathT.join(s.sub, 'agent-a1.txt'), 'nao e meta');
+    assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora), [
+      { id: 'a1', descricao: 'Inspetor R1 correcao' },
+      { id: 'a7', descricao: 'Recem-nascido, sem .jsonl ainda' },
+      { id: 'a8', descricao: 'Inventário só leitura' },
+      { id: 'a9', descricao: 'Interrompido e retomado' }
+    ]);
+  } finally { s.fim(); }
+  // sem pasta da sessao, sem caminho ou caminho que nao e texto: lista vazia, nunca lanca
+  const vazia = sessaoComAgentes([]);
+  try {
+    fsT.rmSync(pathT.join(vazia.sub, '..'), { recursive: true, force: true });
+    assert.deepStrictEqual(saude.agentesRodando(vazia.transcricao, agora), []);
+  } finally { vazia.fim(); }
+  for (const c of [undefined, null, '', 42, {}]) assert.deepStrictEqual(saude.agentesRodando(c, agora), [], JSON.stringify(c));
+});
+
+test('D704: o limite de silencio do agente e de 30 min (medido: p99 de 156 s em 1523 agentes terminados)', () => {
+  assert.strictEqual(saude.SILENCIO_DO_AGENTE_MS, 30 * 60 * 1000);
+  const s = sessaoComAgentes([{ id: 'b1', meta: fundo('Calado'), linhas: TRABALHANDO, mtime: Date.parse('2026-10-27T13:00:00Z') }]);
+  try {
+    const escrito = fsT.statSync(pathT.join(s.sub, 'agent-b1.jsonl')).mtimeMs;
+    assert.strictEqual(saude.agentesRodando(s.transcricao, escrito + saude.SILENCIO_DO_AGENTE_MS - 1).length, 1, 'antes do limite ainda roda');
+    assert.strictEqual(saude.agentesRodando(s.transcricao, escrito + saude.SILENCIO_DO_AGENTE_MS).length, 0, 'no limite conta como morto');
+  } finally { s.fim(); }
+});
+
+test('D704: com agente rodando, os 3 textos do handoff mandam esperar; sem agente, ficam como eram', () => {
+  const g = ['3 decisoes do dono respondidas (limiar 3)'];
+  // sem agente (lista vazia ou ausente): identico ao de antes da D704
+  assert.strictEqual(saude.avisoDeSaude(g, false, []), saude.avisoDeSaude(g, false));
+  assert.strictEqual(saude.instrucaoAoModelo(g, false, []), saude.instrucaoAoModelo(g, false));
+  assert.strictEqual(saude.instrucaoDaPergunta([]), saude.INSTRUCAO_DA_PERGUNTA);
+  assert.strictEqual(saude.instrucaoDaPergunta(), saude.INSTRUCAO_DA_PERGUNTA);
+  assert.ok(saude.instrucaoAoModelo(g).indexOf('1. Rode /sworn:handoff.') !== -1, 'controle: a ordem normal manda rodar');
+  const rodando = [{ id: 'a1', descricao: 'Inventário só leitura' }, { id: 'a2', descricao: '' }];
+  const textos = {
+    aviso: saude.avisoDeSaude(g, false, rodando),
+    alarme: saude.avisoDeSaude(g, true, rodando),
+    modelo: saude.instrucaoAoModelo(g, false, rodando),
+    jaColado: saude.instrucaoAoModelo(g, true, rodando),
+    pergunta: saude.instrucaoDaPergunta(rodando)
+  };
+  for (const [nome, t] of Object.entries(textos)) {
+    assert.ok(/2 agentes em segundo plano/.test(t), nome + ': tem de contar os agentes: ' + t);
+    assert.ok(t.indexOf('  - Inventario so leitura (agent-a1)\n') !== -1 && t.indexOf('  - (agent-a2)\n') !== -1,
+      nome + ': tem de nomear cada agente, em ASCII: ' + t);
+    assert.ok(/^[\x20-\x7E\n]+$/.test(t), nome + ': tem de ser ASCII: ' + JSON.stringify(t));
+    assert.ok(/nao pare nenhum/i.test(t), nome + ': tem de proibir parar agente: ' + t);
+    assert.ok(!/(?:^|\n)(?:\d\. Rode|Faca assim: rode) \/sworn:handoff/.test(t), nome + ': mandou rodar o handoff com agente rodando: ' + t);
+  }
+  // o modelo: nao rodar agora, nao disparar agente novo, dizer ao usuario que e hora de trocar
+  for (const nome of ['modelo', 'jaColado', 'pergunta']) {
+    assert.ok(/Nao rode \/sworn:handoff agora/.test(textos[nome]), nome + ': ' + textos[nome]);
+    assert.ok(/nao dispare agente novo/.test(textos[nome]), nome + ': ' + textos[nome]);
+    assert.ok(/chat novo/.test(textos[nome]), nome + ': tem de dizer que e hora de trocar: ' + textos[nome]);
+  }
+  assert.ok(/3 decisoes do dono respondidas \(limiar 3\)/.test(textos.modelo), 'o modelo tem de citar o gatilho: ' + textos.modelo);
+  // a pergunta nao tem Stop que de a ordem depois: ela mesma diz quando rodar
+  assert.ok(/ultimo terminar, rode \/sworn:handoff/.test(textos.pergunta), textos.pergunta);
+  assert.strictEqual(textos.jaColado, textos.modelo, 'com agente rodando, a espera vale mesmo com o prompt ja colado');
+  assert.ok(/1 agente em segundo plano/.test(saude.instrucaoAoModelo(g, false, [rodando[0]])), 'singular com 1 agente');
+});
+
+const SCRIPT_AGENTES = pathT.join(__dirname, '..', 'scripts', 'agentes-rodando.js');
+test('D704: scripts/agentes-rodando.js lista os agentes de fundo da sessao; sem nenhum, diz que pode seguir', () => {
+  const s = sessaoComAgentes([{ id: 'c1', meta: fundo('Inspetor R1'), linhas: TRABALHANDO }]);
+  const roda = function (args, env) {
+    return spawnT(process.execPath, [SCRIPT_AGENTES].concat(args), { encoding: 'utf8',
+      env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: s.base }, env || {}) });
+  };
+  try {
+    const r = roda(['--transcricao', s.transcricao]);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(/1 agente em segundo plano/.test(r.stdout) && r.stdout.indexOf('  - Inspetor R1 (agent-c1)') !== -1, r.stdout);
+    assert.ok(/nao pare nenhum/i.test(r.stdout), r.stdout);
+    // sem --transcricao: a da sessao do ambiente, procurada em <CLAUDE_CONFIG_DIR>/projects/*
+    const r2 = roda([], { CLAUDE_CODE_SESSION_ID: 'sessao-x' });
+    assert.strictEqual(r2.status, 0, r2.stderr);
+    assert.ok(r2.stdout.indexOf('(agent-c1)') !== -1, r2.stdout);
+    fsT.writeFileSync(pathT.join(s.sub, 'agent-c1.meta.json'), JSON.stringify(fundo('Inspetor R1', { finished: true })));
+    const r3 = roda(['--transcricao', s.transcricao]);
+    assert.strictEqual(r3.status, 0, r3.stderr);
+    assert.ok(/nenhum agente em segundo plano rodando/.test(r3.stdout) && r3.stdout.indexOf('agent-c1') === -1, r3.stdout);
+    // sem sessao no ambiente: nao medido, e diz por que; saida 0 (o handoff decide)
+    const r4 = roda([], { CLAUDE_CODE_SESSION_ID: '' });
+    assert.strictEqual(r4.status, 0, r4.stderr);
+    assert.ok(/nao medido - sem --transcricao e sem CLAUDE_CODE_SESSION_ID/.test(r4.stdout), r4.stdout);
+    const r5 = roda([], { CLAUDE_CODE_SESSION_ID: 'sessao-que-nao-existe' });
+    assert.strictEqual(r5.status, 0, r5.stderr);
+    assert.ok(/nao medido - a transcricao da sessao/.test(r5.stdout), r5.stdout);
+  } finally { s.fim(); }
+});
+
+test('D704: o Passo 1 do /sworn:handoff roda o agentes-rodando.js antes dos fatos e para com agente rodando', () => {
+  const s = fsT.readFileSync(pathT.join(__dirname, '..', 'skills', 'handoff', 'SKILL.md'), 'utf8').replace(/\r\n/g, '\n');
+  const inicio = s.indexOf('## Step 1');
+  const fim = s.indexOf('## Step 2');
+  assert.ok(inicio !== -1 && fim > inicio, 'a skill perdeu os Passos 1 e 2');
+  const passo1 = s.slice(inicio, fim);
+  const agentes = passo1.indexOf('node "${CLAUDE_PLUGIN_ROOT}/scripts/agentes-rodando.js"');
+  assert.ok(agentes !== -1, 'o Passo 1 nao roda o agentes-rodando.js: ' + passo1);
+  assert.ok(agentes < passo1.indexOf('git -C . rev-parse HEAD'), 'os agentes vem antes dos fatos do handoff');
+  assert.ok(passo1.indexOf('If it lists an agent, stop here') !== -1 && passo1.indexOf('do not stop any of them') !== -1, passo1);
+});
+
+test('D704: o abrir-turno passa a transcricao: a pergunta pela saude com agente rodando manda esperar', () => {
+  const s = sessaoComAgentes([{ id: 'd1', meta: fundo('Inspetor R2'), linhas: TRABALHANDO }]);
+  try {
+    const turno = function (transcricao) {
+      const r = spawnT(process.execPath, [pathT.join(__dirname, '..', 'scripts', 'abrir-turno.js')], { cwd: s.base, encoding: 'utf8',
+        env: Object.assign({}, process.env, { SWORN_TMP: pathT.join(s.base, 'estado') }),
+        input: JSON.stringify({ session_id: 'd704-pergunta', cwd: s.base, prompt: 'o contexto esta bom?', transcript_path: transcricao }) });
+      assert.strictEqual(r.status, 0, r.stderr);
+      try { return JSON.parse(r.stdout).hookSpecificOutput.additionalContext; } catch (e) { return r.stdout; }
+    };
+    const ctx = turno(s.transcricao);
+    assert.ok(ctx.indexOf(saude.instrucaoDaPergunta([{ id: 'd1', descricao: 'Inspetor R2' }])) !== -1, 'nao mandou esperar: ' + ctx);
+    assert.ok(turno(pathT.join(s.base, 'outra.jsonl')).indexOf(saude.INSTRUCAO_DA_PERGUNTA) !== -1, 'controle: sem agente, a ordem de antes');
+  } finally { s.fim(); }
+});

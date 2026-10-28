@@ -92,3 +92,60 @@ test('degraus: o motivo cita cada problema e diz o conserto', () => {
   assert.ok(m.includes('posicao 1'));
   assert.ok(m.includes('entrevista'));
 });
+
+// ------------------------------------------- D678 T1: o esforco de cada degrau
+
+test('D678 T1: o degrau guarda o esforco, nas duas grafias (esforco e effort do frontmatter)', () => {
+  const r = degraus.normalizar([
+    { agente: 'busca', apelido: 'haiku', esforco: 'low' },
+    { nome: 'arquiteto', model: 'opus', effort: 'high' }
+  ]);
+  assert.deepStrictEqual(r, [
+    { agente: 'busca', apelido: 'haiku', esforco: 'low' },
+    { agente: 'arquiteto', apelido: 'opus', esforco: 'high' }
+  ]);
+});
+
+// R1 da revisao (correcao, borda, manutencao): esforco vazio ou nulo nao pode esconder um effort que veio.
+test('D678 T1: esforco vazio ou nulo nao apaga o effort da outra grafia', () => {
+  const r = degraus.normalizar([
+    { agente: 'a', apelido: 'x', esforco: '', effort: 'high' },
+    { agente: 'b', apelido: 'y', esforco: null, effort: 'low' },
+    { agente: 'c', apelido: 'z', esforco: '  ', effort: 'max' }
+  ]);
+  assert.deepStrictEqual(r.map((d) => d.esforco), ['high', 'low', 'max']);
+});
+
+test('D678 T1: degrau sem esforco segue na forma de antes (configuracao anterior continua igual)', () => {
+  const r = degraus.paraProjeto([{ agente: 'a', apelido: 'x' }, { agente: 'b', apelido: 'y', esforco: '' }]);
+  assert.deepStrictEqual(r.degraus, [{ agente: 'a', apelido: 'x' }, { agente: 'b', apelido: 'y' }]);
+});
+
+test('D678 T1: esforco fora de low|medium|high|xhigh|max e erro nomeado, com o aceito', () => {
+  const r = degraus.validar([{ agente: 'a', apelido: 'x', esforco: 'altissimo' }, { agente: 'b', apelido: 'y' }]);
+  assert.strictEqual(r.ok, false);
+  assert.ok(r.erros.some((e) => e.includes('"a"') && e.includes('altissimo') && e.includes('low|medium|high|xhigh|max')),
+    r.erros.join(' | '));
+});
+
+test('D678 T1: esforco de tipo errado e erro, nao vira texto', () => {
+  const r = degraus.validar([{ agente: 'a', apelido: 'x', esforco: 3 }, { agente: 'b', apelido: 'y' }]);
+  assert.strictEqual(r.ok, false, 'numero no esforco passou');
+  assert.ok(r.erros.some((e) => e.includes('esforco')), r.erros.join(' | '));
+});
+
+test('D678 T1: tabela com esforco valido em todos os degraus passa', () => {
+  const r = degraus.validar([
+    { agente: 'busca', apelido: 'haiku', esforco: 'low' }, { agente: 'arquiteto', apelido: 'opus', esforco: 'xhigh' }
+  ]);
+  assert.strictEqual(r.ok, true, r.erros.join(' | '));
+});
+
+// A tabela e perene so com apelido: o id de versao (o que o apelido resolve hoje) apodrece na troca de geracao.
+test('D678 T1: id de versao de qualquer geracao no lugar do apelido e recusado', () => {
+  for (const id of ['claude-sonnet-5-5', 'claude-haiku-4-5-20251001', 'claude-opus-5-5[1m]', 'claude-fable-5-1']) {
+    const r = degraus.validar([{ agente: 'a', apelido: id, esforco: 'low' }, { agente: 'b', apelido: 'opus' }]);
+    assert.strictEqual(r.ok, false, id + ' passou como apelido');
+    assert.ok(r.erros.some((e) => e.includes('id de modelo')), id + ': ' + r.erros.join(' | '));
+  }
+});

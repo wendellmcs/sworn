@@ -354,9 +354,10 @@ test('D486: o revisar e o inspetor dizem o que fazer com o recorte do trecho mud
   assert.ok(inspetor.includes('[fora do trecho'), 'o inspetor nao sabe da marca do vao');
   assert.match(inspetor, /I can't see it/i, 'o inspetor tem de dizer "nao consigo ver" sobre o que esta fora');
   // s108, ronda 1 da Tarefa 3: 5 de 6 P1 das faixas pequenas eram inferencia sobre o que ficou fora do recorte.
-  // O que depende do vao sai no maximo P2, no briefing e no inspetor.
-  assert.ok(/at most P2/.test(brief), 'o briefing do recorte tem de limitar a P2 o que depende do vao: ' + brief);
-  assert.ok(/at most P2/.test(inspetor), 'o inspetor tem de limitar a P2 o que depende do vao');
+  // O que depende do vao sai no maximo P2, no briefing e no inspetor. Lote 3/4a da colheita 10-20: nao lido nao tem
+  // severidade - sai `pendente`, que nao molha a ronda (mais forte que o P2, que ainda contava como achado).
+  assert.ok(/`pendente`/.test(brief) && !/at most P2/.test(brief), 'o briefing do recorte tem de mandar a pendente o que depende do vao: ' + brief);
+  assert.ok(/depends on what is outside[\s\S]{0,120}`pendente`/.test(inspetor) && !/at most P2/.test(inspetor), 'o inspetor tem de mandar a pendente o que depende do vao');
 });
 
 // L3 (s104): subir a completa tem flag (A3-04); a aprovacao com achado descartado manda ler vereditosDescartados
@@ -377,6 +378,10 @@ const TRAVA_DO_BALDE = {
   fora_do_escopo: 4, sem_escopo: 4, intocavel: 4, frente_invalida: 4, fora_declarado: 4,
   comando_destrutivo: 5, shell_idioma_errado: 5, outra_frente: 5, cd_solto: 5,
   agente_caro_em_marcha_rapida: 6, criou_sem_buscar: 7, catraca_afrouxada: 8,
+  // D678 T2: o mesmo portao-agente da trava 6, quando a chamada foge da tabela dos degraus
+  chamada_fora_da_tabela: 6,
+  // D694 T3: a escada da trava 6, cobrada no fim do turno quando o agente pediu o degrau de cima e ninguem o despachou
+  escalada_sem_despacho: 6,
   // o modulo de design nega, mas e opcional e nao e trava: so existe com design.json
   token_fora_do_sistema: null,
   // T11-1: o mesmo modulo de design, quando o estilo e escrito por comando de shell

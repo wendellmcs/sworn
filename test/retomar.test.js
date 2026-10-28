@@ -297,3 +297,60 @@ test('volta-resumo: resumir sem registro legivel ou sem pedido devolve null e na
     assert.strictEqual(fs.existsSync(path.join(raiz, '.claude')), false);
   } finally { vazio.fim(); semPedido.fim(); fs.rmSync(raiz, { recursive: true, force: true }); }
 });
+
+// Colheita 10-20, item 13 (D674): o handoff tem dono. O chat que o le marca a posse; outro chat que le o mesmo handoff
+// em menos de 24 h e avisado, e a posse passa a ele (o aviso vai para quem chegou por ultimo, nos dois sentidos).
+test('item 13: reclamar marca o dono do handoff e avisa a outra sessao em menos de 24 h', () => {
+  const raiz = pasta();
+  try {
+    const h = path.join(raiz, 'planos', '2026-10-25-x-handoff.md');
+    assert.strictEqual(retomar.reclamar(raiz, h, 'aaaaaaaa-1', AGORA), null, 'sem .claude/sworn/ nao grava');
+    assert.strictEqual(fs.existsSync(path.join(raiz, '.claude')), false);
+    fs.mkdirSync(path.join(raiz, '.claude', 'sworn'), { recursive: true });
+    assert.strictEqual(retomar.reclamar(raiz, h, 'aaaaaaaa-1', AGORA), null, '1a leitura: so marca');
+    assert.strictEqual(retomar.reclamar(raiz, h, 'aaaaaaaa-1', AGORA + 5 * MIN), null, 'a mesma sessao relendo');
+    const aviso = retomar.reclamar(raiz, h, 'bbbbbbbb-2', AGORA + 30 * MIN);
+    assert.ok(aviso, 'outra sessao em 30 min tinha de ser avisada');
+    assert.ok(aviso.includes('planos/2026-10-25-x-handoff.md'), aviso);
+    assert.ok(aviso.includes('aaaaaaaa'), aviso);
+    assert.ok(/^[\x20-\x7E\n]+$/.test(aviso), 'aviso fora de ASCII: ' + aviso);
+    const donos = JSON.parse(fs.readFileSync(path.join(raiz, '.claude', 'sworn', 'handoff-donos.json'), 'utf8'));
+    assert.strictEqual(donos['planos/2026-10-25-x-handoff.md'].sessao, 'bbbbbbbb', 'a posse passou');
+    assert.ok(retomar.reclamar(raiz, h, 'aaaaaaaa-1', AGORA + 40 * MIN), 'a 1a, voltando, e avisada');
+    assert.strictEqual(retomar.reclamar(raiz, h, 'cccccccc-3', AGORA + 40 * MIN + 25 * 60 * MIN), null, 'posse velha');
+    for (const torto of ['[1,', '5', '[1]', 'null']) {
+      fs.writeFileSync(path.join(raiz, '.claude', 'sworn', 'handoff-donos.json'), torto);
+      assert.strictEqual(retomar.reclamar(raiz, h, 'dddddddd-4', AGORA), null, 'arquivo torto recomeca sem lancar: ' + torto);
+      const lido = JSON.parse(fs.readFileSync(path.join(raiz, '.claude', 'sworn', 'handoff-donos.json'), 'utf8'));
+      assert.strictEqual(lido['planos/2026-10-25-x-handoff.md'].sessao, 'dddddddd', torto);
+    }
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
+test('item 13: o marcar-trabalho avisa no Read de handoff pego por outra sessao; subagente e outro arquivo nao', () => {
+  const { spawnSync } = require('node:child_process');
+  const raiz = pasta();
+  const sessoes = path.join(raiz, 'sessoes');
+  fs.mkdirSync(path.join(raiz, '.claude', 'sworn'), { recursive: true });
+  function ler(id, arquivo, extra) {
+    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'marcar-trabalho.js')], {
+      cwd: raiz, encoding: 'utf8',
+      input: JSON.stringify(Object.assign({ session_id: id, cwd: raiz, hook_event_name: 'PostToolUse', tool_name: 'Read',
+        tool_input: { file_path: arquivo } }, extra || {})),
+      env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+    return r.stdout.trim() ? JSON.parse(r.stdout) : null;
+  }
+  try {
+    const h = path.join(raiz, '.claude', 'sworn', 'handoff', '2026-10-25-frete.md');
+    assert.strictEqual(ler('s1-aaaaaa', h), null);
+    assert.strictEqual(ler('s2-bbbbbb', h, { agent_id: 'sub1' }), null, 'subagente nao pega o handoff');
+    assert.strictEqual(ler('s1-aaaaaa', path.join(raiz, 'README.md')), null);
+    assert.strictEqual(ler('s2-bbbbbb', path.join(raiz, 'README.md')), null, 'arquivo comum nao tem dono');
+    const saida = ler('s2-bbbbbb', h);
+    assert.ok(saida && saida.hookSpecificOutput, JSON.stringify(saida));
+    assert.strictEqual(saida.hookSpecificOutput.hookEventName, 'PostToolUse');
+    assert.ok(saida.hookSpecificOutput.additionalContext.includes('s1-aaaaa'), JSON.stringify(saida));
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});

@@ -114,17 +114,26 @@ text, docs, config), `padrao` (standard) or `aaa` (the strictest, for what users
 The names are the literal config values, in Portuguese. The fast gear asks for no scope: no paperwork where
 there is no risk.
 
+Gate 6, in the table below, reads the project's **ladder**: its agents from cheapest to most expensive, each with the model
+and the effort (how hard the model thinks) it should run with. `/sworn:init` records the ladder in the
+config, under `agentes.degraus` ("rungs"). Each agent is a **rung**; the most expensive one is the **top**.
+**Moving up** is handing the task to the next rung: the subagent that finds the task beyond its role asks for
+the next rung, and the main agent dispatches it. In a task, the main agent moves up twice on its own. Before
+a third move up, it stops and asks you: move up (higher cost), keep the task on the rung it is on, or stop.
+When the top asks, there is no rung above: the main agent stops and brings you what the top found and why
+it asked, as a question in 3 options with the recommended one first.
+
 <!-- pagina:travas -->
-| # | Gate | What it blocks | Why |
-|---|---|---|---|
-| 1 | Interview → tailored config | Nothing; `/sworn:init` writes the project config. | A generic rule set fits no project; six questions no scan can answer do. |
-| 2 | Blind A/B review by distinct lenses | Nothing; `/sworn:review` tallies by script. | The author is the worst judge of the work; the inspector does not know which side is new. |
-| 3 | Done without evidence | The end of the turn when the reply claims success without pasting output (or pastes only failing output), when the last test run failed, when the project's proof command did not run after the last code edit, or when a plan step is called finished with a box still open. | "Done" with nothing pasted is the most common false claim. Saying what did not run always passes. |
-| 4 | File outside the declared scope | The write, when the target is not in the scope file, is listed as out of scope, or is untouchable. | A fix that wanders into files nobody asked about is how a regression ships. |
-| 5 | Destructive command and concurrent session | The command that deletes, the stray `cd`, the wrong shell syntax for the tool, and writes to files another session touched. | Lost work cannot be reviewed back. |
-| 6 | Expensive agent on light work | Dispatching the top-tier agent when the scope only has light-work paths. | Cost does not hurt whoever picks the model. |
-| 7 | Creating without searching | A new file when nothing was searched in the turn. | `utils2.js` next to `utils.js` is a duplicate nobody will clean up. |
-| 8 | Loosened ratchet | The edit that raises a ceiling or lowers a floor. | Lowering the bar is the easy way to make a test pass; loosening is a human decision. |
+| # | Gate |
+|---|---|
+| 1 | **Interview → tailored config**<br>Blocks: nothing; `/sworn:init` writes the project config.<br>Why: A generic rule set fits no project; six questions no scan can answer do. |
+| 2 | **Blind A/B review by distinct lenses**<br>Blocks: nothing; `/sworn:review` tallies by script.<br>Why: The author is the worst judge of the work; the inspector does not know which side is new. |
+| 3 | **Done without evidence**<br>Blocks: the end of the turn when the reply claims success without pasting output (or pastes only failing output), when the last test run failed, when the project's proof command did not run after the last code edit, or when a plan step is called finished with a box still open.<br>Why: "Done" with nothing pasted is the most common false claim. Saying what did not run always passes. |
+| 4 | **File outside the declared scope**<br>Blocks: the write, when the target is not in the scope file, is listed as out of scope, or is untouchable.<br>Why: A fix that wanders into files nobody asked about is how a regression ships. |
+| 5 | **Destructive command and concurrent session**<br>Blocks: the command that deletes, the stray `cd`, the wrong shell syntax for the tool, and writes to files another session touched.<br>Why: Lost work cannot be reviewed back. |
+| 6 | **Expensive agent, wrong model or effort, dropped request to move up**<br>Blocks:<br>• dispatching an agent from the more expensive half of the ladder, rounded down (with 2 or 3 agents, the top; with 4 or 5, the top two; with 6 or 7, the top three) when the scope only has fast-gear paths;<br>• calling a ladder agent with a model or an effort other than the one the ladder records;<br>• ending the turn while a subagent's request to move up has not been dispatched. This block fires once per request.<br>Each block tells the main agent what to do instead; you only step in when the main agent stops to ask you (before a third move up, or when the top asks).<br>Why: Cost does not hurt whoever picks the model, so the ladder picks it: no expensive agent on light work, the model and effort the ladder records, and the next rung when a subagent says the task is beyond its role. |
+| 7 | **Creating without searching**<br>Blocks: a new file when nothing was searched in the turn.<br>Why: `utils2.js` next to `utils.js` is a duplicate nobody will clean up. |
+| 8 | **Loosened ratchet**<br>Blocks: the edit that raises a ceiling or lowers a floor.<br>Why: Lowering the bar is the easy way to make a test pass; loosening is a human decision. |
 <!-- /pagina:travas -->
 
 Gates 3 to 8 cost zero tokens. Without `/sworn:init`, only gates 3 and 5 work.
@@ -143,7 +152,7 @@ Every switch is a `true`/`false` key in `.claude/sworn/projeto.json`.
 | Manual first | Denies editing an `aaa` file before the execution manual was loaded in the session. | Rigor that was never loaded is never applied. | `portaoManual` |
 | Three options | Denies a question to you without exactly 3 options and the recommended one first; a plain question of fact passes with `(fato)` ("fact") in its header. | A choice hidden in a wall of text is a choice you did not make. | `portaoDecisao` |
 | Handoff prompt | Hands the turn back when it wrote a handoff file and the final reply has no code block. | The prompt for the next chat has to reach you, not only a file. | `portaoHandoff` |
-| Model nickname | Warns once a session when an agent's `model:` differs from the nickname recorded in the project. Does not block. | A silent model swap changes cost and quality. | none; quiet without recorded nicknames |
+| Model nickname | Warns once a session when an agent's `model:` (the model field in the agent's file) differs from the nickname recorded in the project (a short model name, such as `sonnet` or `opus`), or its `effort:` (the effort field) from the effort the ladder records for it. Does not block: the main agent offers you 3 options, to make the agent's file match the project, to make the project match the file, or to leave it for now. | A silent model swap changes cost and quality. | none; quiet without recorded nicknames |
 | Style by shell | With a declared design system, denies a style file written by a shell command. | The token check lives on `Write` and `Edit`; a shell write would skip it. | no `design.json` |
 | Design tokens | With `.claude/sworn/design.json`, denies a style file with a color or a `px`, `rem` or `em` size the system does not have. | A design system dies one hardcoded value at a time. | no `design.json` |
 <!-- /pagina:portoes -->
@@ -158,7 +167,7 @@ before asking you to act; with the continuous mode, decide technical choices ins
 the irreversible, the external and the costly); **response quality** (six rules: conclusion first, no
 preamble, a technical term explained the first time, one line between tools, evidence cut to the line that
 proves it, no repeating what you just read; the reply comes in your language); and
-**less code** (a 7-rung ladder before writing code: does it need to exist, does the project already have
+**less code** (7 questions asked in order before writing code, stopping at the first that settles it: does it need to exist, does the project already have
 it, does the language or platform do it). Subagents that can write code get the last block too.
 
 ### Knowing when to switch chats
@@ -193,6 +202,12 @@ command that is due.
 - **The audit runs by itself** every 7 days at the opening: instruction weight, repeated skills, rules
   that contradict each other, stale skills, shortcuts with no trigger to replace them. It speaks only
   when something crossed a limit.
+- **What actually ran.** `/sworn:audit`, run by hand, reads the subagent transcripts and shows, for each
+  agent of the ladder, the model and effort that answered against what the ladder asks. A nickname that
+  started answering with another model id without anyone changing the ladder (the id is the full name, with
+  the version, such as `claude-sonnet-5-5`) comes first, as a warning, and the audit asks you whether that
+  rung stays as it is. The automatic run skips this: it reads
+  every subagent transcript of the last 30 days, too slow for the session opening.
 - **Shortcuts are labeled.** A deliberate shortcut carries `atalho: <what>. limite: <how far>. trocar
   quando: <trigger>.`, and `/sworn:shortcuts` lists them and flags the ones with no trigger.
 - **Study before building.** `/sworn:reference` builds a sourced sheet of 2-3 leading products of the
@@ -219,7 +234,7 @@ button, and INP (the time from a click to the screen's response).
 | `/sworn:review` | Blind A/B review of a changed file: one inspector per lens, default reject, tallied by script, at most 3 rounds. |
 | `/sworn:learn` | Turns your correction into a proposed `trigger -> action` rule; writes it only after your explicit OK. |
 | `/sworn:handoff` | Writes the continuation for a new chat: paths, `HEAD`, current step, decisions made, open items. |
-| `/sworn:audit` | Weighs the project's instructions against a ceiling and points at what to cut. |
+| `/sworn:audit` | Weighs the project's instructions against a ceiling, points at what to cut, and shows the model and effort the subagents actually ran with. |
 | `/sworn:calibrate` | Measures, in your own chats, when switching to a new chat pays off, and suggests the threshold. |
 | `/sworn:shortcuts` | Lists the deliberate shortcuts in the code and flags the ones with no condition to replace them. |
 | `/sworn:reference` | Studies 2-3 leading products of the same kind and writes a sourced reference sheet. |
@@ -227,7 +242,9 @@ button, and INP (the time from a click to the screen's response).
 <!-- /pagina:comandos -->
 
 Also installed: `playbook`, the execution manual the agent loads at the start of a task (not a
-command); the `/sworn:parallel` workflow, which runs 3 or more independent tasks at once with a cap on
+command); `effort-low` and `effort-high`, two skills outside the menu that the playbook calls by gear, at
+the start of each turn of the task, to set how hard the main conversation thinks in that turn (only the
+effort: the model changes only when you type `/model`); the `/sworn:parallel` workflow, which runs 3 or more independent tasks at once with a cap on
 agents, the cheapest model that solves and an isolated copy for whoever edits; and three agents:
 `inspector` and `dedupe-judge` for the blind review, `reader` for light reading in parallel.
 

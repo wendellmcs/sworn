@@ -16,7 +16,18 @@ which would rewrite the entire conversation.
 
 ## Step 1 — check the facts on disk, not from memory
 
-Run, and paste the output:
+**Background agents first.** The handoff only comes out with every background agent of this session finished: a
+handoff written while one still works goes stale when it reports, and the next chat opens beside a conversation that
+is still running. Run:
+
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/agentes-rodando.js"
+
+If it lists an agent, stop here: tell the user it is time to open a new chat and that the handoff comes when the last
+agent finishes; do not stop any of them and do not launch new ones. Each completion notice arrives on its own; when the
+last one has arrived, run this skill again. An agent counts as running while its `subagents/agent-<id>.meta.json` lacks
+`"finished": true`, unless it was stopped or has written nothing for 30 minutes.
+
+Then run, and paste the output:
 
     git -C . rev-parse HEAD
     git -C . rev-parse --abbrev-ref HEAD
@@ -40,6 +51,9 @@ In `.claude/sworn/handoff/AAAA-MM-DD-<slug>.md`, with **all** of these sections:
    this section the next chat will "discover" it and lose time. **A pending item is not dragged from handoff
    to handoff**: a list that only grows has no owner. Before the prompt, take each new pending item to the owner,
    all of them at once and in 3 options, and write here only what was already decided or what has an owner and place declared.
+   **The owner's requests:** read `.claude/sworn/pedidos/<front>.md` (`sem-frente.md` with no front), the numbered
+   list the hook writes with every message of theirs, and bring each request with its number and state: done (with
+   the evidence), open, or refused (with the decision). An open request is a pending item of this section.
 6. **Method errors that cost time** — so they are not repeated.
 7. **Third-party files left untouched** — from the `git status` of step 1.
 8. **Ready-to-paste prompt**, in a code block.

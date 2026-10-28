@@ -22,7 +22,7 @@ report brings the detail and the cut proposal. For the repeated hook text, run t
 1c brings the text that returns and the proposed cut. A stalled skill does **not** appear in this skill's
 report (it doesn't measure age): open the skill pointed out and decide whether it is still valid as it is; "stalled" means
 unchanged, not unused. The automatic round does **not** measure `MEMORY.md`, the items outside the
-rubric or the model catalog: only this skill checks those. Three keys of
+rubric, the model catalog or the model the subagents actually ran with (item 1d): only this skill checks those. Three keys of
 `.claude/sworn/projeto.json` change the automatic round: `limiares.diasEntreAuditorias`
 (interval), `limiares.diasSkillParada` (stalled-skill deadline) and `"auditarNaAbertura": false`
 (turns it off). The weight cap and the overlap criterion are not the project's: they come from the plugin, and there is no
@@ -123,6 +123,21 @@ serves which role, and how much they are willing to pay. With the facts in hand,
    `nao identificado` is a hook this reading couldn't tie to a plugin; say it that way. If `medido: false` comes,
    say "injected not measured" with the `causa` and the `nota` (the transcript format is not
    documented); never "0 injections". If `aviso` comes, show it next to the zero.
+
+   1d. **What the subagents actually ran with.** The `efetivo` key, read from the subagent transcripts in the folder
+   of the same session transcript, from files changed in the last `dias` days: the model and effort that answered,
+   not the ones the configuration asks for. **If `trocas` is not empty, say it first, as a warning:** "<apelido> now
+   answers with <para> (before: <de>), since <desde>": the alias moved to another model id without anyone changing
+   the table, cost and behavior may have moved with it. Ask the owner whether that rung stays: keeping it needs
+   nothing; changing it is editing its `apelido` in `agentes.degraus` of `.claude/sworn/projeto.json`. Then
+   the `tabela`, one line per rung of `agentes.degraus`: agent, what the table asks (`apelido`, `esforco`), what
+   answered last (`efetivo.modelo`, `efetivo.esforco`) and `confere`. `false` comes with the `motivo` (model or
+   effort) and is a divergence; `null` is "I don't know" (no answer in the window, a transcript without the effort,
+   an alias the plugin does not know), never "matches". Then `foraDaTabela`: agents that answered and are not rungs
+   (the plugin's own and the built-in ones), with the last model and effort. If `ilegiveis` is above zero, say how
+   many transcripts could not be read: their agents may show up as "I don't know". If `medido: false` comes, say
+   "effective model not measured" and the `motivo`; the automatic round never measures it (it reads every subagent
+   transcript in the window, too slow for the session opening).
 2. **Overlaps.** Pairs of skills whose triggers compete for the same situation. Two skills that
    fire at the same moment mean that **neither of the two fires reliably.**
 
@@ -138,6 +153,14 @@ serves which role, and how much they are willing to pay. With the facts in hand,
    rules, or `lidas: false` with the `causa`. **`contradicoes: []` only means "no contradiction"
    when `lidas` is `true`.** With `lidas: false`, say "rules not read" and the `causa` — `ENOENT` is the
    project without `.claude/sworn/regras.md`, which is not an error, but is not "nothing to cut" either.
+
+   3c. **Age.** The `idadeDasRegras` key: each rule with its line, `dias` since it last changed (from `git blame`)
+   and `fria` (more than 90 days). `dias: null` is "I don't know" (outside git, or the file not committed), never
+   "new". The `memorias` key (needs `--memoria`): each `.md` next to `MEMORY.md`, with `dias` from the file date,
+   the `frias` list, `duplicadas` (pairs with the same description, the overlap test of item 2) and `ilegiveis`
+   (files that could not be read, each with its `causa`: list them, never leave them out). With
+   `medida: false`, say "memories not measured" and the `motivo`. Cold, duplicate and contradictory are candidates to
+   retire, not verdicts: a 200-day-old rule that still holds is kept with a reason.
 4. **Outside the rubric.** Items that violate `modelos/boa-skill.md` in the mechanical part.
 5. **Delegable.** What another installed plugin already solves and this project reimplemented.
 6. **Scar.** For each instruction item: is there a decision, incident or finding behind it?
@@ -159,7 +182,23 @@ For each finding, a one-line proposal: **cut**, **merge** or **keep with a reaso
 
 **You delete nothing.** Retiring an instruction is the owner's decision, and goes in 3 options with the recommended one
 marked. A retired file is **not deleted: it is moved** to a history area, with date, origin and
-reason.
+reason. A cold or duplicate memory goes to an `_arquivo/` folder next to it, by `mv`, and leaves its line in
+`MEMORY.md`; moving it back undoes the retirement.
+
+## Before installing someone else's plugin or skill — the security scan
+
+Claude Code has no hook that runs when a plugin is installed, so the scan runs on the downloaded folder, before
+installing it, with no AI and at no cost:
+
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/auditar.js" --seguranca <folder>
+
+It returns, in JSON, every place that deserves a read, with `arquivo:linha` and the excerpt, by category: `rede`
+(network calls), `eval` (code built at run time), `processo` (child processes), `credencial` (keys, tokens, credential
+files), `fora` (the home folder) and `gancho-fora` (a hook that writes outside the plugin's folder). It also says what
+it did not read (`naoLidos`: binary or large files; `pastasIgnoradas`; `corte` when the cap cut the list) and its
+`limites`. Show the owner the summary per category and the findings of `credencial` and `gancho-fora` first.
+**It is not a seal of safety**: a network call can be exactly what the plugin is for, and obfuscated or downloaded
+code does not show up. The decision to install is the owner's.
 
 ## What this audit does NOT do
 

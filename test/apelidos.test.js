@@ -193,3 +193,79 @@ test('apelidos: corrigido o arquivo, a conferencia deixa de acusar (ida e volta)
   ]));
   assert.deepStrictEqual(r.divergencias, [], 'a correcao nao corrigiu');
 });
+
+// ------------------------------------------ D678 T1: o effort: contra a tabela
+
+const MAPA_ESFORCO = { agentes: {
+  escada: ['busca', 'arquiteto'],
+  degraus: [{ agente: 'busca', apelido: 'barato', esforco: 'low' }, { agente: 'arquiteto', apelido: 'caro', esforco: 'high' }]
+} };
+function agE(nome, model, effort) { return Object.assign(ag(nome, model), { effort: effort }); }
+
+test('D678 T1: effort: diferente do esforco gravado e divergencia de esforco, com os dois lados', () => {
+  const r = apelidos.conferir(MAPA_ESFORCO, lidos([agE('busca', 'barato', 'high'), agE('arquiteto', 'caro', 'high')]));
+  assert.deepStrictEqual(r.divergencias, [], 'o modelo bate: nao e divergencia de modelo');
+  assert.strictEqual(r.esforcoDivergente.length, 1, JSON.stringify(r.esforcoDivergente));
+  assert.deepStrictEqual(r.esforcoDivergente[0],
+    { agente: 'busca', arquivo: 'busca.md', declarado: 'high', gravado: 'low' });
+});
+
+test('D678 T1: agente sem effort: com esforco gravado e balde proprio, nao divergencia', () => {
+  const r = apelidos.conferir(MAPA_ESFORCO, lidos([agE('busca', 'barato', null), agE('arquiteto', 'caro', 'high')]));
+  assert.deepStrictEqual(r.esforcoDivergente, []);
+  assert.deepStrictEqual(r.esforcoNaoDeclarado, [{ agente: 'busca', arquivo: 'busca.md', gravado: 'low' }]);
+});
+
+test('D678 T1: tabela sem esforco nao compara o effort: (configuracao anterior nao acusa nada)', () => {
+  const r = apelidos.conferir(MAPA_DOIS, lidos([agE('busca', 'barato', 'max'), agE('arquiteto', 'caro', null)]));
+  assert.deepStrictEqual(r.esforcoDivergente, []);
+  assert.deepStrictEqual(r.esforcoNaoDeclarado, []);
+});
+
+test('D678 T1: o motivo cita a divergencia de esforco com os dois lados', () => {
+  const r = apelidos.conferir(MAPA_ESFORCO, lidos([agE('busca', 'barato', 'high'), agE('arquiteto', 'caro', 'high')]));
+  const m = apelidos.motivo(r);
+  assert.ok(m.includes('"busca"'), m);
+  assert.ok(m.includes('      o arquivo diz: effort: high') && m.includes('      o mapa diz:    esforco low'), m);
+  assert.ok(!/arquiteto/.test(m), 'agente que nao divergiu nao entra na mensagem');
+});
+
+test('D678 T1: trocarCampo troca o effort: e preserva o resto; trocarModel segue igual', () => {
+  const antes = '---\r\nname: busca\r\nmodel: caro\r\neffort: high\r\n---\r\ncorpo\r\n';
+  const r = apelidos.trocarCampo(antes, 'effort', 'low');
+  assert.strictEqual(r.ok, true, r.motivo);
+  assert.strictEqual(r.texto, antes.replace('effort: high', 'effort: low'));
+  const sem = apelidos.trocarCampo('---\nname: busca\n---\n', 'effort', 'low');
+  assert.strictEqual(sem.texto, '---\nname: busca\neffort: low\n---\n');
+  assert.strictEqual(apelidos.trocarModel(antes, 'barato').texto, antes.replace('model: caro', 'model: barato'));
+});
+
+// R1 da revisao (5 lentes): o nome do campo entra num RegExp; nome fora do formato de chave e recusado, nao estoura.
+test('D678 T1: trocarCampo recusa nome de campo fora do formato de chave, sem lancar', () => {
+  for (const campo of ['ef(fort', 'a.b', '', 'model:x']) {
+    const r = apelidos.trocarCampo('---\nmodel: caro\naXb: 1\n---\n', campo, 'x');
+    assert.strictEqual(r.ok, false, campo + ' passou');
+    assert.strictEqual(r.texto, null);
+  }
+});
+
+test('D678 T1: dois effort: no frontmatter param a troca em vez de adivinhar', () => {
+  const r = apelidos.trocarCampo('---\neffort: low\nname: busca\neffort: high\n---\n', 'effort', 'medium');
+  assert.strictEqual(r.ok, false);
+  assert.ok(r.motivo.includes('effort:'), r.motivo);
+});
+
+// "Em agente": o proprio plugin nao publica id de versao no model: dos agentes dele, e o effort: e um dos aceitos.
+test('D678 T1: os agentes do plugin declaram apelido (nunca id de versao) e esforco valido', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const degrausLib = require('../scripts/lib/degraus.js');
+  const pasta = path.join(__dirname, '..', 'agents');
+  const lista = apelidos.agentesDoPlugin(pasta);
+  assert.ok(lista.length > 0, 'nao achou agents/ do plugin');
+  for (const a of lista) {
+    assert.ok(!degrausLib.ehNomeDeModelo(a.apelido), a.arquivo + ' declara id de versao: ' + a.apelido);
+    const effort = agentesLib.frontmatter(fs.readFileSync(path.join(pasta, a.arquivo), 'utf8')).campos.effort;
+    if (effort) assert.ok(agentesLib.ESFORCOS.includes(effort), a.arquivo + ' declara effort: ' + effort);
+  }
+});

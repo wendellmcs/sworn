@@ -188,4 +188,4 @@ function guardarSessao(opcoes) {
   return { historico: historico, gastoReal: gastoReal };
 }
 
-module.exports = { inicioDoMes, custoDoTexto, estimarMes, gastoDoMes, guardarSessao, pastaDosProjetos, PRAZO_PADRAO_MS };
+module.exports = { inicioDoMes, custoDoTexto, arquivosDoProjeto, estimarMes, gastoDoMes, guardarSessao, pastaDosProjetos, PRAZO_PADRAO_MS };

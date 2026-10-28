@@ -185,7 +185,11 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   // D569 (0.9.1): o aviso inteiro do cd corrigido ja saiu nesta sessao; os seguintes vao curtos.
   'avisouCdCorrigido',
   // T3b (D611): a oferta do radar sai 1 vez por sessao; sem isto, o fecho do turno apagava a marca e a oferta repetia.
-  'ofereceuRadar'];
+  'ofereceuRadar',
+  // Item 14 (D674): a marca da nota viva (mtime do plano e turnos); sem isto, o fecho a apagava e o aviso nunca saia.
+  'notaViva',
+  // D694 (T3 da escada): o pedido de escalada chega no fim do subagente e e cobrado num turno seguinte (lib/escalada.js).
+  'escalada'];
 const CAMPOS_DO_TURNO = ['trabalhoReal', 'bloqueouNesteTurno', 'buscouNesteTurno', 'contadores', 'gravouHandoff'];
 
 /** Os campos da sessao que este estado tem, para o fecho carregar adiante. */

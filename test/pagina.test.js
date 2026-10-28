@@ -11,6 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { MANUAL } = require('../scripts/lib/ordens.js');
 
@@ -29,6 +30,25 @@ function trecho(texto, nome, rel) {
   const j = texto.indexOf(fim);
   assert.ok(i !== -1 && j > i, rel + ': sumiu o trecho ' + nome + ' (marcadores ' + ini + ' ... ' + fim + ')');
   return texto.slice(i + ini.length, j);
+}
+
+/** O frontmatter do SKILL.md da pasta `nome` de `dir`; sem ele, a falha nomeia a pasta (nao o ENOENT cru). */
+function frenteDaSkill(dir, nome) {
+  let texto;
+  try {
+    texto = fs.readFileSync(path.join(dir, nome, 'SKILL.md'), 'utf8');
+  } catch (e) {
+    assert.fail('skills/' + nome + '/ sem SKILL.md legivel (' + e.code + '): crie o SKILL.md ou apague a pasta');
+  }
+  return texto.replace(/\r\n/g, '\n').split('\n---\n')[0];
+}
+
+/** Comando e a skill que o dono digita: fora o manual e a que a doc tira do menu (`user-invocable: false`, D678 T4). */
+function comandosDoDisco(dir = path.join(RAIZ, 'skills')) {
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !MANUAL.test(e.name) &&
+      !/^user-invocable:\s*false\s*$/m.test(frenteDaSkill(dir, e.name)))
+    .map((e) => e.name).sort();
 }
 
 /** Linhas de dados de uma tabela markdown: fora o cabecalho e o separador. */
@@ -50,8 +70,7 @@ test('pagina: os dois READMEs e o guia existem, e o README e curto', () => {
 });
 
 test('pagina: a tabela de comandos e a das skills do disco, nos dois idiomas', () => {
-  const doDisco = fs.readdirSync(path.join(RAIZ, 'skills'), { withFileTypes: true })
-    .filter((e) => e.isDirectory() && !MANUAL.test(e.name)).map((e) => e.name).sort();
+  const doDisco = comandosDoDisco();
   assert.ok(doDisco.length > 0, 'nenhuma skill no disco: o leitor quebrou');
   cada((rel, t) => {
     const linhas = linhasDeTabela(trecho(t, 'comandos', rel));
@@ -59,6 +78,13 @@ test('pagina: a tabela de comandos e a das skills do disco, nos dois idiomas', (
     assert.ok(citados.every(Boolean), rel + ': linha da tabela de comandos sem `/sworn:<nome>` na 1a coluna');
     assert.deepStrictEqual(citados.slice().sort(), doDisco, rel + ': a tabela de comandos difere das pastas de skills/');
   });
+});
+
+test('pagina: pasta de skill sem SKILL.md reprova com o nome da pasta, nao com ENOENT cru', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn pagina-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'sem-arquivo'));
+  assert.throws(() => comandosDoDisco(dir), (e) => e.code !== 'ENOENT' && /skills\/sem-arquivo\//.test(e.message));
 });
 
 /** As duas condicoes e o veredito, lidos do medicao/resultado.txt. */
@@ -174,8 +200,7 @@ function travasDoGuia() {
 
 test('pagina: a previa social conta as travas do guia e os comandos do disco', () => {
   const s = ler('assets/social.svg');
-  const comandos = fs.readdirSync(path.join(RAIZ, 'skills'), { withFileTypes: true })
-    .filter((e) => e.isDirectory() && !MANUAL.test(e.name)).length;
+  const comandos = comandosDoDisco().length;
   assert.ok(/>A Claude Code plugin · \d+ gates · \d+ commands/.test(s), 'a previa social perdeu a linha que conta travas e comandos');
   // A linha visivel e a descricao acessivel (<desc>) contam juntas: nenhuma pode dizer outro numero.
   const travas = Array.from(s.matchAll(/(\d+) gates/g)).map((m) => Number(m[1]));
@@ -194,6 +219,17 @@ test('pagina: as travas dos READMEs sao as da tabela do guia', () => {
   cada((rel, t) => {
     const nums = linhasDeTabela(trecho(t, 'travas', rel)).map((l) => Number((l.match(/^\|\s*(\d+)\s*\|/) || [])[1]));
     assert.deepStrictEqual(nums, doGuia, rel + ': a tabela de travas difere da do guia');
+  });
+});
+
+// Colheita 10-20: com 4 colunas a ultima saia da tela do celular (foto a 390 px); com 2, o texto quebra dentro dela.
+test('pagina: a tabela de travas dos READMEs tem 2 colunas, para caber no celular', () => {
+  cada((rel, t) => {
+    const linhas = trecho(t, 'travas', rel).split('\n').filter((l) => /^\|/.test(l.trim()));
+    assert.ok(linhas.length > 2, rel + ': a tabela de travas sumiu');
+    for (const l of linhas) {
+      assert.strictEqual(l.trim().split('|').length - 2, 2, rel + ': linha com outro numero de colunas: ' + l);
+    }
   });
 });
 
@@ -225,6 +261,23 @@ test('pagina: a figura dos ganchos de cada idioma mostra cada evento e cada scri
       fig + ': evento ou script do hooks.json fora da figura; acrescente o nome a ' + fig);
     assert.ok(t.indexOf('src="' + fig + '"') !== -1, rel + ' nao mostra a figura dos ganchos do seu idioma (' + fig + ')');
   });
+});
+
+// s169 (R2 da T3 da escada): a <desc> dizia a escalada nos eventos de subagente e no Stop, e a linha visivel de cada
+// um nao; quem enxerga a figura nao via o que o leitor de tela ouvia. A linha que descreve o evento e a 2a depois
+// do titulo dele (titulo, scripts, descricao).
+test('pagina: a escalada que a descricao da figura dos ganchos cita tambem esta no texto visivel do evento', () => {
+  for (const fig of Object.values(FIGURAS_GANCHOS)) {
+    const svg = ler(fig);
+    const desc = (svg.match(/<desc[^>]*>([^<]*)<\/desc>/) || [])[1] || '';
+    const linhas = Array.from(svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)).map((m) => m[1]);
+    assert.ok((desc.match(/escala/gi) || []).length >= 2, fig + ': a <desc> nao cita a escalada no subagente e no Stop');
+    for (const evento of ['PostToolUse · SubagentStart · SubagentStop', 'Stop']) {
+      const i = linhas.indexOf(evento);
+      assert.ok(i !== -1, fig + ': sumiu o titulo do evento ' + evento);
+      assert.ok(/escala/i.test(linhas[i + 2] || ''), fig + ': a linha visivel de ' + evento + ' nao cita a escalada: ' + linhas[i + 2]);
+    }
+  }
 });
 
 // D662: as travas seguem oito; os portoes fora da conta tem tabela propria. Cada chave portao* de liga/desliga esta

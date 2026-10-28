@@ -307,4 +307,32 @@ function resumir(o) {
   }
 }
 
-module.exports = { PASTA, lerRegistro, montar, gravar, resumir, limpar };
+// Colheita 10-20, item 13 (D674): quem leu cada handoff por ultimo, por projeto. A posse vence em 24 h: depois disso o
+// handoff velho volta a ser de quem o pegar, sem aviso.
+const DONOS = '.claude/sworn/handoff-donos.json';
+const POSSE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Marca a sessao (8 primeiros do id) como dona do handoff que ela leu e devolve o aviso quando outra sessao o leu ha
+ * menos de 24 h; senao null. A posse passa a quem leu por ultimo: a outra, se ler de novo, tambem e avisada. Projeto
+ * sem .claude/sworn/ = null, sem gravar. Arquivo de donos torto recomeca vazio. Erro de disco lanca (o gancho cala).
+ */
+function reclamar(raiz, arquivo, sessao, agora) {
+  if (!fs.existsSync(path.join(raiz, '.claude', 'sworn'))) return null;
+  const rel = relativo(raiz, arquivo);
+  const id = String(sessao == null ? '' : sessao).slice(0, 8);
+  let donos = {};
+  try { donos = JSON.parse(fs.readFileSync(path.join(raiz, DONOS), 'utf8')); } catch (e) { donos = {}; }
+  if (!donos || typeof donos !== 'object' || Array.isArray(donos)) donos = {};
+  const antes = donos[rel];
+  donos[rel] = { sessao: id, em: agora };
+  fs.writeFileSync(path.join(raiz, DONOS), JSON.stringify(donos, null, 2) + '\n');
+  if (!antes || typeof antes !== 'object' || antes.sessao === id || typeof antes.em !== 'number' ||
+      agora - antes.em >= POSSE_MS) return null;
+  const min = Math.max(0, Math.round((agora - antes.em) / 60000));
+  return 'sworn: o handoff ' + rel + ' ja foi pego pela sessao ' + String(antes.sessao).replace(/[^A-Za-z0-9_-]/g, '') +
+    ' as ' + hora(antes.em) + ' (ha ' + min + ' min). Dois chats no mesmo handoff fazem o trabalho duas vezes: ' +
+    'confirme com o dono qual chat segue antes de agir. A posse passou para esta sessao; a outra e avisada se ler de novo.';
+}
+
+module.exports = { PASTA, lerRegistro, montar, gravar, resumir, limpar, mascarar, cortar, reclamar };

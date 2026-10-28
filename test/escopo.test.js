@@ -309,6 +309,27 @@ test('escopo: avisoHeranca lista as frentes existentes e diz como se vincular', 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('item 11: frente com notas de sessao mostra o comeco, a ultima nota, o plano e o caminho do detalhe', () => {
+  const objetivo = 'ESQUADRO frente das pendencias ' + 'x'.repeat(300) + ' (sessao 1, 2026-10-05 13:10: confronto) ' +
+    '(sessao 2, 2026-10-06 09:00: lote 3+4a (D671), revisao) Plano: `planos/a b.md` (D655).';
+  const dir = projetoTmp({
+    '.claude/sworn/escopos/pend.md': '**Objetivo:** ' + objetivo + '\n## Dentro\n- src/a.js\n',
+    '.claude/sworn/escopos/curta.md': '**Objetivo:** medir a oscilacao\n## Dentro\n- src/b.js\n'
+  });
+  try {
+    for (const a of [escopo.avisoHeranca(dir, null), escopo.avisoHeranca(dir, 'pend')]) {
+      assert.ok(a.includes('(sessao 2, 2026-10-06 09:00: lote 3+4a (D671), revisao)'), a);
+      assert.ok(!a.includes('confronto'), 'a nota velha sai: ' + a);
+      assert.ok(a.includes('planos/a b.md'), a);
+      assert.ok(a.includes('detalhe em .claude/sworn/escopos/pend.md'), a);
+      assert.ok(a.includes('ESQUADRO frente das pendencias'), a);
+      const linha = a.split('\n').filter(function (l) { return l.includes('sessao 2'); })[0];
+      assert.ok(linha.length < 420, 'resumo curto: ' + linha.length);
+    }
+    assert.ok(escopo.avisoHeranca(dir, 'pend').includes('medir a oscilacao'), 'sem notas fica como hoje');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('escopo: avisoHeranca sem pasta escopos/ nem frentes e identico ao de hoje', () => {
   const dir = projetoTmp({
     '.claude/sworn/escopo.md': '**Objetivo:** tarefa unica\n## Dentro\n- src/a.js\n'

@@ -1,5 +1,6 @@
 'use strict';
 const regraLib = require('./regra.js');
+const { ESFORCOS } = require('./agentes.js');
 
 /** Abaixo de dois nomes o portao de custo nao opina (o `permitido` do custo.js). Um degrau
  *  sozinho nao e escada: nao ha "mais caro" em relacao a coisa nenhuma. */
@@ -26,7 +27,14 @@ function normalizar(lista) {
   return lista.map(function (d) {
     if (typeof d === 'string') return { agente: texto(d), apelido: '' };
     const o = (d && typeof d === 'object') ? d : {};
-    return { agente: texto(o.agente || o.nome), apelido: texto(o.apelido || o.model) };
+    const r = { agente: texto(o.agente || o.nome), apelido: texto(o.apelido || o.model) };
+    // D678 T1: o esforco do degrau (`effort` e como o frontmatter chama), a primeira grafia que veio com valor.
+    // So entra quando veio: degrau sem ele e a configuracao de antes, e ela se grava igual. Valor que nao e
+    // texto segue cru, para o validar acusar.
+    const esforco = [o.esforco, o.effort].map(function (v) { return typeof v === 'string' ? v.trim() : v; })
+      .find(function (v) { return v !== undefined && v !== null && v !== ''; });
+    if (esforco !== undefined) r.esforco = esforco;
+    return r;
   }).filter(function (d) { return d.agente !== ''; });
 }
 
@@ -60,6 +68,9 @@ function validar(lista) {
     } else if (ehNomeDeModelo(item.apelido)) {
       erros.push('degrau "' + item.agente + '": "' + item.apelido +
         '" e id de modelo, nao apelido - id apodrece e o apelido nao');
+    }
+    if (item.esforco !== undefined && (typeof item.esforco !== 'string' || ESFORCOS.indexOf(item.esforco) === -1)) {
+      erros.push('degrau "' + item.agente + '": esforco "' + item.esforco + '" invalido: use um de ' + ESFORCOS.join('|'));
     }
   }
   return { ok: erros.length === 0, erros: erros };

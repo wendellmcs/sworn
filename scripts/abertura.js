@@ -65,8 +65,9 @@ function avisoDasFichas(cwd, projeto, agora) {
   const pasta = path.join(cwd, '.claude', 'sworn', 'referencias');
   let nomes;
   try { nomes = fs.readdirSync(pasta).filter(function (n) { return /\.md$/i.test(n); }); } catch (e) { return null; }
-  // atalho: caminho comparado sem caixa em qualquer sistema. limite: dois nomes so diferentes na caixa contam como um
-  // (a skill manda o nome em minusculas). trocar quando: ficha com nome em maiuscula for aceita pela skill.
+  // atalho: caminho comparado sem caixa em qualquer sistema.
+  // limite: dois nomes so diferentes na caixa contam como um (a skill manda o nome em minusculas).
+  // trocar quando: ficha com nome em maiuscula for aceita pela skill.
   const chave = function (p) { return path.resolve(cwd, p).toLowerCase(); };
   const emUso = new Set();
   for (const tipo of Object.keys(projeto.referencias)) {

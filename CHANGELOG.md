@@ -1,5 +1,96 @@
 # Changelog
 
+## 0.16.0 — a escada decide o modelo e o esforço, e o achado da revisão cita o que leu
+
+A escada de agentes passa a valer de verdade: cada degrau grava o modelo e o esforço, a chamada fora da tabela é
+barrada, o subagente que vê a tarefa passar do papel dele pede o degrau seguinte, e o `/sworn:audit` mostra com que
+modelo e esforço os subagentes rodaram de fato. Na revisão cega, achado só conta com o trecho copiado do arquivo. O
+que passa de um chat ao outro fica mais firme: pedidos numerados, frentes com a última nota e handoff que espera os
+agentes de fundo.
+
+**Escada de modelo e esforço**
+
+- **O esforço entra na tabela da escada.** Cada degrau de `agentes.degraus` no `projeto.json` pode gravar, além do
+  apelido do modelo, o esforço com que o agente pensa (`low` a `max`). O `/sworn:init` pergunta, o `gerar-agentes.js`
+  escreve no arquivo do agente, e o aviso de apelido passa a avisar também quando o `effort:` do arquivo difere do
+  esforço gravado.
+- **Agente da escada chamado fora da tabela é barrado.** Quando o agente principal chama um agente da escada
+  (`agentes.degraus` no `projeto.json`) passando `model` ou `effort` diferente do que a tabela diz, o portão de custo
+  nega e escreve a chamada certa. O que a chamada passa vence o que o arquivo do agente declara: sem esta conferência,
+  a tabela não valeria. Chamada sem esses campos passa, e quem decide é o arquivo do agente.
+- **O degrau que pede escalada é atendido.** Quando um agente da escada para e termina a resposta com a linha
+  `ESCALAR: <agente> - <motivo>`, o sworn guarda o pedido; se o turno do agente principal termina sem despachar o
+  agente pedido, o fim do turno é barrado uma vez, com a chamada certa escrita. Destino fora da escada, ou abaixo de
+  quem pediu, vira o degrau seguinte. Duas subidas seguidas na mesma tarefa vão sozinhas; a terceira, e o pedido do
+  topo da escada, vão para o usuário decidir. Os agentes gerados pelo `/sworn:init` já ensinam a linha.
+- **A conversa principal pensa conforme a marcha.** Duas skills fora do menu, `effort-low` e `effort-high`, que o
+  playbook chama pela marcha no começo de cada turno da tarefa, porque o esforço de uma skill dura só até o fim do
+  turno (medido no Claude Code 2.1.311): a marcha rápida baixa o esforço, a máxima sobe, e a passagem de rápida para
+  padrão chama a alta naquele turno. Só o esforço muda: uma skill não troca o modelo da conversa (medido no Claude
+  Code 2.1.310); para isso, o usuário digita `/model`. O agente avisa numa linha, uma vez por conversa, o que mudou.
+- **O `/sworn:audit` mostra o modelo e o esforço que rodaram de fato.** Lê as transcrições dos subagentes dos
+  últimos 30 dias e compara a última resposta de cada degrau com a tabela. Apelido que passou calado para outro id
+  de modelo (por exemplo, `sonnet` de `claude-sonnet-5` para `claude-sonnet-5-5`) vem primeiro, como aviso. A rodada
+  automática da abertura não mede: leria todas essas transcrições, 23 s num projeto grande.
+
+**Revisão cega**
+
+- **Achado só conta com o trecho lido.** Cada achado do inspetor diz o estado. `confirmado` traz a severidade e o
+  trecho copiado do arquivo citado, que a apuração procura no lado da rodada (a linha citada e até 2 em volta);
+  trecho que não confere fica fora da conta. `pendente` não tem severidade: diz o fato que falta para decidir e
+  também fica fora. Achado sem estado, ou confirmado sem trecho, invalida o veredito inteiro, e a apuração para em
+  vez de dar a rodada como limpa.
+
+**Travas e segurança**
+
+- **Commit que pula os ganchos é barrado.** `git commit --no-verify` (ou `-n`, também junto de outras letras, como
+  `-anm`) e `--no-gpg-sign` caem na trava 5: pular o gancho de commit pula a revisão e os testes que ele roda. O que
+  vem dentro da mensagem não conta (`-m "explica o --no-verify"` passa), e a última opção vence, como no git
+  (`-n --verify` passa). Ainda não são lidos o `-c core.hooksPath` nem o `commit.gpgSign` da configuração.
+- **Varredura de segurança antes de instalar um plugin ou uma skill.** `node "<plugin>/scripts/auditar.js"
+  --seguranca <pasta>` lista, sem IA, o que pede atenção: rede, `eval`, processo filho, credencial, pasta pessoal e
+  gancho que escreve fora da pasta do plugin, cada um com arquivo:linha e o trecho. Diz o que não leu (binário,
+  arquivo grande, pasta ignorada, corte) e nunca diz "seguro".
+
+**De um chat ao outro**
+
+- **Os seus pedidos ficam numa lista.** O gancho de entrada grava cada mensagem sua numa lista numerada por frente
+  (`.claude/sworn/pedidos/<frente>.md`), com data e hora, o texto limpo, segredo mascarado e corte no tamanho. O
+  `/sworn:handoff` leva cada pedido ao chat seguinte com o número e o estado: feito, aberto ou recusado. Só grava num
+  projeto com `.claude/sworn/`; `"pedidos": false` desliga.
+- **A lista de frentes diz onde cada uma parou.** Na abertura, cada frente aparece com o começo do Objetivo, a última
+  nota de sessão, o plano e onde ler o detalhe, no lugar dos 200 primeiros caracteres do arquivo.
+- **Handoff com dono.** Ler um arquivo de handoff grava a sessão como dona dele; se outra sessão o leu há menos de
+  24 h, sai um aviso, para dois chats não continuarem o mesmo trabalho.
+- **O progresso vai para o plano durante a tarefa.** Com um plano na sessão, 5 respostas com trabalho sem o arquivo
+  do plano mudar trazem o lembrete de anotar onde a tarefa está: uma troca de chat no meio dela não perde nada.
+- **O handoff espera os agentes de fundo.** Enquanto um subagente em segundo plano roda, o fim do turno segura a
+  ordem de gerar o handoff e avisa uma vez; o agente parado, ou calado há 30 minutos, não conta. O `/sworn:handoff`
+  confere antes com `scripts/agentes-rodando.js`.
+
+**Auditoria e atalhos**
+
+- **Cada memória e cada regra têm idade.** A memória pela data do arquivo, a regra pelo `git blame` (fora do git,
+  "não sei"). Mais de 90 dias sem mudar é fria; duas memórias com a mesma descrição são duplicadas. O
+  `/sworn:audit` propõe aposentar movendo o arquivo para uma pasta de arquivo, com o seu sim: nada some.
+- **A nota de atalho pode continuar nas linhas de baixo.** O `/sworn:shortcuts` junta à nota as linhas logo abaixo
+  que abrem com um rótulo ainda não usado (`limite:`, `trocar quando:`), em qualquer ordem; num bloco `/*` ou
+  `<!--` aberto, conta toda linha até o fecho. Nota sem ponto final com um comentário sem rótulo logo abaixo sai com
+  o aviso de que a linha de baixo ficou de fora.
+
+**Paralelo e página**
+
+- **No `/sworn:parallel`, cada arquivo tem um dono.** A tarefa que edita lista os arquivos dela, e o mesmo arquivo
+  em duas tarefas para o workflow antes de gastar agente; o que o agente diz ter mexido fora da lista volta à parte.
+- A tabela das oito travas no README cabe na tela do celular: duas colunas em vez de quatro.
+
+**Manutenção**
+
+- Para quem mantém o plugin: são **29 baldes** de contador: 23 que negam, 6 que só contam. Os novos somam as chamadas
+  barradas por fugir da tabela e os fins de turno barrados com escalada sem despacho. Um teste novo confere que todo
+  agente tem `name` igual ao nome do arquivo e uma `description`, e que todo script de `scripts/` é citado por algum
+  teste.
+
 ## 0.15.0 — entrega de rigor máximo só com revisão aprovada, o sworn em inglês e página nova
 
 O agente não dá mais por pronta uma entrega de rigor máximo sem revisão cega aprovada. O sworn passa a entender

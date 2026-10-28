@@ -68,7 +68,7 @@ what is about to happen.
   is not a key of `projeto.json`). **Preserve what the interview did not ask again:** keys
   set by hand that `projeto.json` already has, the `limiares`, the `travas`, the `marchas` and the `agentes`
   not repeated (init only writes `agentes.escada`, the list of agents from cheapest to most expensive, and
-  `agentes.degraus`, the name and the model alias of each rung of that ladder; other sub-keys set by hand
+  `agentes.degraus`, the name, the model alias and the effort of each rung of that ladder; other sub-keys set by hand
   survive; a partial answer is merged by key, it does not replace the whole object) and any other field
   left unanswered. **Show both lists.** An answer silently discarded is the failure this plugin
   exists to stop.
@@ -300,9 +300,17 @@ believing you saw it.
 5. **Who decides?** → writes `quemDecide`
    A name or role. It is whom the agent takes the 3 options to when the choice is not its own.
 
-6. **Which agents exist here, from cheapest to most expensive — and with what alias does each one run?**
-   Offer the subagents the scan found in `.claude/agents/`. **It is two pieces of information per
-   rung, and both are answered at once:** the agent's name and the alias of the model it uses.
+6. **Which agents exist here, from cheapest to most expensive — and with what alias and what effort does each one run?**
+   Offer the subagents the scan found in `.claude/agents/`. **Ask the three pieces of each rung in
+   this one question:** the agent's name, the alias of the model it uses and the effort (how hard the
+   model thinks: one of `low|medium|high|xhigh|max`). Offer the `effort:` the agent's file already
+   declares. Model and effort are separate axes: a search agent on the cheapest model with no effort
+   set runs at whatever effort it inherits, not at the one its job needs.
+   Name and alias are required; the effort may be left blank. A rung saved with an effort gets it
+   checked against the `effort:` of the agent's file, and `gerar-agentes.js` writes it into the file;
+   a rung saved without one has only its model checked, and its effort is asked in Step 7b. An
+   effort outside the five values is refused by the validator, like an identifier in place of an
+   alias: explain it and ask again, do not pick a value for the person.
 
    **Ask for the alias, never the full identifier.** An alias is the short name the tool
    accepts; an identifier is the exact version, which changes when the vendor renames — and a
@@ -590,7 +598,13 @@ The rungs from question 6 are already written. Now they become files in `.claude
 **2. Fill in the slices for each rung**, with `AskUserQuestion` where there is a real choice. The `nome` and
 the `apelido` are **not asked again**: they come from `projeto.json`. The `escalaPara` neither: the generator
 fills it from the order of the ladder (the rung above; on the last one, whoever decides), and an answer of yours for that
-slice is ignored.
+slice is ignored. The `esforco` is not asked again for a rung that question 6 saved with one: the rung's value
+wins over the answers file. For a rung saved without it, ask it here, write it to that rung in
+`agentes.degraus` with `Edit` (in a re-init, the scope declared in Step 0b already covers `projeto.json`; in a
+first init there is no scope yet, so declare it now the same way, with `.claude/sworn/projeto.json` in "Dentro",
+before the `Edit`), and run the Step 7
+validator again (`validar.js '<raiz>'`): it must answer `OK` before you generate, so the map and the agent's file
+say the same.
 
 | Slice | What to ask |
 |---|---|
@@ -598,7 +612,7 @@ slice is ignored.
 | `papel` | What it does, in two or three lines |
 | `decideSozinho` | What it resolves without asking — and where it stops |
 | `naoFaz` | What it does **not** do, said now so it doesn't become a broken promise |
-| `esforco` | *"How much reasoning does this agent spend?"* — `low`, `medium`, `high`, `xhigh` or `max`. It is an axis **independent of the model**: when in doubt, go down, because without declaring it the agent inherits the default and a search agent pays for deep reasoning to run `grep` |
+| `esforco` | Only for a rung saved without one (see above). *"How much reasoning does this agent spend?"* — `low`, `medium`, `high`, `xhigh` or `max`. It is an axis **independent of the model**: when in doubt, go down, because without declaring it the agent inherits the default and a search agent pays for deep reasoning to run `grep` |
 | `ferramentas` | Only the ones the role needs, separated by commas (`Read, Grep`). An agent that only reads does not get a write tool |
 | `maxTurns` | How many turns it may take before stopping and handing back — an integer from 1 up |
 
@@ -608,7 +622,8 @@ does not pay for a single rework. When filling in `esforco` and `ferramentas`, t
 has `Edit` lands on.
 
 The three values have their own format, and the generator refuses (`RECUSADO`, stating the accepted value) whatever
-departs from it — the file only reaches the person's folder with all three valid.
+departs from it — the file only reaches the person's folder with all three valid. On a `RECUSADO`, explain to the
+person what was refused and ask again; do not pick a value for them.
 
 **3. Write the answers to a temporary JSON**, with one key per agent name, and generate the proposal:
 
@@ -625,7 +640,10 @@ generate again · don't save (the project stays without agents and the cost gate
 
 Paste the output. **An agent that already exists is skipped, never overwritten** — the file is someone's work,
 and replacing it is the owner's decision. If the output says `PULADOS` non-zero, **say which ones** to the
-user: he needs to know that those rungs keep the old content.
+user: he needs to know that those rungs keep the old content, including a `model:` or `effort:` that may differ
+from the map. The alias check (`portao-apelido.js`) warns about that difference when the agent is dispatched and
+offers the fix in either direction (`--corrigir <agente> --para arquivo` or `--para mapa`); which side is right is
+the owner's call.
 
 **7. Delete the temporary JSON** and say that the agents only appear after `/reload-plugins` or
 after reopening the session.
@@ -774,8 +792,8 @@ refuses what it doesn't understand without rewriting over it, and preserves the 
 
 ## Step 8 — close by saying what was switched on
 
-**If in the re-init you added lines to the `escopo.md` (or to the front file) of another task
-(Step 0b), remove them now**, after the last `Write` in `.claude/sworn/`, and say that you removed them.
+**If you added lines to the `escopo.md` (or to the front file) of another task — in Step 0b of a
+re-init, or in Step 7b of a first init — remove them now**, after the last `Write` in `.claude/sworn/`, and say that you removed them.
 **If `.claude/sworn/escopo.md` did not exist and init created it, remove the whole file**,
 also after the last `Write`, and tell the owner that you removed it: left behind, it starts restricting the `padrao` gear
 for the next task. Deleting a file is a command, not `Write`/`Edit`; use

@@ -6,6 +6,7 @@ const evidencia = require('./lib/evidencia.js');
 const config = require('./lib/config.js');
 const projetoLib = require('./lib/projeto.js');
 const saude = require('./lib/saude.js');
+const escaladaLib = require('./lib/escalada.js');
 
 function avisoDeAmpliacao(contadores) {
   const n = (contadores && contadores.escopo_ampliado) || 0;
@@ -36,12 +37,18 @@ function encerrarTurno(e, s, avisoExtra) {
   // T10-1: em laco (stop_hook_active) nao se continua a conversa nem se marca o aviso como dado:
   // ele fica pendente para o proximo Stop. Continuar dentro do laco e o que a trava de 8 existe para cortar.
   const avisa = vs.disparou && e.stop_hook_active !== true;
+  // D704: com agente de fundo rodando na sessao, a ordem do handoff espera. O aviso de espera sai uma vez (avisouEspera)
+  // e o de saude fica pendente (avisouSaude nao marca): sai no primeiro Stop sem agente rodando.
+  const rodando = avisa ? saude.agentesRodando(e.transcript_path, Date.now()) : [];
+  const entrega = avisa && rodando.length === 0;
+  const esperaNova = rodando.length > 0 && s.avisouEspera !== true;
 
   const partes = [];
   const amp = avisoDeAmpliacao(contadores);
   if (amp) partes.push(amp);
   if (avisoExtra) partes.push(avisoExtra);
-  if (avisa) partes.push(vs.aviso);
+  if (entrega) partes.push(vs.aviso);
+  if (esperaNova) partes.push(saude.avisoDeSaude(vs.gatilhos, vs.alarme, rodando));
 
   // O estado do TURNO morre aqui (trabalhoReal, bloqueouNesteTurno, contadores); o da
   // SESSAO sobrevive. Separar os dois e exatamente o que a T18 existe para fazer.
@@ -49,24 +56,28 @@ function encerrarTurno(e, s, avisoExtra) {
   // registros - moram em `estado.CAMPOS_DA_SESSAO`: fora dela, morriam a cada turno.
   const sessao = function (dados) { estado.gravar(e.session_id, Object.assign(dados, estado.camposDaSessao(s))); };
   // D464: o alarme de tamanho tambem sai uma vez por sessao, e em laco fica pendente como o aviso.
-  const avisouAlarme = s.avisouAlarme === true || (avisa && vs.alarme === true);
-  if (avisa) {
+  const avisouAlarme = s.avisouAlarme === true || (entrega && vs.alarme === true);
+  // D704: esperando, a espera fica marcada; depois da ordem, zera (a espera de um alarme futuro sai de novo).
+  const avisouEspera = rodando.length > 0 || (!entrega && s.avisouEspera === true);
+  if (entrega) {
     // Zera o turno mas guarda que ja avisou: o aviso sai uma vez por sessao.
     // Plano 0.9.1: os arquivos tocados e a conta dos portoes seguem, como no outro ramo - o compact os reinjeta, e e
     // perto deste aviso que a conversa costuma compactar.
-    sessao({ avisouSaude: true, avisouAlarme: avisouAlarme, turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [], arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, tokensDeContexto: tokensDeContexto });
+    sessao({ avisouSaude: true, avisouAlarme: avisouAlarme, avisouEspera: avisouEspera, turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [], arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, tokensDeContexto: tokensDeContexto });
   } else {
-    sessao({ turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [], arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, avisouSaude: s.avisouSaude || false, avisouAlarme: avisouAlarme, tokensDeContexto: tokensDeContexto });
+    sessao({ turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [], arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, avisouSaude: s.avisouSaude || false, avisouAlarme: avisouAlarme, avisouEspera: avisouEspera, tokensDeContexto: tokensDeContexto });
   }
   if (!partes.length) return io.permitir();
   const saida = { systemMessage: partes.join('\n\n') };
   // T10-1: o systemMessage so o usuario ve. O additionalContext do Stop e o que chega ao modelo
   // e o faz agir (rodar o handoff e colar o prompt na mesma resposta).
-  if (avisa) {
+  if (entrega) {
     // D412: o turno que gravou o handoff e ja colou o bloco nao recebe a ordem de colar de novo.
     // Mesma regra do portao (handoffSemPrompt, declarada mais abaixo: `function` sobe ao topo do arquivo), sem o projeto: a ordem nao depende do portaoHandoff.
     const jaColado = s.gravouHandoff === true && !handoffSemPrompt(e, s, null);
     saida.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: saude.instrucaoAoModelo(vs.gatilhos, jaColado) };
+  } else if (esperaNova) {
+    saida.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: saude.instrucaoAoModelo(vs.gatilhos, false, rodando) };
   }
   io.permitir(saida);
 }
@@ -238,8 +249,18 @@ io.blindar(function () {
     // Ja bloqueou neste turno, ou o harness avisa que estamos em laco: encerra.
     if (s.bloqueouNesteTurno || e.stop_hook_active === true) return encerrarTurno(e, s);
 
+    // D694 (T3 da escada): o pedido de escalada sem despacho entra no bloqueio do turno com ou sem trabalho e com a
+    // trava 3 desligada (e da escada de agentes, a trava 6). Cobrado uma vez: sai da sessao aqui (lib/escalada.js).
+    const daEscalada = escaladaLib.motivoDoFecho(s);
+    if (daEscalada) {
+      s.escalada = escaladaLib.semPendentes(s);
+      s.contadores = s.contadores || {};
+      s.contadores.escalada_sem_despacho = (s.contadores.escalada_sem_despacho || 0) + 1;
+    }
+    const motivosDaEscalada = daEscalada ? [daEscalada] : [];
+
     // Nao houve trabalho real: conversa passa direto. Custo zero.
-    if (!s.trabalhoReal) return io.permitir();
+    if (!s.trabalhoReal) return motivosDaEscalada.length ? barrar(e, s, motivosDaEscalada, false) : io.permitir();
 
     // X2b: o dono desligou a cobranca de evidencia - NAO o ledger. encerrarTurno
     // e o UNICO chamador de estado.descarregar (unico escritor de
@@ -269,7 +290,9 @@ io.blindar(function () {
       s.contadores = s.contadores || {};
       s.contadores.fecho_sem_revisao = (s.contadores.fecho_sem_revisao || 0) + 1;
     }
-    if (travas.fecho === false) return daRevisao.length || semPrompt ? barrar(e, s, daRevisao, semPrompt) : encerrarTurno(e, s);
+    // A escalada antes dos da revisao, que seguem depois dos outros motivos do turno.
+    const doTurno = motivosDaEscalada.concat(daRevisao);
+    if (travas.fecho === false) return doTurno.length || semPrompt ? barrar(e, s, doTurno, semPrompt) : encerrarTurno(e, s);
 
     const planoLib = require('./lib/plano.js');
     const ativo = planoLib.lerAtivo(cwd);
@@ -287,14 +310,14 @@ io.blindar(function () {
       if (aberta) {
         s.contadores = s.contadores || {};
         s.contadores.subitem_pendente = (s.contadores.subitem_pendente || 0) + 1;
-        return barrar(e, s, [planoLib.motivoSubitemAberto(aberta)].concat(daRevisao), semPrompt);
+        return barrar(e, s, [planoLib.motivoSubitemAberto(aberta)].concat(doTurno), semPrompt);
       }
     }
 
     const semEvidencia = evidencia.deveBloquear(e.last_assistant_message);
     // D634: se a falta de bloco nao barrou, o resultado da prova; conta no mesmo balde (a evidencia nao sustenta a alegacao).
     const semResultado = semEvidencia ? null : motivoDoResultado(e, projeto);
-    if (!semEvidencia && !semResultado && !semPrompt && !daRevisao.length) return encerrarTurno(e, s, planoIlegivel);
+    if (!semEvidencia && !semResultado && !semPrompt && !doTurno.length) return encerrarTurno(e, s, planoIlegivel);
 
     const motivos = [];
     if (planoIlegivel) motivos.push(planoIlegivel);
@@ -303,6 +326,6 @@ io.blindar(function () {
       s.contadores.fecho_sem_evidencia = (s.contadores.fecho_sem_evidencia || 0) + 1;
       motivos.push(semEvidencia ? evidencia.MOTIVO : semResultado);
     }
-    barrar(e, s, motivos.concat(daRevisao), semPrompt);
+    barrar(e, s, motivos.concat(doTurno), semPrompt);
   });
 });

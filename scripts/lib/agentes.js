@@ -84,6 +84,7 @@ function listar(raiz) {
       arquivo: arquivo,
       nome: f.campos.name || arquivo.replace(/\.md$/, ''),
       model: f.campos.model === undefined ? null : f.campos.model,
+      effort: f.campos.effort === undefined ? null : f.campos.effort,
       temFrontmatter: f.ok
     };
   });

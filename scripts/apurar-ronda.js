@@ -409,10 +409,25 @@ function textoDaLinha(indice, rotulo, linha, passada) {
   return linhas && n >= 1 && n <= linhas.length ? linhas[n - 1] : null;
 }
 
+// Colheita 10-20, lote 3/4a: o trecho do achado confirmado tem de estar na linha citada ou ate 2 acima ou abaixo
+// (o inspetor erra a linha por pouco), com os espacos normalizados. Arquivo que falta = null: conta como antes.
+const VIZINHAS = 2;
+function semEspaco(s) { return String(s).replace(/\s+/g, ' ').trim(); }
+function trechoNoArquivo(indice, rotulo, linha, trecho, passada) {
+  const n = Number.isInteger(linha) ? linha : parseInt(linha, 10);
+  if (textoDaLinha(indice, rotulo, 1, passada) === null) return null;
+  const perto = [];
+  for (let k = n - VIZINHAS; k <= n + VIZINHAS; k++) {
+    const t = textoDaLinha(indice, rotulo, k, passada);
+    if (t !== null) perto.push(t);
+  }
+  return semEspaco(perto.join('\n')).indexOf(semEspaco(trecho)) !== -1;
+}
+
 let r;
 try {
   r = veredito.apurar(rondas, { mapas: mapas, refutados: refutados, mesmos: mesmos, textoDaLinha: textoDaLinha,
-    invertidas: invertidas, faixas: faixas });
+    trechoNoArquivo: trechoNoArquivo, invertidas: invertidas, faixas: faixas });
 } catch (err) {
   // 0.3.3, item 7: o erro diz o defeito; a linha seguinte diz onde corrigir e o que fazer depois.
   // L3 (A3-03): o voto que falta ja diz o que fazer; a linha da refutacao nao e com ele.
@@ -431,6 +446,10 @@ rondas.forEach(function (ronda, i) {
     for (const e of veredito.validarVeredito(vd, { comReferencia: comReferencia }).erros) descartados.push(e);
   }
 });
+for (const t of r.trechoNaoConfere) {
+  descartados.push('achado confirmado cujo trecho nao esta em ' + t.arquivo + ':' + t.linha + ' (nem 2 linhas acima ou ' +
+    'abaixo), descartado (ronda ' + t.ronda + ', lente ' + t.lente + '): "' + String(t.trecho).slice(0, 60) + '"');
+}
 // L3 (A3-05): o achado fora do formato segue descartado sem travar a ronda (D422), mas a aprovacao diz que houve.
 if (r.encerrar && r.motivo === 'duas rondas secas seguidas: aprovado' && descartados.length) {
   r.motivo += ', com ' + descartados.length + ' achado(s) descartado(s) por estar fora do formato: leia ' +
@@ -523,6 +542,8 @@ process.stdout.write(JSON.stringify({
   paresCandidatos: r.paresCandidatos,
   provaveisMesmos: r.provaveisMesmos,
   referencia: r.referencia,
+  pendentes: r.pendentes,
+  trechoNaoConfere: r.trechoNaoConfere,
   rondasSemMapa: semMapa,
   vereditosDescartados: descartados,
   revisaoFechadaContada: contada,

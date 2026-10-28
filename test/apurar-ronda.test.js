@@ -47,7 +47,7 @@ test('D244/defeito 3: pelo CLI, P1 so do lado antigo fecha por duas rondas secas
   comTmp((tmp) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-lado-'));
     const vd = (arq, linha) => ({ lente: 'design', melhor: 'A',
-      achados: [{ severidade: 'P1', arquivo: arq, linha: linha, descricao: 'valor cru' }] });
+      achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: arq, linha: linha, descricao: 'valor cru' }] });
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [vd('B.txt', 379)]);
     gravarMapa(cwd, 2, { A: 'HEAD', B: 'trabalho' });
@@ -66,7 +66,7 @@ test('D475: pelo CLI, P1 na mesma linha do lado novo com texto reescrito entre r
   comTmp((tmp) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-reescrita-'));
     const vd = (arq) => ({ lente: 'microcopy', melhor: 'A',
-      achados: [{ severidade: 'P1', arquivo: arq, linha: 3, descricao: 'frase ambigua' }] });
+      achados: [{ estado: 'confirmado', trecho: 'dois', severidade: 'P1', arquivo: arq, linha: 3, descricao: 'frase ambigua' }] });
     const texto = (n, rotulo, linha3) => fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', String(n),
       rotulo + '.txt'), 'um\ndois\n' + linha3 + '\nquatro\n', 'utf8');
     gravarMapa(cwd, 1, { A: 'HEAD', B: 'trabalho' });
@@ -91,7 +91,7 @@ test('D475: pelo CLI, A.txt da ronda que existe e nao se le para com a causa; o 
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-ilegivel-'));
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [{ lente: 'microcopy', melhor: 'B',
-      achados: [{ severidade: 'P2', arquivo: 'A.txt', linha: 1, descricao: 'x' }] }]);
+      achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P2', arquivo: 'A.txt', linha: 1, descricao: 'x' }] }]);
     const r0 = rodar(['--sessao', 'falta'], cwd, tmp);
     assert.strictEqual(r0.status, 0, 'A.txt que falta tem de seguir a conta de antes: ' + r0.stdout);
     fs.mkdirSync(path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'A.txt'));
@@ -107,7 +107,7 @@ test('D244/defeito 3: pelo CLI, refutados.json sem prova para com erro', () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-ref-'));
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [{ lente: 'design', melhor: 'A',
-      achados: [{ severidade: 'P1', arquivo: 'A.txt', linha: 3, descricao: 'x' }] }]);
+      achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: 3, descricao: 'x' }] }]);
     fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'refutados.json'),
       JSON.stringify([{ ronda: 1, lente: 'design', arquivo: 'A.txt', linha: 3 }]), 'utf8');
     const r = rodar(['--sessao', 'ref'], cwd, tmp);
@@ -169,7 +169,7 @@ test('091 #1: revisao aprovada grava o arquivo em revisadosAprovados; o teto nao
       for (const n of [1, 2, 3]) {
         gravarMapa(cwd, n, { A: 'trabalho', B: 'HEAD' });
         gravarRonda(cwd, n, [{ lente: 'correcao', melhor: 'B',
-          achados: [{ severidade: 'P1', arquivo: 'A.txt', linha: n * 10, descricao: 'quebra ' + n }] }]);
+          achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: n * 10, descricao: 'quebra ' + n }] }]);
       }
       const r = rodar(['--sessao', 'ap2'], cwd, tmp);
       assert.strictEqual(r.status, 0, r.stdout);
@@ -186,7 +186,7 @@ test('apurar-ronda: revisao que NAO encerra nao conta (contador inflado e D14 se
     try {
       gravarRonda(cwd, 1, [{
         lente: 'correcao', melhor: 'A',
-        achados: [{ severidade: 'P1', arquivo: 'x.js', linha: 10, o_que: 'quebra' }]
+        achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'x.js', linha: 10, o_que: 'quebra' }]
       }]);
       const r = rodar(['--sessao', 's1'], cwd, tmp);
       assert.strictEqual(r.status, 0);
@@ -273,7 +273,7 @@ test('apurar-ronda: o que se le mas nao e veredito para a apuracao, e diz por qu
 
       for (const f of Object.keys(falsos)) fs.rmSync(path.join(dir, f));
       fs.writeFileSync(path.join(dir, 'borda.json'), JSON.stringify({ lente: 'borda', melhor: 'empate',
-        achados: [{ severidade: 'P1', descricao: 'sem lugar' }] }), 'utf8');
+        achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', descricao: 'sem lugar' }] }), 'utf8');
       r = rodar(['--sessao', 's2'], cwd, tmp);
       assert.strictEqual(r.status, 0, 'achado invalido em veredito bom nao para a apuracao: ' + r.stdout);
       assert.ok(r.json && r.json.vereditosDescartados.some((e) => e.includes('sem lugar')),
@@ -325,7 +325,7 @@ test('L3 A3-03: pelo CLI, ronda 1 sem as lentes da faixa para com erro e nao fec
 
 const SECO = { lente: 'correcao', melhor: 'B', achados: [] };
 const P1_NOVO = { lente: 'correcao', melhor: 'A',
-  achados: [{ severidade: 'P1', arquivo: 'A.txt', linha: 3, descricao: 'quebra' }] };
+  achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: 3, descricao: 'quebra' }] };
 
 /** Grava revisao/<id>/<n>/ com vereditos e mapa.json (A = trabalho, B = HEAD). */
 function gravarNaBase(cwd, id, arquivo, n, vereditos) {
@@ -1152,9 +1152,9 @@ const K_VELHO = 'P2|trabalho|3|correcao';
 /** Ronda 1: um P2 em A.txt:3. Ronda 2: um P1 novo em A.txt:5 (2 linhas de distancia: um par candidato). */
 function baseComPar(cwd) {
   gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [{ lente: 'correcao', melhor: 'A',
-    achados: [{ severidade: 'P2', arquivo: 'A.txt', linha: 3, descricao: 'raiz' }] }]);
+    achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P2', arquivo: 'A.txt', linha: 3, descricao: 'raiz' }] }]);
   gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [{ lente: 'borda', melhor: 'A',
-    achados: [{ severidade: 'P1', arquivo: 'A.txt', linha: 5, descricao: 'repete a raiz' }] }]);
+    achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: 5, descricao: 'repete a raiz' }] }]);
   return path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js');
 }
 
@@ -1328,7 +1328,7 @@ test('RV-04: fechada.json com BOM le normalmente e o fecho nao e contado outra v
 test('RV-03: pelo CLI, P0 com linha em texto ("42") ou intervalo ("40-45") molha a ronda, e nao fecha aprovado', () => {
   comRepo((cwd, tmp) => {
     const vd = (linha) => ({ lente: 'correcao', melhor: 'A',
-      achados: [{ severidade: 'P0', arquivo: 'A.txt', linha: linha, descricao: 'quebra' }] });
+      achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P0', arquivo: 'A.txt', linha: linha, descricao: 'quebra' }] });
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [vd('42')]);
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [vd('40-45')]);
     const r = rodar(['--sessao', 'rv03'], cwd, tmp);
@@ -1346,7 +1346,7 @@ test('RV-03: pelo CLI, P0 com linha em texto ("42") ou intervalo ("40-45") molha
 test('RV-01: mapa com identico:true conta os achados dos dois rotulos como do lado atual', () => {
   comRepo((cwd, tmp) => {
     const vd = (arq, linha) => ({ lente: 'correcao', melhor: 'empate',
-      achados: [{ severidade: 'P0', arquivo: arq, linha: linha, descricao: 'quebra' }] });
+      achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P0', arquivo: arq, linha: linha, descricao: 'quebra' }] });
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [vd('B.txt', 10)]);
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [vd('B.txt', 20)]);
     const base = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js');
@@ -1365,7 +1365,7 @@ test('RV-01: mapa com identico:true conta os achados dos dois rotulos como do la
 test('RV-01: CONTROLE - mapa antigo, sem o campo, segue contando o rotulo HEAD como lado antigo', () => {
   comRepo((cwd, tmp) => {
     const vd = (arq, linha) => ({ lente: 'correcao', melhor: 'empate',
-      achados: [{ severidade: 'P0', arquivo: arq, linha: linha, descricao: 'quebra' }] });
+      achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P0', arquivo: arq, linha: linha, descricao: 'quebra' }] });
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [vd('B.txt', 10)]);
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [vd('B.txt', 20)]);
     const r = rodar(['--sessao', 'rv01c'], cwd, tmp);
@@ -1571,8 +1571,8 @@ test('D503: pelo CLI, veredito sem vsReferencia na ronda com referencia e veredi
 test('D503 E7: pelo CLI, o texto da linha da 2a passada vem de invertida/ (o mesmo defeito nao dobra)', () => {
   comTmp((tmp) => comTmp((cwd) => {
     // trabalho = A na 1a passada e B na 2a; a linha 2 do trabalho e "novo"; a do HEAD e "velho"
-    const p1 = [vdRef('correcao', 'empata', 'empata', [{ severidade: 'P1', arquivo: 'A.txt', linha: 2, descricao: 'quebra' }])];
-    const p2 = [vdRef('correcao', 'empata', 'empata', [{ severidade: 'P1', arquivo: 'B.txt', linha: 2, descricao: 'quebra' }])];
+    const p1 = [vdRef('correcao', 'empata', 'empata', [{ estado: 'confirmado', trecho: 'um', severidade: 'P1', arquivo: 'A.txt', linha: 2, descricao: 'quebra' }])];
+    const p2 = [vdRef('correcao', 'empata', 'empata', [{ estado: 'confirmado', trecho: 'um', severidade: 'P1', arquivo: 'B.txt', linha: 2, descricao: 'quebra' }])];
     gravarRondaRef(cwd, 1, { A: 'trabalho', B: 'HEAD' }, p1, p2, { A: 'um\nnovo\n', B: 'um\nvelho\n' });
     const r = rodar(['--sessao', 'ref6'], cwd, tmp);
     assert.strictEqual(r.status, 0, r.stdout);
@@ -1643,4 +1643,28 @@ test('D503 T5: revisao sem referencia que fecha nao conta revisao_referencia_fec
     try { c = contadoresDe(tmp, 'rf3'); } catch (e) { c = {}; }
     assert.strictEqual(c.revisao_referencia_fechada, undefined, 'aberta nao conta');
   }));
+});
+
+// Colheita 10-20, lote 3/4a: pelo CLI, o trecho do confirmado e conferido no A.txt/B.txt da ronda (linha citada e ate 2
+// acima ou abaixo, espacos normalizados); o que nao confere nao conta e entra nos descartados. O pendente sai a parte.
+test('lote 3/4a: pelo CLI, o trecho e conferido no A.txt da ronda e o pendente sai em pendentes', () => {
+  comTmp((tmp) => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-trecho-'));
+    gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
+    const linhas = ['a', 'b', 'c', 'd', '  const   x = ler(arq);', 'f', 'g', 'h', 'i', 'j'];
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'A.txt'), linhas.join('\r\n'), 'utf8');
+    gravarRonda(cwd, 1, [{ lente: 'correcao', melhor: 'B', achados: [
+      { estado: 'confirmado', severidade: 'P1', arquivo: 'A.txt', linha: 3, trecho: 'const x = ler(arq)', descricao: 'perto' },
+      { estado: 'confirmado', severidade: 'P1', arquivo: 'A.txt', linha: 9, trecho: 'const x = ler(arq)', descricao: 'longe' },
+      { estado: 'confirmado', severidade: 'P0', arquivo: 'A.txt', linha: 2, trecho: 'apaga()', descricao: 'inventado' },
+      { estado: 'pendente', arquivo: 'A.txt', linha: 5, falta: 'o que ler() devolve com arquivo vazio', descricao: 'talvez' }
+    ] }]);
+    const r = rodar(['--sessao', 'trecho'], cwd, tmp);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.deepStrictEqual(r.json.achadosNovosP0P1.map((a) => a.descricao), ['perto']);
+    assert.deepStrictEqual(r.json.trechoNaoConfere.map((a) => a.descricao), ['longe', 'inventado']);
+    assert.strictEqual(r.json.pendentes.length, 1);
+    assert.strictEqual(r.json.pendentes[0].falta, 'o que ler() devolve com arquivo vazio');
+    assert.ok(r.json.vereditosDescartados.some((e) => /trecho/.test(e) && /A\.txt:9/.test(e)), JSON.stringify(r.json.vereditosDescartados));
+  });
 });

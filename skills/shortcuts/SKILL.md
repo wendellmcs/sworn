@@ -9,12 +9,18 @@ A deliberate shortcut is good as long as someone remembers it. The "less code" b
 carry a comment with three labels, and this skill gathers those comments into a single list, so the
 debt is not forgotten in the middle of the code.
 
-The comment, on one line, after `//`, `#`, `--`, `/*` or `<!--`:
+The comment, after `//`, `#`, `--`, `/*` or `<!--`:
 `// atalho: <what was simplified>. limite: <how far it holds>. trocar quando: <trigger>.`
 
 "limite:" and "trocar quando:" are labels, written exactly like this in any language (the script recognizes only
 these), not commas: a comma inside the sentence does not break the
 reading. With no label at all, the whole text becomes the "what" and the shortcut comes out as `sem-gatilho`.
+
+The note may go on in the lines right below the mark, one label per line, in any order: a line joins when it is only
+a comment and opens with a label not used yet (inside an open `/*` or `<!--` block, every line up to the close
+counts). A note with no final period that has a comment with no label right below comes out with the warning that
+the line below was left out (`sem ponto final: a linha de baixo ficou de fora`). To fix it, start that line with one
+of the labels, or move the rest of the sentence to the line above.
 
 ## Step 1 — list
 
@@ -53,6 +59,7 @@ below it (a workspace that keeps its projects in separate repositories is not le
 
 - **Does not find a shortcut with no mark.** It reads comments, not code: a simplification without the comment does not
   appear. Finding code that did not need to exist is the review's job (`/sworn:review`).
-- **Does not read multi-line comments.** The shortcut must fit on the mark's line.
+- **Does not read a line below that has no label.** Only lines that open with `limite:` or `trocar quando:` join
+  the note; a sentence broken onto the next line is left out, with the warning above.
 - **Does not judge whether the shortcut still holds.** It shows the trigger; whoever checks whether it has fired is you,
   reading the code, and whoever decides to replace it is the owner.

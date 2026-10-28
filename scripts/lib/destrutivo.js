@@ -858,6 +858,49 @@ function apagaRemoto(seg) {
   return false;
 }
 
+// Colheita 10-20, item 18: `git commit --no-verify` (`-n`) pula os ganchos pre-commit e commit-msg, e `--no-gpg-sign`
+// pula a assinatura - a checagem do projeto deixa de rodar sem ninguem ver. Lido por token, no molde do `apagaRemoto`:
+// o subcomando e o 1o token depois do `git` e das opcoes globais (`git log --grep commit -n 3` passa), e so OPCAO do
+// commit conta - a mensagem citada e um token so, o argumento de `-m`/`-F`/`-C`/`-c`/`-t` nao e opcao (nem colado:
+// `-mnovo` e a mensagem "novo"; `-S`/`-u` colados levam o resto do aglomerado) e o `--` encerra as opcoes. Abreviacao
+// unica vale nos dois sentidos (`--no-veri`; `--veri` e `--gpg`, medido no git 2.53; `--ver` o git recusa por ambiguo),
+// e vale a ULTIMA, como no git: `--verify` depois do `-n`, ou `-S`/`--gpg-sign` depois do `--no-gpg-sign`, volta a
+// checar. Limite: `git -c core.hooksPath=...` e `commit.gpgSign=false` nao sao lidos aqui.
+const GIT_GLOBAL_VALOR = /^(?:-[Cc]|--(?:git-dir|work-tree|namespace|super-prefix|config-env))$/;
+const COMMIT_VALOR = /^--(?:message|file|template|author|date|trailer|fixup|squash|reuse-message|reedit-message|cleanup|pathspec-from-file)$/;
+const NO_VERIFY = new RegExp('^--' + abrev('no-verify') + '$');
+const NO_GPG = new RegExp('^--' + abrev('no-gpg-sign') + '$');
+const VERIFY = new RegExp('^--ver' + abrev('ify') + '$');
+const GPG = new RegExp('^--' + abrev('gpg-sign') + '(?:=|$)');
+function pulaChecagem(seg) {
+  const g = achaCmd(seg, /^git(?:\.exe)?$/i);
+  if (g === null) return false;
+  let k = g.k + 1;
+  for (; k < seg.tokens.length && nu(seg.tokens[k])[0] === '-'; k++) {
+    if (GIT_GLOBAL_VALOR.test(nu(seg.tokens[k]))) k++;
+  }
+  if (k >= seg.tokens.length || nu(seg.tokens[k]) !== 'commit') return false;
+  let semGancho = false;
+  let semAssinatura = false;
+  for (k++; k < seg.tokens.length; k++) {
+    const t = nu(seg.tokens[k]);
+    if (t === '--') break;
+    if (COMMIT_VALOR.test(t)) { k++; continue; }
+    if (VERIFY.test(t)) { semGancho = false; continue; }
+    if (GPG.test(t)) { semAssinatura = false; continue; }
+    if (NO_VERIFY.test(t)) { semGancho = true; continue; }
+    if (NO_GPG.test(t)) { semAssinatura = true; continue; }
+    if (t[0] !== '-' || t[1] === '-') continue;
+    for (let i = 1; i < t.length && /[a-zA-Z]/.test(t[i]); i++) {
+      const c = t[i];
+      if (c === 'n') semGancho = true;
+      if ('mFCct'.indexOf(c) !== -1) { if (i === t.length - 1) k++; break; }
+      if (c === 'S' || c === 'u') { if (c === 'S') semAssinatura = false; break; }
+    }
+  }
+  return semGancho || semAssinatura;
+}
+
 // S1/L1-1: flags de `git checkout` que nao tiram o `.` do alvo e nao mudam o descarte.
 const CHECKOUT_FLAG = '(?:-[fq]+|--(?:force|ours|theirs|quiet|no-overlay|overlay|ignore-skip-worktree-bits))';
 
@@ -1013,6 +1056,7 @@ const REGRAS = [
   { re: new RegExp(GIT + 'branch' + FIM + SEG + '\\s(?:-[a-zA-Z]*d[a-zA-Z]*|--' + abrev('delete') + ')' + FIM),
     e: new RegExp('\\s(?:-[a-zA-Z]*f[a-zA-Z]*|--' + abrev('force') + ')' + FIM), semAspas: true, motivo: 'apaga branch sem conferir merge' },
   { re: new RegExp(GIT + '(rebase|filter-branch)' + FIM, 'i'), semAspas: true, motivo: 'reescreve historico' },
+  { fn: pulaChecagem, motivo: 'git commit --no-verify ou --no-gpg-sign pula a checagem do projeto' },
   { re: /\bDROP\s+(TABLE|DATABASE|SCHEMA)\b/i, semAspas: true, motivo: 'DDL destrutivo' },
   { re: /\bTRUNCATE\s+TABLE\b/i, semAspas: true, motivo: 'TRUNCATE apaga a tabela inteira' },
   { re: /\bnpm\s+publish\b/i, semAspas: true, motivo: 'publicacao nao pedida' },

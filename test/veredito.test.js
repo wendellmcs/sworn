@@ -4,7 +4,8 @@ const assert = require('node:assert');
 const v = require('../scripts/lib/veredito.js');
 
 function achado(sev, arq, linha, desc) {
-  return { severidade: sev, arquivo: arq, linha: linha, descricao: desc || 'defeito', comoFalha: 'x -> y' };
+  return { estado: 'confirmado', severidade: sev, arquivo: arq, linha: linha, trecho: 'x', descricao: desc || 'defeito',
+    comoFalha: 'x -> y' };
 }
 function veredito(lente, achados, melhor) {
   return { lente: lente, melhor: melhor || 'A', porQue: 'A.txt:1', achados: achados };
@@ -120,7 +121,7 @@ test('veredito: as duas familias somam 18 lentes sem chave repetida', () => {
 test('veredito: achado sem arquivo:linha nao conta (anti-teatro)', () => {
   const r = v.validarVeredito(veredito('correcao', [
     achado('P1', 'A.txt', 10),
-    { severidade: 'P1', descricao: 'esta feio' }
+    { estado: 'confirmado', severidade: 'P1', descricao: 'esta feio' }
   ]));
   assert.strictEqual(r.achadosValidos.length, 1);
   assert.ok(r.erros.some((e) => e.includes('arquivo')));
@@ -129,7 +130,7 @@ test('veredito: achado sem arquivo:linha nao conta (anti-teatro)', () => {
 // Plano 083 (p5-20): o descarte sem descricao nao imprime "undefined"; com descricao, segue o trecho dela.
 test('083 T5 (p5-20): achado e lacuna sem arquivo:linha e sem descricao dizem "(sem descricao)", nao "undefined"', () => {
   const r = v.validarVeredito(comRef('correcao', 'vence', 'empata',
-    [{ severidade: 'P1', arquivo: 'A.txt' }, { severidade: 'P1', descricao: 'esta feio' }],
+    [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt' }, { estado: 'confirmado', trecho: 'x', severidade: 'P1', descricao: 'esta feio' }],
     [{ severidade: 'P1', arquivo: 'C.txt', linha: 2 }]), { comReferencia: true });
   assert.ok(r.erros.length === 3, JSON.stringify(r.erros));
   assert.ok(r.erros.every((e) => e.indexOf('undefined') === -1), JSON.stringify(r.erros));
@@ -247,7 +248,7 @@ test('apurar: o que nao e veredito e recusado, e nao conta como voto seco', () =
 // D244/defeito 3 (D241 secao 2.3): na onda 7 as 3 rondas molharam com P1 do lado ANTIGO - o que
 // a mudanca conserta. So o lado novo molha; o antigo sai listado a parte.
 const P1 = (arquivo, linha, lente) => ({ lente: lente || 'design', melhor: 'A',
-  achados: [{ severidade: 'P1', arquivo: arquivo, linha: linha, descricao: 'x' }] });
+  achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: arquivo, linha: linha, descricao: 'x' }] });
 const TRAB_A = { A: 'trabalho', B: 'HEAD' };
 const TRAB_B = { A: 'HEAD', B: 'trabalho' };
 
@@ -277,7 +278,7 @@ test('D244/defeito 3: a mesma linha do mesmo lado e o mesmo achado, mesmo com o 
 // mas a linha 302 tinha sido REESCRITA entre as rondas. Mesmo numero com outro texto e evidencia nova, nao repeticao.
 test('D475: linha reescrita entre rondas e evidencia nova: o P1 da ronda seguinte molha; texto igual segue repeticao', () => {
   const mic = (arquivo) => ({ lente: 'microcopy', melhor: 'A',
-    achados: [{ severidade: 'P1', arquivo: arquivo, linha: 302, descricao: 'x' }] });
+    achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: arquivo, linha: 302, descricao: 'x' }] });
   const rondas = [[mic('B.txt')], [mic('A.txt')]];
   const reescrita = (indice) => (indice === 0 ? 'nem os contadores do plugin, turnos e' : 'bloqueios de portao, que o plugin conta');
   const r = v.apurar(rondas, { mapas: [TRAB_B, TRAB_A], textoDaLinha: reescrita });
@@ -393,8 +394,8 @@ test('D246: rotulo depois de virgula ou outra pontuacao conta', () => {
 // linha - medido antes: novos = 0.
 test('D246: refutacao exige severidade e so derruba o achado dela', () => {
   const vd = { lente: 'correcao', melhor: 'A', achados: [
-    { severidade: 'P0', arquivo: 'A.txt', linha: 5, descricao: 'apaga tudo' },
-    { severidade: 'P1', arquivo: 'A.txt', linha: 5, descricao: 'mensagem ruim' }] };
+    { estado: 'confirmado', trecho: 'x', severidade: 'P0', arquivo: 'A.txt', linha: 5, descricao: 'apaga tudo' },
+    { estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: 5, descricao: 'mensagem ruim' }] };
   const ref = { ronda: 1, lente: 'correcao', arquivo: 'A.txt', linha: 5, severidade: 'P1', prova: 'x.js:1' };
   const r = v.apurar([[vd]], { mapas: [TRAB_A], refutados: [ref] });
   assert.strictEqual(r.secas, 0, JSON.stringify(r));
@@ -1129,4 +1130,91 @@ test('L3 A3-03: com a faixa, a lente que achou P0/P1 do lado novo tem de voltar 
   const antigo = [veredito('correcao', []), veredito('borda', [achado('P1', 'B.txt', 9)])];
   assert.doesNotThrow(() => v.apurar([antigo, [veredito('correcao', [])]], { mapas: [M, M], faixas: ['duas'] }));
   assert.doesNotThrow(() => v.apurar([r1, [veredito('correcao', [])]], { mapas: [M, M] }), 'sem faixa, a conta de antes');
+});
+
+// Colheita 10-20, lote 3 (vereditos tipados) + 4a (LIDO/INFERIDO): o achado diz o estado. Confirmado = LIDO, com a
+// severidade e o trecho copiado do arquivo citado; pendente = INFERIDO, com o fato exato que falta e sem severidade, e
+// nao molha a ronda. Rejeitado e o refutados.json, com a prova. Achado sem estado invalida o veredito inteiro.
+function confirmado(sev, arq, linha, trecho, desc) {
+  return { estado: 'confirmado', severidade: sev, arquivo: arq, linha: linha, trecho: trecho, descricao: desc || 'defeito',
+    comoFalha: 'x -> y' };
+}
+function pendente(arq, linha, falta, desc) {
+  return { estado: 'pendente', arquivo: arq, linha: linha, falta: falta, descricao: desc || 'talvez quebre' };
+}
+
+test('lote 3/4a: achado sem estado (ou com estado desconhecido) invalida o veredito inteiro', () => {
+  const sem = { severidade: 'P1', arquivo: 'A.txt', linha: 3, descricao: 'quebra' };
+  for (const a of [sem, Object.assign({}, sem, { estado: 'talvez' }), Object.assign({}, sem, { estado: 'rejeitado' })]) {
+    const erros = v.errosDoVeredito(veredito('correcao', [a]));
+    assert.ok(erros.some((e) => /estado/.test(e) && /confirmado/.test(e) && /pendente/.test(e)), JSON.stringify(erros));
+    assert.throws(() => v.apurar([[veredito('correcao', [a])]]), /estado/);
+  }
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('correcao', [])), [], 'sem achado, nada a dizer do estado');
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('correcao', [confirmado('P1', 'A.txt', 3, 'x()')])), []);
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('correcao', [pendente('A.txt', 3, 'o que ler() devolve')])), []);
+});
+
+// R3 do lote 3/4a (D672): o confirmado sem trecho, como o sem estado, invalida o veredito inteiro. Descartado, ele
+// secava a ronda, e duas rondas assim aprovavam com um P0 real.
+test('lote 3/4a: confirmado sem trecho invalida o veredito inteiro (descartar secaria a ronda)', () => {
+  for (const t of [undefined, '', '   ', 5]) {
+    const a = confirmado('P0', 'A.txt', 10, t, 'quebra');
+    const erros = v.errosDoVeredito(veredito('correcao', [a]));
+    assert.ok(erros.some((e) => /trecho/.test(e) && /regrave/.test(e)), JSON.stringify(erros));
+    assert.throws(() => v.apurar([[veredito('correcao', [a])], [veredito('correcao', [])]]), /trecho/);
+  }
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('correcao', [pendente('A.txt', 3, 'o que ler() devolve')])), [],
+    'o pendente nao tem trecho');
+});
+
+test('lote 3/4a: confirmado sem trecho e pendente sem falta ou com severidade sao descartados', () => {
+  const r = v.validarVeredito(veredito('correcao', [
+    confirmado('P1', 'A.txt', 3, ''), confirmado('P1', 'A.txt', 4, undefined),
+    pendente('A.txt', 5, '  '), Object.assign(pendente('A.txt', 6, 'o retorno de ler()'), { severidade: 'P1' }),
+    pendente('A.txt', 0, 'x'),
+    confirmado('P0', 'A.txt', 7, 'apaga()'), pendente('B.txt', 8, 'o valor de x em B.txt:2')
+  ]));
+  assert.strictEqual(r.achadosValidos.length, 1);
+  assert.strictEqual(r.achadosValidos[0].linha, 7);
+  assert.deepStrictEqual(r.pendentesValidos.map((p) => p.linha), [8]);
+  // 5 descartes + o erro do veredito inteiro pelos 2 confirmados sem trecho (D672: o apurar para antes de descartar)
+  assert.strictEqual(r.erros.length, 6, JSON.stringify(r.erros));
+  assert.ok(r.erros.some((e) => /trecho/.test(e)) && r.erros.some((e) => /falta/.test(e)) &&
+    r.erros.some((e) => /severidade/.test(e) && /pendente/.test(e)), JSON.stringify(r.erros));
+});
+
+test('lote 3/4a: pendente nao molha a ronda e sai na lista de pendentes com a ronda e a lente', () => {
+  const M = { A: 'trabalho', B: 'HEAD' };
+  const r1 = [veredito('correcao', [pendente('A.txt', 9, 'o que ler() devolve com arquivo vazio')])];
+  const r2 = [veredito('correcao', [])];
+  const r = v.apurar([r1, r2], { mapas: [M, M] });
+  assert.strictEqual(r.motivo, 'duas rondas secas seguidas: aprovado');
+  assert.strictEqual(r.pendentes.length, 1);
+  assert.deepStrictEqual([r.pendentes[0].ronda, r.pendentes[0].lente, r.pendentes[0].linha], [1, 'correcao', 9]);
+  assert.strictEqual(r.pendentes[0].falta, 'o que ler() devolve com arquivo vazio');
+  // controle: o mesmo lugar como confirmado molha
+  const molhada = v.apurar([[veredito('correcao', [confirmado('P1', 'A.txt', 9, 'ler()')])], r2], { mapas: [M, M] });
+  assert.strictEqual(molhada.encerrar, false);
+});
+
+test('lote 3/4a: o trecho do confirmado e conferido no arquivo citado; o que nao confere sai e nao molha', () => {
+  const M = { A: 'trabalho', B: 'HEAD' };
+  const vistos = [];
+  const noArquivo = (indice, rotulo, linha, trecho, passada) => {
+    vistos.push([indice, rotulo, linha, passada]);
+    return trecho === 'const x = ler()';
+  };
+  const r1 = [veredito('correcao', [confirmado('P1', 'A.txt', 9, 'inventado()'), confirmado('P1', 'A.txt', 12, 'const x = ler()')])];
+  const r = v.apurar([r1], { mapas: [M], trechoNoArquivo: noArquivo });
+  assert.deepStrictEqual(r.novos.map((a) => a.linha), [12], 'so o que confere conta');
+  assert.strictEqual(r.trechoNaoConfere.length, 1);
+  assert.deepStrictEqual([r.trechoNaoConfere[0].ronda, r.trechoNaoConfere[0].lente, r.trechoNaoConfere[0].linha,
+    r.trechoNaoConfere[0].trecho], [1, 'correcao', 9, 'inventado()']);
+  assert.deepStrictEqual(vistos[0], [0, 'A', 9, 1]);
+  // sem como ler (null), conta como antes; sem o callback, idem
+  const semTexto = v.apurar([r1], { mapas: [M], trechoNoArquivo: () => null });
+  assert.strictEqual(semTexto.novos.length, 2);
+  assert.strictEqual(v.apurar([r1], { mapas: [M] }).novos.length, 2);
+  assert.deepStrictEqual(v.apurar([r1], { mapas: [M] }).trechoNaoConfere, []);
 });

@@ -1,7 +1,7 @@
 {
   "name": "sworn",
   "displayName": "sworn",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Oito portoes deterministicos que obrigam o agente a provar em vez de afirmar: configuracao sob medida, revisao cega A/B, fecho sem evidencia, escopo, comando destrutivo e sessao concorrente, agente caro, criar sem procurar, catraca afrouxada. Alem deles, toda sessao abre com um bloco curto de qualidade de resposta, que nao barra nada.",
   "author": { "name": "wendellmcs" },
   "license": "MIT",

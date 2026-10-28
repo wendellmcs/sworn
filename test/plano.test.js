@@ -519,3 +519,66 @@ test('D660: a faixa conta tarefas, etapas, ondas e fases em ingles com a unidade
   assert.ok(linha('### Wave 1: A\n- [x] a\n### Wave 2: B\n- [ ] b').indexOf(' 1 de 2 ondas ') !== -1);
   assert.ok(linha('### Phase 1: A\n- [x] a\n### Phase 2: B\n- [ ] b').indexOf(' 1 de 2 fases ') !== -1);
 });
+
+// Colheita 10-20, item 14 (D674): nota viva. Com plano na sessao, 5 turnos com trabalho sem o arquivo do plano mudar
+// pedem a nota de progresso nele; o plano mudou = a conta recomeca.
+test('item 14: notaViva conta os turnos com trabalho desde a ultima mudanca do plano', () => {
+  let r = plano.notaViva(undefined, 1000, 3);
+  assert.deepStrictEqual(r, { marca: { mtime: 1000, turnos: 3 }, avisar: false }, '1a vez so marca');
+  r = plano.notaViva(r.marca, 1000, 7);
+  assert.strictEqual(r.avisar, false, '4 turnos ainda nao');
+  r = plano.notaViva(r.marca, 1000, 8);
+  assert.strictEqual(r.avisar, true, '5 turnos sem nota');
+  assert.deepStrictEqual(r.marca, { mtime: 1000, turnos: 8 }, 'avisou: a conta recomeca');
+  assert.strictEqual(plano.notaViva(r.marca, 1000, 12).avisar, false);
+  assert.deepStrictEqual(plano.notaViva({ mtime: 1000, turnos: 3 }, 2000, 20), { marca: { mtime: 2000, turnos: 20 }, avisar: false },
+    'o plano mudou: recomeca');
+  assert.strictEqual(plano.notaViva({ mtime: 1000, turnos: 'x' }, 1000, 20).avisar, false, 'marca torta recomeca');
+  assert.deepStrictEqual(plano.notaViva({ mtime: 1000, turnos: 30 }, 1000, 2), { marca: { mtime: 1000, turnos: 2 }, avisar: false },
+    'conta que voltou recomeca do numero de agora');
+  const m = plano.motivoNotaViva('planos/p.md', 5);
+  assert.ok(m.includes('planos/p.md') && m.includes('5'), m);
+  assert.ok(/^[\x20-\x7E\n]+$/.test(m), 'fora de ASCII: ' + m);
+});
+
+test('item 14: o abrir-turno pede a nota viva depois de 5 turnos com trabalho sem o plano mudar', () => {
+  const { spawnSync } = require('node:child_process');
+  const estado = require('../scripts/lib/estado.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-nota-'));
+  const sessoes = path.join(dir, 'sessoes');
+  const antes = process.env.SWORN_TMP;
+  function abrir() {
+    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'abrir-turno.js')], {
+      cwd: dir, encoding: 'utf8',
+      input: JSON.stringify({ session_id: 'n1', cwd: dir, hook_event_name: 'UserPromptSubmit', prompt: 'segue' }),
+      env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+    const s = r.stdout.trim() ? JSON.parse(r.stdout) : null;
+    return s && s.hookSpecificOutput ? s.hookSpecificOutput.additionalContext : '';
+  }
+  try {
+    process.env.SWORN_TMP = sessoes;
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn', 'escopos'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'p.md'), '1. [ ] passo\n');
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'escopos', 'f.md'), '**Objetivo:** fazer. Plano: p.md\n## Dentro\n- p.md\n');
+    estado.gravar('n1', { frente: 'f', turnosComTrabalho: 1 });
+    assert.ok(!/nota viva/.test(abrir()), '1a vez so marca');
+    estado.alterar('n1', function (s) { s.turnosComTrabalho = 6; return s; });
+    const aviso = abrir();
+    assert.ok(/nota viva/.test(aviso) && aviso.includes('p.md'), aviso);
+    estado.alterar('n1', function (s) { s.turnosComTrabalho = 12; return s; });
+    fs.writeFileSync(path.join(dir, 'p.md'), '1. [x] passo (s1: feito)\n');
+    fs.utimesSync(path.join(dir, 'p.md'), new Date(), new Date(Date.now() + 5000));
+    assert.ok(!/nota viva/.test(abrir()), 'o plano mudou: sem aviso');
+    assert.ok(estado.CAMPOS_DA_SESSAO.indexOf('notaViva') !== -1, 'o fecho carrega a marca');
+    // sem vinculo, o plano da unica frente com plano e de outra sessao: nao conta
+    estado.gravar('n1', { turnosComTrabalho: 1 });
+    abrir();
+    estado.alterar('n1', function (s) { s.turnosComTrabalho = 20; return s; });
+    assert.ok(!/nota viva/.test(abrir()), 'plano de frente sem vinculo nao pede nota');
+  } finally {
+    if (antes === undefined) delete process.env.SWORN_TMP; else process.env.SWORN_TMP = antes;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

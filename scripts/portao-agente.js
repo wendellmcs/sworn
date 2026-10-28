@@ -19,6 +19,13 @@ io.blindar(function () {
     const projeto = config.carregarProjeto(cwd);
     if (!projeto) return io.permitir();
 
+    // D678 T2: a tabela dos degraus antes da marcha - a chamada errada se conserta primeiro.
+    const tabela = custo.chamadaDaTabela(tipo, e.tool_input, projeto);
+    if (!tabela.ok) {
+      try { estado.incrementar(e.session_id, 'chamada_fora_da_tabela'); } catch (err) { /* idem */ }
+      return io.negarFerramenta(tabela.motivo);
+    }
+
     const esc = escopoLib.carregar(cwd, estado.ler(e.session_id).frente);
     const marchaMax = custo.marchaMaximaDoEscopo(esc, projeto);
     const r = custo.permitido(tipo, marchaMax, projeto);

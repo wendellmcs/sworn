@@ -95,7 +95,7 @@ Briefing of each one, exactly in this form:
 
 When the output of Step 1 brings `trecho`, add to the briefing, right after the line with the two files:
 
-> A and B are excerpts: only the changed excerpt, with margin. The line `[fora do trecho: linhas a-b]` marks what was left out, and the blank lines after it are that gap. The gap is not a defect: if the answer depends on what is outside, say "I can't see it", and that finding is at most P2.
+> A and B are excerpts: only the changed excerpt, with margin. The line `[fora do trecho: linhas a-b]` marks what was left out, and the blank lines after it are that gap. The gap is not a defect: if the answer depends on what is outside, say "I can't see it", and that finding is `pendente`, with what is outside in `falta`.
 
 The ruler line only goes in when the output of Step 1 brings `regua` with a path. When it brings
 `semRegua`, tell the user the review ran **without a project ruler** — the inspector judged by
@@ -146,6 +146,12 @@ Who decides whether the round was dry is the script, not you. Paste its output i
 - **A finding outside the format** (severity that is not P0, P1 or P2; no `arquivo:linha`) is discarded and does not wet the
   round. When the review approves with any, the `motivo` says how many: read `vereditosDescartados` before calling it
   approved. A discarded P0 or P1 that is a real defect gets fixed, and the file goes through a new review.
+- **Every finding has a state.** `confirmado` carries the severity and the `trecho` copied from the cited file; the
+  script looks for it in that round's `A.txt`/`B.txt`, on the cited line or up to 2 around it, and the one that is not there
+  goes to `trechoNaoConfere` and to `vereditosDescartados` without wetting the round. `pendente` carries no severity, only the
+  exact fact that is missing (`falta`): it goes to `pendentes` and does not wet the round either. Read both lists: a
+  pendente that the source confirms, or a discarded trecho that points to a real defect, gets fixed like any P0/P1. A
+  finding with no state invalidates the whole verdict (`ERRO`): write it again. Rejected is `refutados.json`, below.
 - **Only the new side wets the round.** The script reads the `mapa.json` of each round: a P0/P1 cited on the old
   side (what the change fixes, or what already existed) goes to `achadosDoLadoAntigo` — information, not a
   block. You still don't open `mapa.json`: the script reads it.

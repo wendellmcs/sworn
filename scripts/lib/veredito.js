@@ -119,6 +119,10 @@ function lentesDaFaixa(faixa) {
 }
 
 const SEVERIDADES = ['P0', 'P1', 'P2'];
+// Colheita 10-20, lote 3 (vereditos tipados) + 4a (LIDO/INFERIDO): confirmado = LIDO, com severidade e o trecho
+// copiado do arquivo citado (o apurar-ronda.js confere no A.txt/B.txt); pendente = INFERIDO, com o fato exato que falta
+// e sem severidade, e nao molha a ronda. Rejeitado e o refutados.json, com a prova de quem orquestra.
+const ESTADOS = ['confirmado', 'pendente'];
 
 // L3 (A3-03): a faixa completa nao tem lista fixa (a tabela de familias e do orquestrador); o menor numero dela e o do
 // arquivo so de logica, as LENTES sem as de SAEM_SO_LOGICA.
@@ -153,6 +157,22 @@ function errosDoVeredito(vd, opcoes) {
   if (!vd.lente) erros.push('veredito sem lente');
   if (['A', 'B', 'empate'].indexOf(vd.melhor) === -1) erros.push('melhor tem de ser A, B ou empate');
   if (!Array.isArray(vd.achados)) erros.push('achados tem de ser lista, vazia quando nao ha achado');
+  // Lote 3/4a: sem estado o veredito e do formato de antes, e para a apuracao (descartar o achado secaria a ronda).
+  const semEstado = Array.isArray(vd.achados) ? vd.achados.filter(function (a) {
+    return !a || ESTADOS.indexOf(a.estado) === -1;
+  }).length : 0;
+  if (semEstado) {
+    erros.push(semEstado + ' achado(s) sem estado: cada achado e "confirmado" (com severidade e o trecho copiado do ' +
+      'arquivo citado) ou "pendente" (com o fato que falta em "falta", sem severidade); regrave o veredito');
+  }
+  // R3 do lote 3/4a (D672): o confirmado sem trecho tambem para a apuracao, pelo mesmo motivo.
+  const semTrecho = Array.isArray(vd.achados) ? vd.achados.filter(function (a) {
+    return a && a.estado === 'confirmado' && (typeof a.trecho !== 'string' || a.trecho.trim() === '');
+  }).length : 0;
+  if (semTrecho) {
+    erros.push(semTrecho + ' achado(s) confirmado(s) sem trecho: copie do arquivo citado o texto da linha que mostra ' +
+      'o defeito, ou marque o achado como "pendente"; regrave o veredito');
+  }
   if (opcoes && opcoes.comReferencia) {
     const vs = vd.vsReferencia;
     if (!vs || typeof vs !== 'object' || Array.isArray(vs) || RESULTADOS_REFERENCIA.indexOf(vs.A) === -1 ||
@@ -200,9 +220,29 @@ function validarVeredito(vd, opcoes) {
   const erros = errosDoVeredito(vd, opcoes);
   const validos = [];
   const lacunas = [];
-  if (!vd || typeof vd !== 'object') return { ok: false, erros: erros, achadosValidos: [], lacunasValidas: [] };
+  const pendentes = [];
+  if (!vd || typeof vd !== 'object') {
+    return { ok: false, erros: erros, achadosValidos: [], lacunasValidas: [], pendentesValidos: [] };
+  }
 
   for (const bruto of (vd.achados || [])) {
+    if (bruto && bruto.estado === 'pendente') {
+      const linhaP = linhaDoAchado(bruto.linha);
+      if (bruto.severidade !== undefined && bruto.severidade !== null && bruto.severidade !== '') {
+        erros.push('achado pendente com severidade (o pendente nao tem severidade: confirme com o trecho, ou tire a ' +
+          'severidade), descartado: ' + trechoDaDescricao(bruto.descricao));
+      } else if (!bruto.arquivo || linhaP === null) {
+        erros.push('achado pendente sem arquivo:linha valido, descartado: ' + trechoDaDescricao(bruto.descricao));
+      } else if (!bruto.descricao || String(bruto.descricao).trim() === '') {
+        erros.push('achado pendente sem descricao, descartado');
+      } else if (typeof bruto.falta !== 'string' || bruto.falta.trim() === '') {
+        erros.push('achado pendente sem falta (o fato exato que confirmaria o achado), descartado: ' +
+          trechoDaDescricao(bruto.descricao));
+      } else {
+        pendentes.push(linhaP === bruto.linha ? bruto : Object.assign({}, bruto, { linha: linhaP }));
+      }
+      continue;
+    }
     // L3 (A3-05): "p1" e " P1 " sao P1; antes o achado saia descartado e a ronda seca.
     const a = severidadeCanonica(bruto);
     if (SEVERIDADES.indexOf(a && a.severidade) === -1) {
@@ -219,6 +259,11 @@ function validarVeredito(vd, opcoes) {
     }
     if (!a.descricao || String(a.descricao).trim() === '') {
       erros.push('achado sem descricao, descartado');
+      continue;
+    }
+    if (typeof a.trecho !== 'string' || a.trecho.trim() === '') {
+      erros.push('achado confirmado sem trecho (copie do arquivo citado o texto da linha que mostra o defeito), ' +
+        'descartado: ' + trechoDaDescricao(a.descricao));
       continue;
     }
     validos.push(linha === a.linha ? a : Object.assign({}, a, { linha: linha }));
@@ -244,7 +289,8 @@ function validarVeredito(vd, opcoes) {
       lacunas.push(linha === l.linha ? l : Object.assign({}, l, { linha: linha }));
     }
   }
-  return { ok: erros.length === 0, erros: erros, achadosValidos: validos, lacunasValidas: lacunas };
+  return { ok: erros.length === 0, erros: erros, achadosValidos: validos, lacunasValidas: lacunas,
+    pendentesValidos: pendentes };
 }
 
 const TETO = 3;
@@ -445,6 +491,10 @@ function descricaoNormal(d) {
  *   faixas[i]  = a faixa do mapa.json da ronda i (L3, A3-03). Com a da ronda 1: a ronda 1 sem as lentes da faixa (na
  *                completa, menos de MINIMO_DA_COMPLETA lentes conhecidas) e a ronda sem a lente que achou P0/P1 do lado
  *                novo na anterior lancam erro com codigo VOTO_QUE_FALTA.
+ *   trechoNoArquivo(indiceDaRonda, rotulo, linha, trecho, passada) -> true | false | null (lote 3/4a): false tira o
+ *                confirmado da conta e o poe em trechoNaoConfere; true ou null (sem como ler o arquivo) conta como antes.
+ *                Sem a funcao, nada se confere: o erro de quem chama cai do lado de molhar a ronda, nunca de seca-la.
+ * pendentes e trechoNaoConfere saem sempre (listas, vazias quando nao ha), de todas as rondas, com ronda e lente.
  * paresCandidatos sai sempre: achado P0/P1 novo da ultima ronda x outro achado do lado novo, mesmo
  * arquivo (o lado, com mapa; o rotulo, sem), a ate DISTANCIA_PAR linhas, chave diferente.
  */
@@ -472,6 +522,10 @@ function apurar(rondas, opcoes) {
   // lente -> o resultado contra a referencia na ultima ronda que a chamou
   const refLentes = new Map();
   let ultimaComReferencia = false;
+  // Lote 3/4a: os pendentes (nao molham) e os confirmados cujo trecho nao esta no arquivo citado (nao contam), de
+  // todas as rondas, para quem orquestra ler.
+  const pendentes = [];
+  const trechoNaoConfere = [];
 
   // L3 (A3-03): com a faixa da ronda 1 (o mapa.json do preparar-revisao.js a grava), o script confere as lentes; sem
   // ela (base de antes), a conta de antes.
@@ -575,8 +629,22 @@ function apurar(rondas, opcoes) {
           const lado = mapaP && rotulo ? mapaP[rotulo] : null;
           return lado ? [a.severidade, lado, a.linha, lenteChave].join('|') : chaveAchado(a, lenteChave);
         };
+        const marca = function (x) {
+          return Object.assign({ ronda: indice + 1, lente: lenteChave }, passada === 2 ? { passada: 2 } : {}, x);
+        };
+        for (const p of r.pendentesValidos) pendentes.push(marca(p));
+        // Lote 3/4a: o confirmado cujo trecho nao esta no arquivo citado nao conta (nem para o ordinal); sem como ler o
+        // arquivo (null), conta como antes.
+        const achados = r.achadosValidos.filter(function (a) {
+          const rotulo = rotuloDoArquivo(a.arquivo);
+          if (typeof op.trechoNoArquivo !== 'function' || !rotulo ||
+              op.trechoNoArquivo(indice, rotulo, a.linha, a.trecho, passada) !== false) return true;
+          trechoNaoConfere.push(marca({ severidade: a.severidade, arquivo: a.arquivo, linha: a.linha, trecho: a.trecho,
+            descricao: a.descricao }));
+          return false;
+        });
         const grupos = new Map();
-        for (const a of r.achadosValidos) {
+        for (const a of achados) {
           const k = semOrdem(a);
           if (!grupos.has(k)) grupos.set(k, []);
           const g = grupos.get(k);
@@ -594,7 +662,7 @@ function apurar(rondas, opcoes) {
             vezDaDescricao.set(k + '\n' + d, vez + 1);
           });
         });
-        for (const a of r.achadosValidos) {
+        for (const a of achados) {
           const rotulo = rotuloDoArquivo(a.arquivo);
           const lado = mapaP && rotulo ? mapaP[rotulo] : null;
           const kSemOrdem = semOrdem(a);
@@ -708,7 +776,7 @@ function apurar(rondas, opcoes) {
 
   const ronda = rondas.length;
   const extra = { achadosDoLadoAntigo: antigosDaUltima, refutados: refutados, paresCandidatos: paresCandidatos,
-    provaveisMesmos: provaveisMesmos, referencia: referencia };
+    provaveisMesmos: provaveisMesmos, referencia: referencia, pendentes: pendentes, trechoNaoConfere: trechoNaoConfere };
   // A ultima ronda tem referencia e ela ainda nao foi alcancada: barra a aprovacao. Sem referencia (null), nao barra.
   const atrasDaReferencia = referencia !== null && !referencia.pronta;
   // Plano 082, Tarefa 5 (p2-15): lista vazia aqui nao acontece (ronda sem veredito lanca antes, e lente julgada que nao

@@ -62,7 +62,7 @@ test('paralelo: sem tarefas, para antes de gastar agente e diz como chamar', asy
   }
   // ronda 2: chave com nome errado era ignorada calada ("edit": true rodava sem copia isolada)
   await assert.rejects(rodar([{ tarefa: 'a', edit: true }]), /task 1: unknown key "edit"/);
-  await assert.rejects(rodar([{ tarefa: 'a', model: 'opus' }]), /unknown key "model"; the keys are tarefa, edita, modelo, esforco/);
+  await assert.rejects(rodar([{ tarefa: 'a', model: 'opus' }]), /unknown key "model"; the keys are tarefa, edita, modelo, esforco, papel, donoDe/);
   const ok = await rodar([{ tarefa: 'a', edita: false }]);
   assert.strictEqual(ok.chamadas[0].opts.model, 'haiku');
 });
@@ -129,6 +129,43 @@ test('paralelo: o agente leve avisa que Measure-Object -Line pula linha vazia (D
   const fim = corpo.split(/\r?\n/).find((l) => /line break/.test(l)) || '';
   assert.ok(/wc -l/.test(fim) && /one less/.test(fim) && /which command you used/.test(fim),
     'o leitor nao avisa que wc -l e .Count divergem sem quebra de linha no fim: ' + fim);
+});
+
+// Colheita 10-20, item 19: o agente devolvia `arquivos` (o que mudou) so depois; nada declarava o dono antes nem barrava dois
+// agentes no mesmo arquivo.
+test('paralelo: papel e donoDe declarados vao ao agente; o mesmo arquivo em duas tarefas para antes de gastar agente', async () => {
+  const { chamadas, r } = await rodar([
+    { tarefa: 'corrigir A', edita: true, papel: 'corrige o parser', donoDe: ['src/a.js', 'test\\a.test.js'] },
+    { tarefa: 'corrigir B', edita: true, donoDe: ['./src/b.js'] },
+    'ler C',
+  ], (p, o, n) => ({ feito: true, resumo: 'ok', evidencia: 'x',
+    arquivos: n === 1 ? ['C:/copia/src/A.js', 'test/a.test.js', 'src/z.js'] : n === 2 ? ['src/b.js'] : [] }));
+  assert.ok(/^Your role: corrige o parser\.$/m.test(chamadas[0].prompt), chamadas[0].prompt);
+  const dono = /You own only these files: (.+)\. Do not edit any other file/;
+  assert.strictEqual((chamadas[0].prompt.match(dono) || [])[1], 'src/a.js, test/a.test.js');
+  assert.strictEqual((chamadas[1].prompt.match(dono) || [])[1], 'src/b.js');
+  assert.ok(!dono.test(chamadas[2].prompt) && !/Your role/.test(chamadas[1].prompt + chamadas[2].prompt));
+  assert.strictEqual(chamadas[0].opts.label, 'task 1 (edita) - corrige o parser');
+  assert.strictEqual(chamadas[1].opts.label, 'task 2 (edita)');
+  assert.strictEqual(r.resultados[0].papel, 'corrige o parser');
+  assert.deepStrictEqual(r.resultados[0].foraDoDono, ['src/z.js'], 'editou fora do que declarou');
+  assert.strictEqual(r.resultados[1].foraDoDono, undefined);
+  assert.strictEqual(r.resultados[2].foraDoDono, undefined);
+
+  await assert.rejects(rodar([
+    { tarefa: 'a', edita: true, donoDe: ['src/a.js'] },
+    { tarefa: 'b', edita: true, donoDe: ['src/x.js'] },
+    { tarefa: 'c', edita: true, donoDe: ['.\\SRC\\a.js'] },
+  ]), /tasks 1 and 3 both own SRC\/a\.js; two agents must not edit the same file/);
+  await assert.rejects(rodar([{ tarefa: 'a', donoDe: ['src/a.js'] }]), /task 1: donoDe is only for a task that edits/);
+  for (const v of ['src/a.js', [], [''], [1]]) {
+    await assert.rejects(rodar([{ tarefa: 'a', edita: true, donoDe: v }]), /task 1: donoDe must be a list of file paths/, JSON.stringify(v));
+  }
+  for (const v of ['', '  ', 3]) {
+    await assert.rejects(rodar([{ tarefa: 'a', papel: v }]), /task 1: papel must be non-empty text/, JSON.stringify(v));
+  }
+  const mesma = await rodar([{ tarefa: 'a', edita: true, donoDe: ['src/a.js', 'src/a.js'] }]);
+  assert.strictEqual(mesma.chamadas.length, 1, 'o mesmo arquivo repetido na mesma tarefa nao e colisao');
 });
 
 test('paralelo: teto de 8 por padrao, 16 no maximo, e o que ficou de fora e dito (nada cortado calado)', async () => {

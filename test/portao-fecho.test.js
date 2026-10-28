@@ -1094,6 +1094,50 @@ test('D464: o fecho da o alarme de 450000 depois do aviso, uma vez so, e nao o m
   });
 });
 
+// D704 (pedido 14): com agente de fundo rodando na sessao (<sessao>/subagents/agent-<id>.meta.json sem "finished": true),
+// o Stop manda esperar uma vez e segura a ordem do handoff; ela sai no primeiro Stop sem agente rodando.
+test('D704: com agente em segundo plano rodando, o fecho manda esperar uma vez e da a ordem quando ele termina', () => {
+  comTmp((tmp) => {
+    const dir = projetoQueDispara(tmp, 'd704');
+    const fundo = { agentType: 'sworn:inspector', description: 'R1 saude correcao', requestShape: 'background' };
+    const sessaoComAgente = function (id, linhaDaTranscricao) {
+      const pasta = path.join(tmp, 'projects', 'p');
+      const sub = path.join(pasta, id, 'subagents');
+      fs.mkdirSync(sub, { recursive: true });
+      fs.writeFileSync(path.join(pasta, id + '.jsonl'), linhaDaTranscricao || '');
+      fs.writeFileSync(path.join(sub, 'agent-x1.meta.json'), JSON.stringify(fundo));
+      fs.writeFileSync(path.join(sub, 'agent-x1.jsonl'), JSON.stringify({ type: 'user', message: { role: 'user', content: 'tarefa' } }) + '\n');
+      return { transcricao: path.join(pasta, id + '.jsonl'), meta: path.join(sub, 'agent-x1.meta.json') };
+    };
+    const s = sessaoComAgente('d704');
+    const r1 = turnoComTrabalho(tmp, 'd704', dir, { transcript_path: s.transcricao });
+    assert.strictEqual(r1.status, 0, r1.stderr);
+    assert.ok(r1.json && /chat novo/.test(r1.json.systemMessage) && r1.json.systemMessage.indexOf('R1 saude correcao (agent-x1)') !== -1,
+      'o usuario ve a espera: ' + r1.stdout);
+    const ctx1 = r1.json.hookSpecificOutput && r1.json.hookSpecificOutput.additionalContext;
+    assert.ok(/Nao rode \/sworn:handoff agora/.test(ctx1) && ctx1.indexOf('1. Rode /sworn:handoff.') === -1, 'o modelo espera: ' + ctx1);
+    assert.ok(!sessaoDe(tmp, 'd704').avisouSaude, 'com agente rodando o aviso de saude fica pendente');
+    assert.strictEqual(sessaoDe(tmp, 'd704').avisouEspera, true);
+    // a espera sai uma vez: o Stop seguinte com o agente ainda rodando fica calado (nao continua a conversa a cada turno)
+    const r2 = turnoComTrabalho(tmp, 'd704', dir, { transcript_path: s.transcricao });
+    assert.strictEqual(r2.json, null, 'a espera repetiu: ' + r2.stdout);
+    // o agente terminou: o Stop seguinte da a ordem normal do handoff e marca o aviso
+    fs.writeFileSync(s.meta, JSON.stringify(Object.assign({ finished: true }, fundo)));
+    const r3 = turnoComTrabalho(tmp, 'd704', dir, { transcript_path: s.transcricao });
+    const ctx3 = r3.json && r3.json.hookSpecificOutput && r3.json.hookSpecificOutput.additionalContext;
+    assert.ok(ctx3 && ctx3.indexOf('1. Rode /sworn:handoff.') !== -1, 'a ordem nao chegou depois do termino: ' + r3.stdout);
+    assert.ok(/Faca assim: rode \/sworn:handoff/.test(r3.json.systemMessage) && r3.json.systemMessage.indexOf('agent-x1') === -1, r3.stdout);
+    assert.strictEqual(sessaoDe(tmp, 'd704').avisouSaude, true);
+    assert.strictEqual(sessaoDe(tmp, 'd704').avisouEspera, false, 'depois da ordem, a espera de um alarme futuro sai de novo');
+    // o alarme tambem espera: com agente rodando, nao marca o avisouAlarme
+    const usage = JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 460000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }) + '\n';
+    const al = sessaoComAgente('d704al', usage);
+    const ra = turnoComTrabalho(tmp, 'd704al', dir, { transcript_path: al.transcricao });
+    assert.ok(ra.json && /ALARME/.test(ra.json.systemMessage) && ra.json.systemMessage.indexOf('(agent-x1)') !== -1, ra.stdout);
+    assert.ok(!sessaoDe(tmp, 'd704al').avisouAlarme && !sessaoDe(tmp, 'd704al').avisouSaude, 'o alarme com agente rodando fica pendente');
+  });
+});
+
 // D468 (0.7.0): com "modoContinuo": true no projeto, o gatilho de turnos nao pede troca no fim de turno.
 test('D468: o fecho le a chave modoContinuo do projeto e cala os gatilhos contaveis dela', () => {
   comTmp((tmp) => {

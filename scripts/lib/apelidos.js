@@ -21,8 +21,12 @@ function mapaDeDegraus(projeto) {
   const a = (projeto && projeto.agentes) || {};
   const lista = degrausLib.normalizar(a.degraus);
   const porNome = Object.create(null);
-  for (const d of lista) porNome[d.agente] = d.apelido;
-  return { lista: lista, porNome: porNome };
+  const esforcoPorNome = Object.create(null);
+  for (const d of lista) {
+    porNome[d.agente] = d.apelido;
+    if (d.esforco !== undefined) esforcoPorNome[d.agente] = d.esforco;
+  }
+  return { lista: lista, porNome: porNome, esforcoPorNome: esforcoPorNome };
 }
 
 /**
@@ -36,11 +40,16 @@ function mapaDeDegraus(projeto) {
  *                  resposta: nao declarado. Nao e divergir (foco de revisao 4).
  *   semArquivo   - ha degrau gravado e nao ha arquivo de agente com esse nome.
  *   foraDoMapa   - ha arquivo de agente que a escada nao menciona.
+ *
+ * D678 T1: o `effort:` contra o esforco do degrau, com a mesma separacao, em baldes proprios
+ * (`esforcoDivergente`, `esforcoNaoDeclarado`) - o conserto do modelo nao pode receber um esforco.
+ * Degrau sem esforco gravado nao compara: e a configuracao de antes.
  */
 function conferir(projeto, lidos) {
   const vazio = {
     verificavel: false, motivo: null,
-    divergencias: [], naoDeclarados: [], semArquivo: [], foraDoMapa: []
+    divergencias: [], naoDeclarados: [], semArquivo: [], foraDoMapa: [],
+    esforcoDivergente: [], esforcoNaoDeclarado: []
   };
   const mapa = mapaDeDegraus(projeto);
 
@@ -55,7 +64,8 @@ function conferir(projeto, lidos) {
 
   const r = {
     verificavel: true, motivo: null,
-    divergencias: [], naoDeclarados: [], semArquivo: [], foraDoMapa: []
+    divergencias: [], naoDeclarados: [], semArquivo: [], foraDoMapa: [],
+    esforcoDivergente: [], esforcoNaoDeclarado: []
   };
   const vistos = Object.create(null);
 
@@ -65,6 +75,14 @@ function conferir(projeto, lidos) {
     if (gravado === undefined) {
       r.foraDoMapa.push({ agente: ag.nome, arquivo: ag.arquivo, declarado: ag.model });
       continue;
+    }
+    const esforco = mapa.esforcoPorNome[ag.nome];
+    if (esforco !== undefined) {
+      if (ag.effort === null || ag.effort === undefined || ag.effort === '') {
+        r.esforcoNaoDeclarado.push({ agente: ag.nome, arquivo: ag.arquivo, gravado: esforco });
+      } else if (ag.effort !== esforco) {
+        r.esforcoDivergente.push({ agente: ag.nome, arquivo: ag.arquivo, declarado: ag.effort, gravado: esforco });
+      }
     }
     if (ag.model === null || ag.model === undefined || ag.model === '') {
       r.naoDeclarados.push({ agente: ag.nome, arquivo: ag.arquivo, gravado: gravado });
@@ -83,13 +101,18 @@ function conferir(projeto, lidos) {
 }
 
 /**
- * Troca o `model:` do frontmatter, preservando o resto do arquivo.
+ * Troca um campo do frontmatter (`model` ou, desde a D678, `effort`), preservando o resto do arquivo.
  * Recusa em vez de adivinhar nos tres casos em que adivinhar estragaria o
- * arquivo de alguem: sem cerca, cerca que nunca fecha, e mais de um `model:`
+ * arquivo de alguem: sem cerca, cerca que nunca fecha, e mais de uma linha do campo
  * dentro do frontmatter. Sem a linha, ela e ACRESCENTADA - "nao declarado"
  * tambem se conserta.
  */
-function trocarModel(bruto, apelido) {
+function trocarCampo(bruto, campo, valor) {
+  // O nome vira RegExp: so o formato de chave que o frontmatter() le (agentes.js:48), sem metacaractere.
+  if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(String(campo))) {
+    return { ok: false, texto: null, motivo: 'campo "' + campo + '" fora do formato de chave do frontmatter' };
+  }
+  const reCampo = new RegExp('^' + campo + ':');
   const texto = String(bruto == null ? '' : bruto);
   const bom = texto.charCodeAt(0) === 0xFEFF ? '\uFEFF' : '';
   const corpo = texto.slice(bom.length);
@@ -103,28 +126,30 @@ function trocarModel(bruto, apelido) {
   for (let i = 1; i < linhas.length; i++) {
     const nua = semTerminador(linhas[i]);
     if (CERCA.test(nua)) { fim = i; break; }
-    if (RE_MODEL.test(nua)) alvos.push(i);
+    if (reCampo.test(nua)) alvos.push(i);
   }
   if (fim === -1) {
     return { ok: false, texto: null, motivo: 'a cerca do frontmatter abre e nunca fecha' };
   }
   if (alvos.length > 1) {
-    return { ok: false, texto: null, motivo: 'ha ' + alvos.length + ' linhas `model:` no frontmatter: nao da para saber qual e a certa' };
+    return { ok: false, texto: null, motivo: 'ha ' + alvos.length + ' linhas `' + campo + ':` no frontmatter: nao da para saber qual e a certa' };
   }
 
   const copia = linhas.slice();
   if (alvos.length === 1) {
     const i = alvos[0];
     const terminador = linhas[i].slice(semTerminador(linhas[i]).length);
-    copia[i] = 'model: ' + apelido + terminador;
+    copia[i] = campo + ': ' + valor + terminador;
   } else {
-    // Sem linha `model:`: entra como ultima do frontmatter, com o mesmo
+    // Sem a linha do campo: entra como ultima do frontmatter, com o mesmo
     // terminador da linha da cerca de fecho - para nao misturar CRLF com LF.
     const terminador = linhas[fim].slice(semTerminador(linhas[fim]).length) || '\n';
-    copia.splice(fim, 0, 'model: ' + apelido + terminador);
+    copia.splice(fim, 0, campo + ': ' + valor + terminador);
   }
   return { ok: true, texto: bom + copia.join(''), motivo: null };
 }
+
+function trocarModel(bruto, apelido) { return trocarCampo(bruto, 'model', apelido); }
 
 // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos. "gatilho 3" e nome interno: a 1a linha diz o que falta.
 // As DUAS direcoes possiveis: o hook nao tem como saber qual lado envelheceu; quem sabe e o dono, e por isso a
@@ -132,10 +157,10 @@ function trocarModel(bruto, apelido) {
 // chamador; os valores de cada lado saem por agente, logo abaixo.
 function motivo(r) {
   const linhas = [
-    'sworn - o modelo de alguns agentes nao bate com o mapa deste projeto.',
+    'sworn - o modelo ou o esforco de alguns agentes nao bate com o mapa deste projeto.',
     '',
-    'Estes agentes declaram um modelo (`model:`) diferente do que a entrevista gravou no mapa',
-    '(campo "agentes" de .claude/sworn/projeto.json):'
+    'Estes agentes declaram um modelo (`model:`) ou um esforco (`effort:`) diferente do que a entrevista',
+    'gravou no mapa (campo "agentes" de .claude/sworn/projeto.json):'
   ];
   // A1-08: nome e arquivo vem do dono e podem ter acento; o aviso sai em ASCII (R5), e o nome sem acento nao e o real.
   let mudou = false;
@@ -144,6 +169,11 @@ function motivo(r) {
     linhas.push('  - "' + a(d.agente) + '" em ".claude/agents/' + a(d.arquivo) + '"');
     linhas.push('      o arquivo diz: ' + a(d.declarado));
     linhas.push('      o mapa diz:    ' + a(d.gravado));
+  }
+  for (const d of (r.esforcoDivergente || [])) {
+    linhas.push('  - "' + a(d.agente) + '" em ".claude/agents/' + a(d.arquivo) + '"');
+    linhas.push('      o arquivo diz: effort: ' + a(d.declarado));
+    linhas.push('      o mapa diz:    esforco ' + a(d.gravado));
   }
   if (mudou) linhas.push('Nome com acento ou caractere especial sai aqui sem acento: use o nome real, do arquivo do agente.');
   linhas.push('Nada foi bloqueado: um dos dois lados ficou velho, e so o dono sabe qual.');
@@ -258,6 +288,6 @@ function motivoReprovado(c) {
 }
 
 module.exports = {
-  RE_LINHA, CERCA, RE_MODEL, mapaDeDegraus, conferir, trocarModel, motivo,
+  RE_LINHA, CERCA, RE_MODEL, mapaDeDegraus, conferir, trocarCampo, trocarModel, motivo,
   agentesDoPlugin, cobertura, motivoReprovado
 };

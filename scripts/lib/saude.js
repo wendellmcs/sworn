@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const path = require('node:path');
 const { CALADOS, TOKENS_CONTEXTO } = require('./continuo.js');
 const { veioDeSubagente } = require('./texto.js');
 
@@ -157,7 +158,11 @@ const BALDES_DE_BLOQUEIO = [
   // D503 (0.8.1): entrega AAA sem revisao contra a referencia de topo na sessao.
   'fecho_sem_referencia',
   // D655: entrega com arquivo AAA mudado sem revisao aprovada na sessao.
-  'fecho_sem_revisao'
+  'fecho_sem_revisao',
+  // D678 T2: agente dos degraus chamado com model ou effort fora da tabela.
+  'chamada_fora_da_tabela',
+  // D694 (T3 da escada): fim do turno com pedido de escalada sem despacho.
+  'escalada_sem_despacho'
 ];
 
 /**
@@ -267,11 +272,78 @@ function avaliar(estado, limiares, continuo) {
   return { disparou: true, alarme: alarme, gatilhos: gatilhos, aviso: avisoDeSaude(gatilhos, alarme) };
 }
 
-/** Plano 082, Tarefa 5 (mock S10): o aviso de troca de chat na forma unica dos avisos. Vai ao usuario (systemMessage). */
-function avisoDeSaude(gatilhos, alarme) {
+// D704 (pedido 14): o handoff so depois que os agentes em segundo plano da sessao terminarem. Sinal medido (sondas
+// s173/s174): o subagente grava <pasta da transcricao>/<sessao>/subagents/agent-<id>.meta.json ao nascer sem `finished`
+// e ganha "finished": true ao terminar. O parado por TaskStop nao ganha: a ultima linha do .jsonl dele e a interrupcao.
+// O que morre sem marca sai pelo silencio: em 1523 agentes de fundo terminados (2026-10-20 a 10-27), p99 de 156 s sem
+// escrever e 2 acima de 15 min (o maior, 49 min, ja tinha entregue o relatorio e esperava um aviso).
+const SILENCIO_DO_AGENTE_MS = 30 * 60 * 1000;
+const RE_INTERROMPIDO = /^\[Request interrupted by user/;
+
+/**
+ * D704: os agentes de fundo da sessao da transcricao `caminho` que ainda rodam em `agora` (ms), [{ id, descricao }].
+ * Fica de fora o que tem "finished": true, o de primeiro plano (o turno ja esperou por ele), o parado (ultima linha do
+ * .jsonl e a interrupcao) e o que nao escreve ha SILENCIO_DO_AGENTE_MS (sem .jsonl ainda, vale a data do meta.json).
+ * Sem pasta ou sem leitura: [] - o aviso sai como antes da D704.
+ */
+function agentesRodando(caminho, agora) {
+  if (typeof caminho !== 'string' || !caminho) return [];
+  const pasta = path.join(path.dirname(caminho), path.basename(caminho).replace(/\.jsonl$/i, ''), 'subagents');
+  let nomes;
+  try { nomes = fs.readdirSync(pasta).sort(); } catch (e) { return []; }
+  const lista = [];
+  for (const nome of nomes) {
+    const m = /^agent-(.+)\.meta\.json$/i.exec(nome);
+    if (!m) continue;
+    const meta = path.join(pasta, nome);
+    let dados;
+    try { dados = JSON.parse(fs.readFileSync(meta, 'utf8')); } catch (e) { continue; }
+    if (!dados || dados.finished === true || dados.requestShape !== 'background') continue;
+    const jsonl = path.join(pasta, 'agent-' + m[1] + '.jsonl');
+    let escrito;
+    try { escrito = fs.statSync(jsonl).mtimeMs; } catch (e) {
+      try { escrito = fs.statSync(meta).mtimeMs; } catch (x) { continue; }
+    }
+    if (agora - escrito >= SILENCIO_DO_AGENTE_MS || foiParado(jsonl)) continue;
+    lista.push({ id: m[1], descricao: typeof dados.description === 'string' ? dados.description : '' });
+  }
+  return lista;
+}
+
+/** D704: a ultima linha legivel do .jsonl do agente e a interrupcao do TaskStop (medida na s174). */
+function foiParado(jsonl) {
+  const texto = caudaDoTranscript(jsonl);
+  if (texto === null) return false;
+  const linhas = texto.split('\n');
+  for (let i = linhas.length - 1; i >= 0; i--) {
+    let o;
+    try { o = JSON.parse(linhas[i]); } catch (e) { continue; }
+    if (!o || typeof o !== 'object') continue;
+    const c = o.message && o.message.content;
+    const t = typeof c === 'string' ? c : (Array.isArray(c) && c[0] ? c[0].text : null);
+    return o.type === 'user' && typeof t === 'string' && RE_INTERROMPIDO.test(t);
+  }
+  return false;
+}
+
+/** D704: quantos agentes seguram o handoff e quais, um por linha, em ASCII (o texto chega ao modelo, R5). */
+function linhasDosAgentes(rodando) {
+  const ascii = require('./escopo.js').ascii;
+  return [rodando.length + (rodando.length === 1 ? ' agente em segundo plano desta sessao ainda roda:' :
+    ' agentes em segundo plano desta sessao ainda rodam:')].concat(rodando.map(function (a) {
+    return '  - ' + (a.descricao ? ascii(a.descricao).slice(0, 80) + ' ' : '') + '(agent-' + ascii(a.id) + ')';
+  }));
+}
+
+/**
+ * Plano 082, Tarefa 5 (mock S10): o aviso de troca de chat na forma unica dos avisos. Vai ao usuario (systemMessage).
+ * D704: com `rodando` (agentesRodando) nao vazio, o "faca assim" manda esperar os agentes antes do handoff.
+ */
+function avisoDeSaude(gatilhos, alarme, rodando) {
   // p7-21: sem gatilho nao ha aviso, como no avaliar (a lista nula lancava; a vazia saia um alarme sem motivo).
   if (!Array.isArray(gatilhos) || gatilhos.length === 0) return null;
   const lista = gatilhos.map(function (g) { return '  - ' + g; }).join('\n');
+  const espera = Array.isArray(rodando) && rodando.length > 0;
   return (alarme ? [
     'sworn - ALARME: troque de chat agora; esta conversa ficou cara demais.',
     '',
@@ -283,10 +355,22 @@ function avisoDeSaude(gatilhos, alarme) {
     'Gatilho contavel disparou:',
     lista,
     'Se surgiu a duvida "ja e hora?", ja era.'
-  ]).concat([
-    '',
+  ]).concat([''], espera ? linhasDosAgentes(rodando).concat([
+    'Faca assim: espere todos terminarem e nao pare nenhum; o aviso volta quando o ultimo terminar.',
+    'Ai rode /sworn:handoff, cole o prompt pronto num chat novo e continue de la.'
+  ]) : [
     'Faca assim: rode /sworn:handoff, cole o prompt pronto num chat novo e continue de la.'
   ]).join('\n');
+}
+
+/** D704: o que o modelo faz enquanto agentes seguram o handoff (sem a ordem de rodar agora). */
+function esperaAoModelo(rodando, porque) {
+  return linhasDosAgentes(rodando).concat([
+    'Faca agora, nesta mesma resposta:',
+    '1. Diga ao usuario, com todas as letras, que e hora de abrir chat novo, ' + porque + ', e que o handoff sai',
+    '   quando o ultimo agente acima terminar.',
+    '2. Nao rode /sworn:handoff agora, nao dispare agente novo e nao pare nenhum dos que rodam.'
+  ]);
 }
 
 /**
@@ -297,8 +381,18 @@ function avisoDeSaude(gatilhos, alarme) {
  * que a decisao 650 da extensao tentou evitar tirando a ordem de colar.
  * So o booleano `true` muda a ordem, de proposito: um valor truthy qualquer (estado corrompido) cai
  * na ordem de colar. Na duvida, colar duas vezes custa menos que o prompt nao chegar ao chat.
+ * D704: com `rodando` nao vazio, a ordem e esperar, mesmo com o prompt ja colado: o handoff de antes do fim dos
+ * agentes e o que sai velho.
  */
-function instrucaoAoModelo(gatilhos, promptJaColado) {
+function instrucaoAoModelo(gatilhos, promptJaColado, rodando) {
+  if (Array.isArray(rodando) && rodando.length > 0) {
+    return [
+      'sworn: gatilho contavel de saude do contexto disparou. E hora de abrir chat novo, mas ainda nao de rodar o handoff.',
+      (gatilhos || []).map(function (g) { return '  - ' + g; }).join('\n')
+    ].concat(esperaAoModelo(rodando, 'cite o gatilho acima que disparou'), [
+      'O aviso de termino de cada agente chega sozinho; a ordem do handoff vem no primeiro fim de turno sem agente rodando.'
+    ]).join('\n');
+  }
   if (promptJaColado === true) {
     return [
       'sworn: gatilho contavel de saude do contexto disparou. E hora de abrir chat novo.',
@@ -357,6 +451,23 @@ const INSTRUCAO_DA_PERGUNTA = [
   '3. Cole o prompt pronto do handoff no chat, em bloco de codigo.',
   'Nao responda "esta tudo bem" nem pergunte "sigo?" antes de oferecer a troca.'
 ].join('\n');
+
+/**
+ * D704: a resposta a pergunta pela saude com os agentes de fundo da sessao (`rodando`, agentesRodando). Sem agente,
+ * INSTRUCAO_DA_PERGUNTA. Com agente, esperar; esta ordem diz ela mesma quando rodar o handoff, porque a pergunta
+ * nao passa pelo Stop que a daria depois.
+ */
+function instrucaoDaPergunta(rodando) {
+  if (!Array.isArray(rodando) || rodando.length === 0) return INSTRUCAO_DA_PERGUNTA;
+  return [
+    'sworn: o usuario perguntou se o contexto/memoria desta conversa esta bom. A pergunta E a resposta:',
+    'e hora de trocar de chat, mas ainda nao de rodar o handoff.'
+  ].concat(esperaAoModelo(rodando, 'e por que (ele perguntou)'), [
+    '3. Quando o ultimo terminar, rode /sworn:handoff e cole o prompt pronto no chat, em bloco de codigo (o aviso de',
+    '   termino de cada agente chega sozinho).',
+    'Nao responda "esta tudo bem" nem pergunte "sigo?" antes de oferecer a troca.'
+  ]).join('\n');
+}
 
 /**
  * D412: arquivo de handoff = `.md` com data AAAA-MM-DD- na frente do nome e "handoff" no nome
@@ -487,4 +598,5 @@ const MOTIVO_HANDOFF_SEM_PROMPT = [
 ].join('\n');
 
 module.exports = { LIMIARES_PADRAO, BALDES_DE_BLOQUEIO, contextoDoTranscript, ultimaChamadaDoTranscript, testesDoTranscript, limiaresValidos, medir, acumular, avaliar, avisoDeSaude, instrucaoAoModelo, perguntaSobreSaude,
-  INSTRUCAO_DA_PERGUNTA, ehArquivoDeHandoff, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT };
+  INSTRUCAO_DA_PERGUNTA, ehArquivoDeHandoff, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT,
+  SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, instrucaoDaPergunta };

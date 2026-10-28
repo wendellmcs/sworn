@@ -49,7 +49,7 @@ function projeto() {
 function veredito(p, extra) {
   return Object.assign({
     lente: 'correcao', melhor: 'A', porQue: 'A.txt:3 trata o null',
-    achados: [{ severidade: 'P1', arquivo: 'B.txt', linha: 3, descricao: 'nao trata o null', comoFalha: 'null -> erro' }],
+    achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'B.txt', linha: 3, descricao: 'nao trata o null', comoFalha: 'null -> erro' }],
     vereditos: p.vereditos
   }, extra || {});
 }
@@ -837,4 +837,24 @@ test('082 T6 (p1-1): invertida/ fora de uma ronda numerada nao vira 2a passada, 
   avisou(r);
   assert.match(r.json.systemMessage, /pasta numerada/);
   assert.ok(!fs.existsSync(path.join(inv, 'vereditos', 'correcao.json')));
+});
+
+// Colheita 10-20, lote 3/4a: o inspetor devolve o estado de cada achado; a skill diz o que fazer com os pendentes e com
+// o trecho que nao confere.
+test('lote 3/4a: o inspetor devolve estado, trecho e falta; a skill le pendentes e trechoNaoConfere', () => {
+  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
+  const formato = inspetor.slice(inspetor.indexOf('## What you return'), inspetor.indexOf('## When the briefing passes'));
+  for (const t of ['"estado": "confirmado"', '"trecho":', '"estado": "pendente"', '"falta":']) {
+    assert.ok(formato.indexOf(t) !== -1, 'falta no formato do inspetor: ' + t);
+  }
+  const blocoPendente = formato.slice(formato.indexOf('"estado": "pendente"'));
+  assert.ok(!/"severidade"/.test(blocoPendente.slice(0, blocoPendente.indexOf('}'))), 'o pendente do formato traz severidade');
+  assert.match(inspetor, /copied from the cited file/i, 'o inspetor nao sabe que o trecho e copiado do arquivo citado');
+  assert.match(inspetor, /`lacunas`[\s\S]{0,80}no `estado`/, 'o inspetor nao sabe que a lacuna fica sem estado');
+  const prov = inspetor.slice(inspetor.indexOf('## Provenance'));
+  assert.match(prov, /`pendente`, with what you can't see in `falta`/, 'o "nao sei" contradiz o pendente');
+  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
+  const passo3 = skill.slice(skill.indexOf('## Step 3'), skill.indexOf('## Step 4'));
+  assert.match(passo3, /`pendentes`/, 'o Passo 3 nao fala dos pendentes');
+  assert.match(passo3, /`trechoNaoConfere`/, 'o Passo 3 nao fala do trecho que nao confere');
 });

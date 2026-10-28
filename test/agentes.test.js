@@ -334,9 +334,29 @@ test('agentes: --fatias cita escalaPara junto de nome e apelido como fatias do g
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   const j = JSON.parse(r.stdout);
   assert.ok(j.observacao.includes('escalaPara'), j.observacao);
+  // O esforco gravado no degrau vence o do arquivo de respostas: a observacao tem de dizer isso.
+  assert.ok(j.observacao.includes('esforco'), j.observacao);
   for (const f of ['esforco', 'ferramentas', 'maxTurns', 'escalaPara']) {
     assert.ok(j.fatias.indexOf(f) !== -1, 'falta a fatia ' + f + ': ' + j.fatias.join(','));
   }
+});
+
+// D678 T1: a tabela e a fonte do esforco, como e do apelido; a resposta por agente so vale sem ele na tabela.
+test('D678 T1: o esforco gravado no degrau vai para o effort: e vence a resposta', (t) => {
+  const tabela = [{ agente: 'busca', apelido: 'barato', esforco: 'low' }, { agente: 'arquiteto', apelido: 'caro' }];
+  const { raiz, r } = gerar(t, tabela);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.strictEqual(agentes.frontmatter(fs.readFileSync(agentes.caminho(raiz, 'busca'), 'utf8')).campos.effort, 'low');
+  assert.strictEqual(agentes.frontmatter(fs.readFileSync(agentes.caminho(raiz, 'arquiteto'), 'utf8')).campos.effort,
+    'medium', 'degrau sem esforco na tabela usa a resposta');
+});
+
+test('D678 T1: listar devolve o effort: de cada agente (null quando nao declara)', (t) => {
+  const raiz = pastaTemporaria(t);
+  escrever(raiz, 'busca', '---\nname: busca\nmodel: haiku\neffort: low\n---\n');
+  escrever(raiz, 'solto', '---\nname: solto\nmodel: opus\n---\n');
+  const l = agentes.listar(raiz);
+  assert.deepStrictEqual(l.agentes.map((a) => [a.nome, a.effort]), [['busca', 'low'], ['solto', null]]);
 });
 
 test('agentes: esforco fora de low|medium|high|xhigh|max e RECUSADO, dizendo o aceito', (t) => {

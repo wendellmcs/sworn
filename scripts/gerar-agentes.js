@@ -47,7 +47,7 @@ if (process.argv.indexOf('--fatias') !== -1) {
   process.stdout.write(JSON.stringify({
     degraus: lista.map(function (d) { return d.agente; }),
     fatias: nomes,
-    observacao: 'nome, apelido e escalaPara saem do projeto.json; as outras fatias sao por agente'
+    observacao: 'nome, apelido e escalaPara saem do projeto.json, e o esforco tambem quando o degrau o tem; as outras fatias sao por agente'
   }, null, 2) + '\n');
   process.exit(0);
 }
@@ -70,12 +70,15 @@ for (let i = 0; i < lista.length; i++) {
   const degrau = lista[i];
   // nome, apelido e escalaPara vem do projeto.json e NAO do arquivo de respostas:
   // os dois primeiros sao a resposta que a entrevista ja validou; o terceiro e a
-  // ordem da escada, e nao se reescreve aqui.
+  // ordem da escada, e nao se reescreve aqui. O esforco (D678 T1) segue o apelido
+  // quando o degrau o tem; sem ele, vale o do arquivo. O normalizar (linha 24) ja
+  // tirou o esforco vazio ou nulo, e o validarFatias abaixo recusa o fora da lista.
   const valores = Object.assign({}, respostas[degrau.agente] || {}, {
     nome: degrau.agente,
     apelido: degrau.apelido,
     escalaPara: agentes.escalaPara(lista, i)
   });
+  if (degrau.esforco !== undefined) valores.esforco = degrau.esforco;
   // Quem digita 8 em maxTurns nao errou: numero no JSON vira texto antes de preencher.
   for (const k of Object.keys(valores)) {
     if (typeof valores[k] === 'number') valores[k] = String(valores[k]);

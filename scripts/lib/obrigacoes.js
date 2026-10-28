@@ -408,8 +408,8 @@ function conferirResultado(linhas, resultado) {
     // L3 (A3-20): a exigencia do comentario acima, que o codigo nao cobrava - FORA cita a decisao pelo numero: D82,
     // D 82, D-82, D.82, D#82, d82 colado, ou "decisao"/"decisoes" (com ou sem til) seguida de numero, "numero", "nr."
     // ou "n" antes dele. Prosa com numero ("a decisao de 5 minutos", "tela d 5", "d3.js") nao cita.
-    // atalho: D-1 passa como citacao. limite: o regex nao sabe se a decisao existe. trocar quando: o FORA puder
-    // conferir o numero contra o registro de decisoes do projeto.
+    // atalho: D-1 passa como citacao. limite: o regex nao sabe se a decisao existe.
+    // trocar quando: o FORA puder conferir o numero contra o registro de decisoes do projeto.
     if (mec === 'FORA' && !citaDecisao(prova)) {
       r.invalidez.push('linha "' + l.id + '" diz FORA sem citar a decisao que a pos fora do plugin: cite a decisao ' +
         'pelo numero (a letra D seguida do numero dela) e diga o que ela decidiu');

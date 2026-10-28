@@ -112,6 +112,17 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "SubagentHandback",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/escalar.js"],
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SubagentStart": [
@@ -121,6 +132,12 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/abrir-subagente.js"],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/escalar.js"],
             "timeout": 10
           }
         ]
@@ -134,6 +151,16 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/gravar-veredito.js"],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/escalar.js"],
             "timeout": 10
           }
         ]

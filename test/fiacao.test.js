@@ -60,7 +60,10 @@ test('fiacao: auditar.js enxerga uma skill real e devolve exatamente as chaves d
     // nova ou sumida passava calada. Agora e o conjunto exato.
     assert.deepStrictEqual(Object.keys(saida).sort(),
       // D615 (L10): doPlugin, o cruzamento das skills do projeto com as do plugin.
-      ['contradicoes', 'delegaveis', 'doPlugin', 'foraDaRubrica', 'injetado', 'memoria', 'peso', 'regras', 'skills', 'sobreposicoes'],
+      // D674 (item 15): idadeDasRegras e memorias, a idade de cada regra e de cada memoria.
+      // D706 (escada T5): efetivo, o modelo e o esforco que os subagentes de fato usaram.
+      ['contradicoes', 'delegaveis', 'doPlugin', 'efetivo', 'foraDaRubrica', 'idadeDasRegras', 'injetado', 'memoria', 'memorias',
+        'peso', 'regras', 'skills', 'sobreposicoes'],
       'as chaves do relatorio mudaram: ' + Object.keys(saida).join(', '));
     // lerSkills() achou a skill, e instrucoes.contar() contou os itens dela.
     assert.deepStrictEqual(saida.skills, ['zelador'], r.stdout);
@@ -122,6 +125,30 @@ test('fiacao: portao-agente nega o agente do topo em escopo so de marcha rapida 
     const s = lerSessao(dir, 'fa2');
     assert.strictEqual(s.contadores.agente_caro_em_marcha_rapida, 1, JSON.stringify(s));
     assert.strictEqual(s.contadores.agentes_despachados, 1, 'conta o despacho tambem quando nega');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('fiacao: portao-agente nega o degrau chamado com model fora da tabela e conta no balde proprio (D678 T2)', () => {
+  const dir = temp('agente-tabela');
+  try {
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), JSON.stringify({
+      marchaPadrao: 'padrao',
+      agentes: { degraus: [{ agente: 'tarefas-simples', apelido: 'haiku', esforco: 'low' },
+        { agente: 'desenvolvedor', apelido: 'sonnet', esforco: 'medium' }] }
+    }));
+    const r = rodar('portao-agente.js', dir, { session_id: 'fa10', cwd: dir, tool_name: 'Agent',
+      tool_input: { subagent_type: 'desenvolvedor', model: 'opus', prompt: 'p' } });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(/"permissionDecision"\s*:\s*"deny"/.test(r.stdout), r.stdout);
+    assert.ok(/chamada fora da tabela da escada/.test(r.stdout), r.stdout);
+    const s = lerSessao(dir, 'fa10');
+    assert.strictEqual(s.contadores.chamada_fora_da_tabela, 1, JSON.stringify(s));
+    assert.strictEqual(s.contadores.agentes_despachados, 1, 'conta o despacho tambem quando nega');
+
+    const certo = rodar('portao-agente.js', dir, { session_id: 'fa11', cwd: dir, tool_name: 'Agent',
+      tool_input: { subagent_type: 'desenvolvedor', model: 'sonnet', effort: 'medium', prompt: 'p' } });
+    assert.strictEqual(certo.stdout, '', 'a chamada como a tabela passa: ' + certo.stdout);
+    assert.strictEqual(lerSessao(dir, 'fa11').contadores.chamada_fora_da_tabela, undefined);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -221,6 +248,36 @@ test('fiacao: toda skill do plugin tem frontmatter valido (R-T15-01, R-T22-05)',
     assert.ok(mDesc, nome + ': frontmatter sem campo description');
     assert.ok(mDesc[1].trim().length > 0, nome + ': description vazia');
   }
+});
+
+// Colheita 10-20, item 16: o mesmo para os agentes do plugin. `apelidos-vivos.test.js` le agents/*.md, mas deixa de
+// fora o arquivo sem frontmatter - um agente quebrado sumia calado.
+test('fiacao: todo agente do plugin tem frontmatter com name igual ao arquivo e description', () => {
+  const agentesLib = require('../scripts/lib/agentes.js');
+  const dirAgentes = path.join(RAIZ, 'agents');
+  const arquivos = fs.readdirSync(dirAgentes).filter(function (n) { return n.endsWith('.md'); });
+  assert.ok(arquivos.length >= 1, 'o plugin tem de ter pelo menos um agente');
+
+  for (const arquivo of arquivos) {
+    const f = agentesLib.frontmatter(fs.readFileSync(path.join(dirAgentes, arquivo), 'utf8'));
+    assert.ok(f.ok, arquivo + ': sem frontmatter delimitado por ---');
+    assert.strictEqual(f.campos.name, arquivo.slice(0, -3), arquivo + ': o name do frontmatter nao bate com o arquivo');
+    assert.ok(f.campos.description, arquivo + ': frontmatter sem description');
+  }
+});
+
+// Colheita 10-20, item 16: script novo sem teste reprova sozinho. Parte deles nao tem teste de mesmo nome, porque e
+// testada pela lib ou pelo gancho (`portao-destrutivo.js` em destrutivo.test.js), entao a prova e o nome do script
+// citado em algum test/*.test.js (require, spawn ou `rodar`).
+// atalho: citar o nome. limite: um comentario que cita o nome conta como teste.
+// trocar quando: um script passar so por citacao em comentario.
+test('fiacao: todo scripts/*.js e citado por algum teste', () => {
+  const dirTeste = path.join(RAIZ, 'test');
+  const testes = fs.readdirSync(dirTeste).filter(function (n) { return n.endsWith('.test.js'); })
+    .map(function (n) { return fs.readFileSync(path.join(dirTeste, n), 'utf8'); }).join('\n');
+  const semTeste = fs.readdirSync(path.join(RAIZ, 'scripts'))
+    .filter(function (n) { return n.endsWith('.js') && testes.indexOf(n) === -1; });
+  assert.deepStrictEqual(semTeste, [], 'script sem nenhum teste que o cite: ' + semTeste.join(', '));
 });
 
 // ------------------------- A3: os dois que a medicao da D130 achou ABERTOS
@@ -2031,10 +2088,11 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
     ],
     PostToolUse: [
       ['Write|Edit|Bash|PowerShell|Grep|Glob|Read|AskUserQuestion|Skill', 'marcar-trabalho.js 10'],
-      ['SubagentHandback', 'gravar-veredito.js 10']
+      ['SubagentHandback', 'gravar-veredito.js 10'],
+      ['SubagentHandback', 'escalar.js 10']
     ],
-    SubagentStart: [['', 'abrir-subagente.js 10']],
-    SubagentStop: [['^sworn:inspector$', 'gravar-veredito.js 10']],
+    SubagentStart: [['', 'abrir-subagente.js 10', 'escalar.js 10']],
+    SubagentStop: [['^sworn:inspector$', 'gravar-veredito.js 10'], ['', 'escalar.js 10']],
     Stop: [['', 'portao-fecho.js 10']],
     SessionEnd: [['', 'fim-sessao.js 10']]
   });

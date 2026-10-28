@@ -55,7 +55,8 @@ const LISTAS_LIDAS = ['comandosLiberados', 'comandosBloqueados', 'intocaveis'];
 // D554 (0.9.0): `menosCodigo` liga por padrao (so `=== false` desliga, enxuto.js).
 // D611 (T3b): `oferecerRadar` liga por padrao (so `=== false` desliga, radar-oferta.js).
 // D655: `portaoRevisao` liga por padrao (so `=== false` desliga, portao-fecho.js), como o portaoReferencia.
-const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura'];
+// D674 (item 10): `pedidos` liga por padrao (so `=== false` desliga, pedidos.js).
+const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura', 'pedidos'];
 
 // Padrao que NUNCA casa um alvo relativo: letra de unidade (C: ou C:\) ou esquema
 // (file://). O alvo que chega aos portoes e sempre relativo a raiz do projeto

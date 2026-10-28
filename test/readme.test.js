@@ -18,7 +18,10 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+
+const { MANUAL } = require('../scripts/lib/ordens.js');
 
 const RAIZ = path.join(__dirname, '..');
 const README = fs.readFileSync(path.join(RAIZ, 'GUIA.md'), 'utf8');
@@ -28,10 +31,6 @@ const NUMEROS = {
   'cinco': 5, 'seis': 6, 'sete': 7, 'oito': 8, 'nove': 9, 'dez': 10, 'onze': 11,
   'doze': 12, 'treze': 13, 'quatorze': 14, 'catorze': 14, 'quinze': 15,
   'dezesseis': 16, 'dezessete': 17, 'dezoito': 18, 'dezenove': 19, 'vinte': 20
-};
-
-const ORDINAIS = {
-  'sexta': 6, 'sétima': 7, 'setima': 7, 'oitava': 8, 'nona': 9, 'décima': 10, 'decima': 10
 };
 
 function porExtenso(palavra) {
@@ -105,16 +104,40 @@ test('readme: o numero de limites irredutiveis bate com a lista', () => {
 
 // ── o que o README promete existe no disco ───────────────────────────────
 
+/** O frontmatter do SKILL.md da pasta `nome` de `dir`; sem ele, a falha nomeia a pasta (nao o ENOENT cru). */
+function frenteDaSkill(dir, nome) {
+  let texto;
+  try {
+    texto = fs.readFileSync(path.join(dir, nome, 'SKILL.md'), 'utf8');
+  } catch (e) {
+    assert.fail('skills/' + nome + '/ sem SKILL.md legivel (' + e.code + '): crie o SKILL.md ou apague a pasta');
+  }
+  return texto.replace(/\r\n/g, '\n').split('\n---\n')[0];
+}
+
 test('readme: toda skill do disco aparece no README', () => {
   const doDisco = fs.readdirSync(path.join(RAIZ, 'skills'), { withFileTypes: true })
     .filter((e) => e.isDirectory()).map((e) => e.name).sort();
   const faltando = doDisco.filter((n) => README.indexOf(n) === -1);
   assert.deepStrictEqual(faltando, [],
     'skill instalada e nao documentada: quem instala paga o contexto dela sem saber o que e');
-  const ord = README.match(/A (\S+) skill instalada/);
+  // D678 T4: a frase conta o total e as que nao sao comando (o manual e as que a doc tira do menu).
+  const ord = README.match(/(\S+) das (\S+) skills instaladas \*\*não são comando\*\*/);
   assert.ok(ord, 'sumiu a frase que conta as skills instaladas');
-  assert.strictEqual(ORDINAIS[ord[1].toLowerCase()], doDisco.length,
-    'a frase diz ' + ord[1] + ' skill e o disco tem ' + doDisco.length);
+  assert.strictEqual(porExtenso(ord[2]), doDisco.length,
+    'a frase diz ' + ord[2] + ' skills e o disco tem ' + doDisco.length);
+  const naoComando = doDisco.filter((n) => MANUAL.test(n) ||
+    /^user-invocable:\s*false\s*$/m.test(frenteDaSkill(path.join(RAIZ, 'skills'), n)));
+  assert.strictEqual(porExtenso(ord[1]), naoComando.length,
+    'a frase diz ' + ord[1] + ' que nao sao comando e o disco tem ' + naoComando.length);
+});
+
+test('readme: pasta de skill sem SKILL.md reprova com o nome da pasta, nao com ENOENT cru', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn readme-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'sem-arquivo'));
+  assert.throws(() => frenteDaSkill(dir, 'sem-arquivo'),
+    (e) => e.code !== 'ENOENT' && /skills\/sem-arquivo\//.test(e.message));
 });
 
 test('readme: todo comando citado no README existe como skill ou workflow no disco', () => {

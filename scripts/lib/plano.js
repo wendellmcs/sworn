@@ -850,7 +850,32 @@ function linhaDoPlanoDaSessao(cwd, frente) {
   } catch (e) { return ''; }
 }
 
+// Colheita 10-20, item 14 (D674): nota viva. O painel le as caixas so no fim; a troca de chat no meio da tarefa perdia o
+// que ja estava feito. Com plano na sessao, 5 turnos com trabalho sem o arquivo do plano mudar pedem a nota nele.
+const TURNOS_SEM_NOTA = 5;
+
+/**
+ * `anterior` = a marca no estado ({ mtime, turnos }), `mtime` = o do plano agora, `turnos` = turnosComTrabalho. Devolve
+ * { marca, avisar }. Marca ausente, torta, de outro mtime ou com mais turnos que agora: recomeca, sem avisar. Avisou: a
+ * conta recomeca, e o proximo aviso so sai depois de mais 5.
+ */
+function notaViva(anterior, mtime, turnos) {
+  const t = Number.isFinite(turnos) ? turnos : 0;
+  const nova = { marca: { mtime: mtime, turnos: t }, avisar: false };
+  if (!anterior || typeof anterior !== 'object' || anterior.mtime !== mtime || !Number.isFinite(anterior.turnos) ||
+      anterior.turnos > t) return nova;
+  if (t - anterior.turnos >= TURNOS_SEM_NOTA) return { marca: nova.marca, avisar: true };
+  return { marca: anterior, avisar: false };
+}
+
+function motivoNotaViva(arquivo, turnos) {
+  return 'sworn: nota viva - ' + turnos + ' turnos com trabalho e o plano ' + escopoLib.ascii(String(arquivo)) +
+    ' nao mudou. Grave nele o que ja foi feito (a caixa da tarefa ou uma linha de progresso): a troca de chat no meio ' +
+    'da tarefa nao perde o feito.';
+}
+
 module.exports = {
+  notaViva, motivoNotaViva, TURNOS_SEM_NOTA,
   ATIVO, RE_TAREFA, RE_CAIXA, parseTarefas, parseItens, lerAtivo, abrir, donoOutro, linhaDoPlano, linhaDoPlanoDaSessao,
   proximaDecisao, alegaEtapaConcluida, motivoSubitemAberto, painelTexto, painelIlegivel,
   planoDoObjetivo, planosDoObjetivo, planosCitados, frentesComPlano, acharPlanoDaFrente, painelVariasFrentes,

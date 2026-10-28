@@ -48,7 +48,7 @@ io.blindar(function () {
     } catch (err) { aviso = null; }
     if (aviso) return io.segurarMensagem(aviso);
     // A1 (D426): a chave sugerirAprender (padrao ligado) vem do projeto.json; ilegivel ou ausente = ligado.
-    // O projeto.json so e lido quando algum detector bateu (como antes: prompt comum nao toca o disco).
+    // O projeto.json e lido aqui so quando algum detector bateu; a lista dos pedidos (abaixo) o le nos outros.
     const candidataCorrecao = correcao.pareceCorrecao(e.prompt);
     const candidataOferta = radarOferta.parecePedidoDeMelhoria(e.prompt);
     const projetoDoTurno = candidataCorrecao || candidataOferta
@@ -63,10 +63,12 @@ io.blindar(function () {
     } catch (err) { ofertar = false; }
     let oferecer = false;
     let sugerir = false;
+    let frenteDoTurno = null;
     // A5-05: o estado que nao grava nao cala a resposta a pergunta sobre o contexto; sem a espera gravada, nada de
     // sugestao (sairia a cada prompt).
     try {
       estado.alterar(e.session_id, function (s) {
+        frenteDoTurno = s.frente || null;
         delete s.trabalhoReal;
         delete s.bloqueouNesteTurno;
         delete s.buscouNesteTurno;
@@ -99,14 +101,46 @@ io.blindar(function () {
         return s;
       });
     } catch (err) { sugerir = false; oferecer = false; }
+    // Item 10 (D674): o pedido que passou entra na lista numerada da frente (pedidos.js); o segurado pela volta, nao (ele
+    // volta a ser mandado). Le o projeto.json a cada prompt, por causa da chave. Falha de disco cala: o turno segue.
+    try {
+      const pedidos = require('./lib/pedidos.js');
+      const raizDoTurno = config.raizDoProjeto(e.cwd || process.cwd());
+      if (pedidos.ligada(projetoDoTurno || config.carregarProjeto(raizDoTurno))) {
+        pedidos.registrar(raizDoTurno, frenteDoTurno, e.prompt, Date.now());
+      }
+    } catch (err) { /* sem a linha da lista; o turno segue */ }
+    // Item 14 (D674): com plano na sessao (o da frente vinculada ou o do escopo.md; o de outra frente, nao), 5 turnos com
+    // trabalho sem o plano mudar pedem a nota viva (plano.notaViva). Falha cala: sem o aviso.
+    let notaAviso = null;
+    try {
+      const planoLib = require('./lib/plano.js');
+      const raizDoTurno = config.raizDoProjeto(e.cwd || process.cwd());
+      const achado = planoLib.acharPlanoDaFrente(raizDoTurno, frenteDoTurno);
+      if (achado && achado.arquivo && !achado.semVinculo) {
+        const mtime = require('node:fs').statSync(planoLib.caminhoDoPlano(raizDoTurno, achado.arquivo)).mtimeMs;
+        let r = null;
+        let semNota = 0;
+        estado.alterar(e.session_id, function (s) {
+          const antes = s.notaViva;
+          r = planoLib.notaViva(antes, mtime, s.turnosComTrabalho);
+          if (r.avisar) semNota = r.marca.turnos - antes.turnos;
+          s.notaViva = r.marca;
+          return s;
+        });
+        if (r && r.avisar) notaAviso = planoLib.motivoNotaViva(achado.arquivo, semNota);
+      }
+    } catch (err) { notaAviso = null; }
     // T10-4 (D357): quem pergunta se o contexto/memoria esta bom ja tem a resposta - dispara toda
     // vez que a pergunta vier (nao e "uma vez por sessao"). Sem projeto.json tambem.
     // A1: as duas podem valer no mesmo prompt ("o contexto esta bom? eu ja te disse isso"): um so
     // additionalContext, com a saude primeiro (e a que manda agir ja).
     const avisos = [];
-    if (saude.perguntaSobreSaude(e.prompt)) avisos.push(saude.INSTRUCAO_DA_PERGUNTA);
+    // D704: com agente de fundo rodando na sessao, a resposta manda esperar antes do handoff.
+    if (saude.perguntaSobreSaude(e.prompt)) avisos.push(saude.instrucaoDaPergunta(saude.agentesRodando(e.transcript_path, Date.now())));
     if (sugerir) avisos.push(correcao.INSTRUCAO_DA_CORRECAO);
     if (oferecer) avisos.push(radarOferta.INSTRUCAO_DA_OFERTA);
+    if (notaAviso) avisos.push(notaAviso);
     if (avisos.length) {
       return io.permitir({ hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit', additionalContext: avisos.join('\n\n') } });

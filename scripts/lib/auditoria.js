@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const ambiente = require('./ambiente.js');
+const efetivoLib = require('./efetivo.js');
 const injetado = require('./injetado.js');
 const instrucoes = require('./instrucoes.js');
 const regraLib = require('./regra.js');
@@ -218,6 +219,74 @@ function lerRegras(cwd) {
   }
 }
 
+// Colheita 10-20, item 15 (D674): a instrucao engorda sem ninguem ver. Cada memoria (os .md ao lado do MEMORY.md) e
+// cada regra ganham idade; fria = mais de 90 dias sem mudar. Sem IA: mtime, git blame e o mesmo cruzamento de termos das
+// skills. Aposentar e proposta da skill (mv, com o sim do dono); aqui nada se move.
+const DIAS_FRIA = 90;
+const DIA_MS = 86400000;
+
+function dias(agora, ms) { return Math.max(0, Math.floor((agora - ms) / DIA_MS)); }
+
+function idadeDasMemorias(caminho, agora) {
+  if (typeof caminho !== 'string' || !caminho) {
+    return naoMedida('sem-caminho', 'nao medidas: nenhum caminho do MEMORY.md foi passado (argumento --memoria <caminho>)');
+  }
+  // Pasta no lugar do MEMORY.md: o dirname mediria a pasta de cima, que nao e a das memorias.
+  let ehPasta = false;
+  try { ehPasta = fs.statSync(caminho).isDirectory(); } catch (e) { /* nao existe: a pasta de cima ainda se mede */ }
+  if (ehPasta) return naoMedida('EISDIR', 'nao medidas: ' + dicaDeLeitura('EISDIR'), caminho);
+  const pasta = path.dirname(caminho);
+  let nomes;
+  try { nomes = fs.readdirSync(pasta, { withFileTypes: true }); } catch (e) {
+    return naoMedida((e && e.code) || 'ERRO', 'nao medidas: nao consegui ler a pasta ' + pasta + ' (' + textoLib.causaDoErro(e) +
+      '); confira o caminho passado em --memoria e a permissao de leitura da pasta', pasta);
+  }
+  const lista = [];
+  const descricoes = [];
+  const ilegiveis = [];
+  for (const ent of nomes) {
+    if (!ent.isFile() || !/\.md$/i.test(ent.name) || ent.name.toLowerCase() === path.basename(caminho).toLowerCase()) continue;
+    const f = path.join(pasta, ent.name);
+    let d;
+    try { d = dias(agora, fs.statSync(f).mtimeMs); } catch (e) {
+      if (!e || e.code !== 'ENOENT') ilegiveis.push({ arquivo: ent.name, causa: (e && e.code) || 'ERRO' });
+      continue; // ENOENT: sumiu no meio, fica de fora
+    }
+    lista.push({ arquivo: ent.name, dias: d, fria: d > DIAS_FRIA });
+    try {
+      const m = fs.readFileSync(f, 'utf8').match(/^description:\s*(.+)$/im);
+      descricoes.push({ nome: ent.name, descricao: m ? m[1] : '' });
+    } catch (e) { ilegiveis.push({ arquivo: ent.name, causa: (e && e.code) || 'ERRO' }); }
+  }
+  lista.sort(function (a, b) { return a.arquivo < b.arquivo ? -1 : 1; });
+  descricoes.sort(function (a, b) { return a.nome < b.nome ? -1 : 1; });
+  return {
+    medida: true, pasta: pasta, total: lista.length, limiteDias: DIAS_FRIA, lista: lista,
+    frias: lista.filter(function (x) { return x.fria; }).map(function (x) { return x.arquivo; }),
+    duplicadas: sobreposicoes(descricoes), ilegiveis: ilegiveis
+  };
+}
+
+/** Dias desde a ultima mudanca de cada regra, pelo git blame do regras.md; fora do git (ou sem resposta), null = nao sei. */
+function idadeDasRegras(cwd, regras, agora) {
+  const saida = require('./git.js').correr(cwd, ['blame', '--line-porcelain', '--', '.claude/sworn/regras.md'], { timeout: 3000 });
+  const quando = {};
+  if (saida !== null) {
+    let atual = 0;
+    for (const l of saida.split('\n')) {
+      const h = /^[0-9a-f]{40} \d+ (\d+)/.exec(l);
+      if (h) { atual = Number(h[1]); continue; }
+      const t = /^author-time (\d+)$/.exec(l);
+      if (t && atual) quando[atual] = Number(t[1]) * 1000;
+    }
+  }
+  return (regras || []).map(function (r) {
+    const ms = quando[r.linha];
+    const d = ms === undefined ? null : dias(agora, ms);
+    return { linha: r.linha, gatilho: r.gatilho, dias: d, fria: d !== null && d > DIAS_FRIA };
+  });
+}
+
 // `opcoes.memoria`: caminho do MEMORY.md, passado pela skill. A medida sai a parte, na chave
 // `memoria`; o teto de instrucao (`peso`) nao a soma (D288). Valor que nao e texto (so pela API: o
 // auditar.js ja filtra) nao vira caminho: vira "nao medida" com a causa `caminho-invalido`.
@@ -229,6 +298,7 @@ function auditar(cwd, projeto, opcoes) {
     : medirMemoria(pedida ? path.resolve(cwd, pedida) : null);
   const lidas = lerRegras(cwd);
   const regras = lidas.lista;
+  const agora = opcoes && Number.isFinite(opcoes.agora) ? opcoes.agora : Date.now();
 
   const foraDaRubrica = [];
   for (const s of skills) {
@@ -255,14 +325,26 @@ function auditar(cwd, projeto, opcoes) {
     })(),
     contradicoes: contradicoes(regras),
     regras: lidas.estado,
+    idadeDasRegras: idadeDasRegras(cwd, regras, agora),
     foraDaRubrica: foraDaRubrica,
     delegaveis: ambiente.detectar(cwd).delegaveis,
     memoria: memoria,
+    // MEMORY.md que nao se mede: as memorias saem com a mesma causa, nunca com outra historia para a mesma entrada.
+    memorias: memoria.medida === false
+      ? naoMedida(memoria.causa, memoria.motivo.replace(/^nao medida:/, 'nao medidas:'), memoria.caminho)
+      : idadeDasMemorias(path.resolve(cwd, pedida), agora),
     // plano 0.9.1 (D568): o injetado pelos ganchos, a parte do peso como a memoria; quem acha a transcricao e o auditar.js
-    injetado: injetado.medir(opcoes ? opcoes.transcricao : null)
+    injetado: injetado.medir(opcoes ? opcoes.transcricao : null),
+    // D678 T5: o modelo e o esforco que responderam, da pasta da mesma transcricao, contra agentes.degraus. So com
+    // `opcoes.efetivo` (o auditar.js): le todas as transcricoes de subagente da janela (23,4 s em 4.732 arquivos num
+    // projeto real), e a rodada automatica roda no SessionStart, que tem 15 s (D706).
+    efetivo: opcoes && opcoes.efetivo === true
+      ? efetivoLib.daAuditoria(opcoes.transcricao, projeto, agora)
+      : { medido: false, motivo: 'nao medido: so o /sworn:audit mede (le as transcricoes de subagente da janela)' }
   };
 }
 
 module.exports = {
-  VAZIAS, CARGA_LINHAS, CARGA_BYTES, normalizar, termos, sobreposicoes, contradicoes, medirMemoria, auditar
+  VAZIAS, CARGA_LINHAS, CARGA_BYTES, normalizar, termos, sobreposicoes, contradicoes, medirMemoria, auditar,
+  DIAS_FRIA, idadeDasMemorias, idadeDasRegras
 };

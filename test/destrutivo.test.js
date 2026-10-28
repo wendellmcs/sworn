@@ -2972,6 +2972,29 @@ test('D420/TS-08: escrita direta de disco barra com o motivo certo; citar o nome
   assert.strictEqual(destrutivo.classificar('echo dd').destrutivo, false);
 });
 
+// Colheita 10-20, item 18: `git commit --no-verify` (`-n`) e `--no-gpg-sign` pulavam a checagem do projeto em silencio.
+test('item 18: commit sem gancho ou sem assinatura barra; mensagem, argumento e ultima opcao passam', () => {
+  for (const cmd of [
+    'git commit --no-verify -m "x"', 'git commit -n -m x', 'git commit -anm x', 'git commit --no-veri -m x',
+    'git commit --no-gpg-sign -m x', 'git -C "a b" commit -n', 'git commit arquivo.txt -n',
+    'cd repo && git commit -n -m x', 'git commit -S --no-gpg-sign', 'git commit "--no-verify" -m x',
+    'git commit -nm"msg com espaco"'
+  ]) {
+    const r = destrutivo.classificar(cmd);
+    assert.strictEqual(r.destrutivo, true, 'devia barrar: ' + cmd);
+    assert.strictEqual(r.motivo, 'git commit --no-verify ou --no-gpg-sign pula a checagem do projeto', cmd);
+  }
+  for (const cmd of [
+    'git commit -m "explica o --no-verify"', 'git commit -mnovo', 'git commit -m -n', 'git commit -n --verify -m x',
+    'git commit --no-gpg-sign -S -m x', 'git commit --no-gpg-sign --gpg-sign=ABC -m x', 'git commit -Snome -m x', 'git log --grep commit -n 3',
+    'git commit -m x -- -n', 'git commit -q -m x', 'git commit --message --no-verify',
+    'git commit -n --veri -m x', 'git commit --no-verify --verif -m x', 'git commit --no-gpg-sign --gpg -m x',
+    'git commit --no-gpg-sign --gp=ABC -m x'
+  ]) {
+    assert.strictEqual(destrutivo.classificar(cmd).destrutivo, false, 'devia passar: ' + cmd);
+  }
+});
+
 // D420/SH-02 e TS-06: o portao e chamado como processo, como o gancho real.
 function chamarPortaoDestrutivo(comando, tmpEstado, projetoJson, ferramenta) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-dest-cwd-'));
