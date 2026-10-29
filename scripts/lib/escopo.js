@@ -18,6 +18,9 @@ function nomeSeguro(frente) {
   return String(frente).replace(/[^a-zA-Z0-9_-]/g, '-');
 }
 
+// F2-18: regua horizontal do markdown (`---`, `***`, `___`, com ou sem marcador e espacos) separa trechos; nao e caminho.
+const REGUA = /^([-*_])(?:\s*\1){2,}$/;
+
 /**
  * D244/defeito 2: o item de lista e o CAMINHO, e o resto da linha e anotacao. Antes a linha
  * inteira virava padrao, e `src/a.js (motivo)` nunca casava arquivo nenhum. Caminho pode ter
@@ -25,9 +28,6 @@ function nomeSeguro(frente) {
  * entre crases vale o que esta entre elas; sem crase, corta em espaco seguido de `(`,
  * travessao, `--`, ` - ` ou `#`.
  */
-// F2-18: regua horizontal do markdown (`---`, `***`, `___`, com ou sem marcador e espacos) separa trechos; nao e caminho.
-const REGUA = /^([-*_])(?:\s*\1){2,}$/;
-
 function caminhoDoItem(t) {
   if (REGUA.test(t)) return '';
   // 0.3.3, item 23: marcador sozinho na linha (`-`, `*`, `+`) nao e item; sem o `$`, o marcador sem
@@ -189,77 +189,72 @@ function avisoDeAcento(original, fim) {
   return fim ? ['', linha] : [linha, ''];
 }
 
+// A2-23: o defeito achado num arquivo fora do escopo vai ao usuario, nao vira edicao.
+const NAO_EDITE = '  1. nao edite este arquivo; se achou um defeito nele, conte ao usuario no fecho do turno, sem corrigir;';
+
+// A2-20: o texto que sai no aviso passa por ascii() em variavel propria; o parametro fica com o valor recebido.
 function motivoSemEscopo(alvo, marcha, arquivo) {
-  const original = alvo;
-  alvo = ascii(alvo);
-  marcha = ascii(marcha);
-  arquivo = arquivo || ARQUIVO;
+  const alvoAscii = ascii(alvo);
+  const escopoMd = arquivo || ARQUIVO;
   return [
     TRAVA_ESCOPO,
     '',
-    'O arquivo ' + alvo + ' esta em marcha ' + marcha + ' (' + O_QUE_E_MARCHA + '), e nao ha escopo declarado.',
+    'O arquivo ' + alvoAscii + ' esta em marcha ' + ascii(marcha) + ' (' + O_QUE_E_MARCHA + '), e nao ha escopo declarado.',
     '',
-    'Antes de editar, escreva ' + arquivo + ' nesta forma:',
+    'Antes de editar, escreva ' + escopoMd + ' nesta forma:',
     '',
     '  # Escopo',
     '  **Objetivo:** <uma linha sobre o que esta tarefa resolve>',
     '  ## Dentro',
     // A2-04: entre crases, o parser le o caminho inteiro (sem crase, corta em ` (`, ` - `, ` #`).
-    '  - `' + alvo + '`',
+    '  - `' + alvoAscii + '`',
     '  ## Fora de escopo',
-    '  - <o que voce NAO vai mexer, mesmo tendo vontade>',
+    '  - <o que esta tarefa NAO vai mexer>',
     ''
-  ].concat(avisoDeAcento(original), [
+  ].concat(avisoDeAcento(alvo), [
     'A secao "Dentro" libera: o que nao estiver listado la e negado.',
     'A secao "Fora de escopo" tambem bloqueia: o que voce declarou que NAO vai tocar e negado,',
     'mesmo que case um padrao de "Dentro". Pode anotar o motivo depois do caminho, entre parenteses.',
-    'Qualidade maxima se aplica ao que foi pedido, jamais a ampliacao do pedido.'
+    'Depois, grave o escopo e repita a edicao.'
   ]).join('\n');
 }
 
 function motivoFora(alvo, marcha, esc, arquivo) {
-  const original = alvo;
-  alvo = ascii(alvo);
-  marcha = ascii(marcha);
-  arquivo = arquivo || ARQUIVO;
   const lista = (esc && esc.dentro.length) ? esc.dentro.map(function (d) { return '  - ' + ascii(d); }).join('\n') : '  (vazio)';
   return [
     TRAVA_ESCOPO,
     '',
-    'O arquivo ' + alvo + ' (marcha ' + marcha + ': ' + O_QUE_E_MARCHA + ') NAO esta no escopo declarado em ' + arquivo + '.',
+    'O arquivo ' + ascii(alvo) + ' (marcha ' + ascii(marcha) + ': ' + O_QUE_E_MARCHA + ') NAO esta no escopo declarado em ' +
+      (arquivo || ARQUIVO) + '.',
     '',
     'Escopo atual:',
     lista,
     '',
     'Escolha uma:',
-    '  1. nao edite este arquivo - achado fora de escopo vira REGISTRO, nunca correcao;',
+    NAO_EDITE,
     '  2. se ele e mesmo parte do pedido, acrescente-o ao escopo e diga por que.',
     ''
-  ].concat(avisoDeAcento(original), ['Ampliar o escopo e contado e aparece no fecho do turno.']).join('\n');
+  ].concat(avisoDeAcento(alvo), ['Ampliar o escopo e contado e aparece no fecho do turno.']).join('\n');
 }
 
 function motivoDeclaradoFora(alvo, padrao, arquivo) {
-  alvo = ascii(alvo);
-  padrao = ascii(padrao);
-  arquivo = arquivo || ARQUIVO;
   return [
     TRAVA_ESCOPO,
     '',
-    'O arquivo ' + alvo + ' casa "' + padrao + '", que o escopo declara FORA desta tarefa.',
+    'O arquivo ' + ascii(alvo) + ' casa "' + ascii(padrao) + '", que o escopo declara FORA desta tarefa.',
     '',
     'Escolha uma:',
-    '  1. nao edite este arquivo - achado fora de escopo vira REGISTRO, nunca correcao;',
-    '  2. se a tarefa mudou, reescreva ' + arquivo + ' e diga por que.'
+    NAO_EDITE,
+    '  2. se a tarefa mudou, reescreva ' + (arquivo || ARQUIVO) + ' e diga por que.'
   ].join('\n');
 }
 
 /** Nome de frente fora da classe [a-zA-Z0-9_-]: negado sem gravar vinculo nenhum. */
 function motivoNomeDeFrente(alvo) {
-  alvo = ascii(alvo);
   return [
     TRAVA_ESCOPO,
     '',
-    'O arquivo ' + alvo + ' tem nome de frente invalido (frente = uma tarefa em andamento, com o seu arquivo de escopo).',
+    'O arquivo ' + ascii(alvo) + ' tem nome de frente invalido (frente = uma tarefa em andamento, com o seu arquivo de escopo).',
     '',
     'Nome de frente so pode ter letras sem acento, numeros, "_" e "-".',
     'Renomeie o arquivo e tente de novo.'
@@ -413,30 +408,26 @@ function blocoDeFrentes(cwd, frente) {
 }
 
 function motivoIntocavel(alvo) {
-  alvo = ascii(alvo);
   // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos.
   return [
     'sworn - arquivo intocavel: mexer nele e decisao do dono.',
     '',
     // 0.3.3, item 25: diz onde a lista mora (o nome do campo e `intocaveis`).
     'Este arquivo esta na lista "intocaveis" de .claude/sworn/projeto.json:',
-    '  - "' + alvo + '"',
+    '  - "' + ascii(alvo) + '"',
     'Nem o escopo declarado libera este caminho.',
     '',
     'Faca uma destas:',
-    '  1. siga sem mexer nele: o que ele precisar vira registro;',
-    '  2. ou leve ao dono 3 opcoes com a recomendada marcada.'
+    '  1. siga sem mexer nele; se ele precisar de mudanca, conte ao usuario no fecho do turno;',
+    '  2. ou peca ao dono que decida: 3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo.'
   ].join('\n');
 }
 
 function motivoOutraFrente(alvo, arquivo) {
-  const original = alvo;
-  alvo = ascii(alvo);
-  arquivo = arquivo || ARQUIVO;
   return [
     TRAVA_OUTRA_FRENTE,
     '',
-    'O arquivo ' + alvo + ' JA aparecia modificado no git status quando esta sessao abriu.',
+    'O arquivo ' + ascii(alvo) + ' JA aparecia modificado no git status quando esta sessao abriu.',
     'Todo arquivo modificado e nao commitado pertence a outra frente (outra tarefa em andamento neste repositorio) ate prova em contrario.',
     // 0.3.3, item 25: tom neutro; diz o que o arquivo e, sem listar o que ele nao e.
     'Trate-o como trabalho de outra tarefa em andamento: nao o altere por conta propria.',
@@ -444,8 +435,8 @@ function motivoOutraFrente(alvo, arquivo) {
     'Se precisar mesmo tocar nele, isso e decisao do dono. Depois de ele autorizar,',
     // 0.3.3, item 25: o que se conta e a ampliacao do escopo (contador escopo_ampliado, em
     // portao-escopo.js), que o portao do fecho mostra no fim do turno (portao-fecho.js).
-    'liste o caminho exato em ' + arquivo + ', na secao "## Dentro". Essa ampliacao do escopo e contada e aparece no fecho do turno.'
-  ].concat(avisoDeAcento(original, true)).join('\n');
+    'liste o caminho exato em ' + (arquivo || ARQUIVO) + ', na secao "## Dentro". Essa ampliacao do escopo e contada e aparece no fecho do turno.'
+  ].concat(avisoDeAcento(alvo, true)).join('\n');
 }
 
 module.exports = {

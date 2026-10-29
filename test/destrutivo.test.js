@@ -3054,3 +3054,26 @@ test('D420/SH-02: estado nao gravavel nao libera o comando destrutivo (o contado
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('D721 A1-06/A1-08/A1-09: o padrao que nao compila sai listado; o motivo diz o efeito; o dono e o termo so', () => {
+  const projeto = { comandosBloqueados: ['(', 'deploy-prod'] };
+  const r = destrutivo.regrasRecusadas(projeto);
+  assert.deepStrictEqual(r.map((x) => x.padrao), ['(']);
+  assert.ok(r[0].causa, JSON.stringify(r));
+  const t = destrutivo.avisoRecusadas(r);
+  assert.ok(t.includes('"("') && t.includes('comandosBloqueados'), t);
+  // o padrao enorme sai cortado em 400, como o comando no motivo
+  const enorme = destrutivo.avisoRecusadas([{ padrao: '('.repeat(1000), causa: 'x' }]).split('\n')[2];
+  assert.strictEqual(enorme, '  - "' + '('.repeat(400) + '": x');
+  // controle: o padrao valido segue barrando, e sem a lista nada e recusado
+  assert.strictEqual(destrutivo.classificar('deploy-prod agora', projeto).destrutivo, true);
+  assert.deepStrictEqual(destrutivo.regrasRecusadas({}), []);
+  assert.deepStrictEqual(destrutivo.regrasRecusadas(null), []);
+  // A1-08: o motivo do DROP diz o que apaga, sem a sigla
+  const drop = destrutivo.classificar('DROP TABLE clientes');
+  assert.strictEqual(drop.destrutivo, true);
+  assert.ok(!/DDL/.test(drop.motivo) && /apaga/.test(drop.motivo), drop.motivo);
+  // A1-09: quem confirma e o dono, com um termo so
+  const m = destrutivo.motivo('rm -rf x', { motivo: 'apaga' });
+  assert.ok(!/confirmacao humana/.test(m) && m.includes('Nenhum comando destrutivo roda sem o sim do dono.'), m);
+});

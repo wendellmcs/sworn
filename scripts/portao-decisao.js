@@ -33,7 +33,9 @@ function defeitoDaPergunta(q, n) {
   for (let i = 0; i < opcoes.length; i++) {
     const o = opcoes[i];
     if (!o || typeof o !== 'object' || typeof o.label !== 'string' || o.label.trim() === '') {
-      return 'a opcao ' + (i + 1) + ' da pergunta ' + n + ' nao tem rotulo em texto - cada opcao e { label, description }';
+      // A2-09 (D721): os campos pelo que fazem, com o nome entre parenteses.
+      return 'a opcao ' + (i + 1) + ' da pergunta ' + n + ' nao tem rotulo em texto - cada opcao e um objeto com ' +
+        'o rotulo (label) e o que ela faz (description)';
     }
   }
   const rotulos = opcoes.map(function (o) { return o.label; });
@@ -76,7 +78,8 @@ io.blindar(function () {
         'cada uma com consequencia pratica e custo.',
       // D489: pergunta de fato nao e decisao
       'Se for pergunta de fato (sintoma, dado que so o dono tem), ponha (fato) no titulo curto (header) dela.',
-      'Para desligar este portao no projeto: "portaoDecisao": false em .claude/sworn/projeto.json.'
+      'Para desligar esta checagem das perguntas ao dono no projeto: "portaoDecisao": false em ' +
+        '.claude/sworn/projeto.json.'
     ].join('\n'));
   });
 });

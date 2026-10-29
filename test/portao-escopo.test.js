@@ -678,6 +678,21 @@ test('S2/L1-8: contador gravavel - negacao e liberacao saem sem rastro de falha 
   });
 });
 
+test('A2-04/05 (D721): o aviso de estado que nao grava diz a pasta e o passo, sem jargao', () => {
+  comEstadoIngravavel((tmp) => {
+    const dir = montarProjeto();
+    try {
+      const pasta = path.join(tmp, 'sworn');
+      const vinculo = escreverFrente(dir, tmp).json.systemMessage;
+      assert.ok(vinculo.includes(pasta) && /edite de novo o arquivo da frente/.test(vinculo), vinculo);
+      const motivo = rodar(entrada(dir, 'segredos/k.txt'), tmp).json.hookSpecificOutput.permissionDecisionReason;
+      const rastro = motivo.slice(motivo.indexOf('\n\n'));
+      assert.ok(rastro.includes(pasta) && /libere a escrita/.test(rastro), motivo);
+      for (const t of [vinculo, rastro]) assert.doesNotMatch(t, /estado da sessao|ocorrencia|portao/, t);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 // ---------------------------------------------------- D420/PT-04: projeto.json ilegivel
 
 const JSON_COM_VIRGULA_SOBRANDO = '{"marchaPadrao":"padrao","intocaveis":["segredos/**"],}';
@@ -706,6 +721,34 @@ test('D420/PT-04: projeto.json que nao e objeto tambem e ilegivel, e ausente con
       escrever(dir, '.claude/sworn/projeto.json', '5');
       const r = rodar(entrada(dir, 'src/a.js'), tmp);
       assert.match(r.json.systemMessage, /existe mas nao se le/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+test('A2-03 (D721): o aviso de projeto.json ilegivel traz o passo antes do init, com o caminho do validar.js', () => {
+  comTmp((tmp) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg6-'));
+    try {
+      escrever(dir, '.claude/sworn/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
+      const m = rodar(entrada(dir, 'src/a.js'), tmp).json.systemMessage;
+      const validar = path.join(RAIZ, 'scripts', 'validar.js');
+      assert.ok(m.includes('node "' + validar + '"'), m);
+      assert.ok(m.indexOf(validar) < m.indexOf('/sworn:init'), 'o passo vem antes do init: ' + m);
+      assert.ok(m.replace(validar, '').length <= 300, m.length + ' caracteres: ' + m);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// A2-77 (D721): o init preserva so o que le do projeto.json atual (skills/init/SKILL.md:63-73); com o arquivo
+// ilegivel, o risco e perder o ajuste a mao, nao refazer tudo.
+test('A2-77 (D721): o aviso diz o que o init pode perder, sem prometer refazer do zero', () => {
+  comTmp((tmp) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg7-'));
+    try {
+      escrever(dir, '.claude/sworn/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
+      const m = rodar(entrada(dir, 'src/a.js'), tmp).json.systemMessage;
+      assert.ok(!/do zero/.test(m), m);
+      assert.match(m, /\/sworn:init de novo tambem resolve, mas pode perder o que voce ajustou a mao nesse arquivo\./);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
@@ -804,7 +847,7 @@ test('TS-02 (lote 3, D423): trava 8 - Edit que SOBE teto ou DESCE piso nega; mes
       escrever(dir, 'src/a.js', 'velho');
       const sobe = rodar(editar(dir, 'src/a.js', '"teto": 3', '"teto": 8'), tmp);
       assert.ok(negou(sobe), 'subir teto de 3 para 8 tinha de negar');
-      assert.match(motivoDeNegacao(sobe), /sobe a catraca/);
+      assert.match(motivoDeNegacao(sobe), /afrouxa um limite de qualidade/);
       assert.match(motivoDeNegacao(sobe), /3 -> 8/);
       const desce = rodar(editar(dir, 'src/a.js', '"minimo": 80', '"minimo": 40'), tmp);
       assert.ok(negou(desce), 'descer piso de 80 para 40 tinha de negar');

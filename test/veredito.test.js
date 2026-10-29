@@ -139,6 +139,15 @@ test('083 T5 (p5-20): achado e lacuna sem arquivo:linha e sem descricao dizem "(
   assert.ok(/descartada: \(sem descricao\)$/.test(r.erros[2]), r.erros[2]);
 });
 
+// A3-01 (pedido 12): o corte em 60 unidades UTF-16 partia o emoji no meio e a mensagem saia com meio caractere.
+test('A3-01: o trecho da descricao do descartado corta por caractere, sem partir emoji', () => {
+  const r = v.validarVeredito(comRef('correcao', 'vence', 'empata',
+    [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', descricao: 'a'.repeat(59) + '\u{1F600}b' }], []),
+  { comReferencia: true });
+  const erro = r.erros.find((e) => /descartado: /.test(e)) || '';
+  assert.ok(erro.isWellFormed() && erro.endsWith('a'.repeat(59) + '\u{1F600}'), JSON.stringify(r.erros));
+});
+
 test('veredito: severidade fora dos tres niveis e descartada', () => {
   const r = v.validarVeredito(veredito('correcao', [achado('grave', 'A.txt', 3)]));
   assert.strictEqual(r.achadosValidos.length, 0);

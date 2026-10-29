@@ -65,7 +65,8 @@ if (!doPlugin.ok) {
 const caminhoOutro = arg('--manual');
 const doOutro = caminhoOutro ? ob.inventario(caminhoOutro) : { ok: false, obrigacoes: [] };
 if (caminhoOutro && !doOutro.ok) {
-  sair('ERRO: --manual aponta para "' + caminhoOutro + '", onde nao ha SKILL.md.', 1);
+  sair('ERRO: --manual aponta para "' + caminhoOutro + '", ' +
+    (doOutro.erro ? 'e ' + doOutro.erro : 'onde nao ha SKILL.md') + '.', 1);
 }
 const cruz = ob.cruzar(doPlugin, doOutro);
 const linhas = ob.linhasDoExperimento(cruz);

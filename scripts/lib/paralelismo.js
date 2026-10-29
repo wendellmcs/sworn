@@ -7,6 +7,7 @@
  * workflows/parallel.js (TETO_PADRAO), e um teste confere os dois.
  */
 const CHAVE = 'paralelismo';
+// A2-47: caracteres do BLOCO (o teste confere), nao o teto de agentes; o mesmo nome do qualidade.js, continuo.js e enxuto.js.
 const TETO = 700;
 
 const BLOCO = [

@@ -3,21 +3,24 @@
 const ESPECIAIS = new Set(['.', '+', '?', '^', '$', '{', '}', '(', ')', '|', '[', ']', '\\']);
 const CAIXA_PADRAO = process.platform === 'win32';
 
-/** Tira barra invertida, './' da frente e barra sobrando no comeco. */
+/**
+ * Troca barra invertida por barra, tira './' da frente e barra sobrando no comeco; null e undefined viram vazio.
+ * A2-27: nao apara espaco. 'a ' e 'a' sao arquivos distintos, tambem no Windows (o Node grava o nome inteiro).
+ */
 function normalizar(caminho) {
   return String(caminho == null ? '' : caminho)
     .replace(/\\/g, '/')
     .replace(/^\.\//, '')
-    .replace(/^\/+/, '')
-    .trim();
+    .replace(/^\/+/, '');
 }
 
 // Padrao de caminho -> RegExp ancorada.
 //   **/  -> zero ou mais niveis de diretorio
 //   **   -> qualquer coisa, inclusive barra
 //   *    -> qualquer coisa menos barra
+// O padrao e escrito a mao (projeto.json, escopo.md, design.json): o espaco nas pontas sai antes de normalizar.
 function paraRegExp(padrao, ignorarCaixa) {
-  const p = normalizar(padrao);
+  const p = normalizar(String(padrao == null ? '' : padrao).trim());
   let re = '';
   let i = 0;
   while (i < p.length) {
@@ -33,8 +36,10 @@ function paraRegExp(padrao, ignorarCaixa) {
       re += c; i += 1;
     }
   }
-  const flags = (ignorarCaixa === undefined ? CAIXA_PADRAO : ignorarCaixa) ? 'i' : '';
-  return new RegExp('^' + re + '$', flags);
+  // So o omitido segue a plataforma (win32 ignora caixa); qualquer outro valor vale pelo que e como booleano, e null
+  // ou false deixam a caixa sensivel.
+  const semCaixa = ignorarCaixa === undefined ? CAIXA_PADRAO : Boolean(ignorarCaixa);
+  return new RegExp('^' + re + '$', semCaixa ? 'i' : '');
 }
 
 function casa(padrao, caminho, ignorarCaixa) {

@@ -140,3 +140,29 @@ test('083 T6: entreAspas escapa a aspa e junta as quebras de linha; o resto fica
   assert.strictEqual(texto.entreAspas('C:\\pasta\\a.css'), '"C:\\pasta\\a.css"', 'a barra do Windows fica');
   assert.strictEqual(texto.entreAspas(undefined), '"undefined"');
 });
+
+// A2-16 (P2 do pedido 12): o escalar.js e o gravar-veredito.js tinham cada um a sua copia de mensagemDe, e elas ja
+// divergiam (a do gravar-veredito aceitava PostToolUse sem tool_name). Uma fonte so, na forma estrita: o matcher do
+// hooks.json (SubagentHandback) ja garante o nome da ferramenta.
+test('A2-16: mensagemDoSubagente le o fim do subagente e o handback; o resto e undefined', () => {
+  const m = texto.mensagemDoSubagente;
+  assert.strictEqual(m({ hook_event_name: 'SubagentStop', last_assistant_message: 'fim' }), 'fim');
+  const hb = { hook_event_name: 'PostToolUse', tool_name: 'SubagentHandback', tool_input: { message: 'volta' } };
+  assert.strictEqual(m(hb), 'volta');
+  assert.strictEqual(m(Object.assign({}, hb, { tool_name: undefined })), undefined, 'PostToolUse sem tool_name');
+  assert.strictEqual(m(Object.assign({}, hb, { tool_name: 'Read' })), undefined, 'outra ferramenta');
+  assert.strictEqual(m(Object.assign({}, hb, { tool_input: 'x' })), undefined, 'tool_input que nao e objeto');
+  assert.strictEqual(m(Object.assign({}, hb, { tool_input: null })), undefined, 'tool_input null');
+  assert.strictEqual(m({ hook_event_name: 'SubagentStart', last_assistant_message: 'x' }), undefined);
+  // R1 da faixa (borda): entrada que nao e objeto e resposta que nao e texto saem undefined, nunca lancam.
+  for (const e of [null, undefined, 'SubagentStop', 5]) assert.strictEqual(m(e), undefined, JSON.stringify(e));
+  assert.strictEqual(m({ hook_event_name: 'SubagentStop', last_assistant_message: 5 }), undefined);
+  assert.strictEqual(m(Object.assign({}, hb, { tool_input: { message: { a: 1 } } })), undefined);
+  const fs = require('node:fs');
+  const path = require('node:path');
+  ['escalar.js', 'gravar-veredito.js'].forEach(function (nome) {
+    const fonte = fs.readFileSync(path.join(__dirname, '..', 'scripts', nome), 'utf8');
+    assert.ok(fonte.indexOf('mensagemDoSubagente(') !== -1, nome + ' nao chama texto.mensagemDoSubagente');
+    assert.strictEqual(fonte.indexOf('function mensagemDe('), -1, nome + ' ainda tem a propria copia');
+  });
+});

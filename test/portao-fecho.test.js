@@ -1030,6 +1030,21 @@ test('L2-fec-8: os ramos de tarefaACobrar que nenhum teste tocava - nada andou, 
   });
 });
 
+// A3-23 (pedido 12): o filter(...)[0] virou find; a mutacao para findLast escapava. Com duas abertas, a cobrada e a
+// primeira: entre as citadas, e entre as que vem ate a tarefa em andamento.
+test('A3-23: com duas tarefas abertas, cobra a primeira - das citadas e das que vem ate a em andamento', () => {
+  comTmp((tmp) => {
+    const citadas = planoComTarefas(tmp, 'a323a', '## Tarefa 1: primeira\n- [ ] a\n\n## Tarefa 2: segunda\n- [ ] b\n');
+    const r1 = fecho(tmp, 'a323a', citadas, 'Tarefas 1 e 2 concluidas.' + SAIDA);
+    assert.ok(r1.json && r1.json.decision === 'block' && /Tarefa 1 \("primeira"\)/.test(r1.json.reason), r1.stdout);
+    const andamento = '## Tarefa 1: primeira\n- [ ] a\n\n## Tarefa 2: segunda\n- [x] b\n- [ ] c\n\n' +
+      '## Tarefa 3: terceira\n- [ ] d\n';
+    const d2 = planoComTarefas(tmp, 'a323b', andamento);
+    const r2 = fecho(tmp, 'a323b', d2, 'A etapa esta concluida.' + SAIDA);
+    assert.ok(r2.json && r2.json.decision === 'block' && /Tarefa 1 \("primeira"\)/.test(r2.json.reason), r2.stdout);
+  });
+});
+
 test('S52-fec-1: plano ativo que nao pode ser lido nao passa calado - o fecho avisa que nao conferiu', () => {
   comTmp((tmp) => {
     const dir = planoComTarefas(tmp, 'sf1a', DUAS, { arquivo: 'plano-que-sumiu.md' });
@@ -1045,6 +1060,31 @@ test('S52-fec-1: plano ativo que nao pode ser lido nao passa calado - o fecho av
     const dir3 = planoComTarefas(tmp, 'sf1c', DUAS);
     const r3 = fecho(tmp, 'sf1c', dir3, 'A Tarefa 1 esta concluida.' + SAIDA);
     assert.ok(!r3.json || !/nao pode ser lido/.test(r3.json.systemMessage || ''), 'avisou com plano legivel: ' + r3.stdout);
+  });
+});
+
+// Pedido 12, R1 da A3 (s187): o aviso dizia que o plano nao se leu, sem a causa nem o que fazer.
+test('S52-fec-1: o aviso do plano ilegivel diz a causa e o proximo passo', () => {
+  comTmp((tmp) => {
+    const dir = planoComTarefas(tmp, 'sf1d', DUAS, { arquivo: 'plano-que-sumiu.md' });
+    const r = fecho(tmp, 'sf1d', dir, 'A Tarefa 2 esta concluida.' + SAIDA);
+    const aviso = (r.json && r.json.systemMessage) || '';
+    assert.ok(/nao pode ser lido \(nao existe \(ENOENT\)\)/.test(aviso), 'sem a causa: ' + r.stdout);
+    assert.ok(/Confira se o arquivo existe e se abre, ou abra o plano de novo: node "[^"]+plano\.js" --abrir /
+      .test(aviso),
+      'sem o proximo passo: ' + r.stdout);
+  });
+});
+
+// A3-25 (pedido 12): o aviso dizia "alegacao" e "subitens" e o comando vinha sem o caminho do script.
+test('A3-25: o aviso do plano ilegivel traz o comando de abrir com o caminho real do plano.js, sem jargao', () => {
+  comTmp((tmp) => {
+    const dir = planoComTarefas(tmp, 'sf1e', DUAS, { arquivo: 'plano-que-sumiu.md' });
+    const r = fecho(tmp, 'sf1e', dir, 'A Tarefa 2 esta concluida.' + SAIDA);
+    const aviso = (r.json && r.json.systemMessage) || '';
+    const comando = 'node "' + path.join(RAIZ, 'scripts', 'plano.js') + '" --abrir <caminho do plano>';
+    assert.ok(aviso.indexOf(comando) !== -1, 'sem o comando com o caminho real: ' + aviso);
+    assert.ok(!/alegacao|subite/.test(aviso), 'jargao no aviso: ' + aviso);
   });
 });
 
@@ -1276,7 +1316,9 @@ const CENA_S10 = [
   '',
   'Faca uma destas:',
   '  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";',
-  '  2. se chegar a 3 rondas sem fechar, pare e leve ao usuario 3 opcoes;',
+  '  2. se chegar a 3 rondas sem fechar, pare e leve ao usuario 3 opcoes para',
+  '     escolher: corrigir e comparar mais uma vez, entregar sem a comparacao',
+  '     dizendo o motivo, ou comecar uma comparacao nova do zero;',
   '  3. ou diga ao usuario por que esta entrega fica sem a comparacao.',
   '',
   'Desligar neste projeto: "portaoReferencia": false em .claude/sworn/projeto.json.'

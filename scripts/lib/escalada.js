@@ -60,43 +60,51 @@ function copia(s) {
   };
 }
 
-function tem(objeto, chave) { return Object.prototype.hasOwnProperty.call(objeto, chave); }
-
 // aoFechar e aoAbrir devolvem o proprio `s.escalada` (ate undefined) quando nada muda: o escalar.js so grava o estado
 // quando muda, e a sessao sem escalada nao ganha o campo.
 
 /**
- * Fim do subagente `tipo` (`id` = agent_id) com a `mensagem` dele: devolve a escalada nova. So age com escada de
- * degraus.MINIMO+ nomes e agente de dentro dela. Destino fora da escada, abaixo ou igual vira o degrau seguinte.
+ * Fim do subagente `tipo` (`id` = agent_id) com a `mensagem` dele: devolve a escalada nova, ou o proprio `s.escalada`
+ * quando nada muda. So age com escada de degraus.MINIMO+ nomes e agente de dentro dela.
  */
 function aoFechar(s, tipo, id, mensagem, projeto) {
   const atual = s ? s.escalada : undefined;
   const e = copia(s);
   const escada = projeto && projeto.agentes && Array.isArray(projeto.agentes.escada) ? projeto.agentes.escada : [];
-  const i = escada.indexOf(tipo);
-  if (escada.length < degraus.MINIMO || i === -1 || typeof id !== 'string' || e.lidos.indexOf(id) !== -1) return atual;
+  if (escada.length < degraus.MINIMO || escada.indexOf(tipo) === -1 || typeof id !== 'string' ||
+    e.lidos.indexOf(id) !== -1) return atual;
   // O fim do subagente encerra a cadeia dele, com ou sem pedido: a lista nao cresce na sessao.
-  const tinhaCadeia = tem(e.subidas, id);
-  const n = (e.subidas[id] || 0) + 1;
+  const tinhaCadeia = Object.hasOwn(e.subidas, id);
+  const subida = e.subidas[id] || 0;
   delete e.subidas[id];
   const pedido = marcador(mensagem);
   if (!pedido) return tinhaCadeia ? e : atual;
-  const j = escada.indexOf(pedido.agente);
-  const para = j > i ? pedido.agente : (escada[i + 1] || null);
+  registrar(e, escada, tipo, id, pedido, subida + 1);
+  return e;
+}
+
+/**
+ * A2-68: o pedido entra em `e.pendentes` (o que o fecho cobra) e liga o destino a cadeia, na subida `n`. Destino fora
+ * da escada, abaixo ou igual vira o degrau seguinte; o topo pede sem destino (`para` null).
+ */
+function registrar(e, escada, tipo, id, pedido, n) {
+  const i = escada.indexOf(tipo);
+  const para = escada.indexOf(pedido.agente) > i ? pedido.agente : (escada[i + 1] || null);
   e.pendentes.push({ id: id, de: tipo, para: para, motivo: pedido.motivo, n: n });
   // atalho: a ligacao da cadeia e por destino, nao por pedido. limite: dois pedidos ao mesmo destino ao mesmo tempo
-  // dividem uma ligacao (vale o n do ultimo). trocar quando: o SubagentStart trouxer quem pediu o despacho.
+  // dividem uma ligacao (vale o n do ultimo); e o despacho que nao vem deixa a ligacao para a proxima abertura do
+  // destino, mesmo sem relacao (A2-63), que herda o n e chega antes ao teto: pergunta ao usuario mais cedo, nunca
+  // sobe sem perguntar. trocar quando: o SubagentStart trouxer quem pediu o despacho.
   if (para !== null) e.aguardando[para] = n;
   e.lidos = e.lidos.concat([id]).slice(-LIDOS_GUARDADOS);
-  return e;
 }
 
 /** Comeco do subagente `tipo`: o pedido que o tinha como destino foi despachado; a cadeia segue no `id` dele. */
 function aoAbrir(s, tipo, id) {
   const e = copia(s);
   const k = e.pendentes.findIndex(function (p) { return p.para === tipo; });
-  if (typeof id !== 'string' || (k === -1 && !tem(e.aguardando, tipo))) return s ? s.escalada : undefined;
-  e.subidas[id] = tem(e.aguardando, tipo) ? e.aguardando[tipo] : e.pendentes[k].n;
+  if (typeof id !== 'string' || (k === -1 && !Object.hasOwn(e.aguardando, tipo))) return s ? s.escalada : undefined;
+  e.subidas[id] = Object.hasOwn(e.aguardando, tipo) ? e.aguardando[tipo] : e.pendentes[k].n;
   delete e.aguardando[tipo];
   if (k !== -1) e.pendentes.splice(k, 1);
   return e;
@@ -112,29 +120,39 @@ function semPendentes(s) {
 function umPedido(p) {
   const motivo = entreAspas(ascii(p.motivo).slice(0, MOTIVO_MAX));
   const quem = 'O agente ' + entreAspas(ascii(p.de));
+  // A2-58: as 3 opcoes nomeadas nos dois ramos em que o usuario decide, sem o jargao da escada (degrau, subida, topo).
   if (p.para === null) {
-    return [quem + ' e o topo da escada e pediu escalada: ' + motivo + '.',
-      '  Pare e leve ao usuario o que o agente viu e o motivo, em 3 opcoes.'];
+    return [quem + ' e o ultimo da escada de agentes (agentes.escada no projeto.json) e pediu um acima dele: ' +
+      motivo + '.',
+      '  Pare e leve ao usuario o que o agente viu e o motivo, em 3 opcoes: seguir com este agente e mais contexto,',
+      '  dividir ou mudar a tarefa, ou parar.'];
   }
   const para = entreAspas(ascii(p.para));
   if (p.n > TETO_DE_SUBIDAS) {
     return [quem + ' pediu ' + para + ': ' + motivo + '.',
-      '  E a subida ' + p.n + ' desta tarefa, acima do teto de ' + TETO_DE_SUBIDAS + ' subidas sozinhas.',
-      '  Pare e leve ao usuario em 3 opcoes: subir para ' + para + ' (custo maior), seguir no degrau de agora, ou parar.'];
+      '  Seria a ' + p.n + 'a troca desta tarefa por um agente mais caro, acima do teto de ' + TETO_DE_SUBIDAS +
+        ' trocas que o sworn faz sozinho.',
+      '  Pare e leve ao usuario em 3 opcoes: despachar ' + para +
+        ' (custo maior), seguir com o agente de agora, ou parar.'];
   }
+  // A2-57: o que vai no prompt fica em texto, fora da chamada (o molde do custo.js), e nada sai para copiar literal.
   return [quem + ' parou e pediu ' + para + ': ' + motivo + '.',
-    '  Despache agora: Agent({ subagent_type: ' + para + ', prompt: <a tarefa, o que o agente viu e o motivo> }).'];
+    '  Despache agora: Agent({ subagent_type: ' + para +
+      ', ... }), com a tarefa, o que o agente viu e o motivo no prompt.'];
 }
 
 /** O motivo do fecho do turno com pedido sem despacho, ou null. Texto ao modelo em ASCII (R5), em portugues (D665). */
 function motivoDoFecho(s) {
   const pendentes = copia(s).pendentes;
   if (!pendentes.length) return null;
+  // A2-59: a saida sem despacho so onde a ordem e despachar (o ramo do fim de umPedido); no topo e acima do teto quem
+  // decide e o usuario.
+  const despacha = pendentes.some(function (p) { return p.para !== null && !(p.n > TETO_DE_SUBIDAS); });
   return ['sworn - escalada pedida e nao despachada.', ''].concat(
-    pendentes.flatMap(umPedido), [
-      '',
-      'Se a tarefa nao precisa mesmo subir, diga ao usuario por que nao despachou.'
-    ]).join('\n');
+    pendentes.flatMap(umPedido),
+    despacha ? ['', 'Se a tarefa nao precisa mesmo do agente pedido, siga sem despachar e conte ao usuario' +
+      ' o motivo.'] : []
+  ).join('\n');
 }
 
 module.exports = { TETO_DE_SUBIDAS, marcador, aoFechar, aoAbrir, semPendentes, motivoDoFecho };

@@ -291,11 +291,11 @@ sworn - portao de escopo (trava 4 - o escopo da tarefa).
 O arquivo src/pagamento/cobranca.js casa "src/pagamento/**", que o escopo declara FORA desta tarefa.
 
 Escolha uma:
-  1. nao edite este arquivo - achado fora de escopo vira REGISTRO, nunca correcao;
+  1. nao edite este arquivo; se achou um defeito nele, conte ao usuario no fecho do turno, sem corrigir;
   2. se a tarefa mudou, reescreva .claude/sworn/escopo.md e diga por que.
 ~~~
 
-O defeito da cobrança vira registro para você decidir depois, em vez de um diff que ninguém pediu.
+O defeito da cobrança chega a você no fim da resposta, para decidir depois, em vez de um diff que ninguém pediu.
 
 **4. Revise às cegas.** `/sworn:review src/carrinho/frete.js` despacha os inspetores, um por
 lente; o script `apurar-ronda.js` do plugin (que o `/sworn:review` roda por você) diz se a ronda foi seca. Você
@@ -639,7 +639,7 @@ burocracia onde não há risco.
 | 3 | Fecho sem evidência | O fim do turno, quando a resposta alega sucesso sem colar a saída, ou colando só saída que mostra falha; quando o último teste rodado na sessão falhou; ou quando a prova de pronto do projeto (`provaDePronto`) não rodou depois da última edição de código. Declarar o que não rodou, ou que a falha segue, sempre libera. Hook `Stop`. | zero |
 | 4 | Arquivo fora do escopo declarado | A escrita, quando o alvo não está no `.claude/sworn/escopo.md` (ou, com a sessão vinculada a uma frente, em `.claude/sworn/escopos/<frente>.md`). Hook `PreToolUse` em `Write` e `Edit`. | zero |
 | 5 | Comando destrutivo e sessão concorrente | O comando que apaga, o `cd` solto (a pasta muda para o comando seguinte; no `Bash` o comando é corrigido para rodar num subshell, no `PowerShell` é negado), e a escrita em arquivo que outra frente já mexeu. Hook `PreToolUse` em `Bash` e em `Write`/`Edit`, contra a foto do `git status` da abertura. `travas.destrutivo: false` desliga o comando que apaga **e** o `cd` solto juntos. | zero |
-| 6 | Agente caro, modelo ou esforço trocado, pedido de subida esquecido | O despacho de um agente da metade mais cara da escada, arredondada para baixo (com 2 ou 3 agentes, o topo; com 4 ou 5, os dois de cima), quando o escopo declarado só tem caminhos de marcha `rapida`; a chamada de um agente da escada com `model` ou `effort` diferente do que `agentes.degraus` grava, negada com a chamada certa escrita (hook `PreToolUse` em `Task`/`Agent`); e, uma vez por pedido, o fim do turno com um pedido `ESCALAR:` de subagente ainda não despachado (hook `Stop`). Conta **todo** despacho, inclusive os que permite. | zero |
+| 6 | Agente caro, modelo ou esforço trocado, pedido de subida esquecido | • O despacho de um agente da metade mais cara da escada, arredondada para baixo (com 2 ou 3 agentes, o topo; com 4 ou 5, os dois de cima), quando o escopo declarado só tem caminhos de marcha `rapida`.<br>• A chamada de um agente da escada com `model` ou `effort` diferente do que `agentes.degraus` grava, negada com a chamada certa escrita.<br>• Uma vez por pedido, o fim do turno com um pedido `ESCALAR:` de subagente ainda não despachado.<br>Os dois primeiros pelo hook `PreToolUse` em `Task`/`Agent`; o terceiro pelo hook `Stop`. Conta **todo** despacho, inclusive os que permite. | zero |
 | 7 | Criar sem ter procurado | A criação de arquivo **novo** quando nada foi buscado antes no turno. Editar arquivo existente nunca é barrado — quem edita já achou —, e nomear o arquivo no `escopo.md` também libera: declarar já é deliberar. | zero |
 | 8 | Catraca afrouxada | A edição que **sobe um teto** ou **desce um piso** (`teto`, `limite`, `maximo`, `tolerancia`; `minimo`, `piso`, `cobertura`). Apertar a régua passa sempre; afrouxar é decisão humana, não efeito colateral de uma correção. | zero |
 
@@ -716,7 +716,7 @@ Escopo atual:
   - test/cobertura.json
 
 Escolha uma:
-  1. nao edite este arquivo - achado fora de escopo vira REGISTRO, nunca correcao;
+  1. nao edite este arquivo; se achou um defeito nele, conte ao usuario no fecho do turno, sem corrigir;
   2. se ele e mesmo parte do pedido, acrescente-o ao escopo e diga por que.
 
 Ampliar o escopo e contado e aparece no fecho do turno.
@@ -730,7 +730,7 @@ sworn - portao de escopo (trava 4 - o escopo da tarefa).
 O arquivo src/pagamento/cobranca.js casa "src/pagamento/**", que o escopo declara FORA desta tarefa.
 
 Escolha uma:
-  1. nao edite este arquivo - achado fora de escopo vira REGISTRO, nunca correcao;
+  1. nao edite este arquivo; se achou um defeito nele, conte ao usuario no fecho do turno, sem corrigir;
   2. se a tarefa mudou, reescreva .claude/sworn/escopo.md e diga por que.
 ~~~
 
@@ -744,8 +744,8 @@ Este arquivo esta na lista "intocaveis" de .claude/sworn/projeto.json:
 Nem o escopo declarado libera este caminho.
 
 Faca uma destas:
-  1. siga sem mexer nele: o que ele precisar vira registro;
-  2. ou leve ao dono 3 opcoes com a recomendada marcada.
+  1. siga sem mexer nele; se ele precisar de mudanca, conte ao usuario no fecho do turno;
+  2. ou peca ao dono que decida: 3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo.
 ~~~
 
 **Trava 5 — comando destrutivo** (`git reset --hard origin/main` pelo `Bash`):
@@ -755,10 +755,10 @@ sworn - comando destrutivo barrado (trava 5): falta o sim do dono.
 
 Comando: git reset --hard origin/main
 Por que barrou: git reset --hard descarta trabalho nao commitado.
-Nenhum comando destrutivo roda sem confirmacao humana.
+Nenhum comando destrutivo roda sem o sim do dono.
 
 Faca uma destas:
-  1. leve ao dono 3 opcoes com a recomendada marcada, dizendo o que acontece na pratica em cada uma;
+  1. peca ao dono que decida: 3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo;
   2. ou siga sem este comando, se o trabalho nao depende dele.
 
 So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosLiberados" de .claude/sworn/projeto.json.
@@ -782,15 +782,18 @@ Editar arquivo que ja existe nunca exige isso: quem edita ja achou.
 **Trava 8 — catraca afrouxada** (`Edit` que troca `"minimo": 80` por `"minimo": 60`):
 
 ~~~text
-sworn: NEGADO - isto sobe a catraca (o limite fixo que segura um indicador), e subir catraca e decisao humana.
+sworn: NEGADO - esta edicao afrouxa um limite de qualidade (o numero que um teste ou checagem
+usa como regua), e afrouxar esse limite e decisao do dono, nao do agente.
 
 Arquivo: test/cobertura.json
   minimo: 80 -> 60  (o piso, o minimo exigido, desceu: agora exige menos que antes)
 
 Por que barra: quando um teste ou checagem atrapalha, e tentador afrouxar o numero que o mede.
-O que fazer: desfaca a mudanca deste numero (volte ao numero da esquerda do "->" acima) e corrija a causa da falha.
-Se o numero estiver mesmo errado, peca ao dono a decisao e registre-a antes de mexer nele:
-subir catraca no meio de uma correcao nao e permitido.
+O que fazer: refaca a edicao com o numero da esquerda do "->" acima (o de antes) e corrija
+a causa da falha, nao a regua.
+Se o numero estiver mesmo errado: leve ao dono o numero de agora, o proposto e o motivo. A
+mudanca e dele, feita a mao por ele: este portao nega a edicao ao agente mesmo com a decisao
+registrada. A decisao fica onde o projeto registra as decisoes.
 ~~~
 
 **Portão do prompt do handoff** (o turno gravou `.claude/sworn/handoff/2026-10-10-frete.md` e a
@@ -1003,12 +1006,12 @@ só na conversa principal). Os que só leem não recebem: `inspector`, `dedupe-j
 `Plan` do Claude Code.
 
 Atalho de propósito leva o comentário `atalho: <o que>. limite: <até onde vale>. trocar quando: <gatilho>.`, e o
-`/sworn:shortcuts` lista todos. A nota pode continuar nas linhas logo abaixo, um rótulo por linha (`limite:`,
-`trocar quando:`, em qualquer ordem); nota sem ponto final com um comentário sem rótulo logo abaixo sai com o aviso
-de que a linha de baixo ficou de fora: comece essa linha com um dos rótulos, ou leve o resto da frase para a linha de
-cima. Na revisão cega, a lente `enxuto` pergunta o que dava para não escrever. Não há
-número de redução medido aqui: a 0.9.0 não promete um. Desligar neste projeto: a chave `menosCodigo` com `false` em
-`.claude/sworn/projeto.json` (só o booleano `false` desliga; vale para a abertura e para os subagentes).
+`/sworn:shortcuts` lista todos. A nota pode continuar nas linhas logo abaixo, um rótulo por linha: `limite:` ou
+`trocar quando:`, em qualquer ordem. Comentário sem rótulo na linha de baixo não entra. Se a nota não tem ponto
+final, a lista avisa, embaixo do atalho, que essa linha ficou de fora. Para ela entrar, comece-a com um dos rótulos, ou
+leve o resto da frase para a linha de cima. Na revisão cega, a lente `enxuto` pergunta o que dava para não escrever.
+Não há número de redução medido aqui: a 0.9.0 não promete um. Desligar neste projeto: a chave `menosCodigo` com `false`
+em `.claude/sworn/projeto.json` (só o booleano `false` desliga; vale para a abertura e para os subagentes).
 
 As ideias vêm do [ponytail](https://github.com/DietrichGebert/ponytail), de Dietrich Gebert (licença MIT); o texto
 é próprio.
@@ -1133,7 +1136,7 @@ Os ganchos, um por evento, com o que cada um deixa na sua tela:
 | `PostToolUse` em `Write`, `Edit`, `Bash`, `PowerShell`, `Grep`, `Glob`, `Read` e `AskUserQuestion` | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; conta as decisões suas respondidas e os commits que passaram | nada na tela: alimenta os contadores do aviso de troca de chat |
 | `SubagentStart` (menos os que só leem) | `scripts/abrir-subagente.js` | injeta o bloco "menos código" no subagente que pode escrever código | nada na tela; o subagente recebe o bloco antes do primeiro pedido |
 | `SubagentStop` (só do agente `inspector`) e `PostToolUse` em `SubagentHandback` | `scripts/gravar-veredito.js` | grava o veredito do inspetor em `vereditos/<lente>.json` da ronda | nada quando grava; se algo não foi gravado, uma mensagem diz o quê e por quê |
-| `Stop` | `scripts/portao-fecho.js` | cobra evidência, etapa com subitem aberto e o prompt do handoff; grava os contadores | o turno volta com o motivo, ou fecha, com o aviso de troca de chat quando um gatilho cruzou |
+| `Stop` | `scripts/portao-fecho.js` | cobra evidência, etapa com subitem aberto e o prompt do handoff; barra uma vez o fim do turno com pedido `ESCALAR:` de subagente ainda não despachado (trava 6); grava os contadores | o turno volta com o motivo, ou fecha, com o aviso de troca de chat quando um gatilho cruzou |
 | `SessionEnd` | `scripts/fim-sessao.js` | apaga os arquivos de sessão parados há mais de 7 dias | nada |
 
 Os portões que nomeiam uma chave de liga/desliga estão em "Os portões que não são travas"; as chaves, em "O
@@ -1341,7 +1344,8 @@ contraditória movendo o arquivo para uma pasta de arquivo, com o seu sim: dá p
 
 **Ela diz com que modelo e esforço os subagentes rodaram de fato** (desde a 0.16.0). Lê as transcrições dos
 subagentes dos últimos 30 dias e compara a última resposta de cada degrau com a tabela `agentes.degraus`. Apelido que
-passou calado para outro id de modelo vem primeiro, como aviso. Sem como medir, o relatório diz "não medido" e o
+passou a apontar para outro id de modelo sem ninguém mudar a tabela (por exemplo, `sonnet` de `claude-sonnet-5` para
+`claude-sonnet-5-5`) vem primeiro, como aviso. Sem como medir, o relatório diz "não medido" e o
 motivo. A rodada automática da abertura não mede: leria todas essas transcrições.
 
 **Ela mede também o que os ganchos põem na conversa** (desde a 0.9.1): lida a transcrição da sessão, quantas vezes e
@@ -1352,7 +1356,8 @@ documentado pelo Claude Code: quando a leitura falha, o relatório diz "não med
 [context-mode](https://github.com/mksglu/context-mode), de Mert Koseoğlu, com texto e código nossos.
 
 **Você também não precisa lembrar de rodá-la.** Na abertura da sessão, num projeto com `projeto.json`, o
-`abertura.js` roda a mesma auditoria no máximo uma vez a cada 7 dias e **só fala se algo passou do teto**:
+`abertura.js` roda a auditoria no máximo uma vez a cada 7 dias, sem a medida do modelo e do esforço que rodaram, e
+**só fala se algo passou do teto**:
 peso de instrução acima do teto, skills que se sobrepõem, regras que se contradizem, ou skill do projeto
 cujo `SKILL.md` não muda há 90 dias ou mais (pela data do último commit que o tocou; sem git, ou com o
 arquivo fora do git, pela data do arquivo), ou texto de gancho que voltou mais de 5 vezes na conversa anterior
@@ -1753,7 +1758,7 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 | `intocaveis` | padrões de caminho que nem o escopo declarado libera; o padrão que não pega arquivo nenhum é avisado na abertura | `[]` |
 | `marchaPadrao` | a marcha (`rapida`, `padrao` ou `aaa`) do caminho que não está em nenhuma lista de `marchas`; valor desconhecido cai em `padrao` | `padrao` |
 | `marchas` | três listas de padrões de caminho (`aaa`, `padrao`, `rapida`); o caminho que casa em duas listas fica na mais rigorosa; caminho absoluto ou com esquema (`C:`, `file://`) é recusado | as três listas vazias |
-| `comandosBloqueados` | expressões regulares (sem distinção de caixa) que o portão destrutivo trata como destrutivas, além das que já conhece; regex inválida reprova no validar | `[]` |
+| `comandosBloqueados` | expressões regulares (sem distinção de caixa) que o portão destrutivo trata como destrutivas, além das que já conhece; regex inválida reprova no validar, e o portão avisa uma vez por sessão que ela não barra nada | `[]` |
 | `comandosLiberados` | expressões regulares dos comandos que o portão de shell deixa passar sem conferir; o validar reprova padrão que está nas duas listas e o que neutraliza um bloqueado | `[]` |
 | `travas` | as quatro chaves de liga/desliga das travas (tabela abaixo) | todas `true` |
 | `limiares` | os números dos gatilhos de troca de chat e dos prazos da auditoria (tabela abaixo) | `{}`: valem os padrões |

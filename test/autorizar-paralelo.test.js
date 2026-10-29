@@ -101,6 +101,31 @@ test('autorizar: regra em permissions.deny vence a allow -> nao diz autorizado (
   }
 });
 
+// A2 (s193): o deny que nao e lista passava calado (:69): o script gravava e dizia autorizado:true. Item que nao e
+// texto, nas duas listas, e a mesma forma inesperada (o contrato do :13). Para como o allow torto, sem gravar.
+test('A2 (s193): deny que nao e lista, ou item que nao e texto, sai 1 sem gravar e diz a forma esperada', () => {
+  const casos = [['deny', 'Workflow'], ['deny', { 0: 'Workflow' }], ['deny', 5], ['deny', true], ['deny', null],
+    ['deny', [5]], ['deny', [['Workflow']]], ['allow', [5]], ['allow', [null, REGRA]]];
+  for (const [nome, valor] of casos) {
+    comDir((dir) => {
+      fs.mkdirSync(path.join(dir, '.claude'));
+      const permissions = { allow: ['Bash(npm test)'] };
+      permissions[nome] = valor;
+      const bruto = JSON.stringify({ permissions });
+      fs.writeFileSync(local(dir), bruto);
+      for (const args of [[], ['--conferir']]) {
+        const r = rodar(dir, ...args);
+        const rotulo = nome + ' ' + JSON.stringify(valor) + ' ' + args;
+        assert.strictEqual(r.status, 1, rotulo + ': ' + r.stdout);
+        assert.deepStrictEqual([r.json.autorizado, r.json.gravou], [false, false], rotulo);
+        assert.ok(r.json.erro.indexOf('permissions.' + nome) !== -1 && r.json.erro.indexOf('"' + nome + '": [') !== -1 &&
+          /rode de novo/.test(r.json.erro), rotulo + ' -> ' + r.json.erro);
+      }
+      assert.strictEqual(fs.readFileSync(local(dir), 'utf8'), bruto, 'mexeu no arquivo');
+    });
+  }
+});
+
 test('autorizar: de uma subpasta, grava na raiz do repositorio, nao num .claude novo ali (D452)', () => {
   comDir((dir) => {
     fs.mkdirSync(path.join(dir, '.git'));

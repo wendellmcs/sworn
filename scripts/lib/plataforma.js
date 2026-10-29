@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const textoLib = require('./texto.js');
 
 /**
  * H6: comportamento em Windows, Linux e macOS.
@@ -8,7 +9,8 @@ const path = require('node:path');
  * Nao ha maquina Linux nem macOS aqui, e nao ha CI. Prometer "funciona nos tres"
  * seria a classe de promessa que este plugin existe para impedir. O que da para
  * fazer, e o que a spec pede, e DECLARAR o que nao foi testado - com a lista
- * derivada do codigo, nunca escrita a mao.
+ * derivada do codigo, nunca escrita a mao. A excecao e HISTORICO (onde a suite
+ * ja rodou), que nenhum codigo sabe medir: e escrito a mao, e o texto diz isso.
  *
  * DUAS CLASSES, e a diferenca entre elas e a unica coisa que interessa:
  *
@@ -131,16 +133,9 @@ const PONTOS = [
     arquivos: ['scripts/autorizar-paralelo.js', 'scripts/lib/calibracao.js', 'scripts/lib/gasto.js',
                'scripts/lib/injetado.js', 'scripts/lib/migracao.js', 'scripts/lib/vigia-local.js',
                'scripts/medir-qualidade.js'],
-    comoSeProva: 'CLAUDE_CONFIG_DIR sobrepoe a pasta pessoal, e a pasta pessoal entra por parametro ' +
-                 'em acharTranscricao: os dois caminhos rodam daqui. A pasta do vigia (Bloco V) idem: ' +
-                 'SWORN_VIGIA a sobrepoe, e o teste roda por ela. O autorizar-paralelo (para de subir na ' +
-                 'pasta pessoal) idem: o teste troca HOME e USERPROFILE. O calibrador idem: a pasta pessoal ' +
-                 'entra por parametro em pastaDasTranscricoes, e o comando roda pelo CLAUDE_CONFIG_DIR. O gasto ' +
-                 'do mes (pedido 31) idem: pastaDosProjetos recebe a pasta pessoal por parametro, e o sessao.js ' +
-                 'roda no teste pelo CLAUDE_CONFIG_DIR. O injetado da auditoria (0.9.1) idem: a transcricao e o ' +
-                 'cache de plugins saem do CLAUDE_CONFIG_DIR, e o teste roda por ele. A migracao da pasta antiga ' +
-                 '(.claude/esquadro) idem: migrarCasa recebe a pasta pessoal por parametro, e o teste da abertura troca ' +
-                 'HOME e USERPROFILE',
+    comoSeProva: 'a pasta pessoal entra por parametro, ou uma variavel a sobrepoe (CLAUDE_CONFIG_DIR, SWORN_VIGIA, ' +
+                 'ou HOME e USERPROFILE, que o Node le para achar a pasta pessoal); o teste de cada modulo roda ' +
+                 'por essa porta',
     ressalva: 'o nome da pasta de config padrao (.claude na pasta pessoal) so se confere naquele sistema ' +
               'com o claude de verdade; aqui se prova que a busca olha onde mandam.'
   },
@@ -179,24 +174,36 @@ const PONTOS = [
   }
 ];
 
-function jsDe(dir, raiz, acc) {
+function relativo(raiz, p) { return path.relative(raiz, p).replace(/\\/g, '/'); }
+
+// A1 (pedido 12), estados: pasta ou arquivo que nao se le era engolido calado - raiz que nao existe virava matriz de
+// mortos, e o comando mandava editar PONTOS. Agora entra em `naoLidos` ({ arquivo, causa }), e a matriz reprova.
+function jsDe(dir, raiz, acc, naoLidos) {
   acc = acc || [];
   let entradas;
-  try { entradas = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return acc; }
+  try { entradas = fs.readdirSync(dir, { withFileTypes: true }); }
+  catch (e) {
+    if (naoLidos) naoLidos.push({ arquivo: relativo(raiz, dir), causa: textoLib.causaDoErro(e) });
+    return acc;
+  }
   for (const e of entradas) {
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) jsDe(p, raiz, acc);
-    else if (e.isFile() && e.name.endsWith('.js')) acc.push(path.relative(raiz, p).replace(/\\/g, '/'));
+    if (e.isDirectory()) jsDe(p, raiz, acc, naoLidos);
+    else if (e.isFile() && e.name.endsWith('.js')) acc.push(relativo(raiz, p));
   }
   return acc;
 }
 
-/** Acha no disco toda ocorrencia de marcador, com arquivo e linha. */
-function varrer(raiz) {
+/** Acha no disco toda ocorrencia de marcador, com arquivo e linha. `naoLidos`, se vier, recebe o que nao se leu. */
+function varrer(raiz, naoLidos) {
   const achados = [];
-  jsDe(path.join(raiz, 'scripts'), raiz).forEach(function (rel) {
+  jsDe(path.join(raiz, 'scripts'), raiz, [], naoLidos).forEach(function (rel) {
     let linhas;
-    try { linhas = fs.readFileSync(path.join(raiz, rel), 'utf8').split(/\r?\n/); } catch (e) { return; }
+    try { linhas = fs.readFileSync(path.join(raiz, rel), 'utf8').split(/\r?\n/); }
+    catch (e) {
+      if (naoLidos) naoLidos.push({ arquivo: rel, causa: textoLib.causaDoErro(e) });
+      return;
+    }
     linhas.forEach(function (linha, i) {
       MARCADORES.forEach(function (m) {
         if (m.re.test(linha)) achados.push({ marcador: m.chave, arquivo: rel, linha: i + 1 });
@@ -209,13 +216,20 @@ function varrer(raiz) {
 const SISTEMAS = ['win32', 'linux', 'darwin'];
 
 /**
+ * Onde a suite ja rodou de verdade. E DECLARACAO, escrita a mao de proposito: nenhum teste sabe onde a suite
+ * rodou antes. Quem roda a suite num sistema de fora e a ve passar acrescenta o sistema aqui.
+ */
+const HISTORICO = ['win32'];
+
+/**
  * A matriz desta rodada. `so` entra por parametro de proposito: sem isso a
  * propria matriz so seria testavel no Windows, que e o defeito que ela existe
  * para denunciar nos outros.
  */
 function matriz(raiz, so) {
   const sistema = so || process.platform;
-  const achados = varrer(raiz);
+  const naoLidos = [];
+  const achados = varrer(raiz, naoLidos);
   const declarados = Object.create(null);
   PONTOS.forEach(function (p) {
     p.arquivos.forEach(function (a) { declarados[p.chave + '|' + a] = true; });
@@ -256,10 +270,12 @@ function matriz(raiz, so) {
 
   return {
     sistemaDestaRodada: sistema,
+    sistemaReal: process.platform,
     pontos: linhas,
     orfas: orfas,
     mortos: mortos,
-    integra: orfas.length === 0 && mortos.length === 0,
+    naoLidos: naoLidos,
+    integra: orfas.length === 0 && mortos.length === 0 && naoLidos.length === 0,
     resumo: {
       pontos: linhas.length,
       injetaveis: linhas.filter(function (l) { return l.classe === INJETAVEL; }).length,
@@ -279,6 +295,12 @@ function texto(m) {
     linhas.push(pad(p.chave, 24) + pad(p.classe, 16) +
       pad(p.porSistema.win32, 26) + pad(p.porSistema.linux, 26) + p.porSistema.darwin);
   });
+  // A1-19 (pedido 12, microcopy): os tres estados da tabela saiam sem legenda.
+  linhas.push('');
+  linhas.push('Legenda:');
+  linhas.push('    "exercitado por injecao" = o teste escolhe o sistema e roda daqui o caminho de cada um dos tres.');
+  linhas.push('    "exercitado neste sistema" = a suite o exercita quando roda neste sistema.');
+  linhas.push('    "NAO TESTADO" = so se prova rodando a suite naquele sistema.');
   linhas.push('');
   m.pontos.forEach(function (p) {
     linhas.push('- ' + p.chave + ': ' + p.titulo);
@@ -287,6 +309,10 @@ function texto(m) {
     if (p.ressalva) linhas.push('    ressalva: ' + p.ressalva);
   });
   linhas.push('');
+  if (m.naoLidos.length > 0) {
+    linhas.push('NAO LIDOS - o que a varredura nao conseguiu ler (' + m.naoLidos.length + '):');
+    m.naoLidos.forEach(function (n) { linhas.push('    ' + n.arquivo + '  ' + n.causa); });
+  }
   if (m.orfas.length > 0) {
     linhas.push('ORFAS - ocorrencia sem ponto declarado (' + m.orfas.length + '):');
     m.orfas.forEach(function (o) { linhas.push('    ' + o.marcador + '  ' + o.arquivo + ':' + o.linha); });
@@ -300,14 +326,29 @@ function texto(m) {
   m.resumo.naoTestados.forEach(function (n) {
     linhas.push('NAO TESTADO em ' + n.sistema + ': ' + n.pontos + ' de ' + m.resumo.pontos + ' pontos.');
   });
-  linhas.push('Nunca rodou fora de win32. Isto e declaracao, nao medicao - nenhum teste sabe ' +
-              'onde a suite ja rodou antes.');
+  linhas.push('Historico declarado: a suite so rodou em ' + HISTORICO.join(', ') + '. A lista e escrita a mao: ' +
+              'nenhum teste sabe onde a suite ja rodou.');
+  // A1 (pedido 12), manutencao: a frase era fixa ("Nunca rodou fora de win32") e saia igual ao lado de "esta rodada:
+  // linux". A rodada fora do historico diz se so simula o sistema (o `so` da matriz) ou se roda nele de verdade.
+  // A1-18 (pedido 12, microcopy): o passo para acrescentar um sistema sai uma vez so; a rodada de verdade fora do
+  // historico o traz com o nome do sistema.
+  const fora = HISTORICO.indexOf(m.sistemaDestaRodada) === -1;
+  const deVerdade = m.sistemaDestaRodada === m.sistemaReal;
+  if (fora && !deVerdade) {
+    linhas.push('Esta rodada so simula ' + m.sistemaDestaRodada + ' (o sistema de verdade e ' + m.sistemaReal + '): ' +
+                'ela nao conta para o historico.');
+  }
+  if (fora && deVerdade) {
+    linhas.push('Esta rodada e em ' + m.sistemaDestaRodada + ' de verdade, fora do historico: se a suite passou ' +
+                'aqui, acrescente ' + m.sistemaDestaRodada + ' em HISTORICO, em scripts/lib/plataforma.js.');
+  } else {
+    linhas.push('Para acrescentar um sistema: rode a suite nele (node --test test/*.test.js) e, se ela passar, ' +
+                'acrescente o sistema em HISTORICO, em scripts/lib/plataforma.js.');
+  }
   return linhas.join('\n');
 }
 
-function pad(s, n) {
-  const t = String(s);
-  return t.length >= n ? t + ' ' : t + ' '.repeat(n - t.length);
-}
+// A1-15 (pedido 12, enxuto): a coluna tem n de largura; o texto que a enche ganha um espaco, para nao colar na outra.
+function pad(s, n) { return String(s).padEnd(n - 1) + ' '; }
 
-module.exports = { MARCADORES, PONTOS, SISTEMAS, INJETAVEL, SO_NO_SISTEMA, varrer, matriz, texto };
+module.exports = { MARCADORES, PONTOS, SISTEMAS, HISTORICO, INJETAVEL, SO_NO_SISTEMA, varrer, matriz, texto };

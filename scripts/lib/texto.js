@@ -50,4 +50,20 @@ function entreAspas(valor) {
   return '"' + String(valor).replace(/[\r\n]+/g, ' ').replace(/"/g, '\\"') + '"';
 }
 
-module.exports = { semBom, causaDoErro, veioDeSubagente, entreAspas };
+/**
+ * A resposta do subagente no evento do gancho: o `last_assistant_message` do SubagentStop ou o `tool_input.message` do
+ * handback (PostToolUse do SubagentHandback, no modo auto). Outro evento, outra ferramenta, entrada que nao e objeto
+ * ou resposta que nao e texto: undefined. Nunca lanca.
+ * A2-16: uma fonte so para o gravar-veredito.js e o escalar.js (as copias ja divergiam no PostToolUse sem tool_name).
+ */
+function mensagemDoSubagente(e) {
+  if (!e || typeof e !== 'object') return undefined;
+  let m;
+  if (e.hook_event_name === 'SubagentStop') m = e.last_assistant_message;
+  else if (e.hook_event_name === 'PostToolUse' && e.tool_name === 'SubagentHandback' && e.tool_input) {
+    m = e.tool_input.message;
+  }
+  return typeof m === 'string' ? m : undefined;
+}
+
+module.exports = { semBom, causaDoErro, veioDeSubagente, entreAspas, mensagemDoSubagente };

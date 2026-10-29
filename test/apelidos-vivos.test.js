@@ -85,7 +85,24 @@ test('apelidos vivos: o motivo nomeia o que morreu e proibe afrouxar o teste', (
   const m = apelidos.motivoReprovado(c);
   assert.ok(m.includes('barato'), m);
   assert.ok(m.includes('effort'), m);
-  assert.ok(/afrouxando/i.test(m), 'tem de dizer que nao se conserta afrouxando: ' + m);
+  assert.ok(/afrouxar o teste so esconderia a falha/i.test(m), 'tem de dizer que afrouxar nao conserta: ' + m);
+});
+
+// A1-39/A1-49/A1-50: a 1a linha diz o que deixou de valer, o fim diz o comando, e nada de jargao nem bronca.
+test('A1-39: o motivo diz o que deixou de valer e o comando, sem jargao nem bronca', () => {
+  const c = apelidos.cobertura(MAPA, { apelidos: [{ apelido: 'barato', aceito: false, evidencia: 'recusado' }] });
+  const m = apelidos.motivoReprovado(c);
+  assert.ok(/^apelido ou campo que a ferramenta nao aceita mais/.test(m), m);
+  assert.ok(!/sondagem|supos|NAO se conserta|entrevista/.test(m), m);
+  assert.ok(m.includes('node scripts/provar-apelidos.js'), m);
+});
+
+// A1-51: a prova fora da forma diz o comando que a regrava, e nao o nome de um campo interno.
+test('A1-51: a prova torta diz o comando que a regrava', () => {
+  for (const prova of [{}, { apelidos: [1] }]) {
+    const t = apelidos.cobertura(MAPA, prova).provaInvalida;
+    assert.ok(t.includes('node scripts/provar-apelidos.js') && !/formatoDoResultado/.test(t), t);
+  }
 });
 
 test('apelidos vivos: sondagem malformada nao vira prova nem estoura', () => {
@@ -189,6 +206,8 @@ test('apelidos vivos: projeto sem apelidos se DECLARA nao verificavel, nao sonda
   const r = rodar(dir);
   assert.strictEqual(r.status, 1);
   assert.ok(/NAO VERIFICAVEL/.test(r.stdout), r.stdout);
+  // A1-34 (pedido 12, microcopy): "a entrevista pergunta" era vago; agora diz o comando e a resposta que falta
+  assert.ok(/Rode \/sworn:init e, na pergunta dos agentes, de o apelido/.test(r.stdout), 'A1-34: ' + r.stdout);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -223,6 +242,99 @@ test('apelidos vivos: --plugin monta o roteiro so do plugin, sem pedir projeto.j
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// A1-prova-1 (pedido 12, estados): a leitura do molde nao tinha try - molde que faltava saia como pilha de excecao.
+test('A1-prova-1: molde ilegivel para com ERRO e a causa, sem pilha de excecao', () => {
+  const dir = semear(pasta(), MAPA);
+  const ganchos = pasta();
+  const gancho = path.join(ganchos, 'gancho.js');
+  fs.writeFileSync(gancho, [
+    "const fs = require('node:fs');",
+    "const path = require('node:path');",
+    'const orig = fs.readFileSync;',
+    'fs.readFileSync = function (p) {',
+    "  if (String(p).endsWith(path.join('modelos', 'agente.md'))) {",
+    "    throw Object.assign(new Error('ENOENT: no such file or directory, open ' + p), { code: 'ENOENT' });",
+    '  }',
+    '  return orig.apply(this, arguments);',
+    '};'
+  ].join('\n'), 'utf8');
+  const r = spawnSync(process.execPath, ['--require', gancho, SCRIPT], { cwd: dir, encoding: 'utf8' });
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.ok(/^ERRO: nao consegui ler o molde .*agente\.md: ENOENT/.test(r.stdout), r.stdout);
+  assert.ok(/reinstale o plugin/.test(r.stdout), 'o erro tem de dizer o passo seguinte: ' + r.stdout);
+  assert.strictEqual(r.stderr, '', 'a falha saiu como excecao: ' + r.stderr);
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(ganchos, { recursive: true, force: true });
+});
+
+// A1-prova-2 (pedido 12, microcopy): "reprova a suite" so vale no repositorio do plugin - no projeto quem le a prova
+// e o relatorio de cobertura -, e "o caminho acima" nao nomeava o campo. O fim nomeia ondeGravar e o comando seguinte.
+test('A1-prova-2: o fim do roteiro nomeia onde gravar e o comando seguinte, no projeto e no plugin', () => {
+  const dir = semear(pasta(), MAPA);
+  const corte = (s) => s.indexOf('}\n\n') + 2;
+  const r = rodar(dir);
+  const j = JSON.parse(r.stdout.slice(0, corte(r.stdout)));
+  const fim = r.stdout.slice(corte(r.stdout));
+  const grave = 'Grave o resultado, no formato de formatoDoResultado, em ondeGravar:\n  ' + j.ondeGravar + '\n';
+  assert.ok(fim.includes(grave), fim);
+  // A1-32: o caminho e o que o relatorio de cobertura le (lib/cobertura.js, prova)
+  assert.ok(j.ondeGravar.endsWith(path.join('.claude', 'sworn', 'apelidos-vivos.json')), j.ondeGravar);
+  assert.ok(fim.includes('Depois confira com: node "' + path.join(RAIZ, 'scripts', 'cobertura.js') + '"\n'), fim);
+  assert.ok(!/reprova|suite|acima/.test(fim), 'no projeto a suite do plugin nao le a prova: ' + fim);
+  // A1-36 (pedido 12, microcopy): "a linha do H4" era codigo interno; a linha se nomeia pelo rotulo inteiro,
+  // como o relatorio o imprime (a R2 da s201: so o pedaco depois do "H4" nao era o que a tela mostra)
+  assert.ok(fim.includes('na linha "H4 - o apelido ainda e aceito"') && !/linha do H4/.test(fim), 'A1-36: ' + fim);
+  assert.ok(fs.readFileSync(path.join(RAIZ, 'scripts', 'lib', 'cobertura.js'), 'utf8')
+    .includes("'H4 - o apelido ainda e aceito'"), 'o relatorio de cobertura mudou o nome da linha');
+
+  const p = rodar(dir, ['--plugin']);
+  const fimP = p.stdout.slice(corte(p.stdout));
+  assert.ok(fimP.includes(grave), fimP);
+  const teste = path.join(RAIZ, 'test', 'apelidos-vivos.test.js');
+  assert.ok(fimP.includes('Depois rode: node --test "' + teste + '"\n'), fimP);
+  assert.ok(/RECUSADO reprova esse teste; apelido que ninguem testou nao reprova\./.test(fimP), fimP);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// A1-ape-3 (pedido 12, estados): prova que existe sem a forma (`apelidos` que nao e lista) caia em "sem prova", e o
+// teste do H4 pulava calado. Agora a cobertura nomeia em provaInvalida; ausente segue sendo so "sem prova".
+test('A1-ape-3: prova malformada nao se confunde com prova ausente', () => {
+  for (const prova of [{}, { apelidos: 'barato' }, { apelidos: null }, [], 'texto', 7, false]) {
+    const c = apelidos.cobertura(MAPA, prova);
+    assert.strictEqual(c.temProva, false, JSON.stringify(prova));
+    assert.ok(typeof c.provaInvalida === 'string' && /`apelidos`/.test(c.provaInvalida),
+      JSON.stringify(prova) + ': ' + c.provaInvalida);
+    assert.deepStrictEqual(c.naoProvados, ['barato', 'caro']);
+  }
+  for (const ausente of [null, undefined]) {
+    assert.strictEqual(apelidos.cobertura(MAPA, ausente).provaInvalida, null, 'ausente nao e invalida');
+  }
+  assert.strictEqual(apelidos.cobertura(MAPA, { apelidos: [] }).provaInvalida, null);
+});
+
+// A1-ape-4 (pedido 12, R2 estados): item da lista fora da forma (nao objeto, ou sem o nome em texto) sumia calado, e
+// o apelido virava "nao provado", que o teste do H4 nao reprova. Agora o item torto invalida a prova inteira.
+test('A1-ape-4: item fora da forma na prova nao some calado', () => {
+  const bom = { apelido: 'caro', aceito: true };
+  const tortos = ['barato', null, 7, true, [], { aceito: true }, { apelido: 7, aceito: true }, { apelido: '', aceito: true }];
+  for (const item of tortos) {
+    const c = apelidos.cobertura(MAPA, { apelidos: [bom, item] });
+    assert.strictEqual(c.temProva, false, JSON.stringify(item));
+    assert.ok(typeof c.provaInvalida === 'string' && /`apelidos`/.test(c.provaInvalida),
+      JSON.stringify(item) + ': ' + c.provaInvalida);
+    assert.deepStrictEqual(c.naoProvados, ['barato', 'caro']);
+  }
+  for (const campos of ['model', ['model'], [null], [{ aceito: true }], [{ campo: '', aceito: true }]]) {
+    const c = apelidos.cobertura(MAPA, { apelidos: [bom], campos: campos });
+    assert.strictEqual(c.temProva, false, JSON.stringify(campos));
+    assert.ok(typeof c.provaInvalida === 'string' && /`campos`/.test(c.provaInvalida),
+      JSON.stringify(campos) + ': ' + c.provaInvalida);
+  }
+  const semCampos = apelidos.cobertura(MAPA, { apelidos: [bom] });
+  assert.strictEqual(semCampos.provaInvalida, null, 'prova sem a lista campos segue valida');
+  assert.deepStrictEqual(semCampos.provados, ['caro']);
+});
+
 /* ------------------------------------------------------------------------- *
  * A ASSERCAO SOBRE ESTE AMBIENTE. E a unica que o skip cala.
  * Este repositorio e o do PLUGIN: nao tem .claude/ e nunca tera apelidos do
@@ -235,7 +347,9 @@ test('apelidos vivos: --plugin monta o roteiro so do plugin, sem pedir projeto.j
 test('apelidos vivos: nenhum apelido deste ambiente deixou de valer (H4)', (t) => {
   const projeto = config.carregarProjeto(RAIZ);
   let prova = null;
-  try { prova = JSON.parse(fs.readFileSync(path.join(RAIZ, PROVA), 'utf8')); } catch (e) { prova = null; }
+  let ilegivel = null;
+  try { prova = JSON.parse(fs.readFileSync(path.join(RAIZ, PROVA), 'utf8')); }
+  catch (e) { if (e.code !== 'ENOENT') ilegivel = e.message; }
 
   const c = apelidos.cobertura(projeto, prova, apelidos.agentesDoPlugin());
 
@@ -243,6 +357,9 @@ test('apelidos vivos: nenhum apelido deste ambiente deixou de valer (H4)', (t) =
     t.skip('nao verificavel aqui: nem este ambiente nem os agentes do plugin declaram apelido');
     return;
   }
+  // A1-ape-3: prova que existe e nao se le (JSON quebrado, ou sem a lista `apelidos`) reprova; so a ausente pula.
+  assert.strictEqual(ilegivel, null, PROVA + ' existe e nao se le: ' + ilegivel);
+  assert.strictEqual(c.provaInvalida, null, PROVA + ': ' + c.provaInvalida);
   if (!c.temProva) {
     t.skip('nao verificavel aqui: ainda nao se sondou. Rode scripts/provar-apelidos.js' +
       (projeto ? '' : ' --plugin') + ' e grave ' + PROVA.split(path.sep).join('/'));

@@ -62,7 +62,7 @@ test('ambiente: settings.json corrompido nao derruba a deteccao', () => {
 test('ambiente: settings.json, settings.local.json e .mcp.json com BOM sao lidos (A4-01)', () => {
   // O Out-File do PowerShell 5.1 e o Bloco de Notas antigo gravam o BOM; sem tira-lo o JSON.parse falhava e o
   // ambiente saia vazio, calado - o init duplicava o que o projeto ja tinha.
-  const BOM = '﻿';
+  const BOM = '\uFEFF';
   const dir = montar({
     '.claude/settings.json': BOM + JSON.stringify({ enabledPlugins: { 'superpowers@x': true }, hooks: { PreToolUse: [] } }),
     '.claude/settings.local.json': BOM + JSON.stringify({ hooks: { Stop: [] } }),
@@ -148,11 +148,115 @@ test('rubrica: skill sem secao do que NAO promete e recusada (criterio 6)', () =
   assert.ok(r.erros.some((e) => e.toLowerCase().includes('promete')));
 });
 
+// Pedido 12, R1 da A3 (s187): os moldes sao em ingles desde a D656, e a rubrica so lia portugues. O gerar-skill.js
+// recusava a skill do proprio molde (criterios 3 e 6), e a auditoria marcava toda skill em ingles.
+test('rubrica: o molde da skill de projeto passa nos criterios 3 e 6', () => {
+  const molde = fs.readFileSync(path.join(__dirname, '..', 'modelos', 'skill-projeto.md'), 'utf8');
+  const r = rubrica.conferir(molde);
+  assert.deepStrictEqual(r.erros.filter((e) => /criterio [36]/.test(e)), [], JSON.stringify(r.erros));
+});
+
+test('rubrica: description e secao do que nao promete em ingles valem como em portugues', () => {
+  const bom = '---\nname: x\ndescription: Use when the change is written.\n---\n## What this skill does NOT do\n- nothing\n';
+  assert.deepStrictEqual(rubrica.conferir(bom).erros, []);
+  assert.deepStrictEqual(rubrica.conferir(bom.replace(/\n/g, '\r\n')).erros, [], 'com CRLF, do checkout no Windows');
+  const semQuando = '---\nname: x\ndescription: Reviews code.\n---\n## What this skill does NOT promise\n- nothing\n';
+  assert.ok(rubrica.conferir(semQuando).erros.some((e) => e.startsWith('criterio 3:')));
+});
+
+// A description vazia nao pega a linha seguinte (o \s* atravessava a quebra); a em bloco do YAML vale inteira.
+test('rubrica: description vazia, indentada e em bloco do YAML', () => {
+  const T = '\n---\n## O que NAO promete\n- nada\n';
+  const erros = (fm) => rubrica.conferir('---\nname: x\n' + fm + T).erros.map((e) => e.split('.')[0]);
+  const SEM = 'criterio 3: falta a linha description no cabecalho da skill ' +
+    '(o frontmatter, entre as duas linhas --- do topo)';
+  assert.deepStrictEqual(erros('description:\nlicense: y'), [SEM]);
+  assert.deepStrictEqual(erros('description:\nnota: use quando der'), [SEM]);
+  assert.deepStrictEqual(erros('description:\n  Use quando a tarefa pedir'), []);
+  assert.deepStrictEqual(erros('description: >-\n  Use quando a tarefa\n  pedir'), []);
+});
+
+// "## O que nao faz parte" nao e a secao do criterio 6: o titulo termina no que a skill nao promete, garante ou faz.
+test('rubrica: titulo que so contem "nao faz" no meio nao vale como a secao do criterio 6', () => {
+  const r = rubrica.conferir('---\nname: x\ndescription: Use quando x.\n---\n## O que nao faz parte do escopo\n- y\n');
+  assert.ok(r.erros.some((e) => e.startsWith('criterio 6:')), JSON.stringify(r.erros));
+});
+
 test('rubrica: proibicao solta em lista de regras e recusada (criterio 1)', () => {
   const texto = '---\nname: x\ndescription: Use quando x.\n---\n## Regras\n- nunca faca hardening\n## O que NAO promete\n- nada\n';
   const r = rubrica.conferir(texto);
   assert.strictEqual(r.ok, false);
   assert.ok(r.erros.some((e) => e.includes('gatilho')));
+});
+
+// Pedido 12, P2 da A3 (D721): a description so vale no frontmatter (A3-15, A3-19); "use noite" nao e "use no" (A3-20).
+test('rubrica: description fora do frontmatter nao vale, e o QUANDO e palavra inteira', () => {
+  const T = '\n## O que NAO promete\n- nada\n';
+  const c3 = (texto) => rubrica.conferir(texto).erros.filter((e) => e.startsWith('criterio 3:')).length;
+  assert.strictEqual(c3('---\nname: x\n---\n# t\n```\ndescription: Use quando x\n```' + T), 1, 'description so no corpo');
+  assert.strictEqual(c3('# t\ndescription: Use quando x' + T), 1, 'sem frontmatter');
+  assert.strictEqual(c3('\uFEFF---\nname: x\ndescription: Use quando x\n---' + T), 0, 'com BOM');
+  assert.strictEqual(c3('---\r\nname: x\r\ndescription: Use quando x\r\n---' + T), 0, 'com CRLF');
+  assert.strictEqual(c3('---\nname: x\ndescription: Use noite adentro.\n---' + T), 1, '"use noite"');
+  assert.strictEqual(c3('---\nname: x\ndescription: Use no inicio da tarefa.\n---' + T), 0, '"use no"');
+});
+
+// A3-21, A3-22: a secao do criterio 6 e "o que/what ... nao promete/garante/faz", com outro verbo ou um parentese depois.
+const criterio6 = (titulo) => rubrica.conferir('---\nname: x\ndescription: Use quando x.\n---\n' + titulo + '\n- y\n').erros
+  .filter((e) => e.startsWith('criterio 6:')).length;
+test('rubrica: o titulo do criterio 6 pede "o que/what" e aceita verbo composto ou parentese no fim', () => {
+  assert.strictEqual(criterio6('## What this skill does NOT do (yet)'), 0);
+  assert.strictEqual(criterio6('## O que nao promete nem garante'), 0);
+  assert.strictEqual(criterio6('## What it does not promise, guarantee or do'), 0);
+  assert.strictEqual(criterio6('## Isto nao faz'), 1, 'sem "o que"');
+  assert.strictEqual(criterio6('## O que nao faz parte do escopo (ainda)'), 1, 'complemento que nao e verbo');
+});
+
+// A3-39: o criterio 1 le tambem a proibicao solta em ingles (os moldes sao em ingles desde a D656).
+test('rubrica: proibicao solta em ingles tambem e recusada (criterio 1)', () => {
+  const c1 = (item) => rubrica.conferir('---\nname: x\ndescription: Use when x.\n---\n## Rules\n- ' + item +
+    '\n## What this skill does NOT do\n- y\n').erros.filter((e) => e.startsWith('criterio 1,')).length;
+  // A3-41: o apostrofo tipografico (o que o editor poe sozinho) e o "must not" tambem.
+  for (const item of ['never do hardening', 'Always run the suite', 'Do not edit the lockfile', "don't push",
+    'Forbidden: force push',
+    'don\u2019t push', 'Must not edit the lockfile']) {
+    assert.strictEqual(c1(item), 1, item);
+  }
+  assert.strictEqual(c1('never twice -> stop and ask'), 0, 'com gatilho');
+  assert.strictEqual(c1('Nevertheless it helps'), 0, 'palavra inteira');
+});
+
+// A3-16, A3-17, A3-18: cada erro dos criterios 3 e 6 diz o que escrever, e o exemplo que ele da passa na rubrica.
+test('rubrica: os erros dos criterios 3 e 6 dizem o que escrever', () => {
+  const T6 = '## O que NAO promete\n- nada\n';
+  const semDescricao = rubrica.conferir('---\nname: x\n---\n' + T6).erros[0];
+  assert.match(semDescricao, /^criterio 3: falta a linha description no cabecalho .*---.*"description: Use quando/);
+  const semQuando = rubrica.conferir('---\nname: x\ndescription: Faz x.\n---\n' + T6).erros[0];
+  const formulas = semQuando.match(/"Use [^"]+"/g) || [];
+  assert.ok(formulas.length >= 2 && formulas.some((f) => /when/.test(f)), semQuando);
+  for (const f of formulas) assert.ok(rubrica.RE_QUANDO.test(f.replace(/\.\.\./, 'x')), f);
+  const sem6 = rubrica.conferir('---\nname: x\ndescription: Use quando x.\n---\n# t\n').erros[0];
+  const titulos = sem6.match(/"## [^"]+"/g) || [];
+  assert.strictEqual(titulos.length, 2, sem6);
+  for (const t of titulos) assert.strictEqual(criterio6(t.slice(1, -1)), 0, t);
+});
+
+// A3-40: o "criterio N" vem glosado (o numero da rubrica em modelos/boa-skill.md), o frontmatter tambem, e o texto
+// corrido nao grita (QUANDO, NAO); os titulos de exemplo seguem como o molde.
+test('rubrica: os erros dos criterios 3 e 6 dizem de onde vem o numero e o que e o frontmatter', () => {
+  const T6 = '## O que NAO promete\n- nada\n';
+  const [semDescricao, semQuando, sem6] = [
+    rubrica.conferir('---\nname: x\n---\n' + T6).erros[0],
+    rubrica.conferir('---\nname: x\ndescription: Faz x.\n---\n' + T6).erros[0],
+    rubrica.conferir('---\nname: x\ndescription: Use quando x.\n---\n# t\n').erros[0],
+  ];
+  for (const e of [semDescricao, semQuando, sem6]) {
+    assert.match(e, /rubrica de modelos\/boa-skill\.md/, e);
+    assert.doesNotMatch(e, /QUANDO/, e);
+  }
+  assert.match(semDescricao, /cabecalho da skill \(o frontmatter, entre as duas linhas --- do topo\)/, semDescricao);
+  assert.match(semQuando, /^criterio 3: a linha description do cabecalho diz .*, e nao quando usar\./, semQuando);
+  assert.match(sem6, /^criterio 6: falta a secao do que a skill nao promete\./, sem6);
 });
 
 // T11-3 (R-T24-02): no init o projeto.json ainda nao existe, e o peso de instrucao ignorava

@@ -191,6 +191,19 @@ test('obrigacoes: a mesma obrigacao dita duas vezes conta uma vez so', () => {
   limpar(d);
 });
 
+// Pedido 12 (A3-28): a tabela de vistos era uma so para todas as familias, e o ordinal de outra familia com o mesmo
+// titulo sumia. O ordinal se reconhece pela familia e o titulo; o item que repete o nome dele segue contando uma vez.
+test('obrigacoes: dois ordinais de familias diferentes com o mesmo titulo sao duas obrigacoes', () => {
+  const d = manualDeMentira('# m\n\n## Marcha 2 - Estados\n\n## Lente 2 - Estados\n\nSempre:\n\n- **Estados**\n',
+    { 'a.md': '# a\n\n## Lente 2 - Estados\n' });
+  assert.deepStrictEqual(ids(ob.inventario(d)), ['marcha-2', 'lente-2']);
+  limpar(d);
+  // A ordem nao muda a conta: o item que vem ANTES do ordinal com o mesmo nome tambem deixa uma obrigacao so.
+  const antes = manualDeMentira('# m\n\n## R\n\nSempre:\n\n- **Estados**\n\n## Lente 2 - Estados\n');
+  assert.strictEqual(ob.inventario(antes).obrigacoes.length, 1, JSON.stringify(ids(ob.inventario(antes))));
+  limpar(antes);
+});
+
 // ── bordas ───────────────────────────────────────────────────────────────
 
 test('obrigacoes: diretorio que nao existe devolve inventario vazio, nao estoura', () => {
@@ -199,6 +212,49 @@ test('obrigacoes: diretorio que nao existe devolve inventario vazio, nao estoura
     assert.strictEqual(inv.ok, false, JSON.stringify(ruim));
     assert.deepStrictEqual(inv.obrigacoes, []);
   }
+});
+
+// Pedido 12 (A3-34, A3-37): o contrato do inventario diz que pasta sem SKILL.md da ok: false, e o codigo so dava sem
+// nenhum .md; os vazios tambem vinham sem o erro que as falhas de leitura ja traziam.
+test('obrigacoes: pasta que nao existe, sem SKILL.md ou nao informada da ok: false com o erro que diz qual', () => {
+  const soRefs = manualDeMentira('# m\n', { 'a.md': '# a\n\n## Lente 2 - Borda\n' });
+  fs.rmSync(path.join(soRefs, 'SKILL.md'));
+  const casos = [
+    [path.join(os.tmpdir(), 'sworn nao existe 404'), /a pasta nao existe/],
+    [soRefs, /nao ha SKILL\.md nela/],
+    ['', /nenhuma pasta de manual foi informada/],
+    [null, /nenhuma pasta de manual foi informada/]
+  ];
+  for (const [dir, erro] of casos) {
+    const inv = ob.inventario(dir);
+    assert.deepStrictEqual([inv.ok, inv.arquivos, inv.obrigacoes], [false, [], []], String(dir));
+    assert.ok(erro.test(inv.erro || ''), String(dir) + ': ' + JSON.stringify(inv));
+  }
+  limpar(soRefs);
+});
+
+// Pedido 12, R1 da A3 (s187): o arquivo que falhava na leitura sumia com ok: true, e a pasta references/ que nao se
+// listava estourava, contra o "nunca estoura" do contrato. Os dois viram inventario vazio com ok: false e a causa.
+test('obrigacoes: arquivo do manual que nao se le da ok: false com a causa, nao inventario parcial', () => {
+  // O b.md e o ultimo da ordem de leitura: o SKILL.md e o a.md ja deram obrigacoes quando ele falha.
+  const d = manualDeMentira('# m\n\n## Marcha 1 - Rapida\n', { 'a.md': '# a\n\n## Lente 2 - Borda\n' });
+  fs.mkdirSync(path.join(d, 'references', 'b.md'));
+  const inv = ob.inventario(d);
+  assert.strictEqual(inv.ok, false, JSON.stringify(inv));
+  assert.deepStrictEqual([inv.arquivos, inv.obrigacoes], [[], []], 'o que veio antes da falha nao sobra');
+  assert.ok(/b\.md \(e uma pasta \(EISDIR\)\)/.test(inv.erro || ''), JSON.stringify(inv));
+  limpar(d);
+});
+
+test('obrigacoes: references/ que nao se lista da ok: false com a causa, nao estoura', () => {
+  const d = manualDeMentira('# m\n\n## Marcha 1 - Rapida\n', { 'b.md': '# b\n' });
+  const original = fs.readdirSync;
+  fs.readdirSync = function () { throw Object.assign(new Error('negado'), { code: 'EACCES' }); };
+  let inv;
+  try { inv = ob.inventario(d); } finally { fs.readdirSync = original; }
+  assert.strictEqual(inv.ok, false, JSON.stringify(inv));
+  assert.ok(/references \(sem permissao \(EACCES\)\)/.test(inv.erro || ''), JSON.stringify(inv));
+  limpar(d);
 });
 
 test('obrigacoes: manual sem references le so o SKILL.md', () => {

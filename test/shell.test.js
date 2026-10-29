@@ -51,8 +51,8 @@ test('shell: a palavra dentro de string literal nao e apontada', () => {
 
 test('shell: na segunda tentativa o motivo manda TROCAR DE IDIOMA', () => {
   const p = shell.conferir('rm -rf build', WIN);
-  const primeiro = shell.motivo('rm -rf build', p, 1);
-  const segundo = shell.motivo('rm -fr build', p, 2);
+  const primeiro = shell.motivoIdioma('rm -rf build', p, 1);
+  const segundo = shell.motivoIdioma('rm -fr build', p, 2);
   // T1/F1-H08: a frase vira tom normal, sem caixa alta gritada
   assert.ok(!primeiro.includes('Troque de idioma'));
   assert.ok(segundo.includes('Troque de idioma, nao de variacao.'), segundo);
@@ -62,7 +62,7 @@ test('shell: na segunda tentativa o motivo manda TROCAR DE IDIOMA', () => {
 
 test('shell: motivo mostra achado e substituto lado a lado', () => {
   const p = shell.conferir('echo oi > /tmp/a.txt', WIN);
-  const m = shell.motivo('echo oi > /tmp/a.txt', p, 1);
+  const m = shell.motivoIdioma('echo oi > /tmp/a.txt', p, 1);
   assert.ok(m.includes('/tmp'));
   assert.ok(m.includes('TEMP'));
 });
@@ -699,17 +699,31 @@ test('T1/F3-16: padrao vazio ou so de espaco e regra que nao se le, e nao casa t
 
 test('T1/F3-17: o motivo nao lanca com regra sem achado', () => {
   let m = '';
-  assert.doesNotThrow(() => { m = shell.motivo('x', [{ sugestao: 's', motivo: 'm' }], 1); });
+  assert.doesNotThrow(() => { m = shell.motivoIdioma('x', [{ sugestao: 's', motivo: 'm' }], 1); });
   assert.ok(m.includes('  (sem achado)'), m);
   // controle: com achado, a linha mostra o achado
-  assert.ok(shell.motivo('x', [{ achado: 'head', sugestao: 's', motivo: 'm' }], 1).includes('  head '));
+  assert.ok(shell.motivoIdioma('x', [{ achado: 'head', sugestao: 's', motivo: 'm' }], 1).includes('  head '));
 });
 
 test('T1/F6-02: o motivo ecoa no maximo 120 caracteres do comando e diz o tamanho quando corta', () => {
-  const linhaComando = (c) => shell.motivo(c, [], 1).split('\n').find((l) => l.startsWith('Comando: '));
+  const linhaComando = (c) => shell.motivoIdioma(c, [], 1).split('\n').find((l) => l.startsWith('Comando: '));
   assert.strictEqual(linhaComando('a'.repeat(500)), 'Comando: ' + 'a'.repeat(120) + '...(500 caracteres)');
   // controle: 120 sai inteiro, sem sufixo
   assert.strictEqual(linhaComando('b'.repeat(120)), 'Comando: ' + 'b'.repeat(120));
+});
+
+test('D721 A1-01/A1-02: o eco do comando nao mostra null nem undefined e corta por caractere, nunca no meio do emoji', () => {
+  const linha = (m) => m.split('\n').find((l) => l.startsWith('Comando: '));
+  const cd = { forma: 'bash', achado: 'cd' };
+  assert.strictEqual(linha(shell.motivoIdioma(null, [], 1)), 'Comando: ');
+  assert.strictEqual(linha(shell.motivoCdSolto(undefined, cd)), 'Comando: ');
+  // o emoji conta como um caractere: 200 saem como 120 "?" e o tamanho diz 200
+  const emoji = String.fromCodePoint(0x1F600);
+  assert.strictEqual(linha(shell.motivoIdioma(emoji.repeat(200), [], 1)), 'Comando: ' + '?'.repeat(120) + '...(200 caracteres)');
+  assert.strictEqual(linha(shell.motivoCdSolto(emoji.repeat(400), cd)), 'Comando: ' + '?'.repeat(300));
+  // controle: o comando comum sai igual
+  assert.strictEqual(linha(shell.motivoIdioma('cd x', [], 1)), 'Comando: cd x');
+  assert.strictEqual(linha(shell.motivoCdSolto('cd x', cd)), 'Comando: cd x');
 });
 
 test('T1/F3-01: atribuicao, time, ! e palavra entre aspas na frente deixam o cd em posicao de comando (Bash)', () => {
@@ -831,8 +845,8 @@ test('T1/F3-03 (D332): funcao chamada antes de definida ainda nao existe e nao n
 // tentativas; a opcao 2 e a mesma frase nos dois ramos.
 test('083 T6 (p6-30, p6-25): motivo com linha em branco em volta da tabela e a opcao 2 igual nas duas tentativas', () => {
   const p = [{ achado: 'head', sugestao: 'Select-Object -First', motivo: 'm' }];
-  const um = shell.motivo('head x', p, 1).split('\n');
-  const dois = shell.motivo('head x', p, 2).split('\n');
+  const um = shell.motivoIdioma('head x', p, 1).split('\n');
+  const dois = shell.motivoIdioma('head x', p, 2).split('\n');
   for (const [nome, l] of [['tentativa 1', um], ['tentativa 2', dois]]) {
     const i = l.findIndex((x) => x.startsWith('Comando: '));
     assert.strictEqual(l[i + 1], '', nome + ': linha em branco depois do Comando: ' + l.join('\n'));
@@ -856,15 +870,15 @@ test('083 T6 (p6-24): as opcoes do motivoCdSolto saem numeradas em sequencia nos
 });
 
 test('T10-7/5: motivo sem sugestao nao imprime undefined, e sem motivo nao ha a linha por que:', () => {
-  const semSugestao = shell.motivo('x', [{ achado: 'head', motivo: 'm' }], 1);
+  const semSugestao = shell.motivoIdioma('x', [{ achado: 'head', motivo: 'm' }], 1);
   assert.ok(!/undefined/.test(semSugestao), semSugestao);
   assert.ok(semSugestao.includes('(sem sugestao)'), semSugestao);
   assert.ok(semSugestao.includes('      por que: m'), 'com motivo a linha por que: segue: ' + semSugestao);
-  const semMotivo = shell.motivo('x', [{ achado: 'head', sugestao: 's' }], 1);
+  const semMotivo = shell.motivoIdioma('x', [{ achado: 'head', sugestao: 's' }], 1);
   assert.ok(!/undefined/.test(semMotivo), semMotivo);
   assert.ok(!/por que:/.test(semMotivo), 'sem motivo nao pode haver a linha por que: ' + semMotivo);
   assert.ok(semMotivo.includes('  head '), semMotivo);
-  const completo = shell.motivo('x', [{ achado: 'head', sugestao: 's', motivo: 'm' }], 1);
+  const completo = shell.motivoIdioma('x', [{ achado: 'head', sugestao: 's', motivo: 'm' }], 1);
   assert.ok(completo.includes('s') && completo.includes('por que: m') && !completo.includes('(sem sugestao)'), completo);
 });
 

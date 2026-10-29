@@ -194,6 +194,30 @@ test('preparar-revisao: caminho que sai da pasta atual e recusado com o motivo c
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// Pedido 12 (A3-03): a guarda de cima e lexica. Um link (junction) DENTRO da pasta atual para uma pasta de FORA
+// passava, e o arquivo de fora ia para o pacote (e dele ao inspetor). Pelo caminho real, recusa e nao grava.
+test('A3-03: --arquivo que passa por link para fora da pasta atual e recusado, sem gravar', (t) => {
+  const dir = repoDeEnsaio();
+  const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-prep-fora-'));
+  try {
+    fs.writeFileSync(path.join(fora, 'segredo.txt'), 'conteudo de fora\n', 'utf8');
+    // Junction: no Windows nao pede privilegio; em POSIX o tipo e ignorado e vira link comum.
+    try { fs.symlinkSync(fora, path.join(dir, 'link'), 'junction'); } catch (e) {
+      t.skip('nao deu para criar link neste disco/usuario (' + ((e && e.code) || 'erro') + ')');
+      return;
+    }
+    const r = rodarCli(dir, 'link/segredo.txt');
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.strictEqual(r.stderr, '', 'sem stack trace: ' + r.stderr);
+    assert.match(r.stdout, /passa por um link que leva para fora da pasta atual/, r.stdout);
+    assert.match(r.stdout, /Nada foi gravado/, r.stdout);
+    assert.strictEqual(fs.existsSync(path.join(dir, '.claude')), false, 'recusado nao grava nada');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(fora, { recursive: true, force: true });
+  }
+});
+
 test('preparar-revisao: arquivo que nao existe no disco diz qual, sem stack trace', () => {
   const dir = repoDeEnsaio();
   try {
@@ -1463,7 +1487,10 @@ test('D503: montarReferencia - um bloco por entrada; texto inteiro, binario pelo
     '(URL: o inspetor so le arquivo e nao abre a pagina; julgue sem ela e diga isso)', '',
     // Plano 082 (p3-22): o caminho entre aspas, que caminho com espaco nao fica ambiguo
     '=== referencia 3 de 4: ref/tela.png ===', '(imagem ou binario: abra com Read em "/abs/ref/tela.png")', '',
-    '=== referencia 4 de 4: ref/sumiu.js ===', '(NAO ACHADA no disco: confira o caminho no projeto.json)', ''
+    '=== referencia 4 de 4: ref/sumiu.js ===',
+    '(NAO ACHADA no disco: confira o caminho na lista "referencias" de .claude/sworn/projeto.json; ' +
+      'julgue sem esta referencia)',
+    ''
   ].join('\n'));
   // texto sem quebra no fim ganha uma, para o cabecalho seguinte nao colar na ultima linha
   const sem = cegar.montarReferencia(['a.txt'], function () { return { tipo: 'texto', conteudo: 'x' }; });
@@ -1542,6 +1569,9 @@ test('D503: referencia que nao existe vai escrita no R.txt e o aviso diz qual', 
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const s = JSON.parse(r.stdout);
     assert.match(fs.readFileSync(s.referencia, 'utf8'), /NAO ACHADA/);
+    // A3-08 (pedido 12): diz qual lista do projeto.json conferir e que o julgamento segue sem a que falta.
+    assert.match(fs.readFileSync(s.referencia, 'utf8'),
+      /confira o caminho na lista "referencias" de \.claude\/sworn\/projeto\.json; julgue sem esta referencia/);
     assert.match(s.aviso, /ref\/sumiu\.md/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

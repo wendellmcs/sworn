@@ -53,20 +53,25 @@ if (!objeto(obj)) {
 if (obj.permissions !== undefined && !objeto(obj.permissions)) {
   sair(1, { autorizado: false, gravou: false, erro: 'permissions em ' + RELATIVO + ' nao e objeto; o esperado e "permissions": { "allow": [ ... ] }; corrija e rode de novo' });
 }
-const allow = obj.permissions && obj.permissions.allow;
-if (allow !== undefined && !Array.isArray(allow)) {
-  sair(1, { autorizado: false, gravou: false, erro: 'permissions.allow em ' + RELATIVO + ' nao e lista; o esperado e "allow": [ "regra 1", "regra 2" ]; corrija e rode de novo' });
+// A2 (s193): o deny que nao e lista passava calado e o script gravava e dizia autorizado:true; item que nao e
+// texto, nas duas listas, e a mesma forma inesperada.
+for (const nome of ['allow', 'deny']) {
+  const lista = obj.permissions && obj.permissions[nome];
+  if (lista !== undefined && !(Array.isArray(lista) && lista.every((r) => typeof r === 'string'))) {
+    sair(1, { autorizado: false, gravou: false, erro: 'permissions.' + nome + ' em ' + RELATIVO + ' nao e lista de textos; o esperado e "' + nome + '": [ "regra 1", "regra 2" ]; corrija e rode de novo' });
+  }
 }
+const allow = obj.permissions && obj.permissions.allow;
 const deny = obj.permissions && obj.permissions.deny;
 // `Workflow` inteiro, ou `Workflow(<padrao>)` cujo padrao (com * de curinga) casa com sworn:parallel
 function negaEste(r) {
   if (r === 'Workflow') return true;
-  const m = typeof r === 'string' && r.match(/^Workflow\((.*)\)$/);
+  const m = r.match(/^Workflow\((.*)\)$/);
   if (!m) return false;
   const re = new RegExp('^' + m[1].split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
   return re.test('sworn:parallel');
 }
-const negada = Array.isArray(deny) ? deny.filter(negaEste)[0] : undefined;
+const negada = (deny || []).filter(negaEste)[0];
 if (negada) {
   sair(1, { autorizado: false, gravou: false, erro: '"' + negada + '" esta em permissions.deny de ' + RELATIVO + ', e o deny vence o allow; tire de la e rode de novo' });
 }

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const util = require('node:util');
 const io = require('./lib/io.js');
+const caminho = require('./lib/caminho.js');
 const estado = require('./lib/estado.js');
 const config = require('./lib/config.js');
 const glob = require('./lib/glob.js');
@@ -64,6 +65,11 @@ function pastaDaRonda(campo, raiz) {
   const dentro = glob.normalizar(path.relative(raiz, abs));
   if (dentro === '..' || dentro.startsWith('../') || path.isAbsolute(dentro)) {
     return { erro: '"' + campo.trim() + '" fica fora da pasta do projeto (' + raiz + '), entao nao e uma ronda deste projeto' };
+  }
+  // Pedido 12 (A3-05): a guarda acima e lexica; um link (ou junction) no caminho levaria o veredito para fora.
+  if (!caminho.dentroPeloCaminhoReal(abs, raiz)) {
+    return { erro: '"' + campo.trim() + '" passa por um link que leva para fora da pasta do projeto (' + raiz +
+      '), entao nao gravo la' };
   }
   const ronda = path.dirname(abs);
   if (!ehArquivo(path.join(ronda, 'A.txt')) || !ehArquivo(path.join(ronda, 'B.txt'))) {
@@ -158,22 +164,14 @@ function marcaDoInspetor(e) {
 }
 
 // Aviso de quando a marca do handback nao se grava: sem ela o SubagentStop nao sabe que o handback ja avisou.
-const MARCA_FALHOU = 'Nao consegui gravar a marca deste inspetor: o aviso pode se repetir quando o subagente terminar.';
-
-/** A resposta do inspetor, conforme o evento: SubagentStop ou handback (o resto nao e deste script). */
-function mensagemDe(e) {
-  if (e.hook_event_name === 'SubagentStop') return e.last_assistant_message;
-  if (e.hook_event_name === 'PostToolUse') {
-    if (e.tool_name && e.tool_name !== 'SubagentHandback') return undefined;
-    return e.tool_input && typeof e.tool_input === 'object' ? e.tool_input.message : undefined;
-  }
-  return undefined;
-}
+// Pedido 12 (A3-04): quem le e o usuario, sem "marca" nem "subagente", e com o que fazer com a repeticao.
+const MARCA_FALHOU = 'Este aviso pode se repetir quando o inspetor terminar (nao consegui guardar que ja avisei): ' +
+  'a repeticao e o mesmo aviso, ignore-a.';
 
 /** A lente do JSON da resposta, para o aviso de excecao; null quando a resposta nao se le. Nunca lanca. */
 function lenteDaResposta(e) {
   try {
-    const mensagem = mensagemDe(e);
+    const mensagem = texto.mensagemDoSubagente(e);
     const vd = typeof mensagem === 'string' ? extrairJson(mensagem) : null;
     return vd && typeof vd.lente === 'string' && vd.lente.trim() ? vd.lente.trim().slice(0, 60) : null;
   } catch (x) { return null; }
@@ -182,8 +180,9 @@ function lenteDaResposta(e) {
 function tratar(e) {
   if (e.agent_type !== AGENTE) return null;
   if (e.hook_event_name !== 'SubagentStop' && e.hook_event_name !== 'PostToolUse') return null;
-  if (e.hook_event_name === 'PostToolUse' && e.tool_name && e.tool_name !== 'SubagentHandback') return null;
-  const mensagem = mensagemDe(e);
+  // A2-16: a mesma forma estrita do texto.mensagemDoSubagente (o matcher do hooks.json ja garante o nome).
+  if (e.hook_event_name === 'PostToolUse' && e.tool_name !== 'SubagentHandback') return null;
+  const mensagem = texto.mensagemDoSubagente(e);
 
   const marca = marcaDoInspetor(e);
   // O handback vem antes do SubagentStop e ja tratou este inspetor (gravou, ou avisou): o
@@ -203,9 +202,9 @@ function tratar(e) {
       // aviso pode ser ignorado.
       if (gravado.lente) {
         return 'sworn: gravei o veredito da lente ' + gravado.lente + ' em ' +
-          glob.normalizar(path.relative(raiz, gravado.arquivo)) + ', mas nao consegui gravar a marca deste ' +
-          'inspetor. Se o fim deste subagente avisar que nao achou o JSON do veredito, ignore esse aviso: ' +
-          'o veredito ja esta gravado.';
+          glob.normalizar(path.relative(raiz, gravado.arquivo)) + '. Se, quando o inspetor terminar, vier o ' +
+          'aviso de que nao achou o JSON do veredito, ignore esse aviso: o veredito ja esta gravado (nao consegui ' +
+          'guardar que este inspetor ja foi tratado).';
       }
     }
   }

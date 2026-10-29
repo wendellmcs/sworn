@@ -208,7 +208,9 @@ function severidadeCanonica(x) {
 
 /** O comeco da descricao do achado descartado, para a mensagem; sem descricao, diz isso (e nao "undefined"). */
 function trechoDaDescricao(d) {
-  return d === undefined || d === null || String(d).trim() === '' ? '(sem descricao)' : String(d).slice(0, 60);
+  // A3-01: 60 caracteres por ponto de codigo; o slice de String parte o emoji (par UTF-16) no meio.
+  return d === undefined || d === null || String(d).trim() === '' ? '(sem descricao)'
+    : [...String(d)].slice(0, 60).join('');
 }
 
 /**

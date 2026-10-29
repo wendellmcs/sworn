@@ -876,3 +876,22 @@ test('ascii: hifens e menos viram hifen; quebra e tab viram espaco; emoji vira U
   assert.strictEqual(escopo.ascii('a-b c'), 'a-b c');
   assert.strictEqual(escopo.ascii('中'), '?');
 });
+
+// A2-21/22/23 (pedido 12): o fim do motivoSemEscopo era lema, o modelo do Fora insinuava vontade, e o "vira REGISTRO"
+// nao dizia onde registrar.
+test('A2-21/22/23: o aviso diz o passo seguinte e onde contar o achado, sem lema nem jargao', () => {
+  const sem = escopo.motivoSemEscopo('src/a.js', 'padrao');
+  assert.doesNotMatch(sem, /Qualidade maxima|jamais/, 'lema no fim: ' + sem);
+  assert.doesNotMatch(sem, /vontade/, 'tom no modelo do Fora: ' + sem);
+  assert.match(sem.split('\n').pop(), /grave o escopo e repita a edicao/, 'o passo seguinte no fim: ' + sem);
+  const esc = escopo.parse('## Dentro\n- src/**\n');
+  for (const m of [escopo.motivoFora('lib/b.js', 'padrao', esc), escopo.motivoDeclaradoFora('src/a.js', 'src/**')]) {
+    assert.doesNotMatch(m, /REGISTRO|achado/, 'jargao da revisao: ' + m);
+    assert.match(m, /conte ao usuario no fecho do turno, sem corrigir/, 'onde registrar: ' + m);
+  }
+  // R1 da s204: o intocavel tinha o mesmo "vira registro" e a pergunta ao dono sem dizer como.
+  const into = escopo.motivoIntocavel('.env');
+  assert.doesNotMatch(into, /vira registro|recomendada marcada/, 'jargao no intocavel: ' + into);
+  assert.match(into, /conte ao usuario no fecho do turno/, 'onde registrar no intocavel: ' + into);
+  assert.match(into, /3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo/, 'como perguntar: ' + into);
+});

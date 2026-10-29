@@ -8,6 +8,10 @@ const { entreAspas } = require('./texto.js');
 const ESCADA_PADRAO = [];
 const FORK = 'fork';
 
+// Valor que nao e texto sai em JSON: o String() cru lancava com {"toString": 1}, e o `io.blindar` do portao liberava.
+// A2-48: vale tambem para o nome da escada; o validar so avisa, e o portao roda com o projeto.json como esta.
+function citado(v) { return entreAspas(typeof v === 'string' ? v : JSON.stringify(v)); }
+
 function escada(projeto) {
   const e = projeto && projeto.agentes && projeto.agentes.escada;
   return Array.isArray(e) ? e : ESCADA_PADRAO;
@@ -58,16 +62,20 @@ function permitido(tipo, marchaMax, projeto) {
       'sworn - agente caro demais para um trabalho simples.',
       '',
       'Voce despachou ' + entreAspas(tipo) + ', da metade mais cara da escada deste projeto, mas o escopo',
-      'declarado so toca caminho de marcha rapida (o nivel de rigor mais leve do projeto.json).',
+      'declarado so toca caminho de marcha rapida (o nivel de rigor mais leve que o projeto.json da a um',
+      'caminho, no campo marchas).',
     ].concat(tipo === FORK && lista.indexOf(FORK) === -1
       ? ['O "fork" roda no modelo do agente principal e conta como o topo da escada.'] : [], [
       'Escada deste projeto, do mais barato ao mais caro:',
-      lista.map(function (a) { return '  - ' + entreAspas(a); }).join('\n'),
+      lista.map(function (a) { return '  - ' + citado(a); }).join('\n'),
       '',
       'Faca uma destas:',
-      '  1. despache um agente mais barato da escada: ele escala sozinho se a tarefa passar do alcance dele;',
-      '  2. se o trabalho exige mesmo este agente, acrescente ao escopo o caminho de marcha padrao ou AAA',
-      '     que justifica a escolha - e a escolha fica visivel.'
+      '  1. despache um agente mais barato da escada. Se a tarefa passar do papel dele, ele termina a',
+      '     resposta com a linha ESCALAR (o agente de cima e o motivo), e o sworn barra o fim do turno',
+      '     ate esse agente ser despachado;',
+      '  2. se o trabalho exige mesmo este agente, acrescente na secao "Dentro" do escopo',
+      '     (.claude/sworn/escopo.md, ou o arquivo da frente em .claude/sworn/escopos/) o caminho de',
+      '     marcha padrao ou AAA que justifica a escolha: o motivo fica escrito no escopo.'
     ]).join('\n')
   };
 }
@@ -75,8 +83,8 @@ function permitido(tipo, marchaMax, projeto) {
 /**
  * D678 T2: agente dos `degraus` chamado com `model` ou `effort` diferente da tabela do projeto. O que a chamada passa
  * vence o frontmatter do agente (sonda d2/run8): sem esta conferencia a tabela nao valeria. Campo que a chamada nao
- * traz e "nao sei" (binario velho sem `effort`; o arquivo do agente decide) e passa; degrau sem apelido ou sem
- * esforco gravado nao compara esse campo.
+ * traz (ausente, null ou vazio, e a entrada inteira ausente) e "nao sei" (binario velho sem `effort`; o arquivo do
+ * agente decide) e passa; degrau sem apelido ou sem esforco gravado nao compara esse campo.
  */
 function chamadaDaTabela(tipo, entrada, projeto) {
   const lista = degraus.normalizar(projeto && projeto.agentes && projeto.agentes.degraus);
@@ -91,8 +99,7 @@ function chamadaDaTabela(tipo, entrada, projeto) {
   });
   if (errados.length === 0) return { ok: true, motivo: null };
 
-  // Valor que nao e texto sai em JSON: o String() cru lancava com {"toString": 1}, e o `io.blindar` do portao liberava.
-  const campo = function (c, v) { return c[0] + ' ' + entreAspas(typeof v === 'string' ? v : JSON.stringify(v)); };
+  const campo = function (c, v) { return c[0] + ' ' + citado(v); };
   const acima = lista[i + 1];
   return {
     ok: false,
@@ -103,7 +110,8 @@ function chamadaDaTabela(tipo, entrada, projeto) {
         errados.map(function (c) { return campo(c, chamada[c[0]]); }).join(' e ') + ',',
       'e a escada deste projeto (agentes.degraus no projeto.json) diz ' +
         tabela.map(function (c) { return campo(c, c[1]); }).join(' e ') + '.',
-      'O que a chamada passa vence o que o arquivo do agente declara.',
+      'Na chamada, model (o modelo) e effort (o esforco) valem mais que o arquivo do agente: ele rodaria',
+      'com o que a chamada pede, e nao com o que a escada grava para este degrau.',
       '',
       'Faca uma destas:',
       '  1. chame de novo como a tabela diz:',

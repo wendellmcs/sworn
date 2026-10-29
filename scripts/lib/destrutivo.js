@@ -453,15 +453,6 @@ function lerComando(cmd, fundo, opts) {
   return segmentos;
 }
 
-// D67: o portao le o comando sob as interpretacoes AMBIGUAS de shell e UNE os
-// segmentos - barra se QUALQUER leitura barrar. E o molde ja usado em `nu()` (o
-// `^`) e em `semAspas` (as aspas): onde o portao nao sabe qual shell vai executar,
-// erra para o lado do sobre-bloqueio (D45/D49/D57/D58). PROPRIEDADE que isto
-// garante, e que separa este desenho da tentativa da D53: as leituras alternativas
-// SO SE SOMAM a primaria, que fica intacta - nenhum caso que ja barra pode deixar
-// de barrar; o unico risco e falso positivo, e ele foi medido em fix5-bancada.
-// As alternativas so sao montadas quando o gatilho esta presente, entao o custo de
-// um comando sem `(`, sem continuacao e sem `#` e IDENTICO ao da leitura de antes.
 // D244/defeito 5: o corpo de um heredoc so e TEXTO quando quem o recebe e um escritor de
 // texto (`cat`, `tee`) e nada o encaminha a outro programa. Para `bash`, `sh`, `ssh`,
 // `python` ou por um cano, o corpo e executado e continua lido.
@@ -524,6 +515,15 @@ function semCorpoDeHeredocInerte(cmd) {
   return linhas.slice(0, a + 1).concat(linhas.slice(fim)).join('\n');
 }
 
+// D67: o portao le o comando sob as interpretacoes AMBIGUAS de shell e UNE os
+// segmentos - barra se QUALQUER leitura barrar. E o molde ja usado em `nu()` (o
+// `^`) e em `semAspas` (as aspas): onde o portao nao sabe qual shell vai executar,
+// erra para o lado do sobre-bloqueio (D45/D49/D57/D58). PROPRIEDADE que isto
+// garante, e que separa este desenho da tentativa da D53: as leituras alternativas
+// SO SE SOMAM a primaria, que fica intacta - nenhum caso que ja barra pode deixar
+// de barrar; o unico risco e falso positivo, e ele foi medido em fix5-bancada.
+// As alternativas so sao montadas quando o gatilho esta presente, entao o custo de
+// um comando sem `(`, sem continuacao e sem `#` e IDENTICO ao da leitura de antes.
 function lerTudo(cmd) {
   cmd = semCorpoDeHeredocInerte(cmd);
   const segmentos = lerComando(cmd, 0);
@@ -1057,7 +1057,7 @@ const REGRAS = [
     e: new RegExp('\\s(?:-[a-zA-Z]*f[a-zA-Z]*|--' + abrev('force') + ')' + FIM), semAspas: true, motivo: 'apaga branch sem conferir merge' },
   { re: new RegExp(GIT + '(rebase|filter-branch)' + FIM, 'i'), semAspas: true, motivo: 'reescreve historico' },
   { fn: pulaChecagem, motivo: 'git commit --no-verify ou --no-gpg-sign pula a checagem do projeto' },
-  { re: /\bDROP\s+(TABLE|DATABASE|SCHEMA)\b/i, semAspas: true, motivo: 'DDL destrutivo' },
+  { re: /\bDROP\s+(TABLE|DATABASE|SCHEMA)\b/i, semAspas: true, motivo: 'DROP apaga a tabela, o banco ou o schema inteiro' },
   { re: /\bTRUNCATE\s+TABLE\b/i, semAspas: true, motivo: 'TRUNCATE apaga a tabela inteira' },
   { re: /\bnpm\s+publish\b/i, semAspas: true, motivo: 'publicacao nao pedida' },
   { re: /\b(mkfs|dd\s+if=)/i, semAspas: true, motivo: 'escrita direta de disco' },
@@ -1065,14 +1065,31 @@ const REGRAS = [
   { re: /\bdd\s/i, e: /\sof=/i, semAspas: true, motivo: 'escrita direta de disco' }
 ];
 
+// D721 (A1-06): padrao invalido no projeto.json nao pode derrubar o portao, e tambem nao some calado: vai para
+// `recusadas`, e o portao avisa uma vez por sessao que aquela regra nao barra nada (portao-destrutivo.js).
 function extras(projeto) {
   const lista = (projeto && projeto.comandosBloqueados) || [];
   const compiladas = [];
+  const recusadas = [];
   for (const padrao of lista) {
     try { compiladas.push({ re: new RegExp(padrao, 'i'), motivo: 'regra do projeto: ' + padrao }); }
-    catch (e) { /* padrao invalido no projeto.json nao pode derrubar o portao */ }
+    catch (e) { recusadas.push({ padrao: String(padrao), causa: e.message }); }
   }
-  return compiladas;
+  return { compiladas, recusadas };
+}
+
+function regrasRecusadas(projeto) {
+  return extras(projeto).recusadas;
+}
+
+/** D721 (A1-06): o aviso dos padroes de comandosBloqueados que nao compilam, na forma unica e em ASCII (R5). */
+function avisoRecusadas(recusadas) {
+  const linhas = ['sworn - padrao invalido em "comandosBloqueados": ele nao barra nada; o comando rodou normalmente.', ''];
+  for (const r of recusadas) linhas.push('  - "' + r.padrao.slice(0, 400) + '": ' + r.causa);
+  linhas.push('As outras regras seguem valendo. Este aviso sai uma vez por sessao.');
+  linhas.push('');
+  linhas.push('Faca assim: conserte o padrao (expressao regular) em "comandosBloqueados" de .claude/sworn/projeto.json.');
+  return linhas.map(escopo.ascii).join('\n');
 }
 
 function casa(r, seg) {
@@ -1095,7 +1112,7 @@ function classificar(comando, projeto) {
   }
   // Regra do projeto roda sobre o comando inteiro, como sempre rodou: o dono
   // escreve o padrao contra o comando que ele ve, nao contra o segmento.
-  for (const r of extras(projeto)) {
+  for (const r of extras(projeto).compiladas) {
     if (r.re.test(cmd)) return { destrutivo: true, motivo: r.motivo };
   }
   return { destrutivo: false, motivo: null };
@@ -1114,14 +1131,15 @@ function motivo(comando, r) {
     // caso normal, nao o exotico, e os dois testes de ASCII que ja existiam
     // eram cegos a este caminho porque so exercitavam motivo built-in.
     'Por que barrou: ' + escopo.ascii(String(r.motivo).slice(0, 400)) + '.',
-    'Nenhum comando destrutivo roda sem confirmacao humana.',
+    'Nenhum comando destrutivo roda sem o sim do dono.',
     '',
     'Faca uma destas:',
-    '  1. leve ao dono 3 opcoes com a recomendada marcada, dizendo o que acontece na pratica em cada uma;',
+    // A2-84: a pergunta ao dono na redacao do intocavel (escopo.js) e do design.
+    '  1. peca ao dono que decida: 3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo;',
     '  2. ou siga sem este comando, se o trabalho nao depende dele.',
     '',
     'So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosLiberados" de .claude/sworn/projeto.json.'
   ].join('\n');
 }
 
-module.exports = { REGRAS, classificar, motivo, lerComando };
+module.exports = { REGRAS, classificar, motivo, lerComando, regrasRecusadas, avisoRecusadas };

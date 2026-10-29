@@ -13,6 +13,13 @@ const NOME = /^[a-z][a-z0-9-]{0,39}$/;
 
 function texto(v) { return typeof v === 'string' ? v.trim() : ''; }
 
+/** A2 (s193): o valor cru do projeto.json entra na mensagem como texto entre aspas ou em JSON (o molde do
+ *  custo.js:95). Concatenar direto lancava com {"toString": 1} e escrevia [object Object]; sem valor, diz "nada". */
+function citar(v) {
+  if (typeof v === 'string') return '"' + v + '"';
+  return v === undefined ? 'nada' : JSON.stringify(v);
+}
+
 /**
  * Aceita tres formas, porque a entrevista e conversa e nao formulario:
  *   'arquiteto'        -> apelido vazio, e o validador reclama
@@ -31,9 +38,10 @@ function normalizar(lista) {
     // D678 T1: o esforco do degrau (`effort` e como o frontmatter chama), a primeira grafia que veio com valor.
     // So entra quando veio: degrau sem ele e a configuracao de antes, e ela se grava igual. Valor que nao e
     // texto segue cru, para o validar acusar.
-    const esforco = [o.esforco, o.effort].map(function (v) { return typeof v === 'string' ? v.trim() : v; })
-      .find(function (v) { return v !== undefined && v !== null && v !== ''; });
-    if (esforco !== undefined) r.esforco = esforco;
+    for (const v of [o.esforco, o.effort]) {
+      const esforco = typeof v === 'string' ? v.trim() : v;
+      if (esforco !== undefined && esforco !== null && esforco !== '') { r.esforco = esforco; break; }
+    }
     return r;
   }).filter(function (d) { return d.agente !== ''; });
 }
@@ -53,24 +61,30 @@ function validar(lista) {
   // nada mais depende disto. Recusar aqui obrigaria a inventar uma escada.
   if (d.length === 0) return { ok: true, erros: erros };
   if (d.length < MINIMO) {
-    erros.push('escada com ' + d.length + ' degrau: com menos de ' + MINIMO +
-      ' o portao de custo nao opina, e a configuracao parece proteger sem proteger');
+    erros.push('escada com ' + d.length + ' degrau: com menos de ' + MINIMO + ', o portao de custo (que barra o' +
+      ' agente mais caro que a tarefa pede) nao opina; acrescente um degrau mais barato ou mais caro, ou deixe a' +
+      ' escada vazia');
   }
   const vistos = Object.create(null);
   for (const item of d) {
     if (!NOME.test(item.agente)) {
-      erros.push('nome de agente invalido: "' + item.agente + '" (minusculas, digitos e hifen)');
+      erros.push('nome de agente invalido: "' + item.agente + '": renomeie com ate 40 caracteres, comecando por letra' +
+        ' minuscula e so com minusculas, digitos e hifen');
     }
-    if (vistos[item.agente]) erros.push('agente repetido na escada: ' + item.agente);
+    if (vistos[item.agente]) {
+      erros.push('agente repetido na escada: ' + item.agente + ' (cada um entra uma vez; tire a repeticao)');
+    }
     vistos[item.agente] = true;
     if (item.apelido === '') {
-      erros.push('degrau "' + item.agente + '" sem apelido: o gatilho 3 nao tem contra o que comparar');
+      erros.push('degrau "' + item.agente + '" sem apelido: diga o modelo dele pelo apelido (como opus, sonnet ou' +
+        ' haiku), senao a conferencia de apelidos nao tem com o que comparar');
     } else if (ehNomeDeModelo(item.apelido)) {
-      erros.push('degrau "' + item.agente + '": "' + item.apelido +
-        '" e id de modelo, nao apelido - id apodrece e o apelido nao');
+      erros.push('degrau "' + item.agente + '": "' + item.apelido + '" e id de modelo, nao apelido: use o apelido' +
+        ' (como opus, sonnet ou haiku), que nao apodrece quando sai modelo novo');
     }
     if (item.esforco !== undefined && (typeof item.esforco !== 'string' || ESFORCOS.indexOf(item.esforco) === -1)) {
-      erros.push('degrau "' + item.agente + '": esforco "' + item.esforco + '" invalido: use um de ' + ESFORCOS.join('|'));
+      erros.push('degrau "' + item.agente + '": esforco ' + citar(item.esforco) + ' invalido: use um de ' +
+        ESFORCOS.join('|'));
     }
   }
   return { ok: erros.length === 0, erros: erros };
@@ -96,7 +110,10 @@ function desalinhados(agentes) {
   const escada = Array.isArray(a.escada) ? a.escada : null;
   const degraus = Array.isArray(a.degraus) ? a.degraus : null;
   if (degraus === null) return [];
-  if (escada === null) return ['ha degraus gravados e nenhuma escada: o portao de custo fica mudo'];
+  if (escada === null) {
+    return ['ha degraus gravados e nenhuma escada: o portao de custo fica mudo; grave "escada" em "agentes" com os' +
+      ' nomes dos degraus, na mesma ordem'];
+  }
 
   const problemas = [];
   if (escada.length !== degraus.length) {
@@ -106,8 +123,8 @@ function desalinhados(agentes) {
   for (let i = 0; i < n; i++) {
     const nome = degraus[i] && degraus[i].agente;
     if (escada[i] !== nome) {
-      problemas.push('posicao ' + (i + 1) + ': a escada diz "' + escada[i] +
-        '" e os degraus dizem "' + nome + '"');
+      problemas.push('posicao ' + (i + 1) + ': a escada diz ' + citar(escada[i]) + ' e os degraus dizem ' +
+        citar(nome));
     }
   }
   return problemas;

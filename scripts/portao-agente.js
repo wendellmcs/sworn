@@ -12,7 +12,8 @@ io.blindar(function () {
     const tipo = (e.tool_input || {}).subagent_type;
 
     // F18: contar sempre. Custo e informacao do dono, e ele so a tem se alguem contar.
-    // A2-06 (molde D420/SH-02): estado fora do ar lancava aqui e `io.blindar` liberava o agente caro.
+    // A2-06 (molde D420/SH-02): estado fora do ar lancava aqui e `io.blindar` liberava o agente caro. Cada contador
+    // fica no seu try, com o nome literal: o leitor de baldes dos testes (test/auxiliar-baldes.js) le esse padrao.
     try { estado.incrementar(e.session_id, 'agentes_despachados'); } catch (err) { /* o balde vale menos que a negacao */ }
 
     if (!tipo) return io.permitir();
@@ -22,7 +23,7 @@ io.blindar(function () {
     // D678 T2: a tabela dos degraus antes da marcha - a chamada errada se conserta primeiro.
     const tabela = custo.chamadaDaTabela(tipo, e.tool_input, projeto);
     if (!tabela.ok) {
-      try { estado.incrementar(e.session_id, 'chamada_fora_da_tabela'); } catch (err) { /* idem */ }
+      try { estado.incrementar(e.session_id, 'chamada_fora_da_tabela'); } catch (err) { /* a negacao sai mesmo assim */ }
       return io.negarFerramenta(tabela.motivo);
     }
 
@@ -31,7 +32,7 @@ io.blindar(function () {
     const r = custo.permitido(tipo, marchaMax, projeto);
     if (r.ok) return io.permitir();
 
-    try { estado.incrementar(e.session_id, 'agente_caro_em_marcha_rapida'); } catch (err) { /* idem */ }
+    try { estado.incrementar(e.session_id, 'agente_caro_em_marcha_rapida'); } catch (err) { /* a negacao sai mesmo assim */ }
     io.negarFerramenta(r.motivo);
   });
 });

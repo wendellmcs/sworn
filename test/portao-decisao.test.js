@@ -143,6 +143,15 @@ test('D396/portao-decisao: opcao sem rotulo em texto (nula, texto solto, sem lab
   });
 });
 
+test('A2-09 (D721): a negacao diz cada campo pelo que ele faz, e o desligar nomeia a checagem', () => {
+  comProjeto({ versaoConfig: 1 }, (dir) => {
+    const m = motivo(hook(dir, entrada({ question: 'Qual?', options: ['A (Recomendado)', 'B', 'C'] })));
+    assert.match(m, /o rotulo \(label\) e o que ela faz \(description\)/, m);
+    assert.doesNotMatch(m, /\{ label, description \}|este portao/, m);
+    assert.match(m, /desligar esta checagem das perguntas ao dono/, m);
+  });
+});
+
 test('D389/portao-decisao: sem a marca exata entre parenteses a 1a opcao barra (negacao e palavra solta)', () => {
   comProjeto({ versaoConfig: 1 }, (dir) => {
     for (const rotulo of ['Nao recomendado: apagar tudo', 'Manter (não recomendado)', 'Keep (not recommended)',

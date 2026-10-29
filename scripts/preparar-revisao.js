@@ -113,6 +113,13 @@ if (rel === null) {
     'com o caminho relativo a ela.\n');
   process.exit(1);
 }
+// Pedido 12 (A3-03): a guarda acima e lexica; um link (ou junction) dentro da pasta atual que aponta para fora levaria
+// o conteudo de fora ao pacote, e dele ao inspetor. Pelo caminho real, o mesmo das referencias (mais abaixo).
+if (!caminho.dentroPeloCaminhoReal(rel, cwd)) {
+  process.stdout.write('ERRO: ' + alvo + ' passa por um link que leva para fora da pasta atual, entao nao leio. ' +
+    'Nada foi gravado. Revise o arquivo pelo caminho real, de uma pasta que o contenha.\n');
+  process.exit(1);
+}
 if (!fs.existsSync(path.join(cwd, rel))) {
   process.stdout.write('ERRO: ' + rel + ' nao existe no disco. Confira o caminho, relativo a pasta atual.\n');
   process.exit(1);

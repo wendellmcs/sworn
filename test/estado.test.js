@@ -157,9 +157,9 @@ test('estado: descarregar escreve em arquivo temporario antes de renomear (D30)'
       try {
         estado.descarregar(proj, { test: 1 });
 
-        // Prova da atomicidade: deve ter escrito num caminho temporário
-        const tmpPath = arquivo + '.tmp';
-        assert.ok(chamadas.writeSync.includes(tmpPath), 'writeFileSync foi chamado no caminho .tmp');
+        // Prova da atomicidade: deve ter escrito num caminho temporário (A2-28: com pid e sufixo proprios)
+        const tmpPath = chamadas.writeSync.find((p) => p.startsWith(arquivo + '.') && p.endsWith('.tmp'));
+        assert.ok(tmpPath, 'writeFileSync foi chamado num caminho .tmp');
 
         // E depois renomeado do temporário para o final
         assert.ok(
@@ -360,5 +360,91 @@ test('estado: ultimaFerramenta saiu das listas, e estado antigo com o campo segu
       'o fecho nao carrega o campo que saiu das listas');
     const depois = estado.alterar('velho', (s) => { s.buscouNesteTurno = true; return s; });
     assert.strictEqual(depois.buscouNesteTurno, true);
+  });
+});
+
+// A2 (s193): estado.js:30 aceitava array como sessao (o JSON.stringify perde o que se pendura nele: o contador
+// voltava 1 e nunca persistia); `contadores` 5, "x" ou true fazia o incrementar lancar (:206, modo estrito), e
+// [] perdia a conta; valor que nao e numero somava como texto ("2" + 1 = "21").
+test('A2-28 (s205): o temporario do descarregar tem nome proprio, e o .tmp de outro processo nao o derruba', () => {
+  comTmp((estado) => {
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    try {
+      const pasta = path.join(proj, '.claude', 'sworn');
+      const arquivo = path.join(pasta, 'contadores.json');
+      // O nome fixo de antes ocupado (o temporario de outro Stop no mesmo instante)
+      fs.mkdirSync(arquivo + '.tmp', { recursive: true });
+      const original = fs.writeFileSync;
+      const temporarios = [];
+      fs.writeFileSync = function (...args) {
+        if (String(args[0]).endsWith('.tmp')) temporarios.push(String(args[0]));
+        return original.apply(fs, args);
+      };
+      try {
+        assert.strictEqual(estado.descarregar(proj, { a: 1 }), true, 'o .tmp alheio nao pode derrubar');
+        assert.strictEqual(estado.descarregar(proj, { a: 2 }), true);
+      } finally {
+        fs.writeFileSync = original;
+      }
+      assert.deepStrictEqual(JSON.parse(fs.readFileSync(arquivo, 'utf8')), { a: 3 });
+      assert.strictEqual(temporarios.length, 2, 'um temporario por descarga');
+      assert.notStrictEqual(temporarios[0], temporarios[1], 'cada descarga com o seu nome');
+      assert.deepStrictEqual(fs.readdirSync(pasta).sort(), ['contadores.json', 'contadores.json.tmp'],
+        'nenhum temporario proprio sobra');
+    } finally {
+      fs.rmSync(proj, { recursive: true, force: true });
+    }
+  });
+});
+
+test('A2-87 (s205): a escrita do temporario que falha no meio nao deixa o .tmp para tras', () => {
+  comTmp((estado) => {
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    try {
+      const pasta = path.join(proj, '.claude', 'sworn');
+      fs.mkdirSync(pasta, { recursive: true });
+      const original = fs.writeFileSync;
+      fs.writeFileSync = function (...args) {
+        if (!String(args[0]).endsWith('.tmp')) return original.apply(fs, args);
+        original.call(fs, args[0], '{"a":', 'utf8');
+        throw Object.assign(new Error('disco cheio'), { code: 'ENOSPC' });
+      };
+      try {
+        assert.throws(() => estado.descarregar(proj, { a: 1 }), /disco cheio/);
+      } finally {
+        fs.writeFileSync = original;
+      }
+      assert.deepStrictEqual(fs.readdirSync(pasta), [], 'o temporario pela metade sai');
+    } finally {
+      fs.rmSync(proj, { recursive: true, force: true });
+    }
+  });
+});
+
+test('A2 (s193): sessao ou balde de contador torto no disco nao lanca e a conta persiste', () => {
+  comTmp((estado) => {
+    const escrever = (id, valor) => fs.writeFileSync(estado.caminhoSessao(id), JSON.stringify(valor), 'utf8');
+    fs.mkdirSync(path.dirname(estado.caminhoSessao('x')), { recursive: true });
+    for (const torta of [[], [1], 5, 'x', null, true]) {
+      escrever('s', torta);
+      assert.deepStrictEqual(estado.ler('s'), {}, 'sessao ' + JSON.stringify(torta));
+      assert.strictEqual(estado.incrementar('s', 'k'), 1, 'sessao ' + JSON.stringify(torta));
+      assert.strictEqual(estado.incrementar('s', 'k'), 2, 'sessao ' + JSON.stringify(torta) + ': a conta persiste');
+    }
+    for (const torto of [5, 'x', true, [], [3], null]) {
+      escrever('s', { contadores: torto, frente: 'f' });
+      assert.strictEqual(estado.incrementar('s', 'k'), 1, 'contadores ' + JSON.stringify(torto));
+      assert.strictEqual(estado.incrementar('s', 'k'), 2, 'contadores ' + JSON.stringify(torto) + ': a conta persiste');
+      assert.strictEqual(estado.ler('s').frente, 'f', 'o resto da sessao fica');
+    }
+    for (const valor of ['2', {}, true, null, [1]]) {
+      escrever('s', { contadores: { k: valor, j: 4 } });
+      assert.strictEqual(estado.incrementar('s', 'k'), 1, 'valor ' + JSON.stringify(valor));
+      assert.strictEqual(estado.ler('s').contadores.j, 4, 'o numero vizinho fica');
+    }
+    escrever('s', { contadoresSessao: 'xy' });
+    assert.strictEqual(estado.ler('s').contadoresSessao, undefined, 'o balde da sessao torto sai');
+    escrever('s', { contadoresSessao: { a: 2, b: '3' } });
+    assert.deepStrictEqual(estado.ler('s').contadoresSessao, { a: 2 }, 'so o numero fica no balde da sessao');
   });
 });

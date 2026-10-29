@@ -32,16 +32,20 @@ const RE_CHAR_DE_SELETOR = /[A-Za-z0-9_\s.#,>+~*&-]/;
 // qualquer escondia a propriedade aninhada do SCSS (`border:solid #f00 { ... }`); nome desconhecido = valor.
 const PSEUDOS_FUNCIONAIS = ['not', 'is', 'where', 'has', 'matches', 'any', '-webkit-any', '-moz-any', 'host',
   'host-context', 'global', 'local', 'slotted'];
-const PSEUDOS_CONHECIDOS = new Set(PSEUDOS_FUNCIONAIS.concat(['hover', 'focus', 'focus-visible', 'focus-within',
-  'active', 'visited', 'link', 'checked', 'disabled', 'enabled', 'required', 'optional', 'invalid', 'valid', 'empty',
-  'root', 'target', 'first-child', 'last-child', 'only-child', 'first-of-type', 'last-of-type', 'only-of-type',
-  'nth-child', 'nth-last-child', 'nth-of-type', 'nth-last-of-type', 'placeholder-shown', 'read-only', 'read-write',
-  'any-link', 'before', 'after', 'placeholder', 'selection', 'marker', 'first-line', 'first-letter', 'backdrop']));
+// As `nth-*` tambem abrem `(`, mas com formula (`2n+1`, `odd`), nao seletor.
+const PSEUDOS_NTH = ['nth-child', 'nth-last-child', 'nth-of-type', 'nth-last-of-type'];
+const PSEUDOS_CONHECIDOS = new Set(PSEUDOS_FUNCIONAIS.concat(PSEUDOS_NTH, ['hover', 'focus', 'focus-visible',
+  'focus-within', 'active', 'visited', 'link', 'checked', 'disabled', 'enabled', 'required', 'optional', 'invalid',
+  'valid', 'empty', 'root', 'target', 'first-child', 'last-child', 'only-child', 'first-of-type', 'last-of-type',
+  'only-of-type', 'placeholder-shown', 'read-only', 'read-write', 'any-link', 'before', 'after', 'placeholder',
+  'selection', 'marker', 'first-line', 'first-letter', 'backdrop']));
 const RE_NOME_DE_PSEUDO = /-?[A-Za-z][\w-]*/y;       // `y` + lastIndex: sem fatiar a string a cada `:`
-// `(` aceito dentro do trecho: as funcionais acima e as `nth-*` (que levam `2n+1`, `odd`).
-const RE_PAREN_DE_PSEUDO = /:(?:not|is|where|has|matches|any|-webkit-any|-moz-any|host|host-context|global|local|slotted|nth-child|nth-last-child|nth-of-type|nth-last-of-type)$/;
+// A2-41: as duas montadas das listas acima, que sao a fonte (antes cada regex escrevia a lista de novo).
+// `(` aceito dentro do trecho: as funcionais e as `nth-*`.
+const RE_PAREN_DE_PSEUDO = new RegExp(':(?:' + PSEUDOS_FUNCIONAIS.concat(PSEUDOS_NTH).join('|') + ')$');
 const RE_AT_DE_BLOCO = /^@(?:media|supports|container|layer|scope|at-root|document|-moz-document)\b/;
-const RE_PSEUDO_DE_SELETOR = /:(?:not|is|where|has|matches|any|-webkit-any|-moz-any|host|host-context|global|local|slotted)$/;
+// `(` que abre seletor (o `#hex` de dentro e id): so as funcionais.
+const RE_PSEUDO_DE_SELETOR = new RegExp(':(?:' + PSEUDOS_FUNCIONAIS.join('|') + ')$');
 
 // As unidades que o portao le. O `%` e as outras (pt, vw, ch...) ficam de fora de
 // proposito: bloquear `%` acusaria todo `width:100%`. O README e o CHANGELOG dizem
@@ -230,8 +234,21 @@ function valoresCrus(texto) {
 // gradiente/gradient. Termo sem cognato ("sombra" x "box-shadow") continua passando:
 // limite declarado por teste, nao escondido. D124.
 function radical(anti) {
-  const a = String(anti).toLowerCase().split(' ')[0];
+  const a = anti.trim().toLowerCase().split(/\s+/)[0];
   return (a.length > 4 && /e$/.test(a)) ? a.slice(0, -1) : a;
+}
+
+// s192: so texto com radical vale. O radical vazio casava toda linha; a lista que nao e lista lancava (e o portao
+// liberava) ou corria letra por letra. Texto solto vale como lista de um, como nas listas de `conferir`.
+function antiValida(a) {
+  return typeof a === 'string' && radical(a) !== '';
+}
+
+// A2-46: a posicao (1 a n) de cada anti-referencia que a conferencia deixa de lado, para o aviso dizer quais.
+function antiIgnoradas(sistema) {
+  const posicoes = [];
+  [].concat(sistema.antiReferencias || []).forEach(function (a, i) { if (!antiValida(a)) posicoes.push(i + 1); });
+  return posicoes;
 }
 
 function conferir(texto, sistema, antes) {
@@ -252,8 +269,9 @@ function conferir(texto, sistema, antes) {
   }
   // Anti-referencia: dizer o que a coisa NAO pode parecer e verificavel;
   // dizer o que ela deve parecer, nao e.
+  const antis = [].concat(sistema.antiReferencias || []).filter(antiValida);
   String(texto == null ? '' : texto).split(/\r?\n/).forEach(function (linha, i) {
-    for (const anti of (sistema.antiReferencias || [])) {
+    for (const anti of antis) {
       const alvo = radical(anti);
       if (linha.toLowerCase().indexOf(alvo) !== -1) {
         fora.push({ valor: anti, tipo: 'anti-referencia', linha: i + 1 });
@@ -286,19 +304,28 @@ function motivo(alvo, fora, sistema) {
   linhas.push('  cores:   ' + (sistema.cores || []).slice(0, 10).join(' '));
   linhas.push('  raios:   ' + (sistema.raios || []).join(' '));
   linhas.push('  espacos: ' + (sistema.espacos || []).join(' '));
+  // atalho: so este aviso diz as anti-referencias ignoradas. limite: a escrita sem valor fora passa calada.
+  // trocar quando: o design.json ganhar validador (o config.js so le).
+  const ignoradas = antiIgnoradas(sistema);
+  if (ignoradas.length) {
+    linhas.push('  antiReferencias: ' + (ignoradas.length > 1 ? 'itens ' : 'item ') +
+      ignoradas.slice(0, 12).join(', ') + (ignoradas.length > 12 ? ' e mais ' + (ignoradas.length - 12) : '') +
+      ' sem efeito (so vale texto com palavra): corrija ou tire do design.json');
+  }
+  const comAnti = fora.some(function (f) { return f.tipo === 'anti-referencia'; });
   linhas.push('');
   linhas.push('Faca uma destas:');
   linhas.push('  1. troque cor e medida pelo token do sistema, ou por var(--nome);');
-  if (fora.some(function (f) { return f.tipo === 'anti-referencia'; })) {
-    linhas.push('  2. se o valor novo e mesmo necessario, leve ao dono 3 opcoes com a recomendada marcada:');
-    linhas.push('     acrescenta-lo ao sistema e decisao dele, nao julgamento seu;');
-    linhas.push('  3. na (anti-referencia), tire o termo: o sistema o proibe (ex.: gradiente) e nao ha token para ele.');
-  } else {
-    linhas.push('  2. se o valor novo e mesmo necessario, leve ao dono 3 opcoes com a recomendada marcada:');
-    linhas.push('     acrescenta-lo ao sistema e decisao dele, nao julgamento seu.');
+  // A2-45/A2-84: a pergunta ao dono na redacao do intocavel (escopo.js) e da trava 5, com as opcoes deste caso.
+  linhas.push('  2. se o valor novo e mesmo necessario, peca ao dono que decida: 3 opcoes, a recomendada');
+  linhas.push('     primeiro, cada uma com o que muda e o custo (ex.: acrescentar o valor ao design.json,');
+  linhas.push('     usar o token mais proximo, tirar o valor)' + (comAnti ? ';' : '.'));
+  if (comAnti) {
+    linhas.push('  3. na linha marcada (anti-referencia), tire o termo: o sistema o proibe e nao ha token para ele.');
   }
   linhas.push('');
-  linhas.push('Nao suba o limite da checagem (a catraca) so para esta edicao passar: tire o valor cru, que e o caminho certo.');
+  // A2-43: o passo primeiro, sem "catraca".
+  linhas.push('O caminho certo e tirar o valor cru; mudar o design.json para esta edicao passar e decisao do dono.');
   return linhas.join('\n');
 }
 
@@ -565,9 +592,9 @@ function lerArgumentosPs(args) {
   return { nomeados: nomeados, pos: pos };
 }
 
-/** Argumentos estilo unix: as opcoes de `comValor` consomem o valor (colado por = ou a palavra seguinte). */
+/** Argumentos estilo unix: { valores: Map(opcao -> valor), pos: [palavras soltas] }. As opcoes de `comValor` consomem
+ *  o valor (colado por = ou a palavra seguinte); as outras opcoes saem sem leitor (A2-42). */
 function lerArgumentosUnix(args, comValor) {
-  const opcoes = [];
   const valores = new Map();
   const pos = [];
   for (let k = 0; k < args.length; k++) {
@@ -575,10 +602,9 @@ function lerArgumentosUnix(args, comValor) {
     if (a.q || !/^--?[A-Za-z]/.test(a.t)) { pos.push(a.t); continue; }
     const m = /^(--?[A-Za-z][A-Za-z-]*)=(.*)$/.exec(a.t);
     if (m && comValor.indexOf(m[1]) !== -1) { valores.set(m[1], m[2]); continue; }
-    opcoes.push(a.t);
     if (comValor.indexOf(a.t) !== -1 && k + 1 < args.length) valores.set(a.t, args[++k].t);
   }
-  return { opcoes: opcoes, valores: valores, pos: pos };
+  return { valores: valores, pos: pos };
 }
 
 const ESCREVE_CMDLET = new Set(['set-content', 'sc', 'add-content', 'ac', 'out-file', 'tee-object', 'new-item', 'ni']);
@@ -862,7 +888,11 @@ function motivoShell(alvos) {
   linhas.push('');
   linhas.push('Faca uma destas:');
   linhas.push('  1. escreva este arquivo com a ferramenta Write ou Edit;');
-  linhas.push('  2. se o comando nao grava estilo nenhum, diga ao usuario: e leitura errada do sworn, para registrar.');
+  // A2-44: o passo do agente na lista; onde registrar, numa linha propria, para o usuario.
+  linhas.push('  2. se o comando nao grava estilo, e leitura errada do sworn: conte ao usuario no fecho do turno.');
+  linhas.push('');
+  linhas.push('Ao usuario: a leitura errada do sworn se registra em https://github.com/wendellmcs/sworn/issues,');
+  linhas.push('com o comando barrado (tire dele antes senha, token e caminho interno: o issue e publico).');
   return linhas.join('\n');
 }
 

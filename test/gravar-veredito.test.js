@@ -416,6 +416,8 @@ test('gravar-veredito: outro evento, ou outra ferramenta no PostToolUse -> nada'
     calado(rodar(p, stop(p, msg, { hook_event_name: 'Stop' })));
     calado(rodar(p, stop(p, msg, { hook_event_name: 'SubagentStart' })));
     calado(rodar(p, handback(p, msg, { tool_name: 'Read' })));
+    // A2-16: PostToolUse sem tool_name nao e handback (a forma estrita do texto.mensagemDoSubagente).
+    calado(rodar(p, handback(p, msg, { tool_name: undefined })));
     assert.deepStrictEqual(arquivosEm(p), []);
   } finally { limpar(p); }
 });
@@ -603,6 +605,9 @@ test('gravar-veredito (E): handback que avisa e nao grava a marca diz que o avis
     const r = rodar(p, handback(p, 'sem json nenhum'));
     avisou(r, /JSON/);
     assert.ok(/pode se repetir/.test(r.json.systemMessage), 'faltou dizer que o aviso pode voltar: ' + r.json.systemMessage);
+    // Pedido 12 (A3-04): sem o jargao interno ("marca", "subagente") e com o que fazer com a repeticao.
+    assert.ok(/a repeticao e o mesmo aviso, ignore/.test(r.json.systemMessage), r.json.systemMessage);
+    assert.ok(!/marca|subagente/.test(r.json.systemMessage), r.json.systemMessage);
   } finally { limpar(p); }
 });
 
@@ -633,6 +638,7 @@ test('T2/F3-07 (D335 secao 2): handback que GRAVOU e nao grava a marca avisa que
     assert.ok(m.includes('vereditos/borda.json'), 'nao diz o arquivo: ' + m);
     assert.ok(/nao achou o JSON do veredito/.test(m) && /ignore/.test(m), 'nao diz que o aviso do fim pode ser ignorado: ' + m);
     assert.ok(!/nao gravei/.test(m), 'e um aviso de que gravou, nao de que falhou: ' + m);
+    assert.ok(!/marca|subagente/.test(m), 'jargao interno no aviso (pedido 12, A3-04): ' + m);
     assert.deepStrictEqual(arquivosEm(p), ['borda.json']);
     // gravado igual de antes (outro handback, mesma lente): o veredito esta la, e o aviso tambem
     const r2 = rodar(p, handback(p, JSON.stringify(vd), { agent_id: 'segundo' }));
@@ -666,6 +672,24 @@ test('T2/F3-21: a pasta da ronda tem de estar dentro da raiz do projeto (absolut
     calado(rodar(p, stop(p, JSON.stringify(veredito(p, { vereditos: path.relative(p.dir, p.vereditos), lente: 'borda', achados: [] })))));
     calado(rodar(p, stop(p, JSON.stringify(veredito(p, { vereditos: p.vereditos, lente: 'estados', achados: [] })))));
     assert.deepStrictEqual(arquivosEm(p), ['borda.json', 'estados.json']);
+  } finally { limpar(p); fs.rmSync(fora, { recursive: true, force: true }); }
+});
+
+// Pedido 12 (A3-05): a guarda de cima e lexica (regex e path.relative). A pasta vereditos que e link (junction) DENTRO
+// do projeto para uma pasta de FORA passava, e o veredito ia parar fora. Pelo caminho real, nao grava e avisa.
+test('A3-05: vereditos que e link dentro do projeto para fora nao grava, e avisa', (t) => {
+  const p = projeto();
+  const fora = tmp('fora-link');
+  try {
+    fs.rmdirSync(p.vereditos);
+    // Junction: no Windows nao pede privilegio; em POSIX o tipo e ignorado e vira link comum.
+    try { fs.symlinkSync(fora, p.vereditos, 'junction'); } catch (e) {
+      t.skip('nao deu para criar link neste disco/usuario (' + ((e && e.code) || 'erro') + ')');
+      return;
+    }
+    const r = rodar(p, stop(p, JSON.stringify(veredito(p))));
+    avisou(r, /passa por um link que leva para fora da pasta do projeto/);
+    assert.deepStrictEqual(fs.readdirSync(fora), [], 'gravou fora do projeto pelo link');
   } finally { limpar(p); fs.rmSync(fora, { recursive: true, force: true }); }
 });
 

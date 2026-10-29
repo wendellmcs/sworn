@@ -23,14 +23,20 @@ const apelidos = require('./lib/apelidos.js');
  * roteiro e so deles - o caso do repositorio do plugin, que nao tem projeto.
  */
 
-const PROVA = ['.claude', 'sworn', 'apelidos-vivos.json'];
-
 function caminhoDaProva(cwd) {
-  return path.join(String(cwd), PROVA[0], PROVA[1], PROVA[2]);
+  return path.join(String(cwd), '.claude', 'sworn', 'apelidos-vivos.json');
 }
 
+// A1 (pedido 12), estados: a leitura do molde nao tinha try - molde que faltava saia como pilha de excecao.
 function camposDoMolde() {
-  const bruto = fs.readFileSync(path.join(__dirname, '..', 'modelos', 'agente.md'), 'utf8');
+  const molde = path.join(__dirname, '..', 'modelos', 'agente.md');
+  let bruto;
+  try { bruto = fs.readFileSync(molde, 'utf8'); }
+  catch (e) {
+    process.stdout.write('ERRO: nao consegui ler o molde ' + molde + ': ' + e.message + '\n');
+    process.stdout.write('Sem ele nao ha a lista de campos a testar: reinstale o plugin e rode de novo.\n');
+    process.exit(1);
+  }
   const f = agentesLib.frontmatter(bruto);
   return Object.keys(f.campos);
 }
@@ -55,7 +61,8 @@ for (const d of mapa.lista) {
 
 if (!soPlugin && lista.length === 0) {
   process.stdout.write('NAO VERIFICAVEL: este projeto nao tem apelidos gravados.\n');
-  process.stdout.write('A entrevista do /sworn:init pergunta; sem eles nao ha o que sondar.\n');
+  process.stdout.write('Rode /sworn:init e, na pergunta dos agentes, de o apelido do modelo de cada um; ' +
+    'sem eles nao ha o que sondar.\n');
   process.stdout.write(SO_PLUGIN);
   process.exit(1);
 }
@@ -88,7 +95,20 @@ process.stdout.write(JSON.stringify({
   }
 }, null, 2) + '\n');
 
+// A1 (pedido 12), microcopy: "reprova a suite" so vale no repositorio do plugin (--plugin); no projeto quem le a
+// prova e o relatorio de cobertura. E "o caminho acima" nao nomeava o campo: o fim nomeia ondeGravar e o passo
+// seguinte.
 process.stdout.write('\n');
-process.stdout.write('Grave o resultado no caminho acima. Apelido sondado e RECUSADO reprova a\n');
-process.stdout.write('suite; apelido que ninguem sondou apenas se declara como nao provado.\n');
+process.stdout.write('Grave o resultado, no formato de formatoDoResultado, em ondeGravar:\n');
+process.stdout.write('  ' + caminhoDaProva(cwd) + '\n');
+if (soPlugin) {
+  const teste = path.join(__dirname, '..', 'test', 'apelidos-vivos.test.js');
+  process.stdout.write('Depois rode: node --test "' + teste + '"\n');
+  process.stdout.write('Apelido ou campo testado e RECUSADO reprova esse teste; ' +
+    'apelido que ninguem testou nao reprova.\n');
+} else {
+  process.stdout.write('Depois confira com: node "' + path.join(__dirname, 'cobertura.js') + '"\n');
+  process.stdout.write('O relatorio de cobertura le esse arquivo e diz, na linha "H4 - o apelido ainda e aceito", ' +
+    'o apelido que falta testar.\n');
+}
 process.exit(0);

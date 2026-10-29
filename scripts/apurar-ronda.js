@@ -222,8 +222,8 @@ try {
 } catch (err) {
   falhar('ERRO: nao consegui ler as revisoes (' + textoLib.causaDoErro(err) + '). Confira a pasta citada e rode de novo.\n');
 }
-// Os caminhos das mensagens: relativos ao cwd, com barra normal, os da base escolhida.
-const baseRel = path.relative(cwd, base).split(path.sep).join('/');
+// Os caminhos das mensagens, os da base escolhida.
+const baseRel = relDoCwd(base);
 const arquivoRevisado = arquivoDaBase(base, pastas);
 const mapas = [];
 const faixas = [];

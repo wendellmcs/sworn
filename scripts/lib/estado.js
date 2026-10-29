@@ -17,6 +17,27 @@ function caminhoSessao(sessionId) {
   return path.join(raiz(), idSaneado(sessionId) + '.json');
 }
 
+// A2 (s193): o arquivo vem do disco e pode estar torto (editado a mao, versao velha). Array nao e sessao: o
+// JSON.stringify perde o que se pendura nele, e o contador nunca persistia. Balde de contador que nao e objeto
+// fazia todo `s.contadores[x] = ...` lancar em modo estrito; valor que nao e numero somava como texto ("2" + 1 =
+// "21"). O torto sai; o resto da sessao fica, como o descarregar faz com o contadores.json (:227).
+const BALDES = ['contadores', 'contadoresSessao'];
+
+function objetoSimples(x) {
+  return x !== null && typeof x === 'object' && !Array.isArray(x);
+}
+
+function sessaoLida(obj) {
+  if (!objetoSimples(obj)) return {};
+  for (const balde of BALDES) {
+    if (!objetoSimples(obj[balde])) { delete obj[balde]; continue; }
+    for (const chave of Object.keys(obj[balde])) {
+      if (!Number.isFinite(obj[balde][chave])) delete obj[balde][chave];
+    }
+  }
+  return obj;
+}
+
 function ler(sessionId) {
   // D244/defeito 11: no Windows, ler no instante do rename de outro processo da EPERM/EBUSY, e
   // o caminho de reserva do gravar (escrita direta) deixa o arquivo vazio por um instante - medido:
@@ -26,8 +47,7 @@ function ler(sessionId) {
   for (let i = 0; ; i++) {
     try {
       const bruto = fs.readFileSync(caminhoSessao(sessionId), 'utf8');
-      const obj = JSON.parse(texto.semBom(bruto));
-      return obj && typeof obj === 'object' ? obj : {};
+      return sessaoLida(JSON.parse(texto.semBom(bruto)));
     } catch (e) {
       if ((e && e.code === 'ENOENT') || i >= 40) return {};
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
@@ -44,13 +64,16 @@ function dormir(ms) {
  * JSON pela metade - e `ler` devolve {} no JSON invalido, zerando o estado da sessao inteiro.
  * Escreve num temporario e renomeia; no Windows o rename pode dar EPERM/EBUSY enquanto outro
  * processo le, entao tenta de novo algumas vezes antes de cair na escrita direta de antes.
+ * A2-28: o temporario leva pid e sufixo aleatorio; com nome fixo, dois processos juntos disputavam o
+ * mesmo .tmp e o rename do segundo lancava ENOENT. Serve ao gravar e ao descarregar.
+ * A2-87: a escrita que falha no meio (disco cheio) apaga o temporario e lanca: com nome unico, ele se acumularia.
  */
-function gravar(sessionId, estado) {
-  fs.mkdirSync(raiz(), { recursive: true });
-  const destino = caminhoSessao(sessionId);
-  const dados = JSON.stringify(estado || {});
+function gravarAtomico(destino, dados) {
   const temp = destino + '.' + process.pid + '.' + Math.random().toString(36).slice(2) + '.tmp';
-  fs.writeFileSync(temp, dados, 'utf8');
+  try { fs.writeFileSync(temp, dados, 'utf8'); } catch (e) {
+    try { fs.rmSync(temp, { force: true }); } catch (e2) { /* ja foi */ }
+    throw e;
+  }
   for (let i = 0; i < 100; i++) {
     try { fs.renameSync(temp, destino); return; } catch (e) {
       if (e.code !== 'EPERM' && e.code !== 'EBUSY' && e.code !== 'EACCES') break;
@@ -59,6 +82,11 @@ function gravar(sessionId, estado) {
   }
   try { fs.rmSync(temp, { force: true }); } catch (e) { /* ja foi */ }
   fs.writeFileSync(destino, dados, 'utf8');
+}
+
+function gravar(sessionId, estado) {
+  fs.mkdirSync(raiz(), { recursive: true });
+  gravarAtomico(caminhoSessao(sessionId), JSON.stringify(estado || {}));
 }
 
 // D244/defeito 11: trava por sessao para o ler-mudar-gravar. Hooks de um disparo paralelo
@@ -189,7 +217,9 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   // Item 14 (D674): a marca da nota viva (mtime do plano e turnos); sem isto, o fecho a apagava e o aviso nunca saia.
   'notaViva',
   // D694 (T3 da escada): o pedido de escalada chega no fim do subagente e e cobrado num turno seguinte (lib/escalada.js).
-  'escalada'];
+  'escalada',
+  // D721 (A1-06): o aviso do padrao invalido em comandosBloqueados sai 1 vez por sessao (portao-destrutivo.js).
+  'avisouBloqueadoInvalido'];
 const CAMPOS_DO_TURNO = ['trabalhoReal', 'bloqueouNesteTurno', 'buscouNesteTurno', 'contadores', 'gravouHandoff'];
 
 /** Os campos da sessao que este estado tem, para o fecho carregar adiante. */
@@ -212,7 +242,7 @@ function incrementar(sessionId, chave) {
 /**
  * Descarrega os contadores do turno no arquivo duravel do projeto.
  * So grava se .claude/sworn/ ja existir: projeto sem sworn nao e poluido.
- * Escrita atomica (D30): escreve em .tmp e renomeia. Preserva arquivo corrompido.
+ * Escrita atomica (D30): pelo gravarAtomico, como a da sessao. Preserva arquivo corrompido.
  */
 function descarregar(cwd, contadores) {
   if (!cwd || !contadores) return false;
@@ -236,10 +266,7 @@ function descarregar(cwd, contadores) {
   for (const chave of Object.keys(contadores)) {
     dados[chave] = (dados[chave] || 0) + contadores[chave];
   }
-  // Escrita atomica: escrever em temporario e renomear por cima do definitivo
-  const temp = arquivo + '.tmp';
-  fs.writeFileSync(temp, JSON.stringify(dados, null, 2) + '\n', 'utf8');
-  fs.renameSync(temp, arquivo);
+  gravarAtomico(arquivo, JSON.stringify(dados, null, 2) + '\n');
   return true;
 }
 

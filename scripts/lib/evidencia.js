@@ -49,12 +49,17 @@ function blocosDeSaida(texto) {
   return achados;
 }
 
+// A entrada vira texto: null e undefined dao '' (String(null) daria "null").
+function comoTexto(v) {
+  return String(v == null ? '' : v);
+}
+
 function semBlocos(texto) {
-  return String(texto == null ? '' : texto).replace(/```[\s\S]*?```/g, ' ');
+  return comoTexto(texto).replace(/```[\s\S]*?```/g, ' ');
 }
 
 function analisar(texto) {
-  const bruto = String(texto == null ? '' : texto);
+  const bruto = comoTexto(texto);
   const prosa = semBlocos(bruto);
   return {
     alegaSucesso: ALEGACOES.some(function (r) { return r.test(prosa); }),
@@ -91,7 +96,7 @@ const AINDA_FALHA = [
 ];
 
 function textoMostraFalha(texto) {
-  const t = String(texto == null ? '' : texto);
+  const t = comoTexto(texto);
   if (FALHA_NA_SAIDA.some(function (r) { return r.test(t); })) return true;
   return !RESUMO_SEM_FALHA.some(function (r) { return r.test(t); }) && FALHA_SOLTA.some(function (r) { return r.test(t); });
 }
@@ -121,7 +126,7 @@ function declaraSemRevisao(texto) {
  * bloco de saida, todo bloco mostra falha e a prosa nao traz ressalva. Sem alegacao, false mesmo com bloco vermelho.
  */
 function deveBloquearPorFalha(texto) {
-  const bruto = String(texto == null ? '' : texto);
+  const bruto = comoTexto(texto);
   const a = analisar(bruto);
   if (!a.alegaSucesso || !a.temBloco || declaraRessalva(bruto)) return false;
   return blocosDeSaida(bruto).every(textoMostraFalha);
@@ -146,7 +151,7 @@ const MOTIVO_FALHA = [
 
 // O comando citado no motivo: ASCII (R5) e curto.
 function citado(comando) {
-  const c = String(comando).replace(/\s+/g, ' ').trim().replace(/[^\x20-\x7E]/g, '?');
+  const c = comoTexto(comando).replace(/\s+/g, ' ').trim().replace(/[^\x20-\x7E]/g, '?');
   return c.length > 120 ? c.slice(0, 117) + '...' : c;
 }
 

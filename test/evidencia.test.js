@@ -102,6 +102,13 @@ test('evidencia D634: os motivos do 7b e do 8 citam o comando em ASCII (R5) e cu
   assert.ok(/prova de pronto/.test(prova) && prova.indexOf('  npm test') !== -1, prova);
 });
 
+// A3-10 (pedido 12): citado() fazia String(null) e o motivo trazia "null", onde semBlocos e analisar dao ''.
+test('evidencia A3-10: comando ausente nao vira "null" nem "undefined" no motivo', () => {
+  for (const v of [null, undefined]) {
+    for (const m of [ev.motivoTesteVermelho(v), ev.motivoProvaNaoRodou(v)]) assert.ok(!/null|undefined/.test(m), m);
+  }
+});
+
 test('evidencia D634: quem declara que ainda falha ou que nao rodou nao e barrado', () => {
   const bloco = '\n```\n# fail 1\n```';
   assert.strictEqual(ev.deveBloquearPorFalha('Corrigido o parser, mas o teste de datas ainda falha.' + bloco), false);

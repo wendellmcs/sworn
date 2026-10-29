@@ -11,7 +11,9 @@ const { ascii } = require('./escopo.js');
  *  mexer, num arquivo que e trabalho de outra pessoa. */
 const RE_LINHA = /[^\n]*\n|[^\n]+$/g;
 const CERCA = /^---\s*$/;
-const RE_MODEL = /^model:/;
+// A1-51/A1-50: o passo que regrava a prova, dito igual nas tres mensagens que pedem a prova de novo.
+const REGRAVAR = 'rode node scripts/provar-apelidos.js (com --plugin no repositorio do plugin) e grave a prova de ' +
+  'novo no formato que ele mostra';
 
 function semTerminador(linha) {
   return String(linha).replace(/\r?\n$/, '');
@@ -78,13 +80,13 @@ function conferir(projeto, lidos) {
     }
     const esforco = mapa.esforcoPorNome[ag.nome];
     if (esforco !== undefined) {
-      if (ag.effort === null || ag.effort === undefined || ag.effort === '') {
+      if (ag.effort == null || ag.effort === '') {
         r.esforcoNaoDeclarado.push({ agente: ag.nome, arquivo: ag.arquivo, gravado: esforco });
       } else if (ag.effort !== esforco) {
         r.esforcoDivergente.push({ agente: ag.nome, arquivo: ag.arquivo, declarado: ag.effort, gravado: esforco });
       }
     }
-    if (ag.model === null || ag.model === undefined || ag.model === '') {
+    if (ag.model == null || ag.model === '') {
       r.naoDeclarados.push({ agente: ag.nome, arquivo: ag.arquivo, gravado: gravado });
       continue;
     }
@@ -111,6 +113,12 @@ function trocarCampo(bruto, campo, valor) {
   // O nome vira RegExp: so o formato de chave que o frontmatter() le (agentes.js:48), sem metacaractere.
   if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(String(campo))) {
     return { ok: false, texto: null, motivo: 'campo "' + campo + '" fora do formato de chave do frontmatter' };
+  }
+  // A1 (pedido 12), borda: o valor entrava cru na linha - quebra de linha injetava outra chave, e o esforco que nao e
+  // texto (degraus.js:34 o deixa cru, para o validar acusar) virava "effort: 3".
+  if (typeof valor !== 'string' || valor.trim() === '' || /[\r\n]/.test(valor)) {
+    return { ok: false, texto: null, motivo: 'o valor para `' + campo + ':` tem de ser texto de uma linha, ' +
+      'nao vazio (veio ' + JSON.stringify(valor) + ')' };
   }
   const reCampo = new RegExp('^' + campo + ':');
   const texto = String(bruto == null ? '' : bruto);
@@ -176,11 +184,13 @@ function motivo(r) {
     linhas.push('      o mapa diz:    esforco ' + a(d.gravado));
   }
   if (mudou) linhas.push('Nome com acento ou caractere especial sai aqui sem acento: use o nome real, do arquivo do agente.');
-  linhas.push('Nada foi bloqueado: um dos dois lados ficou velho, e so o dono sabe qual.');
+  // A1-48/A1-28: quem le o systemMessage e quem decide; cada direcao diz onde se troca.
+  linhas.push('Nada foi bloqueado: um dos dois lados ficou velho, e so voce sabe qual.');
   linhas.push('');
-  linhas.push('Faca uma destas para cada agente, com a escolha do dono:');
-  linhas.push('  1. o arquivo passa a dizer o que o mapa diz;');
-  linhas.push('  2. o mapa passa a dizer o que o arquivo diz.');
+  linhas.push('Faca uma destas para cada agente; a escolha e sua, e o agente aplica com um comando:');
+  linhas.push('  1. o arquivo passa a dizer o que o mapa diz (`model:` e `effort:` no arquivo do agente, acima);');
+  linhas.push('  2. o mapa passa a dizer o que o arquivo diz (a linha do agente em "agentes" de ' +
+    '.claude/sworn/projeto.json).');
   return linhas.join('\n');
 }
 
@@ -247,34 +257,50 @@ function cobertura(projeto, prova, doPlugin) {
     }
   }
   const r = {
-    temProva: false, apelidos: lista,
+    temProva: false, provaInvalida: null, apelidos: lista,
     provados: [], naoProvados: lista.slice(), reprovados: [], camposReprovados: []
   };
-  if (!prova || typeof prova !== 'object' || !Array.isArray(prova.apelidos)) return r;
+  // A1 (pedido 12), estados: prova que existe sem a forma caia aqui como "sem prova", e o teste do H4 pulava calado.
+  // Ausente segue sem prova; a que veio sem a lista `apelidos` se nomeia em provaInvalida.
+  if (prova === null || prova === undefined) return r;
+  if (!Array.isArray(prova.apelidos)) {
+    r.provaInvalida = 'a prova gravada nao tem a lista `apelidos`: ' + REGRAVAR;
+    return r;
+  }
+  // A1 (pedido 12, R2 estados): item fora da forma (nao objeto, ou sem o nome em texto) sumia calado, e o apelido
+  // virava "nao provado", que o teste do H4 nao reprova. Um item assim, ou `campos` que nao e lista, invalida a prova.
+  const campos = prova.campos === undefined ? [] : prova.campos;
+  const torta = function (l, nome) {
+    return !Array.isArray(l) || l.some(function (x) { return !x || typeof x[nome] !== 'string' || x[nome] === ''; });
+  };
+  const qual = torta(prova.apelidos, 'apelido') ? 'apelidos' : (torta(campos, 'campo') ? 'campos' : null);
+  if (qual) {
+    r.provaInvalida = 'a prova gravada tem item fora do formato na lista `' + qual + '`: ' + REGRAVAR;
+    return r;
+  }
 
   r.temProva = true;
   r.naoProvados = [];
   const porNome = Object.create(null);
-  for (const p of prova.apelidos) {
-    if (p && typeof p === 'object' && typeof p.apelido === 'string') porNome[p.apelido] = p;
-  }
+  for (const p of prova.apelidos) porNome[p.apelido] = p;
   for (const a of lista) {
     const p = porNome[a];
     if (!p) { r.naoProvados.push(a); continue; }
     if (p.aceito === true) r.provados.push(a);
     else r.reprovados.push({ apelido: a, evidencia: p.evidencia || '(sem evidencia)' });
   }
-  for (const c of (Array.isArray(prova.campos) ? prova.campos : [])) {
-    if (c && typeof c === 'object' && c.aceito !== true) {
-      r.camposReprovados.push({ campo: c.campo, evidencia: c.evidencia || '(sem evidencia)' });
-    }
+  for (const c of campos) {
+    if (c.aceito !== true) r.camposReprovados.push({ campo: c.campo, evidencia: c.evidencia || '(sem evidencia)' });
   }
   return r;
 }
 
-/** A mensagem que o teste do H4 cospe ao reprovar. Nomeia o que morreu. */
+/**
+ * A mensagem que o teste do H4 cospe ao reprovar. Nomeia o que morreu. A1-39/A1-49/A1-50: diz o que deixou de valer,
+ * onde se troca e o comando, sem jargao nem bronca. A evidencia sai literal (A1-41): e a mensagem que voltou da prova.
+ */
 function motivoReprovado(c) {
-  const linhas = ['apelido ou campo deixou de valer - a sondagem provou, nao supos:'];
+  const linhas = ['apelido ou campo que a ferramenta nao aceita mais (pela ultima prova gravada):'];
   for (const x of c.reprovados) {
     linhas.push('  - apelido "' + x.apelido + '" nao foi aceito: ' + x.evidencia);
   }
@@ -282,12 +308,13 @@ function motivoReprovado(c) {
     linhas.push('  - campo "' + x.campo + '" nao foi aceito: ' + x.evidencia);
   }
   linhas.push('');
-  linhas.push('Isto NAO se conserta afrouxando o teste. Ou o apelido mudou de nome,');
-  linhas.push('ou o campo saiu do frontmatter: rode a entrevista e sonde de novo.');
+  linhas.push('O apelido mudou de nome, ou o campo saiu do cabecalho (frontmatter) dos agentes: troque-o onde');
+  linhas.push('esta gravado (o mapa em .claude/sworn/projeto.json ou o arquivo do agente), depois ' + REGRAVAR + '.');
+  linhas.push('Afrouxar o teste so esconderia a falha.');
   return linhas.join('\n');
 }
 
 module.exports = {
-  RE_LINHA, CERCA, RE_MODEL, mapaDeDegraus, conferir, trocarCampo, trocarModel, motivo,
+  RE_LINHA, CERCA, mapaDeDegraus, conferir, trocarCampo, trocarModel, motivo,
   agentesDoPlugin, cobertura, motivoReprovado
 };

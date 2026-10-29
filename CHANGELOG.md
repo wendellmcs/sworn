@@ -1,12 +1,76 @@
 # Changelog
 
+## 0.17.0 — o bloqueio diz o que fazer, e o que não se lê não passa calado
+
+A primeira de três etapas da revisão completa do plugin passou, arquivo por arquivo, pela revisão cega: a própria
+revisão cega, os portões que barram e avisam, e o estado que eles gravam. Os problemas pequenos que ela achou foram
+consertados e revisados de novo. Quase toda mensagem de bloqueio ou de aviso passa a dizer o próximo passo, e a
+configuração torta, o arquivo que não se lê e a opção sem valor viram aviso ou erro com a causa, em vez de passar
+calados.
+
+**Mensagens que dizem o passo**
+
+- **O bloqueio diz o que fazer no lugar.** O portão de escopo, quando o `projeto.json` não se lê ou o estado da
+  sessão não se grava, cita a pasta e o passo. O portão de commit explica numa linha própria o que são a faixa de
+  revisão e os inspetores que cada arquivo pede. O arquivo intocável traz as respostas possíveis à pergunta ao dono,
+  também quando quem barra é a trava 5 (comando destrutivo). O aviso da trava 8, que barra a edição que sobe um teto
+  ou desce um piso, diz, sem jargão, como refazer a edição e como levar a decisão ao dono.
+- **O aviso de configuração diz o arquivo, o campo e o efeito.** Na escada (`agentes.degraus`), nome inválido ou
+  item ausente vem com o conserto; o aviso de custo diz onde mexer e o que muda; o teto de agentes do paralelo vem
+  com a unidade. No módulo de design, o aviso diz quais anti-referências foram ignoradas, e o do arquivo de estilo
+  gravado por comando de shell diz onde registrar uma leitura errada do sworn, com o pedido de tirar segredo do
+  comando antes.
+- **O apelido de modelo diz o passo.** No portão de apelido, a escrita negada no `--corrigir` diz o arquivo e a
+  causa, e "nada a corrigir" diz a grafia e o `--mapa`. Na prova dos apelidos (`provar-apelidos.js`), o resultado
+  que não dá para verificar manda rodar o `/sworn:init`.
+
+**O que não se lê não passa calado**
+
+- **Estado torto sai na leitura.** A sessão gravada que não é objeto volta vazia; o contador ou o valor torto sai, e
+  o resto da sessão fica.
+- **Padrão de `comandosBloqueados` que não compila avisa.** O portão de comando destrutivo diz, uma vez por sessão,
+  que aquela expressão não barra nada, em vez de ignorá-la calado.
+- **Permissão torta não é sobrescrita.** Ao autorizar o `/sworn:parallel`, `permissions.allow` ou `permissions.deny`
+  do `.claude/settings.local.json` que não é lista de textos faz o script parar com a forma esperada.
+- **Opção sem valor é erro de uso.** No `scripts/plataforma.js`, a opção sem valor e o sistema fora da lista saem
+  com código 2; a pasta que não se lê entra na lista do que não foi lido, e a tabela não se diz completa.
+- **Valor ausente não vira "null".** As mensagens que citam um valor ausente não escrevem mais `null` nem
+  `undefined` no lugar dele.
+
+**Revisão cega**
+
+- **O caminho real decide.** O `--arquivo` do `preparar-revisao.js` e a pasta dos vereditos são lidos pelo caminho
+  real: um link (ou junction, no Windows) que leva para fora da pasta atual é recusado, sem gravar nada.
+- Na mensagem do achado descartado, o começo da descrição (60 caracteres) não parte mais um emoji ao meio.
+
+**Estado e segurança**
+
+- **Duas sessões ao mesmo tempo não disputam o mesmo arquivo temporário.** O temporário da escrita do estado tem
+  nome único, e a escrita que falha no meio apaga o dela; antes, a segunda sessão podia cair ao renomear.
+- **A trava 8 não quebra com lista enorme.** Com perto de 130 mil números na mesma edição, a conta do maior e do
+  menor valor dava erro; agora ela olha um número de cada vez.
+- **A varredura de segurança lê arquivo com fim de linha só CR.** No `auditar.js --seguranca`, o CR sozinho também
+  separa linhas; antes, num arquivo assim, as regras que olham o começo da linha não casavam, e o achado passava.
+
+**Para quem usa os scripts de skill e de experimento**
+
+- O gerador de skill lê a `description` só no cabeçalho (também em bloco do YAML), entende o critério em inglês e
+  diz o que escrever. A prova de obrigações dá erro com a causa em pasta vazia, inexistente ou sem `SKILL.md`, e
+  `NAO PROVADO` e `INCONCLUSIVO` dizem o passo seguinte.
+
+**Textos**
+
+- O guia, a skill de atalhos e a descrição do plugin ficaram mais claros: a tabela de ganchos cita o bloqueio do
+  `ESCALAR:`, a trava 6 vira lista, a skill de atalhos diz o que acontece com rótulo repetido, e a entrada da 0.16.0
+  explica os termos que usava sem glosa.
+
 ## 0.16.0 — a escada decide o modelo e o esforço, e o achado da revisão cita o que leu
 
-A escada de agentes passa a valer de verdade: cada degrau grava o modelo e o esforço, a chamada fora da tabela é
-barrada, o subagente que vê a tarefa passar do papel dele pede o degrau seguinte, e o `/sworn:audit` mostra com que
-modelo e esforço os subagentes rodaram de fato. Na revisão cega, achado só conta com o trecho copiado do arquivo. O
-que passa de um chat ao outro fica mais firme: pedidos numerados, frentes com a última nota e handoff que espera os
-agentes de fundo.
+Cada agente da escada (do mais barato ao mais caro) passa a ter o modelo e o esforço gravados, e a chamada que foge
+deles é barrada com a chamada certa escrita. O subagente que vê a tarefa passar do papel dele pede o degrau seguinte,
+e o `/sworn:audit` mostra com que modelo e esforço os subagentes rodaram de fato. Na revisão cega, achado só conta
+com o trecho copiado do arquivo. Na troca de chat, os seus pedidos seguem numerados, cada frente mostra a última nota,
+e o handoff espera os agentes de fundo terminarem.
 
 **Escada de modelo e esforço**
 
@@ -36,17 +100,19 @@ agentes de fundo.
 **Revisão cega**
 
 - **Achado só conta com o trecho lido.** Cada achado do inspetor diz o estado. `confirmado` traz a severidade e o
-  trecho copiado do arquivo citado, que a apuração procura no lado da rodada (a linha citada e até 2 em volta);
-  trecho que não confere fica fora da conta. `pendente` não tem severidade: diz o fato que falta para decidir e
-  também fica fora. Achado sem estado, ou confirmado sem trecho, invalida o veredito inteiro, e a apuração para em
-  vez de dar a rodada como limpa.
+  trecho copiado do arquivo citado, que a apuração (a conta que o script faz das respostas dos inspetores) procura
+  no lado da rodada (a linha citada e até 2 em volta); trecho que não confere fica fora da conta. `pendente` não tem
+  severidade: diz o fato que falta para decidir e também fica fora. Achado sem estado, ou confirmado sem trecho,
+  invalida o veredito inteiro (a resposta daquele inspetor), e a apuração para em vez de dar a rodada como limpa.
 
 **Travas e segurança**
 
 - **Commit que pula os ganchos é barrado.** `git commit --no-verify` (ou `-n`, também junto de outras letras, como
-  `-anm`) e `--no-gpg-sign` caem na trava 5: pular o gancho de commit pula a revisão e os testes que ele roda. O que
-  vem dentro da mensagem não conta (`-m "explica o --no-verify"` passa), e a última opção vence, como no git
-  (`-n --verify` passa). Ainda não são lidos o `-c core.hooksPath` nem o `commit.gpgSign` da configuração.
+  `-anm`) e `--no-gpg-sign` caem na trava 5 (comando destrutivo): pular o gancho de commit pula a revisão e os
+  testes que ele roda. O que vem dentro da mensagem não conta (`-m "explica o --no-verify"` passa), e a última
+  opção vence, como no git (`-n --verify` passa). Ainda não são lidos dois outros jeitos de pular: o
+  `-c core.hooksPath=<pasta>`, que troca a pasta dos ganchos só naquele comando, e o `commit.gpgSign` desligado na
+  configuração do git, que tira a assinatura de todo commit sem opção nenhuma no comando.
 - **Varredura de segurança antes de instalar um plugin ou uma skill.** `node "<plugin>/scripts/auditar.js"
   --seguranca <pasta>` lista, sem IA, o que pede atenção: rede, `eval`, processo filho, credencial, pasta pessoal e
   gancho que escreve fora da pasta do plugin, cada um com arquivo:linha e o trecho. Diz o que não leu (binário,
@@ -86,10 +152,11 @@ agentes de fundo.
 
 **Manutenção**
 
-- Para quem mantém o plugin: são **29 baldes** de contador: 23 que negam, 6 que só contam. Os novos somam as chamadas
-  barradas por fugir da tabela e os fins de turno barrados com escalada sem despacho. Um teste novo confere que todo
-  agente tem `name` igual ao nome do arquivo e uma `description`, e que todo script de `scripts/` é citado por algum
-  teste.
+- Para quem mantém o plugin: são **29 baldes** de contador: 23 que negam, 6 que só contam. Balde é cada contador
+  com nome, um por tipo de evento (um bloqueio, um aviso, um despacho), que o sworn soma em
+  `.claude/sworn/contadores.json`. Os novos somam as chamadas barradas por fugir da tabela e os fins de turno
+  barrados com escalada sem despacho. Um teste novo confere que todo agente tem `name` igual ao nome do arquivo e
+  uma `description`, e que todo script de `scripts/` é citado por algum teste.
 
 ## 0.15.0 — entrega de rigor máximo só com revisão aprovada, o sworn em inglês e página nova
 

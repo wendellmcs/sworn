@@ -877,7 +877,7 @@ function motivoNotaViva(arquivo, turnos) {
 module.exports = {
   notaViva, motivoNotaViva, TURNOS_SEM_NOTA,
   ATIVO, RE_TAREFA, RE_CAIXA, parseTarefas, parseItens, lerAtivo, abrir, donoOutro, linhaDoPlano, linhaDoPlanoDaSessao,
-  proximaDecisao, alegaEtapaConcluida, motivoSubitemAberto, painelTexto, painelIlegivel,
+  proximaDecisao, alegaEtapaConcluida, motivoSubitemAberto, painelTexto, painelIlegivel, comandoDeAbrir,
   planoDoObjetivo, planosDoObjetivo, planosCitados, frentesComPlano, acharPlanoDaFrente, painelVariasFrentes,
   painelFrenteSemPlano, sessoesDoPlano, estimativaDeSessoes, painelFrenteIlegivel, deduzirPeloEscopo,
   dentroDoProjeto, painelPlanoFora, painelQueFalhou, painelNaoLeu, caminhoDoPlano, TETO_DO_PLANO, causaDoDisco

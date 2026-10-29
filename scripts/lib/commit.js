@@ -15,19 +15,27 @@ const veredito = require('./veredito.js');
 const MAX_CITADOS = 5;
 const MARCA = '# sworn: sem-revisao';
 
-/** O que esta entre aspas (mensagem, caminho) vira um marcador: nao e comando, e o `-C "pasta"` segue com argumento. */
+/**
+ * O que esta entre aspas (mensagem, caminho) vira Q do mesmo tamanho, com as aspas das pontas: nao e comando, e o
+ * `-C "pasta"` segue com um argumento sem espaco. As posicoes seguem as do comando (o pastaDoComando le o valor nele).
+ */
 function semAspas(comando) {
-  return String(comando).replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, 'Q');
+  return String(comando).replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, function (m) {
+    return m[0] + 'Q'.repeat(m.length - 2) + m[m.length - 1];
+  });
 }
 
 /**
- * O comando roda um `git commit` (com opcoes globais antes, como -C/-c/--no-pager/--git-dir=, depois de cd,
- * encadeado, ou com o executavel por caminho ou .exe)? Entre aspas nao conta.
+ * A2-30: o `git commit` numa fonte so, para o ehCommit e o pastaDoComando, sobre o texto do semAspas: opcoes globais
+ * antes (-C/-c/--no-pager/--git-dir=), depois de cd, encadeado, ou com o executavel por caminho ou .exe. O grupo 1 sao
+ * as opcoes; a flag d da a posicao delas.
  */
+const GIT_COMMIT = /(?:^|[\s;&|(/\\])git(?:\.exe)?((?:\s+(?:-[cC]\s+\S+|--?[A-Za-z][\w-]*(?:=\S+)?))*)\s+commit(?![\w-])/d;
+
+/** O comando roda um `git commit`? Entre aspas nao conta. */
 function ehCommit(comando) {
   if (typeof comando !== 'string' || !comando) return false;
-  return /(?:^|[\s;&|(/\\])git(?:\.exe)?(?:\s+(?:-[cC]\s+\S+|--?[A-Za-z][\w-]*(?:=\S+)?))*\s+commit(?![\w-])/
-    .test(semAspas(comando));
+  return GIT_COMMIT.test(semAspas(comando));
 }
 
 /** A marca de commit sem revisao, fora de aspas. */
@@ -39,14 +47,11 @@ function semRevisao(comando) {
 function pastaDoComando(comando) {
   const c = String(comando || '');
   const valor = function (m) { return m[2] !== undefined ? m[2] : (m[3] !== undefined ? m[3] : m[4]); };
-  // A2-01: o -C que vale e o das opcoes do proprio `git ... commit` (a forma do ehCommit, com o valor entre aspas); o de
-  // um `git -C <outro> status` antes dele media o outro repositorio.
-  // O conteudo entre aspas vira Q do mesmo tamanho (as posicoes seguem as de `c`): `echo "git commit"` nao e o commit,
-  // e `-c user.name="a b"` e uma opcao so.
-  const mascara = c.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, function (m) { return m[0] + 'Q'.repeat(m.length - 2) + m[m.length - 1]; });
-  const gc = /\bgit(?:\.exe)?((?:\s+(?:-[cC]\s+(?:"[^"]*"|'[^']*'|\S+)|--?[A-Za-z][\w-]*(?:=\S+)?))*)\s+commit(?![\w-])/.exec(mascara);
+  // A2-01: o -C que vale e o das opcoes do proprio `git ... commit`; o de um `git -C <outro> status` antes dele media o
+  // outro repositorio. Pelo semAspas, `echo "git commit"` nao e o commit e `-c user.name="a b"` e uma opcao so.
+  const gc = GIT_COMMIT.exec(semAspas(c));
   const fim = gc ? gc.index : -1;
-  const opcoes = gc ? c.substr(gc.index + /^git(?:\.exe)?/.exec(gc[0])[0].length, gc[1].length) : '';
+  const opcoes = gc ? c.slice(gc.indices[1][0], gc.indices[1][1]) : '';
   const comC = gc && /(?:^|\s)-C\s+(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(opcoes);
   if (comC) return comC[1] !== undefined ? comC[1] : (comC[2] !== undefined ? comC[2] : comC[3]);
   const ate = fim === -1 ? c : c.slice(0, fim);
@@ -69,7 +74,7 @@ const chave = function (p) { return path.resolve(String(p)).toLowerCase(); };
 /** Texto fica fora do portao (do commit e, D655, do fecho da marcha AAA). */
 function ehTexto(p) { return /\.(md|markdown|txt)$/i.test(String(p)); }
 
-/** D655: `arquivo` esta na lista de aprovados (a mesma comparacao do `pendentes`). Lista torta = nenhum. */
+/** D655: `arquivo` esta na lista de aprovados (o `pendentes` usa esta, A2-31). Lista torta = nenhum. */
 function aprovado(aprovados, arquivo) {
   const k = chave(arquivo);
   return (Array.isArray(aprovados) ? aprovados : []).some(function (a) { return typeof a === 'string' && chave(a) === k; });
@@ -124,10 +129,9 @@ function atalhosNovos(abs, novas, marcas) {
  */
 function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas) {
   if (!Array.isArray(arquivos)) return [];
-  const ok = new Set((Array.isArray(aprovados) ? aprovados : []).map(chave));
   const lista = [];
   for (const a of arquivos) {
-    if (typeof a !== 'string' || ok.has(chave(a))) continue;
+    if (typeof a !== 'string' || aprovado(aprovados, a)) continue;
     const abs = path.resolve(raiz, a);
     const rel = require('./glob.js').normalizar(path.relative(raiz, abs));
     // D575: fora de qualquer repositorio (instrumento do scratchpad) nunca conta, mesmo com topoDoCommit null (`cd "$D"`).
@@ -154,23 +158,25 @@ function motivo(lista) {
   for (const p of lista) for (const n of (Array.isArray(p.atalhos) ? p.atalhos : [])) atalhos.push('"' + ascii(p.rel) + ':' + n + '"');
   const passos = ['  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";'];
   if (atalhos.length) {
-    linhas.push('Atalho novo sem gatilho:');
+    linhas.push('Atalho novo (simplificacao marcada no codigo) sem o "trocar quando:":');
     for (const a of atalhos.slice(0, MAX_CITADOS)) linhas.push('  - ' + a);
     if (atalhos.length > MAX_CITADOS) linhas.push('  - e mais ' + (atalhos.length - MAX_CITADOS));
-    passos.push('  2. escreva "trocar quando: ..." no atalho sem gatilho;');
+    passos.push('  2. escreva "trocar quando: ..." em cada atalho listado;');
   }
   passos.push('  ' + (passos.length + 1) + '. rode o commit de novo.');
+  // A2-33: faixa, inspetor e atalho explicados na 1a vez; a chave de desligar diz o que desliga.
   return [
     'sworn - commit parado: falta a revisao antes do commit.',
     '',
-    'Arquivos de codigo mudados nesta sessao sem revisao aprovada:'
+    'Arquivos de codigo mudados nesta sessao sem revisao aprovada',
+    '(faixa: o tamanho da revisao; inspetores: quantos revisores ela chama):'
   ].concat(linhas, [
     '',
     'Faca agora:'
   ], passos, [
     'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
     'repita o commit com "' + MARCA + '" no fim do comando.',
-    'Desligar neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+    'Desligar esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
   ]).join('\n');
 }
 

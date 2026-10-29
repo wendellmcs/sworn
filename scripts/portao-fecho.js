@@ -121,18 +121,18 @@ function tarefaACobrar(tarefas, mensagem, ativo) {
     re.lastIndex = 0;
     while ((m = re.exec(texto)) !== null) numerosDaAlegacao(m[1]).forEach(function (n) { citadas.push(n); });
   }
-  const alvo = function (n) { return tarefas.filter(function (t) { return t.n === n; })[0]; };
+  const alvo = function (n) { return tarefas.find(function (t) { return t.n === n; }); };
   const comAberto = function (t) { return t && t.abertos > 0 ? t : undefined; };
   const existentes = citadas.filter(alvo);
   // numero que nao existe no plano nao se confere (ex.: "etapa 7" de outro plano): se NENHUM existe,
   // a alegacao vale como sem numero e segue para as regras abaixo; se algum existe e esta fechado, a
   // alegacao e verdadeira e nao se cobra nada.
-  if (existentes.length) return existentes.map(alvo).filter(comAberto)[0];
+  if (existentes.length) return existentes.map(alvo).find(comAberto);
   const atual = ativo && ativo.tarefa !== null && ativo.tarefa !== undefined ? parseInt(ativo.tarefa, 10) : NaN;
   if (!isNaN(atual) && alvo(atual)) return comAberto(alvo(atual));
   const andamento = tarefas.filter(function (t) { return t.total - t.abertos > 0; }).pop();
-  if (andamento) return tarefas.filter(function (t) { return t.n <= andamento.n && t.abertos > 0; })[0];
-  return tarefas.filter(function (t) { return t.abertos > 0; })[0];
+  if (andamento) return tarefas.find(function (t) { return t.n <= andamento.n && t.abertos > 0; });
+  return tarefas.find(function (t) { return t.abertos > 0; });
 }
 
 /** D412: handoff gravado neste turno e a resposta final sem bloco de codigo. D415: so
@@ -173,7 +173,9 @@ function semRevisaoDeReferencia(e, s, projeto, cwd) {
     '',
     'Faca uma destas:',
     '  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";',
-    '  2. se chegar a 3 rondas sem fechar, pare e leve ao usuario 3 opcoes;',
+    '  2. se chegar a 3 rondas sem fechar, pare e leve ao usuario 3 opcoes para',
+    '     escolher: corrigir e comparar mais uma vez, entregar sem a comparacao',
+    '     dizendo o motivo, ou comecar uma comparacao nova do zero;',
     '  3. ou diga ao usuario por que esta entrega fica sem a comparacao.',
     '',
     'Desligar neste projeto: "portaoReferencia": false em .claude/sworn/projeto.json.'
@@ -302,9 +304,14 @@ io.blindar(function () {
       // Plano 082 (p7-5): caminhoDoPlano, como a faixa e o painel - o absoluto do --abrir se le.
       try { tarefas = planoLib.parseTarefas(require('node:fs').readFileSync(planoLib.caminhoDoPlano(cwd, ativo.arquivo), 'utf8')); }
       catch (err) {
-        // S52-fec-1: plano ilegivel nao barra, mas tambem nao passa calado.
+        // S52-fec-1: plano ilegivel nao barra, mas tambem nao passa calado. Pedido 12 (A3): com causa e proximo passo.
         tarefas = [];
-        planoIlegivel = 'sworn: o plano ativo (' + String(ativo.arquivo) + ') nao pode ser lido; a alegacao de etapa concluida passou sem conferir os subitens.';
+        // A3-25: sem jargao, e o comando de abrir com o caminho real do plano.js (o do painel).
+        planoIlegivel = 'sworn: o plano ativo (' + String(ativo.arquivo) + ') nao pode ser lido (' +
+          require('./lib/escopo.js').ascii(require('./lib/texto.js').causaDoErro(err)).slice(0, 120) +
+          '); a etapa dada como concluida passou sem conferir as caixas abertas do plano. Confira se o arquivo ' +
+          'existe e se abre, ou abra o plano de novo: ' +
+          planoLib.comandoDeAbrir(require('node:path').join(__dirname, 'plano.js'));
       }
       const aberta = tarefaACobrar(tarefas, e.last_assistant_message, ativo);
       if (aberta) {

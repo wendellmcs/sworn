@@ -76,10 +76,6 @@ function lerRegra(regra) {
   try { return { re: new RegExp(regra.padrao), causa: null }; } catch (e) { return { re: null, causa: causaDoErro(e) }; }
 }
 
-function compilar(regra) {
-  return lerRegra(regra).re;
-}
-
 /** As regras que valem para esta plataforma: a do PowerShell 5.1 so com o shell powershell. */
 function regrasAplicaveis(p) {
   return TABELA.regras.concat(p.shell === 'powershell' ? TABELA.regrasPowerShell51 : []);
@@ -103,7 +99,7 @@ function conferir(comando, plataforma, ferramenta) {
   const problemas = [];
 
   for (const regra of regrasAplicaveis(p)) {
-    const re = compilar(regra);
+    const re = lerRegra(regra).re;
     if (re && re.test(limpo)) {
       problemas.push({ achado: regra.achado, sugestao: regra.sugestao, motivo: regra.motivo });
     }
@@ -134,12 +130,18 @@ function problemasDaTabela(plataforma, ferramenta) {
 // "sworn - <o que houve>." e uma linha em branco; o corpo; uma linha em branco e "Faca uma destas:" numerado (ou
 // "Faca assim:", quando ha um caminho so); a liberacao, que e do dono, por ultimo. Em ASCII (R5).
 
-function motivo(comando, problemas, tentativa) {
-  const c = String(comando);
+// D721 (A1-01/A1-02): o comando que os avisos ecoam, um item por caractere: nulo vira vazio, e o corte e a contagem vao
+// por caractere (o emoji conta 1, nunca se parte). Custo medido: 1 MB de comando, ~12 ms, so no caminho que nega.
+function caracteres(comando) {
+  return [...String(comando == null ? '' : comando)];
+}
+
+function motivoIdioma(comando, problemas, tentativa) {
+  const c = caracteres(comando);
   const linhas = [
     'sworn - comando escrito no idioma de shell errado para esta plataforma.',
     '',
-    'Comando: ' + (c.length > 120 ? c.slice(0, 120) + '...(' + c.length + ' caracteres)' : c),
+    'Comando: ' + (c.length > 120 ? c.slice(0, 120).join('') + '...(' + c.length + ' caracteres)' : c.join('')),
     '',
     'Achado                 Use no lugar'
   ];
@@ -545,7 +547,7 @@ function motivoCdSolto(comando, achado) {
   const linhas = [
     'sworn - cd solto: a pasta mudada ficaria valendo para os comandos seguintes.',
     '',
-    'Comando: ' + String(comando).slice(0, 300)
+    'Comando: ' + caracteres(comando).slice(0, 300).join('')
   ];
   if (teto) { // T1/F3-06
     linhas.push('O comando passa de 100 niveis de aninhamento e nao foi lido inteiro: um cd la dentro');
@@ -605,5 +607,5 @@ function avisoCdCorrigido(achado, deNovo) {
   ].map(ascii).join('\n');
 }
 
-module.exports = { TABELA, semLiterais, conferir, problemasDaTabela, avisoTabela, motivo, cdSolto, motivoCdSolto,
+module.exports = { TABELA, semLiterais, conferir, problemasDaTabela, avisoTabela, motivoIdioma, cdSolto, motivoCdSolto,
   envolverEmSubshell, avisoCdCorrigido };

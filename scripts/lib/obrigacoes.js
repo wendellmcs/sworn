@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const { causaDoErro } = require('./texto.js');
 
 /**
  * O INVENTARIO DE OBRIGACOES de um manual, DERIVADO do proprio manual.
@@ -74,6 +75,13 @@ const LIMITE_ANUNCIO = 160;
 
 /** Os cinco mecanismos com que uma obrigacao pode ter valido. Ver o roteiro. */
 const MECANISMOS = ['HOOK', 'REGRAS', 'SKILL', 'FORA', 'NADA'];
+// A3-42: o que cada um quer dizer, com o mesmo texto no BASTA e no INVALIDO do mecanismo que nao existe.
+const O_QUE_E = {
+  HOOK: 'um portao do plugin barrou ou exigiu', REGRAS: 'o arquivo de regras do projeto disse',
+  SKILL: 'uma skill do projeto disse', FORA: 'uma decisao anterior tirou do plugin',
+  NADA: 'valeu apenas porque alguem lembrou'
+};
+const legenda = (mecs) => mecs.map((m) => m + ' = ' + O_QUE_E[m]).join(', ');
 
 function anuncia(texto) {
   for (const re of MARCADORES) if (re.test(texto)) return true;
@@ -185,14 +193,24 @@ function slug(s, palavras) {
  * -> { fonte, ok, arquivos, obrigacoes: [{id, familia, titulo, chave, arquivo,
  *      linha, forma}], porFamilia: {familia: n} }
  *
- * Diretorio que nao existe, ou que nao tem SKILL.md, devolve inventario VAZIO
- * com `ok: false` - nunca estoura. Quem chama decide o que fazer com isso, e o
- * roteiro declara "nao verificavel aqui" em vez de seguir com nada.
+ * Diretorio que nao existe, que nao tem SKILL.md ou que nao veio, devolve
+ * inventario VAZIO com `ok: false` - nunca estoura. Quem chama decide o que
+ * fazer com isso, e o roteiro declara "nao verificavel aqui" em vez de seguir
+ * com nada. Pedido 12 (A3): arquivo que nao se le, ou references/ que nao se
+ * lista, tambem da o vazio com `ok: false`; em todos, `erro` diz qual e por que.
  */
 function inventario(dir) {
   const r = { fonte: String(dir == null ? '' : dir), ok: false, arquivos: [], obrigacoes: [], porFamilia: {} };
-  const lista = arquivosDoManual(r.fonte);
-  if (lista.length === 0) return r;
+  const vazio = (erro) => ({ fonte: r.fonte, ok: false, arquivos: [], obrigacoes: [], porFamilia: {}, erro: erro });
+  const ilegivel = (onde, e) => vazio('nao consegui ler ' + onde + ' (' + causaDoErro(e) + ')');
+  // Sem pasta, o path.join olharia o SKILL.md da pasta atual: o manual de quem chama nao e o manual pedido.
+  if (r.fonte.trim() === '') return vazio('nenhuma pasta de manual foi informada');
+  let lista;
+  try { lista = arquivosDoManual(r.fonte); } catch (e) { return ilegivel('references', e); }
+  // A3-34: so references/*.md, sem o SKILL.md, nao e manual - e o contrato acima diz ok: false.
+  if (lista[0] !== path.join(r.fonte, 'SKILL.md')) {
+    return vazio(fs.existsSync(r.fonte) ? 'nao ha SKILL.md nela' : 'a pasta nao existe');
+  }
   r.ok = true;
 
   const vistos = Object.create(null);
@@ -202,7 +220,7 @@ function inventario(dir) {
     const nome = path.basename(arq);
     r.arquivos.push(nome);
     let bruto = '';
-    try { bruto = fs.readFileSync(arq, 'utf8'); } catch (e) { continue; }
+    try { bruto = fs.readFileSync(arq, 'utf8'); } catch (e) { return ilegivel(nome, e); }
 
     let secao = slug(nome.replace(/\.md$/i, ''), 3);
     let aberto = false;
@@ -248,9 +266,13 @@ function inventario(dir) {
     if (chave === '') return;
     // Obrigacao repetida em dois pontos do manual e a MESMA obrigacao: contar
     // duas vezes daria ao juiz duas linhas para a mesma pergunta, e a segunda
-    // sempre copiaria a primeira.
-    if (vistos[chave]) return;
+    // sempre copiaria a primeira. A3-28: o ordinal e da familia dele ("Lente 2 - Estados" e "Marcha 2 - Estados"
+    // sao duas). Item e frase solta nao tem familia ('*', que nenhuma palavra de cabecalho e): repetidos antes ou
+    // depois de um ordinal com o mesmo nome, contam uma vez so, nas duas ordens.
+    const ordinal = forma === 'ordinal';
+    if (ordinal ? vistos[familia + '|' + chave] || vistos['*|' + chave] : vistos[chave]) return;
     vistos[chave] = true;
+    vistos[(ordinal ? familia : '*') + '|' + chave] = true;
     contaFamilia[familia] = (contaFamilia[familia] || 0) + 1;
     const n = numero !== null && numero !== undefined ? numero : String(contaFamilia[familia]);
     r.obrigacoes.push({
@@ -396,13 +418,14 @@ function conferirResultado(linhas, resultado) {
     const mec = String(l.mecanismo == null ? '' : l.mecanismo).toUpperCase();
     if (MECANISMOS.indexOf(mec) === -1) {
       r.invalidez.push('linha "' + l.id + '" usa mecanismo que nao existe: "' + l.mecanismo +
-        '". Os validos sao ' + MECANISMOS.join(', '));
+        '". Os validos: ' + legenda(MECANISMOS));
       continue;
     }
     const prova = String(l.evidencia == null ? '' : l.evidencia).trim();
     if (mec !== 'NADA' && prova === '') {
-      r.invalidez.push('linha "' + l.id + '" afirma cobertura por ' + mec + ' e nao cita nada. ' +
-        'Este plugin existe para obrigar a provar em vez de afirmar; a propria tabela nao escapa');
+      r.invalidez.push('linha "' + l.id + '" afirma cobertura por ' + mec + ' com a evidencia vazia: preencha ' +
+        'o campo evidencia com o que se confere depois (o portao que disparou, a linha do arquivo de regras, ' +
+        'a mensagem que voltou)');
       continue;
     }
     // L3 (A3-20): a exigencia do comentario acima, que o codigo nao cobrava - FORA cita a decisao pelo numero: D82,
@@ -411,7 +434,7 @@ function conferirResultado(linhas, resultado) {
     // atalho: D-1 passa como citacao. limite: o regex nao sabe se a decisao existe.
     // trocar quando: o FORA puder conferir o numero contra o registro de decisoes do projeto.
     if (mec === 'FORA' && !citaDecisao(prova)) {
-      r.invalidez.push('linha "' + l.id + '" diz FORA sem citar a decisao que a pos fora do plugin: cite a decisao ' +
+      r.invalidez.push('linha "' + l.id + '" diz FORA sem citar a decisao que a tirou do plugin: cite a decisao ' +
         'pelo numero (a letra D seguida do numero dela) e diga o que ela decidiu');
       continue;
     }
@@ -435,6 +458,8 @@ function motivo(c) {
   if (c.veredito === 'NAO PROVADO') {
     L.push('NAO PROVADO: ninguem rodou o experimento neste ambiente.');
     L.push('Isto nao reprova nada: a pergunta sobre aposentar o manual continua sem resposta.');
+    L.push('Para rodar: node "<plugin>/scripts/experimento.js" --manual <pasta do seu manual> monta a tabela e diz');
+    L.push('onde gravar o resultado; com ele gravado, o mesmo comando com --veredito julga.');
     return L.join('\n');
   }
   if (c.veredito === 'INVALIDO') {
@@ -450,6 +475,7 @@ function motivo(c) {
       ' obrigacoes ficaram sem classificacao.');
     L.push('Sem elas nao da para concluir nem a favor nem contra: ' +
       c.semClassificacao.slice(0, 8).join(', ') + (c.semClassificacao.length > 8 ? ', ...' : ''));
+    L.push('Classifique cada uma no resultado gravado (mecanismo e evidencia) e rode de novo com --veredito.');
     return L.join('\n');
   }
   if (c.veredito === 'NAO BASTA') {
@@ -464,6 +490,7 @@ function motivo(c) {
   L.push('BASTA: as ' + c.total + ' obrigacoes tiveram um mecanismo que as fez valer.');
   L.push('HOOK ' + c.porMecanismo.HOOK + ' | REGRAS ' + c.porMecanismo.REGRAS +
     ' | SKILL ' + c.porMecanismo.SKILL + ' | FORA ' + c.porMecanismo.FORA);
+  L.push('(' + legenda(['HOOK', 'REGRAS', 'SKILL', 'FORA']) + ')');
   L.push('A condicao para aposentar o manual esta satisfeita. A decisao continua sendo do dono.');
   return L.join('\n');
 }

@@ -69,7 +69,7 @@ test('T5: gatilho 3 (apelidos) na forma unica, com o arquivo do agente entre asp
 // acento a saida saia de ASCII (R5). O nome sem acento nao e o real: o aviso diz para copiar o real.
 test('A1-08: comando e agente com acento saem em ASCII nos avisos de shell e de apelidos', () => {
   const p = [{ achado: 'cd relatório', sugestao: 'Set-Location', motivo: 'idioma é bash' }];
-  confereForma('idioma acento', shell.motivo('cd relatório && ls', p, 1), { acao: 'destas' });
+  confereForma('idioma acento', shell.motivoIdioma('cd relatório && ls', p, 1), { acao: 'destas' });
   confereForma('cd acento', shell.motivoCdSolto('cd relatório; ls', { forma: 'bash', achado: 'cd relatório' }),
     { acao: 'destas', ultima: LIBERAR });
   assert.ok(ASCII.test(shell.avisoCdCorrigido({ forma: 'bash', achado: 'cd relatório' })), 'cd corrigido fora de ASCII');
@@ -100,6 +100,25 @@ test('T5: comando destrutivo na forma unica; a liberacao e do dono, por ultimo',
   const t = destrutivo.motivo('rm -rf build', { motivo: 'apaga pasta' });
   confereForma('destrutivo', t, { acao: 'destas', ultima: LIBERAR });
   assert.match(t, /trava 5/, 'o nome publico da trava fica');
+  // D721 (A1-06): o aviso do padrao de comandosBloqueados que nao compila; o padrao do dono sai em ASCII
+  confereForma('bloqueados', destrutivo.avisoRecusadas([{ padrao: 'a(ção', causa: 'Unterminated group' }]),
+    { caminhos: ['a(cao'], acao: 'assim' });
+});
+
+// A2-84 (P2 do pedido 12): a pergunta ao dono tinha duas redacoes (a trava 5 e o design pediam "3 opcoes com a
+// recomendada marcada"); a do intocavel diz o que cada opcao traz, e vale nos tres.
+test('A2-84: destrutivo, design e intocavel pedem as 3 opcoes ao dono com a mesma redacao', () => {
+  const avisos = {
+    destrutivo: destrutivo.motivo('rm -rf build', { motivo: 'apaga pasta' }),
+    design: design.motivo('src/a.css', [{ linha: 3, valor: '#123456', tipo: 'cor' }], { cores: ['#fff'] }),
+    intocavel: escopo.motivoIntocavel('.env')
+  };
+  for (const nome of Object.keys(avisos)) {
+    const junto = avisos[nome].replace(/\n +/g, ' ');
+    assert.match(junto, /peca ao dono que decida: 3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo/,
+      nome + ': ' + avisos[nome]);
+    assert.ok(!/recomendada marcada/.test(avisos[nome]), nome + ': ' + avisos[nome]);
+  }
 });
 
 test('T5: intocavel na forma unica, com o arquivo entre aspas', () => {
@@ -129,9 +148,9 @@ test('T5: o aviso de saude que sai do avaliar e o do avisoDeSaude', () => {
 test('T5: os quatro avisos de shell na forma unica', () => {
   const p = [{ achado: 'rm -rf', sugestao: 'Remove-Item', motivo: 'idioma bash' }];
   for (const n of [1, 2]) {
-    confereForma('idioma ' + n, shell.motivo('rm -rf x', p, n), { acao: 'destas' });
+    confereForma('idioma ' + n, shell.motivoIdioma('rm -rf x', p, n), { acao: 'destas' });
   }
-  assert.match(shell.motivo('rm -rf x', p, 2), /Troque de idioma, nao de variacao\./);
+  assert.match(shell.motivoIdioma('rm -rf x', p, 2), /Troque de idioma, nao de variacao\./);
   confereForma('tabela', shell.avisoTabela([{ tipo: 'arquivo', onde: 'tabela/x.json', causa: 'JSON invalido' },
     { tipo: 'regra', achado: 'ls', onde: 'regras[2]', causa: 'regex' }]), { caminhos: ['tabela/x.json'], acao: 'assim' });
   for (const forma of ['bash', 'powershell']) {

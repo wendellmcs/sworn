@@ -114,6 +114,19 @@ test('apelidos: o motivo diz que nada foi bloqueado', () => {
   assert.ok(/nada foi bloqueado/i.test(apelidos.motivo(r)));
 });
 
+// A1-48/A1-28: cada direcao diz onde se troca, e o aviso fala com quem le (o "dono" em terceira pessoa era jargao).
+test('A1-48: as duas direcoes dizem o arquivo e o campo, e o aviso fala com quem le', () => {
+  const m = apelidos.motivo(apelidos.conferir(MAPA_DOIS, lidos([ag('busca', 'caro')])));
+  assert.ok(m.includes('\n  1. o arquivo passa a dizer o que o mapa diz (`model:` e `effort:` no arquivo do agente'), m);
+  assert.ok(/\n {2}2\. o mapa passa a dizer o que o arquivo diz \(.*\.claude\/sworn\/projeto\.json\)/.test(m), m);
+  assert.ok(/o agente aplica com um comando/.test(m) && !/\bdono\b/.test(m), m);
+});
+
+// A1-37/A1-52: RE_MODEL nao tinha importador (o trocarCampo monta a propria RegExp).
+test('A1-37: RE_MODEL saiu da lib', () => {
+  assert.ok(!('RE_MODEL' in apelidos));
+});
+
 // ------------------------------------------------- a correcao (decisao 15)
 
 test('apelidos: trocar o model: preserva o resto do arquivo BYTE A BYTE', () => {
@@ -216,6 +229,13 @@ test('D678 T1: agente sem effort: com esforco gravado e balde proprio, nao diver
   assert.deepStrictEqual(r.esforcoNaoDeclarado, [{ agente: 'busca', arquivo: 'busca.md', gravado: 'low' }]);
 });
 
+// A1-38: `effort:` vazio e a mesma resposta que ausente (como o `model:`): nao declarado, nunca divergencia.
+test('A1-38: effort vazio conta como nao declarado', () => {
+  const r = apelidos.conferir(MAPA_ESFORCO, lidos([agE('busca', 'barato', ''), agE('arquiteto', 'caro', 'high')]));
+  assert.deepStrictEqual(r.esforcoDivergente, []);
+  assert.deepStrictEqual(r.esforcoNaoDeclarado.map((x) => x.agente), ['busca']);
+});
+
 test('D678 T1: tabela sem esforco nao compara o effort: (configuracao anterior nao acusa nada)', () => {
   const r = apelidos.conferir(MAPA_DOIS, lidos([agE('busca', 'barato', 'max'), agE('arquiteto', 'caro', null)]));
   assert.deepStrictEqual(r.esforcoDivergente, []);
@@ -247,6 +267,22 @@ test('D678 T1: trocarCampo recusa nome de campo fora do formato de chave, sem la
     assert.strictEqual(r.ok, false, campo + ' passou');
     assert.strictEqual(r.texto, null);
   }
+});
+
+// A1-ape-2 (pedido 12, borda): o valor entrava cru na linha - quebra de linha injetava outra chave, e o esforco que
+// nao e texto (degraus.js:34 o deixa cru) virava "effort: 3". Recusa o que nao e texto de uma linha, nao vazio.
+test('A1-ape-2: trocarCampo recusa valor que nao e texto de uma linha, sem lancar', () => {
+  const antes = '---\nname: busca\nmodel: caro\n---\n';
+  for (const valor of ['barato\nname: outro', 'barato\r', '', '   ', 3, null, undefined, { a: 1 }]) {
+    for (const campo of ['model', 'effort']) { // a linha que existe (troca) e a que falta (acrescenta)
+      const r = apelidos.trocarCampo(antes, campo, valor);
+      assert.strictEqual(r.ok, false, campo + ' = ' + JSON.stringify(valor) + ' passou: ' + r.texto);
+      assert.strictEqual(r.texto, null);
+      assert.ok(r.motivo.includes('`' + campo + ':`') && /texto de uma linha/.test(r.motivo), r.motivo);
+    }
+  }
+  assert.strictEqual(apelidos.trocarCampo(antes, 'model', 'barato').ok, true, 'o valor normal segue');
+  assert.strictEqual(apelidos.trocarCampo(antes, 'effort', 'low').ok, true);
 });
 
 test('D678 T1: dois effort: no frontmatter param a troca em vez de adivinhar', () => {

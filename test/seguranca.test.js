@@ -113,6 +113,64 @@ test('item 17: linha muito longa (minificado) sai com o trecho cortado e nao tra
   });
 });
 
+// A1-seg-1: python e JS aceitam CR sozinho como fim de linha; partir so em \n juntava o arquivo numa linha e a regra
+// ancorada em ^ deixava de casar (o import do .py passava calado).
+test('A1-seg-1: arquivo com fim de linha so em CR e varrido linha a linha', () => {
+  comPasta({ 'a.py': 'x = 1\rimport requests\r', 'b.js': 'a\rfetch(u)\r', 'c.js': 'a\r\nb\r\nfetch(u)\r\n' }, (dir) => {
+    const r = seguranca.varrer(dir);
+    const py = r.achados.find((a) => a.arquivo === 'a.py');
+    assert.ok(py && py.categoria === 'rede' && py.linha === 2, 'o import do .py: ' + JSON.stringify(r.achados));
+    const js = r.achados.find((a) => a.arquivo === 'b.js');
+    assert.ok(js && js.linha === 2, 'a linha do fetch: ' + JSON.stringify(r.achados));
+    const crlf = r.achados.find((a) => a.arquivo === 'c.js');
+    assert.ok(crlf && crlf.linha === 3, 'CRLF e uma quebra so: ' + JSON.stringify(r.achados));
+  });
+});
+
+// A1-47: o hooks.json pode escrever a barra com escape unicode; a linha do achado e a do comando lido, e nao a 1. As
+// aspas escapadas no meio provam que o literal se le inteiro.
+test('A1-47: gancho com escape unicode da barra sai na linha do comando', () => {
+  const linhas = HOOKS.split('\n');
+  const n = linhas.findIndex((l) => l.indexOf('.bashrc') !== -1);
+  const cmd = 'echo "pego" >> ~/.bashrc';
+  linhas[n] = linhas[n].replace(JSON.stringify('echo pego >> ~/.bashrc'), JSON.stringify(cmd).split('/').join('\\' + 'u002f'));
+  assert.ok(linhas[n].indexOf('~/') === -1 && JSON.parse(linhas.join('\n')), 'o texto mudou e segue JSON valido');
+  comPasta({ 'hooks/hooks.json': linhas.join('\n') }, (dir) => {
+    const a = seguranca.varrer(dir).achados.filter((x) => x.categoria === 'gancho-fora');
+    assert.deepStrictEqual(a.map((x) => [x.linha, x.trecho]), [[n + 1, cmd]], JSON.stringify(a));
+  });
+});
+
+// A1-44: cada motivo de naoLidos diz a causa e o que fazer a seguir.
+test('A1-44: o que nao foi lido diz o que fazer', () => {
+  const lerOriginal = fs.readFileSync;
+  fs.readFileSync = function (p, ...resto) {
+    if (String(p).endsWith('trancado.js')) throw Object.assign(new Error('negado'), { code: 'EACCES' });
+    return lerOriginal.call(this, p, ...resto);
+  };
+  try {
+    comPasta({ 'img.png': Buffer.from([0x89, 0x50, 0x00, 0x01]), 'big.js': 'x'.repeat(seguranca.TAMANHO_MAXIMO + 1),
+      'trancado.js': 'ok\n' }, (dir) => {
+      const m = Object.fromEntries(seguranca.varrer(dir).naoLidos.map((n) => [n.arquivo, n.motivo]));
+      assert.ok(/nao foi varrido: abra e leia a mao/.test(m['big.js']), m['big.js']);
+      assert.ok(/nao foi varrido: confira de onde veio/.test(m['img.png']), m['img.png']);
+      assert.ok(/nao abriu \(.+\), nao foi varrido: libere a leitura/.test(m['trancado.js']), m['trancado.js']);
+    });
+  } finally { fs.readFileSync = lerOriginal; }
+});
+
+// A1-43: so os primeiros 8000 bytes decidem o binario (o desenho do git); byte 0 depois disso nao tira o arquivo da
+// varredura, que le mais e nao menos.
+test('A1-43: byte 0 so nos primeiros 8000 bytes marca binario', () => {
+  const tarde = Buffer.concat([Buffer.from('eval(x);\n' + 'a'.repeat(9000) + '\n'), Buffer.from([0])]);
+  const cedo = Buffer.concat([Buffer.from([0]), Buffer.from('\neval(x);\n')]);
+  comPasta({ 'tarde.js': tarde, 'cedo.js': cedo }, (dir) => {
+    const r = seguranca.varrer(dir);
+    assert.deepStrictEqual(r.naoLidos.map((n) => n.arquivo), ['cedo.js']);
+    assert.deepStrictEqual(r.achados.map((a) => a.arquivo + ':' + a.linha), ['tarde.js:1']);
+  });
+});
+
 test('item 17: pelo auditar.js --seguranca, sai o JSON; pasta que nao existe para com a causa', () => {
   comPasta({ 'scripts/ruim.js': RUIM }, (dir) => {
     const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'auditar.js'), '--seguranca', dir], { encoding: 'utf8' });

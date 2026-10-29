@@ -61,6 +61,13 @@ test('experimento: sem resultado gravado o veredito e NAO PROVADO, e isso nao re
   assert.ok(/continua sem resposta/.test(ob.motivo(c)));
 });
 
+// Pedido 12 (A3-29): o NAO PROVADO dizia que nada reprova e parava; agora diz o comando que roda o experimento.
+test('experimento: o NAO PROVADO diz como rodar o experimento', () => {
+  const m = ob.motivo(ob.conferirResultado(LINHAS, null));
+  assert.ok(m.indexOf('node "<plugin>/scripts/experimento.js" --manual <pasta do seu manual>') !== -1, m);
+  assert.ok(/mesmo comando com --veredito/.test(m), m);
+});
+
 test('experimento: tabela inteira, com mecanismo e evidencia, da BASTA', () => {
   const c = ob.conferirResultado(LINHAS, resultado());
   assert.strictEqual(c.veredito, 'BASTA');
@@ -134,6 +141,29 @@ test('experimento: obrigacao sem classificacao nenhuma da INCONCLUSIVO', () => {
     ob.motivo(c).indexOf('contra: guarda-1') !== -1, ob.motivo(c));
 });
 
+// Pedido 12 (A3-31): os rotulos do BASTA saiam sem legenda e o INCONCLUSIVO saia sem o proximo passo.
+test('experimento: o BASTA explica os rotulos e o INCONCLUSIVO diz o proximo passo', () => {
+  const basta = ob.motivo(ob.conferirResultado(LINHAS, resultado()));
+  assert.ok(/HOOK = um portao do plugin .+, REGRAS = .+, SKILL = .+, FORA = uma decisao anterior/.test(basta), basta);
+  const r = resultado();
+  r.linhas.pop();
+  const inc = ob.motivo(ob.conferirResultado(LINHAS, r));
+  assert.ok(/rode de novo com --veredito/.test(inc), inc);
+});
+
+// Pedido 12 (A3-42): o mecanismo que nao existe listava os validos sem dizer o que cada um e; a legenda e a do BASTA,
+// com o NADA junto (ele tambem e valido).
+test('experimento: o INVALIDO do mecanismo que nao existe diz o que cada valido quer dizer', () => {
+  const r = resultado();
+  r.linhas[0] = { id: 'marcha-3', mecanismo: 'GANCHO', evidencia: 'o portao exigiu' };
+  const m = ob.conferirResultado(LINHAS, r).invalidez.find((x) => /mecanismo que nao existe/.test(x)) || '';
+  const basta = ob.motivo(ob.conferirResultado(LINHAS, resultado()));
+  const leg = /\((HOOK = .+, FORA = [^)]+)\)/.exec(basta);
+  assert.ok(leg, basta);
+  assert.ok(m.indexOf(leg[1]) !== -1, 'a legenda do BASTA nao esta no INVALIDO: ' + m);
+  assert.match(m, /NADA = valeu apenas porque alguem lembrou/, m);
+});
+
 // ── as travas contra cerimonia: cada uma sozinha invalida ────────────────
 
 test('experimento: juiz igual ao executor INVALIDA - e auto-avaliacao (D83, item 5)', () => {
@@ -174,6 +204,14 @@ test('experimento: cobertura afirmada SEM evidencia INVALIDA - a tabela nao esca
     assert.strictEqual(c.veredito, 'INVALIDO', mec);
     assert.ok(c.invalidez.some((m) => /afirma cobertura por/.test(m)));
   }
+});
+
+// Pedido 12 (A3-30): a invalidez da evidencia vazia dava sermao e nao dizia o conserto, que e preencher o campo.
+test('experimento: cobertura sem evidencia diz que preencher o campo evidencia conserta, e com o que', () => {
+  const r = resultado();
+  r.linhas[0] = { id: 'marcha-3', mecanismo: 'HOOK', evidencia: '' };
+  const m = ob.conferirResultado(LINHAS, r).invalidez.join('\n');
+  assert.ok(/preencha o campo evidencia/.test(m) && /portao que disparou/.test(m), m);
 });
 
 test('experimento: NADA e o unico mecanismo que nao precisa de evidencia', () => {
@@ -285,6 +323,17 @@ test('experimento: --manual para lugar sem SKILL.md para e diz onde olhou', () =
   assert.strictEqual(r.status, 1);
   assert.ok(/nao ha SKILL.md/.test(r.saida), r.saida);
   fs.rmSync(vazio, { recursive: true, force: true });
+});
+
+// Pedido 12 (A3): o SKILL.md que existe e nao se le nao e "nao ha SKILL.md" - a saida diz a causa.
+test('experimento: --manual com SKILL.md que nao se le para e diz a causa', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn ilegivel '));
+  fs.mkdirSync(path.join(dir, 'SKILL.md'));
+  const r = rodar(['--manual', dir]);
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.strictEqual(r.status, 1);
+  assert.ok(/nao consegui ler SKILL\.md \(e uma pasta \(EISDIR\)\)/.test(r.saida), r.saida);
+  assert.ok(!/nao ha SKILL.md/.test(r.saida), r.saida);
 });
 
 test('experimento: --veredito devolve 0 no BASTA, 1 no NAO BASTA e 2 no INVALIDO', () => {

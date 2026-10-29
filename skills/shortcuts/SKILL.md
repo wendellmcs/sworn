@@ -16,11 +16,14 @@ The comment, after `//`, `#`, `--`, `/*` or `<!--`:
 these), not commas: a comma inside the sentence does not break the
 reading. With no label at all, the whole text becomes the "what" and the shortcut comes out as `sem-gatilho`.
 
-The note may go on in the lines right below the mark, one label per line, in any order: a line joins when it is only
-a comment and opens with a label not used yet (inside an open `/*` or `<!--` block, every line up to the close
-counts). A note with no final period that has a comment with no label right below comes out with the warning that
-the line below was left out (`sem ponto final: a linha de baixo ficou de fora`). To fix it, start that line with one
-of the labels, or move the rest of the sentence to the line above.
+The note may go on in the lines right below the mark, one label per line, in any order. A line joins when it is only
+a comment and opens with a label the note does not have yet; inside an open `/*` or `<!--` block, every line up to
+the close counts.
+
+The reading stops at the first line that does not join. A label the note already has stops it with no warning: the
+first value holds and that line stays out, so write each label once. A line with no label also stops it; if the
+note has no final period, the list shows `sem ponto final: a linha de baixo ficou de fora` under the shortcut. To
+fix it, start that line with one of the labels, or move the rest of the sentence to the line above.
 
 ## Step 1 — list
 

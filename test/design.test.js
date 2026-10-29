@@ -1,6 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const design = require('../scripts/lib/design.js');
 
 const DESIGN = {
@@ -90,6 +92,20 @@ test('design: anti-referencia sem cognato ingles nao e pega - limite declarado (
   const so = { cores: [], raios: [], espacos: [], sombras: [], antiReferencias: ['sombra larga'] };
   assert.strictEqual(design.conferir('.a{box-shadow:inherit;}', so).ok, true,
     'o limite declarado tem de continuar visivel');
+});
+
+test('A2 (s192): anti-referencia torta nao acusa toda linha nem lanca; texto solto vale como lista de um', () => {
+  // design.js:234: o radical de '' (ou de ' x') era '' e casava toda linha; texto solto corria letra por letra;
+  // numero, booleano ou objeto lancava no for...of, e o io.blindar do portao liberava a escrita sem conferir.
+  const css = '.a{display:grid}\n.b{font-weight:500}\n.c{background:linear-gradient(red,blue)}';
+  const anti = (antiReferencias) => design.conferir(css, { antiReferencias }).fora
+    .filter((f) => f.tipo === 'anti-referencia').map((f) => f.valor + ':' + f.linha);
+  for (const torta of [[''], ['   '], [5], [null], [{}], 5, true, {}]) {
+    assert.deepStrictEqual(anti(torta), [], JSON.stringify(torta));
+  }
+  assert.deepStrictEqual(anti([' gradiente']), [' gradiente:3'], 'espaco na frente: o radical e o da palavra');
+  assert.deepStrictEqual(anti(['gradiente\tsuave']), ['gradiente\tsuave:3'], 'tab separa a palavra como o espaco');
+  assert.deepStrictEqual(anti('gradiente'), ['gradiente:3'], 'texto solto vale como lista de um');
 });
 
 test('design: medida negativa e outro valor - -8px nao passa por 8px (ronda 1 do 8b)', () => {
@@ -371,4 +387,64 @@ test('083 T6 (p7-5, p7-6): alvo com aspa ou quebra fica numa linha so e escapado
   assert.strictEqual(m[i - 1], '', m.join('\n'));
   const s = design.motivoShell(['a"b.css', 'x\ny.scss']).split('\n');
   assert.ok(s.indexOf('  - "a\\"b.css"') !== -1 && s.indexOf('  - "x y.scss"') !== -1, s.join('\n'));
+});
+
+// A2-41 (P2 do pedido 12): a lista das pseudo-classes funcionais era escrita de novo nas duas regex que leem o `(`.
+test('A2-41: as pseudo funcionais e as nth-* saem de uma lista so, e cada uma le o seu `(`', () => {
+  const fonte = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'lib', 'design.js'), 'utf8');
+  for (const nome of ['host-context', 'slotted', '-moz-any', 'nth-last-of-type']) {
+    assert.strictEqual(fonte.split(nome).length - 1, 1, nome + ' escrito mais de uma vez no design.js');
+  }
+  const cores = (css) => design.valoresCrus(css).filter((a) => a.tipo === 'cor').map((a) => a.valor);
+  for (const nome of ['not', 'is', 'where', 'has', 'matches', 'any', '-webkit-any', '-moz-any', 'host',
+    'host-context', 'global', 'local', 'slotted']) {
+    assert.deepStrictEqual(cores('a:' + nome + '(#abc) { color: var(--x) }'), [], nome + ': seletor dentro do (');
+  }
+  for (const nome of ['nth-child', 'nth-last-child', 'nth-of-type', 'nth-last-of-type']) {
+    assert.deepStrictEqual(cores('li:' + nome + '(2n+1) #abc { color: var(--x) }'), [], nome + ': o ( da formula');
+    assert.deepStrictEqual(cores('li:' + nome + '(#abc) { color: var(--x) }'), ['#abc'], nome + ': dentro e valor');
+  }
+});
+
+// A2-43/45 e A2-84 (P2 do pedido 12): "catraca" sem explicacao, "3 opcoes com a recomendada marcada" sem dizer o que
+// cada uma traz, e o "na (anti-referencia)" truncado; a pergunta ao dono na redacao do intocavel (escopo.js).
+test('A2-43/45: o aviso do design diz o passo, as 3 opcoes como no intocavel e a linha da anti-referencia', () => {
+  const com = design.motivo('src/a.css', [{ linha: 9, valor: 'gradiente', tipo: 'anti-referencia' }], DESIGN);
+  const sem = design.motivo('src/a.css', [{ linha: 3, valor: '#123456', tipo: 'cor' }], DESIGN);
+  for (const m of [com, sem]) {
+    const junto = m.replace(/\n +/g, ' ');
+    assert.ok(!/catraca|recomendada marcada/.test(m), m);
+    assert.match(junto, /3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo/, m);
+    assert.match(junto, /acrescentar o valor ao design\.json, usar o token mais proximo, tirar o valor/, m);
+    assert.match(m.split('\n').pop(), /^O caminho certo e tirar o valor cru; .*decisao do dono\.$/, m);
+    for (const l of m.split('\n')) assert.ok(l.length <= 100, 'linha com ' + l.length + ': ' + l);
+  }
+  assert.match(com, /tirar o valor\);\n {2}3\. na linha marcada \(anti-referencia\), tire o termo:/, com);
+  assert.match(sem, /tirar o valor\)\.\n\n/, sem);
+  assert.ok(!/ 3\. /.test(sem), 'sem anti-referencia, sem a opcao 3: ' + sem);
+});
+
+// A2-44 (P2 do pedido 12): o aviso do shell nao dizia onde registrar o erro do sworn, e o "diga ao usuario" misturava
+// o passo do agente com o que e do usuario.
+test('A2-44: o aviso do shell separa o passo do agente e diz ao usuario onde registrar a leitura errada', () => {
+  const m = design.motivoShell(['src/a.css']);
+  assert.ok(!/diga ao usuario/.test(m), m);
+  assert.match(m, /\n {2}2\. .*leitura errada do sworn: conte ao usuario no fecho do turno/, m);
+  assert.match(m, /\n\nAo usuario: .*https:\/\/github\.com\/wendellmcs\/sworn\/issues/, m);
+  assert.match(m, /tire dele antes senha, token e caminho interno: o issue e publico/, 'segredo no issue publico: ' + m);
+  for (const l of m.split('\n')) assert.ok(l.length <= 100, 'linha com ' + l.length + ': ' + l);
+});
+
+// A2-46 (P2 do pedido 12, R2): a anti-referencia que nao e texto com palavra saia calada da conferencia.
+test('A2-46: o aviso diz quais anti-referencias o portao ignorou, pela posicao no design.json', () => {
+  const fora = [{ linha: 3, valor: '#123456', tipo: 'cor' }];
+  const linha = (anti) => design.motivo('src/a.css', fora, Object.assign({}, DESIGN, { antiReferencias: anti }))
+    .split('\n').filter((l) => /antiReferencias/.test(l));
+  const fim = ' sem efeito (so vale texto com palavra): corrija ou tire do design.json';
+  assert.deepStrictEqual(linha(['  ', 5, 'gradiente', null]), ['  antiReferencias: itens 1, 2, 4' + fim], 'tres ignoradas');
+  assert.deepStrictEqual(linha(5), ['  antiReferencias: item 1' + fim], 'nao e lista');
+  assert.deepStrictEqual(linha(['gradiente']), [], 'nenhuma ignorada, nenhuma linha');
+  assert.deepStrictEqual(linha(undefined), [], 'sem anti-referencia, nenhuma linha');
+  const muitas = linha(new Array(15).fill(0));
+  assert.match(muitas[0], /itens 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 e mais 3 sem efeito/, muitas[0]);
 });

@@ -69,7 +69,34 @@ test('catraca: motivo cita o arquivo e o numero que andou', () => {
   const m = catraca.motivo('regra.js', catraca.afrouxou('teto: 3', 'teto: 8'));
   assert.ok(m.includes('regra.js'));
   assert.ok(m.includes('3 -> 8'));
-  assert.ok(/decisao humana/i.test(m), 'a recusa tem de dizer de quem e a decisao');
+  assert.ok(/decisao do dono/i.test(m), 'a recusa tem de dizer de quem e a decisao');
+});
+
+// A2-39/40 (P2 do pedido 12): "catraca" e "indicador" eram jargao; o aviso nao dizia como desfazer, nem o caminho do
+// dono, nem onde registrar a decisao.
+test('A2-39/40: o aviso diz o que afrouxou sem jargao, como refazer e o caminho do dono', () => {
+  const m = catraca.motivo('regra.js', catraca.afrouxou('teto: 3', 'teto: 8'));
+  assert.ok(!/catraca|indicador/i.test(m), m);
+  assert.ok(/afrouxa um limite de qualidade/.test(m), m);
+  const junto = m.replace(/\n/g, ' ');
+  assert.ok(/refaca a edicao com o numero da esquerda/.test(junto), m);
+  assert.ok(/feita a mao por ele/.test(junto) && /onde o projeto registra as decisoes/.test(junto), m);
+  for (const l of m.split('\n')) assert.ok(l.length <= 100, 'linha com ' + l.length + ': ' + l);
+});
+
+// A2-35 (P2 do pedido 12): Math.max.apply com a lista inteira estourava a pilha (RangeError) a partir de ~130 mil
+// ocorrencias (medido na s206); o extremo sai por laco.
+test('A2-35: o extremo de uma lista enorme nao estoura a pilha', () => {
+  const lista = new Array(300000).fill(5);
+  lista[123456] = 9;
+  lista[234567] = 1;
+  assert.strictEqual(catraca.extremo(lista, 'teto'), 9);
+  assert.strictEqual(catraca.extremo(lista, 'piso'), 1);
+  assert.strictEqual(catraca.extremo([-Infinity, 2], 'teto'), 2);
+  assert.strictEqual(catraca.extremo([Infinity, 2], 'piso'), 2);
+  // O extremo dos dois lados, nao o primeiro: o maior teto desceu de 20 para 18, e isso aperta.
+  assert.strictEqual(catraca.afrouxou('teto: 10\nteto: 20', 'teto: 15\nteto: 18').length, 0);
+  assert.strictEqual(catraca.afrouxou('minimo: 50\nminimo: 40', 'minimo: 45\nminimo: 42').length, 0);
 });
 
 test('catraca: entrada vazia ou nula nao estoura', () => {

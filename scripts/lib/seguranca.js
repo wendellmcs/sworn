@@ -9,6 +9,8 @@ const texto = require('./texto.js');
 
 const TAMANHO_MAXIMO = 512 * 1024;
 const TRECHO_MAXIMO = 160;
+// A1-43: so os primeiros 8000 bytes decidem o binario (o desenho do git); byte 0 depois disso nao tira o arquivo da
+// varredura, que le mais e nao menos.
 const AMOSTRA_BINARIO = 8000;
 
 // Cada regra: a categoria, o padrao e, opcional, as extensoes onde ela vale (o `exec(` do Python e outra coisa no JS).
@@ -74,6 +76,15 @@ function comandosDosGanchos(json) {
   return comandos;
 }
 
+// A1-47: a linha pelo valor lido, e nao pelo texto escapado (o hooks.json pode escrever a barra com escape unicode).
+// So roda depois do JSON.parse do arquivo inteiro (em varrer): ali todo `"` abre ou fecha uma string, e string de JSON
+// nao atravessa linha; cada literal casado aqui e string valida, e o JSON.parse dele nao lanca.
+function linhaDoValor(linhas, valor) {
+  return linhas.findIndex(function (l) {
+    return (l.match(/"(?:[^"\\]|\\.)*"/g) || []).some(function (s) { return JSON.parse(s) === valor; });
+  });
+}
+
 /**
  * Varre a pasta e devolve { pasta, arquivosLidos, achados: [{ categoria, arquivo, linha, trecho }], resumo: { categoria: n },
  * naoLidos: [{ arquivo, motivo }], pastasIgnoradas, incompleta, corte, limites }. Uma ocorrencia por categoria e linha.
@@ -89,16 +100,26 @@ function varrer(pasta, opcoes) {
     let buf;
     try {
       const st = fs.statSync(abs);
-      if (st.size > TAMANHO_MAXIMO) { naoLidos.push({ arquivo: rel, motivo: 'maior que ' + (TAMANHO_MAXIMO / 1024) + ' KB' }); continue; }
+      if (st.size > TAMANHO_MAXIMO) {
+        naoLidos.push({ arquivo: rel,
+          motivo: 'maior que ' + (TAMANHO_MAXIMO / 1024) + ' KB, nao foi varrido: abra e leia a mao' });
+        continue;
+      }
       buf = fs.readFileSync(abs);
     } catch (e) {
-      naoLidos.push({ arquivo: rel, motivo: 'nao abriu (' + texto.causaDoErro(e) + ')' });
+      naoLidos.push({ arquivo: rel, motivo: 'nao abriu (' + texto.causaDoErro(e) + '), nao foi varrido: ' +
+        'libere a leitura e rode a varredura de novo' });
       continue;
     }
-    if (buf.subarray(0, AMOSTRA_BINARIO).indexOf(0) !== -1) { naoLidos.push({ arquivo: rel, motivo: 'binario' }); continue; }
+    if (buf.subarray(0, AMOSTRA_BINARIO).indexOf(0) !== -1) {
+      naoLidos.push({ arquivo: rel,
+        motivo: 'binario, nao foi varrido: confira de onde veio e para que o plugin o usa' });
+      continue;
+    }
     lidos++;
     const conteudo = texto.semBom(buf.toString('utf8'));
-    const linhas = conteudo.split(/\r?\n/);
+    // A1-seg-1: CR sozinho tambem e fim de linha (python e JS o aceitam); sem ele, o ^ das regras nao casava.
+    const linhas = conteudo.split(/\r\n|\r|\n/);
     const ext = path.extname(rel).toLowerCase();
     linhas.forEach(function (linha, i) {
       const vistas = new Set();
@@ -120,7 +141,7 @@ function varrer(pasta, opcoes) {
       for (const cmd of json ? comandosDosGanchos(json) : []) {
         // a pasta do plugin vira um nome sem barra na frente: escrever nela nao e escrever fora
         if (!ESCRITA.test(cmd) || !FORA.test(cmd.split('${CLAUDE_PLUGIN_ROOT}').join('RAIZ_DO_PLUGIN'))) continue;
-        const n = linhas.findIndex(function (l) { return l.indexOf(JSON.stringify(cmd).slice(1, -1)) !== -1; });
+        const n = linhaDoValor(linhas, cmd);
         achados.push({ categoria: 'gancho-fora', arquivo: rel, linha: n === -1 ? 1 : n + 1, trecho: cortar(cmd) });
       }
     }

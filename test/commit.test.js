@@ -102,7 +102,8 @@ function motivoDoMock(linhas) {
   return [
     'sworn - commit parado: falta a revisao antes do commit.',
     '',
-    'Arquivos de codigo mudados nesta sessao sem revisao aprovada:'
+    'Arquivos de codigo mudados nesta sessao sem revisao aprovada',
+    '(faixa: o tamanho da revisao; inspetores: quantos revisores ela chama):'
   ].concat(linhas, [
     '',
     'Faca agora:',
@@ -110,7 +111,7 @@ function motivoDoMock(linhas) {
     '  2. rode o commit de novo.',
     'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
     'repita o commit com "# sworn: sem-revisao" no fim do comando.',
-    'Desligar neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+    'Desligar esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
   ]).join('\n');
 }
 
@@ -181,21 +182,22 @@ test('091 #8: commit negado lista o atalho novo sem gatilho e manda escrever o g
     assert.strictEqual(motivo(r), [
       'sworn - commit parado: falta a revisao antes do commit.',
       '',
-      'Arquivos de codigo mudados nesta sessao sem revisao aprovada:',
+      'Arquivos de codigo mudados nesta sessao sem revisao aprovada',
+      '(faixa: o tamanho da revisao; inspetores: quantos revisores ela chama):',
       '  - "src/pequeno.js"   faixa uma, 1 inspetor',
       '  - "src/novo.js"      faixa completa, 10 inspetores',
       '  - "src/velho.js"     faixa uma, 1 inspetor',
-      'Atalho novo sem gatilho:',
+      'Atalho novo (simplificacao marcada no codigo) sem o "trocar quando:":',
       '  - "src/pequeno.js:10"',
       '  - "src/novo.js:3"',
       '',
       'Faca agora:',
       '  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";',
-      '  2. escreva "trocar quando: ..." no atalho sem gatilho;',
+      '  2. escreva "trocar quando: ..." em cada atalho listado;',
       '  3. rode o commit de novo.',
       'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
       'repita o commit com "# sworn: sem-revisao" no fim do comando.',
-      'Desligar neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+      'Desligar esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
     ].join('\n'));
   });
 });
@@ -206,7 +208,7 @@ test('091 #8: a marcaDeAtalho do projeto vale no portao', () => {
     fs.writeFileSync(path.join(dir, 'src', 'novo.js'), '// divida: sem gatilho\n// atalho: nao conta aqui\n');
     tocar(dir, tmp, 'src/novo.js');
     const m = motivo(commitar(dir, tmp, 'git commit -m x'));
-    assert.ok(m.indexOf('Atalho novo sem gatilho:\n  - "src/novo.js:1"\n\n') !== -1, m);
+    assert.ok(m.indexOf('Atalho novo (simplificacao marcada no codigo) sem o "trocar quando:":\n  - "src/novo.js:1"\n\n') !== -1, m);
   });
 });
 
@@ -343,5 +345,23 @@ test('A9-03: com mais de 5 pendentes, o motivo cita 5 e diz "e mais N"', () => {
     const linhas = motivo(r).split('\n').filter(function (l) { return /^ {2}- "src\/n\d\.js"/.test(l); });
     assert.strictEqual(linhas.length, 5, motivo(r));
     assert.ok(motivo(r).split('\n').indexOf('  - e mais 1') !== -1, motivo(r));
+  });
+});
+
+// A2-30 (D721): o `git ... commit` numa fonte so; o pastaDoComando (\bgit) achava "git" dentro de "x-git".
+test('A2-30 (D721): pastaDoComando acha o mesmo git commit que o ehCommit', () => {
+  assert.strictEqual(commit.ehCommit('x-git commit'), false);
+  assert.strictEqual(commit.pastaDoComando('cd a && x-git commit; git -C b commit -m y'), 'b');
+  assert.strictEqual(commit.pastaDoComando('git -c user.name="a b" -C repo commit -m x'), 'repo');
+  assert.strictEqual(commit.pastaDoComando('cd "x y" && echo "git -C z commit" && git commit'), 'x y');
+});
+
+// A2-31 (D721): o pendentes usa o aprovado(): item da lista que nao e texto nao aprova nada.
+test('A2-31 (D721): item torto na lista de aprovados nao libera o arquivo', () => {
+  comRepo(function (dir) {
+    const abs = path.join(dir, 'src', 'pequeno.js');
+    assert.deepStrictEqual(commit.pendentes([abs], [[abs]], dir, null, null, []).map(function (p) { return p.rel; }),
+      ['src/pequeno.js']);
+    assert.deepStrictEqual(commit.pendentes([abs], [abs], dir, null, null, []), [], 'o texto segue aprovando');
   });
 });

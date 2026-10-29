@@ -180,8 +180,31 @@ test('escalada: o motivo do fecho escreve o despacho certo, e sem pedido nao ha 
   const topo = novo();
   topo.escalada = escalada.aoFechar(topo, 'arquiteto', 'a9', 'ESCALAR: especialista - x', PROJETO);
   const m = escalada.motivoDoFecho(topo);
-  assert.match(m, /topo da escada/, m);
+  assert.match(m, /ultimo da escada de agentes/, m);
   assert.ok(!/Agent\(\{/.test(m), m);
+});
+
+test('escalada: A2-57/58/59 - o despacho sem molde para copiar, as 3 opcoes nomeadas e a saida sem despacho so no despacho', () => {
+  const despacho = novo();
+  despacho.escalada = escalada.aoFechar(despacho, 'tarefas-simples', 'a1', 'ESCALAR: desenvolvedor - x', PROJETO);
+  const d = escalada.motivoDoFecho(despacho);
+  assert.ok(d.includes('Agent({ subagent_type: "desenvolvedor", ... })'), 'a chamada no molde do custo.js: ' + d);
+  assert.ok(!/[<>]/.test(d), 'sem marcador de lugar para copiar: ' + d);
+  assert.match(d, /a tarefa, o que o agente viu e o motivo no prompt/, d);
+  assert.match(d, /siga sem despachar e conte ao usuario o motivo/, d);
+
+  const topo = novo();
+  topo.escalada = escalada.aoFechar(topo, 'arquiteto', 'a9', 'ESCALAR: especialista - x', PROJETO);
+  const t = escalada.motivoDoFecho(topo);
+  assert.match(t, /em 3 opcoes: seguir com este agente e mais contexto,\s+dividir ou mudar a tarefa, ou parar\./, t);
+
+  const teto = { escalada: { pendentes: [{ id: 'a3', de: 'desenvolvedor', para: 'arquiteto', motivo: 'z',
+    n: escalada.TETO_DE_SUBIDAS + 1 }] } };
+  const c = escalada.motivoDoFecho(teto);
+  for (const [nome, texto] of [['topo', t], ['teto', c]]) {
+    assert.ok(!/siga sem despachar|por que nao despachou/.test(texto), nome + ': quem decide e o usuario: ' + texto);
+    assert.ok(!/degrau|subida|topo da escada/.test(texto), nome + ': sem o jargao da escada: ' + texto);
+  }
 });
 
 test('escalada: pedido que nao e objeto no estado (arquivo editado ou corrompido) nao derruba o fecho', () => {

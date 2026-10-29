@@ -74,3 +74,20 @@ test('glob: padrao vazio ou lista que nao e lista nao casa nada', () => {
   assert.strictEqual(glob.casaAlgum([], 'a'), false);
   assert.strictEqual(glob.casaAlgum(['x', 'src/**'], 'src/a'), true);
 });
+
+// A2-27 (pedido 12): o aparo valia tambem no caminho, e 'a ' casava o 'a' declarado. Sao arquivos distintos: o Node
+// grava 'a ' e 'a.' com o nome inteiro tambem no Windows (sonda s204). O padrao, escrito a mao, segue aparado.
+test('A2-27: o padrao e aparado e o caminho nao', () => {
+  assert.strictEqual(glob.casa('a', 'a '), false, 'caminho com espaco no fim e outro arquivo');
+  assert.strictEqual(glob.casa('src/a.js', ' src/a.js'), false, 'caminho com espaco na frente e outro arquivo');
+  assert.strictEqual(glob.casa(' src/a.js ', 'src/a.js'), true, 'espaco na ponta do padrao');
+  assert.strictEqual(glob.casa(' ./src/a.js', 'src/a.js'), true, 'o aparo vem antes de tirar o ./ da frente');
+  assert.strictEqual(glob.normalizar(' a '), ' a ', 'normalizar nao apara o caminho');
+});
+
+// A2-25: so o omitido segue a plataforma; null e false deixam a caixa sensivel.
+test('A2-25: ignorarCaixa null ou false deixa a caixa sensivel', () => {
+  assert.strictEqual(glob.casa('Src/A.js', 'src/a.js', null), false);
+  assert.strictEqual(glob.casa('Src/A.js', 'src/a.js', 0), false);
+  assert.strictEqual(glob.casa('Src/A.js', 'src/a.js', 1), true);
+});

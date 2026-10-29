@@ -118,6 +118,57 @@ test('portao-apelido: avisa uma vez por sessao, e conta TODAS as vezes', () => {
   });
 });
 
+// A1-24 (pedido 12, estados): o aviso unico lia a marca e gravava depois, em separado: dois despachos que leem
+// antes de qualquer um gravar avisavam os dois. O gancho segura cada processo depois da leitura ate o outro ler
+// tambem - a corrida sem depender da sorte.
+test('A1-24: dois despachos ao mesmo tempo na mesma sessao avisam UMA vez so', async () => {
+  const { spawn } = require('node:child_process');
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-barreira-'));
+  const barreira = path.join(pasta, 'chegaram');
+  fs.mkdirSync(barreira);
+  const gancho = path.join(pasta, 'gancho.js');
+  fs.writeFileSync(gancho, [
+    "const fs = require('node:fs');",
+    "const path = require('node:path');",
+    'const estado = require(' + JSON.stringify(path.join(RAIZ, 'scripts', 'lib', 'estado.js')) + ');',
+    'const ler = estado.ler;',
+    'estado.ler = function (id) {',
+    '  const s = ler(id);',
+    "  fs.writeFileSync(path.join(" + JSON.stringify(barreira) + ", String(process.pid)), '');",
+    '  const fim = Date.now() + 5000;',
+    '  while (fs.readdirSync(' + JSON.stringify(barreira) + ').length < 2 && Date.now() < fim) {',
+    '    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);',
+    '  }',
+    '  return s;',
+    '};'
+  ].join('\n'), 'utf8');
+  const dir = projeto(DOIS);
+  try {
+    agente(dir, 'busca', '---\nname: busca\nmodel: caro\n---\n');
+    agente(dir, 'arquiteto', '---\nname: arquiteto\nmodel: caro\n---\n');
+    const entrada = JSON.stringify({
+      session_id: 'p14', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Task',
+      tool_input: { subagent_type: 'busca' }
+    });
+    const saidas = await Promise.all([1, 2].map(() => new Promise((resolve) => {
+      const f = spawn(process.execPath, ['--require', gancho, SCRIPT], {
+        cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: pasta })
+      });
+      let out = '';
+      f.stdout.on('data', (d) => { out += d; });
+      f.on('close', (status) => resolve({ status, out }));
+      f.stdin.end(entrada);
+    })));
+    assert.deepStrictEqual(saidas.map((s) => s.status), [0, 0], JSON.stringify(saidas));
+    assert.strictEqual(saidas.filter((s) => s.out.trim() !== '').length, 1, 'A1-24: avisou mais de uma vez: ' +
+      JSON.stringify(saidas));
+    assert.strictEqual(sessao(pasta, 'p14').contadores.apelido_divergente, 2, 'a contagem tem de ver os dois');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(pasta, { recursive: true, force: true });
+  }
+});
+
 test('portao-apelido: mapa e arquivos casados passam calados', () => {
   comTmp((tmp) => {
     const dir = projeto(DOIS);
@@ -350,9 +401,29 @@ test('portao-apelido --corrigir: agente que nao diverge e RECUSADO, nao reescrit
   const c = cli(dir, ['--corrigir', 'busca', '--para', 'arquivo']);
   assert.strictEqual(c.status, 1, c.stdout);
   assert.ok(/NADA A CORRIGIR/.test(c.stdout), c.stdout);
+  // A1-26 (pedido 12, microcopy): a recusa diz o passo seguinte
+  assert.ok(/--mapa/.test(c.stdout) && /grafia/.test(c.stdout), 'A1-26: sem o passo seguinte: ' + c.stdout);
   assert.strictEqual(fs.readFileSync(agentesLib.caminho(dir, 'busca'), 'utf8'), antes,
     'recusou e mesmo assim mexeu no arquivo');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// A1-27 (pedido 12, microcopy): o degrau escrito com "nome" no lugar de "agente" o mapa le, e o conserto do
+// --para mapa nao acha. A mensagem dizia "degraus", sem o passo; agora diz onde esta e o que fazer.
+test('A1-27: --para mapa com o agente gravado em outra forma diz o arquivo e o passo, sem jargao', () => {
+  const dir = projeto([{ nome: 'busca', apelido: 'barato' }, { agente: 'arquiteto', apelido: 'caro' }]);
+  try {
+    agente(dir, 'busca', '---\nname: busca\nmodel: caro\n---\n');
+    agente(dir, 'arquiteto', '---\nname: arquiteto\nmodel: caro\n---\n');
+    const c = cli(dir, ['--corrigir', 'busca', '--para', 'mapa']);
+    assert.strictEqual(c.status, 1, c.stdout + c.stderr);
+    assert.ok(/^ERRO: /.test(c.stdout), c.stdout);
+    assert.ok(!/degrau/i.test(c.stdout), 'A1-27: jargao na mensagem: ' + c.stdout);
+    assert.ok(/projeto\.json/.test(c.stdout) && /--para arquivo/.test(c.stdout),
+      'A1-27: sem onde e sem o passo: ' + c.stdout);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('portao-apelido --corrigir sem direcao para e explica as duas', () => {
@@ -374,6 +445,41 @@ test('portao-apelido --corrigir: arquivo sem frontmatter e recusado sem ser reme
   assert.strictEqual(c.status, 1, c.stdout);
   assert.strictEqual(fs.readFileSync(agentesLib.caminho(dir, 'busca'), 'utf8'), antes);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// A1-ape-1 (pedido 12, estados): a escrita do --corrigir (o arquivo do agente e o projeto.json) estava fora de try -
+// a falha saia como pilha de excecao. Agora tem a forma da leitura: "ERRO: nao consegui gravar <arquivo>: <causa>".
+function cliComEscritaNegada(dir, args, final) {
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-gancho-'));
+  try {
+    const gancho = path.join(pasta, 'gancho.js');
+    fs.writeFileSync(gancho, [
+      "const fs = require('node:fs');",
+      'const orig = fs.writeFileSync;',
+      'fs.writeFileSync = function (p) {',
+      '  if (String(p).endsWith(' + JSON.stringify(final) + ')) {',
+      "    throw Object.assign(new Error('EACCES: permission denied, open ' + p), { code: 'EACCES' });",
+      '  }',
+      '  return orig.apply(this, arguments);',
+      '};'
+    ].join('\n'), 'utf8');
+    return spawnSync(process.execPath, ['--require', gancho, SCRIPT].concat(args), { cwd: dir, encoding: 'utf8' });
+  } finally { fs.rmSync(pasta, { recursive: true, force: true }); }
+}
+
+test('A1-ape-1: escrita negada no --corrigir sai com ERRO e a causa, sem pilha de excecao', () => {
+  for (const [para, final] of [['arquivo', 'busca.md'], ['mapa', 'projeto.json']]) {
+    const dir = projeto(DOIS);
+    agente(dir, 'busca', '---\nname: busca\nmodel: caro\n---\n');
+    agente(dir, 'arquiteto', '---\nname: arquiteto\nmodel: caro\n---\n');
+    const r = cliComEscritaNegada(dir, ['--corrigir', 'busca', '--para', para], final);
+    assert.strictEqual(r.status, 1, para + ': ' + r.stdout + r.stderr);
+    assert.ok(new RegExp('^ERRO: nao consegui gravar .*' + final.replace('.', '\\.') + ': EACCES').test(r.stdout),
+      para + ': ' + r.stdout);
+    assert.strictEqual(r.stderr, '', para + ': a falha saiu como excecao: ' + r.stderr);
+    assert.ok(!/CORRIGIDO/.test(r.stdout), para + ': nao gravou e disse que corrigiu: ' + r.stdout);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /**
@@ -454,6 +560,23 @@ test('portao-apelido: caminho de instalacao com $ ou crase vai entre aspas simpl
       const normal = pluginEm('instalacao normal');
       const ctxN = contexto(normal, dir, tmp, 'p13');
       assert.ok(ctxN.includes('a) node "' + path.join(normal, 'scripts', 'portao-apelido.js') + '" --corrigir'), ctxN);
+
+      // A1-29 (pedido 12, seguranca): com `'` E `$` no caminho, o escape era so o do Bash (`\$` entre aspas
+      // duplas); no PowerShell, entre aspas duplas, o `$` expande e a `\` nao escapa. Agora vai pelo shell
+      // declarado: no PowerShell, aspas simples com a `'` dobrada; no Bash ou sem declarar, o de antes.
+      const aspa = pluginEm("a'b$c");
+      const alvoAspa = path.join(aspa, 'scripts', 'portao-apelido.js');
+      const doBash = 'a) node "' + alvoAspa.replace(/([\\$`"])/g, '\\$1') + '" --corrigir';
+      assert.ok(contexto(aspa, dir, tmp, 'p15').includes(doBash), 'sem shell declarado, o do Bash');
+      const cfg = path.join(dir, '.claude', 'sworn', 'projeto.json');
+      const obj = JSON.parse(fs.readFileSync(cfg, 'utf8'));
+      obj.plataforma = { so: 'win32', shell: 'powershell' };
+      fs.writeFileSync(cfg, JSON.stringify(obj), 'utf8');
+      const ctxPs = contexto(aspa, dir, tmp, 'p16');
+      assert.ok(ctxPs.includes("a) node '" + alvoAspa.replace(/'/g, "''") + "' --corrigir"), 'A1-29: ' + ctxPs);
+      obj.plataforma.shell = 'bash';
+      fs.writeFileSync(cfg, JSON.stringify(obj), 'utf8');
+      assert.ok(contexto(aspa, dir, tmp, 'p17').includes(doBash), 'Bash declarado, o do Bash');
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
       for (const c of copias) fs.rmSync(c, { recursive: true, force: true });

@@ -174,7 +174,9 @@ function montarReferencia(entradas, ler) {
     // Plano 082 (p3-22): o caminho entre aspas - com espaco, sem elas, nao se sabe onde ele acaba.
     if (lido && lido.tipo === 'binario') return cab + '(imagem ou binario: ' + pelaLeitura(lido.caminho) + ')\n';
     faltam.push(e);
-    return cab + '(NAO ACHADA no disco: confira o caminho no projeto.json)\n';
+    // A3-08: qual lista conferir, e que o julgamento segue sem ela.
+    return cab + '(NAO ACHADA no disco: confira o caminho na lista "referencias" de .claude/sworn/projeto.json; ' +
+      'julgue sem esta referencia)\n';
   });
   return { texto: blocos.join('\n'), faltam: faltam, urls: urls, grandes: grandes };
 }

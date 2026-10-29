@@ -40,8 +40,11 @@ function marcar(sessionId, fn) {
  * o proprio estado). O rastro pega CARONA na saida que o portao ja ia dar - o motivo da
  * negacao ou o `systemMessage` da liberacao - e nunca muda a decisao.
  */
-const AVISO_CONTADOR = 'sworn: o contador desta ocorrencia nao foi gravado (estado da sessao nao gravavel); ' +
-  'os totais do turno podem sair menores que o real. A decisao do portao nao mudou.';
+// A2-04/05 (D721): os avisos dizem a pasta que recusou a escrita, para o passo ter onde agir.
+const PASTA_DO_ESTADO = path.dirname(estado.caminhoSessao('x'));
+const AVISO_CONTADOR = 'sworn: o contador desta edicao nao foi gravado (a pasta de estado do sworn, ' +
+  PASTA_DO_ESTADO + ', nao aceita escrita): os totais do fim do turno podem sair menores que o real. ' +
+  'A decisao sobre esta edicao nao mudou; para voltar a contar, libere a escrita nessa pasta.';
 let contadorFalhou = false;
 
 function contadorNaoGravou() { contadorFalhou = true; }
@@ -67,10 +70,12 @@ function projetoPresenteEIlegivel(cwd) {
   try { return fs.existsSync(config.caminhoEmSworn(cwd, 'projeto.json')); } catch (err) { return false; }
 }
 
+// A2-03 (D721): o passo primeiro, com o caminho real do validar.js (ele diz a linha e a coluna do erro).
+// A2-77: o init preserva so o que le do arquivo atual (skills/init/SKILL.md:63-73), dai o "pode perder".
 const AVISO_PROJETO_ILEGIVEL = 'sworn: .claude/sworn/projeto.json existe mas nao se le: ' +
   'os portoes de escopo e de intocaveis estao DESLIGADOS ate corrigir. ' +
-  'Corrija o JSON (virgula sobrando, aspas). Rodar /sworn:init de novo so serve se voce aceitar ' +
-  'refazer a configuracao: o init preserva o que consegue ler do projeto.json, e um arquivo que nao se le nao tem o que preservar.';
+  'Para achar o erro: node "' + path.join(__dirname, 'validar.js') + '". ' +
+  'Rodar /sworn:init de novo tambem resolve, mas pode perder o que voce ajustou a mao nesse arquivo.';
 
 /**
  * X2a: o aviso pega CARONA num `permitir` que ja ia acontecer. Um
@@ -126,7 +131,9 @@ io.blindar(function () {
       if (frenteAlvo) {
         try { estado.alterar(e.session_id, function (x) { x.frente = frenteAlvo.nome; return x; }); } catch (err) {
           avisosDaFrente.push('sworn: o vinculo desta sessao a frente "' + frenteAlvo.nome + '" nao foi gravado ' +
-            '(estado da sessao nao gravavel): a sessao segue regida pelo escopo.md, nao por esta frente.');
+            '(a pasta de estado do sworn, ' + PASTA_DO_ESTADO + ', nao aceita escrita): as edicoes seguem pelo ' +
+            'escopo.md, nao por esta frente. Para vincular, libere a escrita nessa pasta e edite de novo ' +
+            'o arquivo da frente.');
         }
       }
       if (contadorFalhou) avisosDaFrente.push(AVISO_CONTADOR);

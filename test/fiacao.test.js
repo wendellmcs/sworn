@@ -734,6 +734,29 @@ test('fiacao: tabela do PowerShell ilegivel - o comando passa com aviso, UMA vez
   }
 });
 
+test('fiacao: comandosBloqueados com padrao que nao compila - o comando passa com aviso, UMA vez por sessao (D721 A1-06)', () => {
+  const dir = temp('bloqueado-invalido');
+  try {
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'),
+      JSON.stringify({ plataforma: { so: 'linux', shell: 'bash' }, comandosBloqueados: ['(', 'deploy-prod'] }));
+    const chamar = (id, comando) => rodar('portao-destrutivo.js', dir,
+      { session_id: id, cwd: dir, tool_name: 'Bash', tool_input: { command: comando } });
+    const a = avisoPermitido(chamar('bq1', 'npm test'));
+    assert.ok(a && a.usuario.includes('"("') && a.agente === a.usuario, 'tinha de permitir com aviso: ' + JSON.stringify(a));
+    assert.strictEqual(lerSessao(dir, 'bq1').avisouBloqueadoInvalido, true);
+    // o 2o comando da mesma sessao passa calado; o fecho do turno nao traz o aviso de volta
+    assert.strictEqual(chamar('bq1', 'npm run build').stdout, '');
+    rodar('marcar-trabalho.js', dir, { session_id: 'bq1', cwd: dir, tool_name: 'Write' });
+    rodar('portao-fecho.js', dir, { session_id: 'bq1', cwd: dir, hook_event_name: 'Stop', last_assistant_message: 'Anotado.' });
+    assert.strictEqual(chamar('bq1', 'npm test').stdout, '', 'o aviso voltou depois do fecho');
+    // controle: o padrao valido segue negando, e outra sessao avisa de novo
+    assert.ok(motivoNegado(chamar('bq1', 'deploy-prod agora')), 'o padrao valido tinha de negar');
+    assert.ok(avisoPermitido(chamar('bq2', 'npm test')), 'sessao nova tem de avisar');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('fiacao: seis comandos ao mesmo tempo na mesma sessao avisam UMA vez so (D294)', async () => {
   const { spawn } = require('node:child_process');
   const plugin = pluginComTabela('{ "quando": ');
