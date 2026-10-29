@@ -12,18 +12,20 @@ debt is not forgotten in the middle of the code.
 The comment, after `//`, `#`, `--`, `/*` or `<!--`:
 `// atalho: <what was simplified>. limite: <how far it holds>. trocar quando: <trigger>.`
 
-"limite:" and "trocar quando:" are labels, written exactly like this in any language (the script recognizes only
-these), not commas: a comma inside the sentence does not break the
-reading. With no label at all, the whole text becomes the "what" and the shortcut comes out as `sem-gatilho`.
+The labels are "limite:" and "trocar quando:", spelled exactly like this even in a project written in another
+language: the script recognizes only these. The labels split the note, not commas, so a comma inside a sentence does
+not break the reading. With no label at all, the whole text becomes the "what" and the shortcut comes out as
+`sem-gatilho`.
 
 The note may go on in the lines right below the mark, one label per line, in any order. A line joins when it is only
 a comment and opens with a label the note does not have yet; inside an open `/*` or `<!--` block, every line up to
 the close counts.
 
 The reading stops at the first line that does not join. A label the note already has stops it with no warning: the
-first value holds and that line stays out, so write each label once. A line with no label also stops it; if the
-note has no final period, the list shows `sem ponto final: a linha de baixo ficou de fora` under the shortcut. To
-fix it, start that line with one of the labels, or move the rest of the sentence to the line above.
+first value holds and that line stays out, so write each label once. A comment line with text but no label also
+stops it; if the note has no final period, the list shows `sem ponto final: a linha de baixo ficou de fora` under
+the shortcut. To fix it, start that line with one of the labels, or move the rest of the sentence to the line above.
+A line of code, an empty comment or a comment with another mark stops it with no warning.
 
 ## Step 1 — list
 

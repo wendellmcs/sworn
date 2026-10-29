@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.17.1 — duas explicações corrigidas: o aviso dos atalhos e o apelido de modelo
+
+**Corrige**
+
+- **A skill `/sworn:shortcuts` dizia que qualquer linha sem rótulo (`limite:` ou `trocar quando:`) logo abaixo de
+  um atalho dava o aviso "sem ponto final".** Só a linha de comentário com texto pode dar esse aviso, quando o atalho
+  não termina em ponto; uma linha de código, um comentário vazio ou outro atalho logo abaixo encerram a leitura sem
+  aviso. A skill agora diz isso, e o conserto segue o mesmo: começar a linha de baixo com um rótulo ou subir o resto
+  da frase.
+- **O GUIA usava "apelido" sem explicar e dava de exemplo nomes completos de modelo, que mudam com o tempo.** Agora
+  explica que o apelido é o nome curto do modelo na tabela `agentes.degraus`, como `sonnet`, e o exemplo não traz
+  mais nomes completos.
+
 ## 0.17.0 — o bloqueio diz o que fazer, e o que não se lê não passa calado
 
 A primeira de três etapas da revisão completa do plugin passou, arquivo por arquivo, pela revisão cega: a própria

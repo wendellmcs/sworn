@@ -1343,10 +1343,10 @@ arquivo; as regras do `regras.md` pelo `git blame` (fora do git, a idade fica "n
 contraditória movendo o arquivo para uma pasta de arquivo, com o seu sim: dá para voltar atrás, e nada some.
 
 **Ela diz com que modelo e esforço os subagentes rodaram de fato** (desde a 0.16.0). Lê as transcrições dos
-subagentes dos últimos 30 dias e compara a última resposta de cada degrau com a tabela `agentes.degraus`. Apelido que
-passou a apontar para outro id de modelo sem ninguém mudar a tabela (por exemplo, `sonnet` de `claude-sonnet-5` para
-`claude-sonnet-5-5`) vem primeiro, como aviso. Sem como medir, o relatório diz "não medido" e o
-motivo. A rodada automática da abertura não mede: leria todas essas transcrições.
+subagentes dos últimos 30 dias e compara a última resposta de cada degrau com a tabela `agentes.degraus`. O apelido
+(o nome curto do modelo na tabela, como `sonnet`) que passou a apontar para outro modelo sem ninguém mudar a tabela
+vem primeiro, como aviso. Sem como medir, o relatório diz "não medido" e o motivo. A rodada automática da abertura
+não mede: leria todas essas transcrições.
 
 **Ela mede também o que os ganchos põem na conversa** (desde a 0.9.1): lida a transcrição da sessão, quantas vezes e
 quantos caracteres cada gancho de cada plugin injetou, e o texto que volta mais de 5 vezes, com o corte proposto (a

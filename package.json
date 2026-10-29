@@ -1,6 +1,6 @@
 {
   "name": "sworn",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "private": true,
   "type": "commonjs",
   "description": "Portoes deterministicos que obrigam o agente a provar em vez de afirmar.",
