@@ -122,9 +122,13 @@ test('catalogo: cache gravado com BOM ainda e lido (JSON do Windows)', () => {
 
 // -------------------------------------------------- foco de revisao 3: sem rede
 
-test('catalogo: o modo degradado declara, pergunta e proibe inventar', () => {
+test('catalogo: sem o catalogo, o aviso diz que segue sem a lista, pergunta e proibe inventar', () => {
   const m = catalogo.motivoDegradado();
-  assert.ok(/degradado/i.test(m), m);
+  // A6-76 (pedido 12): sem os termos internos "modo degradado" e "degrau"; diz o que o sworn faz sem a lista.
+  const corrido = m.replace(/\s+/g, ' ');
+  assert.ok(!/degradado|degrau/i.test(m), 'termo interno no aviso: ' + m);
+  assert.ok(corrido.includes('o sworn segue sem a lista atualizada e avisa disso de proposito'), m);
+  assert.ok(corrido.includes('qual modelo para qual papel'), m);
   assert.ok(/memoria/i.test(m), 'tem de proibir completar de memoria');
   assert.ok(/dono/i.test(m), 'tem de mandar perguntar ao dono');
 });

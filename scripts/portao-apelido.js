@@ -59,7 +59,8 @@ if (tem('mapa')) {
     semArquivo: r.semArquivo,
     foraDoMapa: r.foraDoMapa,
     esforcoDivergente: r.esforcoDivergente,
-    esforcoNaoDeclarado: r.esforcoNaoDeclarado
+    esforcoNaoDeclarado: r.esforcoNaoDeclarado,
+    ilegiveis: r.ilegiveis
   }, null, 2) + '\n');
   process.exit(0);
 }

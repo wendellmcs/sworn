@@ -126,7 +126,9 @@ test('ramo inexistente: exit 1, ultima-busca ok:false, novidades.md anterior int
     fs.writeFileSync(path.join(c.dest, 'novidades.md'), 'semana: 2026-09-28\n\nantiga\n', 'utf8');
     const r = puxar(['--repo', c.dono, '--destino', c.dest]);
     assert.strictEqual(r.status, 1, r.stdout + r.stderr);
-    assert.ok(/^vigia: busca falhou \(.+\)\r?\n$/.test(r.stderr), r.stderr);
+    // A7 (pedido 12, R1 :78 microcopy): a falha diz o que ficou como estava e o passo, nao so o motivo do git
+    assert.ok(/^vigia: busca falhou \(.+\)\. A novidade que ja estava no disco nao mudou; corrija a causa e rode de novo\.\r?\n$/
+      .test(r.stderr), r.stderr);
     assert.ok(/^[\x20-\x7E\r\n]*$/.test(r.stderr), 'stderr nao e ASCII: ' + JSON.stringify(r.stderr));
     assert.strictEqual(fs.readFileSync(path.join(c.dest, 'novidades.md'), 'utf8'), 'semana: 2026-09-28\n\nantiga\n');
     const b = lerBusca(c.dest);
@@ -171,6 +173,36 @@ test('sem --repo: uso no stderr, exit 2, nada gravado', () => {
     // --repo sem valor (seguido de outra opcao) tambem e falta
     assert.strictEqual(puxar(['--repo', '--destino', dest]).status, 2);
     assert.ok(!fs.existsSync(dest));
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
+});
+
+// A7 (pedido 12, R1 :34 borda): flag presente com valor vazio, no fim da linha ou seguida de outra flag virava o padrao
+// sem aviso: `--destino ''` gravava na pasta do vigia, e o radar chama com `--destino <pasta do vigia>/radar`.
+test('A7: flag presente sem valor e erro de uso que diz qual, exit 2, nada gravado nem no padrao', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-vigiapx-flag-'));
+  try {
+    const padrao = path.join(base, 'padrao');
+    const d = path.join(base, 'destino');
+    const casos = [
+      [['--repo', base, '--destino', ''], '--destino'], [['--repo', base, '--destino'], '--destino'],
+      [['--repo', base, '--destino', '--ramo', 'claude/radar'], '--destino'], [['--repo', base, '--remote', ''], '--remote'],
+      [['--repo', base, '--ramo'], '--ramo'], [['--repo', base, '--arquivo', '--destino', d], '--arquivo'],
+      [['--repo', ''], '--repo'], [['--repo'], '--repo']
+    ];
+    for (const [args, flag] of casos) {
+      // cwd na pasta temporaria: um conserto quebrado que leia a flag seguinte como pasta grava ali, nao no repositorio
+      const r = spawnSync(process.execPath, [SCRIPT].concat(args), {
+        cwd: base, encoding: 'utf8', windowsHide: true, env: Object.assign({}, process.env, { SWORN_VIGIA: padrao })
+      });
+      assert.ok(!fs.existsSync(path.join(base, '--ramo')), JSON.stringify(args) + ' gravou na pasta "--ramo"');
+      assert.strictEqual(r.status, 2, JSON.stringify(args) + ' -> ' + r.stdout + r.stderr);
+      assert.ok(r.stderr.indexOf('vigia: ' + flag + ' pede um valor.\nuso: node vigia-puxar.js --repo ') === 0,
+        JSON.stringify(args) + ' -> ' + r.stderr);
+      assert.ok(!fs.existsSync(padrao) && !fs.existsSync(d), JSON.stringify(args) + ' gravou');
+    }
+    // sem --repo nenhum, o erro diz que ele falta
+    const sem = puxar(['--destino', d]);
+    assert.ok(sem.stderr.indexOf('vigia: falta --repo (a pasta do clone).\nuso: ') === 0, sem.stderr);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 

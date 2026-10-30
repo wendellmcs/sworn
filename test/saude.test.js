@@ -211,6 +211,25 @@ test('D412: o motivo do bloqueio diz o que fazer, como desligar, e e ASCII', () 
   assert.ok(saude.BALDES_DE_BLOQUEIO.indexOf('handoff_sem_prompt') !== -1, 'o balde novo nega: entra na soma');
 });
 
+// A5-13, A5-14 e A5-15 (D735): o aviso de troca diz o que e o numero e o passo, sem giria; o bloqueio diz o que e;
+// o motivo do handoff sem "Voce gravou", "tis" nem "portao de fecho".
+test('A5-13/14/15: aviso de troca e motivo do handoff em palavras claras', () => {
+  const linhas = saude.avisoDeSaude(['3 decisoes do dono respondidas (limiar 3)'], false).split('\n');
+  assert.strictEqual(linhas[2],
+    'O sworn faz contas nesta conversa, e o que esta abaixo chegou ao limite (o numero depois de "limiar"):');
+  assert.strictEqual(linhas[4], 'Nao espere ter certeza: troque agora, pelo passo abaixo.');
+  const r = saude.avaliar({ contadores: { fora_do_escopo: 6 } }, { bloqueios: 6 });
+  assert.ok(r.gatilhos.indexOf('6 bloqueios de portao (acoes que o sworn negou) nesta sessao (limiar 6)') !== -1,
+    r.gatilhos.join(' | '));
+  const m = saude.MOTIVO_HANDOFF_SEM_PROMPT;
+  assert.ok(!/Voce gravou|tis\)|portao de fecho|O portao/.test(m), m);
+  assert.ok(m.indexOf('Um arquivo de handoff foi gravado neste turno, ' +
+    'e a resposta final nao tem bloco de codigo.') !== -1, m);
+  assert.ok(m.indexOf('Esta trava do fim do turno le so a resposta final:') !== -1, m);
+  assert.ok(m.indexOf('Faca assim: cole o prompt agora num bloco de codigo (entre ``` ou ~~~), nesta resposta ' +
+    'final - uma vez so.') !== -1, m);
+});
+
 // D445 (0.6.2): 7o gatilho, por tamanho do contexto. O Stop nao recebe o tamanho: recebe o transcript_path.
 // Contexto = input + cache_read + cache_creation do ultimo `usage` da linha principal (a conta da medicao da s73).
 const fsT = require('node:fs');
@@ -458,6 +477,52 @@ test('D704: o limite de silencio do agente e de 30 min (medido: p99 de 156 s em 
   } finally { s.fim(); }
 });
 
+// A5 (fila a, medida na s215): o agente de workflow mora em subagents/workflows/<run>/, o meta.json dele diz
+// requestShape "foreground" e nunca ganha `finished`; quem diz que acabou e o journal.jsonl do run (`started` abre, a
+// linha posterior do mesmo agentId fecha). Antes o agentesRodando nao via nenhum e o handoff saia com a leva rodando.
+test('A5: agentesRodando ve o agente de workflow aberto no journal do run, com o mesmo silencio e a mesma interrupcao', () => {
+  const s = sessaoComAgentes([]);
+  const run = pathT.join(s.sub, 'workflows', 'wf_teste-001');
+  fsT.mkdirSync(run, { recursive: true });
+  const journal = function (linhas) {
+    fsT.writeFileSync(pathT.join(run, 'journal.jsonl'), linhas.map(function (l) {
+      return typeof l === 'string' ? l + '\n' : JSON.stringify(l) + '\n';
+    }).join(''));
+  };
+  const agente = function (id, linhas) {
+    fsT.writeFileSync(pathT.join(run, 'agent-' + id + '.meta.json'), JSON.stringify({ agentType: 'sworn:inspector',
+      description: id, requestShape: 'foreground', requestNonInteractive: true }));
+    fsT.writeFileSync(pathT.join(run, 'agent-' + id + '.jsonl'), linhas.map(function (l) { return JSON.stringify(l) + '\n'; }).join(''));
+  };
+  try {
+    agente('w1', TRABALHANDO);
+    agente('w2', TRABALHANDO);
+    journal([{ type: 'launched' }, { type: 'started', key: 'v2:1', agentId: 'w1', label: 'base:1:borda', phase: 'Leva' },
+      { type: 'started', key: 'v2:2', agentId: 'w2', label: 'base:1:estados', phase: 'Leva' },
+      'linha torta', { type: 'started', label: 'sem agentId' },
+      { type: 'result', agentId: 'w1', result: 'ok', toolsUsed: 3 }]);
+    const agora = Date.now();
+    assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora), [{ id: 'w2', descricao: 'base:1:estados' }]);
+    // o mesmo silencio de 30 min do agente de fundo
+    const escrito = fsT.statSync(pathT.join(run, 'agent-w2.jsonl')).mtimeMs;
+    assert.strictEqual(saude.agentesRodando(s.transcricao, escrito + saude.SILENCIO_DO_AGENTE_MS - 1).length, 1);
+    assert.strictEqual(saude.agentesRodando(s.transcricao, escrito + saude.SILENCIO_DO_AGENTE_MS).length, 0);
+    // o parado por TaskStop (a ultima linha e a interrupcao) nao conta
+    agente('w2', TRABALHANDO.concat([INTERROMPIDO]));
+    assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora), []);
+    // sem o .jsonl do agente ainda: vale a data do journal
+    fsT.renameSync(pathT.join(run, 'agent-w2.jsonl'), pathT.join(run, 'outro.txt'));
+    assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora), [{ id: 'w2', descricao: 'base:1:estados' }]);
+    // o `result` do w2 fecha: nenhum rodando, e o script diz que o handoff pode seguir
+    journal([{ type: 'started', agentId: 'w2', label: 'base:1:estados' }, { type: 'result', agentId: 'w2', result: 'ok' }]);
+    assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora), []);
+    journal([{ type: 'started', agentId: 'w2', label: 'base:1:estados' }]);
+    const r = spawnT(process.execPath, [SCRIPT_AGENTES, '--transcricao', s.transcricao], { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(r.stdout.indexOf('  - base:1:estados (agent-w2)') !== -1, r.stdout);
+  } finally { s.fim(); }
+});
+
 test('D704: com agente rodando, os 3 textos do handoff mandam esperar; sem agente, ficam como eram', () => {
   const g = ['3 decisoes do dono respondidas (limiar 3)'];
   // sem agente (lista vazia ou ausente): identico ao de antes da D704
@@ -518,10 +583,27 @@ test('D704: scripts/agentes-rodando.js lista os agentes de fundo da sessao; sem 
     // sem sessao no ambiente: nao medido, e diz por que; saida 0 (o handoff decide)
     const r4 = roda([], { CLAUDE_CODE_SESSION_ID: '' });
     assert.strictEqual(r4.status, 0, r4.stderr);
-    assert.ok(/nao medido - sem --transcricao e sem CLAUDE_CODE_SESSION_ID/.test(r4.stdout), r4.stdout);
+    // A5-05 (D735): "nao medidos" concorda com "agentes", e cada causa diz o passo
+    assert.ok(/nao medidos - sem --transcricao e sem CLAUDE_CODE_SESSION_ID/.test(r4.stdout) &&
+      /rode de novo com --transcricao e o caminho do \.jsonl desta conversa/.test(r4.stdout), r4.stdout);
     const r5 = roda([], { CLAUDE_CODE_SESSION_ID: 'sessao-que-nao-existe' });
     assert.strictEqual(r5.status, 0, r5.stderr);
-    assert.ok(/nao medido - a transcricao da sessao/.test(r5.stdout), r5.stdout);
+    assert.ok(/nao medidos - a transcricao da sessao sessao-que-nao-existe nao esta em /.test(r5.stdout) &&
+      /passe o caminho do \.jsonl em --transcricao/.test(r5.stdout), r5.stdout);
+    // A5 (R1 :10): --transcricao sem valor (ultima ou vazia) nao cai calada na sessao do ambiente; saida 0 do mesmo jeito
+    for (const args of [['--transcricao'], ['--transcricao', ''], ['--transcricao', '--outra']]) {
+      const r6 = roda(args, { CLAUDE_CODE_SESSION_ID: 'sessao-x' });
+      assert.strictEqual(r6.status, 0, r6.stderr);
+      assert.ok(/nao medidos - --transcricao pede um valor/.test(r6.stdout) && /rode de novo com ele/.test(r6.stdout) &&
+        r6.stdout.indexOf('agent-c1') === -1,
+        JSON.stringify(args) + ': ' + r6.stdout);
+    }
+    // A5 (R2 :10): transcricao que nao existe e "nao medido", nunca "nenhum rodando, o handoff pode seguir"
+    const r7 = roda(['--transcricao', pathT.join(s.base, 'nao-existe.jsonl')]);
+    assert.strictEqual(r7.status, 0, r7.stderr);
+    assert.ok(/nao medidos - a transcricao .*nao-existe\.jsonl nao existe; confira o caminho de --transcricao/
+      .test(r7.stdout) &&
+      !/pode seguir/.test(r7.stdout), r7.stdout);
   } finally { s.fim(); }
 });
 

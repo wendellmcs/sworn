@@ -48,8 +48,12 @@ if (process.argv.indexOf('--gravar') !== -1 || manter) {
   const bruto = manter ? String(emVigor.n) : valor('--gravar');
   const n = Number(bruto);
   if (!bruto || !/^\d+$/.test(bruto) || n < MINIMO || n >= alarme) {
-    sair(1, { gravou: false, erro: (manter ? '--manter' : '--gravar') + ' pede um numero inteiro de tokens, de ' + MINIMO +
-      ' ate abaixo do alarme (' + alarme + '); veio "' + bruto + '"' });
+    // A6 (s220, R1 :51): no --manter ninguem digitou o valor; a recusa diz o limiar em vigor, de onde veio e o passo.
+    sair(1, { gravou: false, erro: manter
+      ? '--manter: o limiar em vigor (' + bruto + ', do ' + emVigor.de + ') esta fora da faixa que se grava ' +
+        '(inteiro de ' + MINIMO + ' ate abaixo do alarme, ' + alarme + '); grave um valor nessa faixa com --gravar <tokens>'
+      : '--gravar pede um numero inteiro de tokens, de ' + MINIMO + ' ate abaixo do alarme (' + alarme + '); veio "' +
+        bruto + '"' });
   }
   const arquivo = config.caminhoEmSworn(raiz, 'projeto.json');
   if (!fs.existsSync(arquivo)) sair(1, { gravou: false, erro: 'sem ' + RELATIVO + ' neste projeto: rode /sworn:init antes' });
@@ -57,7 +61,11 @@ if (process.argv.indexOf('--gravar') !== -1 || manter) {
   try { obj = JSON.parse(texto.semBom(fs.readFileSync(arquivo, 'utf8'))); } catch (e) {
     sair(1, { gravou: false, erro: RELATIVO + ' nao e JSON valido (' + e.message + '); corrija e rode de novo' });
   }
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) sair(1, { gravou: false, erro: RELATIVO + ' nao e um objeto JSON' });
+  // A6-21 (D735): a forma com exemplo e o passo, sem "objeto JSON".
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    sair(1, { gravou: false, erro: RELATIVO + ' tem de ter os campos do projeto entre { e }, como ' +
+      '{ "shell": "bash" }; corrija e rode de novo' });
+  }
   if ('limiares' in obj && (!obj.limiares || typeof obj.limiares !== 'object' || Array.isArray(obj.limiares))) {
     sair(1, { gravou: false, erro: 'limiares em ' + RELATIVO + ' nao e objeto; corrija e rode de novo' });
   }
@@ -73,8 +81,15 @@ const pasta = valor('--pasta') ? path.resolve(valor('--pasta')) : calibracao.pas
 if (!pasta || !fs.existsSync(pasta)) {
   sair(1, { erro: 'nao achei as transcricoes deste projeto (' + calibracao.nomeDaPasta(raiz) + ' em projects/ da pasta de config do Claude Code); passe --pasta <pasta das transcricoes>' });
 }
-const lidas = calibracao.lerPasta(pasta);
+// A6 (s220, pendente :76 medido): pasta que existe e nao se le (arquivo, sem permissao) saia com o stack trace.
+let lidas;
+try { lidas = calibracao.lerPasta(pasta); } catch (e) {
+  // A6-22 e A6-23 (D735): a causa traduzida e a forma da flag.
+  sair(1, { erro: '--pasta nao se le como pasta (' + texto.causaDoErro(e) + '); passe --pasta <pasta das ' +
+    'transcricoes deste projeto>' });
+}
 const relatorio = calibracao.calibrar(lidas.sessoes, { limiarAtual: emVigor.n });
 relatorio.limiarAtualDe = emVigor.de;
 relatorio.amostra.chamadasSemPreco = lidas.semPreco;
+relatorio.amostra.transcricoesIlegiveis = lidas.ilegiveis;
 sair(0, Object.assign({ pasta: pasta }, relatorio));

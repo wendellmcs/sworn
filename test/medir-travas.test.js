@@ -427,6 +427,37 @@ test('--apurar: rodada incompleta nao da veredito, mesmo com a grade equilibrada
   assert.match(ap.stdout, /VEREDITO: nenhum.*incompleta/);
 });
 
+// A6-64 (D735): a pasta que nao e a da rodada (o --destino, por exemplo) diz a causa traduzida e o passo; o JSON torto
+// diz o texto do Node entre aspas, sem o passo do --gerar.
+test('A6-64: --apurar numa pasta sem rodada diz a causa e o passo, sem o codigo cru', () => {
+  const dir = pasta();
+  const r = cli(['--apurar', dir]);
+  assert.strictEqual(r.status, 1, r.stderr);
+  assert.match(r.stderr, /execucoes\.json \(nao existe \(ENOENT\)\)\. Passe a pasta da rodada/, r.stderr);
+  assert.match(r.stderr, /"proximo passo"; sem rodada, rode o --gerar antes\.\n$/, r.stderr);
+  fs.writeFileSync(path.join(dir, 'execucoes.json'), '{', 'utf8');
+  const torto = cli(['--apurar', dir]);
+  assert.strictEqual(torto.status, 1, torto.stderr);
+  assert.match(torto.stderr, /\(o texto nao e JSON valido; o Node diz: ".+"\)\. Corrija-o e rode de novo\.\n$/,
+    torto.stderr);
+  assert.doesNotMatch(torto.stderr, /--gerar/, torto.stderr);
+});
+
+// A6-64 (R1, borda): null ou lista no lugar do objeto quebrava adiante (env.modelo) com o erro do Node em ingles.
+// Numero e texto (R1 s238, borda): o typeof da guarda so cai com eles.
+test('A6-64 (R1): execucoes.json que nao e objeto diz a forma e o passo', () => {
+  const dir = pasta();
+  ['null', '[]', '7', '"x"'].forEach(function (conteudo) {
+    fs.writeFileSync(path.join(dir, 'execucoes.json'), conteudo, 'utf8');
+    const r = cli(['--apurar', dir]);
+    assert.strictEqual(r.status, 1, conteudo + ': ' + r.stdout + r.stderr);
+    assert.match(r.stderr,
+      /execucoes\.json nao tem a forma que o --gerar grava \(um objeto com a lista "execucoes"\)\. /,
+      conteudo + ': ' + r.stderr);
+    assert.match(r.stderr, /Corrija-o e rode de novo\.\n$/, conteudo + ': ' + r.stderr);
+  });
+});
+
 test('--gerar: sem --modelo, tarefa desconhecida ou repeticoes invalidas, nada roda', () => {
   const a = ambienteFalso();
   const destino = congelado(a);

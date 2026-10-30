@@ -115,7 +115,9 @@ async function atualizar($: any) {
       pendente = true
       return
     }
-    await $.ui.status('medidor atrasado: a leitura de uso travou; medindo de novo.')
+    // A7-25 (pedido 12): um verbo so (a presa demorou e e largada; o prazo vale para a medida inteira) e o passo,
+    // que e nenhum: a medida nova comeca logo abaixo.
+    await $.ui.status('medidor atrasado: a medida anterior demorou demais; uma nova já começou, nada a fazer.')
   }
   medindo = true
   medindoDesde = t === null ? 0 : t
@@ -128,9 +130,12 @@ async function atualizar($: any) {
       if (minha !== geracao) return
       // Script que falhou (saida diferente de 0, JSON torto, ou a chamada lancou - prazo estourado): o status diz isso
       // em vez de seguir com o numero velho. A faixa fica como estava; a proxima medida boa a acerta. O texto leva
-      // acento e o passo concreto, sem jargao (o status desenha acento inteiro: mock aprovado na D532).
+      // acento (o status desenha acento inteiro: mock aprovado na D532). A7-22 (pedido 12): a causa varia (Node
+      // ausente, saida diferente de 0, JSON torto, prazo), entao o status nao culpa o Node: diz que a medida roda de
+      // novo e, se seguir, o comando, que traz as causas possiveis e o passo.
       if (!m) {
-        await $.ui.status('medidor parado: o Node.js não respondeu. Rode node -v num terminal para conferir.')
+        await $.ui.status('medidor parado: a medida falhou e roda de novo na próxima resposta; se seguir assim, ' +
+          'rode /sworn-session.')
         continue
       }
       await $.ui.status(m.curta)
@@ -209,9 +214,13 @@ export const register: Register = on => {
   on('command.run', { command: 'sworn-session' }, async $ => {
     let m: Medida | null = null
     try { m = await medir($) } catch (err) {}
-    // Sem "sworn:" na frente: o motor ja escreve o nome do plugin antes da resposta. O passo concreto, como no
-    // status, com acento (D532: a resposta do comando desenha acento inteiro).
-    return { text: m ? m.longa : 'Medidor parado: o Node.js não respondeu. Rode **node -v** num terminal para conferir.' }
+    // Sem "sworn:" na frente: o motor ja escreve o nome do plugin antes da resposta. Com acento (D532: a resposta do
+    // comando desenha acento inteiro). A7-22 (pedido 12): as causas possiveis e um passo que serve a qualquer uma
+    // para quem nao programa (pedir ao Claude), no lugar do "node -v num terminal"; sem caminho de script (o Claude o
+    // acha), e o Node.js so como causa possivel, que e o que a pessoa instala.
+    return { text: m ? m.longa : 'Medidor parado: a medida falhou (pode faltar o Node.js, ou o script do sworn ' +
+      'deu erro ou demorou demais). Peça ao Claude para achar por que o medidor do sworn parou; depois rode ' +
+      '/sworn-session de novo.' }
   })
 
   on('command.run', { command: 'sworn-plan' }, async $ => {
@@ -223,7 +232,10 @@ export const register: Register = on => {
       const r = await rodar($, 'plano.js', sessao ? ['--texto', '--sessao', sessao] : ['--texto'])
       if (r && r.exitCode === 0 && r.stdout) return { text: String(r.stdout).replace(/\s+$/, '') }
     } catch (err) {}
-    return { text: 'Painel do plano parado: o Node.js não respondeu. Rode **node -v** num terminal para conferir.' }
+    // A7-22: o mesmo passo do medidor, com o script e o comando do painel.
+    return { text: 'Painel do plano parado: a leitura do plano falhou (pode faltar o Node.js, ou o script do sworn ' +
+      'deu erro ou demorou demais). Peça ao Claude para achar por que o painel do plano do sworn parou; depois ' +
+      'rode /sworn-plan de novo.' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -245,7 +257,8 @@ export const register: Register = on => {
         {f ? (
           <Box key="sworn-falhou">
             {linhaDoPlano ? null : marca}
-            <Text>{'Não consegui escrever no prompt. Digite '}</Text>
+            {/* A7-26 (pedido 12): sem 1a pessoa e sem "prompt" solto; o campo pelo nome que a pessoa ve. */}
+            <Text>{'O botão não preencheu o campo de mensagem. Digite '}</Text>
             <Text key="sworn-falhou-comando" bold>{f.comando}</Text>
             <Text>{' e envie.'}</Text>
           </Box>

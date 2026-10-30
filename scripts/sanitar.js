@@ -29,10 +29,21 @@ const sanit = require('./lib/sanitacao.js');
  */
 
 const NOMES = { 1: 'conteudo ', 2: 'autoria  ', 3: 'mensagens' };
+const USO = 'uso: sanitar.js [--raiz <pasta>] [--so-conteudo]';
+const FLAGS_DO_USO = ['--raiz', '--so-conteudo'];
 
+// A4-san-1 (pedido 12), borda: `--raiz` sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia
+// calada em '.' - media a pasta de onde se chamou. O molde e o argumento() do plataforma.js.
 function argumento(argv, nome) {
   const i = argv.indexOf(nome);
-  return (i !== -1 && argv[i + 1]) ? argv[i + 1] : null;
+  if (i === -1) return null;
+  const valor = argv[i + 1];
+  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
+    console.error('ERRO: ' + nome + ' pede um valor.');
+    console.error(USO);
+    process.exit(2);
+  }
+  return valor;
 }
 
 function main() {
@@ -73,7 +84,8 @@ function main() {
     console.log('Nome de pessoa, de empresa e de projeto interno NAO estao sendo procurados.');
   }
   // A4-03: o `docs/` fora e so do export do sworn (exportar.js); aqui a pasta inteira entra.
-  console.log('Fora da superficie: so o que o .gitignore cobre.');
+  console.log('Nao verificados: os arquivos que o .gitignore manda o git ignorar.');
+  console.log('Se um deles vai ser publicado, tire-o do .gitignore e rode de novo.');
   console.log('');
 
   const tamanhos = { 1: r.arquivos + ' arquivos', 2: 'historico', 3: r.commits + ' commits' };
@@ -120,10 +132,12 @@ function main() {
     process.exit(0);
   }
 
-  console.log('VAZOU - ' + relevantes.length + ' achado(s):');
+  console.log('VAZOU - ' + relevantes.length + ' trecho(s) que nao pode(m) ir a publico:');
   relevantes.forEach(function (a) {
     console.log('  S' + a.superficie + '  ' + a.classe + '  ' + a.arquivo + ':' + a.linha);
   });
+  console.log('S1, S2 e S3 sao as superficies acima: 1 o conteudo dos arquivos, 2 a autoria dos commits,');
+  console.log('3 as mensagens de commit. Depois do S vem o tipo do que vazou (segredo, email...) e onde ele esta.');
   console.log('');
   console.log('O trecho NAO e impresso de proposito: imprimi-lo poria o vazamento');
   console.log('na saida do terminal, que costuma ser colada em relatorio. Abra o');

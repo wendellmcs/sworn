@@ -176,7 +176,9 @@ function fraseDaBusca(dir) {
   try {
     const b = JSON.parse(textoLib.semBom(fs.readFileSync(path.join(dir, BUSCA), 'utf8')));
     if (!ehObjeto(b) || b.ok !== false) return '';
-    return ' Ultima busca falhou em ' + (umaLinha(b.quando) || '?') + ': ' + (umaLinha(b.motivo).slice(0, 120) || '?') + '.';
+    // A7-16 (pedido 12): termina no passo seguinte (ASCII pela R5, como o resto do aviso).
+    return ' Ultima busca falhou em ' + (umaLinha(b.quando) || '?') + ': ' + (umaLinha(b.motivo).slice(0, 120) || '?') +
+      '. Corrija a causa e rode de novo a tarefa agendada do Windows que chama o vigia-puxar.js.';
   } catch (e) {
     return '';
   }
@@ -243,7 +245,9 @@ function avisar(dir, agora, nomes, mostrar) {
     problema = 'sworn: ' + nomes.quem + ' ligado, mas ' + nomes.nada + ' chegou ainda em ' + umaLinha(dir) +
       ' (a tarefa agendada puxa toda segunda).';
   } else if (l.estado === 'ilegivel') {
-    problema = 'sworn: ' + nomes.quem + ' - nao consegui ler ' + umaLinha(arquivo) + ' (' + l.motivo + ').';
+    // A7 (pedido 12, R1 :246): o passo, como os irmaos; o vigia-puxar so grava arquivo valido e por rename
+    problema = 'sworn: ' + nomes.quem + ' - nao consegui ler ' + umaLinha(arquivo) + ' (' + l.motivo + '): confira o ' +
+      'arquivo; a tarefa agendada o regrava na proxima busca boa.';
   } else if (agora - Date.parse(l.semana + 'T00:00:00Z') >= DIAS_VELHO * DIA_MS) {
     problema = 'sworn: ' + nomes.quem + ' sem ' + nomes.sem + ' desde ' + l.semana +
       ': confira a rotina na nuvem e a tarefa agendada.';

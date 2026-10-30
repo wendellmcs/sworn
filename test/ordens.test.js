@@ -209,27 +209,30 @@ test('091 T6: estado torto nao lanca; tipo desconhecido nao conta', () => {
   assert.deepStrictEqual(s.contadores, { ordem_revisar_dada: 1 });
 });
 
-const NOTA = '  (-: o sworn nao ve essa recusa; dada e nao cumprida foi ignorada ou recusada na conversa)';
+// A5-37 (D735): o "-" diz o que o sworn nao ve e o passo; o cabecalho diz de quem e a ordem.
+const NOTA = [
+  '  ("-": o sworn so ve a recusa no commit sem revisao; nas outras, a ordem que o Claude nao cumpriu foi ignorada ou',
+  '  recusada na conversa. Ordem que se repete sem cumprir: vale perguntar ao dono se ela ainda serve.)'
+];
 
 test('091 T6: as linhas da auditoria - diferenca contra a foto anterior, os nunca disparados e a nota do "-"', () => {
   const antes = { ordem_aprender_dada: 1, ordem_aprender_cumprida: 1 };
   const agora = { ordem_aprender_dada: 5, ordem_aprender_cumprida: 4, ordem_revisar_dada: 6, ordem_revisar_cumprida: 5,
     ordem_revisar_recusada: 1, ordem_manual_dada: 2, ordem_manual_cumprida: 2, fecho_sem_evidencia: 9 };
   assert.deepStrictEqual(ordens.linhasDasOrdens(antes, agora, 7), [
-    '- ordens dos ultimos 7 dias (dadas / cumpridas / recusadas pelo dono):',
+    '- ordens dos ultimos 7 dias que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
     '  aprender 4/3/-; revisar antes do commit 6/5/1; manual 2/2/-',
-    '  nunca disparadas: auditar, calibrar, init',
-    NOTA
-  ]);
+    '  nunca disparadas: auditar, calibrar, init'
+  ].concat(NOTA));
   // so o revisar mede a recusa: sem "-", sem a nota
   assert.deepStrictEqual(ordens.linhasDasOrdens({}, { ordem_revisar_dada: 1, ordem_revisar_recusada: 1 }, 1), [
-    '- ordens do ultimo dia (dadas / cumpridas / recusadas pelo dono):',
+    '- ordens do ultimo dia que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
     '  revisar antes do commit 1/0/1',
     '  nunca disparadas: aprender, auditar, calibrar, init, manual'
   ]);
   // sem foto anterior (primeira auditoria): desde o comeco
   assert.strictEqual(ordens.linhasDasOrdens(null, agora, null)[0],
-    '- ordens desde o comeco (dadas / cumpridas / recusadas pelo dono):');
+    '- ordens desde o comeco que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):');
   // nada disparado na janela: silencio
   assert.deepStrictEqual(ordens.linhasDasOrdens(agora, agora, 7), []);
   assert.deepStrictEqual(ordens.linhasDasOrdens(null, {}, null), []);

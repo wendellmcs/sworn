@@ -189,7 +189,9 @@ test('paralelo: agente que morre vira respondeu false, e o resultado volta como 
   assert.strictEqual(r.resultados[0].respondeu, true);
   assert.strictEqual(r.resultados[0].resumo, 'feito a');
   assert.strictEqual(r.resultados[1].respondeu, false);
-  assert.ok(/skipped|died/.test(r.resultados[1].motivo), 'null diz o porque: ' + r.resultados[1].motivo);
+  // A7-27 (D735): o motivo diz o porque e o passo
+  assert.strictEqual(r.resultados[1].motivo,
+    'the agent was skipped or died from an API error, with no answer; run this task again if you still need it');
   assert.strictEqual(r.resultados[0].motivo, undefined, 'quem respondeu nao ganha motivo');
   assert.ok(/claim/.test(r.aviso) && /check/.test(r.aviso), r.aviso);
 });
@@ -200,6 +202,14 @@ test('paralelo: agente que lanca erro vira respondeu false COM a mensagem do err
     return undefined;
   });
   assert.strictEqual(r.resultados[0].respondeu, false);
-  assert.ok(/orcamento esgotado/.test(r.resultados[0].motivo), JSON.stringify(r.resultados[0]));
+  assert.strictEqual(r.resultados[0].motivo,
+    'the agent stopped on an error ("orcamento esgotado"); run this task again once the cause is fixed');
   assert.strictEqual(r.resultados[1].respondeu, false, 'undefined tambem e nao respondeu');
+});
+
+// A7-27 (R1, borda): erro sem mensagem nao deixa "error: ;" no motivo
+test('paralelo: agente que lanca erro sem mensagem diz que veio sem mensagem, e o passo', async () => {
+  const { r } = await rodar(['a'], () => { throw '  '; });
+  assert.strictEqual(r.resultados[0].motivo, 'the agent stopped on an error with no message; run this task again ' +
+    'once the cause is fixed');
 });

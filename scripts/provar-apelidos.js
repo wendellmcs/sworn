@@ -108,7 +108,7 @@ if (soPlugin) {
     'apelido que ninguem testou nao reprova.\n');
 } else {
   process.stdout.write('Depois confira com: node "' + path.join(__dirname, 'cobertura.js') + '"\n');
-  process.stdout.write('O relatorio de cobertura le esse arquivo e diz, na linha "H4 - o apelido ainda e aceito", ' +
-    'o apelido que falta testar.\n');
+  process.stdout.write('O relatorio de cobertura le esse arquivo e diz, na linha ' +
+    '"O apelido de modelo ainda e aceito", o apelido que falta testar.\n');
 }
 process.exit(0);

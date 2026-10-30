@@ -170,6 +170,39 @@ test('D442/9: plano.js (JSON) nao conta tarefa sem caixa como concluida e diz qu
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 
+// A7-01 (pedido 12): sem --texto e sem plano ativo, a saida dizia so "Use --abrir <caminho do plano>", sem acento,
+// sem o comando inteiro e sem dizer o que vai no lugar do caminho.
+test('A7-01: plano.js (JSON) sem plano ativo diz o comando inteiro de abrir e o que vai no caminho, com acento', () => {
+  const r = painelEm(null, []);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.ok(r.stdout.indexOf('Nenhum plano ativo: não há .claude/sworn/plano-ativo.json nesta pasta.') === 0, r.stdout);
+  assert.ok(r.stdout.indexOf(' rode node "' + SCRIPT + '" --abrir <caminho do plano> (troque <caminho do plano> pelo ' +
+    'arquivo do plano, relativo a esta pasta ou absoluto).\n') !== -1, r.stdout);
+});
+
+// A7 (pedido 12, R1 :14/:15 borda e estados): flag sem valor (a ultima da linha, vazia ou seguida de outra flag) caia
+// calada no painel ou no JSON; `--abrir --sessao X` abria um plano chamado "--sessao". Agora e erro de uso que diz qual.
+test('A7: plano.js com flag sem valor diz qual flag pede valor, mostra o uso e sai 1', () => {
+  const casos = [
+    [['--abrir'], '--abrir'], [['--abrir', ''], '--abrir'], [['--abrir', '--sessao', 'X'], '--abrir'],
+    [['--proxima-decisao'], '--proxima-decisao'], [['--proxima-decisao', '--texto'], '--proxima-decisao'],
+    [['--texto', '--sessao'], '--sessao'], [['--abrir', 'plano.md', '--sessao', '--texto'], '--sessao'],
+    [['--texto', '--sessao', '--abrir', 'plano.md'], '--sessao'], [['--abrir', '--proxima-decisao', 'd.md'], '--abrir']
+  ];
+  // com plano ativo o --texto nem chega a ler o --sessao: a flag vale do mesmo jeito
+  const ativo = JSON.stringify({ arquivo: 'plano.md', sessionId: 's1' });
+  casos.push([['--texto', '--sessao'], '--sessao', ativo], [['--sessao'], '--sessao', ativo]);
+  for (const [args, flag, conteudo] of casos) {
+    const r = painelEm(conteudo === undefined ? null : conteudo, args);
+    assert.strictEqual(r.status, 1, JSON.stringify(args) + ' -> ' + r.stdout + r.stderr);
+    assert.ok(r.stdout.indexOf('ERRO: ' + flag + ' pede um valor.\nuso: plano.js ') === 0, JSON.stringify(args) + ' -> ' + r.stdout);
+  }
+  // o valor que comeca com outra coisa que nao uma flag do uso segue valendo
+  const ok = painelEm(null, ['--abrir', 'plano.md', '--sessao', 's1']);
+  assert.strictEqual(ok.status, 0, ok.stdout + ok.stderr);
+  assert.ok(/^plano ativo: plano\.md \(dono: s1\)/.test(ok.stdout), ok.stdout);
+});
+
 // D476 (Tarefa 4 da 0.7.1): nada chamava `plano.js --abrir`, entao o /sworn-plan dizia "nenhum plano ativo"
 // numa sessao que trabalhava num plano. Sem plano-ativo.json, o plano vem da frente vinculada: o ULTIMO
 // "Plano: <caminho>" do Objetivo do arquivo da frente. Sem vinculo: uma frente com plano no disco -> ela.

@@ -492,7 +492,9 @@ if (r.encerrar) {
       // D503 (plano d503, Tarefa 5): com referencia, o fecho conta tambem em revisao_referencia_fechada, que o portao
       // de fecho le para saber se a entrega AAA ja foi revisada contra a referencia de topo nesta sessao. As duas
       // contagens numa gravacao so: se falhar, nenhuma entrou, e rodar de novo nao reconta a primeira.
-      n = estado.alterar(sessao, function (s) {
+      // A5-57 (D735): `contadores` e do turno e zera no Stop (portao-fecho.js:25-29); a saida, ao lado da `sessao`,
+      // da o total da sessao pelo saude.acumular, a mesma conta que o gatilho de saude le.
+      n = require('./lib/saude.js').acumular(estado.alterar(sessao, function (s) {
         s.contadores = s.contadores || {};
         s.contadores.revisao_fechada = (s.contadores.revisao_fechada || 0) + 1;
         if (r.referencia) s.contadores.revisao_referencia_fechada = (s.contadores.revisao_referencia_fechada || 0) + 1;
@@ -503,7 +505,7 @@ if (r.encerrar) {
             path.resolve(process.cwd(), arquivoRevisado));
         }
         return s;
-      }).contadores.revisao_fechada;
+      })).revisao_fechada;
     } catch (err) {
       falhar('ERRO: a revisao fechou, mas o fecho nao foi contado (' + err.message + '). Rode este comando de novo.\n');
     }

@@ -415,7 +415,12 @@ test('A2-43/45: o aviso do design diz o passo, as 3 opcoes como no intocavel e a
     const junto = m.replace(/\n +/g, ' ');
     assert.ok(!/catraca|recomendada marcada/.test(m), m);
     assert.match(junto, /3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo/, m);
-    assert.match(junto, /acrescentar o valor ao design\.json, usar o token mais proximo, tirar o valor/, m);
+    assert.match(junto, /acrescentar o valor ao design\.json, usar o valor do sistema mais proximo, tirar o valor/, m);
+    // A4-65 (microcopy do pedido 12): "design system" e "token" eram ingles solto no aviso em portugues.
+    assert.ok(!/design system|token/.test(m), m);
+    // R2 da s230: a lista "O que existe no sistema" mostra so 10 cores e nenhuma sombra; o passo aponta o design.json.
+    assert.match(m, /\n {2}1\. troque cor e medida por um valor declarado no design\.json, ou por var\(--nome\);\n/, m);
+    assert.match(m.split('\n')[0], /fora do sistema de design deste projeto\.$/, m);
     assert.match(m.split('\n').pop(), /^O caminho certo e tirar o valor cru; .*decisao do dono\.$/, m);
     for (const l of m.split('\n')) assert.ok(l.length <= 100, 'linha com ' + l.length + ': ' + l);
   }
@@ -433,18 +438,57 @@ test('A2-44: o aviso do shell separa o passo do agente e diz ao usuario onde reg
   assert.match(m, /\n\nAo usuario: .*https:\/\/github\.com\/wendellmcs\/sworn\/issues/, m);
   assert.match(m, /tire dele antes senha, token e caminho interno: o issue e publico/, 'segredo no issue publico: ' + m);
   for (const l of m.split('\n')) assert.ok(l.length <= 100, 'linha com ' + l.length + ': ' + l);
+  // A4-66 (microcopy do pedido 12): o "Por que:" vinha colado na lista de arquivos; e o "tokens" era ingles solto.
+  assert.match(m, /"\n\nPor que: /, m);
+  assert.ok(!/os tokens/.test(m), m);
 });
 
 // A2-46 (P2 do pedido 12, R2): a anti-referencia que nao e texto com palavra saia calada da conferencia.
 test('A2-46: o aviso diz quais anti-referencias o portao ignorou, pela posicao no design.json', () => {
   const fora = [{ linha: 3, valor: '#123456', tipo: 'cor' }];
-  const linha = (anti) => design.motivo('src/a.css', fora, Object.assign({}, DESIGN, { antiReferencias: anti }))
-    .split('\n').filter((l) => /antiReferencias/.test(l));
-  const fim = ' sem efeito (so vale texto com palavra): corrija ou tire do design.json';
-  assert.deepStrictEqual(linha(['  ', 5, 'gradiente', null]), ['  antiReferencias: itens 1, 2, 4' + fim], 'tres ignoradas');
-  assert.deepStrictEqual(linha(5), ['  antiReferencias: item 1' + fim], 'nao e lista');
+  const linha = (anti) => {
+    const m = design.motivo('src/a.css', fora, Object.assign({}, DESIGN, { antiReferencias: anti })).split('\n');
+    const i = m.findIndex((l) => /antiReferencias/.test(l));
+    return i === -1 ? [] : m.slice(i, i + 2);
+  };
+  // A4-64 (microcopy do pedido 12): "texto com palavra" nao dizia o que falha; a regra vai na linha de baixo.
+  const fim = ' sem efeito: corrija ou tire do design.json';
+  const regra = '    (so vale texto nao vazio, como "gradiente"; so espacos, numero ou objeto nao valem)';
+  assert.deepStrictEqual(linha(['  ', 5, 'gradiente', null]), ['  antiReferencias: itens 1, 2, 4' + fim, regra],
+    'tres ignoradas');
+  assert.deepStrictEqual(linha(5), ['  antiReferencias: item 1' + fim, regra], 'nao e lista');
   assert.deepStrictEqual(linha(['gradiente']), [], 'nenhuma ignorada, nenhuma linha');
   assert.deepStrictEqual(linha(undefined), [], 'sem anti-referencia, nenhuma linha');
   const muitas = linha(new Array(15).fill(0));
   assert.match(muitas[0], /itens 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 e mais 3 sem efeito/, muitas[0]);
+});
+
+// A4-des-1 (pedido 12, fila §5; D721): o design.json nao tinha validador - a anti-referencia sem efeito so aparecia no
+// aviso de negacao, e a escrita sem valor fora passava calada. validar() diz cada item sem efeito e o que escrever.
+test('A4-des-1: validar acusa o que nao e objeto e cada item sem efeito, por chave e posicao', () => {
+  assert.deepStrictEqual(design.validar({ cores: ['#fff'], raios: '4px', antiReferencias: ['gradiente'] }),
+    { ok: true, erros: [] });
+  assert.deepStrictEqual(design.validar({}), { ok: true, erros: [] });
+  for (const [v, tipo] of [[[], 'lista'], [null, 'nulo'], ['x', 'string']]) {
+    const r = design.validar(v);
+    assert.strictEqual(r.ok, false, tipo);
+    assert.ok(/tem de ser um objeto JSON .* veio /.test(r.erros[0]) && r.erros[0].endsWith(tipo), r.erros[0]);
+  }
+  const r = design.validar({ cores: ['#fff', 5, ' '], espacos: null, sombras: [{}], antiReferencias: ['', 3, 'ok'] });
+  assert.strictEqual(r.ok, false);
+  assert.deepStrictEqual(r.erros.map((e) => e.split(' sem efeito')[0]),
+    ['cores: itens 2, 3', 'sombras: item 1', 'antiReferencias: itens 1, 2']);
+  assert.ok(r.erros.every((e) => /: corrija ou tire do design\.json$/.test(e)), r.erros.join(' | '));
+  // A4-64: a anti-referencia diz o que falha, como no aviso do portao (motivo).
+  assert.match(r.erros[2], /\(so vale texto nao vazio, como "gradiente"; so espacos, numero ou objeto nao valem\)/,
+    r.erros[2]);
+});
+
+// A4-des-3 (pedido 12, achado lateral da s212): texto solto vale como lista de um no conferir, mas o motivo() fazia
+// `.join` na chave - `raios: "4px"` estourava, e o io.blindar do portao-estilo liberava a escrita (falha aberta).
+test('A4-des-3: motivo aceita texto solto nas chaves do sistema, como o conferir', () => {
+  const s = { cores: '#fff', raios: '4px', espacos: '8px' };
+  assert.strictEqual(design.conferir('a { color: #123; }', s).ok, false);
+  const m = design.motivo('a.css', [{ valor: '#123', tipo: 'cor', linha: 1 }], s);
+  assert.ok(/cores: {3}#fff\n/.test(m) && /raios: {3}4px\n/.test(m) && /espacos: 8px\n/.test(m), m);
 });

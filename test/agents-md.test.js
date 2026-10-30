@@ -121,3 +121,69 @@ test('agents-md: sem respostas o gerador recusa e nomeia a fatia que falta', (t)
   assert.ok(r.stdout.includes('comoSeTrabalha'), r.stdout);
   assert.strictEqual(fs.existsSync(path.join(raiz, 'AGENTS.md')), false);
 });
+
+// A4-10 (pedido 12, microcopy): o RECUSADO dizia "nao passou no validador" e nao dizia onde corrigir.
+test('A4-10: o RECUSADO diz o que houve, sem "validador", e onde corrigir', (t) => {
+  const raiz = pastaComProjeto(t);
+  const sem = rodar(raiz, []);
+  assert.strictEqual(sem.status, 1, sem.stdout);
+  assert.ok(sem.stdout.startsWith('RECUSADO: o AGENTS.md gerado tem pendencias, e nada foi gravado:\n'), sem.stdout);
+  assert.ok(!sem.stdout.includes('validador'), sem.stdout);
+  assert.ok(sem.stdout.endsWith('Passe as respostas com --respostas <arquivo.json>, uma chave por fatia' +
+    ' (os nomes saem com --fatias).\n'), sem.stdout);
+  const arq = respostasEmArquivo(raiz);
+  const valores = JSON.parse(fs.readFileSync(arq, 'utf8'));
+  valores.comoSeTrabalha = '';
+  fs.writeFileSync(arq, JSON.stringify(valores), 'utf8');
+  const com = rodar(raiz, ['--respostas', arq]);
+  assert.strictEqual(com.status, 1, com.stdout);
+  assert.ok(com.stdout.endsWith('Corrija ' + arq + ' e rode de novo.\n'), com.stdout);
+});
+
+// A4-gam-1 (pedido 12, borda+microcopy): `--respostas` sem valor caia calado no "sem respostas", e JSON quebrado
+// saia como "nao consegui ler". Agora erro de uso que nomeia a flag, e a frase do lerRespostas do molde.js.
+test('A4-gam-1: --respostas sem valor e erro de uso; JSON quebrado nao e "nao consegui ler"', (t) => {
+  const raiz = pastaComProjeto(t);
+  [['--respostas'], ['--respostas', ''], ['--respostas', '--gravar']].forEach((args) => {
+    const r = spawnSync(process.execPath, [GERADOR].concat(args), { cwd: raiz, encoding: 'utf8', timeout: 60000 });
+    assert.strictEqual(r.status, 1, args.join(' ') + ': ' + r.stdout + r.stderr);
+    assert.ok(/--respostas pede um valor/.test(r.stdout) && /uso: gerar-agents-md\.js/.test(r.stdout), r.stdout);
+    assert.strictEqual(fs.existsSync(path.join(raiz, 'AGENTS.md')), false, args.join(' ') + ': gravou');
+  });
+  fs.writeFileSync(path.join(raiz, 'quebrado.json'), '{"x": ', 'utf8');
+  const r = spawnSync(process.execPath, [GERADOR, '--respostas', 'quebrado.json'], { cwd: raiz, encoding: 'utf8', timeout: 60000 });
+  assert.ok(/ERRO: quebrado\.json nao e JSON valido/.test(r.stdout), r.stdout);
+});
+
+// A4-gam-2 (pedido 12, estados): o write do AGENTS.md sem try saia em excecao crua, sem GRAVADO nem ERRO. O --require
+// faz a gravacao falhar com EACCES no processo filho (a raiz do projeto nao tem pasta-mae que se possa trocar).
+test('A4-gam-2: AGENTS.md que nao se grava sai com a causa e saida 1, sem excecao crua', (t) => {
+  const raiz = pastaComProjeto(t);
+  const falha = path.join(raiz, 'falha.js');
+  fs.writeFileSync(falha, "const fs = require('fs'); const w = fs.writeFileSync;\n" +
+    "fs.writeFileSync = function (p) { if (/AGENTS\.md$/.test(String(p))) { const e = new Error('negado'); " +
+    "e.code = 'EACCES'; throw e; } return w.apply(fs, arguments); };\n", 'utf8');
+  const r = spawnSync(process.execPath, ['--require', falha, GERADOR, '--respostas', respostasEmArquivo(raiz), '--gravar'],
+    { cwd: raiz, encoding: 'utf8', timeout: 60000 });
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.ok(/ERRO: nao consegui gravar .*AGENTS\.md \(sem permissao \(EACCES\)\)/.test(r.stdout), r.stdout);
+  assert.strictEqual(/\n\s+at /.test(r.stderr), false, 'excecao crua: ' + r.stderr);
+  assert.strictEqual(r.stdout.indexOf('GRAVADO'), -1, r.stdout);
+});
+
+// A4-gam-3 (pedido 12, R2 da A4, estados - a classe do A4-gsk-3): o AGENTS.md que aparece entre o existsSync e o write
+// era sobrescrito (flag 'w'). O --require faz o existsSync nao ver o AGENTS.md que ja esta la.
+test('A4-gam-3: AGENTS.md que aparece entre a conferencia e a escrita nao e sobrescrito', (t) => {
+  const raiz = pastaComProjeto(t);
+  const alvo = path.join(raiz, 'AGENTS.md');
+  fs.writeFileSync(alvo, 'trabalho de meses\n', 'utf8');
+  const cego = path.join(raiz, 'cego.js');
+  fs.writeFileSync(cego, "const fs = require('fs'); const e = fs.existsSync;\n" +
+    "fs.existsSync = function (p) {\n  return /AGENTS\.md$/.test(String(p)) ? false : e.apply(fs, arguments);\n};\n",
+    'utf8');
+  const r = spawnSync(process.execPath, ['--require', cego, GERADOR, '--respostas', respostasEmArquivo(raiz), '--gravar'],
+    { cwd: raiz, encoding: 'utf8', timeout: 60000 });
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.ok(/\(ja existe \(EEXIST\)\)/.test(r.stdout), r.stdout);
+  assert.strictEqual(fs.readFileSync(alvo, 'utf8'), 'trabalho de meses\n', 'sobrescreveu');
+});

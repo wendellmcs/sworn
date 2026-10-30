@@ -60,8 +60,8 @@ what is about to happen.
 
 **Three rules that apply only in a re-init:**
 
-- **Ask only what makes sense to ask again.** What he doesn't answer again **stays as it is**.
-  Do not reread the whole list of six questions to him: that is asking him to redo the work.
+- **Ask only what makes sense to ask again.** What they don't answer again **stays as it is**.
+  Do not reread the whole list of six questions to them: that is asking them to redo the work.
 - **Show what changed before writing.** No script compares them: you do. Before the
   `Write`, put the current `projeto.json` side by side with what will be written, and show **two lists**: the
   fields whose value changed and the answers that **did not fit in any field** (the answer's name
@@ -144,12 +144,13 @@ Run, with the project root in place of `<raiz>`:
     node "${CLAUDE_PLUGIN_ROOT}/scripts/varrer.js" '<raiz>'
 
 Show the user the `teto` block of the output — how many files were read, whether it truncated, and the token
-estimate. **Cost is his information, not a detail.**
+estimate. **Cost is their information, not a detail.**
 
 ## Step 2b — what already exists here, and what sworn will NOT duplicate
 
 Read the `ambiente` block of the scan and show the user, in a table: active plugins, skills, agents,
-hooks already configured and MCP servers.
+hooks already configured and MCP servers. If `ambiente.naoLidos` is not empty, name each file and its cause
+below the table: what that file declares is missing from it, so "none" there is not proof of absence.
 
 **Rule:** what already exists is **not duplicated**. If `superpowers` is installed, the method
 (brainstorm, plan writing and execution, TDD, debugging) is its own — `sworn` demands proof, it does not
@@ -162,6 +163,7 @@ hooks and both will run. Ask whether either should go, and **do not turn anythin
 
 Read the `instrucoes` block of the scan and show: total, the three heaviest files, and the cap.
 **Give the method together with the number** — a number without a method is opinion with decimal places.
+If `instrucoes.naoLidos` is not empty, name each file and its cause: the total leaves them out, so it is a floor.
 
 If `instrucoes.fontes` comes back `candidatas`, there is no `projeto.json` yet: the number counts the
 canonical-source candidates the scan found, not yet confirmed (question 2 of Step 4
@@ -192,7 +194,7 @@ Present the `inferido` block in a short table, and say explicitly that it is inf
 Where the value is `null`, say "I couldn't infer it" — **never fill in a guess.**
 
 **`modificados` has three answers, not two.** A list with names: there is work from another
-front open here — tell the user now, don't let him find out when a gate denies something.
+front open here — tell the user now, don't let them find out when a gate denies something.
 Empty list: the tree is clean. **`null`: I couldn't take the snapshot** — no git, outside a
 repository, or the command failed; in that case say that I don't know, **never "nothing modified"**.
 
@@ -267,7 +269,7 @@ believing you saw it.
    the answer is the owner's. Recommend `interno` and say that it is a recommendation, not an inference.
    Options: `interno` (recommended) · `publico` · "I don't know yet — treat it as public until I
    decide". The third **writes `publico`**: the field only accepts those two values, and that is what you
-   tell the user — without citing the field name, which is not his vocabulary.
+   tell the user — without citing the field name, which is not their vocabulary.
 
 2. **Which files really govern?** → writes `fontesCanonicas`
    Offer the scan's `candidatosCanonicos` — the field name in the output is different, and you are the one
@@ -362,9 +364,9 @@ script refuses to overwrite a skill that already exists, item 6 of 7c):
 
 - **exists and has all three files** in the `decisoes` slice: do not ask again; what is there stands;
 - **exists without the three:** do this step, but the answer does **not** go through 7c. Show the owner the
-  snippet with the three files for him to put in the `decisoes` slice of the existing skill — you don't edit it:
+  snippet with the three files for them to put in the `decisoes` slice of the existing skill — you don't edit it:
   in a re-init `projeto.json` already exists, and the scope gate may deny the write (the trap of
-  Step 7e). **Warn that, until he puts the snippet in, the answer is not saved**;
+  Step 7e). **Warn that, until they put the snippet in, the answer is not saved**;
 - **doesn't exist:** do this step; the answer goes on to 7c.
 
 **Last, the top reference** → writes `referencias` into `projeto.json` (optional key). It is not a place for
@@ -374,7 +376,7 @@ work, and the end of the turn blocks the delivery of the AAA gear that was not r
 `AskUserQuestion`, with 3 options. In the question to the owner, no jargon: "what is the best example that exists of what this
 project delivers? The review will compare the work with it" — "gear" is only explained in Step 5.
 
-The 3 options go to the owner with these labels and descriptions, already in his words (what comes after "Writes:" is
+The 3 options go to the owner with these labels and descriptions, already in their words (what comes after "Writes:" is
 for you, it does not go into the option):
 
 1. **Name it now (recommended)** — "You point to the best example of each type (screen, code, text): a file
@@ -394,7 +396,7 @@ for you, it does not go into the option):
    `"referencias": {}`, and the opening warning does not appear.
 
 In a re-init, show the current `referencias` and ask only whether the owner wants to change it. The answer is merged with the one that exists,
-type by type: the type the owner answers replaces its list, and the type he doesn't mention stays as it was. The exception
+type by type: the type the owner answers replaces its list, and the type left unmentioned stays as it was. The exception
 is option 3: **"never" in a re-init writes `"referencias": {}` in place of the whole key**, and the types that were
 saved are removed (it is the only object where `{}` erases; in the others, `{}` changes nothing). To remove just one type, write
 its list empty (`"tela": []`), which counts as no reference.
@@ -449,7 +451,7 @@ after asking the anti-references** (paragraph below) write `.claude/sworn/design
 `cores`, `raios`, `espacos`, `sombras` and `antiReferencias`.
 **In a re-init, the `Write` here is denied by the scope gate** if `escopo.md` does not cover that file:
 declare it first, as Step 0b says. **If `design.json` already exists, do not overwrite it without
-asking:** show the owner what changes (field by field) and only write with his OK.
+asking:** show the owner what changes (field by field) and only write with their OK.
 
 **When the project has no design system, extract one from the components that already exist** — never
 import an average taste. If it cannot be extracted, **do not create the file**: the module is optional and
@@ -489,8 +491,8 @@ script merges by JSON):
 It adds `Workflow(sworn:parallel)` to `permissions.allow` of `.claude/settings.local.json`
 (the project's personal file, outside git). Output `"erro"`: do not write by hand; show the error to the owner.
 **Tell the owner the limit that was measured:** the rule releases the workflow with no window in `claude -p` mode;
-in the interactive session (terminal or VS Code), if the window still appears on the first run, he
-chooses **"Yes, and don't ask again"** once and it does not come back in this project.
+in the interactive session (terminal or VS Code), if the window still appears on the first run, they
+choose **"Yes, and don't ask again"** once and it does not come back in this project.
 
 ## Step 6 — seed the rules
 
@@ -572,13 +574,13 @@ Fix **what is yours** — missing key, wrong type, malformed date, or **I wrote 
 folder**: an `ENOENT` error means the file is not where the validator looked, and the cause
 is almost always having written relative to the current folder instead of the root. **If the error comes from an answer of the
 owner** (an `intocaveis` with an absolute path, a pattern that neutralizes another), **do not rewrite
-his answer on your own**: show the error, explain in one line, and ask again. Two
+their answer on your own**: show the error, explain in one line, and ask again. Two
 attempts of yours without `OK` is a sign that the fix is not yours — stop and ask.
 
 **If you stop without `OK`, say so in so many words to the user.** The file is already written, and the
 gates will read it anyway: none of them runs the validator. A rejected configuration does not stay inert
 — it protects less than it appears to, and the `intocaveis` the owner asked for may not be in force.
-Until `OK` comes out, the project has incomplete protection, and he needs to know that now.
+Until `OK` comes out, the project has incomplete protection, and they need to know that now.
 
 ## Step 7b — emit this project's agents
 
@@ -640,7 +642,7 @@ generate again · don't save (the project stays without agents and the cost gate
 
 Paste the output. **An agent that already exists is skipped, never overwritten** — the file is someone's work,
 and replacing it is the owner's decision. If the output says `PULADOS` non-zero, **say which ones** to the
-user: he needs to know that those rungs keep the old content, including a `model:` or `effort:` that may differ
+user: they need to know that those rungs keep the old content, including a `model:` or `effort:` that may differ
 from the map. The alias check (`portao-apelido.js`) warns about that difference when the agent is dispatched and
 offers the fix in either direction (`--corrigir <agente> --para arquivo` or `--para mapa`); which side is right is
 the owner's call.
@@ -685,7 +687,7 @@ refuses, and it is right.
 **5. Ask for the decision in 3 options**, the recommended one first:
 
 - **Save as is** — becomes this project's skill and takes effect in the next sessions.
-- **Adjust first** — he points out what to change, you regenerate and show it again.
+- **Adjust first** — they point out what to change, you regenerate and show it again.
 - **Don't save** — the project keeps only `projeto.json` and `regras.md`; the gates stay the same, but the
   Step 4b answer is not saved anywhere.
 
@@ -721,7 +723,7 @@ rot when the project changes.
 
 **If the project already has an `AGENTS.md`, the generator refuses and touches nothing.** That is not an error:
 that file may be months of work. Tell the owner that one exists, **show the proposal anyway**,
-and leave the merge to him — never join the two on your own.
+and leave the merge to them — never join the two on your own.
 
 **If the project keeps `AGENTS.md` and `CLAUDE.md` mirrored**, a change to one of the two goes to the
 other **in the same change set** — the rule and the reason are in `05-governanca.md` §2 and §3 of the `padrao`
@@ -731,7 +733,7 @@ before calling the step closed.
 ## Step 7e — check the model catalog, because this is an installation
 
 **Installing is the natural moment to check** whether the aliases from question 6 are still what the
-vendor offers: the moment is caused by the owner himself, with no calendar and no warning every session.
+vendor offers: the moment is caused by the owner themselves, with no calendar and no warning every session.
 That is why this step runs on **every** init, including a re-init, and the `instalacao` reason **ignores the
 frequency window** — a good lookup from yesterday does not excuse this one.
 
@@ -756,7 +758,7 @@ switched on** — the same trap that put Step 6 before 7. The file is plugin sta
 writes it is its module. The output says where it wrote: check that it is the root.
 
 **4. Nothing the lookup brings goes into `projeto.json` on your own.** A saved alias that
-no longer appears on the page goes to the owner in 3 options — and the swap, if he chooses it, is a new answer
+no longer appears on the page goes to the owner in 3 options — and the swap, if they choose it, is a new answer
 to question 6, not an edit of yours.
 
 **5. Tell the owner that updating the plugin does not repeat this check.** No event tells the plugin
@@ -800,7 +802,7 @@ for the next task. Deleting a file is a command, not `Write`/`Edit`; use
 `rm .claude/sworn/escopo.md` (in PowerShell, `Remove-Item .claude\sworn\escopo.md`), **without `-f`,
 `-r` or `-Force`** — the destructive gate blocks those options, and a plain `rm` of one file goes through (measured
 with `classificar` from `scripts/lib/destrutivo.js`). If the gate blocks it anyway, do not insist and do not
-empty the file (an empty file still exists): tell the owner the path and ask him to delete it.
+empty the file (an empty file still exists): tell the owner the path and ask them to delete it.
 
 Finish with a short table: which lock stayed on, what it blocks, and how to turn it off
 (`travas.<nome>: false` in `projeto.json`). The number in parentheses is what appears in the message
@@ -828,8 +830,8 @@ binds the session to that front; without a binding, the general `escopo.md` stay
 **The last row is not a lock, and say so.** There is no `travas.custo`: the cost gate goes quiet
 on its own when the ladder has fewer than two names. And it does not block only the top agent — it blocks
 the upper half of the ladder, rounded up. On a ladder of five, the last two; on one of
-four, also the last two. Say at which position the cut starts **on the ladder he just
-answered**, otherwise he finds out at the first denied dispatch.
+four, also the last two. Say at which position the cut starts **on the ladder they just
+answered**, otherwise they find out at the first denied dispatch.
 
 **Say it out loud, don't leave it only in the table:** the key `travas.escopo` exists in `projeto.json` and the
 validator requires it to be there, but **no gate reads it** — putting `false` in it turns nothing
@@ -846,19 +848,19 @@ saved as on and has no way of firing in this project.
 
 **If you configured a different folder from the one the user is working in, say this:** the
 gates look at the folder where the agent's session was opened, not the one that was just configured. The
-locks in this table apply when he is working **inside** this root; opening the session
+locks in this table apply when they are working **inside** this root; opening the session
 elsewhere, none of them fires. Promising four locks on without this caveat is announcing
 protection that will not happen.
 
 Also say what `sworn` **does not** promise — it does not judge whether the interface came out beautiful, does not
 solve concurrent sessions in the general case, and does not learn on its own.
 
-**Close with the next commands**, one sentence each, no question, so he knows when each one applies:
+**Close with the next commands**, one sentence each, no question, so they know when each one applies:
 
 - `/sworn:review` — blind review of what was written, before calling it done;
 - `/sworn:reference` — studies the leaders of the same type and writes the reference the review uses
-  (if he declined in Step 4b, say he can run it later);
-- `/sworn:radar` — public projects similar to what he is building; it offers itself
+  (if they declined in Step 4b, say they can run it later);
+- `/sworn:radar` — public projects similar to what they are building; it offers itself
   when the request is for a new function or improvement;
 - `/sworn:shortcuts` — the deliberate simplification debt, before a release;
 - `/sworn:audit` and `/sworn:calibrate` — after a few weeks: the weight of the rules and the

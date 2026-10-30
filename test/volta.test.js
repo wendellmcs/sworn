@@ -32,8 +32,11 @@ function chamada(quando, modelo, contexto, extra) {
 
 // O texto do mock aprovado da 0.11.0 (prints-0110/mock-0110.html, D588), letra por letra: o resumo gravado ao segurar.
 const RESUMO = '.claude/sworn/handoff/2026-10-22-retomar-d731fc49.md';
+// A5-25, A5-26 e A5-59 (D735): sem "cache" nem "regrava"; a opcao 2 diz o custo e que a mensagem foi segurada; a 1
+// do "Sem resumo" diz onde fica o handoff e como saber se esta em dia.
 const MOCK = [
-  'sworn - este chat ficou 1 h 16 min parado e o cache venceu: continuar aqui regrava 461 mil tokens.',
+  'sworn - este chat ficou 1 h 16 min parado: continuar aqui fica mais caro, porque a conversa inteira ' +
+    '(461 mil tokens) e cobrada de novo.',
   '',
   'Continuar neste chat: cerca de US$ 3,69 (Opus 5.5).',
   'Abrir um chat novo: cerca de US$ 0,55.',
@@ -43,13 +46,15 @@ const MOCK = [
   'Faca uma destas:',
   '  1. abra um chat novo e cole:',
   '     Retome o chat d731fc49 pelo resumo ' + RESUMO + ': leia-o antes de qualquer coisa e siga de onde ele parou.',
-  '  2. para seguir neste chat, mande a mensagem de novo: este aviso nao volta nesta pausa.',
+  '  2. para seguir neste chat (cerca de US$ 3,69), mande a mensagem de novo: o sworn a segurou antes do Claude ' +
+    'e nao segura a proxima nesta pausa.',
   '',
   'Desligar neste projeto: "avisoDeVolta": false em .claude/sworn/projeto.json.'
 ].join('\n');
 // Sem resumo (registro torto, disco cheio): a linha diz isso e a opcao 1 volta a ser a da 0.8.4 (mock D550).
 const MOCK_SEM_RESUMO = [
-  'sworn - este chat ficou 3 h 08 min parado e o cache venceu: continuar aqui regrava 318 mil tokens.',
+  'sworn - este chat ficou 3 h 08 min parado: continuar aqui fica mais caro, porque a conversa inteira ' +
+    '(318 mil tokens) e cobrada de novo.',
   '',
   'Continuar neste chat: cerca de US$ 2,54 (Opus 5.5).',
   'Abrir um chat novo: cerca de US$ 0,55.',
@@ -57,8 +62,10 @@ const MOCK_SEM_RESUMO = [
   'Sem resumo: nao consegui montar o resumo deste chat.',
   '',
   'Faca uma destas:',
-  '  1. abra um chat novo e cole o prompt do ultimo handoff, se ele estiver em dia;',
-  '  2. para seguir neste chat, mande a mensagem de novo: este aviso nao volta nesta pausa.',
+  '  1. abra um chat novo e cole o prompt do ultimo handoff (o /sworn:handoff grava em ' +
+    '.claude/sworn/handoff/), se ele foi gravado depois do seu ultimo pedido;',
+  '  2. para seguir neste chat (cerca de US$ 2,54), mande a mensagem de novo: o sworn a segurou antes do Claude ' +
+    'e nao segura a proxima nesta pausa.',
   '',
   'Desligar neste projeto: "avisoDeVolta": false em .claude/sworn/projeto.json.'
 ].join('\n');
@@ -94,6 +101,11 @@ test('0.11.0: sem resumo, o aviso diz isso e a opcao 1 e a de antes, letra por l
   const r = volta.avaliar({ contexto: 318000, horario: AGORA - 188 * MIN, modelo: 'claude-opus-5-5' }, AGORA);
   assert.strictEqual(volta.motivo(r, null), MOCK_SEM_RESUMO);
   assert.strictEqual(volta.motivo(r), MOCK_SEM_RESUMO);
+  // A5-25: modelo fora da tabela de precos nao tem valor; a opcao 2 diz o que encarece
+  const semPreco = volta.avaliar({ contexto: 318000, horario: AGORA - 188 * MIN, modelo: 'claude-nada-9' }, AGORA);
+  const opcao2 = '  2. para seguir neste chat (a conversa inteira e cobrada outra vez), mande a mensagem de novo: ' +
+    'o sworn a segurou antes do Claude e nao segura a proxima nesta pausa.';
+  assert.ok(volta.motivo(semPreco).split('\n').indexOf(opcao2) !== -1, volta.motivo(semPreco));
 });
 
 test('0.11.0: handoff do modelo em dia - a opcao 1 aponta o handoff e o resumo; atrasado ou fora de ASCII, so o resumo', () => {
@@ -118,7 +130,8 @@ test('084: a conta - continuar = contexto x escrita de 1 h; chat novo = 68.723 x
   assert.ok(Math.abs(r.continuar - 400000 * 20 / 1e6) < 1e-9, 'Fable 5.1: escrita de 1 h US$ 20/M');
   assert.ok(Math.abs(r.novo - 68723 * 20 / 1e6) < 1e-9);
   assert.strictEqual(volta.RECOMECO, 68723, 'mediana da 1a chamada de chat novo (D547)');
-  assert.match(volta.motivo(r), /^sworn - este chat ficou 1 h 01 min parado .* 400 mil tokens\.$/m);
+  assert.match(volta.motivo(r),
+    /^sworn - este chat ficou 1 h 01 min parado: .* \(400 mil tokens\) e cobrada de novo\.$/m);
   assert.match(volta.motivo(r), /cerca de US\$ 8,00 \(Fable 5\.1\)\./);
 });
 
@@ -146,7 +159,7 @@ test('084: modelo sem preco avisa sem o valor em dolar', () => {
     assert.ok(r, String(modelo) + ': tinha de avisar');
     const t = volta.motivo(r);
     assert.ok(!/US\$ \d/.test(t), 'sem valor em dolar: ' + t);
-    assert.match(t, /^sworn - este chat ficou 2 h 00 min parado .* 250 mil tokens\.$/m);
+    assert.match(t, /^sworn - este chat ficou 2 h 00 min parado: .* \(250 mil tokens\) e cobrada de novo\.$/m);
     assert.match(t, /sem o valor em US\$|sem preco/i);
   }
 });

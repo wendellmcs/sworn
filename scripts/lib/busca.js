@@ -28,6 +28,10 @@ const FERRAMENTAS = ['grep', 'glob', 'read'];
  */
 const COMANDOS = /(^|[\s|;&(])(grep|rg|ag|ack|find|fd|ls|dir|cat|head|tail|tree|git\s+grep|git\s+ls-files)\b/;
 
+// A4-bus-1 (pedido 12), seguranca: `find` com -delete/-exec/-execdir/-ok/-okdir, e `fd` com -x/-X/--exec, apagam ou
+// rodam comando por si - pelo mesmo motivo do `sed -i` acima, o comando inteiro deixa de contar como busca.
+const ALTERA = /(^|[\s|;&(])(find\b[^|;&]*\s-(delete|exec|execdir|ok|okdir)|fd\b[^|;&]*\s(-x|-X|--exec|--exec-batch))\b/;
+
 /**
  * Uma chamada de ferramenta conta como busca?
  * Bash conta pelo COMANDO, nao pelo nome da ferramenta: `Bash` sozinho nao diz
@@ -38,7 +42,7 @@ function ehBusca(toolName, toolInput) {
   if (FERRAMENTAS.indexOf(nome) !== -1) return true;
   if (nome === 'bash' || nome === 'powershell') {
     const cmd = (toolInput || {}).command;
-    return typeof cmd === 'string' && COMANDOS.test(cmd);
+    return typeof cmd === 'string' && COMANDOS.test(cmd) && !ALTERA.test(cmd);
   }
   return false;
 }
@@ -71,10 +75,11 @@ function motivo(alvo) {
     '',
     'Alvo: ' + alvo + '  (nao existe ainda: isto e criacao, nao edicao)',
     '',
-    'A falha de origem: criar arquivo novo em vez de entender o que ja existe.',
+    // A4-30 (pedido 12, microcopy): o motivo e o passo sem "falha de origem" nem "portao".
+    'Por que: o risco e criar arquivo novo em vez de entender o que ja existe.',
     'Antes de criar, procure - Grep, Glob, ou um grep/find pelo Bash - e diga na',
     'resposta o que a busca devolveu. Se mesmo assim nao houver onde encaixar,',
-    'criar passa a ser a resposta certa, e o portao nao atrapalha de novo neste turno.',
+    'crie: depois de uma busca neste turno, criar arquivo novo fica liberado.',
     '',
     'Editar arquivo que ja existe nunca exige isso: quem edita ja achou.'
   ].join('\n');

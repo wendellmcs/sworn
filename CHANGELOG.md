@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.18.0 — a opção sem valor vira erro, e o que não se lê diz a causa
+
+A segunda de três etapas da revisão completa do plugin passou, arquivo por arquivo, pela revisão cega: o init, a
+sanitização e a publicação; a abertura da sessão, a medida do contexto e o aviso de volta; a medição, o custo e a
+auditoria; o painel, o vigia, os ganchos e o paralelo. Os defeitos que ela achou foram consertados e revisados de
+novo. A opção sem valor deixa de virar nome de pasta, o arquivo que não se lê aparece com a causa, e os avisos dessas
+áreas dizem a causa, o efeito e o passo seguinte.
+
+**Opção sem valor é erro de uso**
+
+- **A opção sem valor não vira mais nome de pasta.** O `exportar.js --destino --gravar` montava a cópia numa pasta
+  chamada `--gravar`, e o `cicatriz.js --corpus --json` lia o corpus de uma pasta `--json`. Nesses dois e no
+  `sanitar.js`, no `experimento.js`, no `plano.js`, no `vigia-puxar.js` e nos geradores de agente, de `AGENTS.md` e
+  de skill, a opção sem valor (a última da linha, vazia ou seguida de outra opção) é erro de uso.
+- **Número fora da faixa é recusado.** No `cicatriz.js`, `--minimo abc` punha todas as regras na lista "com
+  cicatriz"; agora o `--minimo` pede um inteiro de 1 em diante, e o `--fracao`, um número acima de 0 até 1.
+
+**O que não se lê diz a causa**
+
+- **A medida que falhou não diz mais "pode seguir".** O `agentes-rodando.js` com `--transcricao` sem valor, ou
+  apontando para um arquivo que não existe, respondia "nenhum agente rodando; o handoff pode seguir". Agora diz que os
+  agentes em segundo plano não foram medidos, com a causa e o passo.
+- **Arquivo ilegível vem com a causa, em vez de sumir.** O `uso.js` com o contador torto diz "ilegível" e a causa,
+  com saída 1. O agente cujo arquivo não se lê aparece entre os ilegíveis do `--mapa`, não entre os não declarados.
+  No `/sworn:init` e no `/sworn:audit`, o arquivo de configuração ou de instrução que não se lê entra na lista do que
+  não foi lido, com a causa, e o total contado passa a ser um mínimo.
+- **No init, o plugin marcado `false` no `enabledPlugins` conta como desligado**, e o `settings.local.json` vale por
+  cima do `settings.json`.
+
+**Gravação e segurança**
+
+- **Os geradores não gravam fora da pasta nem por cima.** No gerador de agentes, um nome como `../fora` gravava o
+  agente fora de `.claude/agents`; agora o nome fora da regra é recusado. Nos três geradores, o arquivo que
+  aparecesse entre a conferência e a escrita era sobrescrito; agora a escrita para sem sobrescrever.
+- **Busca que apaga ou executa não conta como busca.** O `find` com `-delete` ou `-exec` e o `fd` com `-x` não valem
+  mais como a busca que a trava 7 pede antes de criar arquivo.
+- **O `design.json` ganhou validador.** O `validar.js` confere o `design.json` quando ele existe. Uma anti-referência
+  escrita como texto solto, em vez de lista, quebrava o aviso, e o portão de estilo deixava a escrita passar; agora o
+  texto solto vale como lista de um item.
+
+**Contagem**
+
+- **O agente de workflow entra na conta.** O handoff, que espera os agentes de fundo terminarem, vê também os agentes
+  de um workflow; a conta de gasto e a do modelo que os subagentes usaram de fato também os incluem.
+- **A revisão fechada diz o total da sessão.** O `apurar-ronda.js` mostrava a contagem do turno, que zera a cada fim
+  de turno; agora mostra a da sessão, a mesma que o aviso de troca de chat lê.
+- **Fonte de consulta fora do peso.** A chave opcional `fontesDeConsulta` do `projeto.json` marca as fontes canônicas
+  que se consultam, mas não se carregam como instrução (um registro de decisões, por exemplo): elas saem do peso de
+  instrução do `/sworn:audit`, que as mostra à parte.
+- A lista de atalhos (`/sworn:shortcuts`) separa as linhas do arquivo que termina cada linha só com CR (o retorno
+  de carro, sem o LF): antes, o arquivo inteiro era lido como uma linha só.
+
+**Textos**
+
+- Os avisos e as recusas dessas áreas dizem a causa, o efeito e o passo, sem jargão interno nem inglês solto. O aviso
+  de troca de chat diz o que chegou ao limite e qual é o limite; o aviso de volta diz o efeito em custo; o painel diz
+  quando a medida parou e o que fazer, e a mensagem do clique que falhou não fala mais em primeira pessoa. A skill de
+  init, escrita em inglês, se refere a quem usa com pronomes neutros (they/them), não mais com os masculinos
+  (he/his).
+- A skill de atalhos diz que os rótulos são palavras em português, também quando o comentário está em outra língua,
+  e a entrada da 0.17.1 diz o arquivo do guia, o que é a tabela dos degraus e como consertar a linha de baixo.
+
 ## 0.17.1 — duas explicações corrigidas: o aviso dos atalhos e o apelido de modelo
 
 **Corrige**
@@ -7,11 +69,11 @@
 - **A skill `/sworn:shortcuts` dizia que qualquer linha sem rótulo (`limite:` ou `trocar quando:`) logo abaixo de
   um atalho dava o aviso "sem ponto final".** Só a linha de comentário com texto pode dar esse aviso, quando o atalho
   não termina em ponto; uma linha de código, um comentário vazio ou outro atalho logo abaixo encerram a leitura sem
-  aviso. A skill agora diz isso, e o conserto segue o mesmo: começar a linha de baixo com um rótulo ou subir o resto
-  da frase.
-- **O GUIA usava "apelido" sem explicar e dava de exemplo nomes completos de modelo, que mudam com o tempo.** Agora
-  explica que o apelido é o nome curto do modelo na tabela `agentes.degraus`, como `sonnet`, e o exemplo não traz
-  mais nomes completos.
+  aviso. A skill agora diz isso e diz o conserto: começar a linha de baixo com um rótulo, ou juntar o resto da frase
+  à linha de cima.
+- **O guia do plugin (`GUIA.md`) usava "apelido" sem explicar e dava de exemplo nomes completos de modelo, que mudam
+  com o tempo.** Agora explica que o apelido é o nome curto do modelo, como `sonnet`, na tabela do `projeto.json` que
+  dá a cada agente da escada o modelo dele (`agentes.degraus`), e o exemplo não traz mais nomes completos.
 
 ## 0.17.0 — o bloqueio diz o que fazer, e o que não se lê não passa calado
 

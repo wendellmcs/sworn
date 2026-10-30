@@ -236,8 +236,11 @@ test('exportar: git que falha no destino sai 1 e nao anuncia indice pronto', () 
   assert.strictEqual(r.stdout.indexOf('feitos'), -1,
     'anunciou o indice pronto sem ele estar: ' + r.stdout);
   // a linha que NOMEIA a falha - a explicacao logo abaixo tambem cita o `git add`
-  assert.ok(/NAO FICOU PRONTO: git add saiu \d+/.test(r.stderr),
+  assert.ok(/O GIT NAO PREPAROU O EXPORT: o `git add` saiu \d+; o git disse: "\S[^\n]*"\n/.test(r.stderr),
     'nao disse qual passo do git falhou: ' + r.stderr);
+  // A4-05 (pedido 12, microcopy): sem "INDICE", e o passo seguinte vem depois da causa
+  assert.strictEqual(r.stderr.indexOf('INDICE'), -1, r.stderr);
+  assert.ok(r.stderr.indexOf('Corrija a causa (a linha acima), apague o destino e rode de novo.') !== -1, r.stderr);
 });
 
 test('exportar: todo spawnSync dos scripts tem teto de tempo, como os irmaos do git.js', () => {
@@ -260,4 +263,41 @@ test('exportar: todo spawnSync dos scripts tem teto de tempo, como os irmaos do 
   assert.ok(com.indexOf('scripts/exportar.js') !== -1, 'o git do exportar.js ficou sem teto');
   assert.ok(com.length >= 4, 'o leitor achou so ' + com.length + ' chamadas com teto: ' + com.join(', '));
   assert.deepStrictEqual(sem, [], 'git sem teto de tempo pendura o script sem aviso');
+});
+
+// A4-exp-1 (pedido 12, borda): flag sem valor caia calada - `--destino --gravar` montava o export na pasta "--gravar"
+// de onde se chamou, e `--raiz --destino x` media a pasta "--destino". Agora e erro de uso, saida 2, nada criado.
+test('A4-exp-1: flag sem valor e erro de uso, nunca pasta com nome de flag', () => {
+  const de = origem();
+  const cwd = pasta('chamada');
+  const para = path.join(pasta('destino'), 'novo');
+  const casos = [
+    [['--raiz', de, '--destino'], /--destino pede um valor/],
+    [['--raiz', de, '--destino', ''], /--destino pede um valor/],
+    [['--raiz', de, '--destino', '--gravar'], /--destino pede um valor/],
+    [['--raiz', '--destino', para, '--gravar'], /--raiz pede um valor/]
+  ];
+  casos.forEach(([args, re]) => {
+    const r = spawnSync(process.execPath, [SCRIPT].concat(args), { cwd: cwd, encoding: 'utf8', timeout: 60000 });
+    assert.strictEqual(r.status, 2, args.join(' ') + ': ' + r.stdout + r.stderr);
+    assert.ok(re.test(r.stderr) && /uso: node scripts\/exportar\.js/.test(r.stderr), args.join(' ') + ': ' + r.stderr);
+    assert.deepStrictEqual(fs.readdirSync(cwd), [], 'criou pasta com nome de flag: ' + fs.readdirSync(cwd));
+    assert.strictEqual(fs.existsSync(para), false, args.join(' ') + ': montou mesmo assim');
+  });
+});
+
+// A4-exp-2 (pedido 12, estados): `vazia()` dava "vazio" a todo erro de leitura e o `mkdirSync` do destino ficava fora
+// de try - destino que e arquivo, ou que passa por um, saia com a excecao crua do Node. So ENOENT e destino vazio.
+test('A4-exp-2: destino que e arquivo, ou que passa por um, sai 2 com a causa, sem excecao crua', () => {
+  const de = origem();
+  const base = pasta('destino');
+  escrever(base, 'arquivo', 'nao sou pasta\n');
+  [path.join(base, 'arquivo'), path.join(base, 'arquivo', 'novo')].forEach((para) => {
+    const r = exportar(de, para, ['--gravar']);
+    assert.strictEqual(r.status, 2, para + ': ' + r.stdout + r.stderr);
+    assert.ok(/NAO DEU PARA MONTAR: .*\(ENOTDIR\)/.test(r.stderr), para + ': ' + r.stderr);
+    assert.ok(/Escolha outro --destino/.test(r.stderr), 'sem o passo: ' + r.stderr);
+    assert.strictEqual(/\n\s+at /.test(r.stderr), false, 'excecao crua: ' + r.stderr);
+    assert.strictEqual(r.stdout.indexOf('Copiados'), -1, r.stdout);
+  });
 });

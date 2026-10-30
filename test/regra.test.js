@@ -287,3 +287,57 @@ test('D116: campo nao declarado vira texto honesto, nunca null nem undefined', (
     fs.rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+// A4-reg-1 (pedido 12, estados+manutencao): volateis.json ausente, quebrado ou com regex invalida virava [] calado, e
+// a checagem D10 passava tudo (falha aberta). Agora a causa fica em ERRO_VOLATEIS e o validarRegra acusa - sem lancar
+// no require, que a abertura faz em toda sessao.
+test('A4-reg-1: volateis.json que nao carrega faz o validarRegra acusar, sem lancar no require', () => {
+  const caminho = require.resolve('../scripts/lib/regra.js');
+  const ler = fs.readFileSync;
+  const casos = [
+    ['ausente', () => { const e = new Error('x'); e.code = 'ENOENT'; throw e; }, /nao existe \(ENOENT\)/],
+    ['quebrado', () => '{"volateis": [', /SyntaxError/],
+    ['regex invalida', () => '{"volateis": [{"padrao": "(", "tipo": "t"}]}', /SyntaxError/]
+  ];
+  try {
+    for (const [nome, leitura, re] of casos) {
+      fs.readFileSync = function (p) {
+        if (/volateis\.json$/.test(String(p))) return leitura();
+        return ler.apply(fs, arguments);
+      };
+      delete require.cache[caminho];
+      const r = require(caminho);
+      assert.deepStrictEqual(r.VOLATEIS, [], nome);
+      assert.ok(re.test(r.ERRO_VOLATEIS), nome + ': ' + r.ERRO_VOLATEIS);
+      const v = r.validarRegra('ao editar -> rode os testes');
+      assert.strictEqual(v.ok, false, nome + ': a checagem D10 nao rodou e a regra passou');
+      assert.ok(v.erros.some((e) => /modelos\/volateis\.json\) nao carregou \(/.test(e)), nome + ': ' + v.erros);
+    }
+  } finally {
+    fs.readFileSync = ler;
+    delete require.cache[caminho];
+  }
+  const limpo = require(caminho);
+  assert.strictEqual(limpo.ERRO_VOLATEIS, null);
+  assert.strictEqual(limpo.validarRegra('ao editar -> rode os testes').ok, true);
+});
+
+// A4-25 (pedido 12, microcopy): o erro do valor que muda com o tempo diz o trecho e o que reescrever, sem jargao.
+test('A4-25: valor que muda com o tempo diz o trecho e o que reescrever', () => {
+  const e = regra.validarRegra('ao instalar -> usar a versao 2.1.220').erros.join(' | ');
+  assert.ok(e.includes('(numero de versao: "2.1.220")'), e);
+  assert.ok(e.includes('tire o valor da regra, ou troque-o por onde le-lo na hora'), e);
+  assert.ok(!/cravado|fonte viva/.test(e), e);
+  const f = regra.validarRegra('ao rodar teste -> passar --fail-fast').erros.join(' | ');
+  assert.ok(f.includes('(flag de linha de comando: "--fail-fast")'), f);
+});
+
+// A4-26 (pedido 12, microcopy): a regra fora da forma traz o exemplo, e nao diz "sem gatilho" quando falta a acao.
+test('A4-26: regra fora da forma traz o exemplo e nao diz "sem gatilho" quando falta a acao', () => {
+  for (const bruta of ['nao faca hardening nao solicitado', 'quando editar ->', '-> faca alguma coisa']) {
+    const e = regra.validarRegra(bruta).erros.join(' | ');
+    assert.ok(e.includes('a seta -> com espaco dos dois lados'), bruta + ': ' + e);
+    assert.ok(e.includes('como em "ao editar arquivo -> rodar os testes"'), bruta + ': ' + e);
+    assert.ok(!e.includes('sem gatilho'), bruta + ': ' + e);
+  }
+});

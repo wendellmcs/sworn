@@ -5,9 +5,11 @@
 // breakdown (D148); historico e gastoReal sao o que o mod guardou no $.store (pedido 31); resposta e a ultima do
 // agente principal (sem uso desde o plano 091 #5, que tirou o botao do paralelo) e padrao diz se o mod viu a skill
 // do manual carregada (pedido 32, botoes).
-// Saida: JSON { curta, longa, cruzou, plano, guardar, botoes } e, se a entrada veio torta, `erro`. Saida 0 sempre:
-// o medidor nunca derruba a sessao.
+// Saida: JSON { curta, longa, cruzou, plano, guardar, botoes } e, se a entrada veio torta ou a medida falhou, `erro`
+// (A7-19, D735: frase para quem roda o script a mao, que o mod nao mostra). Saida 0 sempre: o medidor nunca derruba a
+// sessao.
 const fs = require('node:fs');
+const texto = require('./lib/texto.js');
 const estado = require('./lib/estado.js');
 const config = require('./lib/config.js');
 const saude = require('./lib/saude.js');
@@ -15,15 +17,20 @@ const medidor = require('./lib/medidor.js');
 const gastoLib = require('./lib/gasto.js');
 const path = require('node:path');
 
+const SEM_DADOS = ' a medida saiu sem os dados da sessao. Mande na entrada do script um objeto JSON com os campos ' +
+  'uso e sessao (a lista inteira esta no topo de scripts/sessao.js) e rode de novo.';
 let entrada = {};
 let erro = null;
 try {
   const bruto = fs.readFileSync(0, 'utf8');
   entrada = JSON.parse(bruto);
-  if (!entrada || typeof entrada !== 'object') { entrada = {}; erro = 'entrada nao e objeto JSON'; }
+  if (!entrada || typeof entrada !== 'object') {
+    erro = 'A entrada e JSON, mas nao um objeto (veio ' + JSON.stringify(entrada).slice(0, 80) + ');' + SEM_DADOS;
+    entrada = {};
+  }
 } catch (e) {
   entrada = {};
-  erro = 'entrada nao e JSON: ' + e.message;
+  erro = 'A entrada nao e JSON valido (o Node diz: ' + texto.entreAspas(e.message) + ');' + SEM_DADOS;
 }
 
 let resposta;
@@ -68,7 +75,8 @@ try {
   });
 } catch (e) {
   resposta = medidor.linhaDaSessao({});
-  erro = (erro ? erro + '; ' : '') + 'falha ao medir: ' + e.message;
+  erro = (erro ? erro + ' ' : '') + 'A medida falhou (o Node diz: ' + texto.entreAspas(e && e.message ? e.message : e) +
+    ') e saiu vazia. Corrija a causa que o Node aponta e rode de novo.';
 }
 if (erro) resposta.erro = erro;
 process.stdout.write(JSON.stringify(resposta) + '\n');

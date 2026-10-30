@@ -504,6 +504,21 @@ test('T2/item 12: uma ronda nova numa revisao fechada e outro fecho, e conta de 
   });
 });
 
+// A5-57 (D735): `contadores` e do turno (zera no Stop, portao-fecho.js:25-29); o numero da saida, ao lado da `sessao`,
+// e o total da sessao (o do turno somado ao contadoresSessao, como o gatilho de saude le), nao so o deste turno.
+test('A5-57: o revisao_fechada da saida e o total da sessao, nao so o do turno', () => {
+  comRepo((cwd, tmp) => {
+    fs.mkdirSync(path.join(tmp, 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'sworn', 'turnos.json'),
+      JSON.stringify({ contadoresSessao: { revisao_fechada: 3 } }), 'utf8');
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]);
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [SECO]);
+    const r = rodar(['--sessao', 'turnos'], cwd, tmp);
+    assert.strictEqual(r.json.revisaoFechadaContada.revisao_fechada, 4, r.stdout);
+    assert.strictEqual(contadorDe(tmp, 'turnos'), 1, 'o balde do turno segue +1: o portao de fecho descarrega so ele');
+  });
+});
+
 test('T2/item 12: revisao que nao fecha nao grava fechada.json e a saida segue como antes', () => {
   comRepo((cwd, tmp) => {
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [P1_NOVO]);

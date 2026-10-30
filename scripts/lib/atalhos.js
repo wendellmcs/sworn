@@ -123,7 +123,7 @@ function continuacao(linhas, i, marca, listaDeMarcas) {
   let fechou = marca.fechou;
   let paraEmSemRotulo = false;
   for (let j = i + 1; j < linhas.length && !fechou; j++) {
-    const crua = linhas[j].replace(/\r$/, '');
+    const crua = linhas[j];
     const texto = soComentario(crua, marca.emBloco);
     if (!texto || outraMarca.test(texto)) break; // codigo, comentario vazio ou outra marca
     const rotulo = ROTULO_NO_INICIO.exec(texto);
@@ -145,9 +145,10 @@ function varrer(arquivos, ler, listaDeMarcas) {
   for (const arquivo of arquivos) {
     const texto = ler(arquivo);
     if (typeof texto !== 'string' || texto.indexOf('\u0000') !== -1) continue;
-    const linhas = texto.split('\n');
+    // A6 (s220, R1 :148): CR puro tambem quebra linha (antes o arquivo inteiro virava uma).
+    const linhas = texto.split(/\r\n|\r|\n/);
     for (let i = 0; i < linhas.length; i++) {
-      const marca = linhaDaMarca(linhas[i].replace(/\r$/, ''), listaDeMarcas);
+      const marca = linhaDaMarca(linhas[i], listaDeMarcas);
       if (!marca) continue;
       const c = continuacao(linhas, i, marca, listaDeMarcas);
       const a = rotulos([marca.corpo].concat(c.aceitas).join(' '));

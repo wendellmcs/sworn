@@ -235,7 +235,9 @@ test('arquivo sem a linha semana: (ou vazio) avisa que nao leu, 1 vez por dia', 
     try {
       novidades(dir, texto);
       const t = aviso(dir, AGORA);
-      assert.ok(/^sworn: vigia - nao consegui ler .*novidades\.md \(sem a linha "semana: AAAA-MM-DD" no inicio\)\.$/.test(t), nome + ': ' + t);
+      // A7 (pedido 12, R1 :246 microcopy): o aviso diz o passo, como os irmaos (ausente e velha)
+      assert.ok(/^sworn: vigia - nao consegui ler .*novidades\.md \(sem a linha "semana: AAAA-MM-DD" no inicio\): confira o arquivo; a tarefa agendada o regrava na proxima busca boa\.$/
+        .test(t), nome + ': ' + t);
       assert.strictEqual(aviso(dir, AGORA), '', nome + ': repetiu no mesmo dia');
       assert.ok(!('semana' in lerJson(dir, 'visto.json')), nome + ': marcou semana como vista');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -247,7 +249,8 @@ test('novidades.md que nao e arquivo (pasta) cai no aviso de ilegivel, sem lanca
   try {
     fs.mkdirSync(path.join(dir, 'novidades.md'));
     const t = aviso(dir, AGORA);
-    assert.ok(/^sworn: vigia - nao consegui ler .*novidades\.md \(.+\)\.$/.test(t), t);
+    assert.ok(/^sworn: vigia - nao consegui ler .*novidades\.md \(.+\): confira o arquivo; a tarefa agendada o regrava na proxima busca boa\.$/
+      .test(t), t);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -277,7 +280,10 @@ test('ultima-busca com ok:false acrescenta a frase nos tres casos de problema; o
     busca(a, ruim);
     const ta = aviso(a, AGORA);
     assert.ok(ta.indexOf(' Ultima busca falhou em 2026-10-10T10:30:00.000Z: git fetch falhou: atencao zzz') !== -1, ta);
-    assert.ok(/z\.$/.test(ta) && ta.length < 400, 'motivo nao foi cortado em 120: ' + ta.length);
+    // A7-16 (pedido 12): a frase da busca que falhou termina no passo seguinte
+    const passo = /z\. Corrija a causa e rode de novo a tarefa agendada do Windows que chama o vigia-puxar\.js\.$/;
+    assert.ok(passo.test(ta) && ta.length < 450,
+      'motivo nao foi cortado em 120, ou falta o passo: ' + ta);
 
     const b = path.join(base, 'b'); // ilegivel
     novidades(b, 'nada\n');

@@ -392,6 +392,66 @@ test('experimento: --veredito devolve 0 no BASTA, 1 no NAO BASTA e 2 no INVALIDO
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// A6 (s220, borda/estados :51): flag que pede valor e nao tem (a ultima, vazia ou seguida de outra flag) e erro de uso
+// que diz qual e o que ela espera; antes `--manual --veredito` lia o manual de uma pasta chamada "--veredito".
+test('A6: --manual e --resultado sem valor sao erro de uso que diz qual flag e o que ela espera', () => {
+  for (const [args, flag] of [[['--manual'], '--manual'], [['--manual', '--veredito'], '--manual'],
+    [['--manual', ''], '--manual'], [['--manual', '--resultado', 'r.json'], '--manual'],
+    [['--veredito', '--resultado'], '--resultado'],
+    [['--veredito', '--resultado', '--roteiro'], '--resultado']]) {
+    const r = rodar(args);
+    assert.strictEqual(r.status, 1, args.join(' ') + ': ' + r.saida);
+    assert.ok(r.saida.startsWith('ERRO: ' + flag + ' pede um valor ('), args.join(' ') + ': ' + r.saida);
+  }
+});
+
+// A6 (s220, borda/estados/manutencao/microcopy :79): so o arquivo ausente e "(nenhum)". JSON quebrado e erro de leitura
+// saem ERRO com a causa e o passo, exit 2, sem caminho de maquina; o BOM que o Bloco de Notas poe se le.
+test('A6: resultado que nao se le sai ERRO com a causa, exit 2; com BOM se le', () => {
+  const dir = pasta();
+  const arq = path.join(dir, 'r.json');
+  try {
+    fs.writeFileSync(arq, '{quebrado', 'utf8');
+    let r = rodar(['--veredito', '--resultado', arq]);
+    assert.strictEqual(r.status, 2, r.saida);
+    assert.ok(r.saida.startsWith('ERRO: o resultado r.json nao se le (o texto nao e JSON valido; o Node diz: "'),
+      r.saida);
+    assert.match(r.saida, /formatoDoResultado do --roteiro/, r.saida);
+    assert.ok(!r.saida.includes('(nenhum)') && !r.saida.includes(dir), r.saida);
+    const pastaNoLugar = path.join(dir, 'p.json');
+    fs.mkdirSync(pastaNoLugar);
+    r = rodar(['--veredito', '--resultado', pastaNoLugar]);
+    assert.strictEqual(r.status, 2, r.saida);
+    assert.ok(r.saida.startsWith('ERRO: o resultado p.json nao se le (e uma pasta (EISDIR))'), r.saida);
+    fs.writeFileSync(arq, '﻿' + JSON.stringify(resultado()), 'utf8');
+    r = rodar(['--veredito', '--resultado', arq]);
+    assert.match(r.saida, /resultado lido de: r\.json/, r.saida);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A6-10 (D735): o roteiro diz em palavras comuns o nivel da tarefa e o que e portao, sem "marcha" nem "O ACHADO".
+test('A6-10: o comoExecutar fala sem jargao interno', () => {
+  const t = JSON.parse(rodar([]).stdout).comoExecutar.join(' ');
+  assert.ok(!/marcha|O ACHADO/.test(t), t);
+  assert.match(t, /rigor maximo do playbook: tela que o usuario ve/, t);
+  assert.match(t, /HOOK +uma checagem automatica do plugin \(portao\) barrou ou exigiu/, t);
+  assert.match(t, /<<< e isto que o experimento procura/, t);
+});
+
+// A6 (s220, microcopy :62 e :69): as duas recusas do manual dizem o passo.
+test('A6: sem o manual do plugin a recusa manda reinstalar; --manual errado diz para onde apontar', () => {
+  const dir = pasta();
+  try {
+    fs.cpSync(path.join(RAIZ, 'scripts'), path.join(dir, 'scripts'), { recursive: true });
+    const r0 = spawnSync(process.execPath, [path.join(dir, 'scripts', 'experimento.js')], { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(r0.status, 1, r0.stdout + r0.stderr);
+    assert.match(r0.stdout, /instalacao esta incompleta: reinstale o plugin e rode de novo\./, r0.stdout);
+    const r = rodar(['--manual', dir]);
+    assert.strictEqual(r.status, 1, r.saida);
+    assert.match(r.saida, /Aponte --manual para a pasta com os SKILL\.md do manual antigo\./, r.saida);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('experimento: o comando nao imprime caminho de maquina - a saida e para colar', () => {
   // Com resultado LIDO: e so quando ha arquivo que o caminho entra na saida.
   // Arquivo inexistente e primeira linha so provavam o caso que nunca vaza.

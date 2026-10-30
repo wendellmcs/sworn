@@ -26,37 +26,64 @@ const texto = require('./lib/texto.js');
  * coisa. Commit, identidade e push sao o ato irreversivel, e tem dono proprio.
  */
 
+const USO = 'uso: node scripts/exportar.js --destino <pasta> [--raiz <pasta>] [--gravar]';
+const FLAGS_DO_USO = ['--raiz', '--destino', '--gravar'];
+
+// A4-exp-1 (pedido 12), borda: flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada -
+// `--destino --gravar` montava o export na pasta "--gravar". O molde e o argumento() do plataforma.js.
 function argumento(argv, nome) {
   const i = argv.indexOf(nome);
-  return (i !== -1 && argv[i + 1]) ? argv[i + 1] : null;
+  if (i === -1) return null;
+  const valor = argv[i + 1];
+  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
+    console.error('ERRO: ' + nome + ' pede um valor.');
+    console.error(USO);
+    process.exit(2);
+  }
+  return valor;
 }
 
+// A4-exp-2 (pedido 12), estados: so ENOENT e destino vazio. O resto (destino que e arquivo, sem permissao) chegava
+// ao mkdir como "vazio" e saia em excecao crua; agora sobe ao main, que diz a causa (o mkdir do destino tambem).
 function vazia(dir) {
-  try { return fs.readdirSync(dir).length === 0; } catch (e) { return true; }
+  try { return fs.readdirSync(dir).length === 0; } catch (e) {
+    if (e && e.code === 'ENOENT') return true;
+    throw e;
+  }
+}
+
+function naoDeuParaMontar(causa) {
+  console.error('NAO DEU PARA MONTAR: ' + causa);
+  console.error('Escolha outro --destino: uma pasta que nao existe, ou uma vazia.');
+  process.exit(2);
 }
 
 /**
  * Teto de tempo e retorno conferido, como os irmaos em `lib/git.js` e
  * `lib/sanitacao.js`. Sem os dois, um git travado pendurava o script, e um que
  * falhava deixava a saida dizer "feitos" com saida 0 (ronda 1 do Passo 8b).
- * Devolve null quando deu certo, ou a frase do que falhou.
+ * Devolve null quando deu certo, ou a frase do que falhou. A4-05 (pedido 12): a frase e em portugues, e o texto
+ * cru do git vem entre aspas e marcado como dele, nunca solto.
  */
 function git(dir, args) {
+  const passo = 'o `git ' + args[0] + '`';
   let r;
   try {
     r = spawnSync('git', args, {
       cwd: dir, encoding: 'utf8', shell: false, timeout: 20000, windowsHide: true
     });
   } catch (e) {
-    return 'git ' + args[0] + ': ' + ((e && e.message) || e);
+    return passo + ' nao rodou (' + texto.causaDoErro(e) + ')';
   }
   if (r.error) {
-    const porque = r.error.code === 'ETIMEDOUT' ? 'passou de 20 s sem responder' : r.error.message;
-    return 'git ' + args[0] + ': ' + porque;
+    if (r.error.code === 'ETIMEDOUT') return passo + ' passou de 20 s sem responder';
+    return passo + ' nao rodou (' + texto.causaDoErro(r.error) + ')';
   }
   if (r.status !== 0) {
     const primeira = String(r.stderr || '').trim().split(/\r?\n/)[0];
-    return 'git ' + args[0] + ' saiu ' + r.status + ': ' + primeira;
+    // R1 (s227): morto por sinal o status e null; stderr vazio nao deixa a frase terminar em ": ".
+    const saida = r.status === null ? 'parou pelo sinal ' + r.signal : 'saiu ' + r.status;
+    return passo + ' ' + saida + (primeira ? '; o git disse: "' + primeira + '"' : ', sem mensagem do git');
   }
   return null;
 }
@@ -65,7 +92,6 @@ function montar(raiz, destino) {
   const arquivos = sanit.superficiePublicavel(raiz);
   if (arquivos === null) return { erro: 'o git nao respondeu na origem' };
 
-  fs.mkdirSync(destino, { recursive: true });
   const copiados = [];
   const faltaram = [];
   arquivos.forEach(function (rel) {
@@ -95,7 +121,7 @@ function main() {
   const gravar = argv.indexOf('--gravar') !== -1;
 
   if (!destinoPedido) {
-    console.error('uso: node scripts/exportar.js --destino <pasta> [--raiz <pasta>] [--gravar]');
+    console.error(USO);
     console.error('Sem --gravar ele so mostra o que copiaria. Nada e escrito.');
     process.exit(2);
   }
@@ -125,11 +151,18 @@ function main() {
     process.exit(1);
   }
 
-  if (!vazia(destino)) {
+  let livre;
+  try { livre = vazia(destino); } catch (e) {
+    naoDeuParaMontar('o destino nao se le (' + texto.causaDoErro(e) + '): ' + destinoPedido);
+  }
+  if (!livre) {
     console.error('O destino nao esta vazio: ' + destinoPedido);
     console.error('Montar por cima misturaria export novo com sobra do anterior,');
     console.error('e a sobra nao aparece em lista nenhuma. Apague ou escolha outro.');
     process.exit(2);
+  }
+  try { fs.mkdirSync(destino, { recursive: true }); } catch (e) {
+    naoDeuParaMontar('o destino nao pode ser criado (' + texto.causaDoErro(e) + '): ' + destinoPedido);
   }
 
   const r = montar(raiz, destino);
@@ -143,9 +176,9 @@ function main() {
     process.exit(1);
   }
   if (r.falhaGit) {
-    console.error('O INDICE NAO FICOU PRONTO: ' + r.falhaGit);
-    console.error('Os arquivos foram copiados, mas sem o `git add` o commit seguinte');
-    console.error('sairia incompleto. Apague o destino e rode de novo.');
+    console.error('O GIT NAO PREPAROU O EXPORT: ' + r.falhaGit);
+    console.error('Os arquivos foram copiados, mas sem o `git add` o commit seguinte sairia incompleto.');
+    console.error('Corrija a causa (a linha acima), apague o destino e rode de novo.');
     process.exit(1);
   }
   console.log('`git init` e `git add` feitos. NENHUM commit - isso e o ato irreversivel.');

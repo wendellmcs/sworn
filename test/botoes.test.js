@@ -38,7 +38,8 @@ test('botao handoff: o gatilho contavel cruzou', () => {
   assert.deepStrictEqual(nomes(b), ['handoff']);
   assert.strictEqual(b[0].comando, '/sworn:handoff');
   assert.strictEqual(b[0].rotulo, 'gerar handoff');
-  assert.match(b[0].texto, /troca de chat cruzou/);
+  // A7-11 (pedido 12): a frase diz por que trocar (um limite que o sworn conta), nao so que "ja vale"
+  assert.match(b[0].texto, /^A conversa chegou a um limite que o sworn conta \(/);
 });
 
 test('botao revisar: arquivo AAA com referencia mudado e nenhuma revisao contra ela fechada (a condicao do portao, D503)', () => {
@@ -129,16 +130,24 @@ test('plano 082 (p5-36): os 7 textos e rotulos (8 menos o paralelo, 091 #5), sem
   const visto = {};
   tudo.forEach(function (x) { visto[x.nome] = x.texto + ' [' + x.rotulo + ']'; });
   assert.deepStrictEqual(visto, {
-    handoff: 'Um gatilho de troca de chat cruzou: gere o handoff e siga num chat novo. [gerar handoff]',
-    revisar: 'Você mudou arquivo de rigor máximo e nenhuma revisão contra a referência do projeto fechou. [revisar]',
+    handoff: 'A conversa chegou a um limite que o sworn conta (tamanho, bloqueios ou trabalho feito): gere o ' +
+      'handoff (o texto que continua daqui) e cole num chat novo. [gerar handoff]',
+    // A7-10, R1 da s239 (P2 do lado novo): o revisar diz qual arquivo (o mesmo do comando)
+    revisar: 'O arquivo src/a.js pede o cuidado mais alto do projeto: revise-o contra a referência antes de dar por ' +
+      'pronto. [revisar]',
     aprender: 'Isso pareceu uma correção sua: dá para virar regra das próximas vezes. [virar regra]',
     init: 'Este projeto ainda não tem o sworn configurado. [configurar]',
     auditar: 'A auditoria automática achou regras ou skills para cortar. [ver o que cortar]',
     calibrar: 'Já há 557 conversas salvas: dá para calibrar quando trocar de chat. [calibrar]',
-    padrao: 'Você mudou arquivo de rigor máximo sem carregar o manual. [carregar o manual]'
+    padrao: 'Um arquivo mudado nesta sessão pede o cuidado mais alto do projeto: carregue o manual antes de seguir. ' +
+      '[carregar o manual]'
   });
   for (const x of tudo) {
-    assert.ok(!/AAA|execucao|contavel|\?/.test(x.texto + x.rotulo), 'sem jargao nem "?": ' + x.texto);
+    // A7 (pedido 12, R1 :47 microcopy): "gatilho", "cruzou" e "handoff" sem explicar eram jargao no texto do handoff.
+    // A7-10: "rigor maximo" (a marcha AAA) tambem, no revisar e no padrao.
+    assert.ok(!/AAA|rigor|execucao|contavel|gatilho|cruzou|\?/.test(x.texto + x.rotulo),
+      'sem jargao nem "?": ' + x.texto);
+    assert.ok(!/handoff/.test(x.texto) || /handoff \(o texto/.test(x.texto), 'handoff no texto vem explicado: ' + x.texto);
     assert.ok(/^[A-ZÀ-Ú].*\.$/.test(x.texto), 'frase inteira, com maiuscula e ponto: ' + x.texto);
   }
 });

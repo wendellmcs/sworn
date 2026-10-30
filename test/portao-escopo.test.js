@@ -945,13 +945,13 @@ test('TS-03 (lote 3, D423): token_fora_do_sistema - Write (content) e Edit (new_
       };
       const wFora = rodar(escrita('.a { color: #ff0000; }\n', 'ts03-w'), tmp);
       assert.ok(negou(wFora), 'Write com cor fora do sistema tinha de negar');
-      assert.match(motivoDeNegacao(wFora), /fora do design system/);
+      assert.match(motivoDeNegacao(wFora), /fora do sistema de design/);
       assert.match(motivoDeNegacao(wFora), /#ff0000/);
       liberou(rodar(escrita('.a { color: #ff6600; }\n', 'ts03-w2'), tmp));
       // Edit: o conteudo novo vem em new_string (nao ha `content`) - E26 so lia `content`
       const eFora = rodar(editar(dir, 'src/app.css', 'color: #ff6600;', 'color: #ff0000;', 'ts03-e'), tmp);
       assert.ok(negou(eFora), 'Edit com new_string fora do sistema tinha de negar');
-      assert.match(motivoDeNegacao(eFora), /fora do design system/);
+      assert.match(motivoDeNegacao(eFora), /fora do sistema de design/);
       assert.match(motivoDeNegacao(eFora), /#ff0000/);
       liberou(rodar(editar(dir, 'src/app.css', 'color: #ff6600;', 'color: #ffffff;', 'ts03-e2'), tmp));
       // o modulo e opcional: a mesma cor, sem design.json, nao nega
@@ -987,11 +987,13 @@ test('091 #6: arquivo AAA sem o manual carregado e negado com o motivo do mock; 
       const r = rodar(entrada(dir, 'src/auth/login.js'), tmp);
       assert.ok(negou(r), 'AAA sem manual passou');
       assert.strictEqual(r.json.hookSpecificOutput.permissionDecisionReason, [
-        'sworn - falta carregar o manual antes de editar arquivo de rigor maximo.',
+        'sworn - falta carregar o manual de execucao antes de editar este arquivo.',
         '',
-        '"src/auth/login.js" e de marcha AAA neste projeto, e nenhum manual',
-        'de execucao (sworn:playbook, ou o manual do projeto) foi carregado nesta sessao.',
-        'Faca agora: carregue a skill pela ferramenta Skill e tente a edicao de novo.',
+        '"src/auth/login.js" e de marcha AAA neste projeto (o nivel de rigor mais alto que o',
+        'projeto.json da a um caminho), e nenhum manual de execucao foi carregado nesta sessao.',
+        'Faca agora: carregue pela ferramenta Skill o sworn:playbook (ou a skill do projeto com "padrao" no nome) ' +
+          'e tente',
+        'a edicao de novo.',
         'Desligar neste projeto: "portaoManual": false em .claude/sworn/projeto.json.'
       ].join('\n'));
       assert.strictEqual(carregarSkill(dir, tmp, 'sworn:review').status, 0);

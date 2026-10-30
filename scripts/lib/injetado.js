@@ -242,7 +242,10 @@ function medir(alvo) {
     nota: NOTA
   };
   if (registros.filter(function (a) { return a.type === 'hook_success' || a.type === 'hook_additional_context'; }).length === 0) {
-    r.aviso = 'nenhum registro de gancho na transcricao: se havia gancho ligado, o formato pode ter mudado';
+    // A5-07 (D735): sem o jargao "gancho"; o efeito (o zero pode ser falso) e o passo.
+    r.aviso = 'a transcricao nao tem nenhum registro do texto que os plugins poem sozinhos na conversa. Se havia ' +
+      'plugin ligado, o zero pode ser falso (o Claude Code pode ter mudado o formato da transcricao): confira em ' +
+      '/hooks que os do plugin estao ligados e atualize o Claude Code (claude update)';
   }
   return r;
 }

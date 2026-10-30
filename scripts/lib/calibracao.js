@@ -146,15 +146,17 @@ function lerSessao(texto) {
 function lerPasta(dir) {
   const sessoes = [];
   let semPreco = 0;
+  let ilegiveis = 0;
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (!e.isFile() || !/\.jsonl$/i.test(e.name)) continue;
     let texto;
-    try { texto = fs.readFileSync(path.join(dir, e.name), 'utf8'); } catch (x) { continue; }
+    // A6 (s220, R1 :152): a que nao se le saia calada da amostra; conta em `ilegiveis`, como no gasto (082 p6-2).
+    try { texto = fs.readFileSync(path.join(dir, e.name), 'utf8'); } catch (x) { ilegiveis++; continue; }
     const s = lerSessao(texto);
     semPreco += s.semPreco;
     if (s.chamadas.length >= 3) sessoes.push(s);
   }
-  return { sessoes: sessoes, semPreco: semPreco };
+  return { sessoes: sessoes, semPreco: semPreco, ilegiveis: ilegiveis };
 }
 
 /** Conversas: a compactacao corta a sessao. `turnos` guarda, por conversa, os indices de fim de turno do dono. */

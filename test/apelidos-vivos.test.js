@@ -283,9 +283,12 @@ test('A1-prova-2: o fim do roteiro nomeia onde gravar e o comando seguinte, no p
   assert.ok(!/reprova|suite|acima/.test(fim), 'no projeto a suite do plugin nao le a prova: ' + fim);
   // A1-36 (pedido 12, microcopy): "a linha do H4" era codigo interno; a linha se nomeia pelo rotulo inteiro,
   // como o relatorio o imprime (a R2 da s201: so o pedaco depois do "H4" nao era o que a tela mostra)
-  assert.ok(fim.includes('na linha "H4 - o apelido ainda e aceito"') && !/linha do H4/.test(fim), 'A1-36: ' + fim);
+  // A6-52 (s235): o rotulo perdeu o "H4 - "; os dois lados seguem iguais. So o rotulo velho (R1 s238, borda): o fim
+  // traz o ondeGravar, numa pasta que o mkdtemp sorteia e que pode ter "H4" no nome.
+  assert.ok(fim.includes('na linha "O apelido de modelo ainda e aceito"') && !/H4 - |linha do H4/.test(fim),
+    'A1-36: ' + fim);
   assert.ok(fs.readFileSync(path.join(RAIZ, 'scripts', 'lib', 'cobertura.js'), 'utf8')
-    .includes("'H4 - o apelido ainda e aceito'"), 'o relatorio de cobertura mudou o nome da linha');
+    .includes("'O apelido de modelo ainda e aceito'"), 'o relatorio de cobertura mudou o nome da linha');
 
   const p = rodar(dir, ['--plugin']);
   const fimP = p.stdout.slice(corte(p.stdout));

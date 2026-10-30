@@ -251,6 +251,39 @@ function antiIgnoradas(sistema) {
   return posicoes;
 }
 
+function itens(posicoes) {
+  return (posicoes.length > 1 ? 'itens ' : 'item ') + posicoes.slice(0, 12).join(', ') +
+    (posicoes.length > 12 ? ' e mais ' + (posicoes.length - 12) : '');
+}
+
+// A4-des-1 (pedido 12, fila §5; D721): o design.json nao tinha validador - a anti-referencia sem efeito so aparecia
+// no aviso de negacao (motivo, abaixo) e a escrita sem valor fora passava calada. Le as chaves que o conferir le, com
+// a mesma leitura (texto solto vale como lista de um; vazio e nulo valem nada); o validar.js chama quando o arquivo existe.
+const CHAVES_DE_VALOR = ['cores', 'raios', 'espacos', 'sombras'];
+function validar(sistema) {
+  if (!sistema || typeof sistema !== 'object' || Array.isArray(sistema)) {
+    const tipo = Array.isArray(sistema) ? 'lista' : (sistema === null ? 'nulo' : typeof sistema);
+    return { ok: false, erros: ['o design.json tem de ser um objeto JSON ({ ... }), e veio ' + tipo] };
+  }
+  const erros = [];
+  for (const chave of CHAVES_DE_VALOR) {
+    const ruins = [];
+    [].concat(sistema[chave] || []).forEach(function (v, i) {
+      if (typeof v !== 'string' || v.trim() === '') ruins.push(i + 1);
+    });
+    if (ruins.length) {
+      erros.push(chave + ': ' + itens(ruins) + ' sem efeito (so vale texto, como "#1a1a1a" ou "8px"): corrija ou tire' +
+        ' do design.json');
+    }
+  }
+  const ignoradas = antiIgnoradas(sistema);
+  if (ignoradas.length) {
+    erros.push('antiReferencias: ' + itens(ignoradas) + ' sem efeito (so vale texto nao vazio, como "gradiente"; so' +
+      ' espacos, numero ou objeto nao valem): corrija ou tire do design.json');
+  }
+  return { ok: erros.length === 0, erros: erros };
+}
+
 function conferir(texto, sistema, antes) {
   if (!sistema) return { ok: true, fora: [] };
   // A2-03: no Edit, o valor fora que ja estava no `old_string` (contexto, legado) nao e do pedido: desconta, por contagem.
@@ -290,7 +323,7 @@ function conferir(texto, sistema, antes) {
 // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos - o que falta, o arquivo entre aspas, "Faca uma destas".
 function motivo(alvo, fora, sistema) {
   const linhas = [
-    'sworn - valor fora do design system deste projeto.',
+    'sworn - valor fora do sistema de design deste projeto.',
     '',
     'Estes valores nao estao no sistema declarado (.claude/sworn/design.json):',
     '  - ' + entreAspas(alvo)
@@ -301,27 +334,27 @@ function motivo(alvo, fora, sistema) {
   if (fora.length > 12) linhas.push('      ... e mais ' + (fora.length - 12));
   linhas.push('');
   linhas.push('O que existe no sistema:');
-  linhas.push('  cores:   ' + (sistema.cores || []).slice(0, 10).join(' '));
-  linhas.push('  raios:   ' + (sistema.raios || []).join(' '));
-  linhas.push('  espacos: ' + (sistema.espacos || []).join(' '));
-  // atalho: so este aviso diz as anti-referencias ignoradas. limite: a escrita sem valor fora passa calada.
-  // trocar quando: o design.json ganhar validador (o config.js so le).
+  // A4-des-3 (pedido 12): texto solto vale como lista de um, como no conferir - o `.join` direto estourava, e o
+  // io.blindar do portao-estilo liberava a escrita.
+  linhas.push('  cores:   ' + [].concat(sistema.cores || []).slice(0, 10).join(' '));
+  linhas.push('  raios:   ' + [].concat(sistema.raios || []).join(' '));
+  linhas.push('  espacos: ' + [].concat(sistema.espacos || []).join(' '));
+  // A2-46: o aviso diz tambem as anti-referencias ignoradas; sem valor fora, quem as acusa e o validar (validar.js).
   const ignoradas = antiIgnoradas(sistema);
   if (ignoradas.length) {
-    linhas.push('  antiReferencias: ' + (ignoradas.length > 1 ? 'itens ' : 'item ') +
-      ignoradas.slice(0, 12).join(', ') + (ignoradas.length > 12 ? ' e mais ' + (ignoradas.length - 12) : '') +
-      ' sem efeito (so vale texto com palavra): corrija ou tire do design.json');
+    linhas.push('  antiReferencias: ' + itens(ignoradas) + ' sem efeito: corrija ou tire do design.json');
+    linhas.push('    (so vale texto nao vazio, como "gradiente"; so espacos, numero ou objeto nao valem)');
   }
   const comAnti = fora.some(function (f) { return f.tipo === 'anti-referencia'; });
   linhas.push('');
   linhas.push('Faca uma destas:');
-  linhas.push('  1. troque cor e medida pelo token do sistema, ou por var(--nome);');
+  linhas.push('  1. troque cor e medida por um valor declarado no design.json, ou por var(--nome);');
   // A2-45/A2-84: a pergunta ao dono na redacao do intocavel (escopo.js) e da trava 5, com as opcoes deste caso.
   linhas.push('  2. se o valor novo e mesmo necessario, peca ao dono que decida: 3 opcoes, a recomendada');
   linhas.push('     primeiro, cada uma com o que muda e o custo (ex.: acrescentar o valor ao design.json,');
-  linhas.push('     usar o token mais proximo, tirar o valor)' + (comAnti ? ';' : '.'));
+  linhas.push('     usar o valor do sistema mais proximo, tirar o valor)' + (comAnti ? ';' : '.'));
   if (comAnti) {
-    linhas.push('  3. na linha marcada (anti-referencia), tire o termo: o sistema o proibe e nao ha token para ele.');
+    linhas.push('  3. na linha marcada (anti-referencia), tire o termo: o sistema o proibe, sem valor que o troque.');
   }
   linhas.push('');
   // A2-43: o passo primeiro, sem "catraca".
@@ -883,8 +916,9 @@ function motivoShell(alvos) {
   for (const a of alvos.slice(0, 12)) linhas.push('  - ' + entreAspas(a));
   if (alvos.length > 12) linhas.push('  - ... e mais ' + (alvos.length - 12));
   // D396 n. 14: o porque da negacao, sem ensinar desvio
-  linhas.push('Por que: o sworn nao le o conteudo que um comando de shell vai gravar, entao nao confere os tokens');
-  linhas.push('do design.json antes de rodar. Com a ferramenta Write ou Edit, ele confere.');
+  linhas.push('');
+  linhas.push('Por que: o sworn nao le o conteudo que um comando de shell vai gravar, entao nao confere o estilo');
+  linhas.push('com os valores do design.json antes de rodar. Com a ferramenta Write ou Edit, ele confere.');
   linhas.push('');
   linhas.push('Faca uma destas:');
   linhas.push('  1. escreva este arquivo com a ferramenta Write ou Edit;');
@@ -896,4 +930,4 @@ function motivoShell(alvos) {
   return linhas.join('\n');
 }
 
-module.exports = { EXTENSOES_ESTILO, UNIDADES, ehArquivoDeEstilo, valoresCrus, conferir, motivo, alvosDeEstiloNoShell, motivoShell };
+module.exports = { EXTENSOES_ESTILO, UNIDADES, ehArquivoDeEstilo, valoresCrus, conferir, motivo, alvosDeEstiloNoShell, motivoShell, validar };

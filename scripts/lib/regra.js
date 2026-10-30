@@ -1,7 +1,12 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const texto = require('./texto.js');
 
+// A4-reg-1 (pedido 12), estados: volateis.json ausente, quebrado ou com regex invalida virava [] calado, e a checagem
+// D10 passava tudo (falha aberta). A causa fica em ERRO_VOLATEIS e o validarRegra acusa; nada lanca no require, que
+// a abertura (abertura.js) faz em toda sessao.
+let ERRO_VOLATEIS = null;
 const VOLATEIS = (function () {
   try {
     const bruto = fs.readFileSync(path.join(__dirname, '..', '..', 'modelos', 'volateis.json'), 'utf8');
@@ -10,6 +15,7 @@ const VOLATEIS = (function () {
       return { re: new RegExp(v.padrao, v.sensivel === true ? '' : 'i'), tipo: v.tipo };
     });
   } catch (e) {
+    ERRO_VOLATEIS = texto.causaDoErro(e);
     return [];
   }
 })();
@@ -33,14 +39,23 @@ function validarRegra(bruta) {
   const erros = [];
   const p = partir(bruta);
   if (!p) {
-    erros.push('regra sem gatilho: escreva na forma "<gatilho> -> <acao>"');
+    // A4-26 (pedido 12, microcopy): a forma com exemplo; gatilho ou acao vazios tambem caem aqui (trim e a SETA).
+    erros.push('regra fora da forma gatilho -> acao: escreva quando ela vale, a seta -> com espaco dos dois lados e' +
+      ' o que fazer, como em "ao editar arquivo -> rodar os testes"');
     return { ok: false, erros: erros };
   }
   if (!p.gatilho) erros.push('gatilho vazio antes da seta');
   if (!p.acao) erros.push('acao vazia depois da seta');
   // D10: nenhum fato volatil cravado em prosa.
+  if (ERRO_VOLATEIS) {
+    erros.push('a lista de fatos volateis (modelos/volateis.json) nao carregou (' + ERRO_VOLATEIS + '): a checagem de' +
+      ' fato volatil nao rodou; reinstale o plugin e rode de novo');
+  }
+  // A4-25 (pedido 12, microcopy): o trecho que casou e o que reescrever, sem jargao.
   for (const v of VOLATEIS) {
-    if (v.re.test(bruta)) erros.push('fato volatil cravado (' + v.tipo + '): leia da fonte viva ou diga que nao verificou');
+    const m = String(bruta).match(v.re);
+    if (m) erros.push('valor que muda com o tempo (' + v.tipo + ': "' + m[0].trim() + '"): tire o valor da regra, ou' +
+      ' troque-o por onde le-lo na hora (o arquivo ou o comando que o traz)');
   }
   return { ok: erros.length === 0, erros: erros };
 }
@@ -70,4 +85,4 @@ function validarArquivo(texto) {
 // O texto que o SessionStart reinjeta (contexto e nucleo) mora no reinjecao.js, o unico que
 // o usa (D221, ronda 1 do 8c.5). Aqui fica so a forma da regra.
 
-module.exports = { VOLATEIS, SETA, parseRegras, validarRegra, validarArquivo };
+module.exports = { VOLATEIS, ERRO_VOLATEIS, SETA, parseRegras, validarRegra, validarArquivo };

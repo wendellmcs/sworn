@@ -199,6 +199,54 @@ test('calibrar.js: --pasta le as transcricoes e imprime so numeros', () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// A6 (s220, manutencao :152): a transcricao que nao se le saia calada da amostra; agora conta em `ilegiveis`, e o
+// calibrar.js a mostra na `amostra`, como o `chamadasSemPreco` (precedente: `ilegiveis` do gasto, plano 082 p6-2).
+test('A6: transcricao que nao se le conta em ilegiveis, e o calibrar.js a mostra na amostra', () => {
+  const dir = pasta();
+  const trans = path.join(dir, 'trans');
+  fs.mkdirSync(trans);
+  const tres = [chamada(60000), chamada(70000), chamada(80000)].join('\n');
+  fs.writeFileSync(path.join(trans, 's1.jsonl'), tres);
+  fs.writeFileSync(path.join(trans, 'ruim.jsonl'), tres);
+  const original = fs.readFileSync;
+  try {
+    fs.readFileSync = function (p) {
+      if (path.basename(String(p)) === 'ruim.jsonl') throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      return original.apply(fs, arguments);
+    };
+    const lidas = cal.lerPasta(trans);
+    fs.readFileSync = original;
+    assert.deepStrictEqual([lidas.sessoes.length, lidas.ilegiveis], [1, 1], JSON.stringify(lidas.ilegiveis));
+    const ok = rodar(['--pasta', trans], dir);
+    assert.strictEqual(JSON.parse(ok.stdout).amostra.transcricoesIlegiveis, 0, ok.stdout);
+    const preload = path.join(dir, 'falhar.js');
+    fs.writeFileSync(preload, "const fs = require('fs'); const o = fs.readFileSync; fs.readFileSync = function (p) { " +
+      "if (require('path').basename(String(p)) === 'ruim.jsonl') throw new Error('EBUSY'); return o.apply(fs, arguments); };");
+    const r = spawnSync(process.execPath, ['--require', preload, path.join(RAIZ, 'scripts', 'calibrar.js'), '--pasta', trans],
+      { cwd: dir, encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: path.join(dir, 'sem-config') }) });
+    assert.strictEqual(r.status, 0, r.stderr);
+    const j = JSON.parse(r.stdout);
+    assert.deepStrictEqual([j.amostra.sessoes, j.amostra.transcricoesIlegiveis], [1, 1], r.stdout);
+  } finally {
+    fs.readFileSync = original;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A6 (s220, pendentes :76 e lib :149, medidos): --pasta que e arquivo saia com o stack trace do readdirSync (ENOTDIR).
+test('A6: --pasta que nao se le como pasta sai 1 com a causa e o passo, sem stack trace', () => {
+  const dir = pasta();
+  try {
+    fs.writeFileSync(path.join(dir, 'arq.txt'), 'x');
+    const r = rodar(['--pasta', 'arq.txt'], dir);
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.strictEqual(r.stderr, '');
+    assert.strictEqual(JSON.parse(r.stdout).erro,
+      '--pasta nao se le como pasta (parte do caminho nao e uma pasta (ENOTDIR)); passe --pasta <pasta das ' +
+      'transcricoes deste projeto>');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('calibrar.js: sem pasta de transcricoes achada, sai 1 e manda passar --pasta', () => {
   const dir = pasta();
   try {
@@ -233,6 +281,20 @@ test('calibrar.js (D495): alarme gravado que nao e numero positivo cai no padrao
       assert.strictEqual(JSON.parse(fs.readFileSync(arq, 'utf8')).limiares.tokensDeContexto, 300000);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }
+});
+
+// A6-21 (D735): projeto.json que nao e objeto diz a forma, com exemplo, e o passo.
+test('A6-21: --gravar com projeto.json que nao e objeto diz a forma e o passo', () => {
+  const dir = pasta();
+  const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
+  fs.mkdirSync(path.dirname(arq), { recursive: true });
+  fs.writeFileSync(arq, '[1]');
+  try {
+    const r = rodar(['--gravar', '300000'], dir);
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.strictEqual(JSON.parse(r.stdout).erro, '.claude/sworn/projeto.json tem de ter os campos do projeto entre ' +
+      '{ e }, como { "shell": "bash" }; corrija e rode de novo');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 // Plano 083 (sobra 5, D538): o limiarAtual do relatorio e o que vale hoje, como o medidor (saude.medir): o gravado no
@@ -279,6 +341,28 @@ test('083 T6 (sobra 5): --manter grava o limiar em vigor e preserva o resto; sem
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     assert.deepStrictEqual(JSON.parse(r.stdout), { gravou: true, manteve: true, tokensDeContexto: 250000, arquivo: '.claude/sworn/projeto.json' });
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(arq, 'utf8')).limiares, { commits: 5, tokensDeContexto: 250000 });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A6 (s220, microcopy :51): no --manter o valor nao foi digitado - vem do projeto.json ou do modo continuo. A recusa diz
+// o limiar em vigor, de onde veio, a faixa e o passo (--gravar com um valor nela), e nao grava.
+test('A6: --manter com o limiar em vigor fora da faixa diz qual, de onde veio e manda gravar um valor nela', () => {
+  const dir = pasta();
+  const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
+  try {
+    fs.mkdirSync(path.dirname(arq), { recursive: true });
+    const casos = [[{ limiares: { tokensDeContexto: 30000 } }, '30000, do projeto.json'],
+      [{ modoContinuo: true, limiares: { tokensAlarme: 200000 } }, '250000, do modo continuo']];
+    for (const [cfg, vigor] of casos) {
+      fs.writeFileSync(arq, JSON.stringify(cfg));
+      const r = rodar(['--manter'], dir);
+      assert.strictEqual(r.status, 1, r.stdout);
+      const erro = JSON.parse(r.stdout).erro;
+      assert.ok(erro.startsWith('--manter: o limiar em vigor (' + vigor + ') esta fora da faixa que se grava'), erro);
+      assert.match(erro, /grave um valor nessa faixa com --gravar <tokens>/, erro);
+      assert.ok(!/pede um numero/.test(erro), erro);
+      assert.strictEqual(fs.readFileSync(arq, 'utf8'), JSON.stringify(cfg), 'gravou mesmo recusado');
+    }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

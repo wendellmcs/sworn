@@ -60,8 +60,9 @@ function duracao(ms) {
  * ASCII (o resumo o cita de qualquer jeito). Sem ele, o aviso diz que nao houve resumo e a opcao 1 e a de antes.
  */
 function motivo(r, resumo) {
-  const linhas = ['sworn - este chat ficou ' + duracao(r.parado) + ' parado e o cache venceu: continuar aqui regrava ' +
-    milhar(Math.floor(r.contexto / 1000)) + ' mil tokens.', ''];
+  // A5-26 (D735): o efeito em palavras simples, sem "cache" nem "regrava".
+  const linhas = ['sworn - este chat ficou ' + duracao(r.parado) + ' parado: continuar aqui fica mais caro, porque a ' +
+    'conversa inteira (' + milhar(Math.floor(r.contexto / 1000)) + ' mil tokens) e cobrada de novo.', ''];
   if (r.continuar !== null) {
     linhas.push('Continuar neste chat: cerca de US$ ' + centavos(r.continuar) + ' (' + nomeDoModelo(r.modelo) + ').');
     linhas.push('Abrir um chat novo: cerca de US$ ' + centavos(r.novo) + '.');
@@ -78,9 +79,15 @@ function motivo(r, resumo) {
         ': leia os dois' : ' pelo resumo ' + resumo.caminho + ': leia-o') + ' antes de qualquer coisa e siga de onde ele parou.');
   } else {
     linhas.push('', 'Sem resumo: nao consegui montar o resumo deste chat.',
-      '', 'Faca uma destas:', '  1. abra um chat novo e cole o prompt do ultimo handoff, se ele estiver em dia;');
+      // A5-59 (D735): onde fica o handoff e como saber se esta em dia.
+      '', 'Faca uma destas:', '  1. abra um chat novo e cole o prompt do ultimo handoff (o /sworn:handoff grava em ' +
+        '.claude/sworn/handoff/), se ele foi gravado depois do seu ultimo pedido;');
   }
-  linhas.push('  2. para seguir neste chat, mande a mensagem de novo: este aviso nao volta nesta pausa.',
+  // A5-25 (D735): o custo (o valor, ou o que encarece quando ele falta) e que a mensagem foi segurada antes do Claude.
+  const custo = r.continuar !== null ? ' (cerca de US$ ' + centavos(r.continuar) + ')' :
+    ' (a conversa inteira e cobrada outra vez)';
+  linhas.push('  2. para seguir neste chat' + custo + ', mande a mensagem de novo: o sworn a segurou antes do ' +
+    'Claude e nao segura a proxima nesta pausa.',
     '', 'Desligar neste projeto: "' + CHAVE + '": false em .claude/sworn/projeto.json.');
   return linhas.join('\n');
 }

@@ -261,6 +261,40 @@ test('agentes: sem respostas o gerador recusa e nomeia a fatia que falta', (t) =
   assert.ok(r.stdout.includes('RECUSADO'), r.stdout);
   assert.ok(r.stdout.includes('papel'), 'tem de dizer QUAL fatia falta: ' + r.stdout);
   assert.strictEqual(fs.existsSync(agentes.caminho(raiz, 'busca')), false);
+  // A4-09 (pedido 12, microcopy): o RECUSADO diz onde corrigir
+  assert.ok(r.stdout.includes('  Passe as respostas com --respostas <arquivo.json>, uma chave por agente' +
+    ' (os nomes das fatias saem com --fatias).\n'), r.stdout);
+});
+
+test('A4-09: com --respostas, o RECUSADO diz a chave e o arquivo a corrigir', (t) => {
+  const raiz = pastaTemporaria(t);
+  semearProjeto(raiz, DOIS);
+  const arq = respostasAjustadas(raiz, ['busca', 'arquiteto'],
+    (nome, f) => { if (nome === 'busca') f.maxTurns = 'x'; });
+  const r = rodar(raiz, ['--respostas', arq]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.ok(r.stdout.includes('RECUSADO busca:\n'), r.stdout);
+  assert.ok(r.stdout.includes('  Corrija a chave "busca" de ' + arq + ' e rode de novo.\n'), r.stdout);
+  assert.ok(!r.stdout.includes('chave "arquiteto"'), 'o agente aceito nao entra na dica: ' + r.stdout);
+});
+
+test('A4-42: sem degraus, o erro manda rodar o /sworn:init', (t) => {
+  const raiz = pastaTemporaria(t);
+  semearProjeto(raiz, []);
+  const r = rodar(raiz, []);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.ok(r.stdout.startsWith('ERRO: este projeto nao tem degraus gravados.\n' +
+    'Rode /sworn:init: a entrevista pergunta os degraus, e sem eles nao ha o que gerar\n'), r.stdout);
+});
+
+// A4-84 (pedido 12, microcopy): sem "frontmatter" solto no erro; o nome do lugar em portugues.
+test('A4-84: sem degraus, o erro diz o cabecalho do arquivo do agente, sem "frontmatter"', (t) => {
+  const raiz = pastaTemporaria(t);
+  semearProjeto(raiz, []);
+  const r = rodar(raiz, []);
+  assert.ok(r.stdout.includes('\n(nem nome de agente, nem apelido para escrever no cabecalho do arquivo do agente).\n'),
+    r.stdout);
+  assert.ok(!r.stdout.includes('frontmatter'), r.stdout);
 });
 
 // ---- T10-8: effort, tools, maxTurns e a escalada (nº 2 e 4 do inventario) ----
@@ -379,6 +413,8 @@ test('agentes: maxTurns que nao e inteiro >= 1 e RECUSADO, dizendo o aceito', (t
   }
 });
 
+const FORMATO_DITO = 'nomes que comecam com letra e levam so letras, numeros, _ ou - (como Read, Grep)';
+
 test('agentes: ferramentas vazia ou com item fora de [A-Za-z][A-Za-z0-9_-]* e RECUSADA', (t) => {
   for (const ruim of ['', ' , ', 'Read, Gre p', 'Read, 9x', 'Read; Grep', 'Read, Bash(rm *)']) {
     const { raiz, r } = gerar(t, DOIS, (nome, f) => { f.ferramentas = ruim; });
@@ -386,7 +422,9 @@ test('agentes: ferramentas vazia ou com item fora de [A-Za-z][A-Za-z0-9_-]* e RE
     assert.ok(r.stdout.includes('RECUSADO'), r.stdout);
     assert.ok(r.stdout.includes('ferramentas'), r.stdout);
     // Vale tambem para a vazia: o POR PREENCHER do molde recusa, mas nao diz o formato aceito.
-    assert.ok(r.stdout.includes('[A-Za-z][A-Za-z0-9_-]*'), 'tem de dizer o valor aceito: ' + r.stdout);
+    // A4-08 (pedido 12, microcopy): o formato em frase, sem a regex crua.
+    assert.ok(r.stdout.includes(FORMATO_DITO), 'tem de dizer o valor aceito: ' + r.stdout);
+    assert.ok(!r.stdout.includes('[A-Za-z]'), 'regex crua na mensagem: ' + r.stdout);
     assert.strictEqual(fs.existsSync(agentes.caminho(raiz, 'busca')), false);
   }
 });
@@ -419,6 +457,7 @@ test('agentes: validarFatias recusa ferramentas que nao e texto, dizendo o forma
     assert.strictEqual(erros.length, 1, JSON.stringify(ruim) + ' -> ' + JSON.stringify(erros));
     assert.ok(!/vazia/.test(erros[0]), 'nao pode mentir que esta vazia: ' + erros[0]);
     assert.ok(/separadas por virgula/.test(erros[0]), erros[0]);
+    assert.ok(erros[0].includes(FORMATO_DITO) && !erros[0].includes('[A-Za-z]'), erros[0]);
   }
   const lista = agentes.validarFatias({ ferramentas: ['Read', 'Grep'] });
   assert.ok(/lista/.test(lista[0]), lista[0]);
@@ -430,6 +469,7 @@ test('agentes: validarFatias: ferramentas em string vazia segue "vazia"', () => 
     assert.strictEqual(erros.length, 1, JSON.stringify(erros));
     assert.ok(/vazia/.test(erros[0]), erros[0]);
     assert.ok(/separadas por virgula/.test(erros[0]), erros[0]);
+    assert.ok(erros[0].includes(FORMATO_DITO) && !erros[0].includes('[A-Za-z]'), erros[0]);
   }
 });
 
@@ -454,4 +494,124 @@ test('H-5: frontmatter desfaz o escape do valor citado (aspas duplas e simples);
   assert.strictEqual(f.campos.a, "Use quando: it's ok");
   assert.strictEqual(f.campos.b, 'Use quando: cru');
   assert.strictEqual(f.campos.c, 'meio' + B, 'aspa que fecha escapada nao e valor citado: so tira as pontas, como antes');
+});
+
+// A4-age-1 (pedido 12, estados): todo erro do readdir virava existe:false, e o gatilho 3 dizia "nao tem a pasta
+// .claude/agents" de uma pasta que existe e nao se le. So ENOENT e "nao tem"; o resto leva a causa ate o motivo.
+test('A4-age-1: pasta de agentes que nao se le diz a causa, nunca "nao tem a pasta"', (t) => {
+  const apelidos = require('../scripts/lib/apelidos.js');
+  const raiz = pastaTemporaria(t);
+  fs.mkdirSync(path.join(raiz, '.claude'));
+  fs.writeFileSync(path.join(raiz, '.claude', 'agents'), 'sou arquivo\n', 'utf8');
+  const r = agentes.listar(raiz);
+  assert.strictEqual(r.existe, false);
+  assert.ok(/\(ENOTDIR\)/.test(r.erro), 'sem a causa: ' + r.erro);
+  const c = apelidos.conferir({ agentes: { degraus: [{ agente: 'busca', apelido: 'barato' }] } }, r);
+  assert.strictEqual(c.verificavel, false);
+  assert.ok(/\.claude\/agents nao se le \(.*ENOTDIR\)/.test(c.motivo), c.motivo);
+  assert.strictEqual(c.motivo.indexOf('nao tem a pasta'), -1, c.motivo);
+  assert.strictEqual(agentes.listar(pastaTemporaria(t)).erro, undefined, 'pasta ausente nao e erro de leitura');
+});
+
+// A4-age-2 (pedido 12, estados+manutencao): agente que nao se le virava texto vazio e caia em naoDeclarados - "o
+// arquivo nao diz model:" de um arquivo que ninguem leu. Agora sai com a causa, num balde proprio.
+test('A4-age-2: agente ilegivel vai para ilegiveis com a causa, nunca para naoDeclarados', (t) => {
+  const apelidos = require('../scripts/lib/apelidos.js');
+  const raiz = pastaTemporaria(t);
+  const alvo = escrever(raiz, 'busca', '---\nname: busca\nmodel: barato\n---\n');
+  escrever(raiz, 'arquiteto', '---\nname: arquiteto\nmodel: caro\n---\n');
+  const ler = fs.readFileSync;
+  t.mock.method(fs, 'readFileSync', function (p) {
+    if (path.resolve(String(p)) === path.resolve(alvo)) {
+      const e = new Error('negado'); e.code = 'EACCES'; throw e;
+    }
+    return ler.apply(fs, arguments);
+  });
+  const r = agentes.listar(raiz);
+  const busca = r.agentes.filter((a) => a.arquivo === 'busca.md')[0];
+  assert.ok(/sem permissao \(EACCES\)/.test(busca.erro), 'sem a causa: ' + busca.erro);
+  assert.strictEqual(r.agentes.filter((a) => a.arquivo === 'arquiteto.md')[0].erro, undefined);
+  const mapa = { agentes: { degraus: [{ agente: 'busca', apelido: 'barato' }, { agente: 'arquiteto', apelido: 'caro' }] } };
+  const c = apelidos.conferir(mapa, r);
+  assert.deepStrictEqual(c.naoDeclarados, [], 'arquivo nao lido nao "deixa de declarar"');
+  assert.deepStrictEqual(c.ilegiveis, [{ agente: 'busca', arquivo: 'busca.md', causa: busca.erro }]);
+  assert.deepStrictEqual(c.semArquivo, [], 'o arquivo existe: nao e semArquivo');
+});
+
+function rodarComTeto(raiz, args) {
+  return spawnSync(process.execPath, [GERADOR].concat(args || []), { cwd: raiz, encoding: 'utf8', timeout: 60000 });
+}
+
+// A4-gag-1 (pedido 12, borda): `--respostas` sem valor caia calado - ultima da linha virava "sem respostas", e
+// `--respostas --gravar` lia um arquivo chamado "--gravar". Agora e erro de uso que nomeia a flag (molde:
+// preparar-revisao.js), e nada se grava.
+test('A4-gag-1: --respostas sem valor e erro de uso, e nada e gravado', (t) => {
+  const raiz = pastaTemporaria(t);
+  semearProjeto(raiz, DOIS);
+  [['--respostas'], ['--respostas', ''], ['--respostas', '--gravar']].forEach((args) => {
+    const r = rodarComTeto(raiz, args);
+    assert.strictEqual(r.status, 1, args.join(' ') + ': ' + r.stdout + r.stderr);
+    assert.ok(/--respostas pede um valor/.test(r.stdout) && /uso: gerar-agentes\.js/.test(r.stdout), r.stdout);
+    assert.strictEqual(fs.existsSync(path.join(raiz, '.claude', 'agents')), false, args.join(' ') + ': gravou');
+  });
+});
+
+// A4-gag-2 (pedido 12, borda+microcopy): respostas `null` estourava em TypeError cru; JSON quebrado saia como "nao
+// consegui ler". Agora as duas frases do lerRespostas do molde.js.
+test('A4-gag-2: respostas null ou JSON quebrado sai com a frase certa, sem excecao crua', (t) => {
+  const raiz = pastaTemporaria(t);
+  semearProjeto(raiz, DOIS);
+  fs.writeFileSync(path.join(raiz, 'nulo.json'), 'null', 'utf8');
+  fs.writeFileSync(path.join(raiz, 'quebrado.json'), '{"busca": ', 'utf8');
+  let r = rodarComTeto(raiz, ['--respostas', 'nulo.json']);
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.ok(/ERRO: nulo\.json tem de ser um objeto JSON/.test(r.stdout), r.stdout);
+  assert.strictEqual(/TypeError/.test(r.stderr), false, r.stderr);
+  r = rodarComTeto(raiz, ['--respostas', 'quebrado.json']);
+  assert.ok(/ERRO: quebrado\.json nao e JSON valido/.test(r.stdout), r.stdout);
+  assert.strictEqual(r.stdout.indexOf('nao consegui ler'), -1, r.stdout);
+});
+
+// A4-gag-3 (pedido 12, seguranca): o nome do degrau vira o nome do arquivo (agentes.caminho), e fora da regra NOME
+// (degraus.js:12) - com `..` - o agente ia parar fora de .claude/agents. Agora e RECUSADO antes de montar o caminho.
+test('A4-gag-3: degrau com nome fora da regra NOME e recusado, e nada se grava fora da pasta', (t) => {
+  const raiz = pastaTemporaria(t);
+  semearProjeto(raiz, [{ agente: '../fora', apelido: 'barato' }, { agente: 'arquiteto', apelido: 'caro' }]);
+  const r = rodarComTeto(raiz, ['--respostas', respostasEmArquivo(raiz, ['../fora', 'arquiteto']), '--gravar']);
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.ok(/RECUSADO "\.\.\/fora":\n\s+- nome de agente invalido/.test(r.stdout), r.stdout);
+  assert.strictEqual(fs.existsSync(path.join(raiz, '.claude', 'fora.md')), false, 'gravou fora de .claude/agents');
+  assert.ok(fs.existsSync(agentes.caminho(raiz, 'arquiteto')), 'o degrau valido segue gravado: ' + r.stdout);
+});
+
+// A4-gag-4 (pedido 12, estados): mkdir e write sem try - a pasta que nao se cria saia em excecao crua, sem GRAVADO
+// nem ERRO. Agora cada agente nao gravado sai com a causa, e a saida e 1.
+test('A4-gag-4: agente que nao se grava sai com a causa e saida 1, sem excecao crua', (t) => {
+  const raiz = pastaTemporaria(t);
+  semearProjeto(raiz, DOIS);
+  fs.writeFileSync(path.join(raiz, '.claude', 'agents'), 'sou arquivo\n', 'utf8');
+  const r = rodarComTeto(raiz, ['--respostas', respostasEmArquivo(raiz, ['busca', 'arquiteto']), '--gravar']);
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.ok(/NAO GRAVADO: .*busca\.md \(.*\)/.test(r.stdout), r.stdout);
+  assert.ok(/GRAVADOS: 0 .* NAO GRAVADOS: 2/.test(r.stdout), r.stdout);
+  assert.strictEqual(/\n\s+at /.test(r.stderr), false, 'excecao crua: ' + r.stderr);
+});
+
+// A4-gag-5 (pedido 12, R2 da A4, estados - a classe do A4-gsk-3): o agente que aparece entre o existsSync e o write
+// era sobrescrito (flag 'w'). O --require faz o existsSync nao ver o busca.md que ja esta la.
+test('A4-gag-5: agente que aparece entre a conferencia e a escrita nao e sobrescrito', (t) => {
+  const raiz = pastaTemporaria(t);
+  semearProjeto(raiz, DOIS);
+  const alvo = agentes.caminho(raiz, 'busca');
+  fs.mkdirSync(path.dirname(alvo), { recursive: true });
+  fs.writeFileSync(alvo, 'agente do dono\n', 'utf8');
+  const cego = path.join(raiz, 'cego.js');
+  fs.writeFileSync(cego, "const fs = require('fs'); const e = fs.existsSync;\n" +
+    "fs.existsSync = function (p) {\n  return /busca\.md$/.test(String(p)) ? false : e.apply(fs, arguments);\n};\n",
+    'utf8');
+  const r = spawnSync(process.execPath, ['--require', cego, GERADOR, '--respostas',
+    respostasEmArquivo(raiz, ['busca', 'arquiteto']), '--gravar'], { cwd: raiz, encoding: 'utf8', timeout: 60000 });
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.ok(/NAO GRAVADO: .*busca\.md \(ja existe \(EEXIST\)\)/.test(r.stdout), r.stdout);
+  assert.strictEqual(fs.readFileSync(alvo, 'utf8'), 'agente do dono\n', 'sobrescreveu');
 });

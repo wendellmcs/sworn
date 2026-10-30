@@ -53,7 +53,11 @@ function custoDoTexto(texto, desdeMs) {
   return { usd: usd, semPreco: semPreco };
 }
 
-/** Os .jsonl de uma pasta de projeto: `<sessao>.jsonl` e `<sessao>/subagents/*.jsonl`, cada um com a sessao dele. */
+/**
+ * Os .jsonl de uma pasta de projeto: `<sessao>.jsonl`, `<sessao>/subagents/*.jsonl` e os agentes de workflow
+ * (`<sessao>/subagents/workflows/<run>/agent-*.jsonl`; o journal.jsonl do run nao e transcricao), cada um com a sessao
+ * dele; `subagente` true nos dois ultimos.
+ */
 function arquivosDoProjeto(dir) {
   const lista = [];
   let itens;
@@ -64,7 +68,18 @@ function arquivosDoProjeto(dir) {
     const sub = path.join(dir, it.name, 'subagents');
     let ags;
     try { ags = fs.readdirSync(sub); } catch (e) { continue; }
-    for (const a of ags) if (/\.jsonl$/i.test(a)) lista.push({ arquivo: path.join(sub, a), sessao: it.name });
+    for (const a of ags) if (/\.jsonl$/i.test(a)) lista.push({ arquivo: path.join(sub, a), sessao: it.name, subagente: true });
+    // A6 (pedido 12, lacuna (a) da sonda da s186): o agente de workflow mora um nivel abaixo e ficava fora do gasto do
+    // mes e do efetivo.
+    let runs;
+    try { runs = fs.readdirSync(path.join(sub, 'workflows')); } catch (e) { continue; }
+    for (const run of runs) {
+      let wf;
+      try { wf = fs.readdirSync(path.join(sub, 'workflows', run)); } catch (e) { continue; }
+      for (const a of wf) {
+        if (/^agent-.+\.jsonl$/i.test(a)) lista.push({ arquivo: path.join(sub, 'workflows', run, a), sessao: it.name, subagente: true });
+      }
+    }
   }
   return lista;
 }
@@ -86,7 +101,11 @@ function estimarMes(opcoes) {
   const cache = {};
   let usd = 0, pendentes = 0, semPreco = 0, ilegiveis = 0;
   let projetos;
-  try { projetos = fs.readdirSync(o.raiz, { withFileTypes: true }); } catch (e) { projetos = []; }
+  // A6 (s220, R1 :89): so a raiz ausente da zero calado; a que existe e nao se le conta em `ilegiveis`.
+  try { projetos = fs.readdirSync(o.raiz, { withFileTypes: true }); } catch (e) {
+    if (e.code !== 'ENOENT') ilegiveis++;
+    projetos = [];
+  }
   for (const p of projetos) {
     if (!p.isDirectory()) continue;
     for (const f of arquivosDoProjeto(path.join(o.raiz, p.name))) {

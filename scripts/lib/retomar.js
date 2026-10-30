@@ -234,7 +234,9 @@ function juntar(d, arquivos) {
   ], arquivos.length ? arquivos.map(function (a) { return relativo(d.raiz, a); }) : ['(nenhum arquivo mexido no trecho lido)'], [
     '',
     '## Para o chat novo',
-    'Confira no disco (git status, plano, ledger) antes de agir: este resumo e um retrato do registro, nao uma verificacao.',
+    // A5-22 (D735): o que abrir e como comparar.
+    'Antes de agir, confira se isto ainda vale: abra o plano e o ultimo handoff citados em "Onde parou" (se houver)',
+    'e compare a lista de modificados com a de agora (git status). Este resumo copia a conversa; ele nao confere nada.',
     'Se precisar de handoff completo, rode /sworn:handoff.',
     ''
   ]).join('\n');
@@ -330,9 +332,11 @@ function reclamar(raiz, arquivo, sessao, agora) {
   if (!antes || typeof antes !== 'object' || antes.sessao === id || typeof antes.em !== 'number' ||
       agora - antes.em >= POSSE_MS) return null;
   const min = Math.max(0, Math.round((agora - antes.em) / 60000));
-  return 'sworn: o handoff ' + rel + ' ja foi pego pela sessao ' + String(antes.sessao).replace(/[^A-Za-z0-9_-]/g, '') +
-    ' as ' + hora(antes.em) + ' (ha ' + min + ' min). Dois chats no mesmo handoff fazem o trabalho duas vezes: ' +
-    'confirme com o dono qual chat segue antes de agir. A posse passou para esta sessao; a outra e avisada se ler de novo.';
+  // A5-21 (D735): sem "posse" nem "sessao"; quem confirma e o usuario.
+  return 'sworn: o handoff ' + rel + ' (o arquivo de continuacao) ja foi lido por outro chat (id ' +
+    String(antes.sessao).replace(/[^A-Za-z0-9_-]/g, '') + ') as ' + hora(antes.em) + ' (ha ' + min + ' min). ' +
+    'Dois chats no mesmo handoff fazem o trabalho duas vezes: antes de agir, pergunte ao usuario qual dos dois chats ' +
+    'segue. O sworn marca este chat como o ultimo a ler; o outro recebe este mesmo aviso se ler o arquivo de novo.';
 }
 
 module.exports = { PASTA, lerRegistro, montar, gravar, resumir, limpar, mascarar, cortar, reclamar };

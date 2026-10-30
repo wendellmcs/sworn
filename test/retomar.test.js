@@ -198,6 +198,12 @@ test('volta-resumo: montar segue o mock (D588), com o texto do sworn em ASCII', 
   assert.ok(linhas.indexOf('scripts/referencia.js') !== -1);
   assert.ok(linhas.indexOf('/fora/outro.md') !== -1);
   assert.ok(linhas.indexOf('Se precisar de handoff completo, rode /sworn:handoff.') !== -1);
+  // A5-22 (D735): o que abrir (o que "Onde parou" cita) e como comparar, sem "ledger" nem "registro"
+  const novo = linhas.slice(linhas.indexOf('## Para o chat novo') + 1, linhas.indexOf('## Para o chat novo') + 3);
+  assert.deepStrictEqual(novo, [
+    'Antes de agir, confira se isto ainda vale: abra o plano e o ultimo handoff citados em "Onde parou" (se houver)',
+    'e compare a lista de modificados com a de agora (git status). Este resumo copia a conversa; ele nao confere nada.'
+  ]);
   // o texto fixo do sworn e ASCII (D532); so o que veio do chat pode ter acento
   const fixo = retomar.montar(dados({ plano: 'plano x', registro: { pedidos: [{ horario: AGORA, texto: 'ok' }],
     respostas: [], arquivos: [], handoff: null } }));
@@ -314,6 +320,11 @@ test('item 13: reclamar marca o dono do handoff e avisa a outra sessao em menos 
     assert.ok(aviso.includes('planos/2026-10-25-x-handoff.md'), aviso);
     assert.ok(aviso.includes('aaaaaaaa'), aviso);
     assert.ok(/^[\x20-\x7E\n]+$/.test(aviso), 'aviso fora de ASCII: ' + aviso);
+    // A5-21 (D735): sem "posse" nem "sessao"; o handoff explicado; quem confirma (o usuario) e o que perguntar
+    assert.ok(!/posse|sessao/.test(aviso), aviso);
+    assert.ok(aviso.includes('(o arquivo de continuacao) ja foi lido por outro chat (id aaaaaaaa)'), aviso);
+    assert.ok(aviso.includes('antes de agir, pergunte ao usuario qual dos dois chats segue'), aviso);
+    assert.ok(aviso.includes('o outro recebe este mesmo aviso se ler o arquivo de novo'), aviso);
     const donos = JSON.parse(fs.readFileSync(path.join(raiz, '.claude', 'sworn', 'handoff-donos.json'), 'utf8'));
     assert.strictEqual(donos['planos/2026-10-25-x-handoff.md'].sessao, 'bbbbbbbb', 'a posse passou');
     assert.ok(retomar.reclamar(raiz, h, 'aaaaaaaa-1', AGORA + 40 * MIN), 'a 1a, voltando, e avisada');

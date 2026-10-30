@@ -1,5 +1,7 @@
 'use strict';
+const fs = require('node:fs');
 const regraLib = require('./regra.js');
+const { semBom } = require('./texto.js');
 
 const RE_SLOT = /\{\{(campo|texto):([A-Za-z][A-Za-z0-9_.]*)\}\}/g;
 const MARCA = 'POR PREENCHER';
@@ -97,17 +99,25 @@ function validar(resultado) {
   const erros = [];
 
   const restantes = slots(texto);
-  for (const s of restantes) erros.push('fatia nao substituida: ' + s.bruto);
+  // A4-16 (pedido 12, microcopy): cada erro diz o que fazer; o campo vem do projeto.json, nao das respostas.
+  for (const s of restantes) {
+    erros.push('fatia nao substituida: ' + s.bruto + ' (troque a marca pelo texto que ela pede)');
+  }
 
   const re = new RegExp('\\(' + MARCA + ':([^)]*)\\)', 'g');
   let m;
-  while ((m = re.exec(texto)) !== null) erros.push('fatia por preencher:' + m[1]);
+  while ((m = re.exec(texto)) !== null) {
+    erros.push('fatia por preencher:' + m[1] + (/^ campo \S+ nao existe em projeto\.json$/.test(m[1])
+      ? ' (grave o campo em .claude/sworn/projeto.json, pelo /sworn:init)'
+      : ' (escreva a resposta dessa fatia)'));
+  }
 
   // D10: nenhum fato volatil no que veio da entrevista.
   for (const linha of texto.split(/\r?\n/)) {
     for (const vol of regraLib.VOLATEIS) {
       if (vol.re.test(linha)) {
-        erros.push('fato volatil (' + vol.tipo + ') na linha: ' + linha.trim().slice(0, 70));
+        erros.push('fato volatil (' + vol.tipo + ') na linha: ' + linha.trim().slice(0, 70) +
+          ' (tire esse valor da resposta: ele muda com o tempo)');
         break;
       }
     }
@@ -116,4 +126,24 @@ function validar(resultado) {
   return { ok: erros.length === 0, erros: erros };
 }
 
-module.exports = { RE_SLOT, MARCA, slots, preencher, validar };
+/**
+ * A4-mol-1 (pedido 12): o arquivo de respostas dos tres geradores (agentes, AGENTS.md, skill). Ler e interpretar
+ * falham por motivos diferentes (a regra do validar.js:12-13), e respostas que nao e objeto - `null` - estourava o
+ * gerar-agentes em TypeError cru. Devolve { ok: true, valores } ou { ok: false, erro } com a frase pronta.
+ */
+function lerRespostas(arquivo) {
+  let bruto;
+  try { bruto = fs.readFileSync(arquivo, 'utf8'); }
+  catch (e) { return { ok: false, erro: 'nao consegui ler ' + arquivo + ': ' + e.message }; }
+  let valores;
+  // A4-mol-2 (R2): o BOM (Out-File do PowerShell 5.1) sai antes do parse, como no lerJson do ambiente.js (A4-01).
+  try { valores = JSON.parse(semBom(bruto)); }
+  catch (e) { return { ok: false, erro: arquivo + ' nao e JSON valido: ' + e.message }; }
+  if (valores === null || typeof valores !== 'object' || Array.isArray(valores)) {
+    const tipo = Array.isArray(valores) ? 'lista' : (valores === null ? 'nulo' : typeof valores);
+    return { ok: false, erro: arquivo + ' tem de ser um objeto JSON ({ ... }) com as respostas por nome; veio ' + tipo };
+  }
+  return { ok: true, valores: valores };
+}
+
+module.exports = { RE_SLOT, MARCA, slots, preencher, validar, lerRespostas };

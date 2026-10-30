@@ -134,10 +134,14 @@ test('F1-C12: abertura fora de repositorio, com intocaveis, diz que nao sabe; se
     };
     const com = abrir(montar('com', ['segredos/**']));
     assert.strictEqual(com.status, 0, com.stderr);
-    assert.ok(com.stdout.indexOf('nao sei se ha intocavel inerte (o git nao respondeu)') !== -1, com.stdout);
+    // A5-02 (D735): sem o jargao "intocavel inerte"; diz o efeito (protecao sem efeito) e o passo.
+    assert.ok(com.stdout.indexOf('nao deu para conferir se os padroes de `intocaveis`') !== -1, com.stdout);
+    assert.ok(com.stdout.indexOf('a protecao dele pode estar sem efeito agora') !== -1, com.stdout);
+    assert.ok(com.stdout.indexOf('Rode git status nesta pasta para ver a causa') !== -1, com.stdout);
+    assert.strictEqual(com.stdout.indexOf('intocavel inerte'), -1, com.stdout);
     const sem = abrir(montar('sem', []));
     assert.strictEqual(sem.status, 0, sem.stderr);
-    assert.strictEqual(sem.stdout.indexOf('intocavel inerte'), -1,
+    assert.strictEqual(sem.stdout.indexOf('padroes de `intocaveis`'), -1,
       'sem intocaveis nao ha o que duvidar: ' + sem.stdout);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

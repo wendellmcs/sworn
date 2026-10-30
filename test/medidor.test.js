@@ -234,9 +234,11 @@ test('pedido 71 (D544): troca de chat em N, na unidade do sinal mais perto; disp
   assert.strictEqual(curta({ tokensDeContexto: 249500 }, true), 'troca de chat em 500 tokens', 'menos de mil');
   assert.strictEqual(curta({ tokensDeContexto: 260000 }, true), 'troque de chat → /sworn:handoff', 'disparou');
   assert.strictEqual(curta({ tokensDeContexto: 1000, contadores: { fora_do_escopo: 5 } }, true),
-    'troca de chat em 1 bloqueio de portão', 'o bloqueio mais perto que o contexto');
-  assert.strictEqual(curta({ decisoesDoDono: 2, tokensDeContexto: 1000 }, false), 'troca de chat em 1 decisão do dono',
+    'troca de chat em 1 ação negada pelo sworn', 'o bloqueio mais perto que o contexto');
+  assert.strictEqual(curta({ decisoesDoDono: 2, tokensDeContexto: 1000 }, false), 'troca de chat em 1 decisão sua',
     'sem o modo continuo: o mais perto dos 7');
+  // A6-68 (D735): o plural tambem sem "dono"
+  assert.strictEqual(curta({ decisoesDoDono: 1, tokensDeContexto: 1000 }, false), 'troca de chat em 2 decisões suas');
   assert.strictEqual(curta({ commitsFeitos: 1 }, false), 'troca de chat em 2 commits');
   // o calado pelo modo continuo nunca e o mais perto, nem perto do limite
   assert.strictEqual(curta({ decisoesDoDono: 2, tokensDeContexto: 70000 }, true), 'troca de chat em 180 mil tokens');
@@ -290,12 +292,13 @@ test('A6-02: o que ficou fora da conta do mes (sem preco, ilegivel) aparece na r
     return medidor.linhaDaSessao({ uso: uso(), amostras: [], medidas: [], gasto: Object.assign({}, GASTO, extra) }).longa;
   };
   const varios = longa({ semPreco: 295, ilegiveis: 2 });
-  assert.ok(varios.indexOf('- fora da conta: 295 mensagens de um modelo que a tabela de preços não tem; o mês sai ' +
-    'menor do que é\n') !== -1, varios);
+  assert.ok(varios.indexOf('- fora da conta: 295 mensagens de um modelo que a tabela de preços do sworn ainda não ' +
+    'tem; o mês sai menor do que é até você atualizar o sworn para uma versão com esse preço\n') !== -1, varios);
   assert.ok(varios.indexOf('- fora da conta: 2 conversas salvas que não se leram; a próxima medida tenta de novo\n') !== -1,
     varios);
   const um = longa({ semPreco: 1, ilegiveis: 1 });
-  assert.ok(um.indexOf('- fora da conta: 1 mensagem de um modelo que a tabela de preços não tem;') !== -1, um);
+  assert.ok(um.indexOf('- fora da conta: 1 mensagem de um modelo que a tabela de preços do sworn ainda não ' +
+    'tem;') !== -1, um);
   assert.ok(um.indexOf('- fora da conta: 1 conversa salva que não se leu;') !== -1, um);
   for (const nada of [{}, { semPreco: 0, ilegiveis: 0 }, { semPreco: 'x', ilegiveis: -1 }]) {
     assert.ok(longa(nada).indexOf('fora da conta') === -1, longa(nada));
@@ -401,7 +404,7 @@ test('plano 082 (S4): a resposta do comando e a do mock, bloco por bloco', () =>
     '',
     '**Troca de chat — 0 de 2 sinais dispararam (basta 1)**',
     '- tamanho do contexto: 240.283 de 250.000 tokens ← perto do limite',
-    '- bloqueios de portão: 1 de 6',
+    '- ações que o sworn negou: 1 de 6',
     '- desligados pelo modo contínuo: respostas 6/15 · revisões 0/2 · arquivos 15/25 · decisões 2/3 · commits 0/3',
     '',
     '**O que fazer**',
@@ -417,7 +420,7 @@ test('plano 082 (S4): sinal que disparou e aviso ja dado mandam ao handoff; "per
   // o que disparou vem primeiro (mais perto do limite em cima); 13 de 15 = 87%: ainda nao e "perto"
   assert.ok(cruzou.longa.indexOf('(basta 1)**\n- revisões independentes fechadas: 17 de 2 ← disparou\n') !== -1, cruzou.longa);
   assert.ok(cruzou.longa.indexOf('- respostas com trabalho real: 13 de 15\n') !== -1, cruzou.longa);
-  assert.ok(cruzou.longa.indexOf('- decisões do dono respondidas: 2 de 3\n') !== -1, cruzou.longa);
+  assert.ok(cruzou.longa.indexOf('- decisões que você respondeu: 2 de 3\n') !== -1, cruzou.longa);
   assert.ok(/\*\*O que fazer\*\*\nRode \/sworn:handoff e cole o prompt pronto num chat novo\.$/.test(cruzou.longa), cruzou.longa);
   const perto = medidor.linhaDaSessao({ uso: null, amostras: [], avisouSaude: false, medidas: saude.medir({ turnosComTrabalho: 14 }, null) });
   assert.ok(perto.longa.indexOf('- respostas com trabalho real: 14 de 15 ← perto do limite\n') !== -1, perto.longa);

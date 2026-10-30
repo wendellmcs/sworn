@@ -99,13 +99,20 @@ serves which role, and how much they are willing to pay. With the facts in hand,
      It looks on and isn't. (The ladder is the project's list of agents, from cheapest to most expensive,
      in `agentes.escada` of `projeto.json`; each agent in it is a rung. The cost gate is the lock
      that blocks dispatching an expensive agent, from the upper half of the ladder, for work that only touches
-     a file of gear `rapida`, the one with the lowest rigor.)
+     files of rigor gear `rapida`: the gear is the rigor level that `marchas` in `projeto.json` gives each
+     path, and `rapida`, the playbook's Fast gear, is the lowest.)
    - **The comparison with the catalog never appears as guaranteed**, however up to date it is.
      It lives in a skill, and a skill is an instruction, which can be skipped. The guaranteed guard is the gate
      that compares file with file.
 
 1. **Weight against the cap.** Total, the three files that weigh the most, and the counting method next to the
-   number. A number without a method is opinion with decimal places.
+   number. A number without a method is opinion with decimal places. If `peso.naoLidos` is not empty, name each
+   file and its cause: the total leaves them out, so the real weight is at least the total and can pass the cap
+   even when the total does not. The cause says what failed (no read permission, a folder where a file was
+   expected, a source in `projeto.json` that is not text): tell the person what to fix, and run the audit again.
+   If `peso.foraDoPeso` is not empty, name each file with its count, out of the weight by the project's own
+   declaration (`fontesDeConsulta` in `projeto.json`): it still rules, but it is consulted, not loaded as
+   instruction.
 
    1b. **Loaded memory.** The `memoria` key, **separate from the weight** — it doesn't add to the cap. Show
    lines, bytes, the longest line (number and bytes) and **what is left out of the load**: only the first

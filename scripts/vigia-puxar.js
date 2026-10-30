@@ -16,7 +16,8 @@
  * So grava se o conteudo tiver a linha `semana: AAAA-MM-DD` valida (mesmo parser da abertura): arquivo
  * quebrado nunca sobrescreve a ultima novidade boa. A gravacao e atomica (temporario + rename). Toda
  * tentativa, boa ou ruim, deixa `ultima-busca.json` = { quando, ok, motivo, semana } para a abertura poder
- * dizer por que nada chegou. Exit 0 = gravou; 1 = falhou; 2 = faltou --repo (nada e gravado).
+ * dizer por que nada chegou. Exit 0 = gravou; 1 = falhou; 2 = faltou --repo ou uma flag veio sem valor (nada e
+ * gravado).
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -28,10 +29,19 @@ const textoLib = require('./lib/texto.js');
 const USO = 'uso: node vigia-puxar.js --repo <pasta do clone> [--remote backup] [--ramo claude/vigia] ' +
   '[--arquivo vigia/novidades.md] [--destino <pasta>]';
 
+function erroDeUso(texto) {
+  process.stderr.write('vigia: ' + texto + '\n' + USO + '\n');
+  process.exit(2);
+}
+
+// A7 (pedido 12, R1 :34): flag presente vazia, no fim da linha ou seguida de outra flag virava o padrao sem aviso
+// (`--destino ''` gravava na pasta do vigia). Agora e erro de uso que diz qual, antes de tocar no disco.
 function valor(nome) {
   const i = process.argv.indexOf(nome);
-  const v = i !== -1 ? process.argv[i + 1] : null;
-  return v && !v.startsWith('--') ? v : null;
+  if (i === -1) return null;
+  const v = process.argv[i + 1];
+  if (v === undefined || v === '' || v.startsWith('--')) erroDeUso(nome + ' pede um valor.');
+  return v;
 }
 
 /** ASCII em uma linha (R5): o texto de erro do git pode trazer acento, caminho do usuario, quebra de linha. */
@@ -75,15 +85,14 @@ function registrar(destino, ok, motivo, semana) {
 function falhar(destino, motivo) {
   const m = umaLinha(motivo).slice(0, 300);
   registrar(destino, false, m, null);
-  process.stderr.write('vigia: busca falhou (' + m + ')\n');
+  // A7 (R1 :78): falhar roda antes do rename ou depois de apagar o .tmp, entao a novidade do disco nao mudou
+  process.stderr.write('vigia: busca falhou (' + m + '). A novidade que ja estava no disco nao mudou; ' +
+    'corrija a causa e rode de novo.\n');
   process.exit(1);
 }
 
 const repo = valor('--repo');
-if (!repo) {
-  process.stderr.write(USO + '\n');
-  process.exit(2);
-}
+if (!repo) erroDeUso('falta --repo (a pasta do clone).');
 const remote = valor('--remote') || 'backup';
 const ramo = valor('--ramo') || 'claude/vigia';
 const arquivo = valor('--arquivo') || 'vigia/novidades.md';

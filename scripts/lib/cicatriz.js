@@ -233,21 +233,28 @@ function varrer(raizManual, raizCorpus, opcoes) {
 function texto(r, limite) {
   const teto = typeof limite === 'number' ? limite : 20;
   // Plano 082, Tarefa 5 (mock S10): a 1a linha diz o que o relatorio responde; arquivo:linha entre aspas.
-  const linhas = ['sworn - auditoria por cicatriz: que regra tem dor de origem, e qual pode sair.', ''];
+  // A5-44 (D735): cicatriz e dor de origem, que o resto do relatorio usa, explicadas logo abaixo.
+  const linhas = ['sworn - auditoria por cicatriz: que regra tem dor de origem, e qual pode sair.',
+    'Cicatriz: a decisao, o incidente ou o achado do historico (o corpus) que explica por que a regra',
+    'nasceu, a dor de origem dela.', ''];
 
   if (!r.corpusLido) {
     linhas.push('CORPUS NAO LIDO. Sem historico para comparar, nada aqui distingue regra com');
     linhas.push('dor de origem de regra sem - e chamar todas de "sem cicatriz" seria mentir.');
-    linhas.push('Aponte o corpus e rode de novo.');
+    linhas.push('Aponte o corpus com --corpus <pasta> e rode de novo.');
     linhas.push('');
   }
 
   linhas.push('Itens de instrucao: ' + r.resumo.total +
     ' | com cicatriz: ' + r.resumo.comCicatriz +
     ' | sem: ' + r.resumo.semCicatriz);
-  linhas.push('Passagens com marca no corpus: ' + r.passagensComMarca +
-    ' | termos em comum exigidos: ' + r.minimo +
-    ' (' + Math.round(r.fracao * 100) + '% dos termos da regra)');
+  // A5-43/45 (D735): o que o corpus tem, e o piso dito como o conferir() o aplica: os dois juntos, o minimo de
+  // termos E a fracao dos termos da regra.
+  linhas.push('Trechos do corpus com marca de decisao, incidente ou achado: ' + r.passagensComMarca);
+  const plural = function (n, um, varios) { return n + ' ' + (n === 1 ? um : varios); };
+  linhas.push('Uma regra tem cicatriz quando um desses trechos divide com ela ao menos ' +
+    plural(r.minimo, 'palavra-chave', 'palavras-chave'));
+  linhas.push('e ' + Math.round(r.fracao * 100) + '% das palavras-chave dela.');
   linhas.push('Por tipo de cicatriz: decisao ' + r.resumo.porTipo.decisao +
     ', incidente ' + r.resumo.porTipo.incidente +
     ', achado ' + r.resumo.porTipo.achado);
@@ -270,8 +277,10 @@ function texto(r, limite) {
   }
   if (com.length > teto) linhas.push('  ... mais ' + (com.length - teto) + '.');
   linhas.push('');
-  linhas.push('Isto e SINAL, nunca veredito: termo em comum liga duas linhas, nao prova');
-  linhas.push('que uma nasceu da outra. Quem poda e o dono, e nada foi alterado aqui.');
+  // A5-43 (D735): "indicio" no lugar de "SINAL", e o passo antes de podar.
+  linhas.push('Isto e indicio, nunca veredito: palavra em comum liga duas linhas, nao prova que uma');
+  linhas.push('nasceu da outra. Antes de tirar uma regra da lista SEM cicatriz, procure o motivo dela no corpus');
+  linhas.push('com outras palavras. Quem poda e o dono, e nada foi alterado aqui.');
   return linhas.join('\n');
 }
 

@@ -221,7 +221,8 @@ function medirTodos(estado, limiares) {
     item('revisoesFechadas', 'revisoes independentes fechadas', revisoes, revisoes >= L.revisoesFechadas,
       revisoes + ' revisoes independentes fechadas (limiar ' + L.revisoesFechadas + ')'),
     item('bloqueios', 'bloqueios de portao', bloqueios, bloqueios >= L.bloqueios,
-      bloqueios + ' bloqueios de portao nesta sessao (limiar ' + L.bloqueios + ')'),
+      // A5-14 (D735): o que e o bloqueio, para o usuario que le o aviso.
+      bloqueios + ' bloqueios de portao (acoes que o sworn negou) nesta sessao (limiar ' + L.bloqueios + ')'),
     item('arquivosTocados', 'arquivos tocados', arquivos, arquivos >= L.arquivosTocados,
       arquivos + ' arquivos tocados (limiar ' + L.arquivosTocados + ')'),
     item('decisoesDoDono', 'decisoes do dono respondidas', decisoes,
@@ -284,7 +285,8 @@ const RE_INTERROMPIDO = /^\[Request interrupted by user/;
  * D704: os agentes de fundo da sessao da transcricao `caminho` que ainda rodam em `agora` (ms), [{ id, descricao }].
  * Fica de fora o que tem "finished": true, o de primeiro plano (o turno ja esperou por ele), o parado (ultima linha do
  * .jsonl e a interrupcao) e o que nao escreve ha SILENCIO_DO_AGENTE_MS (sem .jsonl ainda, vale a data do meta.json).
- * Sem pasta ou sem leitura: [] - o aviso sai como antes da D704.
+ * O agente de workflow entra pelo journal do run (agentesDeWorkflow). Sem pasta ou sem leitura: [] - o aviso sai como
+ * antes da D704.
  */
 function agentesRodando(caminho, agora) {
   if (typeof caminho !== 'string' || !caminho) return [];
@@ -299,15 +301,49 @@ function agentesRodando(caminho, agora) {
     let dados;
     try { dados = JSON.parse(fs.readFileSync(meta, 'utf8')); } catch (e) { continue; }
     if (!dados || dados.finished === true || dados.requestShape !== 'background') continue;
-    const jsonl = path.join(pasta, 'agent-' + m[1] + '.jsonl');
-    let escrito;
-    try { escrito = fs.statSync(jsonl).mtimeMs; } catch (e) {
-      try { escrito = fs.statSync(meta).mtimeMs; } catch (x) { continue; }
-    }
-    if (agora - escrito >= SILENCIO_DO_AGENTE_MS || foiParado(jsonl)) continue;
+    if (!escreveAinda(path.join(pasta, 'agent-' + m[1] + '.jsonl'), meta, agora)) continue;
     lista.push({ id: m[1], descricao: typeof dados.description === 'string' ? dados.description : '' });
   }
+  return lista.concat(agentesDeWorkflow(path.join(pasta, 'workflows'), agora));
+}
+
+/**
+ * A5 (fila a, medida na s215): o agente de workflow mora em subagents/workflows/<run>/, com requestShape "foreground"
+ * e sem `finished` mesmo depois de terminar. Quem diz se acabou e o journal.jsonl do run: `started` {agentId, label}
+ * abre, qualquer linha posterior do mesmo agentId (o `result`) fecha. O aberto passa pelo mesmo silencio e pela mesma
+ * interrupcao do agente de fundo (sem o .jsonl dele ainda, vale a data do journal).
+ */
+function agentesDeWorkflow(pasta, agora) {
+  let runs;
+  try { runs = fs.readdirSync(pasta).sort(); } catch (e) { return []; }
+  const lista = [];
+  for (const run of runs) {
+    const journal = path.join(pasta, run, 'journal.jsonl');
+    let texto;
+    try { texto = fs.readFileSync(journal, 'utf8'); } catch (e) { continue; }
+    const abertos = new Map();
+    for (const linha of texto.split('\n')) {
+      let o;
+      try { o = JSON.parse(linha); } catch (e) { continue; }
+      if (!o || typeof o.agentId !== 'string' || !o.agentId) continue;
+      if (o.type === 'started') abertos.set(o.agentId, typeof o.label === 'string' ? o.label : '');
+      else abertos.delete(o.agentId);
+    }
+    for (const [id, rotulo] of abertos) {
+      const jsonl = path.join(pasta, run, 'agent-' + id + '.jsonl');
+      if (escreveAinda(jsonl, journal, agora)) lista.push({ id: id, descricao: rotulo });
+    }
+  }
   return lista;
+}
+
+/** O agente escreveu ha menos de SILENCIO_DO_AGENTE_MS e nao foi parado; sem o `jsonl` dele, vale a data de `reserva`. */
+function escreveAinda(jsonl, reserva, agora) {
+  let escrito;
+  try { escrito = fs.statSync(jsonl).mtimeMs; } catch (e) {
+    try { escrito = fs.statSync(reserva).mtimeMs; } catch (x) { return false; }
+  }
+  return agora - escrito < SILENCIO_DO_AGENTE_MS && !foiParado(jsonl);
 }
 
 /** D704: a ultima linha legivel do .jsonl do agente e a interrupcao do TaskStop (medida na s174). */
@@ -352,9 +388,10 @@ function avisoDeSaude(gatilhos, alarme, rodando) {
   ] : [
     'sworn - hora de abrir chat novo.',
     '',
-    'Gatilho contavel disparou:',
+    // A5-13 e A5-14 (D735): o que e o numero e o passo, sem "gatilho contavel" nem giria.
+    'O sworn faz contas nesta conversa, e o que esta abaixo chegou ao limite (o numero depois de "limiar"):',
     lista,
-    'Se surgiu a duvida "ja e hora?", ja era.'
+    'Nao espere ter certeza: troque agora, pelo passo abaixo.'
   ]).concat([''], espera ? linhasDosAgentes(rodando).concat([
     'Faca assim: espere todos terminarem e nao pare nenhum; o aviso volta quando o ultimo terminar.',
     'Ai rode /sworn:handoff, cole o prompt pronto num chat novo e continue de la.'
@@ -586,13 +623,14 @@ function expandirPrefixo(linha) {
 // D412/D415. R5: ASCII puro - chega ao Claude como motivo do bloqueio.
 // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos.
 const MOTIVO_HANDOFF_SEM_PROMPT = [
-  'sworn - falta colar no chat o prompt do handoff (portao de fecho).',
+  // A5-15 (D735): sem "Voce gravou", "tis" nem "portao de fecho".
+  'sworn - falta colar no chat o prompt do handoff.',
   '',
-  'Voce gravou um arquivo de handoff neste turno, e a sua resposta final nao tem bloco de codigo.',
-  'O prompt pronto tem de chegar ao chat, nao so ao arquivo. O portao le so a resposta final:',
-  'um bloco numa mensagem anterior deste turno ele nao ve.',
+  'Um arquivo de handoff foi gravado neste turno, e a resposta final nao tem bloco de codigo.',
+  'O prompt pronto tem de chegar ao chat, nao so ao arquivo. Esta trava do fim do turno le so a resposta final:',
+  'um bloco numa mensagem anterior deste turno ela nao ve.',
   '',
-  'Faca assim: cole o prompt agora num bloco de codigo (tres crases ou tres tis), nesta resposta final - uma vez so.',
+  'Faca assim: cole o prompt agora num bloco de codigo (entre ``` ou ~~~), nesta resposta final - uma vez so.',
   '',
   'Desligar neste projeto: "portaoHandoff": false em .claude/sworn/projeto.json.'
 ].join('\n');

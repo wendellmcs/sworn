@@ -69,6 +69,25 @@ test('estimarMes: todas as pastas de projeto, subagente na sessao dele, arquivo 
   } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
 });
 
+test('arquivosDoProjeto: o agente de workflow (subagents/workflows/<run>/agent-*.jsonl) entra na sessao dele; o journal do run fica fora', () => {
+  // A6 (pedido 12, lacuna (a) da sonda da s186): o gasto dos workflows ficava fora da estimativa do mes.
+  const raiz = arvore();
+  try {
+    const proj = path.join(raiz, 'c--proj');
+    const run = path.join(proj, 's2', 'subagents', 'workflows', 'wf_1');
+    fs.mkdirSync(run, { recursive: true });
+    fs.writeFileSync(path.join(run, 'agent-w.jsonl'), linha('m4', 'claude-opus-5-5', U, OUT));
+    fs.writeFileSync(path.join(run, 'journal.jsonl'), linha('m5', 'claude-opus-5-5', U, OUT));
+    const s2 = gasto.arquivosDoProjeto(proj).filter(function (f) { return f.sessao === 's2'; });
+    assert.deepStrictEqual(s2.map(function (f) { return path.basename(f.arquivo); }).sort(), ['agent-w.jsonl', 'agent-x.jsonl', 's2.jsonl']);
+    assert.deepStrictEqual(s2.filter(function (f) { return f.subagente; }).map(function (f) { return path.basename(f.arquivo); }).sort(),
+      ['agent-w.jsonl', 'agent-x.jsonl'], 'so a conversa principal fica sem a marca de subagente');
+    const mes = { ms: Date.UTC(2026, 9, 1), chave: '2026-10' };
+    const tudo = gasto.estimarMes({ raiz: raiz, mes: mes, cache: {}, excluir: [], prazoMs: 5000 });
+    assert.strictEqual(Math.round(tudo.usd), 16, 'o agente do workflow soma, o journal nao: ' + JSON.stringify(tudo));
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
 test('estimarMes: o cache poupa a releitura; arquivo mudado e relido; prazo estourado deixa pendentes', () => {
   const raiz = arvore();
   try {
@@ -193,7 +212,19 @@ test('083 T6 (p2-7): stat que falha conta em ilegiveis', () => {
 test('estimarMes: raiz que nao existe da zero, sem lancar', () => {
   const r = gasto.estimarMes({ raiz: path.join(os.tmpdir(), 'nao-existe-sworn-gasto'), mes: { ms: 0, chave: 'x' },
     cache: {}, excluir: [], prazoMs: 100 });
-  assert.deepStrictEqual([r.usd, r.pendentes], [0, 0]);
+  assert.deepStrictEqual([r.usd, r.pendentes, r.ilegiveis], [0, 0, 0]);
+});
+
+// A6 (s220, estados :89 do HEAD): a raiz que existe e nao se le (aqui um arquivo, ENOTDIR) dava zero calado, igual a
+// raiz ausente; agora conta em `ilegiveis`.
+test('A6: raiz que nao se le conta em ilegiveis; so a ausente da zero calado', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-gasto-raiz-'));
+  try {
+    const arquivo = path.join(dir, 'projects');
+    fs.writeFileSync(arquivo, 'nao sou pasta', 'utf8');
+    const r = gasto.estimarMes({ raiz: arquivo, mes: { ms: 0, chave: 'x' }, cache: {}, excluir: [], prazoMs: 100 });
+    assert.deepStrictEqual([r.usd, r.ilegiveis], [0, 1], JSON.stringify(r));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('gastoDoMes: soma o real do $.store do mes e a estimativa das outras sessoes; cache gravado no disco', () => {

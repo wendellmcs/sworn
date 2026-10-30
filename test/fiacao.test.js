@@ -19,14 +19,14 @@ function temp(nome) {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fiacao-' + nome + '-'));
 }
 
-/** Roda um script de entrada como processo, com estado de sessao isolado. */
-function rodar(script, dir, entrada) {
+/** Roda um script de entrada como processo, com estado de sessao isolado; `env` soma ao ambiente (NODE_OPTIONS). */
+function rodar(script, dir, entrada, env) {
   const sessoes = path.join(dir, '_sessoes');
   return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
     cwd: dir,
     encoding: 'utf8',
     input: entrada === undefined ? undefined : JSON.stringify(entrada),
-    env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
+    env: Object.assign({}, process.env, { SWORN_TMP: sessoes }, env)
   });
 }
 
@@ -1645,8 +1645,8 @@ function projetoComPesoEstourado(dir, extra) {
   escrever(dir, '.claude/sworn/projeto.json', JSON.stringify(Object.assign({ fontesCanonicas: ['DOC.md'] }, extra || {})));
 }
 
-function abrirA2(dir, id) {
-  return rodar('abertura.js', dir, { session_id: id, cwd: dir, source: 'startup' });
+function abrirA2(dir, id, env) {
+  return rodar('abertura.js', dir, { session_id: id, cwd: dir, source: 'startup' }, env);
 }
 
 const MARCA_A2 = path.join('.claude', 'sworn', 'auditoria.json');
@@ -1659,7 +1659,7 @@ test('A2: a abertura avisa o peso estourado quando a auditoria esta vencida, e a
     const r1 = abrirA2(dir, 'a2-1');
     assert.strictEqual(r1.status, 0, r1.stderr);
     assert.ok(/sworn: auditoria automatica \(a cada 7 dias\) achou o que cortar:/.test(r1.stdout), r1.stdout);
-    assert.ok(/peso de instrucao 205 acima do teto 200/.test(r1.stdout), r1.stdout);
+    assert.ok(/instrucoes do projeto com 205 itens de lista .*, acima do limite de 200\./.test(r1.stdout), r1.stdout);
     // Plano 091 (#3, D559): a abertura entrega a ordem de rodar a auditoria, nao so o aviso.
     assert.ok(/1\. Rode \/sworn:audit para ver o detalhe\./.test(r1.stdout) && r1.stdout.indexOf('"auditarNaAbertura": false') !== -1, r1.stdout);
     assert.ok(/qualidade de resposta/.test(r1.stdout), 'o resto da abertura sumiu: ' + r1.stdout);
@@ -1706,7 +1706,8 @@ test('092: a abertura mede o injetado da conversa anterior e revisa os atalhos; 
     const entrada = { session_id: '092-1', cwd: dir, source: 'startup', transcript_path: path.join(projects, '092-1.jsonl') };
     const r1 = rodar('abertura.js', dir, entrada);
     assert.strictEqual(r1.status, 0, r1.stderr);
-    assert.ok(r1.stdout.indexOf('- texto de gancho que volta mais de 5 vezes na conversa anterior (aaaa1111, ') !== -1, r1.stdout);
+    assert.ok(r1.stdout.indexOf('- texto repetido por plugin mais de 5 vezes na conversa anterior (aaaa1111, ') !== -1,
+      r1.stdout);
     assert.ok(r1.stdout.indexOf('sworn: atalhos registrados (revisao a cada 30 dias): 1 atalho em 1 arquivo; todos com gatilho.\n' +
       '- a.js:2  lista lida inteira.\n    trocar quando: arquivo maior.\n') !== -1, r1.stdout);
     assert.ok(r1.stdout.indexOf('sworn: atalhos registrados') > r1.stdout.indexOf('auditoria automatica'), 'os atalhos sairam antes da auditoria');
@@ -1729,7 +1730,8 @@ test('091 T6: a abertura com so a retroalimentacao nao marca auditoriaAvisou nem
     const r = abrirA2(dir, 'a2r-1');
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.indexOf('sworn: auditoria automatica (a cada 7 dias): nada a cortar.\n' +
-      '- ordens desde o comeco (dadas / cumpridas / recusadas pelo dono):\n  revisar antes do commit 2/2/0') !== -1, r.stdout);
+      '- ordens desde o comeco que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):\n' +
+      '  revisar antes do commit 2/2/0') !== -1, r.stdout);
     const s = lerSessao(dir, 'a2r-1') || {};
     assert.strictEqual(s.auditoriaAvisou, undefined);
     assert.strictEqual((s.contadores || {}).ordem_auditar_dada, undefined);
@@ -1826,6 +1828,20 @@ test('091 #7: recusar-init.js sem pasta sai 1 e nao grava', () => {
   } finally { fs.rmSync(cfg, { recursive: true, force: true }); }
 });
 
+// A4-22 (pedido 12, microcopy): a falha de gravar dizia so a consequencia; agora diz onde e o que conferir.
+test('A4-22: recusar-init.js que nao grava diz o arquivo e o que conferir', () => {
+  const cfg = temp('ordem-init-trava');
+  try {
+    fs.writeFileSync(path.join(cfg, 'sworn'), 'um arquivo no lugar da pasta', 'utf8');
+    const g = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'recusar-init.js'), cfg], {
+      encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
+    assert.strictEqual(g.status, 1, g.stdout);
+    assert.strictEqual(g.stdout, 'ERRO: nao consegui gravar a recusa em ' +
+      path.join(cfg, 'sworn', 'init-recusado.json') + '; a abertura vai perguntar de novo.\n' +
+      'Confira se a pasta desse arquivo aceita escrita e rode o mesmo comando de novo.\n');
+  } finally { fs.rmSync(cfg, { recursive: true, force: true }); }
+});
+
 test('A2: auditarNaAbertura: false desliga (sem aviso, sem marca); sem projeto.json nao audita nem cria .claude', () => {
   const dir = temp('a2-off');
   const sem = temp('a2-sem');
@@ -1848,16 +1864,22 @@ test('A2: auditarNaAbertura: false desliga (sem aviso, sem marca); sem projeto.j
 test('A2: auditoria que lanca nao derruba a abertura - o resto do stdout sai, 1 linha de aviso, marca gravada', () => {
   const dir = temp('a2-lanca');
   try {
-    // fonte canonica que nao e texto: path.resolve lanca TypeError dentro de instrucoes.contar, so na auditoria
-    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ fontesCanonicas: [123] }));
-    const r = abrirA2(dir, 'a2lanca');
+    // A auditoria lanca por preload. A fonte canonica que nao e texto (o gatilho de antes) nao lanca mais: o contar a
+    // poe em naoLidos (A6, pedido 12, R2 :71 do lib/instrucoes). Molde do preload: apurar-ronda.test.js (T4/r2).
+    escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ fontesCanonicas: [] }));
+    const preload = path.join(dir, 'auditoria-lanca.js');
+    fs.writeFileSync(preload, 'require(' + JSON.stringify(path.join(RAIZ, 'scripts', 'lib', 'auditoria.js')) + ').auditar = ' +
+      "function () { throw new TypeError('auditoria simulada que lanca'); };\n", 'utf8');
+    // No NODE_OPTIONS entre aspas a barra invertida vira escape: o caminho vai com barra normal.
+    const env = { NODE_OPTIONS: '--require "' + preload.split(path.sep).join('/') + '"' };
+    const r = abrirA2(dir, 'a2lanca', env);
     assert.strictEqual(r.status, 0, r.stderr);
     const linhas = r.stdout.split('\n').filter(function (l) { return l.indexOf('auditoria automatica falhou') !== -1; });
     assert.strictEqual(linhas.length, 1, r.stdout);
     assert.ok(/rode \/sworn:audit/.test(linhas[0]), linhas[0]);
     assert.ok(/qualidade de resposta/.test(r.stdout), 'o resto da abertura sumiu: ' + r.stdout);
     assert.ok(fs.existsSync(path.join(dir, MARCA_A2)), 'falha nao gravou a marca (repetiria a cada abertura)');
-    assert.strictEqual(abrirA2(dir, 'a2lanca2').stdout.indexOf('auditoria automatica'), -1, 'repetiu a falha dentro do prazo');
+    assert.strictEqual(abrirA2(dir, 'a2lanca2', env).stdout.indexOf('auditoria automatica'), -1, 'repetiu a falha dentro do prazo');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -126,14 +126,14 @@ function motivoDegradado() {
   return [
     'sworn: nao deu para consultar o catalogo de modelos agora.',
     '',
-    'Isto nao e falha do plugin nem motivo para parar: e modo degradado, e ele',
-    'e declarado de proposito, em vez de virar silencio.',
+    'Isto nao e falha do plugin nem motivo para parar: o sworn segue sem a lista',
+    'atualizada e avisa disso de proposito, em vez de ficar calado.',
     '',
     'O que NAO fazer: completar a lista de memoria. A pagina vence a memoria -',
     'ja se mediu catalogo desatualizado sobre o proprio modelo que o estava lendo.',
     '',
     'O que fazer: dizer ao dono o que nao deu para conferir, e perguntar direto',
-    'o que so ele sabe - qual degrau para qual papel, e quanto ele aceita pagar.'
+    'o que so ele sabe - qual modelo para qual papel, e quanto ele aceita pagar.'
   ].join('\n');
 }
 

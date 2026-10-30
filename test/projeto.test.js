@@ -29,6 +29,30 @@ function copia(mudancas) {
   return Object.assign(JSON.parse(JSON.stringify(VALIDO)), mudancas || {});
 }
 
+// D732 (fila D687): `fontesDeConsulta` e opcional; quando vem, e lista de texto, e cada item e uma das fontesCanonicas
+// (o que nao e canonico nao sai do peso por ela: item fora ficaria inerte calado, como o intocavel da D104).
+test('D732: fontesDeConsulta opcional, lista de texto, so com fonte canonica', () => {
+  assert.strictEqual(projeto.validar(copia({ fontesDeConsulta: ['CLAUDE.md'] })).ok, true);
+  assert.strictEqual(projeto.validar(copia({ fontesDeConsulta: ['./CLAUDE.md'] })).ok, true);
+  for (const ruim of [{}, 'CLAUDE.md', [1], ['']]) {
+    const r = projeto.validar(copia({ fontesDeConsulta: ruim }));
+    assert.ok(r.erros.indexOf('fontesDeConsulta tem de ser lista de texto') !== -1, JSON.stringify(ruim) + ': ' + r.erros);
+  }
+  const fora = projeto.validar(copia({ fontesDeConsulta: ['docs/decisoes.md'] }));
+  assert.deepStrictEqual(fora.erros, ['fontesDeConsulta: "docs/decisoes.md" nao esta em fontesCanonicas, e so fonte ' +
+    'canonica sai do peso; corrija o caminho ou declare-a canonica']);
+  assert.ok(projeto.CHAVES_OPCIONAIS.indexOf('fontesDeConsulta') !== -1, 'o re-init ignoraria a chave');
+  // A6-83 (pedido 12): com a fontesCanonicas reprovada, o erro dela basta; sem um erro a mais por item de consulta,
+  // com um item e com dois.
+  for (const canonicas of ['README.md', ['README.md', 5]]) {
+    for (const consulta of [['docs/a.md'], ['docs/a.md', 'docs/b.md']]) {
+      const r = projeto.validar(copia({ fontesCanonicas: canonicas, fontesDeConsulta: consulta }));
+      assert.deepStrictEqual(r.erros, ['fontesCanonicas tem de ser lista de texto'],
+        JSON.stringify([canonicas, consulta]));
+    }
+  }
+});
+
 test('projeto: config valida passa', () => {
   const r = projeto.validar(VALIDO);
   assert.strictEqual(r.ok, true, r.erros.join(' | '));
@@ -543,7 +567,7 @@ test('D442/5: re-init aceita as chaves de liga/desliga em vez de ignorar', () =>
 // D503 (plano d503, Tarefa 1): `referencias` e a peca de topo contra a qual a revisao compara. Opcional: sem ela,
 // nada muda. Por tipo (tela, codigo, texto), cada um uma lista de caminho ou URL - por isso fora de conferirCaminhos.
 test('D503: referencias e opcional e aceita listas de caminho ou URL por tipo', () => {
-  assert.deepStrictEqual(projeto.CHAVES_OPCIONAIS, ['referencias', 'marcaDeAtalho']);
+  assert.deepStrictEqual(projeto.CHAVES_OPCIONAIS, ['referencias', 'marcaDeAtalho', 'fontesDeConsulta']);
   assert.deepStrictEqual(projeto.TIPOS_REFERENCIA, ['tela', 'codigo', 'texto']);
   assert.strictEqual(projeto.CHAVES.indexOf('referencias'), -1, 'opcional nao entra nas obrigatorias');
   const com = copia({ referencias: { tela: ['docs/ref.png', 'https://exemplo.com/painel'], codigo: [], texto: ['README.md'] } });
@@ -637,4 +661,70 @@ test('083 T6 (sobra 2): re-init com referencias {} vira "nunca" e apaga os tipos
   // a resposta com algum tipo segue fundindo
   const f = projeto.atualizar(copia({ referencias: { tela: ['a.png'] } }), { referencias: { texto: ['R.md'] } }, '2026-10-16');
   assert.deepStrictEqual(f.config.referencias, { tela: ['a.png'], texto: ['R.md'] });
+});
+
+// A4-des-2 (pedido 12, fila §5; D721): o validar.js passa a conferir o design.json quando ele existe - ler e
+// interpretar separados, como no projeto.json; ausente segue valido (o modulo e opcional).
+test('A4-des-2: a CLI valida o design.json quando ele existe', () => {
+  const cli = path.join(__dirname, '..', 'scripts', 'validar.js');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-cli-design-'));
+  fs.mkdirSync(path.join(base, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(base, '.claude', 'sworn', 'projeto.json'), JSON.stringify(VALIDO), 'utf8');
+  const arq = path.join(base, '.claude', 'sworn', 'design.json');
+  const roda = () => spawnSync(process.execPath, [cli, base], { encoding: 'utf8', shell: false, timeout: 60000 });
+
+  let r = roda();
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.strictEqual(r.stdout.indexOf('design.json'), -1, 'sem design.json nao se fala dele: ' + r.stdout);
+
+  fs.writeFileSync(arq, '\uFEFF' + JSON.stringify({ cores: ['#fff'], antiReferencias: ['gradiente'] }), 'utf8');
+  r = roda();
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.ok(r.stdout.includes('OK: design.json valido'), r.stdout);
+
+  fs.writeFileSync(arq, JSON.stringify({ cores: ['#fff', 5], antiReferencias: [''] }), 'utf8');
+  r = roda();
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.ok(/ERRO: design\.json invalido \(.*design\.json\)\n  - cores: item 2 sem efeito.*\n  - antiReferencias: item 1/.test(r.stdout), r.stdout);
+
+  fs.writeFileSync(arq, '{ nao e json', 'utf8');
+  r = roda();
+  assert.strictEqual(r.status, 1);
+  assert.ok(/ERRO: .*design\.json nao e JSON valido/.test(r.stdout) && !r.stdout.includes('nao consegui ler'), r.stdout);
+  fs.rmSync(base, { recursive: true, force: true });
+});
+
+// A4-23 (pedido 12, microcopy): os ERRO do validar.js diziam o que houve, nao o que fazer a seguir.
+test('A4-23: todo ERRO do validar.js termina com o passo seguinte', () => {
+  const cli = path.join(__dirname, '..', 'scripts', 'validar.js');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-cli-'));
+  const dir = path.join(base, '.claude', 'sworn');
+  const passo = '\nCorrija o que esta acima e rode a validacao de novo.\n';
+  const roda = () => spawnSync(process.execPath, [cli, base], { encoding: 'utf8', shell: false });
+  try {
+    let r = roda();
+    assert.ok(r.status === 1 && r.stdout.endsWith(passo) &&
+      /^ERRO: nao consegui ler .*projeto\.json \(o \/sworn:init cria esse arquivo\): /.test(r.stdout), r.stdout);
+    fs.mkdirSync(dir, { recursive: true });
+    const casos = [
+      [{ 'projeto.json': '{ quebrado' }, /^ERRO: .*projeto\.json nao e JSON valido: /],
+      [{ 'projeto.json': JSON.stringify(copia({ modeloDeAmeaca: 'talvez' })) }, /^ERRO: projeto\.json invalido \(/],
+      [{ 'projeto.json': JSON.stringify(VALIDO), 'regras.md': '- ao subir -> usar node 24.12.0\n' },
+        /^OK: projeto\.json valido .*\nERRO: regras\.md invalido \(/],
+      [{ 'regras.md': '', 'design.json': '{ nao e json' }, /\nERRO: .*design\.json nao e JSON valido: /],
+      [{ 'design.json': JSON.stringify({ cores: ['#fff', 5] }) }, /\nERRO: design\.json invalido \(/]
+    ];
+    for (const [arquivos, inicio] of casos) {
+      for (const nome of Object.keys(arquivos)) fs.writeFileSync(path.join(dir, nome), arquivos[nome], 'utf8');
+      r = roda();
+      assert.ok(r.status === 1 && inicio.test(r.stdout) && r.stdout.endsWith(passo), r.stdout);
+    }
+    // R1: regras.md que existe e nao se le (aqui, uma pasta) saia em excecao crua, sem ERRO.
+    fs.rmSync(path.join(dir, 'design.json'));
+    fs.rmSync(path.join(dir, 'regras.md'));
+    fs.mkdirSync(path.join(dir, 'regras.md'));
+    r = roda();
+    assert.ok(r.status === 1 && /\nERRO: nao consegui ler .*regras\.md: /.test(r.stdout) && r.stdout.endsWith(passo),
+      r.stdout + r.stderr);
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });

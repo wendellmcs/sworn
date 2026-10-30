@@ -4,10 +4,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 const molde = require('./lib/molde.js');
 const config = require('./lib/config.js');
+const texto = require('./lib/texto.js');
 
+const USO = 'uso: gerar-agents-md.js [--fatias] [--respostas <arquivo.json>] [--gravar]\n';
+const FLAGS_DO_USO = ['--respostas', '--gravar', '--fatias'];
+
+// A4-gam-1 (pedido 12), borda: flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada no
+// "sem respostas". O molde e o arg() do preparar-revisao.js.
 function arg(nome) {
   const i = process.argv.indexOf('--' + nome);
-  return i !== -1 ? process.argv[i + 1] : null;
+  if (i === -1) return null;
+  const valor = process.argv[i + 1];
+  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
+    process.stdout.write('ERRO: --' + nome + ' pede um valor.\n' + USO);
+    process.exit(1);
+  }
+  return valor;
 }
 
 const cwd = process.cwd();
@@ -33,18 +45,23 @@ if (process.argv.indexOf('--fatias') !== -1) {
 let valores = {};
 const arquivoRespostas = arg('respostas');
 if (arquivoRespostas) {
-  try { valores = JSON.parse(fs.readFileSync(arquivoRespostas, 'utf8')); }
-  catch (e) {
-    process.stdout.write('ERRO: nao consegui ler ' + arquivoRespostas + ': ' + e.message + '\n');
+  const lidas = molde.lerRespostas(arquivoRespostas);
+  if (!lidas.ok) {
+    process.stdout.write('ERRO: ' + lidas.erro + '\n');
     process.exit(1);
   }
+  valores = lidas.valores;
 }
 
 const cheio = molde.preencher(moldeTexto, valores, projeto);
 const v = molde.validar(cheio);
 if (!v.ok) {
-  process.stdout.write('RECUSADO: o AGENTS.md gerado nao passou no validador.\n');
+  process.stdout.write('RECUSADO: o AGENTS.md gerado tem pendencias, e nada foi gravado:\n');
   for (const e of v.erros) process.stdout.write('  - ' + e + '\n');
+  // A4-10 (pedido 12, microcopy): as fatias vem do arquivo de respostas; o RECUSADO diz onde corrigir.
+  process.stdout.write(arquivoRespostas
+    ? 'Corrija ' + arquivoRespostas + ' e rode de novo.\n'
+    : 'Passe as respostas com --respostas <arquivo.json>, uma chave por fatia (os nomes saem com --fatias).\n');
   process.exit(1);
 }
 
@@ -67,6 +84,12 @@ if (fs.existsSync(alvo)) {
   process.exit(1);
 }
 
-fs.writeFileSync(alvo, cheio, 'utf8');
+// A4-gam-2 (pedido 12), estados: o write sem try saia em excecao crua, sem GRAVADO nem ERRO.
+// A4-gam-3 (R2): 'wx' fecha a janela entre o existsSync e o write - o AGENTS.md que aparece nela sai EEXIST.
+try { fs.writeFileSync(alvo, cheio, { encoding: 'utf8', flag: 'wx' }); } catch (e) {
+  process.stdout.write('ERRO: nao consegui gravar ' + alvo + ' (' + texto.causaDoErro(e) + ').\n');
+  process.stdout.write('Nada foi gravado: conserte a pasta e rode de novo.\n');
+  process.exit(1);
+}
 process.stdout.write('GRAVADO em ' + alvo + '\n');
 process.exit(0);

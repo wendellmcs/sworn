@@ -150,7 +150,11 @@ const ORDEM_DO_MOCK = [
 
 test('A2: cada categoria avisa sozinha, em ASCII, com o prefixo, o detalhe e a ordem de auditar (D559)', () => {
   const casos = [
-    ['peso', limpo({ peso: { total: 227, teto: 200, estourou: true } }), /peso de instrucao 227 acima do teto 200/],
+    // A6-72 (pedido 12): o peso em palavras do dono, com o que fazer; singular e plural do rotulo.
+    ['peso', limpo({ peso: { total: 227, teto: 200, estourou: true } }),
+      /- instrucoes do projeto com 227 itens de lista \(.+\), acima do limite de 200\. Junte ou corte itens\./],
+    ['peso-um', limpo({ peso: { total: 1, teto: 0, estourou: true } }),
+      /- instrucoes do projeto com 1 item de lista \(.+\), acima do limite de 0\. Junte ou corte itens\./],
     ['sobreposicao', limpo({ sobreposicoes: [{ a: 'revisar', b: 'inspecionar', termos: ['x', 'y'] }] }),
       /skills que se sobrepoem \(1\): revisar x inspecionar/],
     ['contradicao', limpo({ contradicoes: [{ gatilho: 'antes de commitar', acoes: ['a', 'b'] }] }),
@@ -183,7 +187,8 @@ test('091 #8: atalhos sem gatilho entram na lista do que cortar, com arquivo:lin
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo({})), atalhos: function () { return achados; } });
     assert.strictEqual(t, [
       'sworn: auditoria automatica (a cada 7 dias) achou o que cortar:',
-      '- atalhos sem gatilho (2): scripts/lib/gasto.js:42; scripts/abrir-turno.js:77',
+      '- atalhos sem "trocar quando" (2): scripts/lib/gasto.js:42; scripts/abrir-turno.js:77. ' +
+        'Complete o "trocar quando" ou desfaca o atalho.',
       ORDEM_DO_MOCK
     ].join('\n'));
     const so = ap.avisoDaAuditoria(ok, PROJETO, { agora: AGORA, auditar: stub(limpo({})),
@@ -203,7 +208,8 @@ test('091 #8: sem stub, a auditoria varre o repositorio de verdade (rastreado e 
     escrever(dir, 'a.js', 'x\n// atalho: sem gatilho\n');
     escrever(dir, 'fora.js', '// atalho: ignorado\n');
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo({})) });
-    assert.ok(t.indexOf('\n- atalhos sem gatilho (1): a.js:2\n') !== -1, t);
+    assert.ok(t.indexOf('\n- atalhos sem "trocar quando" (1): a.js:2. ' +
+      'Complete o "trocar quando" ou desfaca o atalho.\n') !== -1, t);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -256,7 +262,8 @@ test('A2: auditar que lanca vira UMA linha de aviso, grava a marca e nao relanca
     let t;
     assert.doesNotThrow(function () { t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: quebra }); });
     assert.strictEqual(t.split('\n').length, 1, 'mais de uma linha: ' + JSON.stringify(t));
-    assert.ok(t.startsWith('sworn: auditoria automatica falhou (') && /rode \/sworn:audit$/.test(t), t);
+    assert.ok(t.startsWith('sworn: auditoria automatica falhou (') &&
+      /rode \/sworn:audit para ver o detalhe\.$/.test(t), t);
     assert.ok(/relatorio quebrado/.test(t) && /^[\x20-\x7E]+$/.test(t), JSON.stringify(t));
     assert.strictEqual(lerMarcaBruta(dir).ultima, new Date(AGORA).toISOString(), 'falha nao gravou a marca');
     // e, com a marca valida, a abertura seguinte nao repete a falha
@@ -282,7 +289,7 @@ test('A2: falha ao gravar a marca nao lanca nem muda o aviso', () => {
     const rel = limpo({ peso: { total: 300, teto: 200, estourou: true } });
     let t;
     assert.doesNotThrow(function () { t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(rel) }); });
-    assert.ok(/acima do teto 200/.test(t), t);
+    assert.ok(/acima do limite de 200\./.test(t), t);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -293,7 +300,7 @@ test('A2: com a auditoria real, projeto com fonte canonica de 205 itens avisa o 
     for (let i = 0; i < 205; i++) itens.push('- item ' + i);
     escrever(dir, 'DOC.md', itens.join('\n') + '\n');
     const t = ap.avisoDaAuditoria(dir, { fontesCanonicas: ['DOC.md'] }, { agora: AGORA });
-    assert.ok(/peso de instrucao 205 acima do teto 200/.test(t), t);
+    assert.ok(/instrucoes do projeto com 205 itens de lista .*, acima do limite de 200\./.test(t), t);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -496,7 +503,7 @@ test('A2-1c: elemento null/nao-objeto em sobreposicoes e contradicoes nao troca 
       contradicoes: [null, undefined]
     });
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(rel) });
-    assert.ok(/acima do teto 200/.test(t), 'perdeu o aviso de peso: ' + t);
+    assert.ok(/acima do limite de 200\./.test(t), 'perdeu o aviso de peso: ' + t);
     assert.ok(t.indexOf('falhou') === -1, 'virou falha: ' + t);
     assert.ok(t.indexOf('sobrepoem') === -1 && t.indexOf('contradizem') === -1, 'contou lixo como achado: ' + t);
     // misturado com item valido: so o valido conta
@@ -614,10 +621,12 @@ test('091 T6: nada a cortar, com ordens na janela - so a retroalimentacao, sem a
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo()) });
     assert.strictEqual(t, [
       'sworn: auditoria automatica (a cada 7 dias): nada a cortar.',
-      '- ordens dos ultimos 7 dias (dadas / cumpridas / recusadas pelo dono):',
+      '- ordens dos ultimos 7 dias que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
       '  aprender 2/2/-',
       '  nunca disparadas: auditar, calibrar, init, revisar, manual',
-      '  (-: o sworn nao ve essa recusa; dada e nao cumprida foi ignorada ou recusada na conversa)'
+      '  ("-": o sworn so ve a recusa no commit sem revisao; nas outras, ' +
+        'a ordem que o Claude nao cumpriu foi ignorada ou',
+      '  recusada na conversa. Ordem que se repete sem cumprir: vale perguntar ao dono se ela ainda serve.)'
     ].join('\n'));
     assert.strictEqual(ap.pedeCorte(t), false, 'nada a cortar nao pode acender o botao nem contar a ordem');
     assert.deepStrictEqual(lerMarcaBruta(dir).ordens, { ordem_aprender_dada: 3, ordem_aprender_cumprida: 2 });
@@ -633,8 +642,9 @@ test('091 T6: com o que cortar, a retroalimentacao entra entre a lista e a ordem
       auditar: stub(limpo({ peso: { total: 227, teto: 200, estourou: true } })) });
     assert.strictEqual(t, [
       'sworn: auditoria automatica (a cada 7 dias) achou o que cortar:',
-      '- peso de instrucao 227 acima do teto 200',
-      '- ordens desde o comeco (dadas / cumpridas / recusadas pelo dono):',
+      '- instrucoes do projeto com 227 itens de lista (regras, skills e fontes canonicas), acima do limite de 200. ' +
+        'Junte ou corte itens.',
+      '- ordens desde o comeco que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
       '  revisar antes do commit 2/1/1',
       '  nunca disparadas: aprender, auditar, calibrar, init, manual',
       ORDEM_DO_MOCK
@@ -660,7 +670,8 @@ test('091 T6: auditar que lanca com ordens na janela - a retroalimentacao sai ju
   try {
     contadores(dir, { ordem_aprender_dada: 2 });
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: function () { throw new Error('quebrou'); } });
-    assert.ok(t.startsWith('sworn: auditoria automatica falhou (Error: quebrou); rode /sworn:audit\n'), t);
+    assert.ok(t.startsWith('sworn: auditoria automatica falhou (Error: quebrou); ' +
+      'rode /sworn:audit para ver o detalhe.\n'), t);
     assert.ok(t.includes('  aprender 2/0/-'), t);
     assert.deepStrictEqual(lerMarcaBruta(dir).ordens, { ordem_aprender_dada: 2 });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -691,8 +702,8 @@ test('D573: a auditoria passa a transcricao anterior ao auditar e avisa o gancho
     assert.ok(recebido && recebido.transcricao === alvo, 'o auditar nao recebeu a transcricao anterior');
     assert.strictEqual(t, [
       'sworn: auditoria automatica (a cada 7 dias) achou o que cortar:',
-      '- texto de gancho que volta mais de 5 vezes na conversa anterior (4f947022, ' + local(quando) +
-        ') (1): context-mode PreToolUse:Read 12x, 4812 caracteres',
+      '- texto repetido por plugin mais de 5 vezes na conversa anterior (4f947022, ' + local(quando) +
+        ') (1): context-mode PreToolUse:Read 12x, 4812 caracteres. Corte para uma vez por sessao.',
       ORDEM_DO_MOCK
     ].join('\n'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -889,7 +900,7 @@ test('D576: a varredura pega a pasta aberta e os repositorios logo abaixo dela, 
     const onde = r.achados.map(function (a) { return a.arquivo + ':' + a.linha; }).sort();
     assert.deepStrictEqual(onde, ['a.js:1', 'pasta/c.js:1', 'sub/b.js:2']);
     const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo({})) });
-    assert.ok(t.includes('- atalhos sem gatilho (3): '), t);
+    assert.ok(t.includes('- atalhos sem "trocar quando" (3): '), t);
     assert.ok(t.includes('sub/b.js:2'), 'a auditoria de 7 dias nao varreu o repositorio de dentro: ' + t);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

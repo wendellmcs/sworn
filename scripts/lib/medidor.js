@@ -28,12 +28,13 @@ const MINIMO_DE_SESSOES = 2;   // com menos de 2 sessoes medidas, nao ha media e
 const PERTO_DO_LIMITE = 0.9;
 // Plano 082 (mock S4; p6-23): o sinal pelo nome que a pessoa entende ("turnos" vira "respostas"); o curto vai na
 // linha dos desligados pelo modo continuo. Chave de saude.medirTodos; chave desconhecida usa o nome que veio.
+// A6-68 (D735): sem "portao" nem "dono" - o bloqueio e a acao que o sworn negou (saude.js:225), e o dono e quem le.
 const SINAL = {
   turnosComTrabalho: ['respostas com trabalho real', 'respostas'],
   revisoesFechadas: ['revisões independentes fechadas', 'revisões'],
-  bloqueios: ['bloqueios de portão', 'bloqueios'],
+  bloqueios: ['ações que o sworn negou', 'bloqueios'],
   arquivosTocados: ['arquivos tocados', 'arquivos'],
-  decisoesDoDono: ['decisões do dono respondidas', 'decisões'],
+  decisoesDoDono: ['decisões que você respondeu', 'decisões'],
   commits: ['commits nesta sessão', 'commits'],
   tokensDeContexto: ['tamanho do contexto', 'contexto']
 };
@@ -42,9 +43,9 @@ const SINAL = {
 const FALTA = {
   turnosComTrabalho: ['resposta com trabalho real', 'respostas com trabalho real'],
   revisoesFechadas: ['revisão independente', 'revisões independentes'],
-  bloqueios: ['bloqueio de portão', 'bloqueios de portão'],
+  bloqueios: ['ação negada pelo sworn', 'ações negadas pelo sworn'],
   arquivosTocados: ['arquivo tocado', 'arquivos tocados'],
-  decisoesDoDono: ['decisão do dono', 'decisões do dono'],
+  decisoesDoDono: ['decisão sua', 'decisões suas'],
   commits: ['commit', 'commits']
 };
 
@@ -279,9 +280,11 @@ function linhasDoGasto(uso, gasto) {
       gastos.push('- ainda somando: ' + (gasto.pendentes === 1 ? 'falta 1 conversa salva' : 'faltam ' + gasto.pendentes + ' conversas salvas') +
         ' para ler; o total se completa sozinho nas próximas respostas, sem você fazer nada');
     }
+    // A6-67 (D735): de quem e a tabela (calibracao.js PRECOS, do plugin) e o passo: o preco novo chega com o sworn.
     if (gasto.semPreco > 0) {
       gastos.push('- fora da conta: ' + (gasto.semPreco === 1 ? '1 mensagem' : gasto.semPreco + ' mensagens') +
-        ' de um modelo que a tabela de preços não tem; o mês sai menor do que é');
+        ' de um modelo que a tabela de preços do sworn ainda não tem; o mês sai menor do que é até você atualizar o ' +
+        'sworn para uma versão com esse preço');
     }
     if (gasto.ilegiveis > 0) {
       gastos.push('- fora da conta: ' + (gasto.ilegiveis === 1 ? '1 conversa salva que não se leu' :

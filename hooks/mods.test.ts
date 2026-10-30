@@ -90,16 +90,26 @@ for (const vazio of [undefined, null, '']) {
   })
 }
 
+// A7-22 (pedido 12): a resposta serve a qualquer falha (Node ausente, saida diferente de 0, JSON torto, prazo
+// estourado), que caem todas no mesmo ramo do mods.tsx; este teste simula so a saida 1. Ela diz as causas possiveis e
+// um passo que serve a qualquer uma (pedir ao Claude), sem mandar quem nao programa ao terminal.
+// P2 da R1 (s241): sem o caminho do script nem os passos tecnicos; o Node.js fica so como causa (e o que se instala).
+const PARADO_SESSAO = 'Medidor parado: a medida falhou (pode faltar o Node.js, ou o script do sworn ' +
+  'deu erro ou demorou demais). Peça ao Claude para achar por que o medidor do sworn parou; depois rode ' +
+  '/sworn-session de novo.'
+const PARADO_PLANO = 'Painel do plano parado: a leitura do plano falhou (pode faltar o Node.js, ou o script do sworn ' +
+  'deu erro ou demorou demais). Peça ao Claude para achar por que o painel do plano do sworn parou; depois ' +
+  'rode /sworn-plan de novo.'
+
 test('script que falha: o comando responde o motivo, nao lanca', async ($, on) => {
   on('session.usage', () => ({ value: USO }))
   on('session.id', () => ({ value: 'sess-abc' }))
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: 'node nao achado' } }))
   const r = await $.command.run({ command: 'sworn-session', args: '' })
   // Sem "sworn:" na frente: o motor ja escreve o nome do plugin antes da resposta.
-  // Achado da s60 (mock S3): o passo concreto, como no status, no lugar de "confira se o node esta no PATH".
-  expect(r.text).toBe('Medidor parado: o Node.js não respondeu. Rode **node -v** num terminal para conferir.')
+  expect(r.text).toBe(PARADO_SESSAO)
   const p = await $.command.run({ command: 'sworn-plan', args: '' })
-  expect(p.text).toBe('Painel do plano parado: o Node.js não respondeu. Rode **node -v** num terminal para conferir.')
+  expect(p.text).toBe(PARADO_PLANO)
 })
 
 test('fim de turno: guarda a amostra do turno e poe a linha curta no status', async ($, on) => {
@@ -119,7 +129,9 @@ test('fim de turno: guarda a amostra do turno e poe a linha curta no status', as
   expect(ultimo.amostras).toEqual([{ tokens: 46900, cincoH: 49 }])
 })
 
-const MEDIDOR_PARADO = 'medidor parado: o Node.js não respondeu. Rode node -v num terminal para conferir.'
+// A7-22: o status diz que a medida falhou, que ela roda de novo e o passo se seguir (o comando diz a causa possivel).
+const MEDIDOR_PARADO = 'medidor parado: a medida falhou e roda de novo na próxima resposta; se seguir assim, ' +
+  'rode /sworn-session.'
 
 test('script que falha no fim do turno: o status diz que o medidor nao respondeu, nao fica com o numero velho', async ($, on) => {
   let falha = false
@@ -225,7 +237,8 @@ test('D442/7: leitura de uso que nunca responde nao congela o status - a medida 
   await relogio.settle()
   await relogio.advance(60000)
   await $.session.measure(MEDIDA)
-  expect(status).toContain('medidor atrasado: a leitura de uso travou; medindo de novo.')
+  // A7-25 (pedido 12): um verbo so (a medida demorou; a presa e largada) e o passo, que e nenhum
+  expect(status).toContain('medidor atrasado: a medida anterior demorou demais; uma nova já começou, nada a fazer.')
   expect(status[status.length - 1]).toBe('sworn | contexto 5%')
   // a presa responde tarde: o resultado dela e velho e nao volta para a tela
   soltarPresa()
@@ -435,14 +448,16 @@ test('botoes: prompt que falha ao preencher - a faixa diz o comando a digitar, e
   const depois = await $.ui.mount({ ...BANDA, surface: 'terminal' })
   expect(await depois.find({ key: 'sworn-revisar' })).toBeUndefined()
   const textos = (await depois.findAll({ type: 'Text' })).map((t: any) => String(t.text))
-  expect(textos.join('')).toBe('sworn Não consegui escrever no prompt. Digite /sworn:review src/a.js e envie.')
+  // A7-26 (pedido 12): sem 1a pessoa e sem "prompt" solto
+  expect(textos.join('')).toBe('sworn O botão não preencheu o campo de mensagem. Digite ' +
+    '/sworn:review src/a.js e envie.')
   const comando = await depois.find({ type: 'Text', text: '/sworn:review src/a.js' })
   expect(comando && comando.props.bold).toBe(true)
   await depois.unmount()
   await $.turn.complete({ turnId: 't2', answer: 'ok', durationMs: 10, isAborted: false, usage: null })
   const outra = await $.ui.mount({ ...BANDA, surface: 'terminal' })
   expect(await outra.find({ key: 'sworn-revisar' })).toBeDefined()
-  expect(await outra.find({ type: 'Text', text: /consegui escrever/ })).toBeUndefined()
+  expect(await outra.find({ type: 'Text', text: /não preencheu/ })).toBeUndefined()
   await outra.unmount()
 })
 
@@ -536,12 +551,12 @@ test('botoes: o aviso do clique que falhou fica no turno de subagente e sai no d
   await ui.unmount()
   await $.turn.complete({ turnId: 't2', answer: 'relatorio', durationMs: 10, isAborted: false, usage: null, agentId: 'ag1' })
   const sub = await $.ui.mount({ ...BANDA, surface: 'terminal' })
-  expect(await sub.find({ type: 'Text', text: /consegui escrever/ })).toBeDefined()
+  expect(await sub.find({ type: 'Text', text: /não preencheu/ })).toBeDefined()
   expect(await sub.find({ key: 'sworn-revisar' })).toBeUndefined()
   await sub.unmount()
   await $.turn.complete({ turnId: 't3', answer: 'ok', durationMs: 10, isAborted: false, usage: null })
   const principal = await $.ui.mount({ ...BANDA, surface: 'terminal' })
-  expect(await principal.find({ type: 'Text', text: /consegui escrever/ })).toBeUndefined()
+  expect(await principal.find({ type: 'Text', text: /não preencheu/ })).toBeUndefined()
   expect(await principal.find({ key: 'sworn-revisar' })).toBeDefined()
   await principal.unmount()
 })
@@ -628,15 +643,21 @@ test('botoes: comando que nao e do sworn nao vira botao', async ($, on) => {
 // Plano 082, Tarefa 2 (mock D532, parte 1): os estados da faixa como o dono aprovou, com os textos que o plano.js e o
 // botoes.js produzem (conferidos la por igualdade). O clique que falhou tem teste proprio acima; medidor parado e gasto
 // somando sao da barra (MEDIDOR_PARADO aqui, "somando" no medidor.test.js).
+// A7 (pedido 12): os textos de hoje do handoff e do padrao, copiados do scripts/lib/botoes.js.
+const TEXTO_HANDOFF = 'A conversa chegou a um limite que o sworn conta (tamanho, bloqueios ou trabalho feito): ' +
+  'gere o handoff (o texto que continua daqui) e cole num chat novo.'
+const TEXTO_PADRAO = 'Um arquivo mudado nesta sessão pede o cuidado mais alto do projeto: carregue o manual ' +
+  'antes de seguir.'
 const ESTADOS_DO_MOCK = [
   { nome: 'plano em curso, titulo longo cortado', plano: 'plano 082 · 2 de 7 tarefas · próxima: Tarefa 3 — barra do medidor em uma linha e o res...',
     botoes: [], linhas: 'sworn plano 082 · 2 de 7 tarefas · próxima: Tarefa 3 — barra do medidor em uma linha e o res...', rotulo: null },
   { nome: 'troca de chat urgente', plano: 'plano 082 · 2 de 7 tarefas · próxima: Tarefa 3',
-    botoes: [{ nome: 'handoff', texto: 'Um gatilho de troca de chat cruzou: gere o handoff e siga num chat novo.', rotulo: 'gerar handoff', comando: '/sworn:handoff' }],
-    linhas: 'sworn plano 082 · 2 de 7 tarefas · próxima: Tarefa 3|Um gatilho de troca de chat cruzou: gere o handoff e siga num chat novo. gerar handoff', rotulo: 'gerar handoff' },
+    botoes: [{ nome: 'handoff', texto: TEXTO_HANDOFF, rotulo: 'gerar handoff', comando: '/sworn:handoff' }],
+    linhas: 'sworn plano 082 · 2 de 7 tarefas · próxima: Tarefa 3|' + TEXTO_HANDOFF + ' gerar handoff',
+    rotulo: 'gerar handoff' },
   { nome: 'arquivo AAA sem o manual', plano: '',
-    botoes: [{ nome: 'padrao', texto: 'Você mudou arquivo de rigor máximo sem carregar o manual.', rotulo: 'carregar o manual', comando: '/sworn:playbook' }],
-    linhas: 'sworn Você mudou arquivo de rigor máximo sem carregar o manual. carregar o manual', rotulo: 'carregar o manual' },
+    botoes: [{ nome: 'padrao', texto: TEXTO_PADRAO, rotulo: 'carregar o manual', comando: '/sworn:playbook' }],
+    linhas: 'sworn ' + TEXTO_PADRAO + ' carregar o manual', rotulo: 'carregar o manual' },
 ]
 
 for (const estado of ESTADOS_DO_MOCK) {

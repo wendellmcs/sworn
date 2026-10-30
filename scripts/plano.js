@@ -5,14 +5,27 @@ const path = require('node:path');
 const planoLib = require('./lib/plano.js');
 const estado = require('./lib/estado.js');
 
+const USO = 'uso: plano.js [--abrir <caminho do plano>] [--proxima-decisao <arquivo de decisoes>] [--texto] ' +
+  '[--sessao <id>]\n';
+const FLAGS_DO_USO = ['--abrir', '--proxima-decisao', '--texto', '--sessao'];
+
+// A7 (pedido 12, R1 :14/:15): flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada no
+// painel ou no JSON. O molde e o arg() do gerar-skill.js.
 function arg(nome) {
   const i = process.argv.indexOf('--' + nome);
-  return i !== -1 ? process.argv[i + 1] : null;
+  if (i === -1) return null;
+  const valor = process.argv[i + 1];
+  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
+    process.stdout.write('ERRO: --' + nome + ' pede um valor.\n' + USO);
+    process.exit(1);
+  }
+  return valor;
 }
 
 const cwd = process.cwd();
 const abrirEm = arg('abrir');
 const decisoes = arg('proxima-decisao');
+const sessaoDaFlag = arg('sessao');
 
 if (decisoes) {
   // D460: ausente segue dando 1 (projeto sem decisao ainda), mas avisa: caminho errado gravava "D1" calado
@@ -31,7 +44,7 @@ if (decisoes) {
 }
 
 if (abrirEm) {
-  const sessao = arg('sessao') || process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || 'sem-sessao';
+  const sessao = sessaoDaFlag || process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || 'sem-sessao';
   let a;
   // Plano 082 (p7-16): o abrir() diz o arquivo, a causa e o que fazer; aqui sai so a mensagem, sem stack.
   try { a = planoLib.abrir(cwd, abrirEm, sessao); }
@@ -54,7 +67,7 @@ if (process.argv.indexOf('--texto') !== -1) {
   let alvo = ativo && ativo.arquivo ? ativo : null;
   if (!alvo) {
     // D476: sem plano-ativo.json, o plano vem da frente vinculada a sessao (o mod passa --sessao).
-    const sessao = arg('sessao') || process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || null;
+    const sessao = sessaoDaFlag || process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || null;
     const achado = planoLib.acharPlanoDaFrente(cwd, sessao ? estado.ler(sessao).frente : null);
     if (achado && achado.varias) {
       process.stdout.write(planoLib.painelVariasFrentes(achado.varias, eu) + '\n');
@@ -104,7 +117,10 @@ if (process.argv.indexOf('--texto') !== -1) {
 }
 
 if (!ativo) {
-  process.stdout.write('nenhum plano ativo. Use --abrir <caminho do plano>\n');
+  // A7-01 (pedido 12): o comando inteiro de abrir (o caminho real deste script, como no painel) e o que vai no caminho.
+  process.stdout.write('Nenhum plano ativo: não há .claude/sworn/plano-ativo.json nesta pasta. Para abrir um, rode ' +
+    planoLib.comandoDeAbrir(__filename) + ' (troque <caminho do plano> pelo arquivo do plano, relativo a esta pasta ' +
+    'ou absoluto).\n');
   process.exit(0);
 }
 

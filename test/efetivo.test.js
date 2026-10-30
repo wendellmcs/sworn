@@ -73,6 +73,20 @@ test('efetivo: resposta sem data nao passa a frente da ultima datada; arquivo qu
   assert.strictEqual(efetivo.daAuditoria({ caminho: path.join(dir, 's1.jsonl') }, null, AGORA).ilegiveis, 1);
 });
 
+test('efetivo: o agente de workflow (subagents/workflows/<run>/) entra; o journal do run nao e transcricao', (t) => {
+  // A6 (pedido 12, lacuna (a) da sonda da s186): o efetivo so lia subagents/*.jsonl e nao via os inspetores das levas.
+  const dir = projeto(t, []);
+  fs.writeFileSync(path.join(dir, 's1.jsonl'), resposta('principal', 'claude-opus-5-5', 'high', '2026-10-27T09:00:00Z') + '\n');
+  const run = path.join(dir, 's1', 'subagents', 'workflows', 'wf_1');
+  fs.mkdirSync(run, { recursive: true });
+  fs.writeFileSync(path.join(run, 'agent-a1.jsonl'), resposta('sworn:inspector', 'claude-sonnet-5-5', 'medium', '2026-10-27T09:00:00Z') + '\n');
+  fs.writeFileSync(path.join(run, 'journal.jsonl'), resposta('intruso', 'claude-opus-5-5', 'high', '2026-10-27T09:00:00Z') + '\n');
+  const m = efetivo.medir(dir, { agora: AGORA });
+  assert.deepStrictEqual(Object.keys(m.agentes), ['sworn:inspector'], 'a conversa principal e o journal do run ficam fora');
+  assert.strictEqual(m.agentes['sworn:inspector'].ultimo.esforco, 'medium');
+  assert.strictEqual(m.arquivos, 1);
+});
+
 test('efetivo: arquivo mexido antes da janela nao e lido; pasta que nao existe da vazio', (t) => {
   const dir = projeto(t, [[resposta('velho', 'claude-haiku-5-5', 'low', '2026-08-01T10:00:00Z')]]);
   const antigo = new Date('2026-08-01T10:00:00Z');

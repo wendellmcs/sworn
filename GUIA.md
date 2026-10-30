@@ -394,9 +394,9 @@ BOM (comum no Windows) vale. O portão da "etapa com subitem aberto" lê só o f
 ~~~text
 sworn - hora de abrir chat novo.
 
-Gatilho contavel disparou:
-  - 7 bloqueios de portao nesta sessao (limiar 6)
-Se surgiu a duvida "ja e hora?", ja era.
+O sworn faz contas nesta conversa, e o que esta abaixo chegou ao limite (o numero depois de "limiar"):
+  - 7 bloqueios de portao (acoes que o sworn negou) nesta sessao (limiar 6)
+Nao espere ter certeza: troque agora, pelo passo abaixo.
 
 Faca assim: rode /sworn:handoff, cole o prompt pronto num chat novo e continue de la.
 ~~~
@@ -549,12 +549,15 @@ botão por vez, o do comando do sworn que está na hora:
 | `/sworn:playbook` | carregar o manual | um arquivo da marcha AAA mudou e o agente não carregou o manual (skill com "padrao" no nome) |
 
 Com mais de um aceso, vale a ordem da tabela. O botão põe o comando no prompt, sem enviar, e some; volta se o sinal
-dele passar e acender de novo. Se o Claude Code não deixar escrever no prompt, a faixa troca o botão por "Não
-consegui escrever no prompt. Digite **/sworn:handoff** e envie." (com o comando daquele botão) até a próxima
-resposta. Depois de recarregar os mods, o botão do padrão pode voltar numa sessão que já carregou o manual: o mod recomeça sem
-lembrar que viu o manual carregado. Não é erro; ignore o botão, ou clique, e o manual carrega de novo (só gasta a
-leitura dele). Se o Node.js não responder, a linha de status diz "medidor parado: o Node.js não respondeu. Rode
-node -v num terminal para conferir.", e os dois comandos dizem o mesmo. Nada disso abre rede: os números vêm do
+dele passar e acender de novo. Se o Claude Code não deixar o botão preencher o campo de mensagem, a faixa troca o
+botão por "O botão não preencheu o campo de mensagem. Digite **/sworn:handoff** e envie." (com o comando daquele
+botão) até a próxima resposta. Depois de recarregar os mods, o botão do padrão pode voltar numa sessão que já
+carregou o manual: o mod recomeça sem lembrar que viu o manual carregado. Não é erro; ignore o botão, ou clique, e o
+manual carrega de novo (só gasta a leitura dele). Se a medida falhar, a linha de status diz "medidor parado: a medida
+falhou e roda de novo na próxima resposta; se seguir assim, rode /sworn-session.", e os dois comandos dizem as causas
+possíveis (falta o Node.js, ou o script do sworn deu erro ou demorou demais) e o passo: pedir ao Claude para achar
+por que o medidor (ou o painel do plano) parou, e depois rodar o comando de novo. Nada disso abre rede: os números
+vêm do
 próprio Claude Code e dos arquivos na sua máquina.
 
 **Como o painel do plano acha o plano e conta.**
@@ -771,10 +774,10 @@ sworn: NEGADO - arquivo novo sem ter procurado o que ja existe.
 
 Alvo: src/carrinho/frete-novo.js  (nao existe ainda: isto e criacao, nao edicao)
 
-A falha de origem: criar arquivo novo em vez de entender o que ja existe.
+Por que: o risco e criar arquivo novo em vez de entender o que ja existe.
 Antes de criar, procure - Grep, Glob, ou um grep/find pelo Bash - e diga na
 resposta o que a busca devolveu. Se mesmo assim nao houver onde encaixar,
-criar passa a ser a resposta certa, e o portao nao atrapalha de novo neste turno.
+crie: depois de uma busca neste turno, criar arquivo novo fica liberado.
 
 Editar arquivo que ja existe nunca exige isso: quem edita ja achou.
 ~~~
@@ -800,13 +803,13 @@ registrada. A decisao fica onde o projeto registra as decisoes.
 resposta final não tem bloco de código):
 
 ~~~text
-sworn - falta colar no chat o prompt do handoff (portao de fecho).
+sworn - falta colar no chat o prompt do handoff.
 
-Voce gravou um arquivo de handoff neste turno, e a sua resposta final nao tem bloco de codigo.
-O prompt pronto tem de chegar ao chat, nao so ao arquivo. O portao le so a resposta final:
-um bloco numa mensagem anterior deste turno ele nao ve.
+Um arquivo de handoff foi gravado neste turno, e a resposta final nao tem bloco de codigo.
+O prompt pronto tem de chegar ao chat, nao so ao arquivo. Esta trava do fim do turno le so a resposta final:
+um bloco numa mensagem anterior deste turno ela nao ve.
 
-Faca assim: cole o prompt agora num bloco de codigo (tres crases ou tres tis), nesta resposta final - uma vez so.
+Faca assim: cole o prompt agora num bloco de codigo (entre ``` ou ~~~), nesta resposta final - uma vez so.
 
 Desligar neste projeto: "portaoHandoff": false em .claude/sworn/projeto.json.
 ~~~
@@ -1387,10 +1390,11 @@ há sinal: o commit com `# sworn: sem-revisao` depois de negado; nas outras sai 
 guarda a foto desses números em `auditoria.json` e mostra o que mudou desde a vez anterior:
 
 ~~~text
-- ordens dos ultimos 7 dias (dadas / cumpridas / recusadas pelo dono):
+- ordens dos ultimos 7 dias que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):
   aprender 4/3/-; revisar antes do commit 6/5/1; manual 2/2/-
   nunca disparadas: auditar, calibrar, init
-  (-: o sworn nao ve essa recusa; dada e nao cumprida foi ignorada ou recusada na conversa)
+  ("-": o sworn so ve a recusa no commit sem revisao; nas outras, a ordem que o Claude nao cumpriu foi ignorada ou
+  recusada na conversa. Ordem que se repete sem cumprir: vale perguntar ao dono se ela ainda serve.)
 ~~~
 
 Sem nada a cortar, essa parte sai sozinha, sem a ordem de auditar; nada disparado e nada a cortar segue em
@@ -1533,7 +1537,7 @@ dois lugares, como na tabela.
 | Rodar | O que devolve |
 |---|---|
 | `node "<plugin>/scripts/uso.js"` | quantas vezes cada trava disparou neste projeto |
-| `node "<plugin>/scripts/agentes-rodando.js" [--transcricao <caminho do .jsonl>]` | os agentes em segundo plano desta sessão que ainda rodam, um por linha: o `/sworn:handoff` roda antes de escrever o handoff, que só sai com todos terminados. Lê a transcrição da sessão do ambiente (`CLAUDE_CODE_SESSION_ID`), ou a de `--transcricao`; sem as duas, diz "nao medido" e a causa. Saída 0 sempre |
+| `node "<plugin>/scripts/agentes-rodando.js" [--transcricao <caminho do .jsonl>]` | os agentes em segundo plano desta sessão que ainda rodam, um por linha: o `/sworn:handoff` roda antes de escrever o handoff, que só sai com todos terminados. Lê a transcrição da sessão do ambiente (`CLAUDE_CODE_SESSION_ID`), ou a de `--transcricao`; sem as duas, diz "nao medidos", a causa e o passo. Saída 0 sempre |
 | `node "<plugin>/scripts/cobertura.js"` | quais portões este ambiente consegue verificar, quais não, e por quê |
 | `node "<plugin>/scripts/cicatriz.js" --manual <pasta ou arquivo do seu manual> --corpus <pasta com o seu histórico em .md>` | para cada regra do seu manual: existe decisão, incidente ou achado atrás dela? Sem `--corpus` o script avisa que não leu histórico e não separa nada; sem `--manual` mede as skills do próprio plugin |
 | `node "<plugin>/scripts/plataforma.js" --raiz "<plugin>"` | em que sistemas cada trecho dependente de plataforma foi de fato exercitado |
@@ -1550,7 +1554,7 @@ dois lugares, como na tabela.
 | `node "<plugin>/scripts/gerar-agents-md.js" [--fatias] [--respostas <arquivo.json>] [--gravar]` | o `AGENTS.md` da raiz, a partir de `modelos/agents-md.md`. Sem `--gravar` só mostra; com ele, recusa sobrescrever um `AGENTS.md` que já existe |
 | `node "<plugin>/scripts/autorizar-paralelo.js" [--conferir]` | grava a regra `Workflow(sworn:parallel)` em `permissions.allow` do `.claude/settings.local.json`; com `--conferir`, só lê e diz se já está autorizado. Saída em JSON (`autorizado`, `gravou`, `arquivo`) |
 | `node "<plugin>/scripts/recusar-init.js" <pasta>` | grava o "nunca neste projeto" da pergunta do init, fora do projeto (em `sworn/init-recusado.json` da pasta de configuração do Claude), e a abertura não pergunta mais ali. O Claude roda quando você escolhe "nunca"; saída 0 se gravou, 1 sem pasta ou sem conseguir gravar |
-| `node "<plugin>/scripts/vigia-puxar.js" --repo <pasta do clone> [--remote backup] [--ramo claude/vigia] [--arquivo vigia/novidades.md] [--destino <pasta>]` | só para quem mantém o plugin: traz a novidade da semana do ramo `claude/vigia` para a pasta do vigia (ver "Os portões que não são travas"); com `--ramo claude/radar --arquivo radar/semana.md --destino <pasta do vigia>/radar`, traz a ficha do radar da semana. Roda por tarefa agendada, nunca por gancho. Saída 0 se gravou, 1 se falhou, 2 se faltou `--repo` |
+| `node "<plugin>/scripts/vigia-puxar.js" --repo <pasta do clone> [--remote backup] [--ramo claude/vigia] [--arquivo vigia/novidades.md] [--destino <pasta>]` | só para quem mantém o plugin: traz a novidade da semana do ramo `claude/vigia` para a pasta do vigia (ver "Os portões que não são travas"); com `--ramo claude/radar --arquivo radar/semana.md --destino <pasta do vigia>/radar`, traz a ficha do radar da semana. Roda por tarefa agendada, nunca por gancho. Saída 0 se gravou, 1 se falhou, 2 se faltou `--repo` ou se uma opção veio sem valor (nada é gravado) |
 | `node "<clone do plugin>/scripts/exportar.js" --raiz "<clone do plugin>" --destino <pasta>` | só para quem publica o próprio plugin: monta, numa pasta à parte, exatamente o que iria para um repositório público (sem `--gravar` só mostra o que copiaria) |
 | `node "<plugin>/scripts/experimento.js" --manual <pasta do seu manual>` | monta a tabela de obrigações do seu manual e do plugin; depois de preenchida (o script diz onde), rode de novo com `--veredito` para julgar: o plugin bastou, ou ainda falta manual? Sem `--manual` a tabela traz só as obrigações do plugin |
 
@@ -1754,7 +1758,7 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 | `modeloDeAmeaca` | `interno` ou `publico`; entra no cabeçalho que a abertura reinjeta e orienta a lente de governança (onde o projeto declarou o risco como aceito, propor hardening que ninguém pediu é achado dela) | sem padrão: é resposta da entrevista |
 | `provaDePronto` | o comando cuja saída o agente cola para provar o pronto; texto, ou `null` quando ainda não existe | o que a varredura achou, ou `null` |
 | `quemDecide` | a quem se leva a decisão, em três opções; reinjetado na abertura | sem padrão: é resposta da entrevista |
-| `fontesCanonicas` | os arquivos que mandam de verdade, em ordem; o resto é dado, não instrução; também entram no peso de instrução da auditoria | os candidatos que a varredura achou, ou `[]` |
+| `fontesCanonicas` | os arquivos que mandam de verdade, em ordem; o resto é dado, não instrução; também entram no peso de instrução da auditoria, menos as que estiverem em `fontesDeConsulta` | os candidatos que a varredura achou, ou `[]` |
 | `intocaveis` | padrões de caminho que nem o escopo declarado libera; o padrão que não pega arquivo nenhum é avisado na abertura | `[]` |
 | `marchaPadrao` | a marcha (`rapida`, `padrao` ou `aaa`) do caminho que não está em nenhuma lista de `marchas`; valor desconhecido cai em `padrao` | `padrao` |
 | `marchas` | três listas de padrões de caminho (`aaa`, `padrao`, `rapida`); o caminho que casa em duas listas fica na mais rigorosa; caminho absoluto ou com esquema (`C:`, `file://`) é recusado | as três listas vazias |
@@ -1792,6 +1796,7 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 |---|---|---|
 | `referencias` | a peça de topo contra a qual o `/sworn:review` compara (o `R.txt` no pacote e uma 2ª passada com A e B trocados, que dobra os inspetores), por tipo (`tela`, `codigo`, `texto`), cada tipo uma lista de caminhos ou URLs; tipo desconhecido (`telas`) e lista que tem item que não é texto reprovam no `node scripts/validar.js`, que diz a chave a corrigir; no `/sworn:init` rodado de novo, o tipo que você responder troca a lista dele e o tipo que você não citar fica como estava (lista vazia, `[]`, tira um tipo; `{}` não apaga nada); o `/sworn:reference` junta a ficha dele à lista do tipo, com o seu sim | sem a chave: nada muda |
 | `marcaDeAtalho` | a marca que o `/sworn:shortcuts` procura nos comentários, no lugar de `atalho` (`ponytail` e `shortcut` seguem valendo); uma palavra só (letras, números, `-` ou `_`), senão reprova no validar | `atalho` |
+| `fontesDeConsulta` | as fontes canônicas que se consultam, mas não se carregam como instrução (um registro de decisões, por exemplo): seguem mandando, mas saem do peso de instrução do `/sworn:audit`, que as mostra à parte com a contagem de cada uma; cada item tem de estar em `fontesCanonicas`, senão reprova no validar | sem a chave: todas as canônicas pesam |
 
 **As quatro travas**, dentro de `travas`. As quatro são obrigatórias e booleanas.
 

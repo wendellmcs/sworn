@@ -4,8 +4,8 @@
 // apelido passa a responder com outro id (o `sonnet` que virou `-6` sem ninguem mudar a tabela).
 //
 // Forma vista nas transcricoes reais (s173; o Claude Code nao documenta o formato):
-//   <projeto>/<sessao>/subagents/agent-<id>.jsonl, linha {type:"assistant", attributionAgent, effort, timestamp,
-//   message:{model}}. `<synthetic>` e o modelo das respostas que o proprio Claude Code escreve: fica de fora.
+//   <projeto>/<sessao>/subagents/agent-<id>.jsonl (e o agente de workflow em subagents/workflows/<run>/, A6), linha
+//   {type:"assistant", attributionAgent, effort, timestamp, message:{model}}. `<synthetic>` e o modelo das respostas que o proprio Claude Code escreve: fica de fora.
 // Binario sem `effort` na linha (2.1.258) da esforco "nao sei", nunca divergencia.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -44,7 +44,7 @@ function medir(dir, opcoes) {
   let arquivos = 0;
   let ilegiveis = 0;
   for (const a of gasto.arquivosDoProjeto(dir)) {
-    if (path.basename(path.dirname(a.arquivo)) !== 'subagents') continue;
+    if (!a.subagente) continue;
     let texto;
     try {
       if (fs.statSync(a.arquivo).mtimeMs < desde) continue;

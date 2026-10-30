@@ -12,6 +12,7 @@
  */
 
 const qualidade = require('./qualidade.js');
+const { entreAspas } = require('./texto.js');
 
 const CONDICOES = ['padrao', 'caveman', 'recurso'];
 const RIVAIS = ['caveman', 'padrao'];
@@ -31,8 +32,9 @@ const LENTE = {
 };
 
 /** O que fazer quando faltam julgamentos: a mesma frase no motivo do apurar e na tela do --veredito. */
-const ACAO_DE_JULGAR = 'Julgue os pares que faltam (o briefing do juiz sai de: node scripts/medir-qualidade.js --pares <pasta da rodada>; ' +
-  'cada veredito vai em pares/<par>/vereditos/' + LENTE.chave + '.json) e rode --veredito <pasta da rodada> de novo.';
+const ACAO_DE_JULGAR = 'Julgue os pares que faltam (as instrucoes do juiz saem de: ' +
+  'node scripts/medir-qualidade.js --pares <pasta da rodada>; cada veredito vai em pares/<par>/vereditos/' +
+  LENTE.chave + '.json) e rode --veredito <pasta da rodada> de novo.';
 
 /** O comando que liga o caveman no modo print. Quem julga nunca o ve: `perguntaDaCondicao` so o poe no envio. */
 const COMANDO_CAVEMAN = '/caveman ';
@@ -378,18 +380,25 @@ function lerExecucao(linhas, opcoes) {
   }
   if (falhas.length > 0) motivos.push('hook de SessionStart falhou: ' + falhas.join('; '));
   const querBloco = condicao === 'recurso';
-  if (querBloco && comBloco === 0) motivos.push('o bloco de qualidade nao chegou a sessao do recurso');
+  if (querBloco && comBloco === 0) motivos.push('o bloco de qualidade nao chegou a sessao do recurso: sem ele a ' +
+    'condicao recurso mede o mesmo que o padrao. Confira o .claude/sworn/projeto.json da pasta medida: a condicao ' +
+    'recurso nao pode ter "qualidadeDeResposta": false. Rode de novo.');
   if (!querBloco && comBloco > 0) motivos.push('o bloco de qualidade apareceu na condicao ' + condicao +
     ': ela tem de rodar sem o bloco. Confira o .claude/sworn/projeto.json da pasta medida: a condicao ' + condicao +
     ' precisa de "qualidadeDeResposta": false.');
   if (condicao === 'caveman') {
     if (!cavemanLigou) {
-      motivos.push(transcricao.legivel
+      // A6 (s220, R1 :388/:389): como os motivos da abertura (:373/:377), diz o passo.
+      motivos.push((transcricao.legivel
         ? 'o caveman nao ligou na condicao caveman (a transcricao nao mostra o comando e o stream nao mostra a skill)'
-        : 'o caveman nao ligou na condicao caveman: transcricao da sessao nao achada, e o stream nao mostra a skill');
+        : 'o caveman nao ligou na condicao caveman: transcricao da sessao nao achada, e o stream nao mostra a skill') +
+        '. Confira se o plugin caveman esta instalado e ligado no claude que a medicao chama (o de SWORN_CLAUDE, ou o ' +
+        'do PATH), e rode de novo.');
     }
   } else if (cavemanPedido) {
-    motivos.push('o caveman foi acionado na condicao ' + condicao);
+    // A6-29: como o motivo do bloco que vazou (:386-388), diz o passo.
+    motivos.push('o caveman foi acionado na condicao ' + condicao + ': ela tem de rodar sem o caveman. Confira se o ' +
+      'plugin caveman liga sozinho no claude que a medicao chama (o de SWORN_CLAUDE, ou o do PATH) e rode de novo.');
   }
   const aplicou = motivos.length === 0;
 
@@ -416,23 +425,35 @@ function lerExecucao(linhas, opcoes) {
   let ok = true;
   if (!resultado) {
     ok = false;
-    motivos.push('o stream nao tem o evento result');
+    motivos.push('o stream nao tem o evento result: a execucao parou antes do fim; o .stderr.txt desta geracao na ' +
+      'rodada, quando existe, diz por que. Rode de novo.');
   } else {
     if (resultado.is_error === true || resultado.subtype !== 'success') {
       ok = false;
-      motivos.push('a execucao terminou com erro (subtype ' + String(resultado.subtype) + ')');
+      // A6-28: sem o jargao "subtype"; a marca de fim e do claude, entre aspas (molde D736), e o passo e o do :428.
+      const marca = resultado.subtype;
+      const fim = marca === 'success' ? 'o claude marcou o fim como erro'
+        : marca !== undefined && marca !== null && marca !== ''
+          ? 'o claude fechou com ' + entreAspas(marca) + ', e nao com "success"'
+          : 'o claude fechou sem a marca "success"';
+      motivos.push('a execucao terminou com erro (' + fim + '); o .stderr.txt desta geracao na rodada, ' +
+        'quando existe, diz por que. Rode de novo.');
     }
     const usage = resultado.usage;
     const bruto = usage && typeof usage === 'object' ? usage.output_tokens : undefined;
     if (bruto !== undefined && bruto !== null) outputTokens = bruto;
     if (!tokensValidos(bruto)) {
       ok = false;
-      motivos.push('output_tokens ausente ou invalido no result');
+      // A6-30: diz o que e o output_tokens e o passo.
+      motivos.push('o evento result nao traz a contagem de tokens da resposta (o campo output_tokens), ou ela ' +
+        'nao e um numero de 0 para cima: sem ela o gasto desta geracao nao se mede. Rode de novo; se repetir, ' +
+        'confira a versao do claude que a medicao chama (o de SWORN_CLAUDE, ou o do PATH).');
     }
   }
   if (texto === '') {
     ok = false;
-    motivos.push('nenhum texto visivel ao usuario');
+    motivos.push('a execucao nao deixou texto que o usuario veria (so ferramenta, subagente ou pensamento): sem ele ' +
+      'nao ha o que julgar. Rode de novo.');
   }
 
   return { ok: ok, texto: texto, aplicou: aplicou, outputTokens: outputTokens, motivos: motivos };

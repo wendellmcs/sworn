@@ -583,3 +583,14 @@ test('portao-apelido: caminho de instalacao com $ ou crase vai entre aspas simpl
     }
   });
 });
+
+// A4-age-2 (pedido 12): o agente que nao se le saiu de naoDeclarados para o balde ilegiveis; o --mapa, que a skill le
+// no gatilho 2, tem de trazer o balde - sem ele o agente sumiria do mapa calado.
+test('A4-age-2: o --mapa traz o balde ilegiveis', () => {
+  const dir = projeto(DOIS);
+  agente(dir, 'busca', '---\nname: busca\nmodel: barato\n---\n');
+  const r = cli(dir, ['--mapa']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.deepStrictEqual(JSON.parse(r.stdout).ilegiveis, []);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

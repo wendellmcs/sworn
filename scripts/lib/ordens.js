@@ -146,11 +146,13 @@ function ordemDoInit(cwd, projeto, opcoes) {
 /** #6: o motivo do portao do manual (portao-escopo.js, passo 5b), no texto do mock. */
 function motivoSemManual(alvo) {
   return [
-    'sworn - falta carregar o manual antes de editar arquivo de rigor maximo.',
+    'sworn - falta carregar o manual de execucao antes de editar este arquivo.',
     '',
-    '"' + require('./escopo.js').ascii(alvo) + '" e de marcha AAA neste projeto, e nenhum manual',
-    'de execucao (sworn:playbook, ou o manual do projeto) foi carregado nesta sessao.',
-    'Faca agora: carregue a skill pela ferramenta Skill e tente a edicao de novo.',
+    '"' + require('./escopo.js').ascii(alvo) + '" e de marcha AAA neste projeto (o nivel de rigor mais alto que o',
+    'projeto.json da a um caminho), e nenhum manual de execucao foi carregado nesta sessao.',
+    // A5-38 (D735): a skill nomeada, a mesma que o MANUAL aceita.
+    'Faca agora: carregue pela ferramenta Skill o sworn:playbook (ou a skill do projeto com "padrao" no nome) e tente',
+    'a edicao de novo.',
     'Desligar neste projeto: "portaoManual": false em .claude/sworn/projeto.json.'
   ].join('\n');
 }
@@ -171,7 +173,11 @@ const MANUAL = /padrao|^(sworn:)?playbook$/i;
 const FASES = ['dada', 'cumprida', 'recusada'];
 const ROTULO = { revisar: 'revisar antes do commit' };
 const RECUSA_MEDIDA = ['revisar'];
-const NOTA_DA_RECUSA = '  (-: o sworn nao ve essa recusa; dada e nao cumprida foi ignorada ou recusada na conversa)';
+// A5-37 (D735): o que o "-" esconde e o passo.
+const NOTA_DA_RECUSA = [
+  '  ("-": o sworn so ve a recusa no commit sem revisao; nas outras, a ordem que o Claude nao cumpriu foi ignorada ou',
+  '  recusada na conversa. Ordem que se repete sem cumprir: vale perguntar ao dono se ela ainda serve.)'
+];
 
 function chaveDaOrdem(tipo, fase) {
   return 'ordem_' + tipo + '_' + fase;
@@ -266,12 +272,12 @@ function linhasDasOrdens(antes, agora, dias) {
   const janela = typeof dias === 'number' && isFinite(dias)
     ? (Math.max(1, Math.floor(dias)) === 1 ? 'do ultimo dia' : 'dos ultimos ' + Math.floor(dias) + ' dias')
     : 'desde o comeco';
-  const linhas = ['- ordens ' + janela + ' (dadas / cumpridas / recusadas pelo dono):', '  ' + usadas.join('; ')];
+  const linhas = ['- ordens ' + janela + ' que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
+    '  ' + usadas.join('; ')];
   if (nunca.length) linhas.push('  nunca disparadas: ' + nunca.join(', '));
-  if (semRecusa) linhas.push(NOTA_DA_RECUSA);
-  return linhas;
+  return semRecusa ? linhas.concat(NOTA_DA_RECUSA) : linhas;
 }
 
 module.exports = { MARCA_CALIBRAR, DIAS_ENTRE_ORDENS_DO_CALIBRAR, ARQUIVO_INIT_RECUSADO, ordemDoCalibrar, ordemDoInit,
   recusarInit, motivoSemManual, TIPOS_DE_ORDEM, ROTULO, MANUAL, chaveDaOrdem, marcarDada, marcarCumprida, marcarRecusada,
-  totaisDasOrdens, linhasDasOrdens };
+  totaisDasOrdens, linhasDasOrdens, arquivoDaRecusa };

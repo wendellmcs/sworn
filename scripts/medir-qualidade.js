@@ -17,7 +17,7 @@ const projetoLib = require('./lib/projeto.js');
  *       brinquedo NOVO em <destino>/<carimbo>/<prompt>-<condicao>/. Grava o stream bruto e o
  *       geracoes.json em .claude/sworn/medicao-qr/<carimbo>/ da pasta de onde roda. Nada se apaga.
  *   --pares <pasta da rodada>
- *       Monta os pares cegos (A.txt, B.txt, vereditos/) e imprime o briefing do juiz. O mapa de quem
+ *       Monta os pares cegos (A.txt, B.txt, vereditos/) e imprime as instrucoes do juiz. O mapa de quem
  *       e quem fica em <rodada>/mapa.json, FORA de pares/.
  *   --veredito <pasta da rodada>
  *       Le geracoes.json e pares/<par>/vereditos/clareza.json e apura. Exit 0 com veredito; 2 quando
@@ -489,11 +489,13 @@ function pares(argv) {
         'veredito). Nada se refaz por cima: confira essa pasta a mao.');
     }
     if (ha) {
-      return recusar('ERRO: esta rodada ja tem pares/ ou mapa.json. Nada se refaz por cima: ha veredito que se perderia.');
+      return recusar('ERRO: esta rodada ja tem pares/ ou mapa.json. Nada se refaz por cima: ha veredito que se perderia. ' +
+        'Para ler o que ja foi julgado, rode --veredito ' + rodada + '; para medir de novo, gere uma rodada nova com --gerar.');
     }
-    // pares/ sem mapa.json: a montagem morreu entre os dois renomes, e o briefing so sai depois deles
+    // pares/ sem mapa.json: a montagem morreu entre os dois renomes, e as instrucoes do juiz so saem depois deles
     if (!temMapa) {
-      return recusar('ERRO: a montagem anterior foi interrompida: pares/ ficou sem mapa.json, e nenhum juiz recebeu o briefing. ' +
+      return recusar('ERRO: a montagem anterior foi interrompida: pares/ ficou sem mapa.json, e nenhum juiz ' +
+        'recebeu as instrucoes (a saida do --pares). ' +
         'Para refazer, apague ' + path.join(rodada, 'pares') + ' e rode de novo (as pastas montagem-* desta rodada nao barram nada).');
     }
     if (!temPares) {
@@ -501,8 +503,8 @@ function pares(argv) {
         'Para refazer, apague ' + path.join(rodada, 'mapa.json') + ' e rode de novo.');
     }
     return recusar('ERRO: esta rodada ja tem pares/ e mapa.json, sem nenhum veredito gravado ainda. Nada se refaz por cima: ' +
-      'um juiz pode estar julgando agora. Se nenhum esta (o briefing se perdeu), apague ' + path.join(rodada, 'pares') + ' e ' +
-      path.join(rodada, 'mapa.json') + ' e rode de novo.');
+      'um juiz pode estar julgando agora. Se nenhum esta (as instrucoes do --pares se perderam), apague ' +
+      path.join(rodada, 'pares') + ' e ' + path.join(rodada, 'mapa.json') + ' e rode de novo.');
   }
 
   // a chave do apurar junta prompt e condicao como texto (7 e "7" casam); o par procura com ===
@@ -531,7 +533,7 @@ function pares(argv) {
         mapa.pares[nome] = { prompt: p.id, rival: rival, ordem: ordem, A: ladoA, B: ladoB };
         lista.push({
           nome: nome,
-          dir: path.join(rodada, 'pares', nome), // onde fica depois do renome: e o caminho do briefing
+          dir: path.join(rodada, 'pares', nome), // onde fica depois do renome: e o caminho das instrucoes
           A: artefato(p.texto, geracaoDe(ger, p.id, ladoA).texto),
           B: artefato(p.texto, geracaoDe(ger, p.id, ladoB).texto)
         });
@@ -561,7 +563,7 @@ function pares(argv) {
     nasceu.push(arqMapa);
   } catch (e) {
     // a gravacao falhou no meio (disco, permissao). O que esta em `nasceu` foi criado nesta chamada (a trava acima
-    // recusa quando pares/ ou mapa.json ja existiam) e nenhum juiz recebeu o briefing: desfaz, para a retentativa
+    // recusa quando pares/ ou mapa.json ja existiam) e nenhum juiz recebeu as instrucoes: desfaz, para a retentativa
     // nao ser recusada. O desfazer que tambem falha nao engole o erro de origem: diz o que ficou
     const ficou = [];
     nasceu.slice().reverse().forEach(function (alvo) {
@@ -574,7 +576,8 @@ function pares(argv) {
   try { fs.rmdirSync(montagem); } catch (e) { /* sobra uma pasta vazia */ }
 
   const L = [];
-  L.push('BRIEFING DO JUIZ - medicao de qualidade de resposta');
+  // A6-20 (D735): "instrucoes", sem o ingles solto, aqui e nas recusas do --pares.
+  L.push('INSTRUCOES DO JUIZ - medicao de qualidade de resposta');
   L.push('rodada: ' + rodada);
   L.push('pares: ' + lista.length + ' (um inspetor por par, no maximo 20 ao mesmo tempo)');
   L.push('');
@@ -643,6 +646,8 @@ function vereditoDaRodada(argv) {
   L.push('MEDICAO DE QUALIDADE DE RESPOSTA - veredito');
   L.push('rodada: ' + rodada + (ger.modelo ? '  (modelo ' + ger.modelo + ')' : ''));
   L.push('prompts: ' + ger.prompts.length + ' | geracoes: ' + ger.geracoes.length);
+  L.push('condicoes: padrao (sem o caveman e sem o recurso), caveman (a skill /caveman, que encurta as respostas) e ' +
+    'recurso (a qualidade de resposta do sworn)');
   L.push('');
   if (a.veredito === null) {
     L.push('VEREDITO: nenhum - faltam ' + a.faltam.length + ' julgamento(s). Par sem veredito do juiz NAO vira empate. ' + medicao.ACAO_DE_JULGAR);
@@ -661,7 +666,9 @@ function vereditoDaRodada(argv) {
   L.push('');
   L.push('tokens de saida (soma da execucao inteira):');
   medicao.CONDICOES.forEach(function (c) { L.push('  ' + c + '  ' + a.tokens[c]); });
-  L.push('o caveman gasta menos que o recurso quando o numero dele for o menor: isso fica dito, nao escondido.');
+  // A6-17 (D735): a regra do gasto (medicao.apurar, gastaMenos), no lugar da frase que saia sempre e nada dizia.
+  L.push('Para GANHA, o recurso precisa vencer os dois placares e gastar menos tokens que o padrao; o gasto do ' +
+    'caveman nao entra na conta.');
   process.stdout.write(L.join('\n') + '\n');
   process.exitCode = a.veredito === null ? 2 : 0;
 }

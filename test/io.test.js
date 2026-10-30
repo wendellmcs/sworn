@@ -52,6 +52,18 @@ test('io: blindar engole excecao e sai com 0', () => {
   assert.strictEqual(saiu, 0);
 });
 
+// A5-27/A5-29 (D735): valor lancado que nao e Error (texto, null) saia "undefined" no log; e sem quebra de linha.
+test('A5-29: blindar poe no stderr a causa de qualquer valor lancado, com quebra de linha final', () => {
+  const io = path.join(__dirname, '..', 'scripts', 'lib', 'io.js');
+  for (const [lancado, causa] of [["'texto solto'", 'texto solto'], ['null', 'null'],
+    ["new Error('de proposito')", 'Error: de proposito'], ['Object.create(null)', 'valor lancado sem texto legivel']]) {
+    const r = spawnSync(process.execPath, ['-e', 'require(' + JSON.stringify(io) + ').blindar(() => { throw ' +
+      lancado + '; });'], { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.strictEqual(r.stderr, 'sworn: portao falhou e liberou por seguranca: ' + causa + '\n', lancado);
+  }
+});
+
 test('abertura: hook responde 0 mesmo com stdin vazio', () => {
   const r = rodar('abertura.js', '');
   assert.strictEqual(r.status, 0, 'stderr: ' + r.stderr);

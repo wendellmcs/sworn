@@ -18,7 +18,10 @@ if (!pasta) {
   process.exit(1);
 }
 if (!ordens.recusarInit(pasta)) {
-  process.stdout.write('ERRO: nao consegui gravar a recusa; a abertura vai perguntar de novo.\n');
+  // A4-22 (pedido 12, microcopy): a falha diz onde gravaria e o que conferir.
+  process.stdout.write('ERRO: nao consegui gravar a recusa em ' + ordens.arquivoDaRecusa() +
+    '; a abertura vai perguntar de novo.\n' +
+    'Confira se a pasta desse arquivo aceita escrita e rode o mesmo comando de novo.\n');
   process.exit(1);
 }
 process.stdout.write('sworn: nao pergunto mais o /sworn:init em ' + pasta + '.\n');

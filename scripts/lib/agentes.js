@@ -64,6 +64,9 @@ function caminho(raiz, nome) {
  * `existe` separa duas respostas que um array vazio confunde: "este projeto nao
  * tem agentes" e "nao consegui olhar". O gatilho 3 precisa das duas separadas
  * para declarar "nao verificavel aqui" em vez de passar verde (foco 1).
+ *
+ * A4-age-1/2 (pedido 12), estados: so ENOENT e "nao tem a pasta"; pasta ou agente que nao se le leva a causa em
+ * `erro` - antes a pasta ilegivel virava "nao tem" e o agente ilegivel virava "nao declara model:".
  */
 function listar(raiz) {
   const dir = path.join(String(raiz), PASTA[0], PASTA[1]);
@@ -73,26 +76,32 @@ function listar(raiz) {
       .filter(function (e) { return e.isFile() && e.name.endsWith('.md'); })
       .map(function (e) { return e.name; });
   } catch (e) {
-    return { existe: false, agentes: [] };
+    if (e && e.code === 'ENOENT') return { existe: false, agentes: [] };
+    return { existe: false, agentes: [], erro: texto.causaDoErro(e) };
   }
   arquivos.sort();
   const lista = arquivos.map(function (arquivo) {
     let bruto = '';
-    try { bruto = fs.readFileSync(path.join(dir, arquivo), 'utf8'); } catch (e) { bruto = ''; }
+    let erro = null;
+    try { bruto = fs.readFileSync(path.join(dir, arquivo), 'utf8'); } catch (e) { erro = texto.causaDoErro(e); }
     const f = frontmatter(bruto);
-    return {
+    const item = {
       arquivo: arquivo,
       nome: f.campos.name || arquivo.replace(/\.md$/, ''),
       model: f.campos.model === undefined ? null : f.campos.model,
       effort: f.campos.effort === undefined ? null : f.campos.effort,
       temFrontmatter: f.ok
     };
+    if (erro) item.erro = erro;
+    return item;
   });
   return { existe: true, agentes: lista };
 }
 
 const ESFORCOS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const FERRAMENTA = /^[A-Za-z][A-Za-z0-9_-]*$/;
+// A4-08 (pedido 12, microcopy): o FERRAMENTA dito em frase, para quem responde a entrevista.
+const FORMATO_DITO = 'nomes que comecam com letra e levam so letras, numeros, _ ou - (como Read, Grep)';
 
 /**
  * As tres fatias do molde que tem formato proprio. Devolve a lista de erros -
@@ -127,13 +136,13 @@ function validarFatias(valores) {
     const ruins = itens.filter(function (x) { return !FERRAMENTA.test(x); });
     if (ruins.length > 0) {
       erros.push('ferramentas invalidas (' + ruins.map(function (x) { return '"' + x + '"'; }).join(', ') +
-        '): separe por virgula nomes no formato [A-Za-z][A-Za-z0-9_-]*');
+        '): separe por virgula ' + FORMATO_DITO);
     }
   } else if (v.ferramentas !== undefined && typeof v.ferramentas !== 'string') {
     erros.push('ferramentas tem de ser texto, nao ' + tipo(v.ferramentas) +
-      ': liste, separadas por virgula, so as que o papel precisa (formato [A-Za-z][A-Za-z0-9_-]*)');
+      ': liste, separadas por virgula, so as que o papel precisa: ' + FORMATO_DITO);
   } else if (v.ferramentas !== undefined) {
-    erros.push('ferramentas vazia: liste, separadas por virgula, so as que o papel precisa (formato [A-Za-z][A-Za-z0-9_-]*)');
+    erros.push('ferramentas vazia: liste, separadas por virgula, so as que o papel precisa: ' + FORMATO_DITO);
   }
   return erros;
 }

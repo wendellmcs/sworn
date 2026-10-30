@@ -74,13 +74,41 @@ test('sessao.js: entrada que nao e JSON -> saida 0, curta mesmo assim e o erro d
   cenario(function (c) {
     const r = rodar(c, 'isto nao e json');
     // Plano 091 (#9): sem projeto o modo continuo e o padrao: o turno nao e gatilho, o mais perto e o bloqueio de portao
-    assert.ok(typeof r.curta === 'string' && /(^| · )troca de chat em 6 bloqueios de portão$/.test(r.curta), JSON.stringify(r));
+    assert.ok(typeof r.curta === 'string' && /(^| · )troca de chat em 6 ações negadas pelo sworn$/.test(r.curta),
+      JSON.stringify(r));
     assert.ok(typeof r.erro === 'string' && r.erro.length > 0, JSON.stringify(r));
     // controle: com modoContinuo false o turno volta a ser o sinal mais perto
     fs.writeFileSync(path.join(c.projeto, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ modoContinuo: false }));
     const antigo = rodar(c, 'isto nao e json');
     assert.ok(typeof antigo.curta === 'string' && /(^| · )troca de chat em 15 respostas com trabalho real$/.test(antigo.curta), JSON.stringify(antigo));
     assert.ok(typeof antigo.erro === 'string' && antigo.erro.length > 0, JSON.stringify(antigo));
+  });
+});
+
+// A7-19 (D735): o `erro` diz o que houve, o efeito e o passo; a mensagem do Node vai entre aspas, marcada como dele.
+test('A7-19: entrada torta e medida que falha dizem o que houve, o efeito e o passo', () => {
+  cenario(function (c) {
+    const passo = ' a medida saiu sem os dados da sessao. Mande na entrada do script um objeto JSON com os campos ' +
+      'uso e sessao (a lista inteira esta no topo de scripts/sessao.js) e rode de novo.';
+    // P2 da R1 (s242): a mensagem e a do JSON.parse deste Node, inteira (o ".+" aceitava qualquer texto; sem barra nem
+    // quebra de linha nela, o JSON.stringify e o entreAspas dao o mesmo), e a entrada vazia cai no mesmo ramo
+    const doNode = (bruto) => { try { JSON.parse(bruto); } catch (e) { return e.message; } };
+    for (const bruto of ['isto nao e json', '']) {
+      const esperado = 'A entrada nao e JSON valido (o Node diz: ' + JSON.stringify(doNode(bruto)) + ');' + passo;
+      assert.strictEqual(rodar(c, bruto).erro, esperado);
+    }
+    assert.strictEqual(rodar(c, '5').erro, 'A entrada e JSON, mas nao um objeto (veio 5);' + passo);
+    assert.strictEqual(rodar(c, 'null').erro, 'A entrada e JSON, mas nao um objeto (veio null);' + passo);
+    // a medida que lanca (o daSessao do botoes.js trocado, pelo -r, por um que lanca): a causa entre aspas e o passo
+    const lanca = path.join(c.base, 'lanca.js');
+    fs.writeFileSync(lanca, 'require(' + JSON.stringify(path.join(__dirname, '..', 'scripts', 'lib', 'botoes.js')) +
+      ').daSessao = function () { throw new Error("quebrou de proposito"); };');
+    const r = spawnSync(process.execPath, ['-r', lanca, SCRIPT], { cwd: c.projeto, input: JSON.stringify({ uso: USO }),
+      env: Object.assign({}, process.env, { SWORN_TMP: c.base, CLAUDE_CONFIG_DIR: path.join(c.base, 'config') }),
+      encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.strictEqual(JSON.parse(r.stdout).erro, 'A medida falhou (o Node diz: "quebrou de proposito") e saiu ' +
+      'vazia. Corrija a causa que o Node aponta e rode de novo.');
   });
 });
 

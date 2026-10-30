@@ -58,13 +58,22 @@ test('083 T5 (p1-19): as strings acentuadas do mod sao NFC, sem mojibake, e cada
   assert.doesNotMatch(mod, /Ã|Â|�/, 'mojibake no mods.tsx');
   const literais = [];
   for (const m of mod.matchAll(/'([^'\n]*)'/g)) if (/[^\x00-\x7F]/.test(m[1])) literais.push(m[1]);
+  // A7 (pedido 12): as frases longas vem em pedacos (linha de ate 120); a lista tem os pedacos com acento, e o
+  // mods.test.ts os parte nos mesmos pontos.
   assert.deepStrictEqual(literais, [
-    'medidor parado: o Node.js não respondeu. Rode node -v num terminal para conferir.',
-    'Medidor parado: o Node.js não respondeu. Rode **node -v** num terminal para conferir.',
-    'Painel do plano parado: o Node.js não respondeu. Rode **node -v** num terminal para conferir.',
-    'Não consegui escrever no prompt. Digite '
+    'medidor atrasado: a medida anterior demorou demais; uma nova já começou, nada a fazer.',
+    'medidor parado: a medida falhou e roda de novo na próxima resposta; se seguir assim, ',
+    'deu erro ou demorou demais). Peça ao Claude para achar por que o medidor do sworn parou; depois rode ',
+    'deu erro ou demorou demais). Peça ao Claude para achar por que o painel do plano do sworn parou; depois ',
+    'O botão não preencheu o campo de mensagem. Digite '
   ]);
   for (const l of literais) assert.ok(testes.indexOf(l) !== -1, 'sem teste exato no mods.test.ts: ' + l);
+  // R1 da s242 (borda): texto com acento em crase ou aspas duplas escapava da lista; toda linha do mod com acento
+  // tem de conter um dos literais
+  for (const linha of mod.split('\n')) {
+    if (!/[^\x00-\x7F]/.test(linha)) continue;
+    assert.ok(literais.some((l) => linha.indexOf(l) !== -1), 'linha com acento fora da lista: ' + linha.trim());
+  }
 });
 
 test('identidade: o README tem a secao "Aparencia" com as duas cores e a regra por tela', () => {

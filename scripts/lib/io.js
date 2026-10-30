@@ -64,7 +64,11 @@ function segurarMensagem(motivo) {
  * nao duplicar o bloco entre os dois pontos de captura de blindar().
  */
 function liberarPorFalha(e) {
-  process.stderr.write('sworn: portao falhou e liberou por seguranca: ' + (e && e.message));
+  // A5-27/A5-29 (D735): o valor lancado pode nao ser Error (texto, null); o causaDoErro cobre os dois. Quebra final.
+  // O tratador de falha nao pode falhar: objeto sem prototipo faz o String() lancar.
+  let causa;
+  try { causa = require('./texto.js').causaDoErro(e); } catch (x) { causa = 'valor lancado sem texto legivel'; }
+  process.stderr.write('sworn: portao falhou e liberou por seguranca: ' + causa + '\n');
   process.exit(0);
 }
 

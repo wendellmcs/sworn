@@ -454,6 +454,10 @@ test('medicao/lerExecucao: bloco ausente no recurso -> nao aplicou', () => {
   const r = ler({ bloco: false }, 'recurso');
   assert.strictEqual(r.aplicou, false);
   assert.ok(r.motivos.some((m) => /bloco/.test(m)), JSON.stringify(r.motivos));
+  // R1 s235 (microcopy B.txt:383): o motivo do bloco que nao chegou diz o efeito, o arquivo, a chave e o passo, do
+  // mesmo jeito que o do bloco que vazou (o teste acima).
+  assert.ok(r.motivos.some((m) => /^o bloco de qualidade nao chegou a sessao do recurso: sem ele .*\.claude\/sworn\/projeto\.json .*"qualidadeDeResposta": false.* Rode de novo\.$/.test(m)),
+    JSON.stringify(r.motivos));
 });
 
 test('medicao/lerExecucao: caveman no recurso ou no padrao -> nao aplicou', () => {
@@ -463,12 +467,24 @@ test('medicao/lerExecucao: caveman no recurso ou no padrao -> nao aplicou', () =
   assert.strictEqual(ler({ caveman: true }, 'padrao').aplicou, false);
   // a skill acionada sem ser a condicao (chamada solta) contamina do mesmo jeito
   assert.strictEqual(ler({ bloco: true, skillSolta: true }, 'recurso').aplicou, false);
+  // A6-29: o motivo do caveman diz que a condicao roda sem ele e o passo, do mesmo jeito que o do bloco que vazou.
+  const passo = /^o caveman foi acionado na condicao (recurso|padrao): ela tem de rodar sem o caveman\. Confira se o plugin caveman liga sozinho no claude que a medicao chama \(o de SWORN_CLAUDE, ou o do PATH\) e rode de novo\.$/;
+  assert.ok(noRecurso.motivos.some((m) => passo.test(m)), JSON.stringify(noRecurso.motivos));
+  const noPadrao = ler({ caveman: true }, 'padrao').motivos;
+  assert.ok(noPadrao.some((m) => passo.test(m)), JSON.stringify(noPadrao));
 });
 
 test('medicao/lerExecucao: caveman ausente na condicao caveman -> nao aplicou', () => {
   const r = ler({ caveman: false }, 'caveman');
   assert.strictEqual(r.aplicou, false);
   assert.ok(r.motivos.some((m) => /caveman/.test(m)), JSON.stringify(r.motivos));
+  // A6 (s220, microcopy :388/:389): como os motivos da abertura, este diz o passo - nos dois ramos da transcricao.
+  const passo = /\. Confira se o plugin caveman esta instalado e ligado no claude que a medicao chama \(o de SWORN_CLAUDE, ou o do PATH\), e rode de novo/;
+  assert.ok(r.motivos.some((m) => /transcricao da sessao nao achada/.test(m) && passo.test(m)), JSON.stringify(r.motivos));
+  const comTranscricao = ler({ caveman: false }, 'caveman',
+    { transcricao: [JSON.stringify({ type: 'user', message: { role: 'user', content: 'oi' } })] });
+  assert.ok(comTranscricao.motivos.some((m) => /a transcricao nao mostra o comando/.test(m) && passo.test(m)),
+    JSON.stringify(comTranscricao.motivos));
 });
 
 test('medicao/lerExecucao: caveman que nao deu sucesso nao liga a condicao', () => {
@@ -510,6 +526,9 @@ test('medicao/lerExecucao: output_tokens ausente -> outputTokens nao e numero, o
   const r = ler({ tokens: undefined }, 'padrao');
   assert.notStrictEqual(typeof r.outputTokens, 'number', 'campo ausente virou numero: ' + r.outputTokens);
   assert.strictEqual(r.ok, false);
+  // A6-30: o motivo explica o output_tokens e diz o passo.
+  assert.ok(r.motivos.some((m) => /contagem de tokens da resposta \(o campo output_tokens\)/.test(m) && /Rode de novo/.test(m)),
+    JSON.stringify(r.motivos));
   const g = geracoes(null, (x) => { if (x.prompt === 'p1' && x.condicao === 'padrao') Object.assign(x, { texto: r.texto, outputTokens: r.outputTokens, ok: true, aplicou: true }); });
   assert.strictEqual(apurarCom(g, julgamentos(() => 'recurso')).veredito, 'INVALIDO');
 });
@@ -519,8 +538,26 @@ test('medicao/lerExecucao: sem evento result, ou result com erro -> ok falso', (
   const a = medicao.lerExecucao(semResult, { condicao: 'padrao', marcador: MARCADOR });
   assert.strictEqual(a.ok, false);
   assert.notStrictEqual(typeof a.outputTokens, 'number');
-  assert.strictEqual(ler({ erro: true }, 'padrao').ok, false, 'is_error');
-  assert.strictEqual(ler({ subtype: 'error_max_turns' }, 'padrao').ok, false, 'subtype diferente de success');
+  // A6 (s220, microcopy :419): o motivo diz o que houve e o passo.
+  assert.ok(a.motivos.some((m) => /^o stream nao tem o evento result: a execucao parou antes do fim; o \.stderr\.txt desta geracao na rodada, quando existe, diz por que\. Rode de novo\.$/.test(m)),
+    JSON.stringify(a.motivos));
+  // A6-28: sem o jargao "subtype"; a marca do claude vai entre aspas, com o passo, nos tres jeitos de erro.
+  const passoDoErro = /; o \.stderr\.txt desta geracao na rodada, quando existe, diz por que\. Rode de novo\.$/;
+  const comErro = ler({ erro: true }, 'padrao');
+  assert.strictEqual(comErro.ok, false, 'is_error');
+  assert.ok(comErro.motivos.some((m) => /^a execucao terminou com erro \(o claude marcou o fim como erro\)/.test(m) && passoDoErro.test(m)),
+    JSON.stringify(comErro.motivos));
+  const outroFim = ler({ subtype: 'error_max_turns' }, 'padrao');
+  assert.strictEqual(outroFim.ok, false, 'subtype diferente de success');
+  assert.ok(outroFim.motivos.some((m) => /\(o claude fechou com "error_max_turns", e nao com "success"\)/.test(m) && passoDoErro.test(m)),
+    JSON.stringify(outroFim.motivos));
+  const semMarca = ler({ subtype: undefined }, 'padrao');
+  assert.ok(semMarca.motivos.some((m) => /\(o claude fechou sem a marca "success"\)/.test(m) && passoDoErro.test(m)),
+    JSON.stringify(semMarca.motivos));
+  // a marca que veio, mesmo sem ser texto, sai como veio (R1 s235, borda B.txt:436)
+  const numero = ler({ subtype: 7 }, 'padrao').motivos;
+  assert.ok(numero.some((m) => /\(o claude fechou com "7", e nao com "success"\)/.test(m)), JSON.stringify(numero));
+  assert.ok(!outroFim.motivos.concat(comErro.motivos, semMarca.motivos).some((m) => /subtype/.test(m)), 'jargao subtype no motivo');
 });
 
 test('medicao/lerExecucao: texto visivel = so os blocos text sem pai; subagente e pensamento ficam fora', () => {
@@ -545,6 +582,9 @@ test('medicao/lerExecucao: stream vazio nao aplica nada e nao tem tokens', () =>
   assert.strictEqual(r.ok, false);
   assert.strictEqual(r.aplicou, false);
   assert.notStrictEqual(typeof r.outputTokens, 'number');
+  // R1 s235 (microcopy B.txt:453): o motivo do texto vazio diz o efeito e o passo.
+  assert.ok(r.motivos.some((m) => /^a execucao nao deixou texto que o usuario veria\b.*: sem ele nao ha o que julgar\. Rode de novo\.$/.test(m)),
+    JSON.stringify(r.motivos));
 });
 
 // ── os prompts congelados ───────────────────────────────────────────────
@@ -1039,6 +1079,8 @@ test('cli: --pares imprime o briefing do juiz - a lente literal e os caminhos de
   assert.ok(r.stdout.indexOf(path.join(par, 'vereditos')) !== -1, 'a pasta vereditos que o inspetor copia');
   assert.strictEqual(r.stdout.indexOf('mapa.json'), -1, 'o briefing nao cita o mapa');
   assert.ok(!/recurso/i.test(r.stdout.split(medicao.LENTE.pergunta)[1] || ''), 'o briefing dos pares entrega quem e quem');
+  // A6-20 (D735): sem ingles solto na saida
+  assert.ok(r.stdout.startsWith('INSTRUCOES DO JUIZ - ') && !/briefing/i.test(r.stdout), r.stdout.slice(0, 80));
 });
 
 test('cli: --pares nao refaz o que ja existe, e recusa rodada invalida', () => {
@@ -1235,11 +1277,16 @@ test('cli: --pares morto entre os dois renomes: a recusa diz que a montagem paro
     if (julgado) {
       assert.ok(/veredito que se perderia/.test(recusa.stderr), nome + ': ' + recusa.stderr);
       assert.ok(!/interrompida/.test(recusa.stderr), nome + ': mandou apagar pares/ com veredito dentro: ' + recusa.stderr);
+      // A6 (s220, microcopy :492): como as vizinhas, a recusa diz o passo (ler o julgado, ou medir numa rodada nova).
+      assert.ok(recusa.stderr.indexOf('rode --veredito ' + rodada) !== -1, nome + ': ' + recusa.stderr);
+      assert.ok(/rodada nova com --gerar/.test(recusa.stderr), nome + ': ' + recusa.stderr);
       assert.ok(fs.existsSync(path.join(rodada, 'pares', julgado, 'vereditos', 'clareza.json')));
       return;
     }
     assert.ok(!/veredito que se perderia/.test(recusa.stderr), nome + ': a recusa diz que ha veredito, e nao ha: ' + recusa.stderr);
     assert.ok(/interrompida/.test(recusa.stderr), nome + ': ' + recusa.stderr);
+    assert.ok(/nenhum juiz recebeu as instrucoes/.test(recusa.stderr) && !/briefing/i.test(recusa.stderr),
+      recusa.stderr);
     assert.ok(recusa.stderr.indexOf(path.join(rodada, 'pares')) !== -1, nome + ': nao diz o que apagar: ' + recusa.stderr);
     // seguir a recusa resolve
     fs.rmSync(path.join(rodada, 'pares'), { recursive: true, force: true });
@@ -1268,6 +1315,7 @@ test('cli: --pares ja montado e sem veredito: a recusa nao diz que ha veredito, 
       return;
     }
     assert.ok(!/veredito que se perderia/.test(recusa.stderr), nome + ': a recusa diz que ha veredito, e nao ha: ' + recusa.stderr);
+    assert.ok(!/briefing/i.test(recusa.stderr), nome + ': ' + recusa.stderr);
     apagar.forEach((p) => assert.ok(recusa.stderr.indexOf(path.join(rodada, p)) !== -1, nome + ': nao diz que apagar ' + p + ': ' + recusa.stderr));
     ['pares', 'mapa.json'].filter((p) => apagar.indexOf(p) === -1).forEach((p) => {
       assert.strictEqual(recusa.stderr.indexOf(path.join(rodada, p)), -1, nome + ': manda apagar ' + p + ', que nao existe: ' + recusa.stderr);
@@ -1413,6 +1461,11 @@ test('cli: --veredito com veredito sem o campo melhor (vazio, lista) e falta, na
       assert.strictEqual(r.status, 0, nome + ': ' + r.stdout + r.stderr);
       assert.ok(/placar contra caveman: 1 vitorias, 0 derrotas, 1 empates/.test(r.stdout), nome + ': ' + r.stdout);
       assert.ok(!/falta:/.test(r.stdout), nome + ': voto com melhor virou falta: ' + r.stdout);
+      // A6-17 (D735): os nomes das condicoes explicados e a regra do gasto no lugar da frase que nada dizia
+      assert.match(r.stdout, /condicoes: padrao \(sem o caveman e sem o recurso\), caveman \(a skill \/caveman, /);
+      assert.match(r.stdout, /Para GANHA, o recurso precisa vencer os dois placares e gastar menos tokens que o /);
+      assert.match(r.stdout, /padrao; o gasto do caveman nao entra na conta\./);
+      assert.ok(!/fica dito/.test(r.stdout), r.stdout);
       return;
     }
     assert.strictEqual(r.status, 2, nome + ': contou como voto: ' + r.stdout + r.stderr);
@@ -1955,9 +2008,11 @@ test('T10-7/1: apurar com par sem veredito diz o que fazer: julgar os pares (--p
   const r = apurarCom(geracoes(), []);
   const m = r.motivos.join('\n');
   assert.ok(/julgu/i.test(m), 'falta a acao de julgar: ' + m);
-  assert.ok(m.indexOf('--pares') !== -1, 'falta o comando que gera o briefing do juiz: ' + m);
+  assert.ok(m.indexOf('--pares') !== -1, 'falta o comando que gera as instrucoes do juiz: ' + m);
   assert.ok(m.indexOf('--veredito') !== -1, 'falta apurar de novo: ' + m);
   assert.ok(m.indexOf('vereditos/' + medicao.LENTE.chave + '.json') !== -1, 'falta onde o veredito vai: ' + m);
+  // A6 (s235): como a saida do --pares (s234), "as instrucoes do juiz" no lugar do jargao "briefing".
+  assert.ok(m.indexOf('(as instrucoes do juiz saem de: node scripts/medir-qualidade.js --pares') !== -1 && !/briefing/i.test(m), m);
 });
 
 test('T10-7/2: o CLI --veredito com par faltando repete a mesma acao do nº 1', () => {
@@ -1969,6 +2024,7 @@ test('T10-7/2: o CLI --veredito com par faltando repete a mesma acao do nº 1', 
   const linha = r.stdout.split('\n').find((l) => l.indexOf('VEREDITO: nenhum') === 0) || '';
   assert.ok(/julgu/i.test(linha), 'a linha do veredito nao diz para julgar: ' + r.stdout);
   assert.ok(linha.indexOf('--pares') !== -1 && linha.indexOf('--veredito') !== -1, 'falta o comando: ' + r.stdout);
+  assert.ok(!/briefing/i.test(r.stdout), 'jargao briefing na tela do --veredito: ' + r.stdout);
   assert.ok(r.stdout.indexOf('  falta: decisao-9/padrao/2') !== -1, 'as linhas falta: seguem listando: ' + r.stdout);
 });
 

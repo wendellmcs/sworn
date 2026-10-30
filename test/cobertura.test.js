@@ -153,6 +153,73 @@ test('cobertura: sem projeto.json o relatorio RODA e declara tudo que falta', ()
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// A6 (s220, estados/manutencao :28): apelidos-vivos.json que existe e nao se le era igual ao ausente ("ainda nao se
+// sondou"); agora o portao diz a causa e o passo. A prova que se le e nao tem a forma (provaInvalida, da A1) tambem
+// aparece; o BOM se le.
+test('A6: apelidos-vivos.json ilegivel ou fora da forma aparece no portao com a causa e o passo', () => {
+  const dir = pasta();
+  try {
+    const p = semear(dir);
+    const arq = path.join(dir, '.claude', 'sworn', 'apelidos-vivos.json');
+    const porque = function () { return porChave(cobertura.relatorio(dir, p), 'apelidos-vivos'); };
+    fs.writeFileSync(arq, '{quebrado', 'utf8');
+    let g = porque();
+    assert.strictEqual(g.verificavel, false);
+    assert.ok(g.porque.startsWith('apelidos-vivos.json nao se le (JSON invalido: '), g.porque);
+    assert.match(g.porque, /rode node scripts\/provar-apelidos\.js/, g.porque);
+    fs.unlinkSync(arq);
+    fs.mkdirSync(arq);
+    g = porque();
+    assert.ok(g.porque.startsWith('apelidos-vivos.json nao se le (EISDIR)'), g.porque);
+    fs.rmdirSync(arq);
+    fs.writeFileSync(arq, JSON.stringify({ outra: 1 }), 'utf8');
+    g = porque();
+    assert.strictEqual(g.verificavel, false);
+    assert.ok(g.porque.startsWith('a prova gravada nao tem a lista `apelidos`'), g.porque);
+    fs.writeFileSync(arq, '﻿' + JSON.stringify({ apelidos: [] }), 'utf8');
+    assert.ok(!/nao se le|prova gravada/.test(porque().porque), porque().porque);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A6 (s220, microcopy :78 e :94): a busca-antes-de-criar sem projeto.json diz o passo, como o escopo; o shell nomeia o
+// campo que falta e o passo.
+test('A6: busca-antes-de-criar e shell dizem o campo e o passo', () => {
+  const dir = pasta();
+  try {
+    assert.strictEqual(porChave(cobertura.relatorio(dir, null), 'busca-antes-de-criar').porque,
+      'sem projeto.json: rode a entrevista');
+    const p = semear(dir, { plataforma: { shell: 'bash' } });
+    assert.strictEqual(porChave(cobertura.relatorio(dir, p), 'shell').porque,
+      'projeto.json nao declara plataforma.so: sem o sistema da maquina, nao da para conferir se o comando de shell e ' +
+      'o certo; rode /sworn:init de novo, que o infere e grava');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A6-47 (s235): sem prova, ou com apelido por sondar, o portao diz o comando que sonda.
+test('A6-47: sem prova ou com apelido por sondar, o portao diz o comando que sonda', () => {
+  const dir = pasta();
+  try {
+    const p = semear(dir);
+    const porque = () => porChave(cobertura.relatorio(dir, p), 'apelidos-vivos').porque;
+    const passo = /: rode node scripts\/provar-apelidos\.js \(com --plugin no repositorio do plugin\) e grave a prova no formato que ele mostra$/;
+    assert.ok(porque().startsWith('ainda nao se sondou neste ambiente (a sondar: ') && passo.test(porque()), porque());
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'apelidos-vivos.json'), JSON.stringify({ apelidos: [] }), 'utf8');
+    assert.ok(porque().startsWith('faltam sondar: ') && passo.test(porque()), porque());
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A6-52 (s235): os titulos dos portoes em palavras comuns, sem "Gatilho n", "H4" nem o campo `model:`.
+test('A6-52: os titulos dos portoes falam em palavras comuns, sem codigo interno', () => {
+  const dir = pasta();
+  try {
+    const r = cobertura.relatorio(dir, semear(dir));
+    assert.strictEqual(porChave(r, 'apelido').titulo, 'Modelo que cada agente declara x apelido gravado no projeto');
+    assert.strictEqual(porChave(r, 'catalogo').titulo, 'Comparacao com o catalogo de modelos');
+    assert.strictEqual(porChave(r, 'apelidos-vivos').titulo, 'O apelido de modelo ainda e aceito');
+    r.portoes.forEach((p) => assert.ok(!/Gatilho|\bH\d\b|model:/.test(p.titulo), p.titulo));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 /**
  * Criterio 6 da spec: o relatorio roda com a rede desligada. Aqui nao da para
  * desligar a rede da maquina, mas da para provar o que torna isso verdade:
@@ -219,7 +286,9 @@ test('cobertura: a linha do gatilho 2 diz que a consulta a pagina e dos gatilhos
   const p = semear(dir);
   catalogoLib.gravar(dir, catalogoLib.registrar('ok', [], ['fonte'], Date.now()));
   const cat = porChave(cobertura.relatorio(dir, p), 'catalogo');
-  assert.ok(cat.porque.includes('ultima consulta a pagina (gatilhos 1 e 4): ok'), cat.porque);
+  // A6-52 (s235): os gatilhos 1 e 4 pelo nome que o usuario roda, e o catalogo sem o ingles "harness".
+  assert.ok(cat.porque.includes('ultima consulta a pagina (feita pelo /sworn:init e pelo /sworn:audit): ok'), cat.porque);
+  assert.ok(!/gatilho|harness/i.test(cat.porque), cat.porque);
   fs.rmSync(dir, { recursive: true, force: true });
   const vazio = pasta();
   const sem = porChave(cobertura.relatorio(vazio, semear(vazio)), 'catalogo');

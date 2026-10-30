@@ -65,6 +65,14 @@ test('busca: motivo diz que editar existente NAO exige busca', () => {
   assert.ok(!/"eu prefiro/.test(m), 'F1-H08: a frase em primeira pessoa e do catalogo de falhas, nao da recusa');
 });
 
+// A4-30 (pedido 12, microcopy): a recusa diz o motivo e o passo sem o jargao do projeto.
+test('A4-30: a recusa de arquivo novo diz o motivo e o passo sem "falha de origem" nem "portao"', () => {
+  const m = busca.motivo('src/novo.js');
+  assert.ok(!/falha de origem|portao/i.test(m), m);
+  assert.ok(m.includes('Por que: o risco e criar arquivo novo em vez de entender o que ja existe.'), m);
+  assert.ok(m.includes('crie: depois de uma busca neste turno, criar arquivo novo fica liberado.'), m);
+});
+
 // ── regressao: furo achado na auditoria de 2026-09-02 ───────────────────────
 
 test('busca REGRESSAO: comando que ESCREVE nao e passe para criar', () => {
@@ -84,4 +92,24 @@ test('busca: FERRAMENTAS so lista o que o hook entrega (Grep, Glob, Read)', () =
   assert.strictEqual(busca.ehBusca('Search', {}), false);
   assert.strictEqual(busca.ehBusca('LS', {}), false);
   assert.strictEqual(busca.ehBusca('Read', {}), true, 'controle: o que fica continua contando');
+});
+
+// A4-bus-1 (pedido 12, seguranca): `find` com -delete/-exec/-execdir/-ok/-okdir (e `fd -x/-X/--exec`) altera ou roda
+// comando por si e contava como busca - o portao de arquivo novo abria com o mesmo tipo de chave que o `sed -i`.
+test('A4-bus-1: find que apaga ou executa NAO e passe para criar; find que so lista segue contando', () => {
+  [
+    'find . -name "*.tmp" -delete',
+    'find . -type f -exec rm {} \;',
+    'find src -execdir touch novo.js \;',
+    'find . -ok rm {} \;',
+    'find . -okdir rm {} \;',
+    'ls && find . -delete',
+    'fd tmp -x rm',
+    'fd tmp -X rm',
+    'fd tmp --exec rm',
+    'fd tmp --exec-batch rm'
+  ].forEach((c) => assert.strictEqual(busca.ehBusca('Bash', { command: c }), false, c));
+  assert.strictEqual(busca.ehBusca('PowerShell', { command: 'find . -delete' }), false);
+  ['find . -name "*.js"', 'fd busca src', 'find . -name x | grep -c y', 'find . -executable'].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('Bash', { command: c }), true, c));
 });

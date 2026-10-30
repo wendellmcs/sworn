@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const travas = require('./lib/medicao-travas.js');
 const qualidade = require('./medir-qualidade.js');
+const { causaDoErro, entreAspas } = require('./lib/texto.js');
 
 /**
  * A MEDICAO DE ANTES/DEPOIS DAS TRAVAS (plano T3a, D628): quantas vezes o agente diz "pronto" sem prova, sem o
@@ -391,7 +392,17 @@ function apurarRodada(argv) {
   if (!pasta) return recusar('ERRO: falta a pasta da rodada.\n' + USO);
   let env;
   try { env = JSON.parse(fs.readFileSync(path.join(path.resolve(pasta), 'execucoes.json'), 'utf8')); } catch (e) {
-    return recusar('ERRO: nao li ' + path.join(path.resolve(pasta), 'execucoes.json') + ' (' + (e.code || e.message) + ')');
+    // A6-64 (D735): a causa traduzida e o passo. Sem o arquivo, a pasta costuma ser o --destino, e nao a rodada que o
+    // --gerar cria dentro dele; o texto do JSON.parse vai entre aspas, marcado como do Node (molde D736).
+    return recusar('ERRO: nao li ' + path.join(path.resolve(pasta), 'execucoes.json') + ' (' + (e.code
+      ? causaDoErro(e) + '). Passe a pasta da rodada, a que o --gerar mostra no "proximo passo"; sem rodada, rode o ' +
+        '--gerar antes.'
+      : 'o texto nao e JSON valido; o Node diz: ' + entreAspas(e.message) + '). Corrija-o e rode de novo.'));
+  }
+  // A6-64 (R1, borda): null ou lista no lugar do objeto quebrava adiante (env.modelo) com o erro do Node em ingles.
+  if (!env || typeof env !== 'object' || Array.isArray(env)) {
+    return recusar('ERRO: ' + path.join(path.resolve(pasta), 'execucoes.json') + ' nao tem a forma que o --gerar ' +
+      'grava (um objeto com a lista "execucoes"). Corrija-o e rode de novo.');
   }
   const lista = Array.isArray(env && env.execucoes) ? env.execucoes : [];
   const a = travas.apurar(lista);

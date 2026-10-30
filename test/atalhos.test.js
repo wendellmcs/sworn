@@ -85,6 +85,14 @@ test('varrer: linha comecando em 1, pula binario e arquivo que nao leu', () => {
   ]);
 });
 
+// A6 (s220, borda :148): arquivo so com CR (Mac antigo) virava uma linha so; a marca do meio saia na linha 1, e a
+// continuacao da linha de baixo nao entrava.
+test('A6: varrer quebra linha tambem no CR puro', () => {
+  const conteudo = { 'cr.js': 'a();\r// atalho: um. limite: dois.\r// trocar quando: tres.\rc();\r' };
+  assert.deepStrictEqual(atalhos.varrer(['cr.js'], (a) => conteudo[a], PADRAO),
+    [{ arquivo: 'cr.js', linha: 2, oque: 'um.', limite: 'dois.', gatilho: 'tres.' }]);
+});
+
 // D687: 4 dos 5 atalhos do proprio repositorio quebravam o comentario em 2 linhas (scripts/abertura.js:68,
 // scripts/lib/custo.js:21, scripts/lib/obrigacoes.js:411, test/fiacao.test.js:247) e saiam sem gatilho ou cortados.
 test('varrer: a linha de baixo que abre com rotulo ainda nao usado entra, na linha da marca', () => {

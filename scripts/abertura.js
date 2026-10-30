@@ -187,7 +187,12 @@ io.blindar(function () {
     // F1-C12: `null` e "o git nao respondeu" - e nao e "nenhum inerte". Calar aqui
     // fazia "nao sei" parecer "esta tudo certo". So se diz quando ha o que duvidar.
     if (rastreados === null && projeto && Array.isArray(projeto.intocaveis) && projeto.intocaveis.length) {
-      process.stdout.write('\nsworn: nao sei se ha intocavel inerte (o git nao respondeu).\n');
+      // A5-02 (D735): sem o jargao "intocavel inerte"; o efeito e o passo, causas do null de git.js:102.
+      process.stdout.write('\nsworn: nao deu para conferir se os padroes de `intocaveis` ' +
+        '(.claude/sworn/projeto.json)\npegam algum arquivo: o git nao respondeu ' +
+        '(git ausente, pasta fora de um repositorio ou demora).\n' +
+        'Se algum nao pegar arquivo nenhum, a protecao dele pode estar sem efeito agora.\n' +
+        'Rode git status nesta pasta para ver a causa; a conferencia volta na proxima sessao.\n');
     }
     if (inertes.length) {
       process.stdout.write('\n' + projetoLib.motivoInerte(inertes) + '\n');

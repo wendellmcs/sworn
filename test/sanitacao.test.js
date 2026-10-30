@@ -356,15 +356,24 @@ test('sanitar: repositorio limpo -> saida 0 e veredito nas tres superficies', ()
   assert.ok(/SUPERFICIE 2 autoria/.test(r.stdout), r.stdout);
   assert.ok(/SUPERFICIE 3 mensagens/.test(r.stdout), r.stdout);
   assert.ok(/LIMPO nas tres superficies/.test(r.stdout), r.stdout);
-  assert.ok(r.stdout.indexOf('Fora da superficie: so o que o .gitignore cobre.') !== -1, r.stdout);
+  // A4-03 (pedido 12, microcopy): diz que o ignorado nao foi lido e o que fazer, sem "superficie"
+  assert.ok(r.stdout.indexOf('Nao verificados: os arquivos que o .gitignore manda o git ignorar.') !== -1, r.stdout);
+  assert.ok(r.stdout.indexOf('Se um deles vai ser publicado, tire-o do .gitignore e rode de novo.') !== -1, r.stdout);
+  assert.ok(r.stdout.indexOf('Fora da superficie') === -1, r.stdout);
 });
 
 test('sanitar: vazamento no conteudo -> saida 1, com arquivo, linha e superficie', () => {
   const isca = sanit.CLASSES_GENERICAS.filter((c) => c.chave === 'segredo')[0].isca;
   const r = sanitar(repo('const k = "' + isca + '";\n'));
   assert.strictEqual(r.status, 1, 'vazou e o comando devolveu ' + r.status);
-  assert.ok(/VAZOU - 1 achado/.test(r.stdout), r.stdout);
+  assert.ok(/VAZOU - 1 trecho\(s\) que nao pode\(m\) ir a publico:/.test(r.stdout), r.stdout);
   assert.ok(/S1\s+segredo\s+a\.txt:1/.test(r.stdout), r.stdout);
+  // A4-04 (pedido 12, microcopy): o S1 e a palavra do meio explicados na propria saida
+  assert.ok(r.stdout.indexOf('S1, S2 e S3 sao as superficies acima: 1 o conteudo dos arquivos, 2 a autoria') !== -1,
+    r.stdout);
+  assert.ok(r.stdout.indexOf('Depois do S vem o tipo do que vazou (segredo, email...) e onde ele esta.') !== -1,
+    r.stdout);
+  assert.ok(r.stdout.indexOf('achado') === -1, r.stdout);
 });
 
 /**
@@ -434,7 +443,7 @@ test('sanitar: --so-conteudo julga a superficie 1 e ignora as outras duas', () =
   // superficie, e o achado do historico nao pode sair rotulado como conteudo.
   assert.ok(/SUPERFICIE 1 conteudo\s+1 arquivos\s+-> 0/.test(tudo.stdout), tudo.stdout);
   assert.ok(/SUPERFICIE 2 autoria\s+historico\s+-> 1/.test(tudo.stdout), tudo.stdout);
-  assert.ok(/VAZOU - 2 achado/.test(tudo.stdout), tudo.stdout);
+  assert.ok(/VAZOU - 2 trecho\(s\)/.test(tudo.stdout), tudo.stdout);
   assert.ok(/^ {2}S2 {2}autoria_do_historico /m.test(tudo.stdout), tudo.stdout);
   assert.ok(/^ {2}S3 {2}email /m.test(tudo.stdout), tudo.stdout);
 
@@ -994,4 +1003,16 @@ test('A4-03: sanitar num projeto qualquer varre docs/ e nao diz que deixou docs/
   // o export do sworn segue sem docs/ (D132 §1.3): a superficie publicavel e a do exportar.js
   assert.strictEqual(sanit.superficiePublicavel(dir).indexOf('docs/guia.md'), -1);
   assert.ok(sanit.auditar(dir).achados.some((a) => a.arquivo === 'docs/guia.md'));
+});
+
+// A4-san-1 (pedido 12, borda): `--raiz` sem valor (ultima da linha, vazia ou seguida de --so-conteudo) caia calada em
+// '.' e o comando media a pasta de onde foi chamado. Agora e erro de uso, saida 2, sem veredito (molde: plataforma.js).
+test('A4-san-1: --raiz sem valor e erro de uso, nunca a pasta atual calada', () => {
+  const dir = repo();
+  [['--raiz'], ['--raiz', ''], ['--raiz', '--so-conteudo']].forEach((args) => {
+    const r = spawnSync(process.execPath, [SCRIPT].concat(args), { cwd: dir, encoding: 'utf8', timeout: 60000 });
+    assert.strictEqual(r.status, 2, args.join(' ') + ': ' + r.stdout + r.stderr);
+    assert.ok(/--raiz pede um valor/.test(r.stderr) && /uso: sanitar\.js/.test(r.stderr), args.join(' ') + ': ' + r.stderr);
+    assert.strictEqual(r.stdout.indexOf('Sanitacao de'), -1, 'erro de uso nao mede: ' + r.stdout);
+  });
 });

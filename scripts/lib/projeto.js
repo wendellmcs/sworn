@@ -14,7 +14,8 @@ const CHAVES = [
 // D503: chave que pode faltar sem erro, mas que validar() confere quando vem. `referencias` e a peca de topo contra a
 // qual a revisao compara, por tipo, cada um uma lista de caminho ou URL (por isso fora de conferirCaminhos).
 // Plano 090 Tarefa 5: `marcaDeAtalho`, a marca do /sworn:shortcuts (padrao `atalho`), uma palavra.
-const CHAVES_OPCIONAIS = ['referencias', 'marcaDeAtalho'];
+// D732 (fila D687): `fontesDeConsulta`, as fontes canonicas que saem do peso de instrucao da auditoria.
+const CHAVES_OPCIONAIS = ['referencias', 'marcaDeAtalho', 'fontesDeConsulta'];
 const TIPOS_REFERENCIA = ['tela', 'codigo', 'texto'];
 
 const TRAVAS = ['fecho', 'escopo', 'destrutivo', 'outraFrente'];
@@ -257,6 +258,24 @@ function validar(obj) {
 
   if ('marcaDeAtalho' in obj && !require('./atalhos.js').ehMarca(obj.marcaDeAtalho)) {
     erros.push('marcaDeAtalho tem de ser uma palavra (letras, numeros, - ou _)');
+  }
+
+  // D732: so fonte canonica sai do peso; o item fora delas ficaria inerte calado (D104, D503).
+  if ('fontesDeConsulta' in obj) {
+    if (!ehListaDeTexto(obj.fontesDeConsulta)) {
+      erros.push('fontesDeConsulta tem de ser lista de texto');
+    } else if (!('fontesCanonicas' in obj) || ehListaDeTexto(obj.fontesCanonicas)) {
+      // A6-83 (pedido 12): com a fontesCanonicas reprovada acima, o erro dela basta; conferir item por item contra ela
+      // somaria um erro por item, com a mesma causa.
+      const comoCaminho = function (f) { return require('node:path').posix.normalize(String(f).replace(/\\/g, '/')); };
+      const canonicas = (Array.isArray(obj.fontesCanonicas) ? obj.fontesCanonicas : []).map(comoCaminho);
+      for (const f of obj.fontesDeConsulta) {
+        if (canonicas.indexOf(comoCaminho(f)) === -1) {
+          erros.push('fontesDeConsulta: "' + f + '" nao esta em fontesCanonicas, e so fonte canonica sai do peso; ' +
+            'corrija o caminho ou declare-a canonica');
+        }
+      }
+    }
   }
 
   if ('agentes' in obj) {

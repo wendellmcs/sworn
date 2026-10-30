@@ -147,6 +147,8 @@ function ascii(valor) {
   return String(valor == null ? '' : valor).replace(/\s+/g, ' ').replace(/[^\x20-\x7E]/g, '?').trim();
 }
 
+function plural(n, um, varios) { return n + ' ' + (n === 1 ? um : varios); }
+
 function lista(itens) {
   const nomes = itens.map(ascii);
   if (nomes.length <= MAX_POR_CATEGORIA) return nomes.join('; ');
@@ -170,8 +172,12 @@ function linhaDoInjetado(injetado, conversa) {
   if (!rep.length) return null;
   const qual = ehObjeto(conversa) && conversa.id && isFinite(conversa.quando)
     ? ' (' + conversa.id + ', ' + dataLocal(conversa.quando) + ')' : '';
-  return 'texto de gancho que volta mais de ' + require('./injetado.js').VOLTA_MAIS_DE + ' vezes na conversa anterior' + qual +
-    ' (' + rep.length + '): ' + lista(rep.map(function (r) { return r.plugin + ' ' + r.gancho + ' ' + r.vezes + 'x, ' + r.caracteres + ' caracteres'; }));
+  // A6-72 (pedido 12): sem o "gancho" interno, e com o corte que a skill audit propoe.
+  const cada = rep.map(function (r) {
+    return r.plugin + ' ' + r.gancho + ' ' + r.vezes + 'x, ' + r.caracteres + ' caracteres';
+  });
+  return 'texto repetido por plugin mais de ' + require('./injetado.js').VOLTA_MAIS_DE + ' vezes na conversa anterior' +
+    qual + ' (' + rep.length + '): ' + lista(cada) + '. Corte para uma vez por sessao.';
 }
 
 /** Monta as linhas de aviso a partir do relatorio. Vazio quando nada passou do teto. */
@@ -179,7 +185,10 @@ function itens(relatorio, paradas, limiteSkill, semGatilho, conversa) {
   const r = relatorio || {};
   const saida = [];
   if (r.peso && r.peso.estourou) {
-    saida.push('peso de instrucao ' + ascii(r.peso.total) + ' acima do teto ' + ascii(r.peso.teto));
+    // A6-72 (pedido 12): o que o peso conta (lib/instrucoes.js METODO) e o que fazer, sem "peso" nem "teto".
+    saida.push('instrucoes do projeto com ' + ascii(plural(r.peso.total, 'item', 'itens')) +
+      ' de lista (regras, skills e fontes canonicas), acima do limite de ' + ascii(r.peso.teto) +
+      '. Junte ou corte itens.');
   }
   // So objetos entram: `null` no meio (s.a / c.gatilho) lancaria e trocaria o aviso valido por "falhou".
   const sobre = Array.isArray(r.sobreposicoes) ? r.sobreposicoes.filter(ehObjeto) : [];
@@ -200,8 +209,10 @@ function itens(relatorio, paradas, limiteSkill, semGatilho, conversa) {
   if (injetado) saida.push(injetado);
   // Plano 091 #8 (mock D559): atalho sem "trocar quando" vira divida esquecida; entra no que cortar.
   if (semGatilho.length) {
-    saida.push('atalhos sem gatilho (' + semGatilho.length + '): ' +
-      lista(semGatilho.map(function (a) { return a.arquivo + ':' + a.linha; })));
+    // A6-72: o campo pelo nome que o dono escreve (README: "trocar quando"), nao "gatilho".
+    saida.push('atalhos sem "trocar quando" (' + semGatilho.length + '): ' +
+      lista(semGatilho.map(function (a) { return a.arquivo + ':' + a.linha; })) +
+      '. Complete o "trocar quando" ou desfaca o atalho.');
   }
   return saida;
 }
@@ -237,7 +248,6 @@ function avisoDosAtalhos(cwd, projeto, opcoes) {
     try { v = varrerAtalhos(cwd, projeto, o); } catch (e) { v = { achados: [], falhas: [], erro: textoLib.causaDoErro(e) }; }
     gravarMarca(cwd, agora, null, MARCA_ATALHOS);
     const a = require('./escopo.js').ascii;
-    const plural = function (n, um, varios) { return n + ' ' + (n === 1 ? um : varios); };
     const cabeca = 'sworn: atalhos registrados (revisao a cada ' + a(dias(projeto, 'diasEntreAtalhos')) + ' dias): ';
     // revisao 092: a falha nao cala por 30 dias; sai com a causa e o proximo passo
     if (v.erro) return cabeca + 'a busca falhou (' + a(v.erro).slice(0, 120) + '); rode /sworn:shortcuts para ver o detalhe.';
@@ -314,7 +324,7 @@ function avisoDaAuditoria(cwd, projeto, opcoes) {
     } catch (e) {
       // A foto das ordens avanca na marca abaixo: a retroalimentacao do intervalo sai aqui, senao se perderia.
       texto = ['sworn: auditoria automatica falhou (' + ascii(textoLib.causaDoErro(e)).slice(0, 120) +
-        '); rode /sworn:audit'].concat(retro).join('\n');
+        '); rode /sworn:audit para ver o detalhe.'].concat(retro).join('\n');
     }
     gravarMarca(cwd, agora, totais);
     return texto;

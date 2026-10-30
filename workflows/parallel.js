@@ -122,7 +122,9 @@ function instrucao(t) {
 
 // parallel() troca a excecao por null e perde o porque: a excecao e pega aqui, por tarefa, com a mensagem.
 // agent() devolve null quando o usuario pula o agente ou ele morre por erro de API depois das tentativas.
-const SEM_RESPOSTA = 'the agent was skipped or died from an API error, with no answer'
+// A7-27 (D735): o motivo diz o porque e o passo seguinte.
+const SEM_RESPOSTA = 'the agent was skipped or died from an API error, with no answer; ' +
+  'run this task again if you still need it'
 // Quem so le abre no agente leve do plugin (agents/reader.md: sem CLAUDE.md, sem lista de skills, sem Edit/Write);
 // o agente padrao abria com ~56 mil tokens por tarefa. Quem edita segue no padrao, com as regras do projeto.
 const LEITOR = 'sworn:reader'
@@ -139,7 +141,13 @@ function resultado(t, saida) {
   const base = { n: t.n, tarefa: t.tarefa, edita: t.edita, modelo: t.modelo }
   if (t.papel) base.papel = t.papel
   if (!saida) return Object.assign(base, { respondeu: false, motivo: SEM_RESPOSTA })
-  if (saida.erroDoAgente !== undefined) return Object.assign(base, { respondeu: false, motivo: 'error: ' + saida.erroDoAgente })
+  if (saida.erroDoAgente !== undefined) {
+    // A mensagem vai entre aspas, como do agente (o ponto final dela nao encosta no ';'); vazia, diz que veio vazia.
+    const causa = String(saida.erroDoAgente).trim()
+    const qual = causa ? ' (' + JSON.stringify(causa) + ')' : ' with no message'
+    return Object.assign(base, { respondeu: false,
+      motivo: 'the agent stopped on an error' + qual + '; run this task again once the cause is fixed' })
+  }
   const r = Object.assign(base, { respondeu: true }, saida)
   const alheios = foraDoDono(t, saida)
   if (alheios.length) r.foraDoDono = alheios

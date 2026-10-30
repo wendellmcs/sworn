@@ -151,7 +151,7 @@ test('continuo: a linha curta do medidor conta so os gatilhos que podem disparar
   const r = medidor.linhaDaSessao({ uso: null, amostras: [], medidas: m, avisouSaude: false });
   // Pedido 71 (D544): a barra diz quanto falta pelo sinal mais perto; os 99 turnos calados nao contam (bloqueios 0
   // de 6 e contexto 0 empatam; vale o 1o, como no bloco "Troca de chat").
-  assert.strictEqual(r.curta, 'troca de chat em 6 bloqueios de portão');
+  assert.strictEqual(r.curta, 'troca de chat em 6 ações negadas pelo sworn');
   const cruzou = medidor.linhaDaSessao({ uso: null, amostras: [], medidas: saude.medir({ tokensDeContexto: 260000 }, null, true), avisouSaude: false });
   assert.strictEqual(cruzou.curta, 'troque de chat → /sworn:handoff');
   // sem a chave, nada se cala: os 99 turnos disparam

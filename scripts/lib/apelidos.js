@@ -36,12 +36,13 @@ function mapaDeDegraus(projeto) {
  * entrevista gravou. Offline, deterministico, sem tocar a rede e sem nome de
  * modelo nenhum no plugin: os dois lados vem do projeto da pessoa.
  *
- * Quatro baldes, porque tratar tudo como "divergencia" produz achado falso:
+ * Cinco baldes, porque tratar tudo como "divergencia" produz achado falso:
  *   divergencia  - os dois lados existem e discordam. E SO este que acusa.
  *   naoDeclarado - o arquivo nao diz `model:`. Ausente e vazio sao a MESMA
  *                  resposta: nao declarado. Nao e divergir (foco de revisao 4).
  *   semArquivo   - ha degrau gravado e nao ha arquivo de agente com esse nome.
  *   foraDoMapa   - ha arquivo de agente que a escada nao menciona.
+ *   ilegiveis    - o arquivo existe e nao se le (A4-age-2): vai com a causa, nunca como naoDeclarado.
  *
  * D678 T1: o `effort:` contra o esforco do degrau, com a mesma separacao, em baldes proprios
  * (`esforcoDivergente`, `esforcoNaoDeclarado`) - o conserto do modelo nao pode receber um esforco.
@@ -51,10 +52,14 @@ function conferir(projeto, lidos) {
   const vazio = {
     verificavel: false, motivo: null,
     divergencias: [], naoDeclarados: [], semArquivo: [], foraDoMapa: [],
-    esforcoDivergente: [], esforcoNaoDeclarado: []
+    esforcoDivergente: [], esforcoNaoDeclarado: [], ilegiveis: []
   };
   const mapa = mapaDeDegraus(projeto);
 
+  if (lidos && lidos.erro) {
+    vazio.motivo = 'a pasta .claude/agents nao se le (' + lidos.erro + '): nao ha como conferir o `model:`';
+    return vazio;
+  }
   if (!lidos || lidos.existe !== true) {
     vazio.motivo = 'este projeto nao tem a pasta .claude/agents: nao ha `model:` para conferir';
     return vazio;
@@ -67,12 +72,16 @@ function conferir(projeto, lidos) {
   const r = {
     verificavel: true, motivo: null,
     divergencias: [], naoDeclarados: [], semArquivo: [], foraDoMapa: [],
-    esforcoDivergente: [], esforcoNaoDeclarado: []
+    esforcoDivergente: [], esforcoNaoDeclarado: [], ilegiveis: []
   };
   const vistos = Object.create(null);
 
   for (const ag of (lidos.agentes || [])) {
     vistos[ag.nome] = true;
+    if (ag.erro) {
+      r.ilegiveis.push({ agente: ag.nome, arquivo: ag.arquivo, causa: ag.erro });
+      continue;
+    }
     const gravado = mapa.porNome[ag.nome];
     if (gravado === undefined) {
       r.foraDoMapa.push({ agente: ag.nome, arquivo: ag.arquivo, declarado: ag.model });
@@ -316,5 +325,5 @@ function motivoReprovado(c) {
 
 module.exports = {
   RE_LINHA, CERCA, mapaDeDegraus, conferir, trocarCampo, trocarModel, motivo,
-  agentesDoPlugin, cobertura, motivoReprovado
+  agentesDoPlugin, cobertura, motivoReprovado, REGRAVAR
 };

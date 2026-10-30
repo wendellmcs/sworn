@@ -9,9 +9,18 @@ const LIMITES = (function () {
 })();
 
 // A4-01: sem o semBom, o settings.json gravado com BOM (PowerShell 5.1) voltava null e o ambiente saia vazio, calado.
-function lerJson(arquivo) {
-  try { const o = JSON.parse(texto.semBom(fs.readFileSync(arquivo, 'utf8'))); return o && typeof o === 'object' ? o : null; }
-  catch (e) { return null; }
+// A4-amb-2 (pedido 12), estados: so ENOENT e ausente; quebrado, ilegivel ou que nao e objeto entra em `naoLidos`
+// (`rel (causa)`) - antes era ausente, calado, e o init dizia "nada" de um projeto que configura.
+function lerJson(cwd, rel, naoLidos) {
+  let o;
+  try { o = JSON.parse(texto.semBom(fs.readFileSync(path.join(cwd, rel), 'utf8'))); }
+  catch (e) {
+    if (!(e && e.code === 'ENOENT')) naoLidos.push(rel + ' (' + texto.causaDoErro(e) + ')');
+    return null;
+  }
+  if (o && typeof o === 'object' && !Array.isArray(o)) return o;
+  naoLidos.push(rel + ' (nao e um objeto JSON)');
+  return null;
 }
 
 function subpastas(dir) {
@@ -36,18 +45,19 @@ function arquivosMd(dir) {
  */
 function detectar(cwd) {
   const base = path.join(cwd, '.claude');
-  const settings = lerJson(path.join(base, 'settings.json')) || {};
-  const local = lerJson(path.join(base, 'settings.local.json')) || {};
+  const naoLidos = [];
+  const settings = lerJson(cwd, '.claude/settings.json', naoLidos) || {};
+  const local = lerJson(cwd, '.claude/settings.local.json', naoLidos) || {};
 
-  const plugins = Object.keys(
-    Object.assign({}, settings.enabledPlugins || {}, local.enabledPlugins || {})
-  );
+  // A4-amb-1 (pedido 12), borda: `false` e plugin desligado - e o local, que vale por cima do settings, desliga.
+  const ligados = Object.assign({}, settings.enabledPlugins || {}, local.enabledPlugins || {});
+  const plugins = Object.keys(ligados).filter(function (p) { return ligados[p] !== false; });
 
   const hooks = Object.keys(
     Object.assign({}, (settings.hooks || {}), (local.hooks || {}))
   );
 
-  const mcpArquivo = lerJson(path.join(cwd, '.mcp.json')) || {};
+  const mcpArquivo = lerJson(cwd, '.mcp.json', naoLidos) || {};
   const mcp = Object.keys(mcpArquivo.mcpServers || mcpArquivo || {}).filter(function (k) { return k !== 'mcpServers'; });
 
   const delegaveis = [];
@@ -63,7 +73,8 @@ function detectar(cwd) {
     agentes: arquivosMd(path.join(base, 'agents')),
     hooks: hooks,
     mcp: mcp,
-    delegaveis: delegaveis
+    delegaveis: delegaveis,
+    naoLidos: naoLidos
   };
 }
 

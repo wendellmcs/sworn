@@ -46,7 +46,7 @@ test('propor: regra invalida e recusada e sai com codigo 1', () => {
   try {
     const r = rodar(['--gatilho', 'ao subir', '--acao', 'usar a versao 2.1.220', '--gravar'], dir);
     assert.strictEqual(r.status, 1);
-    assert.ok(r.stdout.includes('volatil'));
+    assert.ok(r.stdout.includes('valor que muda com o tempo (numero de versao: "2.1.220")'), r.stdout);
     assert.ok(!fs.readFileSync(path.join(dir, '.claude', 'sworn', 'regras.md'), 'utf8').includes('2.1.220'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

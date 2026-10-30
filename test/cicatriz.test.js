@@ -275,8 +275,18 @@ test('cicatriz: o texto poe os SEM cicatriz primeiro - e a lista que motiva a po
     // que tudo - sem o cabecalho SEM, a ordem "passava" sem lista nenhuma de poda
     const sem = t.indexOf('SEM cicatriz'), com = t.indexOf('COM cicatriz');
     assert.ok((sem !== -1) && (com !== -1) && (sem < com), t);
-    assert.ok(/SINAL, nunca veredito/.test(t), 'o limite do metodo tem de estar no relatorio');
+    assert.ok(/indicio, nunca veredito/.test(t), 'o limite do metodo tem de estar no relatorio');
     assert.ok(/nada foi alterado/.test(t), 'tem de dizer que nao podou nada');
+    // A5-43/44/45 (D735): cicatriz e dor de origem explicadas no cabecalho; o piso diz comum a que, e que valem os
+    // dois (conferir: termos >= minimo E fracao >= fracao); o passo antes de podar; sem "SINAL" nem "termos exigidos"
+    assert.ok(/\nCicatriz: a decisao, o incidente ou o achado do historico \(o corpus\) que explica por que a regra/
+      .test(t), t);
+    assert.ok(/\nTrechos do corpus com marca de decisao, incidente ou achado: \d+\n/.test(t), t);
+    assert.ok(/um desses trechos divide com ela ao menos 2 palavras-chave\s+e 50% das palavras-chave dela/.test(t), t);
+    assert.ok(/procure o motivo dela no corpus\s+com outras palavras/.test(t), t);
+    assert.ok(!/SINAL|termos em comum exigidos|Passagens com marca/.test(t), t);
+    const um = cicatriz.texto(cicatriz.varrer(manualDeTeste(dir), corpusDeTeste(dir), { minimo: 1, fracao: 0.5 }));
+    assert.ok(/ao menos 1 palavra-chave\s+e 50%/.test(um), 'singular com --minimo 1: ' + um);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -308,6 +318,44 @@ test('cicatriz: o script SEM --corpus sai com sucesso e avisa que esta cego', ()
       { encoding: 'utf8' });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(/CORPUS NAO LIDO/.test(r.stdout), r.stdout);
+    // A5 (R1 de lib/cicatriz.js :241): o aviso diz COMO apontar o corpus, nao so que falta
+    assert.ok(/Aponte o corpus com --corpus <pasta>/.test(r.stdout), r.stdout);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A5 (R1 :17 e :26): `--corpus --json` lia o corpus de uma pasta "--json", e `--minimo abc` virava NaN, que nenhum `<`
+// barra - as regras todas saiam "com cicatriz" e a lista de poda vazia, com saida 0. Agora e erro de uso, saida 1.
+test('cicatriz: flag sem valor e numero fora da faixa sao erro de uso que diz a flag, nao relatorio errado', () => {
+  const dir = pasta();
+  try {
+    const manual = manualDeTeste(dir);
+    const corpus = corpusDeTeste(dir);
+    const casos = [
+      [['--corpus'], /--corpus pede um valor/],
+      [['--corpus', '--json'], /--corpus pede um valor/],
+      [['--corpus', ''], /--corpus pede um valor/],
+      [['--corpus', corpus, '--minimo'], /--minimo pede um valor/],
+      [['--corpus', corpus, '--minimo', 'abc'], /--minimo fora da faixa \(veio "abc"\)/],
+      [['--corpus', corpus, '--minimo', '0'], /--minimo fora da faixa/],
+      [['--corpus', corpus, '--minimo', '1.5'], /--minimo fora da faixa/],
+      [['--corpus', corpus, '--fracao', '-1'], /--fracao fora da faixa/],
+      [['--corpus', corpus, '--fracao', '0'], /--fracao fora da faixa/],
+      [['--corpus', corpus, '--fracao', '1.01'], /--fracao fora da faixa/],
+      [['--corpus', corpus, '--fracao', 'NaN'], /--fracao fora da faixa/]
+    ];
+    for (const [args, re] of casos) {
+      const r = spawnSync(process.execPath, [SCRIPT, '--manual', manual].concat(args), { encoding: 'utf8' });
+      assert.strictEqual(r.status, 1, JSON.stringify(args) + ': ' + r.stdout + r.stderr);
+      assert.ok(/^ERRO: /.test(r.stdout) && re.test(r.stdout) && /uso: cicatriz\.js/.test(r.stdout),
+        JSON.stringify(args) + ': ' + r.stdout);
+    }
+    // a borda que vale: minimo 1 e fracao 1 rodam, e o numero chega ao relatorio
+    const ok = spawnSync(process.execPath, [SCRIPT, '--manual', manual, '--corpus', corpus, '--minimo', '1', '--fracao', '1',
+      '--json'], { encoding: 'utf8' });
+    assert.strictEqual(ok.status, 0, ok.stdout + ok.stderr);
+    const j = JSON.parse(ok.stdout);
+    assert.strictEqual(j.minimo, 1);
+    assert.strictEqual(j.fracao, 1);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

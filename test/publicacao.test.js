@@ -957,7 +957,7 @@ function saidasDosPortoes() {
     escrever(ho, '# handoff\n');
     rodar('marcar-trabalho.js', { hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: em(ho), content: '# handoff\n' } });
     s.handoff = rodar('portao-fecho.js', { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'Gravei o handoff do frete.' });
-    s.troca = saude.avisoDeSaude(['7 bloqueios de portao nesta sessao (limiar 6)']);
+    s.troca = saude.avisoDeSaude(['7 bloqueios de portao (acoes que o sworn negou) nesta sessao (limiar 6)']);
     return s;
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

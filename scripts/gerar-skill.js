@@ -4,10 +4,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 const molde = require('./lib/molde.js');
 const config = require('./lib/config.js');
+const texto = require('./lib/texto.js');
 
+const USO = 'uso: gerar-skill.js [--fatias] [--respostas <arquivo.json>] [--gravar]\n';
+const FLAGS_DO_USO = ['--respostas', '--gravar', '--fatias'];
+
+// A4-gsk-1 (pedido 12), borda: flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada no
+// "sem respostas". O molde e o arg() do preparar-revisao.js.
 function arg(nome) {
   const i = process.argv.indexOf('--' + nome);
-  return i !== -1 ? process.argv[i + 1] : null;
+  if (i === -1) return null;
+  const valor = process.argv[i + 1];
+  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
+    process.stdout.write('ERRO: --' + nome + ' pede um valor.\n' + USO);
+    process.exit(1);
+  }
+  return valor;
 }
 
 const cwd = process.cwd();
@@ -22,8 +34,9 @@ if (!projeto) {
 
 let valores = {};
 if (arquivoRespostas) {
-  try { valores = JSON.parse(fs.readFileSync(arquivoRespostas, 'utf8')); }
-  catch (e) { process.stdout.write('ERRO: nao consegui ler ' + arquivoRespostas + ': ' + e.message + '\n'); process.exit(1); }
+  const lidas = molde.lerRespostas(arquivoRespostas);
+  if (!lidas.ok) { process.stdout.write('ERRO: ' + lidas.erro + '\n'); process.exit(1); }
+  valores = lidas.valores;
 }
 
 const moldeTexto = fs.readFileSync(path.join(__dirname, '..', 'modelos', 'skill-projeto.md'), 'utf8');
@@ -72,8 +85,17 @@ if (fs.existsSync(alvo)) {
   process.exit(1);
 }
 
-fs.mkdirSync(path.dirname(alvo), { recursive: true });
-fs.writeFileSync(alvo, cheio, 'utf8');
+// A4-gsk-2 (pedido 12), estados: mkdir e write sem try saiam em excecao crua, sem GRAVADA nem ERRO.
+// A4-gsk-3 (R2): 'wx' fecha a janela entre o existsSync e o write - a skill que aparece nela sai EEXIST, sem
+// ser sobrescrita.
+try {
+  fs.mkdirSync(path.dirname(alvo), { recursive: true });
+  fs.writeFileSync(alvo, cheio, { encoding: 'utf8', flag: 'wx' });
+} catch (e) {
+  process.stdout.write('ERRO: nao consegui gravar ' + alvo + ' (' + texto.causaDoErro(e) + ').\n');
+  process.stdout.write('Nada foi gravado: conserte a pasta e rode de novo.\n');
+  process.exit(1);
+}
 process.stdout.write('GRAVADA em ' + alvo + '\n');
 process.stdout.write('Rode /reload-plugins ou reabra a sessao para o Claude Code enxerga-la.\n');
 process.exit(0);

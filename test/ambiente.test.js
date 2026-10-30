@@ -112,6 +112,29 @@ test('instrucoes: diz QUAL arquivo pesa mais, nao so o total', () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// D732 (fila D687): o registro de decisoes declarado canonico pesava como instrucao (907 dos 934 itens do sworn). A
+// fonte canonica em `fontesDeConsulta` segue mandando, mas sai do total e aparece em `foraDoPeso`, com a contagem; o
+// metodo diz. Sem a chave, nada muda; o que nao e fonte canonica (regras.md, skill) nao sai por ela.
+test('D732: fonte canonica em fontesDeConsulta sai do peso e aparece em foraDoPeso; o metodo diz', () => {
+  const dir = montar({
+    'CLAUDE.md': '- a\n- b\n- c\n',
+    'docs/decisoes.md': '- d1\n- d2\n- d3\n- d4\n- d5\n',
+    '.claude/sworn/regras.md': '- r\n'
+  });
+  try {
+    const fontes = ['CLAUDE.md', 'docs/decisoes.md'];
+    const sem = instrucoes.contar(dir, { fontesCanonicas: fontes });
+    assert.deepStrictEqual([sem.total, sem.foraDoPeso], [9, []]);
+    const com = instrucoes.contar(dir, { fontesCanonicas: fontes, fontesDeConsulta: ['./docs/decisoes.md'] });
+    assert.strictEqual(com.total, 4);
+    assert.deepStrictEqual(com.porArquivo.map((p) => p.arquivo), ['CLAUDE.md', '.claude/sworn/regras.md']);
+    assert.deepStrictEqual(com.foraDoPeso, [{ arquivo: 'docs/decisoes.md', n: 5 }]);
+    assert.ok(com.metodo.startsWith(sem.metodo + '; fora as fontes de consulta'), com.metodo);
+    const regras = instrucoes.contar(dir, { fontesCanonicas: fontes, fontesDeConsulta: ['.claude/sworn/regras.md'] });
+    assert.deepStrictEqual([regras.total, regras.foraDoPeso], [9, []]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // Ronda 1 do 8c.5: `LIMITES.tetoDeInstrucoes || 200` engolia o zero - o defeito que a
 // varredura.js ja corrigiu (`limite || LIMITE_PADRAO`). Zero e teto de verdade.
 test('instrucoes: teto e aviso em zero valem zero; so o ausente cai no padrao', () => {
@@ -337,5 +360,65 @@ test('instrucoes: o metodo diz se as fontes sao canonicas, candidatas ou nenhuma
     assert.ok(/fontes canonicas/.test(declaradas), declaradas);
     assert.ok(/fontes candidatas/.test(candidatas) && !/fontes canonicas,/.test(candidatas), candidatas);
     assert.ok(/nenhuma fonte/.test(nenhuma) && !/nas fontes/.test(nenhuma), nenhuma);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A4-amb-1 (pedido 12, borda): enabledPlugins com `false` (desligado, ou desligado no settings.local.json por cima do
+// settings.json) contava como plugin presente - e virava delegavel no init e na auditoria.
+test('A4-amb-1: plugin com enabledPlugins false nao conta, e o local desliga o do settings', () => {
+  const dir = montar({
+    '.claude/settings.json': JSON.stringify({ enabledPlugins: { 'superpowers@x': true, 'context7@y': true, 'outro@z': false } }),
+    '.claude/settings.local.json': JSON.stringify({ enabledPlugins: { 'superpowers@x': false } })
+  });
+  try {
+    const r = ambiente.detectar(dir);
+    assert.deepStrictEqual(r.plugins, ['context7@y']);
+    assert.strictEqual(r.delegaveis.some((d) => d.indexOf('superpowers') === 0), false, JSON.stringify(r.delegaveis));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A4-amb-2 (pedido 12, estados): settings.json, settings.local.json e .mcp.json quebrados ou ilegiveis eram "ausente",
+// calados - o init dizia "nada" de um projeto que configura. So ENOENT e ausente; o resto vai a naoLidos com a causa.
+test('A4-amb-2: arquivo de configuracao que nao se le vai a naoLidos com a causa; ausente nao', () => {
+  const dir = montar({ '.claude/settings.json': '{ isso nao e json', '.mcp.json/x': '' });
+  try {
+    const r = ambiente.detectar(dir);
+    assert.strictEqual(r.naoLidos.length, 2, JSON.stringify(r.naoLidos));
+    assert.ok(/^\.claude\/settings\.json \(SyntaxError: /.test(r.naoLidos[0]), r.naoLidos[0]);
+    assert.ok(/^\.mcp\.json \(e uma pasta \(EISDIR\)\)$/.test(r.naoLidos[1]), r.naoLidos[1]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const limpo = montar({ 'a.js': '', '.claude/settings.json': '[1]' });
+  try {
+    assert.deepStrictEqual(ambiente.detectar(limpo).naoLidos, ['.claude/settings.json (nao e um objeto JSON)']);
+  } finally { fs.rmSync(limpo, { recursive: true, force: true }); }
+  const cru = montar({ 'a.js': '' });
+  try {
+    assert.deepStrictEqual(ambiente.detectar(cru).naoLidos, [], 'ausente nao e ilegivel');
+  } finally { fs.rmSync(cru, { recursive: true, force: true }); }
+});
+
+// A4-ins-1 (pedido 12, estados): arquivo de instrucoes que nao se le (EACCES, EISDIR) contava 0 calado, e o peso da
+// auditoria e do init saia menor sem dizer. So ENOENT conta 0; o resto vai a naoLidos com a causa.
+test('A4-ins-1: fonte que nao se le vai a naoLidos com a causa; ausente segue contando 0 sem aviso', () => {
+  const dir = montar({ 'CLAUDE.md': '- regra um\n- regra dois\n', 'docs/x.md': '' });
+  try {
+    const r = instrucoes.contar(dir, { fontesCanonicas: ['CLAUDE.md', 'docs', 'nao-existe.md'] });
+    assert.strictEqual(r.total, 2);
+    assert.deepStrictEqual(r.naoLidos, ['docs (e uma pasta (EISDIR))']);
+    assert.deepStrictEqual(instrucoes.contar(dir, { fontesCanonicas: ['CLAUDE.md'] }).naoLidos, []);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A6 (pedido 12, R2 :71 da A6, borda): item de fontesCanonicas que nao e texto (projeto.json editado a mao; o validar
+// reprova, mas a auditoria e o init leem o projeto sem validar) derrubava o contar no path.resolve. Vai a naoLidos, e a
+// fonte de consulta seguinte segue saindo do peso.
+test('A6: item de fonte que nao e texto vai a naoLidos e o peso segue', () => {
+  const dir = montar({ 'CLAUDE.md': '- regra um\n- regra dois\n', 'docs/decisoes.md': '- d1\n' });
+  try {
+    const r = instrucoes.contar(dir, { fontesCanonicas: [null, 'CLAUDE.md', 42, 'docs/decisoes.md'],
+      fontesDeConsulta: ['docs/decisoes.md'] });
+    assert.strictEqual(r.total, 2);
+    assert.deepStrictEqual(r.naoLidos, ['fonte null (nao e texto)', 'fonte 42 (nao e texto)']);
+    assert.deepStrictEqual(r.foraDoPeso, [{ arquivo: 'docs/decisoes.md', n: 1 }]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

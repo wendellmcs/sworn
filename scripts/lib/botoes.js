@@ -44,7 +44,12 @@ function daSessao(entrada) {
   const projeto = e.projeto && typeof e.projeto === 'object' ? e.projeto : null;
   const lista = [];
 
-  if (e.cruzou === true) lista.push(botao('handoff', 'Um gatilho de troca de chat cruzou: gere o handoff e siga num chat novo.', 'gerar handoff'));
+  // A7 (pedido 12, R1 :47): sem "gatilho" e "cruzou", e o handoff explicado na frase; o rotulo segue o do GUIA.
+  // A7-11: diz por que trocar (os sinais de saude.medirTodos: tamanho, bloqueios e o trabalho da sessao).
+  if (e.cruzou === true) {
+    lista.push(botao('handoff', 'A conversa chegou a um limite que o sworn conta (tamanho, bloqueios ou trabalho ' +
+      'feito): gere o handoff (o texto que continua daqui) e cole num chat novo.', 'gerar handoff'));
+  }
 
   // A condicao do portao da referencia (D503, Tarefa 5): arquivo AAA com referencia de topo e nenhuma revisao contra
   // ela fechada na sessao. O comando ja leva o primeiro arquivo.
@@ -52,8 +57,9 @@ function daSessao(entrada) {
   if (projeto && !(fechadas > 0)) {
     const comRef = marcha.aaaComReferencia(s.arquivosTocados, projeto, e.raiz);
     if (comRef.length) {
-      lista.push(botao('revisar', 'Você mudou arquivo de rigor máximo e nenhuma revisão contra a referência do projeto fechou.', 'revisar',
-        '/sworn:review ' + argumento(comRef[0])));
+      // A7-10 (pedido 12): sem "rigor maximo" (a marcha AAA), sem culpar, o arquivo (o do comando) e o que fazer.
+      lista.push(botao('revisar', 'O arquivo ' + comRef[0] + ' pede o cuidado mais alto do projeto: revise-o ' +
+        'contra a referência antes de dar por pronto.', 'revisar', '/sworn:review ' + argumento(comRef[0])));
     }
   }
 
@@ -80,7 +86,8 @@ function daSessao(entrada) {
   }
 
   if (e.padraoCarregado !== true && temArquivoAaa(s.arquivosTocados, projeto, e.raiz)) {
-    lista.push(botao('padrao', 'Você mudou arquivo de rigor máximo sem carregar o manual.', 'carregar o manual', '/sworn:playbook'));
+    lista.push(botao('padrao', 'Um arquivo mudado nesta sessão pede o cuidado mais alto do projeto: carregue o ' +
+      'manual antes de seguir.', 'carregar o manual', '/sworn:playbook'));
   }
 
   // Plano 082 (p5-33): a ordem e a de ORDEM, nao a dos if acima (as duas podiam divergir sem aviso).
