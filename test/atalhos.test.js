@@ -253,7 +253,7 @@ test('painel: com sem-gatilho (mock coluna 2), arquivos em ordem alfabetica', ()
     '       trocar quando: entrar outro modelo na tabela.',
     '',
     '2 atalhos em 2 arquivos; 1 sem "trocar quando".',
-    'Atalho sem "trocar quando" vira dívida esquecida: escreva "trocar quando: ..." no comentário.'
+    'Sem "trocar quando", ninguém lembra de trocar o atalho: escreva "trocar quando: ..." no comentário.'
   ].join('\n'));
 });
 
@@ -279,7 +279,7 @@ test('painel: frase sem ponto final com a linha de baixo de fora avisa no atalho
     '       sem ponto final: a linha de baixo ficou de fora',
     '',
     '2 atalhos em 2 arquivos; 1 sem "trocar quando".',
-    'Atalho sem "trocar quando" vira dívida esquecida: escreva "trocar quando: ..." no comentário.',
+    'Sem "trocar quando", ninguém lembra de trocar o atalho: escreva "trocar quando: ..." no comentário.',
     'Sem ponto final: só entra a linha de baixo que começa com "limite:" ou "trocar quando:". Termine a frase na ' +
       'mesma linha ou comece a de baixo com o rótulo.'
   ].join('\n'));

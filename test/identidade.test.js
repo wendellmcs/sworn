@@ -62,7 +62,7 @@ test('083 T5 (p1-19): as strings acentuadas do mod sao NFC, sem mojibake, e cada
   // mods.test.ts os parte nos mesmos pontos.
   // A7-59 a A7-62: sem "medida" nem "script do sworn"; a frase pronta para o Claude.
   assert.deepStrictEqual(literais, [
-    'medidor atrasado: a leitura anterior do uso demorou demais; uma nova já começou, nada a fazer.',
+    'medidor atrasado: a leitura do uso demorou e outra já começou; nada a fazer.',
     'medidor parado: a leitura do uso falhou e volta na próxima resposta; ',
     'Medidor parado: o sworn não leu os números de uso (pode faltar o Node.js, ',
     'Painel do plano parado: o sworn não leu o plano (pode faltar o Node.js, ou o sworn falhou ',

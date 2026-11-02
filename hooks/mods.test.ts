@@ -252,7 +252,8 @@ test('D442/7: leitura de uso que nunca responde nao congela o status - a medida 
   await $.session.measure(MEDIDA)
   // A7-25 (pedido 12): um verbo so (a medida demorou; a presa e largada) e o passo, que e nenhum
   // A7-59 e A7-61: "a leitura anterior do uso" no lugar de "a medida anterior" (termo interno)
-  const atrasado = 'medidor atrasado: a leitura anterior do uso demorou demais; uma nova já começou, nada a fazer.'
+  // s266 (R1 do A7-80): mais curta e com o "nada a fazer" de volta, que diz que o usuario nao precisa agir
+  const atrasado = 'medidor atrasado: a leitura do uso demorou e outra já começou; nada a fazer.'
   expect(status).toContain(atrasado)
   expect(status[status.length - 1]).toBe('sworn | contexto 5%')
   // a presa responde tarde: o resultado dela e velho e nao volta para a tela

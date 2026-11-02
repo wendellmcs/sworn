@@ -53,9 +53,10 @@ test('io: blindar engole excecao e sai com 0', () => {
 });
 
 // A5-27/A5-29 (D735): valor lancado que nao e Error (texto, null) saia "undefined" no log; e sem quebra de linha.
-// A5-63: a reserva diz as duas causas (valor sem texto ou texto.js que nao carrega) e o passo.
-const semTexto = (texto) => 'o erro nao tem texto legivel (ele nao vira texto, ou o texto.js do plugin nao carregou; ' +
-  'confira com node "' + texto + '")';
+// A5-63: a reserva diz as duas causas (valor sem texto ou texto.js que nao carrega) e o passo. A5-76: curta, sem
+// parenteses com ponto e virgula dentro. s266 (R2): diz o que o texto.js faz e o passo se o comando der erro.
+const semTexto = (texto) => 'nao deu para ler o erro: ou o valor lancado nao vira texto, ou o texto.js do plugin, ' +
+  'que faz essa conversao, nao carregou. Se node "' + texto + '" der erro, reinstale o plugin';
 
 test('A5-29: blindar poe no stderr a causa de qualquer valor lancado, com quebra de linha final', () => {
   const io = path.join(__dirname, '..', 'scripts', 'lib', 'io.js');
@@ -70,7 +71,8 @@ test('A5-29: blindar poe no stderr a causa de qualquer valor lancado, com quebra
 });
 
 test('A5-63: com o texto.js quebrado, um Error comum sai pela reserva, que aponta o texto.js', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-io-texto-'));
+  // A5-77: pasta com espaco e acento, como o caminho de quem usa o plugin.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn io ação-'));
   try {
     fs.copyFileSync(path.join(RAIZ, 'scripts', 'lib', 'io.js'), path.join(dir, 'io.js'));
     fs.writeFileSync(path.join(dir, 'texto.js'), "throw new Error('texto.js quebrado');\n");

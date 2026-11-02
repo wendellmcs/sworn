@@ -770,7 +770,7 @@ So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosL
 **Trava 7 — criar sem ter procurado** (`Write` de `src/carrinho/frete-novo.js`, sem busca no turno):
 
 ~~~text
-sworn - arquivo novo sem ter procurado o que ja existe: procure antes e diga o que achou.
+sworn - arquivo novo barrado (trava 7): sem ter procurado o que ja existe; procure antes e diga o que achou.
 
 Alvo: src/carrinho/frete-novo.js  (nao existe ainda: isto e criacao, nao edicao)
 

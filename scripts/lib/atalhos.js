@@ -196,8 +196,9 @@ function painel(achados, totalDeArquivos, listaDeMarcas) {
   linhas.push('', plural(ordem.length, 'atalho', 'atalhos') + ' em ' + plural(arquivos, 'arquivo', 'arquivos') + '; ' +
     (semGatilho === 0 ? 'todos com "' + ROTULO.gatilho + '".' : semGatilho + ' sem "' + ROTULO.gatilho + '".'));
   if (semGatilho > 0) {
-    // A6-93 (pedido 12): o campo pelo nome que o dono escreve, como a auditoria da abertura.
-    linhas.push('Atalho sem "' + ROTULO.gatilho + '" vira dívida esquecida: escreva "' + ROTULO.gatilho +
+    // A6-93 (pedido 12): o campo pelo nome que o dono escreve, como a auditoria da abertura. A6-115: o efeito em
+    // palavras comuns, sem o jargao "divida".
+    linhas.push('Sem "' + ROTULO.gatilho + '", ninguém lembra de trocar o atalho: escreva "' + ROTULO.gatilho +
       ': ..." no comentário.');
   }
   if (semPonto > 0) {

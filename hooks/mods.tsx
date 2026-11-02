@@ -117,8 +117,8 @@ async function atualizar($: any) {
     }
     // A7-25 (pedido 12): um verbo so (a presa demorou e e largada; o prazo vale para a medida inteira) e o passo,
     // que e nenhum: a medida nova comeca logo abaixo. A7-59 e A7-61: "a leitura do uso", palavra de quem le o
-    // status, no lugar de "a medida".
-    await $.ui.status('medidor atrasado: a leitura anterior do uso demorou demais; uma nova já começou, nada a fazer.')
+    // status, no lugar de "a medida". A7-80: curta, para caber na linha de status; s266 (R1): com o "nada a fazer".
+    await $.ui.status('medidor atrasado: a leitura do uso demorou e outra já começou; nada a fazer.')
   }
   medindo = true
   medindoDesde = t === null ? 0 : t

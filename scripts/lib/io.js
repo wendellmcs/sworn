@@ -70,12 +70,13 @@ function liberarPorFalha(e) {
   // A5-27/A5-29 (D735): o valor lancado pode nao ser Error (texto, null); o causaDoErro cobre os dois. Quebra final.
   // O tratador de falha nao pode falhar: objeto sem prototipo faz o String() lancar.
   let causa;
-  // A5-63: a reserva tambem cobre o texto.js que nao carrega; diz as duas causas e o passo.
+  // A5-63: a reserva tambem cobre o texto.js que nao carrega; diz as duas causas e o passo. A5-76: curta, para uma
+  // linha de stderr. s266 (R2): diz o que o texto.js faz e o passo se o comando der erro.
   try {
     causa = require('./texto.js').causaDoErro(e);
   } catch (x) {
-    causa = 'o erro nao tem texto legivel (ele nao vira texto, ou o texto.js do plugin nao carregou; ' +
-      'confira com node "' + TEXTO_JS + '")';
+    causa = 'nao deu para ler o erro: ou o valor lancado nao vira texto, ou o texto.js do plugin, que faz essa ' +
+      'conversao, nao carregou. Se node "' + TEXTO_JS + '" der erro, reinstale o plugin';
   }
   process.stderr.write('sworn: portao falhou e liberou por seguranca: ' + causa + '\n');
   process.exit(0);

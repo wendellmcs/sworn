@@ -313,8 +313,13 @@ test('ultima-busca com ok:false acrescenta a frase nos tres casos de problema; o
     fs.mkdirSync(f);
     busca(f, { ok: false });
     const tf = aviso(f, AGORA);
-    assert.ok(tf.indexOf(' Ultima busca falhou (sem data registrada): sem motivo registrado. Corrija') !== -1, tf);
     assert.ok(tf.indexOf('?') === -1, tf);
+    // A7-77: sem motivo, "Corrija a causa" ficava sem objeto; o passo e rodar a tarefa a mao para ver o erro.
+    // s266 (R1): o passo diz onde achar o comando (aba Acoes da tarefa).
+    assert.ok(tf.indexOf(' Ultima busca falhou (sem data registrada): sem motivo registrado. Para ver o erro, abra ' +
+      'no Agendador de Tarefas do Windows a tarefa que chama o vigia-puxar.js, copie o comando da aba Acoes e ' +
+      'rode-o no terminal.') !== -1, tf);
+    assert.ok(tf.indexOf('Corrija') === -1, tf);
     // P2 da R1: campos vazios ou so com espaco contam como ausentes
     const g = path.join(base, 'g');
     fs.mkdirSync(g);

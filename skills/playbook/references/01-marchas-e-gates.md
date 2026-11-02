@@ -16,13 +16,16 @@ the `path → gear` map (`{{campo:marchas}}`), it wins, and always wins upward.
 git status --short
 ```
 
-Outside a git repository the command fails with `not a git repository`: say so in the answer, because this check
-did not run, and go on with the edit; if the file sits in a nested repository below that folder, run the check
-there first (see below). Any other failure (git not installed, a damaged repository, or `dubious ownership`, git
-refusing a folder that another user owns) means a repository may be there with another session's work: do not
-edit; show the error to `{{campo:quemDecide}}` and wait. A long list, even thousands of files, is not pasted
-whole: give the count and the
-files that your task touches.
+If the command fails:
+
+- **`not a git repository`** (the folder is outside any repository): say in the answer that this check did not
+  run, and go on with the edit. If the file sits in a nested repository below that folder, run the check there
+  first (see below).
+- **Any other failure** means a repository may be there with another session's work: do not edit; show the error
+  to `{{campo:quemDecide}}` and wait. Examples: git not installed, a damaged repository, or `dubious ownership`
+  (git refusing a folder that another user owns).
+
+A long list, even thousands of files, is not pasted whole: give the count and the files that your task touches.
 
 Every file already modified and not committed **belongs to another front of work** until proven
 otherwise. It is not an abandoned draft, and it is not an invitation.

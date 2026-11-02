@@ -71,8 +71,9 @@ function nomeadoNoEscopo(alvo, esc) {
 
 function motivo(alvo) {
   return [
-    // A4-104 (pedido 12, microcopy): a 1a linha na forma unica dos avisos, com o passo.
-    'sworn - arquivo novo sem ter procurado o que ja existe: procure antes e diga o que achou.',
+    // A4-104 (pedido 12, microcopy): a 1a linha na forma unica dos avisos, com o passo. A4-124: com "barrado" e o
+    // numero da trava, como as travas 5 e 8.
+    'sworn - arquivo novo barrado (trava 7): sem ter procurado o que ja existe; procure antes e diga o que achou.',
     '',
     'Alvo: ' + alvo + '  (nao existe ainda: isto e criacao, nao edicao)',
     '',

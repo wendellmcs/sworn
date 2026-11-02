@@ -79,6 +79,8 @@ test('A4-104: a 1a linha da recusa de arquivo novo segue a forma unica e diz o p
   assert.match(l1, /^sworn - \S.*\.$/, l1);
   assert.ok(!/NEGADO/.test(l1), l1);
   assert.ok(/sem ter procurado/.test(l1) && /procure/.test(l1), l1);
+  // A4-124: a palavra de bloqueio na 1a linha, como as travas 5 e 8 (sem ela, soa como conselho).
+  assert.match(l1, /^sworn - arquivo novo barrado \(trava 7\): /, l1);
 });
 
 // ── regressao: furo achado na auditoria de 2026-09-02 ───────────────────────

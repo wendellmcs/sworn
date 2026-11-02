@@ -94,14 +94,15 @@ test('A1-39: o motivo diz o que deixou de valer e o comando, sem jargao nem bron
   const m = apelidos.motivoReprovado(c);
   assert.ok(/^apelido ou campo que a ferramenta nao aceita mais/.test(m), m);
   assert.ok(!/sondagem|supos|NAO se conserta|entrevista/.test(m), m);
-  assert.ok(m.includes('node scripts/provar-apelidos.js'), m);
+  // A6-113: o caminho real do script, entre aspas, que roda de qualquer pasta (o relativo so valia no repo do plugin).
+  assert.ok(m.includes('node "' + SCRIPT + '"'), m);
 });
 
 // A1-51: a prova fora da forma diz o comando que a regrava, e nao o nome de um campo interno.
 test('A1-51: a prova torta diz o comando que a regrava', () => {
   for (const prova of [{}, { apelidos: [1] }]) {
     const t = apelidos.cobertura(MAPA, prova).provaInvalida;
-    assert.ok(t.includes('node scripts/provar-apelidos.js') && !/formatoDoResultado/.test(t), t);
+    assert.ok(t.includes('node "' + SCRIPT + '"') && !/formatoDoResultado/.test(t), t);
   }
 });
 

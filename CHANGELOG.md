@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.20.1 — o custo da troca de chat medido de novo, e avisos mais curtos e diretos
+
+**Corrige**
+
+- **O `/sworn:calibrate` usava um custo de troca de chat errado** quando o projeto tem menos de 10 trocas medidas:
+  US$ 3,40 por troca e 119 mil tokens de recomeço (o tamanho com que o chat novo começa a trabalhar), medidos com a
+  marca de handoff (o texto de passagem que o Claude escreve para o chat novo) errada. Agora vale a medição nova,
+  US$ 0,86 por troca e 82 mil de recomeço, e o limiar sugerido (o tamanho de conversa a partir do qual o sworn avisa
+  para trocar de chat) sai dessa conta.
+- **O aviso de troca de chat podia repetir um nome.** O aviso diz quais limites a conversa cruzou (turnos,
+  revisões, perguntas de escolha ou tamanho); quando o mesmo limite vinha duas vezes, ou com espaço em volta, o nome
+  saía repetido. Agora cada limite sai uma vez só.
+- **A mensagem que pede a prova dos apelidos de novo dava um caminho que só funcionava dentro do repositório do
+  plugin.** A prova é a conferência gravada de que os apelidos de modelo da escada, como `sonnet`, ainda valem.
+  Agora a mensagem dá o caminho real do `provar-apelidos.js`, o script que a grava, entre aspas, e ele roda de
+  qualquer pasta.
+- **A recusa de criar arquivo sem procurar antes soava como conselho.** A primeira linha agora diz "barrado (trava 7)",
+  como as outras recusas que bloqueiam; a trava 7 é a que pede procurar o que já existe antes de criar um arquivo, e
+  o passo segue o mesmo: procurar e dizer o que achou.
+- **O erro sem texto legível ficou curto e diz o passo**: o que o `texto.js` faz (converte o erro em texto) e, se o
+  comando que o confere der erro, reinstalar o plugin.
+- **A busca do vigia que falhou sem motivo registrado mandava "corrigir a causa"**, que ninguém sabia qual era. O
+  vigia é do mantenedor do plugin e vem desligado; a busca é a tarefa agendada que traz as novidades da semana.
+  Agora o passo é ver o erro: abrir no Agendador de Tarefas do Windows a tarefa que chama o `vigia-puxar.js`, copiar
+  o comando da aba Ações e rodá-lo no terminal.
+- **O relatório de cobertura com menos de dois agentes na escada** diz o plural certo, explica o que é a escada (a
+  lista dos agentes, do mais barato ao mais caro) e separa o efeito do passo.
+- **O aviso de atalho sem "trocar quando" diz o efeito em palavras comuns** ("ninguém lembra de trocar o atalho"),
+  sem o jargão "dívida esquecida".
+- **O status do medidor atrasado ficou mais curto**, para caber na linha de status sem corte.
+- **O agente do `/sworn:parallel` que para num erro** não manda mais consertar "o que a mensagem aponta" quando ela
+  não aponta nada: conserte a causa se a mensagem a nomear e rode de novo; se parar igual, o `/workflows` mostra onde
+  ele parou.
+- **O manual, quando o `git status` falha**, separa os dois casos numa lista curta (fora de um repositório git: diz
+  na resposta e segue; qualquer outra falha: para e leva o erro a quem decide).
+- **As notas da 0.20.0** dizem o que é o `texto.js` e qual comando o confere, o que o manual faz fora de um
+  repositório git e o que é o `/sworn:radar`.
+
+**Testes**
+
+- **Dois testes do plugin ficaram mais firmes; nada muda para quem usa.** O do aviso de shell errado diz, quando
+  falha, se foi o motivo ou a sugestão que saiu com acento ou em inglês, e o do erro sem texto roda numa pasta com
+  espaço e acento, como a de quem usa o plugin.
+
 ## 0.20.0 — os avisos dizem a causa e o passo, e a catraca não lê comparação como piso
 
 Os defeitos de texto que a revisão completa do plugin achou e deixou para depois foram consertados e revisados de
@@ -17,9 +61,10 @@ aparece a quem usa fica em português, e as figuras dizem o que cada gancho faz.
   leu, buscou, editou ou rodou algo), revisões cegas concluídas, respostas às perguntas de escolha e o tamanho da
   conversa. O resumo que retoma uma sessão explica o handoff (o texto de passagem que o Claude escreve para o chat
   novo) na primeira vez que o cita.
-- **Erro sem texto legível diz as duas causas possíveis** (o erro não vira texto, ou o `texto.js` do plugin não
-  carregou) e o comando que confere. O aviso do manual não carregado diz o nível de rigor pelo que ele é, sem o nome
-  interno da marcha, e o aviso dos ganchos manda conferir em `/hooks` que os comandos do plugin aparecem ligados.
+- **Erro sem texto legível diz as duas causas possíveis** (o erro não vira texto, ou o `texto.js`, a peça do plugin
+  que converte o erro em texto, não carregou) e o comando que confere: `node` com o caminho do `texto.js`. O aviso do
+  manual não carregado diz o nível de rigor pelo que ele é, sem o nome interno da marcha, e o aviso dos ganchos manda
+  conferir em `/hooks` que os comandos do plugin aparecem ligados.
 
 **Medição, custo e auditoria**
 
@@ -59,9 +104,10 @@ aparece a quem usa fica em português, e as figuras dizem o que cada gancho faz.
 **Skills e modelos**
 
 - **O aviso de shell errado no Windows vem em português**: os 12 motivos e as sugestões do modelo de shell.
-- **O manual, fora de um repositório git**, segue com o aviso (olhando antes um repositório aninhado); outra falha
-  do git para e leva o erro a quem decide. O `/sworn:audit` mostra o apóstrofo no bash e no PowerShell, e a frase do
-  handoff sobre o último agente ficou mais curta.
+- **O manual, fora de um repositório git**, diz na resposta que a conferência do trabalho de outra sessão não rodou
+  e segue com a edição; se o arquivo estiver num repositório aninhado (outro repositório numa pasta abaixo), confere
+  lá antes. Outra falha do git para e leva o erro a quem decide. O `/sworn:audit` mostra o apóstrofo no bash e no
+  PowerShell, e a frase do handoff sobre o último agente ficou mais curta.
 
 **Textos da raiz e figuras**
 
@@ -99,10 +145,11 @@ algo falha, e as figuras e os READMEs dizem de quem é cada mensagem e o que ela
   escrever um apóstrofo dentro de uma fonte (no bash e no PowerShell). No `/sworn:calibrate`, a pasta sem conversas
   volta com 0 sessões, não com erro: a skill diz que a pasta deve estar errada e pergunta de novo.
 - **Os passos de espera e de falha dizem o que fazer.** O handoff (a passagem do trabalho para um chat novo), quando
-  espera agentes de fundo, diz que o aviso de cada um chega neste chat e que nada se pede a quem usa até lá. O radar,
-  quando uma fonte falha, diz o passo seguinte; a trava de escopo (a que só deixa gravar o que o escopo declarado da
-  tarefa cobre) vem explicada, e o cartão (a ficha que o radar grava com o que vale trazer de cada projeto) que não
-  passou na conferência depois de dois consertos para e é mostrado ao dono com o caminho e cada problema que sobrou.
+  espera agentes de fundo, diz que o aviso de cada um chega neste chat e que nada se pede a quem usa até lá. O
+  `/sworn:radar` (a busca de projetos públicos parecidos com o seu), quando uma fonte falha, diz o passo seguinte; a
+  trava de escopo (a que só deixa gravar o que o escopo declarado da tarefa cobre) vem explicada, e o cartão (a ficha
+  que o radar grava com o que vale trazer de cada projeto) que não passou na conferência depois de dois consertos
+  para e é mostrado ao dono com o caminho e cada problema que sobrou.
   No fecho, a falha vai inteira, não só a linha que prova.
 
 **Agentes e modelos**

@@ -108,14 +108,16 @@ function portoes(cwd, projeto, a) {
   // Foco de revisao 2. custo.js nao opina com menos de dois nomes, e nao avisa
   // que nao opina - e a falha silenciosa que este relatorio existe para acusar.
   // A6-87 (D735): o efeito e o passo em palavras comuns; o passo vai pelo init, que grava escada e degraus juntos.
+  // A6-112: efeito e passo em frases separadas, e a escada explicada na primeira vez. s266 (R1): o plural certo.
   lista.push(portao('custo', 'Agente caro em marcha rapida', HOOK,
     a.escada >= degrausLib.MINIMO,
     a.escada >= degrausLib.MINIMO
       ? 'escada com ' + a.escada + ' nomes'
-      : 'escada com ' + a.escada + ' nome(s): com menos de ' + degrausLib.MINIMO + ', a checagem que barra o ' +
-        'agente mais caro que a tarefa pede fica parada, e so este relatorio mostra isso; para ela valer, rode o ' +
-        '/sworn:init de novo e ponha ao menos ' + degrausLib.MINIMO + ' agentes na escada (agentes.escada do ' +
-        '.claude/sworn/projeto.json)'));
+      : 'escada com ' + a.escada + (a.escada === 1 ? ' nome' : ' nomes') + ' (a escada e a lista dos agentes, ' +
+        'do mais barato ao mais caro): com menos de ' + degrausLib.MINIMO + ', a checagem que barra o agente ' +
+        'mais caro que a tarefa pede fica ' +
+        'parada, e so este relatorio mostra isso. Para ela valer, rode o /sworn:init de novo e ponha ao menos ' +
+        degrausLib.MINIMO + ' agentes na escada (agentes.escada do .claude/sworn/projeto.json)'));
 
   const apel = apelidosLib.conferir(projeto, agentesLib.listar(cwd));
   // A6-52 (s235): os titulos em palavras comuns, sem "Gatilho n", "H4" nem o campo `model:`.

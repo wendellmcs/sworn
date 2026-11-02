@@ -66,10 +66,12 @@ test('cobertura: escada com menos de dois nomes aparece como portao DESLIGADO', 
   const r = cobertura.relatorio(dir, p);
   const custo = porChave(r, 'custo');
   assert.strictEqual(custo.verificavel, false);
-  // A6-87 (D735): o efeito e o passo em palavras comuns, sem "NAO OPINA".
-  assert.strictEqual(custo.porque, 'escada com 1 nome(s): com menos de 2, a checagem que barra o agente mais caro ' +
-    'que a tarefa pede fica parada, e so este relatorio mostra isso; para ela valer, rode o /sworn:init de novo e ' +
-    'ponha ao menos 2 agentes na escada (agentes.escada do .claude/sworn/projeto.json)');
+  // A6-87 (D735): o efeito e o passo em palavras comuns, sem "NAO OPINA". A6-112: efeito e passo em frases
+  // separadas, e a escada explicada. s266 (R1): o plural certo, sem o "nome(s)".
+  assert.strictEqual(custo.porque, 'escada com 1 nome (a escada e a lista dos agentes, do mais barato ao mais ' +
+    'caro): com menos de 2, a checagem que barra o agente mais caro que a tarefa pede fica parada, e so este ' +
+    'relatorio mostra isso. Para ela valer, rode o /sworn:init de novo e ponha ao menos 2 agentes na escada ' +
+    '(agentes.escada do .claude/sworn/projeto.json)');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -168,7 +170,9 @@ test('A6: apelidos-vivos.json ilegivel ou fora da forma aparece no portao com a 
     let g = porque();
     assert.strictEqual(g.verificavel, false);
     assert.ok(g.porque.startsWith('apelidos-vivos.json nao se le (JSON invalido: '), g.porque);
-    assert.match(g.porque, /rode node scripts\/provar-apelidos\.js/, g.porque);
+    // A6-113: o mesmo caminho real do ramo sondar, nao o relativo.
+    assert.ok(g.porque.includes('rode node "' + path.join(__dirname, '..', 'scripts', 'provar-apelidos.js') + '"'),
+      g.porque);
     fs.unlinkSync(arq);
     fs.mkdirSync(arq);
     g = porque();

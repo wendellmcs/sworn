@@ -50,10 +50,12 @@ function daSessao(entrada) {
 
   // A7 (pedido 12, R1 :47): sem "gatilho" e "cruzou", e o handoff explicado na frase; o rotulo segue o do GUIA.
   // A7-11: diz por que trocar. A7-49: com o sinal que cruzou (o nome do /sworn-session); sem nenhum, o cruzou veio do
-  // aviso ja dado nesta sessao (os contadores recomecam depois dele, medidor.js).
+  // aviso ja dado nesta sessao (os contadores recomecam depois dele, medidor.js). A7-78: o nome aparado e sem repetir.
   if (e.cruzou === true) {
-    const sinais = (Array.isArray(e.disparou) ? e.disparou : [])
-      .filter(function (n) { return typeof n === 'string' && n.trim(); });
+    const sinais = Array.from(new Set((Array.isArray(e.disparou) ? e.disparou : [])
+      .filter(function (n) { return typeof n === 'string'; })
+      .map(function (n) { return n.trim(); })
+      .filter(Boolean)));
     const quais = sinais.length > 1 ? sinais.slice(0, -1).join(', ') + ' e ' + sinais[sinais.length - 1] : sinais[0];
     const motivo = sinais.length ? 'chegou a um limite que o sworn conta (' + quais + ')'
       : 'já recebeu o aviso de troca de chat nesta sessão';

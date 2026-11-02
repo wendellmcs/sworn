@@ -47,6 +47,10 @@ test('botao handoff: o gatilho contavel cruzou', () => {
   const tres = botoes.daSessao(base({ cruzou: true, disparou: ['commits nesta sessão', ' ', 'arquivos tocados',
     'tamanho do contexto'] }))[0].texto;
   assert.match(tres, /\(commits nesta sessão, arquivos tocados e tamanho do contexto\): /, 'o so-espacos sai');
+  // A7-78: o nome sai aparado e uma vez so, mesmo vindo com espaco nas pontas ou repetido
+  const rep = botoes.daSessao(base({ cruzou: true, disparou: [' tamanho do contexto ', 'tamanho do contexto',
+    'arquivos tocados'] }))[0].texto;
+  assert.match(rep, /\(tamanho do contexto e arquivos tocados\): /, rep);
   for (const torto of [undefined, [], 'tamanho', [3, null, '', '  ']]) {
     assert.match(botoes.daSessao(base({ cruzou: true, disparou: torto }))[0].texto,
       /^A conversa já recebeu o aviso de troca de chat nesta sessão: gere o handoff /, JSON.stringify(torto));

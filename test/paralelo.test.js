@@ -196,6 +196,10 @@ test('paralelo: agente que morre vira respondeu false, e o resultado volta como 
   assert.ok(/claim/.test(r.aviso) && /check/.test(r.aviso), r.aviso);
 });
 
+// A7-76: o passo quando a mensagem nao aponta nada (rodar de novo; se repetir, o /workflows mostra onde parou)
+const SEM_AJUDA = ' fix the cause if the message names one, then run this task again; if it stops the same way, ' +
+  'open /workflows, which lists each agent run, to see where it stopped';
+
 test('paralelo: agente que lanca erro vira respondeu false COM a mensagem do erro (revisao cega da 0.6.2)', async () => {
   const { r } = await rodar(['a', 'b'], (p, o, n) => {
     if (n === 1) throw new Error('orcamento esgotado');
@@ -203,8 +207,7 @@ test('paralelo: agente que lanca erro vira respondeu false COM a mensagem do err
   });
   assert.strictEqual(r.resultados[0].respondeu, false);
   // A7-57: o passo diz onde esta a causa (a mensagem entre parenteses)
-  assert.strictEqual(r.resultados[0].motivo, 'the agent stopped on an error ("orcamento esgotado"); fix what the ' +
-    'message points to, then run this task again');
+  assert.strictEqual(r.resultados[0].motivo, 'the agent stopped on an error ("orcamento esgotado");' + SEM_AJUDA);
   assert.strictEqual(r.resultados[1].respondeu, false, 'undefined tambem e nao respondeu');
 });
 
@@ -225,5 +228,5 @@ test('paralelo: agente que lanca erro sem mensagem diz que veio sem mensagem, e 
 test('paralelo: mensagem de erro enorme entra cortada em 300 caracteres', async () => {
   const { r } = await rodar(['a'], () => { throw new Error('😀' + 'x'.repeat(5000)); });
   assert.strictEqual(r.resultados[0].motivo, 'the agent stopped on an error ("😀' + 'x'.repeat(299) +
-    '..."); fix what the message points to, then run this task again');
+    '...");' + SEM_AJUDA);
 });

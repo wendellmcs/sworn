@@ -177,11 +177,15 @@ function fraseDaBusca(dir) {
     const b = JSON.parse(textoLib.semBom(fs.readFileSync(path.join(dir, BUSCA), 'utf8')));
     if (!ehObjeto(b) || b.ok !== false) return '';
     // A7-16 (pedido 12): termina no passo seguinte (ASCII pela R5, como o resto do aviso). A7-51: o campo que falta no
-    // registro e dito, no lugar do '?', e o passo diz onde ver a tarefa.
+    // registro e dito, no lugar do '?', e o passo diz onde ver a tarefa. A7-77: sem motivo, nao ha causa a corrigir;
+    // o passo e rodar a mao o comando da tarefa para ver o erro. s266 (R1): e diz onde achar o comando.
     const quando = umaLinha(b.quando);
-    return ' Ultima busca falhou' + (quando ? ' em ' + quando : ' (sem data registrada)') + ': ' +
-      (umaLinha(b.motivo).slice(0, 120) || 'sem motivo registrado') + '. Corrija a causa e rode de novo, no ' +
-      'Agendador de Tarefas do Windows, a tarefa que chama o vigia-puxar.js.';
+    const motivo = umaLinha(b.motivo).slice(0, 120);
+    return ' Ultima busca falhou' + (quando ? ' em ' + quando : ' (sem data registrada)') + ': ' + (motivo
+      ? motivo + '. Corrija a causa e rode de novo, no Agendador de Tarefas do Windows, a tarefa que chama o ' +
+        'vigia-puxar.js.'
+      : 'sem motivo registrado. Para ver o erro, abra no Agendador de Tarefas do Windows a tarefa que chama o ' +
+        'vigia-puxar.js, copie o comando da aba Acoes e rode-o no terminal.');
   } catch (e) {
     return '';
   }

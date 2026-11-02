@@ -113,11 +113,16 @@ test('calibracao: compactacao (queda brusca acima de 80K) abre segmento novo', (
   assert.deepStrictEqual(segs.map((g) => g.chamadas.length), [2, 2]);
 });
 
-test('calibracao: sem trocas medidas suficientes, o custo da troca e o padrao da D464', () => {
+test('calibracao: sem trocas medidas suficientes, o custo da troca e o padrao da D749', () => {
   const t = cal.custoDaTroca([]);
   assert.strictEqual(t.medida, false);
   assert.strictEqual(t.custo, cal.TROCA_PADRAO.custo);
   assert.strictEqual(t.recomeco, cal.TROCA_PADRAO.recomeco);
+});
+
+// P11 (D749): o padrao da D464 (US$ 3,40) foi medido com a marca de handoff errada; o dono mandou medir de novo.
+test('P11: o custo padrao da troca e o medido na s265 (US$ 0,86, recomeco 82K)', () => {
+  assert.deepStrictEqual(cal.TROCA_PADRAO, { custo: 0.86, recomeco: 82000 });
 });
 
 test('calibracao: simular so troca no fim de turno do dono, depois de cruzar o limiar', () => {

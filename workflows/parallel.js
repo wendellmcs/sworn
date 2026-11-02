@@ -150,12 +150,14 @@ function resultado(t, saida) {
   if (!saida) return Object.assign(base, { respondeu: false, motivo: SEM_RESPOSTA })
   if (saida.erroDoAgente !== undefined) {
     // A mensagem vai entre aspas, como do agente (o ponto final dela nao encosta no ';'); vazia, diz que veio vazia.
-    // A7-57: o passo diz onde esta a causa: na mensagem, ou, sem ela, no registro do agente no /workflows.
+    // A7-57: o passo diz onde esta a causa: na mensagem, ou, sem ela, no registro do agente no /workflows. A7-76:
+    // com mensagem que nao aponta nada, rodar de novo; se parar igual, o /workflows mostra onde parou.
     const causa = [...String(saida.erroDoAgente).trim()]
     const cortada = causa.length > MAX_CAUSA ? causa.slice(0, MAX_CAUSA).join('') + '...' : causa.join('')
     return Object.assign(base, { respondeu: false, motivo: causa.length
-      ? 'the agent stopped on an error (' + JSON.stringify(cortada) + '); fix what the message points to, then run ' +
-        'this task again'
+      ? 'the agent stopped on an error (' + JSON.stringify(cortada) + '); fix the cause if the message names one, ' +
+        'then run this task again; if it stops the same way, open /workflows, which lists each agent run, to see ' +
+        'where it stopped'
       : 'the agent stopped on an error with no message; open /workflows, which lists each agent run, to see where it ' +
         'stopped, then run this task again' })
   }

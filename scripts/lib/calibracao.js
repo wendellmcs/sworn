@@ -26,10 +26,11 @@ const FAIXAS = [0, 50, 100, 150, 200, 300, 500].map(function (x) { return x * K;
 // de 25K em 25K, de 150K ate abaixo do alarme: acima dele a troca ja e ordem, nao limiar
 const CANDIDATOS = [];
 for (let t = 150 * K; t < LIMIARES_PADRAO.tokensAlarme; t += 25 * K) CANDIDATOS.push(t);
-// abaixo disto a simulacao nao diz nada sobre o projeto, e fica o padrao da D464
+// abaixo disto a simulacao nao diz nada sobre o projeto, e fica o padrao da D749
 const AMOSTRA_MINIMA = { sessoes: 30, conversasNoPadrao: 10, trocasMedidas: 10 };
-// D464: medido em 435 sessoes (US$ 3,40 por troca; o chat novo comeca a trabalhar com 119K)
-const TROCA_PADRAO = { custo: 3.40, recomeco: 119 * K };
+// D749 (P11): medido em 104 sessoes do autor, 2026-10-27 a 11-02 (US$ 0,86 por troca em 100 handoffs; o chat novo
+// comeca a trabalhar com 82K em 65 aberturas). O US$ 3,40 da D464 contava a marca de handoff errada (D475).
+const TROCA_PADRAO = { custo: 0.86, recomeco: 82 * K };
 // a compactacao derruba o contexto: queda para menos de 60% vindo de mais de 80K abre conversa nova
 const QUEDA_DE_COMPACTACAO = 0.6;
 // escrever o handoff so conta perto do fim da sessao (as ultimas 60 chamadas), como na D464
@@ -192,7 +193,7 @@ function soma(lista) {
 /**
  * Quanto custa uma troca neste projeto: a rampa do chat novo (sessao aberta de handoff, ate a 1a edicao real
  * ou commit) mais escrever o handoff (da 1a chamada que grava arquivo de handoff ate o fim da sessao). Com
- * menos de `AMOSTRA_MINIMA.trocasMedidas` de cada, vale o medido na D464.
+ * menos de `AMOSTRA_MINIMA.trocasMedidas` de cada, vale o medido na D749 (TROCA_PADRAO).
  */
 function custoDaTroca(sessoes) {
   const rampas = [], recomecos = [], escritas = [];
