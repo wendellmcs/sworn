@@ -182,7 +182,8 @@ test('volta-resumo: montar segue o mock (D588), com o texto do sworn em ASCII', 
   const linhas = t.split('\n');
   assert.strictEqual(linhas[0], '# Resumo para retomar o chat d731fc49');
   assert.ok(t.indexOf('(parado 1 h 16 min; 461 mil tokens; Opus 5.5)') !== -1);
-  assert.ok(t.indexOf('nao e o handoff do modelo') !== -1);
+  // A5-66: o handoff explicado na 1a vez que o resumo o cita.
+  assert.ok(t.indexOf('nao e o handoff (o texto de passagem que o modelo escreve para o chat novo)') !== -1);
   for (const secao of ['## Onde parou', '## Seus ultimos pedidos (do mais novo)', '## Ultimas respostas do Claude (do mais novo)',
     '## Arquivos mexidos (os ultimos)', '## Para o chat novo']) {
     assert.ok(linhas.indexOf(secao) !== -1, secao);

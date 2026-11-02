@@ -271,8 +271,9 @@ function validar(obj) {
       const canonicas = (Array.isArray(obj.fontesCanonicas) ? obj.fontesCanonicas : []).map(comoCaminho);
       for (const f of obj.fontesDeConsulta) {
         if (canonicas.indexOf(comoCaminho(f)) === -1) {
-          erros.push('fontesDeConsulta: "' + f + '" nao esta em fontesCanonicas, e so fonte canonica sai do peso; ' +
-            'corrija o caminho ou declare-a canonica');
+          // A6-95 (D735): o efeito em palavras, no lugar de "sai do peso".
+          erros.push('fontesDeConsulta: "' + f + '" nao esta em fontesCanonicas, e so fonte canonica pode ficar fora ' +
+            'da conta do limite de instrucoes do /sworn:audit; corrija o caminho ou declare-a canonica');
         }
       }
     }

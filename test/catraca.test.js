@@ -302,3 +302,14 @@ test('D429/3 cat-5: tempo linear - linha de 30000 caracteres com muitas virgulas
   assert.ok(linha.length > 29000);
   assert.ok(ms < 500, 'levou ' + ms + ' ms');
 });
+
+// A5-64 (D735): o plural do cicatriz.js (igualdade do nome do piso com 1) foi lido como o piso descendo.
+test('A5-64: comparacao de igualdade com o nome do piso nao e valor novo dele; a atribuicao segue acusando', () => {
+  assert.deepStrictEqual(catraca.afrouxou("n + (r.piso === 2 ? ' a' : ' b')", "n + (r.piso === 1 ? ' a' : ' b')"), []);
+  assert.deepStrictEqual(catraca.afrouxou('if (piso == 2) x();', 'if (piso == 1) x();'), []);
+  assert.deepStrictEqual(Object.keys(catraca.pares('const s = r.piso === 1 ? 1 : 2;')), []);
+  assert.strictEqual(catraca.afrouxou('piso = 2', 'piso = 1').length, 1, 'atribuicao');
+  assert.strictEqual(catraca.afrouxou('{ "piso": 2 }', '{ "piso": 1 }').length, 1, 'chave');
+  assert.strictEqual(catraca.afrouxou('if (piso >= 2) ok();', 'if (piso >= 1) ok();').length, 1,
+    '>= num portao e regua');
+});

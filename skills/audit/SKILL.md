@@ -31,7 +31,7 @@ key in `projeto.json` to change them. If the cap bothers you, the way is to cut 
 
 ## Step 1 — measure
 
-    node "${CLAUDE_PLUGIN_ROOT}/scripts/auditar.js" --memoria "<pasta de memória>/MEMORY.md"
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/auditar.js" --memoria "<memory folder>/MEMORY.md"
 
 **The path of `MEMORY.md` is what you pass**, and the script doesn't guess it: the persistent memory folder
 is in your own system instruction (the memory section gives the folder path); the
@@ -75,8 +75,9 @@ failure is what prevents a one-minute network drop from silencing the check for 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/catalogo.js" --registrar ok '<fonte>'
 
 After the outcome come the sources you read, each in single quotes. The script stores each source as given,
-without checking it: an apostrophe inside it is written `'\''` in bash and `''` in PowerShell. **By the command, never
-by `Write`:** with `projeto.json` on disk, the scope gate (the lock, called "trava 4" in
+without checking it: an apostrophe inside it is written `'\''` in bash and `''` in PowerShell, so the source
+`it's` goes as `'it'\''s'` in bash and as `'it''s'` in PowerShell. **By the command, never by `Write`:** with
+`projeto.json` on disk, the scope gate (the lock, called "trava 4" in
 the messages, which only lets you write what the task's declared scope covers) denies the `Write` to
 `.claude/sworn/catalogo.json` without a declared scope.
 
@@ -174,7 +175,7 @@ serves which role, and how much they are willing to pay. With the facts in hand,
 6. **Scar.** For each instruction item: is there a decision, incident or finding behind it?
    A rule without a scar is opinion, and opinion doesn't survive disagreement.
 
-       node "${CLAUDE_PLUGIN_ROOT}/scripts/cicatriz.js" --manual "<pasta do manual>" --corpus "<pasta do histórico>"
+       node "${CLAUDE_PLUGIN_ROOT}/scripts/cicatriz.js" --manual "<manual folder>" --corpus "<history folder>"
 
    **The history is an argument, always.** Without it the report declares itself blind, and it is right to
    declare itself: calling everything "without a scar" for having nowhere to look would be the same silence

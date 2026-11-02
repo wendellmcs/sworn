@@ -703,10 +703,25 @@ test('D573: a auditoria passa a transcricao anterior ao auditar e avisa o gancho
     assert.strictEqual(t, [
       'sworn: auditoria automatica (a cada 7 dias) achou o que cortar:',
       '- texto repetido por plugin mais de 5 vezes na conversa anterior (4f947022, ' + local(quando) +
-        ') (1): context-mode PreToolUse:Read 12x, 4812 caracteres. Corte para uma vez por sessao.',
+        ') (1): context-mode (antes de usar Read) 12x, 4812 caracteres. Corte para uma vez por sessao.',
       ORDEM_DO_MOCK
     ].join('\n'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A6-94 (pedido 12, microcopy): o evento do gancho sai em palavras, nunca o nome tecnico; o que nao se conhece some.
+test('A6-94: o texto repetido diz o momento em palavras; evento desconhecido sai so com o plugin', () => {
+  const rep = [['SessionStart:startup', 'p (na abertura) 9x'], ['UserPromptSubmit', 'p (a cada pedido) 9x'],
+    ['PostToolUse:Bash', 'p (depois de usar Bash) 9x'], ['PreToolUse', 'p (antes de usar uma ferramenta) 9x'],
+    ['PreToolUse:', 'p (antes de usar uma ferramenta) 9x'], ['PreToolUse:a:b', 'p (antes de usar a:b) 9x'],
+    ['Stop', 'p (no fim do turno) 9x'], ['EventoNovo:x', 'p 9x'], ['constructor', 'p 9x'], [undefined, 'p 9x'],
+    [null, 'p 9x'], ['', 'p 9x'], [7, 'p 9x'], ['UserPromptSubmit (texto puro)', 'p (a cada pedido) 9x']];
+  for (const [gancho, esperado] of rep) {
+    const r = { texto: 't', plugin: 'p', gancho: gancho, vezes: 9, caracteres: 9 };
+    const linha = ap.linhaDoInjetado({ medido: true, repetidos: [r] }, null);
+    assert.ok(linha.includes('(1): ' + esperado + ', 9 caracteres.'), gancho + ' -> ' + linha);
+    assert.ok(!/PreToolUse|PostToolUse|SessionStart|UserPromptSubmit|Stop\b|EventoNovo/.test(linha), linha);
+  }
 });
 
 test('D573: injetado nao medido, sem repetidos ou de forma estranha = linha nenhuma (nunca zero inventado)', () => {
@@ -768,7 +783,7 @@ test('D573: com a entrada do gancho, a auditoria acha a anterior sozinha; dentro
 const ORDEM_DOS_ATALHOS = [
   'Faca no seu primeiro turno, depois de atender o pedido:',
   '1. Para cada atalho, confira se o "trocar quando" ja aconteceu.',
-  '2. Se algum venceu (ou nao tem gatilho), leve ao usuario pelo',
+  '2. Se algum venceu (ou nao tem "trocar quando"), leve ao usuario pelo',
   '   AskUserQuestion, em 3 opcoes, com o custo. Nao troque nada sem o sim.',
   '   Se nenhum venceu, nao diga nada.',
   'Desligar: "atalhosNaAbertura": false em .claude/sworn/projeto.json.'
@@ -792,11 +807,11 @@ test('D574: a lista completa dos atalhos, no texto do mock, com e sem gatilho; m
     const varrer = function () { chamadas++; return achados; };
     const t = ap.avisoDosAtalhos(dir, PROJETO, { agora: AGORA, atalhos: varrer });
     assert.strictEqual(t, [
-      'sworn: atalhos registrados (revisao a cada 30 dias): 2 atalhos em 2 arquivos; 1 sem gatilho.',
+      'sworn: atalhos registrados (revisao a cada 30 dias): 2 atalhos em 2 arquivos; 1 sem "trocar quando".',
       '- sworn/scripts/lib/ordens.js:88  raiz comparada sem maiuscula em todo sistema.',
       '    trocar quando: aparecer projeto no Linux com duas pastas que so diferem na caixa.',
       '- scripts/y.js:7  retry fixo de 3 vezes.',
-      '    sem gatilho',
+      '    sem "trocar quando"',
       ORDEM_DOS_ATALHOS
     ].join('\n'));
     assert.ok(fs.existsSync(path.join(dir, '.claude', 'sworn', ap.MARCA_ATALHOS)), 'a marca propria nao foi gravada');
@@ -814,7 +829,8 @@ test('D574: um atalho com gatilho = "todos com gatilho"; sem atalho, calada e co
   try {
     const t = ap.avisoDosAtalhos(um, PROJETO, { agora: AGORA,
       atalhos: function () { return [{ arquivo: 'a.js', linha: 1, oque: 'x.', limite: null, gatilho: 'y.' }]; } });
-    assert.ok(t.startsWith('sworn: atalhos registrados (revisao a cada 30 dias): 1 atalho em 1 arquivo; todos com gatilho.\n'), t);
+    assert.ok(t.startsWith('sworn: atalhos registrados (revisao a cada 30 dias): 1 atalho em 1 arquivo; ' +
+      'todos com "trocar quando".\n'), t);
     assert.strictEqual(ap.avisoDosAtalhos(nada, PROJETO, { agora: AGORA, atalhos: function () { return []; } }), '');
     assert.ok(fs.existsSync(path.join(nada, '.claude', 'sworn', ap.MARCA_ATALHOS)), 'sem atalho tambem grava a marca');
     assert.strictEqual(ap.avisoDosAtalhos(sem, null, { agora: AGORA, atalhos: function () { return [{ arquivo: 'a.js', linha: 1, oque: 'x', gatilho: null }]; } }), '');

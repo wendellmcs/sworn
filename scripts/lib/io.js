@@ -1,5 +1,8 @@
 'use strict';
 
+// A5-63: calculado no carregamento, para o tratador de falha (liberarPorFalha) nao chamar nada que possa lancar.
+const TEXTO_JS = require('path').join(__dirname, 'texto.js');
+
 /**
  * Le o JSON que o Claude Code entrega no stdin do hook.
  * Entrada vazia ou invalida vira objeto vazio: o portao decide sozinho o que fazer,
@@ -67,7 +70,13 @@ function liberarPorFalha(e) {
   // A5-27/A5-29 (D735): o valor lancado pode nao ser Error (texto, null); o causaDoErro cobre os dois. Quebra final.
   // O tratador de falha nao pode falhar: objeto sem prototipo faz o String() lancar.
   let causa;
-  try { causa = require('./texto.js').causaDoErro(e); } catch (x) { causa = 'valor lancado sem texto legivel'; }
+  // A5-63: a reserva tambem cobre o texto.js que nao carrega; diz as duas causas e o passo.
+  try {
+    causa = require('./texto.js').causaDoErro(e);
+  } catch (x) {
+    causa = 'o erro nao tem texto legivel (ele nao vira texto, ou o texto.js do plugin nao carregou; ' +
+      'confira com node "' + TEXTO_JS + '")';
+  }
   process.stderr.write('sworn: portao falhou e liberou por seguranca: ' + causa + '\n');
   process.exit(0);
 }

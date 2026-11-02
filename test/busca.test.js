@@ -73,6 +73,14 @@ test('A4-30: a recusa de arquivo novo diz o motivo e o passo sem "falha de orige
   assert.ok(m.includes('crie: depois de uma busca neste turno, criar arquivo novo fica liberado.'), m);
 });
 
+// A4-104 (pedido 12, microcopy): a 1a linha era "sworn: NEGADO - ...", fora da forma unica, e nao dizia o passo.
+test('A4-104: a 1a linha da recusa de arquivo novo segue a forma unica e diz o passo', () => {
+  const l1 = busca.motivo('src/novo.js').split('\n')[0];
+  assert.match(l1, /^sworn - \S.*\.$/, l1);
+  assert.ok(!/NEGADO/.test(l1), l1);
+  assert.ok(/sem ter procurado/.test(l1) && /procure/.test(l1), l1);
+});
+
 // ── regressao: furo achado na auditoria de 2026-09-02 ───────────────────────
 
 test('busca REGRESSAO: comando que ESCREVE nao e passe para criar', () => {

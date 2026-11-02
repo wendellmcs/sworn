@@ -162,6 +162,17 @@ function dataLocal(ms) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
+/** A6-94 (pedido 12): o momento do evento do gancho, em palavras; o nome da ferramenta vem depois do ":". */
+const MOMENTO = {
+  SessionStart: 'na abertura',
+  UserPromptSubmit: 'a cada pedido',
+  PreToolUse: function (f) { return 'antes de usar ' + f; },
+  PostToolUse: function (f) { return 'depois de usar ' + f; },
+  Stop: 'no fim do turno',
+  SubagentStop: 'no fim de cada subagente',
+  PreCompact: 'antes de compactar'
+};
+
 /**
  * Plano 092 (D573): a linha dos textos de gancho que voltam mais de N vezes na conversa anterior, com o id e a data dela
  * (a anterior pode ser de outra frente: a linha nao pode parecer desta). Nao medido ou sem repeticao: null.
@@ -173,8 +184,15 @@ function linhaDoInjetado(injetado, conversa) {
   const qual = ehObjeto(conversa) && conversa.id && isFinite(conversa.quando)
     ? ' (' + conversa.id + ', ' + dataLocal(conversa.quando) + ')' : '';
   // A6-72 (pedido 12): sem o "gancho" interno, e com o corte que a skill audit propoe.
+  // A6-94: o evento em palavras; o que a tabela nao conhece sai so com o plugin.
   const cada = rep.map(function (r) {
-    return r.plugin + ' ' + r.gancho + ' ' + r.vezes + 'x, ' + r.caracteres + ' caracteres';
+    // o nome do evento sao as letras do inicio: "PreToolUse:Read", "SessionStart (texto puro)" (injetado.js)
+    const evento = String(r.gancho || '');
+    const nome = (evento.match(/^[A-Za-z]+/) || [''])[0];
+    const ferramenta = evento.charAt(nome.length) === ':' ? evento.slice(nome.length + 1) : '';
+    const m = Object.prototype.hasOwnProperty.call(MOMENTO, nome) ? MOMENTO[nome] : null;
+    const quando = typeof m === 'function' ? m(ferramenta || 'uma ferramenta') : m;
+    return r.plugin + (quando ? ' (' + quando + ')' : '') + ' ' + r.vezes + 'x, ' + r.caracteres + ' caracteres';
   });
   return 'texto repetido por plugin mais de ' + require('./injetado.js').VOLTA_MAIS_DE + ' vezes na conversa anterior' +
     qual + ' (' + rep.length + '): ' + lista(cada) + '. Corte para uma vez por sessao.';
@@ -258,17 +276,17 @@ function avisoDosAtalhos(cwd, projeto, opcoes) {
     const arquivos = new Set(achados.map(function (x) { return x.arquivo; })).size;
     const sem = achados.filter(function (x) { return !x.gatilho; }).length;
     const linhas = [cabeca + plural(achados.length, 'atalho', 'atalhos') + ' em ' + plural(arquivos, 'arquivo', 'arquivos') +
-      '; ' + (sem ? sem + ' sem gatilho.' : 'todos com gatilho.')];
+      '; ' + (sem ? sem + ' sem "trocar quando".' : 'todos com "trocar quando".')];
     for (const x of achados.slice(0, ATALHOS_LISTADOS)) {
       linhas.push('- ' + a(x.arquivo + ':' + x.linha) + '  ' + a(x.oque));
-      linhas.push(x.gatilho ? '    trocar quando: ' + a(x.gatilho) : '    sem gatilho');
+      linhas.push(x.gatilho ? '    trocar quando: ' + a(x.gatilho) : '    sem "trocar quando"');
     }
     if (achados.length > ATALHOS_LISTADOS) linhas.push('(+' + (achados.length - ATALHOS_LISTADOS) + ' nao listados: rode /sworn:shortcuts)');
     if (falha) linhas.push(falha);
     return linhas.concat([
       'Faca no seu primeiro turno, depois de atender o pedido:',
       '1. Para cada atalho, confira se o "trocar quando" ja aconteceu.',
-      '2. Se algum venceu (ou nao tem gatilho), leve ao usuario pelo',
+      '2. Se algum venceu (ou nao tem "trocar quando"), leve ao usuario pelo',
       '   AskUserQuestion, em 3 opcoes, com o custo. Nao troque nada sem o sim.',
       '   Se nenhum venceu, nao diga nada.',
       'Desligar: "' + CHAVE_ATALHOS + '": false em .claude/sworn/projeto.json.'
@@ -335,5 +353,5 @@ function avisoDaAuditoria(cwd, projeto, opcoes) {
 
 module.exports = {
   CHAVE, MARCA, CHAVE_ATALHOS, MARCA_ATALHOS, PADROES, MAX_POR_CATEGORIA, ligada, dias, lerMarca, vencida, gravarMarca,
-  skillsParadas, avisoDaAuditoria, avisoDosAtalhos, pedeCorte
+  skillsParadas, avisoDaAuditoria, avisoDosAtalhos, pedeCorte, linhaDoInjetado
 };

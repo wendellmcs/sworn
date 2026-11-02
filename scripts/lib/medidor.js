@@ -8,9 +8,10 @@
 //   historico   - por sessao, o % de cada janela no 1o e no ultimo momento (gasto.guardarSessao), para a previsao em
 //                 trocas de chat; sessao - o id da sessao atual, que fica fora dessa media;
 //   gasto       - o gasto do mes (gasto.gastoDoMes): { usd, real, estimado, pendentes, semPreco, ilegiveis, desde }.
-// Devolve a linha de status (curta), a resposta do comando (longa) e se a troca de chat ja cruzou. Texto de gancho
-// fica ASCII (R5); a barra e a resposta do comando sao excecao, com acento (D532: a sonda da Tarefa 1 do plano 082 viu
-// o acento inteiro nas duas). Campo que o motor nao deu e omitido: numero inventado e pior que numero nenhum.
+// Devolve a linha de status (curta), a resposta do comando (longa), se a troca de chat ja cruzou e os sinais que
+// dispararam (disparou). Texto de gancho fica ASCII (R5); a barra e a resposta do comando sao excecao, com acento
+// (D532: a sonda da Tarefa 1 do plano 082 viu o acento inteiro nas duas). Campo que o motor nao deu e omitido: numero
+// inventado e pior que numero nenhum.
 
 const NOME_DA_JANELA = { five_hour: '5h', seven_day: 'semana', spend_limit: 'gasto' };
 // Plano 082 (mock D532, S4): na resposta do comando, a janela por extenso - [nome, artigo, "usada"/"usado"].
@@ -282,9 +283,10 @@ function linhasDoGasto(uso, gasto) {
     }
     // A6-67 (D735): de quem e a tabela (calibracao.js PRECOS, do plugin) e o passo: o preco novo chega com o sworn.
     if (gasto.semPreco > 0) {
+      // A6-91 (D735): causa e passo em duas linhas; o passo diz como atualizar (ligar-atualizacao.js, pelo init).
       gastos.push('- fora da conta: ' + (gasto.semPreco === 1 ? '1 mensagem' : gasto.semPreco + ' mensagens') +
-        ' de um modelo que a tabela de preços do sworn ainda não tem; o mês sai menor do que é até você atualizar o ' +
-        'sworn para uma versão com esse preço');
+        ' de um modelo sem preço na tabela do sworn; o mês sai menor do que é');
+      gastos.push('- para contá-las: atualize o sworn pelo /plugin, ou ligue a atualização automática no /sworn:init');
     }
     if (gasto.ilegiveis > 0) {
       gastos.push('- fora da conta: ' + (gasto.ilegiveis === 1 ? '1 conversa salva que não se leu' :
@@ -364,7 +366,9 @@ function linhaDaSessao(entrada) {
   bloco('O que fazer', [cruzou ? 'Rode /sworn:handoff e cole o prompt pronto num chat novo.' : 'Nada por ora.']);
 
   const curta = barra({ uso: uso, gasto: gasto, js: js, cruzados: cruzados, medidas: medidas, avisou: avisou });
-  return { curta: curta, longa: blocos.join('\n\n'), cruzou: cruzou };
+  // A7-49: os nomes dos sinais que dispararam, os mesmos da lista acima, para o botao do handoff (botoes.js).
+  const disparou = cruzados.map(function (g) { return (daChave(SINAL, g.chave) || [g.nome])[0]; });
+  return { curta: curta, longa: blocos.join('\n\n'), cruzou: cruzou, disparou: disparou };
 }
 
 module.exports = { linhaDaSessao, milhar, centavos };

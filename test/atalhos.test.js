@@ -233,7 +233,7 @@ test('painel: todos com gatilho (mock coluna 1), ordem por linha', () => {
     '       limite: transcrição de até 50 MB.',
     '       trocar quando: aparecer transcrição maior.',
     '',
-    '2 atalhos em 1 arquivo; todos com gatilho.'
+    '2 atalhos em 1 arquivo; todos com "trocar quando".'
   ].join('\n'));
 });
 
@@ -246,14 +246,14 @@ test('painel: com sem-gatilho (mock coluna 2), arquivos em ordem alfabetica', ()
     'scripts/abrir-turno.js',
     '  :77  pausa medida pelo relógio do PC.',
     '       limite: um fuso só.',
-    '       sem-gatilho',
+    '       sem "trocar quando"',
     'scripts/lib/gasto.js',
     '  :42  preço fixo do Opus em vez de ler a tabela.',
     '       limite: só Opus 5.5.',
     '       trocar quando: entrar outro modelo na tabela.',
     '',
-    '2 atalhos em 2 arquivos; 1 sem gatilho.',
-    'Atalho sem gatilho vira dívida esquecida: escreva "trocar quando: ..." no comentário.'
+    '2 atalhos em 2 arquivos; 1 sem "trocar quando".',
+    'Atalho sem "trocar quando" vira dívida esquecida: escreva "trocar quando: ..." no comentário.'
   ].join('\n'));
 });
 
@@ -270,7 +270,7 @@ test('painel: frase sem ponto final com a linha de baixo de fora avisa no atalho
     'scripts/abertura.js',
     '  :68  caminho comparado sem caixa em qualquer sistema.',
     '       limite: dois nomes so diferentes na caixa contam como um',
-    '       sem-gatilho',
+    '       sem "trocar quando"',
     '       sem ponto final: a linha de baixo ficou de fora',
     'scripts/lib/obrigacoes.js',
     '  :411 D-1 passa como citacao.',
@@ -278,8 +278,8 @@ test('painel: frase sem ponto final com a linha de baixo de fora avisa no atalho
     '       trocar quando: o FORA puder',
     '       sem ponto final: a linha de baixo ficou de fora',
     '',
-    '2 atalhos em 2 arquivos; 1 sem gatilho.',
-    'Atalho sem gatilho vira dívida esquecida: escreva "trocar quando: ..." no comentário.',
+    '2 atalhos em 2 arquivos; 1 sem "trocar quando".',
+    'Atalho sem "trocar quando" vira dívida esquecida: escreva "trocar quando: ..." no comentário.',
     'Sem ponto final: só entra a linha de baixo que começa com "limite:" ou "trocar quando:". Termine a frase na ' +
       'mesma linha ou comece a de baixo com o rótulo.'
   ].join('\n'));
@@ -294,7 +294,7 @@ test('painel: singular, sem limite, e linha longa alarga a coluna', () => {
     '  :12345 a',
     '         trocar quando: b',
     '',
-    '1 atalho em 1 arquivo; todos com gatilho.'
+    '1 atalho em 1 arquivo; todos com "trocar quando".'
   ].join('\n'));
 });
 
@@ -341,10 +341,10 @@ test('CLI: rastreado e novo nao ignorado entram; ignorado e node_modules ficam f
     assert.strictEqual(r.status, 0, r.stderr);
     // `:linha` alinhado na coluna de 4 (`:42` + 2 espacos no mock): `:2` leva 3.
     assert.ok(r.stdout.includes('src/rastreado.js\n  :2   rastreado.'), r.stdout);
-    assert.ok(r.stdout.includes('ação.py\n  :1   nome com acento\n       sem-gatilho'), r.stdout);
+    assert.ok(r.stdout.includes('ação.py\n  :1   nome com acento\n       sem "trocar quando"'), r.stdout);
     assert.ok(r.stdout.includes('novo.sh\n  :1   novo sem commit.'), r.stdout);
     assert.ok(!r.stdout.includes('ignorado') && !r.stdout.includes('dependencia'), r.stdout);
-    assert.ok(r.stdout.includes('3 atalhos em 3 arquivos; 1 sem gatilho.'), r.stdout);
+    assert.ok(r.stdout.includes('3 atalhos em 3 arquivos; 1 sem "trocar quando".'), r.stdout);
     assert.strictEqual(spawnSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' }).stdout, antes);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

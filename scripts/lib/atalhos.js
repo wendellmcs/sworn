@@ -189,14 +189,16 @@ function painel(achados, totalDeArquivos, listaDeMarcas) {
     linhas.push('  ' + (':' + a.linha).padEnd(largura) + ' ' + a.oque);
     if (a.limite) linhas.push(recuo + ROTULO.limite + ': ' + a.limite);
     if (a.gatilho) linhas.push(recuo + ROTULO.gatilho + ': ' + a.gatilho);
-    else { linhas.push(recuo + 'sem-gatilho'); semGatilho++; }
+    else { linhas.push(recuo + 'sem "' + ROTULO.gatilho + '"'); semGatilho++; }
     if (a.talvezCortado) { linhas.push(recuo + 'sem ponto final: a linha de baixo ficou de fora'); semPonto++; }
   }
   const arquivos = new Set(ordem.map(function (a) { return a.arquivo; })).size;
   linhas.push('', plural(ordem.length, 'atalho', 'atalhos') + ' em ' + plural(arquivos, 'arquivo', 'arquivos') + '; ' +
-    (semGatilho === 0 ? 'todos com gatilho.' : semGatilho + ' sem gatilho.'));
+    (semGatilho === 0 ? 'todos com "' + ROTULO.gatilho + '".' : semGatilho + ' sem "' + ROTULO.gatilho + '".'));
   if (semGatilho > 0) {
-    linhas.push('Atalho sem gatilho vira dívida esquecida: escreva "' + ROTULO.gatilho + ': ..." no comentário.');
+    // A6-93 (pedido 12): o campo pelo nome que o dono escreve, como a auditoria da abertura.
+    linhas.push('Atalho sem "' + ROTULO.gatilho + '" vira dívida esquecida: escreva "' + ROTULO.gatilho +
+      ': ..." no comentário.');
   }
   if (semPonto > 0) {
     linhas.push('Sem ponto final: só entra a linha de baixo que começa com "' + ROTULO.limite + ':" ou "' +

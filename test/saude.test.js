@@ -27,6 +27,18 @@ test('saude: turnos com trabalho real disparam no limiar', () => {
   assert.strictEqual(saude.avaliar({ turnosComTrabalho: 12 }, limiares).disparou, true);
 });
 
+// A5-70: cada item do aviso diz o que conta, sem termo solto (o de bloqueios ja dizia, desde o A5-14).
+test('A5-70: turnos, revisoes, decisoes e tokens dizem o que contam', () => {
+  const r = saude.avaliar({ turnosComTrabalho: 15, contadores: { revisao_fechada: 2 }, decisoesDoDono: 3,
+    tokensDeContexto: 120000 }, { tokensDeContexto: 100000 });
+  assert.deepStrictEqual(r.gatilhos, [
+    '15 turnos com trabalho real (respostas em que o Claude leu, buscou, editou ou rodou algo) nesta sessao' +
+      ' (limiar 15)',
+    '2 revisoes independentes fechadas (revisoes as cegas do /sworn:review concluidas) nesta sessao (limiar 2)',
+    '3 decisoes do dono respondidas (respostas as perguntas de escolha do Claude) nesta sessao (limiar 3)',
+    '120000 tokens de contexto, o tamanho desta conversa (limiar 100000)']);
+});
+
 test('saude: soma de bloqueios de portao dispara', () => {
   const e = { contadores: { fora_do_escopo: 3, comando_destrutivo: 2, fecho_sem_evidencia: 1 } };
   const r = saude.avaliar(e, { bloqueios: 5 });
@@ -63,7 +75,8 @@ test('T10-2: tres decisoes do dono respondidas disparam, e duas nao', () => {
   assert.strictEqual(dois.disparou, false);
   const tres = saude.avaliar({ decisoesDoDono: 3 });
   assert.strictEqual(tres.disparou, true);
-  assert.deepStrictEqual(tres.gatilhos, ['3 decisoes do dono respondidas (limiar 3)']);
+  assert.deepStrictEqual(tres.gatilhos,
+    ['3 decisoes do dono respondidas (respostas as perguntas de escolha do Claude) nesta sessao (limiar 3)']);
   assert.strictEqual(saude.LIMIARES_PADRAO.decisoesDoDono, 3);
 });
 
@@ -326,7 +339,7 @@ test('D445: o gatilho de contexto cruza no limiar, respeita o do projeto e ignor
   assert.strictEqual(g({ tokensDeContexto: '200000' }).valor, 0);
   const r = saude.avaliar({ tokensDeContexto: 176000 });
   assert.strictEqual(r.disparou, true);
-  assert.ok(/176000 tokens de contexto \(limiar 175000\)/.test(r.aviso), r.aviso);
+  assert.ok(/176000 tokens de contexto, o tamanho desta conversa \(limiar 175000\)/.test(r.aviso), r.aviso);
   assert.ok(/^[\x20-\x7E\n]+$/.test(r.aviso), 'aviso ASCII (R5)');
 });
 

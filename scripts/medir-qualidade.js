@@ -667,8 +667,9 @@ function vereditoDaRodada(argv) {
   L.push('tokens de saida (soma da execucao inteira):');
   medicao.CONDICOES.forEach(function (c) { L.push('  ' + c + '  ' + a.tokens[c]); });
   // A6-17 (D735): a regra do gasto (medicao.apurar, gastaMenos), no lugar da frase que saia sempre e nada dizia.
-  L.push('Para GANHA, o recurso precisa vencer os dois placares e gastar menos tokens que o padrao; o gasto do ' +
-    'caveman nao entra na conta.');
+  // A6-85 (D735): o placar dito pela regra (medicao.apurar, vencePlacar).
+  L.push('Para GANHA, o recurso precisa de mais vitorias que derrotas contra o caveman e contra o padrao, e gastar ' +
+    'menos tokens que o padrao; o gasto do caveman nao entra na conta.');
   process.stdout.write(L.join('\n') + '\n');
   process.exitCode = a.veredito === null ? 2 : 0;
 }

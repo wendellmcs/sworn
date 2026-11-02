@@ -78,8 +78,12 @@ if (jaTem) {
 const novo = texto.replace(/\s*$/, '') + '\n- ' + bruta + '\n';
 const conferencia = regraLib.validarArquivo(novo);
 if (!conferencia.ok) {
-  process.stdout.write('ERRO: o arquivo ficaria invalido. Nao gravei.\n');
+  // A8-26: a regra nova passou na validarRegra acima, entao os erros sao de linhas que ja estavam no arquivo; o
+  // texto diz onde e o passo seguinte.
+  process.stdout.write('ERRO: o arquivo ficaria invalido. Nao gravei. As linhas citadas abaixo sao regras que ja ' +
+    'estavam no ' + alvo + ':\n');
   for (const e of conferencia.erros) process.stdout.write('  - ' + e + '\n');
+  process.stdout.write('Corrija ou apague essas linhas no ' + alvo + ' (cada item diz o conserto) e rode de novo.\n');
   process.exit(1);
 }
 

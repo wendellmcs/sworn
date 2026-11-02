@@ -176,9 +176,12 @@ function fraseDaBusca(dir) {
   try {
     const b = JSON.parse(textoLib.semBom(fs.readFileSync(path.join(dir, BUSCA), 'utf8')));
     if (!ehObjeto(b) || b.ok !== false) return '';
-    // A7-16 (pedido 12): termina no passo seguinte (ASCII pela R5, como o resto do aviso).
-    return ' Ultima busca falhou em ' + (umaLinha(b.quando) || '?') + ': ' + (umaLinha(b.motivo).slice(0, 120) || '?') +
-      '. Corrija a causa e rode de novo a tarefa agendada do Windows que chama o vigia-puxar.js.';
+    // A7-16 (pedido 12): termina no passo seguinte (ASCII pela R5, como o resto do aviso). A7-51: o campo que falta no
+    // registro e dito, no lugar do '?', e o passo diz onde ver a tarefa.
+    const quando = umaLinha(b.quando);
+    return ' Ultima busca falhou' + (quando ? ' em ' + quando : ' (sem data registrada)') + ': ' +
+      (umaLinha(b.motivo).slice(0, 120) || 'sem motivo registrado') + '. Corrija a causa e rode de novo, no ' +
+      'Agendador de Tarefas do Windows, a tarefa que chama o vigia-puxar.js.';
   } catch (e) {
     return '';
   }

@@ -71,7 +71,8 @@ function nomeadoNoEscopo(alvo, esc) {
 
 function motivo(alvo) {
   return [
-    'sworn: NEGADO - arquivo novo sem ter procurado o que ja existe.',
+    // A4-104 (pedido 12, microcopy): a 1a linha na forma unica dos avisos, com o passo.
+    'sworn - arquivo novo sem ter procurado o que ja existe: procure antes e diga o que achou.',
     '',
     'Alvo: ' + alvo + '  (nao existe ainda: isto e criacao, nao edicao)',
     '',

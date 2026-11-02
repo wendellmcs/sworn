@@ -211,7 +211,8 @@ test('injetado: transcricao lida sem registro de gancho e zero com aviso de que 
     assert.deepStrictEqual(r.total, { vezes: 0, caracteres: 0 });
     // A5-07 (D735): sem o jargao "gancho"; diz que o zero pode ser falso e o passo (conferir os do plugin, atualizar)
     assert.ok(/nenhum registro do texto que os plugins poem sozinhos na conversa/.test(r.aviso) &&
-      /o zero pode ser falso/.test(r.aviso) && /confira em \/hooks que os do plugin estao ligados/.test(r.aviso) &&
+      /o zero pode ser falso/.test(r.aviso) &&
+      /confira em \/hooks que os comandos do plugin aparecem ligados/.test(r.aviso) &&
       /atualize o Claude Code \(claude update\)/.test(r.aviso) && !/gancho/.test(r.aviso), r.aviso);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

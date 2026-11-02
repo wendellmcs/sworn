@@ -189,9 +189,9 @@ test('paralelo: agente que morre vira respondeu false, e o resultado volta como 
   assert.strictEqual(r.resultados[0].respondeu, true);
   assert.strictEqual(r.resultados[0].resumo, 'feito a');
   assert.strictEqual(r.resultados[1].respondeu, false);
-  // A7-27 (D735): o motivo diz o porque e o passo
-  assert.strictEqual(r.resultados[1].motivo,
-    'the agent was skipped or died from an API error, with no answer; run this task again if you still need it');
+  // A7-27 (D735): o motivo diz o porque e o passo; A7-57: sem o jargao "API error"
+  assert.strictEqual(r.resultados[1].motivo, 'the agent was skipped, or the model service failed on every retry, ' +
+    'so there is no answer; run this task again if you still need it');
   assert.strictEqual(r.resultados[0].motivo, undefined, 'quem respondeu nao ganha motivo');
   assert.ok(/claim/.test(r.aviso) && /check/.test(r.aviso), r.aviso);
 });
@@ -202,14 +202,28 @@ test('paralelo: agente que lanca erro vira respondeu false COM a mensagem do err
     return undefined;
   });
   assert.strictEqual(r.resultados[0].respondeu, false);
-  assert.strictEqual(r.resultados[0].motivo,
-    'the agent stopped on an error ("orcamento esgotado"); run this task again once the cause is fixed');
+  // A7-57: o passo diz onde esta a causa (a mensagem entre parenteses)
+  assert.strictEqual(r.resultados[0].motivo, 'the agent stopped on an error ("orcamento esgotado"); fix what the ' +
+    'message points to, then run this task again');
   assert.strictEqual(r.resultados[1].respondeu, false, 'undefined tambem e nao respondeu');
 });
 
-// A7-27 (R1, borda): erro sem mensagem nao deixa "error: ;" no motivo
+// A7-27 (R1, borda): erro sem mensagem nao deixa "error: ;" no motivo. A7-71: throw null, throw undefined e
+// new Error('') tambem sao "sem mensagem" (antes viravam ("null"), ("undefined") e ("Error"))
 test('paralelo: agente que lanca erro sem mensagem diz que veio sem mensagem, e o passo', async () => {
-  const { r } = await rodar(['a'], () => { throw '  '; });
-  assert.strictEqual(r.resultados[0].motivo, 'the agent stopped on an error with no message; run this task again ' +
-    'once the cause is fixed');
+  const semMensagem = 'the agent stopped on an error with no message; open /workflows, which lists each agent run, ' +
+    'to see where it stopped, then run this task again';
+  for (const lancado of ['  ', null, undefined, new Error(''), new Error('  ')]) {
+    const { r } = await rodar(['a'], () => { throw lancado; });
+    assert.strictEqual(r.resultados[0].motivo, semMensagem, String(lancado));
+  }
+  const { r } = await rodar(['a'], () => { throw 'texto cru'; });
+  assert.ok(/\("texto cru"\)/.test(r.resultados[0].motivo), r.resultados[0].motivo);
+});
+
+// A7-55: a mensagem enorme (um stack trace) entra cortada num teto, por caractere, com a marca do corte
+test('paralelo: mensagem de erro enorme entra cortada em 300 caracteres', async () => {
+  const { r } = await rodar(['a'], () => { throw new Error('😀' + 'x'.repeat(5000)); });
+  assert.strictEqual(r.resultados[0].motivo, 'the agent stopped on an error ("😀' + 'x'.repeat(299) +
+    '..."); fix what the message points to, then run this task again');
 });

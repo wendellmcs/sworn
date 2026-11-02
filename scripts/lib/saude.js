@@ -216,10 +216,13 @@ function medirTodos(estado, limiares) {
   const commits = typeof e.commitsFeitos === 'number' ? e.commitsFeitos : 0;
   const contexto = typeof e.tokensDeContexto === 'number' ? e.tokensDeContexto : 0;
   return [
+    // A5-70: cada item diz o que conta, no molde do de bloqueios (A5-14); arquivos e commits ja se explicam.
     item('turnosComTrabalho', 'turnos com trabalho real', turnos, turnos >= L.turnosComTrabalho,
-      turnos + ' turnos com trabalho real (limiar ' + L.turnosComTrabalho + ')'),
+      turnos + ' turnos com trabalho real (respostas em que o Claude leu, buscou, editou ou rodou algo) nesta sessao' +
+      ' (limiar ' + L.turnosComTrabalho + ')'),
     item('revisoesFechadas', 'revisoes independentes fechadas', revisoes, revisoes >= L.revisoesFechadas,
-      revisoes + ' revisoes independentes fechadas (limiar ' + L.revisoesFechadas + ')'),
+      revisoes + ' revisoes independentes fechadas (revisoes as cegas do /sworn:review concluidas) nesta sessao' +
+      ' (limiar ' + L.revisoesFechadas + ')'),
     item('bloqueios', 'bloqueios de portao', bloqueios, bloqueios >= L.bloqueios,
       // A5-14 (D735): o que e o bloqueio, para o usuario que le o aviso.
       bloqueios + ' bloqueios de portao (acoes que o sworn negou) nesta sessao (limiar ' + L.bloqueios + ')'),
@@ -227,13 +230,14 @@ function medirTodos(estado, limiares) {
       arquivos + ' arquivos tocados (limiar ' + L.arquivosTocados + ')'),
     item('decisoesDoDono', 'decisoes do dono respondidas', decisoes,
       typeof e.decisoesDoDono === 'number' && decisoes >= L.decisoesDoDono,
-      decisoes + ' decisoes do dono respondidas (limiar ' + L.decisoesDoDono + ')'),
+      decisoes + ' decisoes do dono respondidas (respostas as perguntas de escolha do Claude) nesta sessao' +
+      ' (limiar ' + L.decisoesDoDono + ')'),
     item('commits', 'commits nesta sessao', commits,
       typeof e.commitsFeitos === 'number' && commits >= L.commits,
       commits + ' commits nesta sessao (limiar ' + L.commits + ')'),
     item('tokensDeContexto', 'tokens de contexto', contexto,
       typeof e.tokensDeContexto === 'number' && contexto >= L.tokensDeContexto,
-      contexto + ' tokens de contexto (limiar ' + L.tokensDeContexto + ')')
+      contexto + ' tokens de contexto, o tamanho desta conversa (limiar ' + L.tokensDeContexto + ')')
   ];
 }
 

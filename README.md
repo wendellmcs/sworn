@@ -212,8 +212,9 @@ command that is due.
   quando: <trigger>.`, and `/sworn:shortcuts` lists them and flags the ones with no trigger.
 - **Study before building.** `/sworn:reference` builds a sourced sheet of 2-3 leading products of the
   same kind; `/sworn:radar` finds similar public projects and says what is worth bringing over, and
-  offers itself once a session when you ask for a new feature. The weekly watch (`vigia`) is for the
-  plugin's maintainer and is off by default.
+  offers itself once a session when you ask for a new feature. The weekly watch (`vigia`, Portuguese for
+  "watchman") is for the plugin's maintainer and is off by default; `"vigia": true` in `projeto.json`
+  turns it on.
 
 ### The blind review, inside
 

@@ -1348,7 +1348,8 @@ test('T10-5: sem /sworn:init (sem projeto.json) o modo continuo padrao cala os d
         const f = rodar('portao-fecho.js', dir, { session_id: id, cwd: dir, hook_event_name: 'Stop',
           last_assistant_message: 'Anotado.' });
         assert.strictEqual(f.status, 0, f.stderr);
-        const dito = nome === 'commits' ? '3 commits nesta sessao (limiar 3)' : '3 decisoes do dono respondidas (limiar 3)';
+        const dito = nome === 'commits' ? '3 commits nesta sessao (limiar 3)'
+          : '3 decisoes do dono respondidas (respostas as perguntas de escolha do Claude) nesta sessao (limiar 3)';
         if (!desligado) {
           assert.ok(f.stdout.indexOf(dito) === -1 && !/chat novo/.test(f.stdout), nome + ': o modo continuo padrao tinha de calar: ' + f.stdout);
           continue;
@@ -1708,8 +1709,9 @@ test('092: a abertura mede o injetado da conversa anterior e revisa os atalhos; 
     assert.strictEqual(r1.status, 0, r1.stderr);
     assert.ok(r1.stdout.indexOf('- texto repetido por plugin mais de 5 vezes na conversa anterior (aaaa1111, ') !== -1,
       r1.stdout);
-    assert.ok(r1.stdout.indexOf('sworn: atalhos registrados (revisao a cada 30 dias): 1 atalho em 1 arquivo; todos com gatilho.\n' +
-      '- a.js:2  lista lida inteira.\n    trocar quando: arquivo maior.\n') !== -1, r1.stdout);
+    assert.ok(r1.stdout.indexOf('sworn: atalhos registrados (revisao a cada 30 dias): 1 atalho em 1 arquivo; ' +
+      'todos com "trocar quando".\n- a.js:2  lista lida inteira.\n    trocar quando: arquivo maior.\n') !== -1,
+      r1.stdout);
     assert.ok(r1.stdout.indexOf('sworn: atalhos registrados') > r1.stdout.indexOf('auditoria automatica'), 'os atalhos sairam antes da auditoria');
     const r2 = rodar('abertura.js', dir, Object.assign({}, entrada, { session_id: '092-2', transcript_path: path.join(projects, '092-2.jsonl') }));
     assert.strictEqual(r2.status, 0, r2.stderr);
@@ -1825,6 +1827,20 @@ test('091 #7: recusar-init.js sem pasta sai 1 e nao grava', () => {
       encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
     assert.strictEqual(g.status, 1, g.stdout);
     assert.ok(!fs.existsSync(path.join(cfg, 'sworn')), 'gravou sem pasta');
+  } finally { fs.rmSync(cfg, { recursive: true, force: true }); }
+});
+
+// A4-97 (pedido 12, borda): a pasta so com espacos passava no !pasta e era gravada como recusa.
+test('A4-97: recusar-init.js com pasta so de espacos sai 1 com o erro de uso e nao grava', () => {
+  const cfg = temp('ordem-init-branco');
+  try {
+    for (const branco of ['   ', '', '\t', ' \t ']) {
+      const g = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'recusar-init.js'), branco], {
+        encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
+      assert.strictEqual(g.status, 1, JSON.stringify(branco) + ': ' + g.stdout);
+      assert.ok(g.stdout.startsWith('ERRO: falta a pasta do projeto'), g.stdout);
+      assert.ok(!fs.existsSync(path.join(cfg, 'sworn')), 'gravou a pasta em branco ' + JSON.stringify(branco));
+    }
   } finally { fs.rmSync(cfg, { recursive: true, force: true }); }
 });
 

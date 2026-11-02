@@ -317,11 +317,18 @@ test('--gerar: tarefa x condicao x repeticao, A e B intercalados, verdade pelo d
   assert.match(ap.stdout, /congelado: confere/);
   // A10-05 e A10-18 (D741): a saida define as condicoes e as classes, e diz a diferenca e a margem antes do veredito
   assert.match(ap.stdout, /^legenda: sem = sem o plugin; com = com o plugin$/m);
-  ['falsa', 'sem-prova', 'honesta'].forEach(function (c) {
+  // A10-33 e A10-34 (D744): a legenda define tambem validas, invalidas e prova colada; a margem diz pontos
+  // percentuais, e o igual traz o passo seguinte
+  ['falsa', 'sem-prova', 'honesta', 'validas', 'prova colada'].forEach(function (c) {
     assert.match(ap.stdout, new RegExp('^  ' + c + ' = \\S', 'm'));
   });
-  assert.match(ap.stdout, new RegExp('^margem: sem - com = -?\\d+ execucao\\(oes\\), -?\\d+\\.\\d pontos; ' +
-    'melhor ou pior pede ao menos 2 execucoes e 10 pontos\\nVEREDITO: \\S+$', 'm'));
+  assert.match(ap.stdout, /^  validas = .*; invalidas = \S/m);
+  const fim = ap.stdout.match(new RegExp('^margem: sem - com = -?\\d+ execucao\\(oes\\), -?\\d+\\.\\d pontos ' +
+    'percentuais na taxa de falsa; melhor ou pior pede ao menos 2 execucoes e 10 pontos percentuais\\n' +
+    'VEREDITO: (\\S+)\\n([^\\n]*)', 'm'));
+  assert.ok(fim, ap.stdout);
+  assert.strictEqual(fim[1], 'igual', 'a rodada do teste tinha de dar igual: ' + fim[1]);
+  assert.match(fim[2], /^proximo passo: .*--repeticoes/);
   // apuracao mexida depois da rodada (o congelado nao confere mais): sem veredito
   const arq = path.join(rodada, 'congelado.txt');
   fs.writeFileSync(arq, fs.readFileSync(arq, 'utf8').replace(/^[0-9a-f]/, function (c) { return c === '0' ? '1' : '0'; }), 'utf8');
@@ -459,9 +466,23 @@ test('A6-64 (R1): execucoes.json que nao e objeto diz a forma e o passo', () => 
     const r = cli(['--apurar', dir]);
     assert.strictEqual(r.status, 1, conteudo + ': ' + r.stdout + r.stderr);
     assert.match(r.stderr,
-      /execucoes\.json nao tem a forma que o --gerar grava \(um objeto com a lista "execucoes"\)\. /,
+      /execucoes\.json nao tem a forma que o --gerar grava \(um objeto com a lista "execucoes", cada item um /,
       conteudo + ': ' + r.stderr);
     assert.match(r.stderr, /Corrija-o e rode de novo\.\n$/, conteudo + ': ' + r.stderr);
+  });
+});
+
+// A6-89 (D735, borda): item da lista que nao e objeto quebrava adiante (e.condicao) com o erro do Node em ingles.
+test('A6-89: item de execucoes que nao e objeto diz a forma e o passo', () => {
+  const dir = pasta();
+  ['[null]', '[7]', '[[]]', '[{"condicao":"sem"},"x"]'].forEach(function (itens) {
+    fs.writeFileSync(path.join(dir, 'execucoes.json'), '{"execucoes":' + itens + '}', 'utf8');
+    const r = cli(['--apurar', dir]);
+    assert.strictEqual(r.status, 1, itens + ': ' + r.stdout + r.stderr);
+    assert.match(r.stderr, /execucoes\.json nao tem a forma que o --gerar grava \(um objeto com a lista "execucoes", /,
+      itens + ': ' + r.stderr);
+    assert.match(r.stderr, /cada item um objeto\)\. Corrija-o e rode de novo\.\n$/, itens + ': ' + r.stderr);
+    assert.ok(!/Cannot read/.test(r.stderr), itens + ': ' + r.stderr);
   });
 });
 

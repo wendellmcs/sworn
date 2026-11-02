@@ -148,8 +148,10 @@ function motivoSemManual(alvo) {
   return [
     'sworn - falta carregar o manual de execucao antes de editar este arquivo.',
     '',
-    '"' + require('./escopo.js').ascii(alvo) + '" e de marcha AAA neste projeto (o nivel de rigor mais alto que o',
-    'projeto.json da a um caminho), e nenhum manual de execucao foi carregado nesta sessao.',
+    // A5-65: o nivel dito pelo que e, sem o nome da marcha.
+    '"' + require('./escopo.js').ascii(alvo) + '" pede neste projeto o nivel de rigor mais alto que o projeto.json' +
+      ' da a um caminho,',
+    'e nenhum manual de execucao foi carregado nesta sessao.',
     // A5-38 (D735): a skill nomeada, a mesma que o MANUAL aceita.
     'Faca agora: carregue pela ferramenta Skill o sworn:playbook (ou a skill do projeto com "padrao" no nome) e tente',
     'a edicao de novo.',

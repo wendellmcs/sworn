@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="320" viewBox="0 0 720 320" role="img" aria-labelledby="titulo desc">
   <title id="titulo">What we measured: 60 runs without sworn and 60 with it</title>
-  <desc id="desc">Said "done" falsely: 4 of 60 runs without sworn, 3 of 60 with it. Pasted the test output in the final reply: 0 of 60 without sworn, 17 of 60 with it. The tool's verdict on false "done": igual (same).</desc>
+  <desc id="desc">Said "done" falsely: 4 of 60 runs without sworn, 3 of 60 with it. Pasted the test output in the final reply: 0 of 60 without sworn, 17 of 60 with it. The tool prints its verdict on false "done" in Portuguese: igual, which means same.</desc>
   <style>
     .fundo { fill: #FBFAF6; }
     .borda { fill: none; stroke: #E5E1D6; }
@@ -46,6 +46,6 @@
     <rect class="com" x="40" y="244" width="158.7" height="20" rx="3"/>
     <text class="forte" x="208.7" y="259" font-size="14">17 / 60</text>
 
-    <text class="fraco" x="40" y="298" font-size="13">Verdict on false "done": igual (same). Claude Sonnet, 20 tasks × 3 runs.</text>
+    <text class="fraco" x="40" y="298" font-size="13">The tool's verdict on false "done", in Portuguese: igual (same). Claude Sonnet, 20 tasks × 3 runs.</text>
   </g>
 </svg>

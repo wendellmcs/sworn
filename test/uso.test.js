@@ -97,6 +97,11 @@ test('uso: lista os disparos em ordem decrescente', () => {
     // A6-02 (D735): o rodape explica a trava e diz o que fazer com os numeros.
     assert.ok(r.stdout.includes('Trava e cada regra do sworn que barra ou avisa uma acao. Use estes numeros para ' +
       'decidir qual manter ou desligar'), r.stdout);
+    // A6-84 (D735): o rodape diz como desligar, conferido trava por trava (projeto.TRAVAS e as linhas
+    // "Desligar neste projeto" dos avisos).
+    assert.ok(r.stdout.includes('Para desligar fecho, escopo, destrutivo e outraFrente, ponha o nome em "travas" no ' +
+      '.claude/sworn/projeto.json, como "travas": { "escopo": false }. As outras travas que se desligam dizem como ' +
+      'na ultima linha do aviso delas.\n'), r.stdout);
     assert.ok(!r.stdout.includes('impressao'), r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

@@ -67,7 +67,9 @@ if (process.argv.indexOf('--gravar') !== -1 || manter) {
       '{ "shell": "bash" }; corrija e rode de novo' });
   }
   if ('limiares' in obj && (!obj.limiares || typeof obj.limiares !== 'object' || Array.isArray(obj.limiares))) {
-    sair(1, { gravou: false, erro: 'limiares em ' + RELATIVO + ' nao e objeto; corrija e rode de novo' });
+    // A6-86 (D735): a forma com exemplo, no molde do A6-21; o exemplo leva o numero pedido.
+    sair(1, { gravou: false, erro: 'limiares em ' + RELATIVO + ' tem de ter os limites entre { e }, como ' +
+      '"limiares": { "tokensDeContexto": ' + n + ' }; corrija e rode de novo' });
   }
   obj.limiares = Object.assign({}, obj.limiares, { tokensDeContexto: n });
   try { fs.writeFileSync(arquivo, JSON.stringify(obj, null, 2) + '\n'); } catch (e) {

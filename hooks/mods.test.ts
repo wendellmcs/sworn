@@ -91,26 +91,38 @@ for (const vazio of [undefined, null, '']) {
 }
 
 // A7-22 (pedido 12): a resposta serve a qualquer falha (Node ausente, saida diferente de 0, JSON torto, prazo
-// estourado), que caem todas no mesmo ramo do mods.tsx; este teste simula so a saida 1. Ela diz as causas possiveis e
-// um passo que serve a qualquer uma (pedir ao Claude), sem mandar quem nao programa ao terminal.
+// estourado), que caem todas no mesmo ramo do mods.tsx; o teste simula tres: a saida 1, a saida 0 com stdout que nao
+// e JSON (so no /sworn-session: o plano.js --texto responde texto) e o process.run que lanca (A7-72). Ela diz as
+// causas possiveis e um passo que serve a qualquer uma (pedir ao Claude), sem mandar quem nao programa ao terminal.
 // P2 da R1 (s241): sem o caminho do script nem os passos tecnicos; o Node.js fica so como causa (e o que se instala).
-const PARADO_SESSAO = 'Medidor parado: a medida falhou (pode faltar o Node.js, ou o script do sworn ' +
-  'deu erro ou demorou demais). Peça ao Claude para achar por que o medidor do sworn parou; depois rode ' +
-  '/sworn-session de novo.'
-const PARADO_PLANO = 'Painel do plano parado: a leitura do plano falhou (pode faltar o Node.js, ou o script do sworn ' +
-  'deu erro ou demorou demais). Peça ao Claude para achar por que o painel do plano do sworn parou; depois ' +
-  'rode /sworn-plan de novo.'
+// A7-60 e A7-62: sem "medida" nem "script do sworn" (termos internos); a frase pronta para o Claude e o que ele traz.
+const PARADO_SESSAO = 'Medidor parado: o sworn não leu os números de uso (pode faltar o Node.js, ' +
+  'ou o sworn falhou ou demorou). Diga ao Claude "ache por que o medidor do sworn parou": ele procura a ' +
+  'causa e o conserto. Depois rode /sworn-session de novo.'
+const PARADO_PLANO = 'Painel do plano parado: o sworn não leu o plano (pode faltar o Node.js, ou o sworn falhou ' +
+  'ou demorou). Diga ao Claude "ache por que o painel do plano do sworn parou": ele procura a causa e o ' +
+  'conserto. Depois rode /sworn-plan de novo.'
 
-test('script que falha: o comando responde o motivo, nao lanca', async ($, on) => {
-  on('session.usage', () => ({ value: USO }))
-  on('session.id', () => ({ value: 'sess-abc' }))
-  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: 'node nao achado' } }))
-  const r = await $.command.run({ command: 'sworn-session', args: '' })
-  // Sem "sworn:" na frente: o motor ja escreve o nome do plugin antes da resposta.
-  expect(r.text).toBe(PARADO_SESSAO)
-  const p = await $.command.run({ command: 'sworn-plan', args: '' })
-  expect(p.text).toBe(PARADO_PLANO)
-})
+const FALHAS = [
+  { nome: 'saida 1', run: () => ({ value: { exitCode: 1, stdout: '', stderr: 'node nao achado' } }) },
+  { nome: 'saida 0 sem JSON', soSessao: true,
+    run: () => ({ value: { exitCode: 0, stdout: 'isto nao e JSON', stderr: '' } }) },
+  { nome: 'run que lanca', run: () => { throw new Error('prazo estourado') } },
+]
+
+for (const falha of FALHAS) {
+  test('script que falha (' + falha.nome + '): o comando responde o motivo, nao lanca', async ($, on) => {
+    on('session.usage', () => ({ value: USO }))
+    on('session.id', () => ({ value: 'sess-abc' }))
+    on('process.run', falha.run)
+    const r = await $.command.run({ command: 'sworn-session', args: '' })
+    // Sem "sworn:" na frente: o motor ja escreve o nome do plugin antes da resposta.
+    expect(r.text).toBe(PARADO_SESSAO)
+    if (falha.soSessao) return
+    const p = await $.command.run({ command: 'sworn-plan', args: '' })
+    expect(p.text).toBe(PARADO_PLANO)
+  })
+}
 
 test('fim de turno: guarda a amostra do turno e poe a linha curta no status', async ($, on) => {
   const chamadas: Chamada[] = []
@@ -130,8 +142,9 @@ test('fim de turno: guarda a amostra do turno e poe a linha curta no status', as
 })
 
 // A7-22: o status diz que a medida falhou, que ela roda de novo e o passo se seguir (o comando diz a causa possivel).
-const MEDIDOR_PARADO = 'medidor parado: a medida falhou e roda de novo na próxima resposta; se seguir assim, ' +
-  'rode /sworn-session.'
+// A7-59 e A7-62: "a leitura do uso" no lugar de "a medida", e o que o comando mostra.
+const MEDIDOR_PARADO = 'medidor parado: a leitura do uso falhou e volta na próxima resposta; ' +
+  'se seguir, /sworn-session mostra a causa.'
 
 test('script que falha no fim do turno: o status diz que o medidor nao respondeu, nao fica com o numero velho', async ($, on) => {
   let falha = false
@@ -238,7 +251,9 @@ test('D442/7: leitura de uso que nunca responde nao congela o status - a medida 
   await relogio.advance(60000)
   await $.session.measure(MEDIDA)
   // A7-25 (pedido 12): um verbo so (a medida demorou; a presa e largada) e o passo, que e nenhum
-  expect(status).toContain('medidor atrasado: a medida anterior demorou demais; uma nova já começou, nada a fazer.')
+  // A7-59 e A7-61: "a leitura anterior do uso" no lugar de "a medida anterior" (termo interno)
+  const atrasado = 'medidor atrasado: a leitura anterior do uso demorou demais; uma nova já começou, nada a fazer.'
+  expect(status).toContain(atrasado)
   expect(status[status.length - 1]).toBe('sworn | contexto 5%')
   // a presa responde tarde: o resultado dela e velho e nao volta para a tela
   soltarPresa()
@@ -643,11 +658,12 @@ test('botoes: comando que nao e do sworn nao vira botao', async ($, on) => {
 // Plano 082, Tarefa 2 (mock D532, parte 1): os estados da faixa como o dono aprovou, com os textos que o plano.js e o
 // botoes.js produzem (conferidos la por igualdade). O clique que falhou tem teste proprio acima; medidor parado e gasto
 // somando sao da barra (MEDIDOR_PARADO aqui, "somando" no medidor.test.js).
-// A7 (pedido 12): os textos de hoje do handoff e do padrao, copiados do scripts/lib/botoes.js.
-const TEXTO_HANDOFF = 'A conversa chegou a um limite que o sworn conta (tamanho, bloqueios ou trabalho feito): ' +
+// A7 (pedido 12): os textos de hoje do handoff e do padrao, copiados do scripts/lib/botoes.js. A7-73: o
+// test/botoes.test.js os compara com o botoes.js (o do contexto que disparou e o do src/a.js).
+const TEXTO_HANDOFF = 'A conversa chegou a um limite que o sworn conta (tamanho do contexto): ' +
   'gere o handoff (o texto que continua daqui) e cole num chat novo.'
-const TEXTO_PADRAO = 'Um arquivo mudado nesta sessão pede o cuidado mais alto do projeto: carregue o manual ' +
-  'antes de seguir.'
+const TEXTO_PADRAO = 'O arquivo src/a.js está entre os que o projeto.json marca com o cuidado mais alto: carregue ' +
+  'o manual antes de seguir.'
 const ESTADOS_DO_MOCK = [
   { nome: 'plano em curso, titulo longo cortado', plano: 'plano 082 · 2 de 7 tarefas · próxima: Tarefa 3 — barra do medidor em uma linha e o res...',
     botoes: [], linhas: 'sworn plano 082 · 2 de 7 tarefas · próxima: Tarefa 3 — barra do medidor em uma linha e o res...', rotulo: null },

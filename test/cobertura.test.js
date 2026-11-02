@@ -66,8 +66,10 @@ test('cobertura: escada com menos de dois nomes aparece como portao DESLIGADO', 
   const r = cobertura.relatorio(dir, p);
   const custo = porChave(r, 'custo');
   assert.strictEqual(custo.verificavel, false);
-  assert.ok(/NAO OPINA/.test(custo.porque), custo.porque);
-  assert.ok(/nao avisa/.test(custo.porque), 'tem de dizer que o silencio e o problema: ' + custo.porque);
+  // A6-87 (D735): o efeito e o passo em palavras comuns, sem "NAO OPINA".
+  assert.strictEqual(custo.porque, 'escada com 1 nome(s): com menos de 2, a checagem que barra o agente mais caro ' +
+    'que a tarefa pede fica parada, e so este relatorio mostra isso; para ela valer, rode o /sworn:init de novo e ' +
+    'ponha ao menos 2 agentes na escada (agentes.escada do .claude/sworn/projeto.json)');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -201,10 +203,13 @@ test('A6-47: sem prova ou com apelido por sondar, o portao diz o comando que son
   try {
     const p = semear(dir);
     const porque = () => porChave(cobertura.relatorio(dir, p), 'apelidos-vivos').porque;
-    const passo = /: rode node scripts\/provar-apelidos\.js \(com --plugin no repositorio do plugin\) e grave a prova no formato que ele mostra$/;
-    assert.ok(porque().startsWith('ainda nao se sondou neste ambiente (a sondar: ') && passo.test(porque()), porque());
+    // A6-88 (D735): onde a prova vai e o caminho real do script, entre aspas (caminho com espaco).
+    const fim = ': rode node "' + path.join(__dirname, '..', 'scripts', 'provar-apelidos.js') + '" (com --plugin no ' +
+      'repositorio do plugin) e grave a prova em .claude/sworn/apelidos-vivos.json, no formato que ele mostra';
+    assert.ok(porque().startsWith('ainda nao se sondou neste ambiente (a sondar: ') && porque().endsWith(fim),
+      porque());
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'apelidos-vivos.json'), JSON.stringify({ apelidos: [] }), 'utf8');
-    assert.ok(porque().startsWith('faltam sondar: ') && passo.test(porque()), porque());
+    assert.ok(porque().startsWith('faltam sondar: ') && porque().endsWith(fim), porque());
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

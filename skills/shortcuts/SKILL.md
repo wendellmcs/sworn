@@ -15,7 +15,7 @@ The comment, after `//`, `#`, `--`, `/*` or `<!--`:
 The labels are the Portuguese words "limite:" and "trocar quando:", spelled exactly like this even when the rest of
 the comment is in English or any other language: the script recognizes only these. The labels split the note, not
 commas, so a comma inside a sentence does not break the reading. With no label at all, the whole text becomes the
-"what" and the shortcut comes out as `sem-gatilho`.
+"what" and the shortcut comes out as `sem "trocar quando"`.
 
 The note may go on in the lines right below the mark, one label per line, in any order. A line joins when it is only
 a comment and opens with a label the note does not have yet; inside an open `/*` or `<!--` block, every line up to

@@ -902,3 +902,16 @@ test('D486: envolverEmSubshell - so o Bash, com o ) na linha de baixo; PowerShel
   assert.strictEqual(shell.envolverEmSubshell('cd sub && ls \\  ', bash), null);
   assert.strictEqual(shell.envolverEmSubshell('x', { forma: 'bash', achado: null, teto: true }), null);
 });
+
+test('A9-04/A9-05 (D745): motivo e sugestao da tabela real saem no aviso em portugues, em ASCII', () => {
+  const tabela = JSON.parse(TABELA_REAL);
+  const linhas = tabela.regras.concat(tabela.regrasPowerShell51);
+  assert.strictEqual(linhas.length, 12);
+  const INGLES = /\b(has no|doesn't|there is|is not a|with the|takes no|an existing)\b/i;
+  for (const r of linhas) {
+    assert.ok(typeof r.motivo === 'string' && typeof r.sugestao === 'string', 'texto: ' + JSON.stringify(r));
+    assert.ok(/^[\x20-\x7E]+$/.test(r.motivo) && /^[\x20-\x7E]+$/.test(r.sugestao), 'ASCII (R5): ' + JSON.stringify(r));
+    assert.ok(!INGLES.test(r.motivo) && !INGLES.test(r.sugestao), 'ingles no aviso em portugues: ' + JSON.stringify(r));
+    assert.ok(/\bnao\b/.test(r.motivo), 'o motivo diz o que falta, em portugues: ' + r.motivo);
+  }
+});

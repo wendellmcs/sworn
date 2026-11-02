@@ -989,8 +989,8 @@ test('091 #6: arquivo AAA sem o manual carregado e negado com o motivo do mock; 
       assert.strictEqual(r.json.hookSpecificOutput.permissionDecisionReason, [
         'sworn - falta carregar o manual de execucao antes de editar este arquivo.',
         '',
-        '"src/auth/login.js" e de marcha AAA neste projeto (o nivel de rigor mais alto que o',
-        'projeto.json da a um caminho), e nenhum manual de execucao foi carregado nesta sessao.',
+        '"src/auth/login.js" pede neste projeto o nivel de rigor mais alto que o projeto.json da a um caminho,',
+        'e nenhum manual de execucao foi carregado nesta sessao.',
         'Faca agora: carregue pela ferramenta Skill o sworn:playbook (ou a skill do projeto com "padrao" no nome) ' +
           'e tente',
         'a edicao de novo.',

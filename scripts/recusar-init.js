@@ -13,7 +13,8 @@
 const ordens = require('./lib/ordens.js');
 
 const pasta = process.argv[2];
-if (!pasta) {
+// A4-97 (pedido 12, borda): a pasta so com espacos e falta de pasta, nao uma recusa gravada.
+if (!pasta || !pasta.trim()) {
   process.stdout.write('ERRO: falta a pasta do projeto: node recusar-init.js <pasta>\n');
   process.exit(1);
 }

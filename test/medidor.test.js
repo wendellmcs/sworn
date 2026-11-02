@@ -292,13 +292,14 @@ test('A6-02: o que ficou fora da conta do mes (sem preco, ilegivel) aparece na r
     return medidor.linhaDaSessao({ uso: uso(), amostras: [], medidas: [], gasto: Object.assign({}, GASTO, extra) }).longa;
   };
   const varios = longa({ semPreco: 295, ilegiveis: 2 });
-  assert.ok(varios.indexOf('- fora da conta: 295 mensagens de um modelo que a tabela de preços do sworn ainda não ' +
-    'tem; o mês sai menor do que é até você atualizar o sworn para uma versão com esse preço\n') !== -1, varios);
+  // A6-91 (D735): a linha partida em causa e passo, e o passo diz como atualizar.
+  assert.ok(varios.indexOf('- fora da conta: 295 mensagens de um modelo sem preço na tabela do sworn; o mês sai ' +
+    'menor do que é\n- para contá-las: atualize o sworn pelo /plugin, ou ligue a atualização automática no ' +
+    '/sworn:init\n') !== -1, varios);
   assert.ok(varios.indexOf('- fora da conta: 2 conversas salvas que não se leram; a próxima medida tenta de novo\n') !== -1,
     varios);
   const um = longa({ semPreco: 1, ilegiveis: 1 });
-  assert.ok(um.indexOf('- fora da conta: 1 mensagem de um modelo que a tabela de preços do sworn ainda não ' +
-    'tem;') !== -1, um);
+  assert.ok(um.indexOf('- fora da conta: 1 mensagem de um modelo sem preço na tabela do sworn;') !== -1, um);
   assert.ok(um.indexOf('- fora da conta: 1 conversa salva que não se leu;') !== -1, um);
   for (const nada of [{}, { semPreco: 0, ilegiveis: 0 }, { semPreco: 'x', ilegiveis: -1 }]) {
     assert.ok(longa(nada).indexOf('fora da conta') === -1, longa(nada));

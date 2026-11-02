@@ -122,9 +122,13 @@ function pares(texto) {
       // (`maxWarnings: number = 0`), so quando o tipo vem seguido de `=`.
       // Aviso: `max` e `min` casam em QUALQUER uso (CSS, variavel de codigo) e geram falso positivo;
       // por isso `ehRegua` (abaixo, no laco) descarta esses casos so para as palavras GENERICAS.
-      const re = new RegExp('(?<![a-z0-9])' + palavra + '(?<sufixo>[a-z_-]*)(?::\\s*[a-z_$.]+(?=\\s*=))?["\'\\s:=>_-]{0,12}?(?<numero>-?(?:infinity|\\d[\\d_]*(?:\\.\\d+)?(?:e\\+?\\d+)?))', 'g');
+      const re = new RegExp('(?<![a-z0-9])' + palavra + '(?<sufixo>[a-z_-]*)(?::\\s*[a-z_$.]+(?=\\s*=))?' +
+        '(?<sep>["\'\\s:=>_-]{0,12}?)(?<numero>-?(?:infinity|\\d[\\d_]*(?:\\.\\d+)?(?:e\\+?\\d+)?))', 'g');
       let m;
       while ((m = re.exec(linha)) !== null) {
+        // A5-64 (D735): `==`/`===` compara, nao atribui (o plural do cicatriz.js foi lido como o piso descendo).
+        // `>=` segue regua: num portao (`cobertura >= 80`) o numero e o piso de verdade.
+        if (m.groups.sep.indexOf('==') !== -1) continue;
         // A2-02: `2_000`, `1e3` e `Infinity` eram lidos so pelo 1o digito (2, 1) ou nem lidos.
         const n = m.groups.numero;
         const valor = /infinity$/.test(n) ? (n[0] === '-' ? -Infinity : Infinity) : Number(n.replace(/_/g, ''));

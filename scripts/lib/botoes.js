@@ -21,18 +21,22 @@ function botao(nome, texto, rotulo, comando) {
   return { nome: nome, texto: texto, rotulo: rotulo, comando: comando || '/sworn:' + nome };
 }
 
-/** Algum arquivo da sessao, relativo a raiz, resolve para `aaa`? Lista torta = nenhum. */
-function temArquivoAaa(arquivos, projeto, raiz) {
-  if (!Array.isArray(arquivos)) return false;
-  return arquivos.some(function (a) {
+/**
+ * O primeiro arquivo da sessao, relativo a raiz, que resolve para `aaa` (A7-50: o texto o cita); nenhum ou lista
+ * torta = ''.
+ */
+function arquivoAaa(arquivos, projeto, raiz) {
+  if (!Array.isArray(arquivos)) return '';
+  for (const a of arquivos) {
     const rel = caminho.relativoAoProjeto(a, raiz);
-    return Boolean(rel) && marcha.resolverMarcha(rel, projeto) === 'aaa';
-  });
+    if (rel && marcha.resolverMarcha(rel, projeto) === 'aaa') return rel;
+  }
+  return '';
 }
 
 /**
  * Os botoes que valem agora, na ordem de ORDEM. Entrada (o que o sessao.js ja tem):
- * - `cruzou`: o gatilho contavel da troca de chat (medidor);
+ * - `cruzou`: o gatilho contavel da troca de chat (medidor); `disparou`: os nomes dos sinais que cruzaram (A7-49);
  * - `s`: o estado da sessao (arquivosTocados, contadores, esperaAprender, auditoriaAvisou);
  * - `projeto`, `raiz`, `temProjeto` (existe .claude/sworn/projeto.json);
  * - `padraoCarregado`: o mod viu a skill carregada;
@@ -45,10 +49,16 @@ function daSessao(entrada) {
   const lista = [];
 
   // A7 (pedido 12, R1 :47): sem "gatilho" e "cruzou", e o handoff explicado na frase; o rotulo segue o do GUIA.
-  // A7-11: diz por que trocar (os sinais de saude.medirTodos: tamanho, bloqueios e o trabalho da sessao).
+  // A7-11: diz por que trocar. A7-49: com o sinal que cruzou (o nome do /sworn-session); sem nenhum, o cruzou veio do
+  // aviso ja dado nesta sessao (os contadores recomecam depois dele, medidor.js).
   if (e.cruzou === true) {
-    lista.push(botao('handoff', 'A conversa chegou a um limite que o sworn conta (tamanho, bloqueios ou trabalho ' +
-      'feito): gere o handoff (o texto que continua daqui) e cole num chat novo.', 'gerar handoff'));
+    const sinais = (Array.isArray(e.disparou) ? e.disparou : [])
+      .filter(function (n) { return typeof n === 'string' && n.trim(); });
+    const quais = sinais.length > 1 ? sinais.slice(0, -1).join(', ') + ' e ' + sinais[sinais.length - 1] : sinais[0];
+    const motivo = sinais.length ? 'chegou a um limite que o sworn conta (' + quais + ')'
+      : 'já recebeu o aviso de troca de chat nesta sessão';
+    lista.push(botao('handoff', 'A conversa ' + motivo + ': gere o handoff (o texto que continua daqui) e cole num ' +
+      'chat novo.', 'gerar handoff'));
   }
 
   // A condicao do portao da referencia (D503, Tarefa 5): arquivo AAA com referencia de topo e nenhuma revisao contra
@@ -85,9 +95,11 @@ function daSessao(entrada) {
     }
   }
 
-  if (e.padraoCarregado !== true && temArquivoAaa(s.arquivosTocados, projeto, e.raiz)) {
-    lista.push(botao('padrao', 'Um arquivo mudado nesta sessão pede o cuidado mais alto do projeto: carregue o ' +
-      'manual antes de seguir.', 'carregar o manual', '/sworn:playbook'));
+  // A7-50: o arquivo e de onde vem a regra (as marchas do projeto.json), como o revisar.
+  const aaa = e.padraoCarregado !== true ? arquivoAaa(s.arquivosTocados, projeto, e.raiz) : '';
+  if (aaa) {
+    lista.push(botao('padrao', 'O arquivo ' + aaa + ' está entre os que o projeto.json marca com o cuidado mais ' +
+      'alto: carregue o manual antes de seguir.', 'carregar o manual', '/sworn:playbook'));
   }
 
   // Plano 082 (p5-33): a ordem e a de ORDEM, nao a dos if acima (as duas podiam divergir sem aviso).

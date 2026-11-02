@@ -432,7 +432,7 @@ function motivoOutraFrente(alvo, arquivo) {
     // 0.3.3, item 25: tom neutro; diz o que o arquivo e, sem listar o que ele nao e.
     'Trate-o como trabalho de outra tarefa em andamento: nao o altere por conta propria.',
     '',
-    'Se precisar mesmo tocar nele, isso e decisao do dono. Depois de ele autorizar,',
+    'Se precisar mesmo tocar nele, isso e decisao do dono. Com a autorizacao do dono,',
     // 0.3.3, item 25: o que se conta e a ampliacao do escopo (contador escopo_ampliado, em
     // portao-escopo.js), que o portao do fecho mostra no fim do turno (portao-fecho.js).
     'liste o caminho exato em ' + (arquivo || ARQUIVO) + ', na secao "## Dentro". Essa ampliacao do escopo e contada e aparece no fecho do turno.'

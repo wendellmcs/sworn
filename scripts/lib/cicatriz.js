@@ -252,9 +252,10 @@ function texto(r, limite) {
   // termos E a fracao dos termos da regra.
   linhas.push('Trechos do corpus com marca de decisao, incidente ou achado: ' + r.passagensComMarca);
   const plural = function (n, um, varios) { return n + ' ' + (n === 1 ? um : varios); };
-  linhas.push('Uma regra tem cicatriz quando um desses trechos divide com ela ao menos ' +
-    plural(r.minimo, 'palavra-chave', 'palavras-chave'));
-  linhas.push('e ' + Math.round(r.fracao * 100) + '% das palavras-chave dela.');
+  // A5-61: a frase do piso numa linha so (a quebra lia truncada).
+  linhas.push('Uma regra tem cicatriz quando um desses trechos tem em comum com ela ao menos ' +
+    plural(r.minimo, 'palavra-chave', 'palavras-chave') + ' e ' + Math.round(r.fracao * 100) +
+    '% das palavras-chave dela.');
   linhas.push('Por tipo de cicatriz: decisao ' + r.resumo.porTipo.decisao +
     ', incidente ' + r.resumo.porTipo.incidente +
     ', achado ' + r.resumo.porTipo.achado);

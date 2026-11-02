@@ -1,5 +1,76 @@
 # Changelog
 
+## 0.20.0 — os avisos dizem a causa e o passo, e a catraca não lê comparação como piso
+
+Os defeitos de texto que a revisão completa do plugin achou e deixou para depois foram consertados e revisados de
+novo pela revisão cega. Os avisos dizem a causa, o efeito e o passo seguinte com as palavras de quem os lê, o que
+aparece a quem usa fica em português, e as figuras dizem o que cada gancho faz.
+
+**Portões e avisos**
+
+- **A catraca não nega mais uma comparação.** A catraca (a trava que não deixa um piso do projeto baixar) lia um
+  `==` ou `===` entre o nome do piso e um número como o piso mudando de valor, e negava a edição. Agora a comparação
+  passa; o `>=` segue contando como piso, porque num portão o número dele é o piso de verdade.
+- **O aviso de arquivo novo diz o passo.** A recusa de criar arquivo sem ter procurado o que já existe abre na forma
+  dos outros avisos e diz o que fazer: procurar antes e dizer o que achou.
+- **O aviso de troca de chat diz o que cada contagem conta**: turnos com trabalho real (respostas em que o Claude
+  leu, buscou, editou ou rodou algo), revisões cegas concluídas, respostas às perguntas de escolha e o tamanho da
+  conversa. O resumo que retoma uma sessão explica o handoff (o texto de passagem que o Claude escreve para o chat
+  novo) na primeira vez que o cita.
+- **Erro sem texto legível diz as duas causas possíveis** (o erro não vira texto, ou o `texto.js` do plugin não
+  carregou) e o comando que confere. O aviso do manual não carregado diz o nível de rigor pelo que ele é, sem o nome
+  interno da marcha, e o aviso dos ganchos manda conferir em `/hooks` que os comandos do plugin aparecem ligados.
+
+**Medição, custo e auditoria**
+
+- **O `uso.js` diz como desligar cada trava**: as que têm nome no bloco `"travas"` do `projeto.json`, com um
+  exemplo, e as demais pela última linha do próprio aviso.
+- **A apuração do `medir-travas.js` explica o resto dos rótulos.** A legenda diz o que são as execuções válidas, as
+  inválidas e a prova colada; a margem vem em pontos percentuais; o veredito `igual` diz que a diferença não passou
+  da margem, não que o plugin não muda nada, e como medir de novo com mais repetições. Um item da lista de execuções
+  que não é objeto recebe a mesma recusa do arquivo torto, sem o erro cru do Node.
+- **O modelo sem preço diz o passo**: atualizar o sworn pelo `/plugin` ou ligar a atualização automática no
+  `/sworn:init`. A escada de agentes com menos de dois nomes diz que a checagem do agente mais caro que a tarefa fica
+  parada e como ligá-la pelo `/sworn:init`; a prova dos apelidos dá o caminho real do script e onde gravar.
+- **Os textos de regra e de configuração dizem o efeito.** O `medir-qualidade.js` diz a regra do `GANHA` pelo placar
+  (mais vitórias que derrotas contra o caveman e contra o padrão); os limiares fora da forma vêm com um exemplo; a
+  fonte de consulta fora das canônicas diz que só a canônica fica fora da conta do limite de instruções do
+  `/sworn:audit`; a frase do piso do `cicatriz.js` não sai mais quebrada ao meio.
+- **Atalhos pelo nome que o dono escreve.** A abertura e o `/sworn:shortcuts` chamam o campo de "trocar quando", e
+  o aviso de texto repetido diz o momento do gancho em palavras ("na abertura", "antes de usar Read").
+- **Recusas de entrada mais claras.** O `propor-regra.js` diz que as linhas que invalidam o arquivo já estavam no
+  `regras.md`, com o caminho e o passo; a lista de ferramentas com vírgula sobrando diz isso; a pasta só com espaços
+  no `recusar-init.js` é erro de uso, não uma recusa gravada.
+
+**Painel, medidor, vigia e paralelo**
+
+- **O botão que pede o handoff diz qual sinal disparou** (os nomes que o `/sworn-session` mostra) e, sem sinal, que
+  o aviso já foi dado; o botão do manual cita o arquivo que pede o cuidado mais alto.
+- **O status do medidor parado ficou mais curto** e diz o que o `/sworn-session` mostra; a mensagem do medidor ou
+  do painel do plano parado traz a frase pronta para pedir ao Claude.
+- **A medida da sessão** recusa uma lista JSON como "não um objeto", corta o que veio por caractere (sem meio
+  emoji) e, quando falha, diz que a causa vem do sworn ou do disco e onde registrar se repetir.
+- **O paralelo (o `/sworn:parallel`, que roda tarefas independentes ao mesmo tempo) diz onde está a causa.** O
+  agente que parou com um erro sem mensagem manda abrir o `/workflows`; com mensagem, ela vem cortada em 300
+  caracteres.
+- **O vigia (a busca semanal de novidades, do mantenedor do plugin) diz o que falta no registro** (sem data, sem
+  motivo) no lugar de `?`, e aponta o Agendador de Tarefas do Windows.
+
+**Skills e modelos**
+
+- **O aviso de shell errado no Windows vem em português**: os 12 motivos e as sugestões do modelo de shell.
+- **O manual, fora de um repositório git**, segue com o aviso (olhando antes um repositório aninhado); outra falha
+  do git para e leva o erro a quem decide. O `/sworn:audit` mostra o apóstrofo no bash e no PowerShell, e a frase do
+  handoff sobre o último agente ficou mais curta.
+
+**Textos da raiz e figuras**
+
+- **As figuras dizem o que cada gancho faz.** Nas figuras dos ganchos, cada linha diz se o gancho nega, avisa ou
+  devolve o turno, com os limites da pausa (1 h, 200 mil tokens). As legendas da imagem do topo e da de
+  compartilhamento ligam "gate 3 (trava 3)" ao cartão em português, e a de compartilhamento ficou legível na
+  miniatura. A figura da medição em inglês diz que `igual` é a saída da ferramenta em português.
+- **O README explica o vigia** e a chave `"vigia": true` que o liga.
+
 ## 0.19.0 — o registro numerado não repete número, e as figuras dizem de quem é a mensagem
 
 A última de três etapas da revisão completa do plugin passou, arquivo por arquivo, pela revisão cega: as skills, os
@@ -13,22 +84,26 @@ algo falha, e as figuras e os READMEs dizem de quem é cada mensagem e o que ela
   número só encontra lista `1. `; num registro numerado por cabeçalho (`### Decision 42`), ela não achava nada, o que
   podia ser lido como "documento sem entrada" e levava a repetir um número. Agora o manual dá a busca para cabeçalho,
   diz que a busca vazia quer dizer que ela não encontrou esse formato (ou que o documento ainda não tem entrada) e
-  manda abrir o fim do arquivo e ler o último número lá. A conferência do git que falha fora de um repositório é dita
-  na resposta como não rodada.
+  manda abrir o fim do arquivo e ler o último número lá.
+- **Fora de um repositório git, a conferência de outra sessão não passa mais por feita.** Antes de editar, o manual
+  manda rodar `git status --short` para ver os arquivos que outra sessão mudou; fora de um repositório o comando
+  falha, e agora o manual manda dizer na resposta que essa conferência não rodou.
 - **A marcha Standard (o rigor do meio) não contradiz mais a própria exceção.** No manual, a linha dela dizia que o
   esforço fica o da sessão, e o parágrafo logo abaixo manda chamar a `sworn:effort-high` quando a marcha sobe da Fast
   (a mais leve); agora a linha aponta esse parágrafo.
 - **O `/sworn:learn` mostra o total de regras de antes ao lado do de agora**, para conferir o +1 sem ter contado o
-  arquivo antes de gravar. Chamado sem a correção, pede a correção numa frase, e explica os nomes em português que o
-  script usa (`gatilho`, `ação`, `RECUSADA`, `GRAVADA`).
+  arquivo antes de gravar. Chamado sem a correção, pede a correção numa frase. Para quem lê a skill em inglês, ela
+  traduz os nomes em português que o script usa: `gatilho` e `ação` são as duas metades da regra (quando ela vale e
+  o que fazer), e `RECUSADA` e `GRAVADA` são as duas respostas (não gravou, gravou).
 - **Caminho com espaço e aspas.** No `/sworn:audit`, as pastas dos comandos vêm entre aspas, e a skill diz como
   escrever um apóstrofo dentro de uma fonte (no bash e no PowerShell). No `/sworn:calibrate`, a pasta sem conversas
   volta com 0 sessões, não com erro: a skill diz que a pasta deve estar errada e pergunta de novo.
 - **Os passos de espera e de falha dizem o que fazer.** O handoff (a passagem do trabalho para um chat novo), quando
   espera agentes de fundo, diz que o aviso de cada um chega neste chat e que nada se pede a quem usa até lá. O radar,
-  quando uma fonte falha, diz o passo seguinte; a trava de escopo vem explicada, e o cartão que não passou na
-  conferência depois de dois consertos para e é mostrado ao dono com o caminho e cada problema que sobrou. No fecho,
-  a falha vai inteira, não só a linha que prova.
+  quando uma fonte falha, diz o passo seguinte; a trava de escopo (a que só deixa gravar o que o escopo declarado da
+  tarefa cobre) vem explicada, e o cartão (a ficha que o radar grava com o que vale trazer de cada projeto) que não
+  passou na conferência depois de dois consertos para e é mostrado ao dono com o caminho e cada problema que sobrou.
+  No fecho, a falha vai inteira, não só a linha que prova.
 
 **Agentes e modelos**
 

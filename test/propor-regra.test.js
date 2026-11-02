@@ -51,6 +51,23 @@ test('propor: regra invalida e recusada e sai com codigo 1', () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('propor: A8-26 regra invalida que ja estava no arquivo - o erro diz onde e o passo seguinte', () => {
+  const dir = projeto();
+  try {
+    const alvo = path.join(dir, '.claude', 'sworn', 'regras.md');
+    const antes = '# Regras\n\n- ao subir -> usar a versao 2.1.220\n';
+    fs.writeFileSync(alvo, antes, 'utf8');
+    const r = rodar(['--gatilho', 'ao fechar tarefa', '--acao', 'colar a saida da rodada', '--gravar'], dir);
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.ok(r.stdout.includes('Nao gravei'), r.stdout);
+    assert.ok(r.stdout.includes('  - linha 3: valor que muda com o tempo'), r.stdout);
+    assert.ok(r.stdout.includes('ja estavam no ' + alvo), r.stdout);
+    assert.ok(r.stdout.includes('Corrija ou apague essas linhas no ' + alvo), r.stdout);
+    assert.ok(/e rode de novo\.\n$/.test(r.stdout), r.stdout);
+    assert.strictEqual(fs.readFileSync(alvo, 'utf8'), antes);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('propor: gatilho vazio e recusado', () => {
   const dir = projeto();
   try {

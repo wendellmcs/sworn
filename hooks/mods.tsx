@@ -116,8 +116,9 @@ async function atualizar($: any) {
       return
     }
     // A7-25 (pedido 12): um verbo so (a presa demorou e e largada; o prazo vale para a medida inteira) e o passo,
-    // que e nenhum: a medida nova comeca logo abaixo.
-    await $.ui.status('medidor atrasado: a medida anterior demorou demais; uma nova já começou, nada a fazer.')
+    // que e nenhum: a medida nova comeca logo abaixo. A7-59 e A7-61: "a leitura do uso", palavra de quem le o
+    // status, no lugar de "a medida".
+    await $.ui.status('medidor atrasado: a leitura anterior do uso demorou demais; uma nova já começou, nada a fazer.')
   }
   medindo = true
   medindoDesde = t === null ? 0 : t
@@ -132,10 +133,11 @@ async function atualizar($: any) {
       // em vez de seguir com o numero velho. A faixa fica como estava; a proxima medida boa a acerta. O texto leva
       // acento (o status desenha acento inteiro: mock aprovado na D532). A7-22 (pedido 12): a causa varia (Node
       // ausente, saida diferente de 0, JSON torto, prazo), entao o status nao culpa o Node: diz que a medida roda de
-      // novo e, se seguir, o comando, que traz as causas possiveis e o passo.
+      // novo e, se seguir, o comando, que traz as causas possiveis e o passo. A7-62: o status diz o que o comando
+      // mostra, curto para caber na linha.
       if (!m) {
-        await $.ui.status('medidor parado: a medida falhou e roda de novo na próxima resposta; se seguir assim, ' +
-          'rode /sworn-session.')
+        await $.ui.status('medidor parado: a leitura do uso falhou e volta na próxima resposta; ' +
+          'se seguir, /sworn-session mostra a causa.')
         continue
       }
       await $.ui.status(m.curta)
@@ -217,10 +219,11 @@ export const register: Register = on => {
     // Sem "sworn:" na frente: o motor ja escreve o nome do plugin antes da resposta. Com acento (D532: a resposta do
     // comando desenha acento inteiro). A7-22 (pedido 12): as causas possiveis e um passo que serve a qualquer uma
     // para quem nao programa (pedir ao Claude), no lugar do "node -v num terminal"; sem caminho de script (o Claude o
-    // acha), e o Node.js so como causa possivel, que e o que a pessoa instala.
-    return { text: m ? m.longa : 'Medidor parado: a medida falhou (pode faltar o Node.js, ou o script do sworn ' +
-      'deu erro ou demorou demais). Peça ao Claude para achar por que o medidor do sworn parou; depois rode ' +
-      '/sworn-session de novo.' }
+    // acha), e o Node.js so como causa possivel, que e o que a pessoa instala. A7-60 e A7-62: mais curta, sem
+    // "medida" nem "script do sworn", com a frase pronta para o Claude e o que ele traz.
+    return { text: m ? m.longa : 'Medidor parado: o sworn não leu os números de uso (pode faltar o Node.js, ' +
+      'ou o sworn falhou ou demorou). Diga ao Claude "ache por que o medidor do sworn parou": ele procura a ' +
+      'causa e o conserto. Depois rode /sworn-session de novo.' }
   })
 
   on('command.run', { command: 'sworn-plan' }, async $ => {
@@ -232,10 +235,10 @@ export const register: Register = on => {
       const r = await rodar($, 'plano.js', sessao ? ['--texto', '--sessao', sessao] : ['--texto'])
       if (r && r.exitCode === 0 && r.stdout) return { text: String(r.stdout).replace(/\s+$/, '') }
     } catch (err) {}
-    // A7-22: o mesmo passo do medidor, com o script e o comando do painel.
-    return { text: 'Painel do plano parado: a leitura do plano falhou (pode faltar o Node.js, ou o script do sworn ' +
-      'deu erro ou demorou demais). Peça ao Claude para achar por que o painel do plano do sworn parou; depois ' +
-      'rode /sworn-plan de novo.' }
+    // A7-22: o mesmo passo do medidor, com o script e o comando do painel (A7-60 e A7-62 tambem).
+    return { text: 'Painel do plano parado: o sworn não leu o plano (pode faltar o Node.js, ou o sworn falhou ' +
+      'ou demorou). Diga ao Claude "ache por que o painel do plano do sworn parou": ele procura a causa e o ' +
+      'conserto. Depois rode /sworn-plan de novo.' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

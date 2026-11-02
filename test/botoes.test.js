@@ -38,8 +38,19 @@ test('botao handoff: o gatilho contavel cruzou', () => {
   assert.deepStrictEqual(nomes(b), ['handoff']);
   assert.strictEqual(b[0].comando, '/sworn:handoff');
   assert.strictEqual(b[0].rotulo, 'gerar handoff');
-  // A7-11 (pedido 12): a frase diz por que trocar (um limite que o sworn conta), nao so que "ja vale"
-  assert.match(b[0].texto, /^A conversa chegou a um limite que o sworn conta \(/);
+  // A7-11 (pedido 12): a frase diz por que trocar (um limite que o sworn conta), nao so que "ja vale".
+  // A7-49: o sinal que disparou vai na frase (os nomes do medidor); sem nenhum (so o aviso ja dado), diz isso
+  const um = botoes.daSessao(base({ cruzou: true, disparou: ['tamanho do contexto'] }))[0].texto;
+  assert.match(um, /^A conversa chegou a um limite que o sworn conta \(tamanho do contexto\): gere o handoff /);
+  const dois = botoes.daSessao(base({ cruzou: true, disparou: ['commits nesta sessão', 'arquivos tocados'] }))[0].texto;
+  assert.match(dois, /\(commits nesta sessão e arquivos tocados\): /);
+  const tres = botoes.daSessao(base({ cruzou: true, disparou: ['commits nesta sessão', ' ', 'arquivos tocados',
+    'tamanho do contexto'] }))[0].texto;
+  assert.match(tres, /\(commits nesta sessão, arquivos tocados e tamanho do contexto\): /, 'o so-espacos sai');
+  for (const torto of [undefined, [], 'tamanho', [3, null, '', '  ']]) {
+    assert.match(botoes.daSessao(base({ cruzou: true, disparou: torto }))[0].texto,
+      /^A conversa já recebeu o aviso de troca de chat nesta sessão: gere o handoff /, JSON.stringify(torto));
+  }
 });
 
 test('botao revisar: arquivo AAA com referencia mudado e nenhuma revisao contra ela fechada (a condicao do portao, D503)', () => {
@@ -125,12 +136,14 @@ test('botoes: tudo aceso sai na ordem de prioridade', () => {
 test('plano 082 (p5-36): os 7 textos e rotulos (8 menos o paralelo, 091 #5), sem jargao e com acento', () => {
   const s = { arquivosTocados: [path.join(RAIZ, 'src', 'a.js')], esperaAprender: correcao.ESPERA_ENTRE_SUGESTOES,
     auditoriaAvisou: true };
-  const tudo = botoes.daSessao(base({ cruzou: true, s: s, projeto: COM_REF, resposta: '/sworn:parallel',
-    contarConversas: function () { return 557; } })).concat(botoes.daSessao(base({ temProjeto: false, projeto: null })));
+  const tudo = botoes.daSessao(base({ cruzou: true, disparou: ['tamanho do contexto'], s: s, projeto: COM_REF,
+    resposta: '/sworn:parallel', contarConversas: function () { return 557; } }))
+    .concat(botoes.daSessao(base({ temProjeto: false, projeto: null })));
   const visto = {};
   tudo.forEach(function (x) { visto[x.nome] = x.texto + ' [' + x.rotulo + ']'; });
   assert.deepStrictEqual(visto, {
-    handoff: 'A conversa chegou a um limite que o sworn conta (tamanho, bloqueios ou trabalho feito): gere o ' +
+    // A7-49: o sinal que disparou (antes, a lista dos tres tipos de sinal)
+    handoff: 'A conversa chegou a um limite que o sworn conta (tamanho do contexto): gere o ' +
       'handoff (o texto que continua daqui) e cole num chat novo. [gerar handoff]',
     // A7-10, R1 da s239 (P2 do lado novo): o revisar diz qual arquivo (o mesmo do comando)
     revisar: 'O arquivo src/a.js pede o cuidado mais alto do projeto: revise-o contra a referência antes de dar por ' +
@@ -139,8 +152,9 @@ test('plano 082 (p5-36): os 7 textos e rotulos (8 menos o paralelo, 091 #5), sem
     init: 'Este projeto ainda não tem o sworn configurado. [configurar]',
     auditar: 'A auditoria automática achou regras ou skills para cortar. [ver o que cortar]',
     calibrar: 'Já há 557 conversas salvas: dá para calibrar quando trocar de chat. [calibrar]',
-    padrao: 'Um arquivo mudado nesta sessão pede o cuidado mais alto do projeto: carregue o manual antes de seguir. ' +
-      '[carregar o manual]'
+    // A7-50: o padrao diz qual arquivo (o primeiro que pede o cuidado) e de onde vem a regra, como o revisar
+    padrao: 'O arquivo src/a.js está entre os que o projeto.json marca com o cuidado mais alto: carregue o manual ' +
+      'antes de seguir. [carregar o manual]'
   });
   for (const x of tudo) {
     // A7 (pedido 12, R1 :47 microcopy): "gatilho", "cruzou" e "handoff" sem explicar eram jargao no texto do handoff.
@@ -150,6 +164,22 @@ test('plano 082 (p5-36): os 7 textos e rotulos (8 menos o paralelo, 091 #5), sem
     assert.ok(!/handoff/.test(x.texto) || /handoff \(o texto/.test(x.texto), 'handoff no texto vem explicado: ' + x.texto);
     assert.ok(/^[A-ZÀ-Ú].*\.$/.test(x.texto), 'frase inteira, com maiuscula e ponto: ' + x.texto);
   }
+});
+
+// A7-73 (pedido 12): o mock da faixa no hooks/mods.test.ts copia a mao o texto do handoff e do padrao; este teste o
+// prende ao de hoje do botoes.js (antes, o botoes.js mudava e o mock ficava velho sem aviso).
+test('A7-73: TEXTO_HANDOFF e TEXTO_PADRAO do mods.test.ts sao os textos de hoje do botoes.js', () => {
+  const ts = fs.readFileSync(path.join(__dirname, '..', 'hooks', 'mods.test.ts'), 'utf8');
+  const constante = function (nome) {
+    const m = new RegExp('const ' + nome + String.raw` = ((?:'[^'\n]*'(?: \+\s*)?)+)\n`).exec(ts);
+    assert.ok(m, nome + ' no mods.test.ts');
+    return m[1].match(/'[^'\n]*'/g).map(function (p) { return p.slice(1, -1); }).join('');
+  };
+  const s = { arquivosTocados: [path.join(RAIZ, 'src', 'a.js')] };
+  const b = botoes.daSessao(base({ cruzou: true, disparou: ['tamanho do contexto'], s: s, projeto: SO_AAA }));
+  assert.deepStrictEqual(nomes(b), ['handoff', 'padrao']);
+  assert.strictEqual(constante('TEXTO_HANDOFF'), b[0].texto);
+  assert.strictEqual(constante('TEXTO_PADRAO'), b[1].texto);
 });
 
 test('botoes: estado torto nao lanca (arquivosTocados que nao e lista, contador que nao e numero)', () => {

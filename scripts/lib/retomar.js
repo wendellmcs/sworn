@@ -219,7 +219,9 @@ function juntar(d, arquivos) {
     '',
     'Gerado pelo sworn em ' + dia(d.agora) + ' ' + hora(d.agora) + ', ao segurar a volta' +
       (conta.length ? ' (' + conta.join('; ') + ')' : '') +
-      '. Montado por script a partir do registro do chat: nao e o handoff do modelo.',
+      // A5-66: o handoff explicado na 1a vez que o resumo o cita.
+      '. Montado por script a partir do registro do chat: nao e o handoff (o texto de passagem que o modelo escreve' +
+      ' para o chat novo).',
     '',
     '## Onde parou'
   ].concat(ondeParou(d), [

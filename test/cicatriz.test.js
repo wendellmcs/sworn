@@ -282,7 +282,9 @@ test('cicatriz: o texto poe os SEM cicatriz primeiro - e a lista que motiva a po
     assert.ok(/\nCicatriz: a decisao, o incidente ou o achado do historico \(o corpus\) que explica por que a regra/
       .test(t), t);
     assert.ok(/\nTrechos do corpus com marca de decisao, incidente ou achado: \d+\n/.test(t), t);
-    assert.ok(/um desses trechos divide com ela ao menos 2 palavras-chave\s+e 50% das palavras-chave dela/.test(t), t);
+    // A5-61: a frase do piso numa linha so.
+    assert.ok(/um desses trechos tem em comum com ela ao menos 2 palavras-chave e 50% das palavras-chave dela\./
+      .test(t), t);
     assert.ok(/procure o motivo dela no corpus\s+com outras palavras/.test(t), t);
     assert.ok(!/SINAL|termos em comum exigidos|Passagens com marca/.test(t), t);
     const um = cicatriz.texto(cicatriz.varrer(manualDeTeste(dir), corpusDeTeste(dir), { minimo: 1, fracao: 0.5 }));

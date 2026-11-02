@@ -53,14 +53,34 @@ test('io: blindar engole excecao e sai com 0', () => {
 });
 
 // A5-27/A5-29 (D735): valor lancado que nao e Error (texto, null) saia "undefined" no log; e sem quebra de linha.
+// A5-63: a reserva diz as duas causas (valor sem texto ou texto.js que nao carrega) e o passo.
+const semTexto = (texto) => 'o erro nao tem texto legivel (ele nao vira texto, ou o texto.js do plugin nao carregou; ' +
+  'confira com node "' + texto + '")';
+
 test('A5-29: blindar poe no stderr a causa de qualquer valor lancado, com quebra de linha final', () => {
   const io = path.join(__dirname, '..', 'scripts', 'lib', 'io.js');
   for (const [lancado, causa] of [["'texto solto'", 'texto solto'], ['null', 'null'],
-    ["new Error('de proposito')", 'Error: de proposito'], ['Object.create(null)', 'valor lancado sem texto legivel']]) {
+    ["new Error('de proposito')", 'Error: de proposito'],
+    ['Object.create(null)', semTexto(path.join(__dirname, '..', 'scripts', 'lib', 'texto.js'))]]) {
     const r = spawnSync(process.execPath, ['-e', 'require(' + JSON.stringify(io) + ').blindar(() => { throw ' +
       lancado + '; });'], { encoding: 'utf8' });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(r.stderr, 'sworn: portao falhou e liberou por seguranca: ' + causa + '\n', lancado);
+  }
+});
+
+test('A5-63: com o texto.js quebrado, um Error comum sai pela reserva, que aponta o texto.js', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-io-texto-'));
+  try {
+    fs.copyFileSync(path.join(RAIZ, 'scripts', 'lib', 'io.js'), path.join(dir, 'io.js'));
+    fs.writeFileSync(path.join(dir, 'texto.js'), "throw new Error('texto.js quebrado');\n");
+    const r = spawnSync(process.execPath, ['-e', 'require(' + JSON.stringify(path.join(dir, 'io.js')) +
+      ").blindar(() => { throw new Error('de proposito'); });"], { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.strictEqual(r.stderr, 'sworn: portao falhou e liberou por seguranca: ' +
+      semTexto(path.join(dir, 'texto.js')) + '\n');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

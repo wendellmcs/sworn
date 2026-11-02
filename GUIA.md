@@ -553,11 +553,11 @@ dele passar e acender de novo. Se o Claude Code não deixar o botão preencher o
 botão por "O botão não preencheu o campo de mensagem. Digite **/sworn:handoff** e envie." (com o comando daquele
 botão) até a próxima resposta. Depois de recarregar os mods, o botão do padrão pode voltar numa sessão que já
 carregou o manual: o mod recomeça sem lembrar que viu o manual carregado. Não é erro; ignore o botão, ou clique, e o
-manual carrega de novo (só gasta a leitura dele). Se a medida falhar, a linha de status diz "medidor parado: a medida
-falhou e roda de novo na próxima resposta; se seguir assim, rode /sworn-session.", e os dois comandos dizem as causas
-possíveis (falta o Node.js, ou o script do sworn deu erro ou demorou demais) e o passo: pedir ao Claude para achar
-por que o medidor (ou o painel do plano) parou, e depois rodar o comando de novo. Nada disso abre rede: os números
-vêm do
+manual carrega de novo (só gasta a leitura dele). Se a leitura falhar, a linha de status diz "medidor parado: a
+leitura do uso falhou e volta na próxima resposta; se seguir, /sworn-session mostra a causa.", e os dois comandos
+dizem as causas possíveis (falta o Node.js, ou o sworn falhou ou demorou) e a frase pronta para dizer ao Claude, que
+procura a causa e o conserto: "ache por que o medidor do sworn parou" no `/sworn-session` e "ache por que o painel do
+plano do sworn parou" no `/sworn-plan`; depois, rodar o comando de novo. Nada disso abre rede: os números vêm do
 próprio Claude Code e dos arquivos na sua máquina.
 
 **Como o painel do plano acha o plano e conta.**
@@ -770,7 +770,7 @@ So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosL
 **Trava 7 — criar sem ter procurado** (`Write` de `src/carrinho/frete-novo.js`, sem busca no turno):
 
 ~~~text
-sworn: NEGADO - arquivo novo sem ter procurado o que ja existe.
+sworn - arquivo novo sem ter procurado o que ja existe: procure antes e diga o que achou.
 
 Alvo: src/carrinho/frete-novo.js  (nao existe ainda: isto e criacao, nao edicao)
 

@@ -122,9 +122,16 @@ function instrucao(t) {
 
 // parallel() troca a excecao por null e perde o porque: a excecao e pega aqui, por tarefa, com a mensagem.
 // agent() devolve null quando o usuario pula o agente ou ele morre por erro de API depois das tentativas.
-// A7-27 (D735): o motivo diz o porque e o passo seguinte.
-const SEM_RESPOSTA = 'the agent was skipped or died from an API error, with no answer; ' +
+// A7-27 (D735): o motivo diz o porque e o passo seguinte. A7-57: sem o jargao "API error".
+const SEM_RESPOSTA = 'the agent was skipped, or the model service failed on every retry, so there is no answer; ' +
   'run this task again if you still need it'
+// A7-55: um stack trace enorme nao incha o resultado; o corte e por caractere.
+const MAX_CAUSA = 300
+// A7-71: throw null, throw undefined e new Error('') sao "sem mensagem" (antes viravam 'null', 'undefined' e 'Error').
+function mensagemDoErro(e) {
+  if (e == null) return ''
+  return typeof e === 'object' && typeof e.message === 'string' ? e.message : String(e)
+}
 // Quem so le abre no agente leve do plugin (agents/reader.md: sem CLAUDE.md, sem lista de skills, sem Edit/Write);
 // o agente padrao abria com ~56 mil tokens por tarefa. Quem edita segue no padrao, com as regras do projeto.
 const LEITOR = 'sworn:reader'
@@ -135,7 +142,7 @@ const saidas = await parallel(rodam.map((t) => () => agent(instrucao(t), Object.
   schema: RESULTADO,
   model: t.modelo,
   effort: t.esforco,
-}, t.edita ? { isolation: 'worktree' } : { agentType: LEITOR })).catch((e) => ({ erroDoAgente: String((e && e.message) || e) }))))
+}, t.edita ? { isolation: 'worktree' } : { agentType: LEITOR })).catch((e) => ({ erroDoAgente: mensagemDoErro(e) }))))
 
 function resultado(t, saida) {
   const base = { n: t.n, tarefa: t.tarefa, edita: t.edita, modelo: t.modelo }
@@ -143,10 +150,14 @@ function resultado(t, saida) {
   if (!saida) return Object.assign(base, { respondeu: false, motivo: SEM_RESPOSTA })
   if (saida.erroDoAgente !== undefined) {
     // A mensagem vai entre aspas, como do agente (o ponto final dela nao encosta no ';'); vazia, diz que veio vazia.
-    const causa = String(saida.erroDoAgente).trim()
-    const qual = causa ? ' (' + JSON.stringify(causa) + ')' : ' with no message'
-    return Object.assign(base, { respondeu: false,
-      motivo: 'the agent stopped on an error' + qual + '; run this task again once the cause is fixed' })
+    // A7-57: o passo diz onde esta a causa: na mensagem, ou, sem ela, no registro do agente no /workflows.
+    const causa = [...String(saida.erroDoAgente).trim()]
+    const cortada = causa.length > MAX_CAUSA ? causa.slice(0, MAX_CAUSA).join('') + '...' : causa.join('')
+    return Object.assign(base, { respondeu: false, motivo: causa.length
+      ? 'the agent stopped on an error (' + JSON.stringify(cortada) + '); fix what the message points to, then run ' +
+        'this task again'
+      : 'the agent stopped on an error with no message; open /workflows, which lists each agent run, to see where it ' +
+        'stopped, then run this task again' })
   }
   const r = Object.assign(base, { respondeu: true }, saida)
   const alheios = foraDoDono(t, saida)

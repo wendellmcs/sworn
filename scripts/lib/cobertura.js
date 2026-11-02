@@ -107,12 +107,15 @@ function portoes(cwd, projeto, a) {
 
   // Foco de revisao 2. custo.js nao opina com menos de dois nomes, e nao avisa
   // que nao opina - e a falha silenciosa que este relatorio existe para acusar.
+  // A6-87 (D735): o efeito e o passo em palavras comuns; o passo vai pelo init, que grava escada e degraus juntos.
   lista.push(portao('custo', 'Agente caro em marcha rapida', HOOK,
     a.escada >= degrausLib.MINIMO,
     a.escada >= degrausLib.MINIMO
       ? 'escada com ' + a.escada + ' nomes'
-      : 'escada com ' + a.escada + ' nome(s): com menos de ' + degrausLib.MINIMO +
-        ' este portao NAO OPINA, e nao avisa que nao opina'));
+      : 'escada com ' + a.escada + ' nome(s): com menos de ' + degrausLib.MINIMO + ', a checagem que barra o ' +
+        'agente mais caro que a tarefa pede fica parada, e so este relatorio mostra isso; para ela valer, rode o ' +
+        '/sworn:init de novo e ponha ao menos ' + degrausLib.MINIMO + ' agentes na escada (agentes.escada do ' +
+        '.claude/sworn/projeto.json)'));
 
   const apel = apelidosLib.conferir(projeto, agentesLib.listar(cwd));
   // A6-52 (s235): os titulos em palavras comuns, sem "Gatilho n", "H4" nem o campo `model:`.
@@ -134,8 +137,9 @@ function portoes(cwd, projeto, a) {
   // A6 (s220, R1 :28): a prova ilegivel e a fora da forma (provaInvalida, A1) se dizem, com o passo do REGRAVAR.
   const cob = apelidosLib.cobertura(projeto, a.prova, apelidosLib.agentesDoPlugin());
   // A6-47 (s235): os dois ramos sem a prova inteira dizem o comando que sonda.
-  const sondar = ': rode node scripts/provar-apelidos.js (com --plugin no repositorio do plugin) e grave a prova ' +
-    'no formato que ele mostra';
+  // A6-88 (D735): onde a prova vai (provar-apelidos.js, ondeGravar) e o caminho real do script, entre aspas.
+  const sondar = ': rode node "' + path.join(__dirname, '..', 'provar-apelidos.js') + '" (com --plugin no ' +
+    'repositorio do plugin) e grave a prova em .claude/sworn/apelidos-vivos.json, no formato que ele mostra';
   lista.push(portao('apelidos-vivos', 'O apelido de modelo ainda e aceito', INSTRUCAO,
     cob.temProva && cob.naoProvados.length === 0,
     a.provaIlegivel ? 'apelidos-vivos.json nao se le (' + a.provaIlegivel + '): ' + apelidosLib.REGRAVAR

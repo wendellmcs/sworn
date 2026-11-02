@@ -78,7 +78,8 @@ test('D493: com a chave, o aviso de tamanho sai a 250000; o limiar do projeto ma
   assert.strictEqual(g({ tokensDeContexto: 250000 }, null, true).cruzou, true);
   assert.strictEqual(g({}, null, true).limiar, 250000, 'o medidor mostra o limiar que vale');
   assert.strictEqual(saude.avaliar({ tokensDeContexto: 200000 }, null, true).disparou, false);
-  assert.ok(/260000 tokens de contexto \(limiar 250000\)/.test(saude.avaliar({ tokensDeContexto: 260000 }, null, true).aviso));
+  assert.ok(/260000 tokens de contexto, o tamanho desta conversa \(limiar 250000\)/
+    .test(saude.avaliar({ tokensDeContexto: 260000 }, null, true).aviso));
   // o numero gravado pelo projeto manda, com ou sem a chave
   assert.strictEqual(g({ tokensDeContexto: 180000 }, { tokensDeContexto: 180000 }, true).cruzou, true);
   assert.strictEqual(g({}, { tokensDeContexto: 180000 }, true).limiar, 180000);

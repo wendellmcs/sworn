@@ -454,8 +454,8 @@ test('medicao/lerExecucao: bloco ausente no recurso -> nao aplicou', () => {
   const r = ler({ bloco: false }, 'recurso');
   assert.strictEqual(r.aplicou, false);
   assert.ok(r.motivos.some((m) => /bloco/.test(m)), JSON.stringify(r.motivos));
-  // R1 s235 (microcopy B.txt:383): o motivo do bloco que nao chegou diz o efeito, o arquivo, a chave e o passo, do
-  // mesmo jeito que o do bloco que vazou (o teste acima).
+  // R1 s235 (microcopy, lerExecucao do medicao.js): o motivo do bloco que nao chegou diz o efeito, o arquivo, a chave
+  // e o passo, do mesmo jeito que o do bloco que vazou (o teste acima).
   assert.ok(r.motivos.some((m) => /^o bloco de qualidade nao chegou a sessao do recurso: sem ele .*\.claude\/sworn\/projeto\.json .*"qualidadeDeResposta": false.* Rode de novo\.$/.test(m)),
     JSON.stringify(r.motivos));
 });
@@ -478,7 +478,8 @@ test('medicao/lerExecucao: caveman ausente na condicao caveman -> nao aplicou', 
   const r = ler({ caveman: false }, 'caveman');
   assert.strictEqual(r.aplicou, false);
   assert.ok(r.motivos.some((m) => /caveman/.test(m)), JSON.stringify(r.motivos));
-  // A6 (s220, microcopy :388/:389): como os motivos da abertura, este diz o passo - nos dois ramos da transcricao.
+  // A6 (s220, microcopy, lerExecucao do medicao.js): como os motivos da abertura, este diz o passo - nos dois ramos
+  // da transcricao.
   const passo = /\. Confira se o plugin caveman esta instalado e ligado no claude que a medicao chama \(o de SWORN_CLAUDE, ou o do PATH\), e rode de novo/;
   assert.ok(r.motivos.some((m) => /transcricao da sessao nao achada/.test(m) && passo.test(m)), JSON.stringify(r.motivos));
   const comTranscricao = ler({ caveman: false }, 'caveman',
@@ -538,7 +539,7 @@ test('medicao/lerExecucao: sem evento result, ou result com erro -> ok falso', (
   const a = medicao.lerExecucao(semResult, { condicao: 'padrao', marcador: MARCADOR });
   assert.strictEqual(a.ok, false);
   assert.notStrictEqual(typeof a.outputTokens, 'number');
-  // A6 (s220, microcopy :419): o motivo diz o que houve e o passo.
+  // A6 (s220, microcopy, lerExecucao do medicao.js): o motivo diz o que houve e o passo.
   assert.ok(a.motivos.some((m) => /^o stream nao tem o evento result: a execucao parou antes do fim; o \.stderr\.txt desta geracao na rodada, quando existe, diz por que\. Rode de novo\.$/.test(m)),
     JSON.stringify(a.motivos));
   // A6-28: sem o jargao "subtype"; a marca do claude vai entre aspas, com o passo, nos tres jeitos de erro.
@@ -554,7 +555,7 @@ test('medicao/lerExecucao: sem evento result, ou result com erro -> ok falso', (
   const semMarca = ler({ subtype: undefined }, 'padrao');
   assert.ok(semMarca.motivos.some((m) => /\(o claude fechou sem a marca "success"\)/.test(m) && passoDoErro.test(m)),
     JSON.stringify(semMarca.motivos));
-  // a marca que veio, mesmo sem ser texto, sai como veio (R1 s235, borda B.txt:436)
+  // a marca que veio, mesmo sem ser texto, sai como veio (R1 s235, borda, lerExecucao do medicao.js)
   const numero = ler({ subtype: 7 }, 'padrao').motivos;
   assert.ok(numero.some((m) => /\(o claude fechou com "7", e nao com "success"\)/.test(m)), JSON.stringify(numero));
   assert.ok(!outroFim.motivos.concat(comErro.motivos, semMarca.motivos).some((m) => /subtype/.test(m)), 'jargao subtype no motivo');
@@ -582,7 +583,7 @@ test('medicao/lerExecucao: stream vazio nao aplica nada e nao tem tokens', () =>
   assert.strictEqual(r.ok, false);
   assert.strictEqual(r.aplicou, false);
   assert.notStrictEqual(typeof r.outputTokens, 'number');
-  // R1 s235 (microcopy B.txt:453): o motivo do texto vazio diz o efeito e o passo.
+  // R1 s235 (microcopy, lerExecucao do medicao.js): o motivo do texto vazio diz o efeito e o passo.
   assert.ok(r.motivos.some((m) => /^a execucao nao deixou texto que o usuario veria\b.*: sem ele nao ha o que julgar\. Rode de novo\.$/.test(m)),
     JSON.stringify(r.motivos));
 });
@@ -684,7 +685,7 @@ function cli(args, o) {
   return spawnSync(process.execPath, [CLI].concat(args), { cwd: opcoes.cwd || os.tmpdir(), encoding: 'utf8', env: env, timeout: 120000 });
 }
 
-function achar(dir, nome) {
+function achar(dir) {
   // a unica pasta de rodada dentro de medicao-qr
   const base = path.join(dir, '.claude', 'sworn', 'medicao-qr');
   const rodadas = fs.readdirSync(base);
@@ -1463,8 +1464,9 @@ test('cli: --veredito com veredito sem o campo melhor (vazio, lista) e falta, na
       assert.ok(!/falta:/.test(r.stdout), nome + ': voto com melhor virou falta: ' + r.stdout);
       // A6-17 (D735): os nomes das condicoes explicados e a regra do gasto no lugar da frase que nada dizia
       assert.match(r.stdout, /condicoes: padrao \(sem o caveman e sem o recurso\), caveman \(a skill \/caveman, /);
-      assert.match(r.stdout, /Para GANHA, o recurso precisa vencer os dois placares e gastar menos tokens que o /);
-      assert.match(r.stdout, /padrao; o gasto do caveman nao entra na conta\./);
+      // A6-85 (D735): o placar dito pela regra (medicao.apurar, vencePlacar), sem "vencer os dois placares".
+      assert.match(r.stdout, /Para GANHA, o recurso precisa de mais vitorias que derrotas contra o caveman e /);
+      assert.match(r.stdout, /contra o padrao, e gastar menos tokens que o padrao; o gasto do caveman nao entra na /);
       assert.ok(!/fica dito/.test(r.stdout), r.stdout);
       return;
     }

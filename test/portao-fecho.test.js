@@ -477,7 +477,8 @@ test('T10-1: a saude que dispara manda ao modelo o que fazer, e ao usuario o avi
     assert.strictEqual(h.hookEventName, 'Stop');
     const t = h.additionalContext;
     assert.strictEqual(typeof t, 'string');
-    assert.ok(/turnos com trabalho real \(limiar 1\)/.test(t), 'tem de citar o gatilho que disparou: ' + t);
+    assert.ok(/turnos com trabalho real \(.+\) nesta sessao \(limiar 1\)/.test(t),
+      'tem de citar o gatilho que disparou: ' + t);
     assert.ok(t.indexOf('/sworn:handoff') !== -1, 'tem de mandar rodar o handoff: ' + t);
     assert.ok(/chat novo/.test(t), 'tem de mandar dizer que e hora de abrir chat novo: ' + t);
     assert.ok(/bloco de codigo/.test(t), 'tem de mandar colar o prompt em bloco de codigo: ' + t);
@@ -1102,7 +1103,8 @@ test('D445: o fecho le o transcript_path e avisa a troca de chat acima do limiar
     fs.writeFileSync(alto, linha(1000) + linha(175500));
     const r2 = turnoComTrabalho(tmp, 'ctx2', dir, { transcript_path: alto });
     assert.ok(r2.json && /chat novo/.test(r2.json.systemMessage), 'acima do limiar avisa: ' + r2.stdout);
-    assert.ok(/175500 tokens de contexto \(limiar 175000\)/.test(r2.json.hookSpecificOutput.additionalContext), r2.stdout);
+    assert.ok(/175500 tokens de contexto, o tamanho desta conversa \(limiar 175000\)/
+      .test(r2.json.hookSpecificOutput.additionalContext), r2.stdout);
     const r3 = turnoComTrabalho(tmp, 'ctx3', dir, { transcript_path: path.join(tmp, 'sumiu.jsonl') });
     assert.strictEqual(r3.status, 0, 'transcript ausente nunca derruba o fecho: ' + r3.stderr);
     assert.strictEqual(r3.json, null, r3.stdout);

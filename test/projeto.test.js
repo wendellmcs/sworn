@@ -39,8 +39,10 @@ test('D732: fontesDeConsulta opcional, lista de texto, so com fonte canonica', (
     assert.ok(r.erros.indexOf('fontesDeConsulta tem de ser lista de texto') !== -1, JSON.stringify(ruim) + ': ' + r.erros);
   }
   const fora = projeto.validar(copia({ fontesDeConsulta: ['docs/decisoes.md'] }));
+  // A6-95 (D735): o efeito em palavras, sem "sai do peso".
   assert.deepStrictEqual(fora.erros, ['fontesDeConsulta: "docs/decisoes.md" nao esta em fontesCanonicas, e so fonte ' +
-    'canonica sai do peso; corrija o caminho ou declare-a canonica']);
+    'canonica pode ficar fora da conta do limite de instrucoes do /sworn:audit; corrija o caminho ou declare-a ' +
+    'canonica']);
   assert.ok(projeto.CHAVES_OPCIONAIS.indexOf('fontesDeConsulta') !== -1, 'o re-init ignoraria a chave');
   // A6-83 (pedido 12): com a fontesCanonicas reprovada, o erro dela basta; sem um erro a mais por item de consulta,
   // com um item e com dois.

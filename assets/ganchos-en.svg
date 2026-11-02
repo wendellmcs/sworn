@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="728" viewBox="0 0 720 728" role="img" aria-labelledby="titulo desc">
   <title id="titulo">Where sworn hooks into a session</title>
-  <desc id="desc">Eight hook events, from the opening of the session to its end, each with the scripts that run there. SessionStart, abertura.js: your rules and the scope come back, with the parallel work, fewer stops, response quality and less code blocks. UserPromptSubmit, abrir-turno.js: a costly return to an idle chat pauses once, with the cost, and the next message goes on; a correction becomes a rule proposal. PreToolUse on Write and Edit, portao-escopo.js: scope, untouchables, another session's files, search first, ratchet, manual and design tokens. PreToolUse on Bash and PowerShell, portao-destrutivo.js, portao-estilo.js and portao-commit.js: destructive command, shell syntax, stray cd, style by shell and commit without review. PreToolUse on Task and Agent, portao-agente.js and portao-apelido.js: top-tier agent on light work, and the model nickname, which only warns. PreToolUse on AskUserQuestion, portao-decisao.js: exactly 3 options, the recommended one first. PostToolUse, SubagentStart and SubagentStop, marcar-trabalho.js, abrir-subagente.js, gravar-veredito.js and escalar.js: they count work, searches, decisions and commits, give the less-code block to subagents, save review verdicts and keep the request of a ladder agent that asks for the rung above. Stop, portao-fecho.js: proof, open sub-item, handoff prompt, review and reference, an escalation left undispatched, and when to switch chats. SessionEnd, fim-sessao.js: cleans session files idle for more than 7 days. A solid amber dot marks the moments that can deny or hand the turn back; a gray ring, the ones that only inject, count or clean.</desc>
+  <desc id="desc">Eight hook events, from the opening of the session to its end, each with the scripts that run there. SessionStart, abertura.js: at startup, resume, clear or compact, your rules and the scope come back, with the blocks of parallel work, fewer stops, response quality and less code. UserPromptSubmit, abrir-turno.js: a costly return to an idle chat pauses once, with the cost, and the next message goes on; a correction becomes a rule proposal. PreToolUse on Write and Edit, portao-escopo.js: it denies, with the reason, a write off scope, to an untouchable file or to another session's file, a new file without searching first, the ratchet (a limit that only tightens), an AAA file without the manual (the playbook) loaded, and a design token off the system. PreToolUse on Bash and PowerShell, portao-destrutivo.js, portao-estilo.js and portao-commit.js: destructive command, shell syntax, stray cd, style by shell and commit without review. PreToolUse on Task and Agent, portao-agente.js and portao-apelido.js: top-tier agent on light work, and the model nickname, which only warns. PreToolUse on AskUserQuestion, portao-decisao.js: exactly 3 options, the recommended one first. PostToolUse, SubagentStart and SubagentStop, marcar-trabalho.js, abrir-subagente.js, gravar-veredito.js and escalar.js: they count work, searches, decisions and commits, give the less-code block to subagents, save review verdicts and keep the request of a ladder agent that asks for the rung above. Stop, portao-fecho.js: proof, open sub-item, handoff prompt, review and reference, an escalation left undispatched, and when to switch chats. SessionEnd, fim-sessao.js: cleans session files idle for more than 7 days. A solid amber dot marks the moments that can deny or hand the turn back; a gray ring, the ones that only inject, count or clean.</desc>
   <style>
     .fundo { fill: #FBFAF6; }
     .borda { fill: none; stroke: #E5E1D6; }
@@ -31,27 +31,27 @@
     <circle class="sem" cx="48" cy="103" r="6"/><circle class="fundo" cx="48" cy="103" r="3"/>
     <text class="forte" x="68" y="108" font-size="14" font-weight="600">SessionStart</text>
     <text class="fraco" x="68" y="126" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">abertura.js</text>
-    <text class="forte" x="68" y="145" font-size="13">Opens, resumes or compacts: rules, scope, parallel work, fewer stops, response quality, less code.</text>
+    <text class="forte" x="68" y="145" font-size="13">Startup, resume, clear or compact: your rules, scope and the four work blocks come back.</text>
 
     <circle class="com" cx="48" cy="167" r="6"/>
     <text class="forte" x="68" y="172" font-size="14" font-weight="600">UserPromptSubmit</text>
     <text class="fraco" x="68" y="190" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">abrir-turno.js</text>
-    <text class="forte" x="68" y="209" font-size="13">Idle chat: a costly return pauses once with the cost; resend to go on. A correction: rule proposal.</text>
+    <text class="forte" x="68" y="209" font-size="13">Idle 1 h at 200k+ tokens: one pause with the cost; send again to go on. A correction proposes a rule.</text>
 
     <circle class="com" cx="48" cy="231" r="6"/>
     <text class="forte" x="68" y="236" font-size="14" font-weight="600">PreToolUse · Write, Edit</text>
     <text class="fraco" x="68" y="254" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-escopo.js</text>
-    <text class="forte" x="68" y="273" font-size="13">Scope, untouchables, another session's files, search first, ratchet, manual, design tokens.</text>
+    <text class="forte" x="68" y="273" font-size="13">Denies: off scope, protected or other-session file, no search, ratchet, manual unread, design token.</text>
 
     <circle class="com" cx="48" cy="295" r="6"/>
     <text class="forte" x="68" y="300" font-size="14" font-weight="600">PreToolUse · Bash, PowerShell</text>
     <text class="fraco" x="68" y="318" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-destrutivo.js · portao-estilo.js · portao-commit.js</text>
-    <text class="forte" x="68" y="337" font-size="13">Destructive command, shell syntax, stray cd, style by shell, commit without review.</text>
+    <text class="forte" x="68" y="337" font-size="13">Denies destructive or wrong-shell commands, CSS via shell, unreviewed commits; fixes a stray cd.</text>
 
     <circle class="com" cx="48" cy="359" r="6"/>
     <text class="forte" x="68" y="364" font-size="14" font-weight="600">PreToolUse · Task, Agent</text>
     <text class="fraco" x="68" y="382" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-agente.js · portao-apelido.js</text>
-    <text class="forte" x="68" y="401" font-size="13">Top-tier agent on light work; the model nickname (warns only).</text>
+    <text class="forte" x="68" y="401" font-size="13">Denies a costly agent on light work; only warns if an agent's model differs from the recorded one.</text>
 
     <circle class="com" cx="48" cy="423" r="6"/>
     <text class="forte" x="68" y="428" font-size="14" font-weight="600">PreToolUse · AskUserQuestion</text>
@@ -66,7 +66,7 @@
     <circle class="com" cx="48" cy="551" r="6"/>
     <text class="forte" x="68" y="556" font-size="14" font-weight="600">Stop</text>
     <text class="fraco" x="68" y="574" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-fecho.js</text>
-    <text class="forte" x="68" y="593" font-size="13">End of the turn: proof, open sub-item, handoff, review, reference, escalation; when to switch chats.</text>
+    <text class="forte" x="68" y="593" font-size="13">Returns the turn: no proof/review/handoff/reference, open sub-item, unsent escalation, full chat.</text>
 
     <circle class="sem" cx="48" cy="615" r="6"/><circle class="fundo" cx="48" cy="615" r="3"/>
     <text class="forte" x="68" y="620" font-size="14" font-weight="600">SessionEnd</text>

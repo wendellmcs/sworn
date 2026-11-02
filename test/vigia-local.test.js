@@ -281,7 +281,9 @@ test('ultima-busca com ok:false acrescenta a frase nos tres casos de problema; o
     const ta = aviso(a, AGORA);
     assert.ok(ta.indexOf(' Ultima busca falhou em 2026-10-10T10:30:00.000Z: git fetch falhou: atencao zzz') !== -1, ta);
     // A7-16 (pedido 12): a frase da busca que falhou termina no passo seguinte
-    const passo = /z\. Corrija a causa e rode de novo a tarefa agendada do Windows que chama o vigia-puxar\.js\.$/;
+    // A7-51: o passo diz onde ver a tarefa (o Agendador de Tarefas)
+    const passo = new RegExp('z\\. Corrija a causa e rode de novo, no Agendador de Tarefas do Windows, a tarefa ' +
+      'que chama o vigia-puxar\\.js\\.$');
     assert.ok(passo.test(ta) && ta.length < 450,
       'motivo nao foi cortado em 120, ou falta o passo: ' + ta);
 
@@ -305,6 +307,19 @@ test('ultima-busca com ok:false acrescenta a frase nos tres casos de problema; o
     fs.mkdirSync(e);
     fs.writeFileSync(path.join(e, 'ultima-busca.json'), '{ quebrado');
     assert.ok(aviso(e, AGORA).indexOf('nenhuma novidade chegou') !== -1);
+
+    // A7-51: registro sem quando nem motivo diz que faltam, no lugar do '?'
+    const f = path.join(base, 'f');
+    fs.mkdirSync(f);
+    busca(f, { ok: false });
+    const tf = aviso(f, AGORA);
+    assert.ok(tf.indexOf(' Ultima busca falhou (sem data registrada): sem motivo registrado. Corrija') !== -1, tf);
+    assert.ok(tf.indexOf('?') === -1, tf);
+    // P2 da R1: campos vazios ou so com espaco contam como ausentes
+    const g = path.join(base, 'g');
+    fs.mkdirSync(g);
+    busca(g, { ok: false, quando: '', motivo: '  ' });
+    assert.ok(aviso(g, AGORA).indexOf(' Ultima busca falhou (sem data registrada): sem motivo registrado.') !== -1);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 

@@ -245,7 +245,7 @@ function medir(alvo) {
     // A5-07 (D735): sem o jargao "gancho"; o efeito (o zero pode ser falso) e o passo.
     r.aviso = 'a transcricao nao tem nenhum registro do texto que os plugins poem sozinhos na conversa. Se havia ' +
       'plugin ligado, o zero pode ser falso (o Claude Code pode ter mudado o formato da transcricao): confira em ' +
-      '/hooks que os do plugin estao ligados e atualize o Claude Code (claude update)';
+      '/hooks que os comandos do plugin aparecem ligados e atualize o Claude Code (claude update)';
   }
   return r;
 }

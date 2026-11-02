@@ -463,6 +463,18 @@ test('agentes: validarFatias recusa ferramentas que nao e texto, dizendo o forma
   assert.ok(/lista/.test(lista[0]), lista[0]);
 });
 
+// A4-81 (pedido 12, borda): o item vazio aparecia como "" no erro, sem dizer que e uma virgula sobrando.
+test('A4-81: item vazio na lista de ferramentas diz virgula sobrando, nunca ""', () => {
+  for (const lista of ['Read,,Grep', 'Read,', ',Read', 'Read, ,Grep', ',']) {
+    const erros = agentes.validarFatias({ ferramentas: lista });
+    assert.strictEqual(erros.length, 1, JSON.stringify(erros));
+    assert.ok(/virgula sobrando/.test(erros[0]), erros[0]);
+    assert.ok(erros[0].indexOf('""') === -1, erros[0]);
+  }
+  const misto = agentes.validarFatias({ ferramentas: 'Read,,-Grep' })[0];
+  assert.ok(/virgula sobrando/.test(misto) && misto.includes('"-Grep"'), misto);
+});
+
 test('agentes: validarFatias: ferramentas em string vazia segue "vazia"', () => {
   for (const vazia of ['', '   ']) {
     const erros = agentes.validarFatias({ ferramentas: vazia });

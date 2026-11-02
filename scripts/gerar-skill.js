@@ -81,7 +81,7 @@ if (!gravar) {
 
 if (fs.existsSync(alvo)) {
   process.stdout.write('ERRO: ' + alvo + ' ja existe. Nao sobrescrevo skill de projeto.\n');
-  process.stdout.write('Se for para substituir, isso e decisao do dono: ele apaga ou renomeia antes.\n');
+  process.stdout.write('Se for para substituir, isso e decisao do dono, que apaga ou renomeia antes.\n');
   process.exit(1);
 }
 

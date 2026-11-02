@@ -135,7 +135,10 @@ function validarFatias(valores) {
     const itens = v.ferramentas.split(',').map(function (x) { return x.trim(); });
     const ruins = itens.filter(function (x) { return !FERRAMENTA.test(x); });
     if (ruins.length > 0) {
-      erros.push('ferramentas invalidas (' + ruins.map(function (x) { return '"' + x + '"'; }).join(', ') +
+      // A4-81 (pedido 12, borda): o item vazio vem de uma virgula sobrando, e "" nao dizia isso.
+      erros.push('ferramentas invalidas (' + ruins.map(function (x) {
+        return x === '' ? 'item vazio: virgula sobrando' : '"' + x + '"';
+      }).join(', ') +
         '): separe por virgula ' + FORMATO_DITO);
     }
   } else if (v.ferramentas !== undefined && typeof v.ferramentas !== 'string') {

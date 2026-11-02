@@ -44,8 +44,7 @@ function validarRegra(bruta) {
       ' o que fazer, como em "ao editar arquivo -> rodar os testes"');
     return { ok: false, erros: erros };
   }
-  if (!p.gatilho) erros.push('gatilho vazio antes da seta');
-  if (!p.acao) erros.push('acao vazia depois da seta');
+  // A4-101 (pedido 12, enxuto): os ramos de gatilho e acao vazios sairam; o partir() nunca os deixa vazios.
   // D10: nenhum fato volatil cravado em prosa.
   if (ERRO_VOLATEIS) {
     erros.push('a lista de fatos volateis (modelos/volateis.json) nao carregou (' + ERRO_VOLATEIS + '): a checagem de' +

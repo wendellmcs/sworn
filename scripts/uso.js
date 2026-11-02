@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const texto = require('./lib/texto.js');
+const projeto = require('./lib/projeto.js');
 
 const alvo = path.join(process.cwd(), '.claude', 'sworn', 'contadores.json');
 // A6 (s220): so o arquivo ausente e vazio. JSON quebrado, valor que nao e objeto simples e erro de leitura saem com a
@@ -59,5 +60,10 @@ process.stdout.write('\n  ' + String(total).padStart(6) + ' | TOTAL\n\n');
 // A6-02 (D735): o que e a trava e o que fazer com os numeros.
 process.stdout.write('Trava e cada regra do sworn que barra ou avisa uma acao. Use estes numeros para decidir qual ' +
   'manter ou desligar: a que nunca dispara talvez sobre; a que dispara muito mostra onde o Claude mais erra.\n');
+// A6-84 (D735): como desligar, conferido trava por trava: as do bloco travas (projeto.TRAVAS) e as que dizem a chave
+// na ultima linha do aviso ("Desligar neste projeto", test/forma-aviso.test.js).
+const nomes = projeto.TRAVAS.slice(0, -1).join(', ') + ' e ' + projeto.TRAVAS[projeto.TRAVAS.length - 1];
+process.stdout.write('Para desligar ' + nomes + ', ponha o nome em "travas" no .claude/sworn/projeto.json, como ' +
+  '"travas": { "escopo": false }. As outras travas que se desligam dizem como na ultima linha do aviso delas.\n');
 if (temOrdens) process.stdout.write('As ordens (dadas, cumpridas, recusadas) saem na auditoria automatica.\n');
 process.exit(0);

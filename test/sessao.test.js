@@ -88,17 +88,26 @@ test('sessao.js: entrada que nao e JSON -> saida 0, curta mesmo assim e o erro d
 // A7-19 (D735): o `erro` diz o que houve, o efeito e o passo; a mensagem do Node vai entre aspas, marcada como dele.
 test('A7-19: entrada torta e medida que falha dizem o que houve, o efeito e o passo', () => {
   cenario(function (c) {
-    const passo = ' a medida saiu sem os dados da sessao. Mande na entrada do script um objeto JSON com os campos ' +
-      'uso e sessao (a lista inteira esta no topo de scripts/sessao.js) e rode de novo.';
+    // A7-53: o passo em frases curtas, com maiuscula depois do ponto
+    const passo = ' A medida saiu sem os dados da sessao. Mande na entrada um objeto JSON com os campos uso e sessao ' +
+      'e rode de novo (a lista completa esta no topo de scripts/sessao.js).';
     // P2 da R1 (s242): a mensagem e a do JSON.parse deste Node, inteira (o ".+" aceitava qualquer texto; sem barra nem
     // quebra de linha nela, o JSON.stringify e o entreAspas dao o mesmo), e a entrada vazia cai no mesmo ramo
     const doNode = (bruto) => { try { JSON.parse(bruto); } catch (e) { return e.message; } };
     for (const bruto of ['isto nao e json', '']) {
-      const esperado = 'A entrada nao e JSON valido (o Node diz: ' + JSON.stringify(doNode(bruto)) + ');' + passo;
+      const esperado = 'A entrada nao e JSON valido (o Node diz: ' + JSON.stringify(doNode(bruto)) + ').' + passo;
       assert.strictEqual(rodar(c, bruto).erro, esperado);
     }
-    assert.strictEqual(rodar(c, '5').erro, 'A entrada e JSON, mas nao um objeto (veio 5);' + passo);
-    assert.strictEqual(rodar(c, 'null').erro, 'A entrada e JSON, mas nao um objeto (veio null);' + passo);
+    assert.strictEqual(rodar(c, '5').erro, 'A entrada e JSON, mas nao um objeto (veio 5).' + passo);
+    assert.strictEqual(rodar(c, 'null').erro, 'A entrada e JSON, mas nao um objeto (veio null).' + passo);
+    // A7-70: lista e JSON e typeof [] e 'object', mas nao e o objeto que o mod manda
+    const lista = rodar(c, '[1,2]');
+    assert.strictEqual(lista.erro, 'A entrada e JSON, mas nao um objeto (veio [1,2]).' + passo);
+    assert.strictEqual(typeof lista.curta, 'string');
+    // A7-52: o corte em 80 e por caractere; o emoji que cai na borda sai inteiro, sem meio par substituto
+    const emoji = 'a'.repeat(78) + '😀' + 'b'.repeat(10);
+    assert.strictEqual(rodar(c, JSON.stringify(emoji)).erro,
+      'A entrada e JSON, mas nao um objeto (veio "' + 'a'.repeat(78) + '😀).' + passo);
     // a medida que lanca (o daSessao do botoes.js trocado, pelo -r, por um que lanca): a causa entre aspas e o passo
     const lanca = path.join(c.base, 'lanca.js');
     fs.writeFileSync(lanca, 'require(' + JSON.stringify(path.join(__dirname, '..', 'scripts', 'lib', 'botoes.js')) +
@@ -107,8 +116,11 @@ test('A7-19: entrada torta e medida que falha dizem o que houve, o efeito e o pa
       env: Object.assign({}, process.env, { SWORN_TMP: c.base, CLAUDE_CONFIG_DIR: path.join(c.base, 'config') }),
       encoding: 'utf8' });
     assert.strictEqual(r.status, 0, r.stderr);
+    // A7-54: o estado da sessao e o projeto.json tortos sao ignorados (estado.ler, config.lerJson), entao o passo
+    // aponta o proprio sworn ou o disco, e onde registrar se repetir
     assert.strictEqual(JSON.parse(r.stdout).erro, 'A medida falhou (o Node diz: "quebrou de proposito") e saiu ' +
-      'vazia. Corrija a causa que o Node aponta e rode de novo.');
+      'vazia. Arquivo torto do projeto ou da sessao nao derruba a medida, entao a causa vem do proprio sworn ou do ' +
+      'disco: rode de novo e, se repetir, registre a mensagem em https://github.com/wendellmcs/sworn/issues.');
   });
 });
 
@@ -214,5 +226,7 @@ test('sessao.js: cruzou acende o botao do handoff, em primeiro', () => {
     const r = rodar(c, { uso: USO, amostras: [], sessao: 'sess-h' });
     assert.strictEqual(r.cruzou, true);
     assert.strictEqual(r.botoes[0].nome, 'handoff', JSON.stringify(r.botoes));
+    // A7-49: o botao diz o sinal que disparou, com o nome que o /sworn-session mostra
+    assert.match(r.botoes[0].texto, /\(revisões independentes fechadas\): /, r.botoes[0].texto);
   });
 });

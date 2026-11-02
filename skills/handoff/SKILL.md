@@ -24,8 +24,8 @@ is still running. Run:
 
 If it lists an agent, stop here: tell the user it is time to open a new chat, that the handoff comes when the last
 listed agent finishes, and that nothing is needed from them meanwhile; do not stop any of them and do not launch new
-ones. Each agent's completion notice arrives in this chat on its own; when the notice of the last listed one has
-arrived, run this skill again. The script counts an agent as running until its record says it finished, unless it was
+ones. Each agent's completion notice arrives in this chat on its own; when the last listed agent's notice arrives,
+run this skill again. The script counts an agent as running until its record says it finished, unless it was
 stopped or has written nothing for 30 minutes.
 
 Then run, and paste the output:

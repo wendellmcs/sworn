@@ -80,7 +80,7 @@ if (!gravar) {
 if (fs.existsSync(alvo)) {
   process.stdout.write('ERRO: ' + alvo + ' ja existe. Nao sobrescrevo o AGENTS.md deste projeto.\n');
   process.stdout.write('Ele pode ser trabalho de meses. Se for para substituir, isso e decisao do\n');
-  process.stdout.write('dono: ele renomeia o atual antes de rodar de novo.\n');
+  process.stdout.write('dono, que renomeia o atual antes de rodar de novo.\n');
   process.exit(1);
 }
 

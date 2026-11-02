@@ -297,6 +297,22 @@ test('A6-21: --gravar com projeto.json que nao e objeto diz a forma e o passo', 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// A6-86 (D735): limiares fora da forma diz a forma com exemplo, no molde do A6-21, sem "objeto".
+test('A6-86: --gravar com limiares fora da forma diz a forma e o passo', () => {
+  const dir = pasta();
+  const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
+  fs.mkdirSync(path.dirname(arq), { recursive: true });
+  try {
+    for (const torto of [[300000], [], null, 'x', 5]) {
+      fs.writeFileSync(arq, JSON.stringify({ shell: 'bash', limiares: torto }));
+      const r = rodar(['--gravar', '300000'], dir);
+      assert.strictEqual(r.status, 1, JSON.stringify(torto) + ': ' + r.stdout + r.stderr);
+      assert.strictEqual(JSON.parse(r.stdout).erro, 'limiares em .claude/sworn/projeto.json tem de ter os limites ' +
+        'entre { e }, como "limiares": { "tokensDeContexto": 300000 }; corrija e rode de novo', JSON.stringify(torto));
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // Plano 083 (sobra 5, D538): o limiarAtual do relatorio e o que vale hoje, como o medidor (saude.medir): o gravado no
 // projeto.json; senao o do modo continuo, quando ligado; senao o padrao do plugin. A origem vem em limiarAtualDe.
 test('083 T6 (sobra 5): limiarAtual e o em vigor - gravado, modo continuo ou padrao - com a origem', () => {

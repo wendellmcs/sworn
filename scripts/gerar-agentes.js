@@ -159,7 +159,7 @@ process.stdout.write('\nGRAVADOS: ' + gravados + '  PULADOS: ' + pulados + '  RE
   (naoGravados > 0 ? '  NAO GRAVADOS: ' + naoGravados : '') + '\n');
 if (pulados > 0) {
   process.stdout.write('Agente que ja existia nao foi tocado - o arquivo e trabalho de alguem.\n');
-  process.stdout.write('Substituir e decisao do dono: ele apaga ou renomeia antes de rodar de novo.\n');
+  process.stdout.write('Substituir e decisao do dono, que apaga ou renomeia antes de rodar de novo.\n');
 }
 if (naoGravados > 0) {
   process.stdout.write('O que nao foi gravado traz a causa na linha NAO GRAVADO: conserte a pasta e rode de novo;\n');
