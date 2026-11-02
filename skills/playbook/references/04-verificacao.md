@@ -30,8 +30,9 @@ covers what counts as proof, and how not to be fooled by your own instrument.
   does. CDP, on its own port and waiting on a condition, not on time, takes the screenshot that was
   asked for.
 
-**One line of output is enough.** A short answer is not an answer without proof: a one-line block
-satisfies the gate, and it is cheaper to paste the proof than to fix later a claim that lacked it.
+**In the close-out, the line that proves is enough;** a failure goes whole, as in section 1. A short answer is not
+an answer without proof: a one-line block satisfies the gate, and it is cheaper to paste the proof than to fix later a
+claim that lacked it.
 
 ---
 

@@ -2016,12 +2016,15 @@ test('V: com "vigia": true a abertura mostra o radar da semana uma vez, depois d
   try {
     escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ vigia: true }));
     escrever(pastaVigia, 'novidades.md', 'semana: 2026-10-05\n\n- Novidade\n');
-    escrever(pastaVigia, 'radar/novidades.md', 'semana: 2026-10-19\n\n## Candidatos\n\n' +
+    // s253 (D743): a semana fixa 2026-10-19 envelheceu (14 dias, DIAS_VELHO) e a r2 ganhou o aviso "radar sem ficha
+    // nova"; a ficha e de 2 dias atras, sempre dentro do prazo
+    const semana = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    escrever(pastaVigia, 'radar/novidades.md', 'semana: ' + semana + '\n\n## Candidatos\n\n' +
       '| Repo | Licença | Como entra | Como melhora | Esforço | Valor | Veredito |\n|---|---|---|---|---|---|---|\n' +
       '| a/b | MIT | no fecho | barra | P | alto | adotar |\n');
     const r1 = abrirVigia(dir, 'r1', pastaVigia);
     assert.strictEqual(r1.status, 0, r1.stderr);
-    const i = r1.stdout.indexOf('sworn: radar - ficha da semana de 2026-10-19: 1 candidato, 1 para adotar.');
+    const i = r1.stdout.indexOf('sworn: radar - ficha da semana de ' + semana + ': 1 candidato, 1 para adotar.');
     assert.ok(i !== -1, r1.stdout);
     assert.ok(r1.stdout.indexOf('novidade da semana de 2026-10-05') < i, 'o radar veio antes do vigia');
     const r2 = abrirVigia(dir, 'r2', pastaVigia);

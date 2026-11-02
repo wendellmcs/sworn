@@ -9,7 +9,7 @@
     { "padrao": "(^|\\s)tail(\\s|$)", "achado": "tail", "sugestao": "Get-Content arq -Tail N", "motivo": "tail doesn't exist in PowerShell" },
     { "padrao": "<<\\s*'?[A-Za-z_]+'?", "achado": "heredoc", "sugestao": "here-string @'...'@ with the closing at column 0", "motivo": "PowerShell has no shell heredoc" },
     { "padrao": "mkdir\\s+-p", "achado": "mkdir -p", "sugestao": "New-Item -ItemType Directory -Force caminho", "motivo": "-p is not a PowerShell flag" },
-    { "padrao": "\\brm\\s+-[a-zA-Z]*r", "achado": "rm -r", "sugestao": "Remove-Item -Recurse -Force", "motivo": "bash recursive rm" },
+    { "padrao": "\\brm\\s+-[a-zA-Z]*r", "achado": "rm -r", "sugestao": "Remove-Item -Recurse -Force", "motivo": "in PowerShell rm is Remove-Item, which takes no bash flags like -rf" },
     { "padrao": "\\bexport\\s+[A-Z_]+=", "achado": "export VAR=", "sugestao": "$env:VAR = 'valor'", "motivo": "export doesn't exist in PowerShell" }
   ],
   "regrasPowerShell51": [

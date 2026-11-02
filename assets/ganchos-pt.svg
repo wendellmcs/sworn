@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="728" viewBox="0 0 720 728" role="img" aria-labelledby="titulo desc">
   <title id="titulo">Onde o sworn se pendura numa sessão</title>
-  <desc id="desc">Oito eventos de gancho, da abertura da sessão ao fim, cada um com os scripts que rodam ali. SessionStart, abertura.js: voltam as suas regras, o escopo e cinco blocos. UserPromptSubmit, abrir-turno.js: a volta cara a um chat grande parado é barrada uma vez, com a conta, e a correção vira proposta de regra. PreToolUse em Write e Edit, portao-escopo.js: escopo, intocáveis, arquivo de outra sessão, buscar antes, catraca, manual e tokens de design. PreToolUse em Bash e PowerShell, portao-destrutivo.js, portao-estilo.js e portao-commit.js: comando destrutivo, sintaxe de shell, cd solto, estilo por shell e commit sem revisão. PreToolUse em Task e Agent, portao-agente.js e portao-apelido.js: agente caro em trabalho leve, e o apelido do modelo, que só avisa. PreToolUse em AskUserQuestion, portao-decisao.js: exatamente 3 opções, a recomendada primeiro. PostToolUse, SubagentStart e SubagentStop, marcar-trabalho.js, abrir-subagente.js, gravar-veredito.js e escalar.js: contam trabalho, buscas, decisões e commits, levam o bloco menos código aos subagentes, gravam os vereditos da revisão e guardam o pedido do agente da escada que pede o degrau de cima. Stop, portao-fecho.js: prova, subitem aberto, prompt do handoff, revisão e referência, escalada sem despacho, e a hora de trocar de chat. SessionEnd, fim-sessao.js: apaga arquivos de sessão parados há mais de 7 dias. O ponto âmbar cheio marca os momentos que podem negar ou devolver o turno; o anel cinza, os que só injetam, contam ou limpam.</desc>
+  <desc id="desc">Oito eventos de gancho, da abertura da sessão ao fim, cada um com os scripts que rodam ali. SessionStart, abertura.js: voltam as suas regras e o escopo, com os blocos de paralelismo, menos paradas, qualidade de resposta e menos código. UserPromptSubmit, abrir-turno.js: a volta cara a um chat parado pausa uma vez, com a conta, e a mensagem seguinte passa; a correção vira proposta de regra. PreToolUse em Write e Edit, portao-escopo.js: escopo, intocáveis, arquivo de outra sessão, buscar antes, catraca, manual e tokens de design. PreToolUse em Bash e PowerShell, portao-destrutivo.js, portao-estilo.js e portao-commit.js: comando destrutivo, sintaxe de shell, cd solto, estilo por shell e commit sem revisão. PreToolUse em Task e Agent, portao-agente.js e portao-apelido.js: agente caro em trabalho leve, e o apelido do modelo, que só avisa. PreToolUse em AskUserQuestion, portao-decisao.js: exatamente 3 opções, a recomendada primeiro. PostToolUse, SubagentStart e SubagentStop, marcar-trabalho.js, abrir-subagente.js, gravar-veredito.js e escalar.js: contam trabalho, buscas, decisões e commits, levam o bloco menos código aos subagentes, gravam os vereditos da revisão e guardam o pedido do agente da escada que pede o degrau de cima. Stop, portao-fecho.js: prova, subitem aberto, prompt do handoff, revisão e referência, escalada sem despacho, e a hora de trocar de chat. SessionEnd, fim-sessao.js: apaga arquivos de sessão parados há mais de 7 dias. O ponto âmbar cheio marca os momentos que podem negar ou devolver o turno; o anel cinza, os que só injetam, contam ou limpam.</desc>
   <style>
     .fundo { fill: #FBFAF6; }
     .borda { fill: none; stroke: #E5E1D6; }
@@ -31,17 +31,17 @@
     <circle class="sem" cx="48" cy="103" r="6"/><circle class="fundo" cx="48" cy="103" r="3"/>
     <text class="forte" x="68" y="108" font-size="14" font-weight="600">SessionStart</text>
     <text class="fraco" x="68" y="126" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">abertura.js</text>
-    <text class="forte" x="68" y="145" font-size="13">Abre, retoma ou compacta: voltam as suas regras, o escopo e cinco blocos.</text>
+    <text class="forte" x="68" y="145" font-size="13">Abre ou compacta: regras, escopo, paralelismo, menos paradas, qualidade de resposta, menos código.</text>
 
     <circle class="com" cx="48" cy="167" r="6"/>
     <text class="forte" x="68" y="172" font-size="14" font-weight="600">UserPromptSubmit</text>
     <text class="fraco" x="68" y="190" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">abrir-turno.js</text>
-    <text class="forte" x="68" y="209" font-size="13">Sua mensagem: a volta a chat grande parado é barrada uma vez; correção vira proposta.</text>
+    <text class="forte" x="68" y="209" font-size="13">Chat parado: a volta cara pausa uma vez com a conta; reenvie e segue. Correção: proposta de regra.</text>
 
     <circle class="com" cx="48" cy="231" r="6"/>
     <text class="forte" x="68" y="236" font-size="14" font-weight="600">PreToolUse · Write, Edit</text>
     <text class="fraco" x="68" y="254" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-escopo.js</text>
-    <text class="forte" x="68" y="273" font-size="13">Escopo, intocáveis, arquivo de outra sessão, buscar antes, catraca, manual, tokens.</text>
+    <text class="forte" x="68" y="273" font-size="13">Escopo, intocáveis, arquivo de outra sessão, buscar antes, catraca, manual, tokens de design.</text>
 
     <circle class="com" cx="48" cy="295" r="6"/>
     <text class="forte" x="68" y="300" font-size="14" font-weight="600">PreToolUse · Bash, PowerShell</text>

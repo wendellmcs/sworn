@@ -6,8 +6,8 @@ argument-hint: "[the correction, in one sentence]"
 
 # `/sworn:learn` — proposal, never automatic writing
 
-The plugin **does not learn on its own.** Nobody on the market has that, and promising it is a promise that is not
-kept. What it does is turn a correction into a proposal, and wait for the OK.
+The plugin **does not learn on its own**, and promising that would be a promise that is not kept. What it does is turn
+a correction into a proposal, and wait for the OK.
 
 The reason for the gate, said plainly: **I often misread a correction.** A misunderstood correction written without approval
 becomes permanent law that guides me every day — and the agent itself would end up writing the file that governs it.
@@ -22,6 +22,8 @@ answer to a question, ignore the offer: go on without running the skill, and not
 
 ## Step 1 — separate what was corrected from what I understood
 
+Called without the correction, ask the user for it in one sentence, and start here with their answer.
+
 Write both things, side by side, for the user to check:
 
 - **What you said:** <their sentence, verbatim>
@@ -30,6 +32,9 @@ Write both things, side by side, for the user to check:
 If the two do not match, they correct it now and not a month from now.
 
 ## Step 2 — turn it into `gatilho → ação`
+
+`gatilho` is the trigger and `ação` the action, the script's Portuguese names for the two halves (`--gatilho`,
+`--acao`); its answers are in Portuguese too (`RECUSADA` is "refused", `GRAVADA` is "written").
 
 A loose prohibition decays with long context; a trigger is summoned by the action itself.
 
@@ -80,6 +85,6 @@ Use `AskUserQuestion`, with the recommended one first and marked:
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/propor-regra.js" --gatilho '…' --acao '…' --gravar
 
-Paste the output, which carries the total number of rules. If the total did not go up by 1, the
+Paste the output, which carries the total number of rules, now and before. If the total did not go up by 1, the
 line was not read as a rule: open `.claude/sworn/regras.md` and check the text. **If the number of rules goes over ~40, warn the user:**
 a large rules file dilutes attention and speeds up exactly the disease it came to cure.

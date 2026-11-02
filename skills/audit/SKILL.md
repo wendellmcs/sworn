@@ -74,7 +74,8 @@ failure is what prevents a one-minute network drop from silencing the check for 
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/catalogo.js" --registrar ok '<fonte>'
 
-After the outcome come the sources you read, each in single quotes. **By the command, never
+After the outcome come the sources you read, each in single quotes. The script stores each source as given,
+without checking it: an apostrophe inside it is written `'\''` in bash and `''` in PowerShell. **By the command, never
 by `Write`:** with `projeto.json` on disk, the scope gate (the lock, called "trava 4" in
 the messages, which only lets you write what the task's declared scope covers) denies the `Write` to
 `.claude/sworn/catalogo.json` without a declared scope.
@@ -173,7 +174,7 @@ serves which role, and how much they are willing to pay. With the facts in hand,
 6. **Scar.** For each instruction item: is there a decision, incident or finding behind it?
    A rule without a scar is opinion, and opinion doesn't survive disagreement.
 
-       node "${CLAUDE_PLUGIN_ROOT}/scripts/cicatriz.js" --manual <pasta do manual> --corpus <pasta do histórico>
+       node "${CLAUDE_PLUGIN_ROOT}/scripts/cicatriz.js" --manual "<pasta do manual>" --corpus "<pasta do histórico>"
 
    **The history is an argument, always.** Without it the report declares itself blind, and it is right to
    declare itself: calling everything "without a scar" for having nowhere to look would be the same silence
@@ -197,7 +198,7 @@ reason. A cold or duplicate memory goes to an `_arquivo/` folder next to it, by 
 Claude Code has no hook that runs when a plugin is installed, so the scan runs on the downloaded folder, before
 installing it, with no AI and at no cost:
 
-    node "${CLAUDE_PLUGIN_ROOT}/scripts/auditar.js" --seguranca <folder>
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/auditar.js" --seguranca "<folder>"
 
 It returns, in JSON, every place that deserves a read, with `arquivo:linha` and the excerpt, by category: `rede`
 (network calls), `eval` (code built at run time), `processo` (child processes), `credencial` (keys, tokens, credential

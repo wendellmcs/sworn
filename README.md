@@ -220,8 +220,9 @@ command that is due.
 `/sworn:review` labels both sides A and B with no authorship and sends one inspector per lens (a single
 angle of reading, such as correctness, edge cases or text): **ten** for code, **eight** for screens. Each
 inspector starts from reject. A round is one pass of all the inspectors; a dry round is one that finds no
-new serious defect. Two dry rounds in a row approve, and the cap is 3 rounds. A small change goes to fewer inspectors (one up to 3 lines). A second agent judges whether two
-findings are the same defect, and the tally is a script. On screens, the lenses check every state, the minimum
+new serious defect. Two dry rounds in a row approve, and the cap is 3 rounds. A small change goes to fewer
+inspectors: up to 3 changed lines get a single inspector. A second agent judges whether two findings are
+the same defect, and the tally is a script. On screens, the lenses check every state, the minimum
 reading contrast (level AA of WCAG, the web accessibility standard), a clickable area of at least 24 × 24 px per
 button, and INP (the time from a click to the screen's response).
 

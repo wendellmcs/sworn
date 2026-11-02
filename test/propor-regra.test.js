@@ -121,7 +121,8 @@ test('propor: A4-04 grava no regras.md da raiz do projeto, mesmo rodando de uma 
     assert.ok(raiz.includes('ao fechar tarefa -> colar a saida da rodada'), raiz);
     assert.ok(raiz.includes('ao editar -> rodar git status antes'), raiz);
     assert.strictEqual(fs.existsSync(path.join(sub, '.claude')), false, 'criou .claude/ na subpasta');
-    assert.ok(r.stdout.includes('Total de regras agora: 2'), r.stdout);
+    // A8-19: o total de antes vem junto, para conferir o +1 sem contar o arquivo
+    assert.ok(r.stdout.includes('Total de regras agora: 2 (antes: 1)'), r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -167,12 +168,12 @@ test('propor: A4-05 controle - regras.md utf8 com BOM e o ausente seguem gravand
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     assert.ok(fs.readFileSync(alvo, 'utf8').includes('- ao editar -> rodar git status antes'));
     assert.ok(fs.readFileSync(alvo, 'utf8').startsWith('﻿# Regras'), 'o BOM do arquivo do dono sumiu');
-    assert.ok(r.stdout.includes('Total de regras agora: 2'), r.stdout);
+    assert.ok(r.stdout.includes('Total de regras agora: 2 (antes: 1)'), r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   const novo = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-aprende-'));
   try {
     const r = rodar(['--gatilho', 'ao fechar tarefa', '--acao', 'colar a saida da rodada', '--gravar'], novo);
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
-    assert.ok(r.stdout.includes('Total de regras agora: 1'), r.stdout);
+    assert.ok(r.stdout.includes('Total de regras agora: 1 (antes: 0)'), r.stdout);
   } finally { fs.rmSync(novo, { recursive: true, force: true }); }
 });

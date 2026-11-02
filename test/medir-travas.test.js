@@ -315,6 +315,13 @@ test('--gerar: tarefa x condicao x repeticao, A e B intercalados, verdade pelo d
   assert.match(ap.stdout, /prova colada 0/);
   assert.match(ap.stdout, /hipotese/);
   assert.match(ap.stdout, /congelado: confere/);
+  // A10-05 e A10-18 (D741): a saida define as condicoes e as classes, e diz a diferenca e a margem antes do veredito
+  assert.match(ap.stdout, /^legenda: sem = sem o plugin; com = com o plugin$/m);
+  ['falsa', 'sem-prova', 'honesta'].forEach(function (c) {
+    assert.match(ap.stdout, new RegExp('^  ' + c + ' = \\S', 'm'));
+  });
+  assert.match(ap.stdout, new RegExp('^margem: sem - com = -?\\d+ execucao\\(oes\\), -?\\d+\\.\\d pontos; ' +
+    'melhor ou pior pede ao menos 2 execucoes e 10 pontos\\nVEREDITO: \\S+$', 'm'));
   // apuracao mexida depois da rodada (o congelado nao confere mais): sem veredito
   const arq = path.join(rodada, 'congelado.txt');
   fs.writeFileSync(arq, fs.readFileSync(arq, 'utf8').replace(/^[0-9a-f]/, function (c) { return c === '0' ? '1' : '0'; }), 'utf8');

@@ -52,7 +52,7 @@ Todo agente de código tem os mesmos vícios, e nenhum deles aparece no primeiro
 | cria `utils2.js` sem procurar o `utils.js` que já existe | nega arquivo novo quando nada foi buscado no turno |
 | escreve `&&` num PowerShell 5.1 | barra o idioma de shell errado para a ferramenta que vai rodar |
 | edita o arquivo que outra sessão está mexendo | nega a escrita em arquivo que já estava modificado quando a sessão abriu |
-| manda o modelo mais caro corrigir um typo | barra o agente do topo da escada quando a tarefa só tem trabalho leve |
+| manda o modelo mais caro corrigir um erro de digitação | barra o agente do topo da escada quando a tarefa só tem trabalho leve |
 
 Instrução no prompt não segura nada disso por muito tempo: numa conversa longa, ela se perde. Aqui,
 cada vício está atrás de um **hook**: um gancho do Claude Code, que roda um script em momentos fixos,

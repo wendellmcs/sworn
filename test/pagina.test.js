@@ -14,6 +14,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { MANUAL } = require('../scripts/lib/ordens.js');
+const { causaDoErro } = require('../scripts/lib/texto.js');
 
 const RAIZ = path.join(__dirname, '..');
 const ler = (rel) => fs.readFileSync(path.join(RAIZ, rel), 'utf8').replace(/\r\n/g, '\n');
@@ -38,7 +39,8 @@ function frenteDaSkill(dir, nome) {
   try {
     texto = fs.readFileSync(path.join(dir, nome, 'SKILL.md'), 'utf8');
   } catch (e) {
-    assert.fail('skills/' + nome + '/ sem SKILL.md legivel (' + e.code + '): crie o SKILL.md ou apague a pasta');
+    assert.fail('skills/' + nome + '/ sem SKILL.md legivel (' + causaDoErro(e) + '): ' + (e.code === 'ENOENT'
+      ? 'crie o SKILL.md ou apague a pasta' : 'confira a permissao e se o SKILL.md e um arquivo'));
   }
   return texto.replace(/\r\n/g, '\n').split('\n---\n')[0];
 }
@@ -84,7 +86,12 @@ test('pagina: pasta de skill sem SKILL.md reprova com o nome da pasta, nao com E
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn pagina-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.mkdirSync(path.join(dir, 'sem-arquivo'));
-  assert.throws(() => comandosDoDisco(dir), (e) => e.code !== 'ENOENT' && /skills\/sem-arquivo\//.test(e.message));
+  assert.throws(() => comandosDoDisco(dir), (e) => e.code !== 'ENOENT' && /skills\/sem-arquivo\//.test(e.message) &&
+    /crie o SKILL\.md ou apague a pasta/.test(e.message));
+  // Fila do pedido 12 (A10): o SKILL.md que existe e nao se le (aqui uma pasta) diz a causa e nao manda cria-lo.
+  fs.mkdirSync(path.join(dir, 'sem-arquivo', 'SKILL.md'));
+  assert.throws(() => comandosDoDisco(dir), (e) => /skills\/sem-arquivo\/.*e uma pasta \(EISDIR\)/.test(e.message) &&
+    !/crie o SKILL\.md/.test(e.message));
 });
 
 /** As duas condicoes e o veredito, lidos do medicao/resultado.txt. */

@@ -16,6 +16,9 @@ the `path → gear` map (`{{campo:marchas}}`), it wins, and always wins upward.
 git status --short
 ```
 
+Outside a git repository the command fails: say so in the answer, because this check did not run. A long list is
+not pasted whole: give the count and the files that your task touches.
+
 Every file already modified and not committed **belongs to another front of work** until proven
 otherwise. It is not an abandoned draft, and it is not an invitation.
 
@@ -42,8 +45,13 @@ Decision log, changelog, findings record: **read the last number on disk before 
 never in the handoff nor in memory.
 
 ```
-grep -n "^[0-9]\+\. " <arquivo> | tail -3
+grep -n "^[0-9]\+\. " <file> | tail -3
 ```
+
+That pattern is for a numbered list (`1. `); match it to how the document numbers its entries (a heading such as
+`### Decision 42` takes `grep -n "^### Decision [0-9]" <file> | tail -3`). Empty output means the pattern
+missed, or that the document is new and has no entry yet: open the end of the file and read the last number there,
+if there is one, before writing.
 
 A handoff is a photo of the past; with a concurrent session, it lies about the present — and two sessions
 that read the same handoff write **the same number** for different decisions. If the collision has already

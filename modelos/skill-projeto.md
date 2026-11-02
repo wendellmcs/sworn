@@ -111,8 +111,8 @@ even after context compaction.
 | Design | Raw value outside the declared tokens |
 
 Blind review: `/sworn:review`. Chat switch: `/sworn:handoff`. New rule:
-`/sworn:learn`. Firing count: `node "<plugin>/scripts/uso.js"`, with `<plugin>` = the folder of the
-installed plugin (`uso.js` lives in the plugin, not in this project).
+`/sworn:learn`. How many times each gate fired in this project: `node "<plugin>/scripts/uso.js"`, with
+`<plugin>` = the folder of the installed plugin (`uso.js` lives in the plugin, not in this project).
 
 ## 11. What this project does NOT promise
 

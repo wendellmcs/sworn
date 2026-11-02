@@ -45,7 +45,7 @@ Then set the effort by the gear — the effort only; the model does not change b
 
 - Fast → call the skill `sworn:effort-low`;
 - AAA → call the skill `sworn:effort-high`;
-- Standard → no level skill: the session effort.
+- Standard → no level skill: the session effort (one exception, when the gear goes up from Fast: below).
 
 The effort of a level skill lasts only until the end of the turn that called it: the next turn, even in the same chat,
 is back at the session effort (measured by sworn on Claude Code 2.1.311). So, in a Fast or AAA task, call the skill of

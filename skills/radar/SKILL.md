@@ -50,7 +50,8 @@ for the maintainer**.
    in the order of the page (`dono/repo`, total stars, stars this week), and note the time of the
    reading. Count how many came.
 2. Page that doesn't open, returns an error or comes empty: write "não consegui ler: trending — <reason>" and
-   stop the search; never "nothing new" for a source that failed.
+   stop the search; never "nothing new" for a source that failed. Then tell the maintainer the next step: run the
+   radar again later, or pass their own list of repositories, which is read with the same rules.
 
 **User mode**: the step is the search by theme.
 
@@ -119,8 +120,9 @@ Don't stop to wait: write the questions you would ask in "O que ficou sem saber"
 
 In user mode, the card goes to `.claude/sworn/radar/<AAAA-MM-DD>.md` (today's date; the week's, in maintainer mode), and
 each deepened one gets a line in `.claude/sworn/radar/estudados.md` — a line is never erased.
-With `projeto.json` on disk, the scope gate (lock 4) may deny these Writes: first, put `.claude/sworn/radar/**`
-in the "Dentro" of `.claude/sworn/escopo.md` (or of the front's file),
+With `projeto.json` on disk, the scope gate (the lock, called "trava 4" in the messages, which only lets you write
+what the task's declared scope covers) may deny these Writes: first, put `.claude/sworn/radar/**`
+in the "Dentro" list (what is inside the scope) of `.claude/sworn/escopo.md` (or of the front's file),
 with the reason. If the scope edit is also denied, or the owner doesn't authorize, show the card in the
 chat and don't write by any other path.
 
@@ -178,7 +180,8 @@ Once the card is written (or, in maintainer mode, the one that arrived), check:
     node "${CLAUDE_PLUGIN_ROOT}/scripts/referencia.js" .claude/sworn/radar/<AAAA-MM-DD>.md --tipo radar
 
 The script only reads, in any folder: with `"ok": false`, fix what `problemas` points to and run
-again; after two fixes without `ok`, tell the owner where the card is and what is left. The radar's card
+again; after two fixes without `ok`, stop and tell the owner, in plain words, the card's path, each problem that is
+left (from `problemas`) and that the card did not pass the check. The radar's card
 does not go into `referencias` — the script refuses `--gravar` with `--tipo radar`: what you
 choose goes in through Step 6.
 

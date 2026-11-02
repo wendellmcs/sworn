@@ -47,7 +47,7 @@ Todo agente de código pega os mesmos vícios, e nenhum deles aparece no primeir
 | cria `utils2.js` sem procurar o `utils.js` que já existe | nega arquivo novo quando nada foi buscado no turno |
 | escreve `&&` no PowerShell 5.1 do Windows | barra a sintaxe de shell errada para a ferramenta que vai rodar |
 | edita o arquivo que outra sessão está mexendo | nega a escrita em arquivo que já estava modificado quando a sessão abriu |
-| manda o modelo mais caro corrigir um typo | barra o agente do topo da escada quando a tarefa só tem trabalho leve |
+| manda o modelo mais caro corrigir um erro de digitação | barra o agente do topo da escada quando a tarefa só tem trabalho leve |
 | commita código que ninguém revisou | nega o commit até o código mudado ter revisão cega aprovada |
 | pede a sua decisão no meio de uma muralha de texto | nega a pergunta que não tem exatamente 3 opções, a recomendada primeiro |
 | perde o fio quando o chat fica longo | diz quando trocar de chat, por gatilho contado, e entrega o prompt pronto |
@@ -150,7 +150,7 @@ um `true`/`false` em `.claude/sworn/projeto.json`.
 | Referência de topo | Com referência declarada para o tipo do arquivo, a entrega `aaa` pede revisão contra ela, nas duas ordens. | Julgado contra o melhor do mesmo tipo, não contra o gosto. | `portaoReferencia` |
 | Manual antes | Nega editar arquivo `aaa` antes de o manual de execução ser carregado na sessão. | Rigor que nunca foi carregado nunca é aplicado. | `portaoManual` |
 | Três opções | Nega a pergunta a você sem exatamente 3 opções e a recomendada primeiro; a pergunta de fato passa com `(fato)` no título curto. | Escolha escondida numa muralha de texto é escolha que você não fez. | `portaoDecisao` |
-| Prompt do handoff | Devolve o turno que gravou um arquivo de handoff quando a resposta final não tem bloco de código. | O prompt do próximo chat tem de chegar a você, não só a um arquivo. | `portaoHandoff` |
+| Prompt do handoff | Devolve o turno que gravou um arquivo de handoff (a passagem do trabalho para um chat novo) quando a resposta final não tem bloco de código. | O prompt do próximo chat (o texto que você cola para abri-lo) tem de chegar a você, não só a um arquivo. | `portaoHandoff` |
 | Apelido do modelo | Avisa uma vez por sessão quando o `model:` de um agente (o campo do modelo no arquivo do agente) difere do apelido gravado no projeto (o nome curto do modelo, como `sonnet` ou `opus`), ou o `effort:` dele (o campo do esforço) difere do esforço que a escada grava para ele. Não barra: o agente principal oferece a você 3 opções, acertar o arquivo do agente pelo projeto, acertar o projeto pelo arquivo, ou deixar para depois. | Troca de modelo calada muda custo e qualidade. | não há; fica calado sem apelidos gravados |
 | Estilo por shell | Com design system declarado, nega o arquivo de estilo escrito por comando de shell. | A conferência de tokens mora no `Write` e no `Edit`; a escrita por shell a pularia. | não ter `design.json` |
 | Tokens de design | Com `.claude/sworn/design.json`, nega o arquivo de estilo com cor ou medida em `px`, `rem` ou `em` que o sistema não tem. | Um design system morre um valor fixo de cada vez. | não ter `design.json` |
@@ -220,10 +220,10 @@ O `/sworn:review` rotula os dois lados como A e B, sem autoria, e manda um inspe
 de leitura só, como correção, borda ou texto): **dez** de código, **oito** de tela. Cada inspetor parte de
 reprovar. Uma ronda é uma passada de todos os inspetores; ronda seca é a que não acha defeito grave novo.
 Duas rondas secas seguidas aprovam, e o teto é de 3 rondas.
-Mudança pequena vai a menos inspetores (um, até 3 linhas). Um segundo agente julga se dois achados são o
-mesmo defeito, e a apuração é um script. Em tela, as lentes conferem cada estado, o contraste mínimo de
-leitura (o nível AA da WCAG, a norma de acessibilidade da web), a área clicável de pelo menos 24 × 24 px em cada
-botão e o INP (o tempo do clique até a tela responder).
+Mudança pequena vai a menos inspetores: com até 3 linhas mudadas, um inspetor só. Um segundo agente julga
+se dois achados são o mesmo defeito, e a apuração é um script. Em tela, as lentes conferem cada estado, o
+contraste mínimo de leitura (o nível AA da WCAG, a norma de acessibilidade da web), a área clicável de pelo
+menos 24 × 24 px em cada botão e o INP (o tempo do clique até a tela responder).
 
 ## Comandos
 
@@ -231,7 +231,7 @@ botão e o INP (o tempo do clique até a tela responder).
 | Comando | O que faz |
 |---|---|
 | `/sworn:init` | Varre o repositório, mostra o que inferiu, faz seis perguntas que varredura nenhuma responde e grava a configuração do projeto. |
-| `/sworn:review` | Revisão cega A/B de um arquivo mudado: um inspetor por lente, default reprovar, apuração por script, no máximo 3 rondas. |
+| `/sworn:review` | Revisão cega A/B de um arquivo mudado: um inspetor por lente, que parte de reprovar, apuração por script, no máximo 3 rondas. |
 | `/sworn:learn` | Transforma uma correção sua em regra proposta `gatilho -> ação`; só grava depois do seu OK explícito. |
 | `/sworn:handoff` | Escreve a continuação para um chat novo: caminhos, `HEAD`, etapa atual, decisões tomadas, pendências. |
 | `/sworn:audit` | Pesa as instruções do projeto contra um teto, aponta o que cortar e mostra o modelo e o esforço com que os subagentes rodaram de fato. |

@@ -21,7 +21,9 @@ Run from the project folder. The script looks for the transcripts in `projects/`
 config folder. If it does not find them, it exits with `erro` and asks for the path: the folder is the one that has this project's `.jsonl`
 files, inside `~/.claude/projects/` (or `projects/` in `CLAUDE_CONFIG_DIR`, if
 it is set), with the project's path in the name; tell the owner this, ask which it is and run
-again with `--pasta "<path>"`. If `erro` comes again, or an output that is not JSON, show it to the
+again with `--pasta "<path>"` (a path with a `"` in it goes in single quotes). A folder with no `.jsonl` does not
+give `erro`: it comes back with 0 sessions, so tell the owner it is probably the wrong folder and ask again. If `erro`
+comes again, or an output that is not JSON, show it to the
 owner, say that calibration does not run without this project's transcripts and that they can check the path
 and call `/sworn:calibrate` again; and stop. Do not read or open the `.jsonl` files yourself: they can be many megabytes.
 

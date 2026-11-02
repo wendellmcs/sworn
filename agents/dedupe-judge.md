@@ -40,3 +40,6 @@ decided by the script. So erring on the side of `nao-sei` costs little, and gues
   { "novo": "<key of the new side>", "outro": "<key of the other side>", "resposta": "sim | nao | nao-sei" }
 ]
 ```
+
+If the same pair comes twice, answer it once. Copy each key character for character: the script refuses a key that
+is not exactly one of the briefing's. Inside the JSON, a `"` in a key is written `\"` and a `\` is written `\\`.

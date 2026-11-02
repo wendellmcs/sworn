@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.19.0 — o registro numerado não repete número, e as figuras dizem de quem é a mensagem
+
+A última de três etapas da revisão completa do plugin passou, arquivo por arquivo, pela revisão cega: as skills, os
+agentes e os modelos, e os textos da raiz com as figuras. Os defeitos que ela achou foram consertados e revisados de
+novo. O manual não leva mais a repetir o número de um registro, as skills dizem o que fazer quando esperam ou quando
+algo falha, e as figuras e os READMEs dizem de quem é cada mensagem e o que ela pede.
+
+**Skills**
+
+- **O último número de um documento numerado não se perde mais.** A busca que o manual dava para achar o último
+  número só encontra lista `1. `; num registro numerado por cabeçalho (`### Decision 42`), ela não achava nada, o que
+  podia ser lido como "documento sem entrada" e levava a repetir um número. Agora o manual dá a busca para cabeçalho,
+  diz que a busca vazia quer dizer que ela não encontrou esse formato (ou que o documento ainda não tem entrada) e
+  manda abrir o fim do arquivo e ler o último número lá. A conferência do git que falha fora de um repositório é dita
+  na resposta como não rodada.
+- **A marcha Standard (o rigor do meio) não contradiz mais a própria exceção.** No manual, a linha dela dizia que o
+  esforço fica o da sessão, e o parágrafo logo abaixo manda chamar a `sworn:effort-high` quando a marcha sobe da Fast
+  (a mais leve); agora a linha aponta esse parágrafo.
+- **O `/sworn:learn` mostra o total de regras de antes ao lado do de agora**, para conferir o +1 sem ter contado o
+  arquivo antes de gravar. Chamado sem a correção, pede a correção numa frase, e explica os nomes em português que o
+  script usa (`gatilho`, `ação`, `RECUSADA`, `GRAVADA`).
+- **Caminho com espaço e aspas.** No `/sworn:audit`, as pastas dos comandos vêm entre aspas, e a skill diz como
+  escrever um apóstrofo dentro de uma fonte (no bash e no PowerShell). No `/sworn:calibrate`, a pasta sem conversas
+  volta com 0 sessões, não com erro: a skill diz que a pasta deve estar errada e pergunta de novo.
+- **Os passos de espera e de falha dizem o que fazer.** O handoff (a passagem do trabalho para um chat novo), quando
+  espera agentes de fundo, diz que o aviso de cada um chega neste chat e que nada se pede a quem usa até lá. O radar,
+  quando uma fonte falha, diz o passo seguinte; a trava de escopo vem explicada, e o cartão que não passou na
+  conferência depois de dois consertos para e é mostrado ao dono com o caminho e cada problema que sobrou. No fecho,
+  a falha vai inteira, não só a linha que prova.
+
+**Agentes e modelos**
+
+- **O juiz de achados repetidos copia a chave exata.** O agente diz que o mesmo par vindo duas vezes tem uma resposta
+  só, que a chave vai copiada letra por letra (o script recusa outra) e como escrever aspas e barra invertida dentro
+  do JSON.
+- **Os modelos explicam o que dizem.** No modelo de shell do Windows, a recusa do `rm -r` diz que no PowerShell o
+  `rm` é o `Remove-Item`, que não aceita as opções do bash; no modelo de skill do projeto, a linha do `uso.js` diz
+  que ele conta quantas vezes cada portão disparou neste projeto.
+
+**Textos da raiz e figuras**
+
+- **A apuração da medição explica os rótulos e a margem.** O `medir-travas.js` mostra a legenda de `sem`, `com`,
+  `falsa`, `sem-prova` e `honesta`, e, ao lado do veredito, a distância até a margem que o mudaria.
+- **As figuras dizem de quem é a mensagem e o que ela pede.** A imagem do topo do README e a de compartilhamento
+  ganharam uma legenda: é a mensagem literal do portão de fim de turno ao agente, que pede rodar o comando e colar a
+  saída, ou declarar o que não rodou. A figura dos ganchos em inglês dá o nome de cada bloco que volta ao abrir,
+  retomar ou compactar, e diz que a volta cara a um chat parado pausa uma vez, com o custo, e segue no reenvio. A
+  figura da medição em inglês diz que a saída do teste é colada na resposta final.
+- **Os READMEs dizem a regra da mudança pequena por inteiro** (até 3 linhas mudadas, um inspetor só), explicam, na
+  tabela dos portões, o que são o handoff e o prompt do próximo chat (o texto que se cola para abri-lo), e trocam
+  "typo" e "default" por português.
+
+**Testes**
+
+- **O teste do radar da semana não vence mais.** A ficha dele tinha data fixa; 14 dias depois dela, a abertura
+  passava a avisar que a ficha estava velha, como deve, e o teste reprovava no `npm test`. Agora a ficha do teste é
+  de dois dias antes do dia em que ele roda.
+
 ## 0.18.0 — a opção sem valor vira erro, e o que não se lê diz a causa
 
 A segunda de três etapas da revisão completa do plugin passou, arquivo por arquivo, pela revisão cega: o init, a
@@ -49,12 +107,12 @@ novo. A opção sem valor deixa de virar nome de pasta, o arquivo que não se l�
 - **Fonte de consulta fora do peso.** A chave opcional `fontesDeConsulta` do `projeto.json` marca as fontes canônicas
   que se consultam, mas não se carregam como instrução (um registro de decisões, por exemplo): elas saem do peso de
   instrução do `/sworn:audit`, que as mostra à parte.
-- A lista de atalhos (`/sworn:shortcuts`) separa as linhas do arquivo que termina cada linha só com CR (o retorno
-  de carro, sem o LF): antes, o arquivo inteiro era lido como uma linha só.
+- **A lista de atalhos (`/sworn:shortcuts`) olha todas as linhas** também no arquivo salvo com o fim de linha do Mac
+  antigo: antes, ela lia esse arquivo inteiro como uma linha só.
 
 **Textos**
 
-- Os avisos e as recusas dessas áreas dizem a causa, o efeito e o passo, sem jargão interno nem inglês solto. O aviso
+- Os avisos e as recusas dessas áreas dizem a causa, o efeito e o passo. O aviso
   de troca de chat diz o que chegou ao limite e qual é o limite; o aviso de volta diz o efeito em custo; o painel diz
   quando a medida parou e o que fazer, e a mensagem do clique que falhou não fala mais em primeira pessoa. A skill de
   init, escrita em inglês, se refere a quem usa com pronomes neutros (they/them), não mais com os masculinos

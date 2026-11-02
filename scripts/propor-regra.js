@@ -86,5 +86,7 @@ if (!conferencia.ok) {
 fs.mkdirSync(path.dirname(alvo), { recursive: true });
 fs.writeFileSync(alvo, novo, 'utf8');
 process.stdout.write('GRAVADA em ' + alvo + ':\n  - ' + bruta + '\n');
-process.stdout.write('Total de regras agora: ' + conferencia.total + '\n');
+// A8-19: o total de antes ao lado, para conferir o +1 sem ter contado o arquivo antes de gravar.
+const antes = regraLib.validarArquivo(texto).total;
+process.stdout.write('Total de regras agora: ' + conferencia.total + ' (antes: ' + antes + ')\n');
 process.exit(0);

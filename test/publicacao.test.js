@@ -843,6 +843,19 @@ test('D498: a Marcha AAA pede comparacao de print antes x depois e entrega o rot
   assert.ok(/5 real users/.test(m) && /does not block/.test(m), 'D498 n. 3: a Marcha AAA nao entrega o roteiro de 5 usuarios sem bloquear');
 });
 
+// A8 (s245, R1 borda :45): o grep do ultimo numero so casa lista `1. `; log com cabecalho (`### D738`) dava saida
+// vazia, lida como log vazio, e o numero repetido que a secao quer evitar. O exemplo nao usa codigo do registro
+// deste projeto (s246: o teste do codigo interno reprovou o `### D738` no texto).
+test('A8: o ultimo numero do documento numerado diz o padrao de cabecalho e o que a saida vazia quer dizer', () => {
+  const s = secao(ler('skills/playbook/references/01-marchas-e-gates.md'), '### Append-only', '**`git add` by name');
+  assert.ok(s.includes('"^### Decision [0-9]'),
+    'falta o exemplo do padrao para entrada numerada por cabecalho (### Decision 42)');
+  // A8-15: o documento novo, ainda sem entrada, tambem da saida vazia
+  assert.match(s, /[Ee]mpty output means the pattern missed, or that the document is new and has no entry yet/,
+    'falta dizer que a saida vazia e o padrao que nao casou ou o documento novo, ainda sem entrada');
+  assert.match(s, /open the end of the file/, 'falta o passo quando o padrao nao casa: abrir o fim do arquivo');
+});
+
 // D503 (plano d503, Tarefa 4): a regra 1 do prompt - a referencia de topo e nomeada antes de fazer e se abre -
 // mora na 4.1 do padrao, junto do artefatoDeReferencia, e aponta a chave e a revisao que a usam.
 test('D503: a 4.1 do padrao manda nomear antes a referencia de topo que se abre e aponta referencias e o revisar', () => {

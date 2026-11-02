@@ -329,7 +329,7 @@ believing you saw it.
    gate simply gives no opinion. **A single rung is not a ladder** and the validator refuses it: it is either
    two, or none.
 
-## Step 4b — where each thing is recorded
+## Step 4b — where each thing is recorded, and the top reference
 
 This is **not** the seventh question of Step 4: those write a field of `projeto.json`, and the answer
 here is not a field of it. The execution skill (`playbook`) looks for these three places in the `ondeRegistrar`
@@ -570,8 +570,8 @@ identify any project. It says `OK` for the wrong file, and the output you are go
 give the mistake away.
 
 **If `ERRO` comes out, fix it and run again.** Only move on with `OK` on screen, and **paste the output** in the response.
-Fix **what is yours** — missing key, wrong type, malformed date, or **I wrote to the wrong
-folder**: an `ENOENT` error means the file is not where the validator looked, and the cause
+Fix **what is yours** — missing key, wrong type, malformed date, or **a file written to the
+wrong folder**: an `ENOENT` error means the file is not where the validator looked, and the cause
 is almost always having written relative to the current folder instead of the root. **If the error comes from an answer of the
 owner** (an `intocaveis` with an absolute path, a pattern that neutralizes another), **do not rewrite
 their answer on your own**: show the error, explain in one line, and ask again. Two

@@ -83,15 +83,22 @@ test('skills de nivel: o manual chama cada uma pela marcha no Passo 0, e a Stand
     assert.ok(linha.includes(n.marcha), rel + ': `sworn:' + n.skill + '` tem de estar na linha da marcha ' + n.marcha);
   }
   assert.match(s, /Standard[^\n]*session effort/, rel + ': a marcha Standard fica no esforco da sessao, sem skill de nivel');
+  // D703 (fila do pedido 12): lida sozinha, a linha da Standard contradiz a regra de Fast para Standard; ela aponta a
+  // excecao de baixo.
+  assert.match(s, /Standard[^\n]*session effort[^\n]*\bFast\b/,
+    rel + ': a linha da Standard tem de apontar a excecao de quem vem da Fast (senao contradiz o paragrafo de baixo)');
   // D700 (a): a marcha que sobe no meio da tarefa (o mapa vence para cima) chama a skill da marcha nova.
   assert.match(s.replace(/\s+/g, ' '), /gear goes up[^.]*call the skill of the new gear/,
     rel + ': o Passo 0 tem de mandar chamar a skill da marcha nova quando a marcha sobe no meio da tarefa');
   // D702 (1): a Standard nao tem skill, e de Fast para Standard o esforco baixo pode ficar; a principal chama a alta.
-  assert.match(s.replace(/\s+/g, ' '), /Fast to Standard[^.]*`sworn:effort-high`/,
+  // D703: a regra pode ocupar mais de uma frase; o teste olha o paragrafo dela, nao so a primeira frase.
+  const par = s.split(/\n\s*\n/).map(function (p) { return p.replace(/\s+/g, ' '); })
+    .find(function (p) { return p.includes('Fast to Standard'); });
+  assert.ok(par && par.includes('`sworn:effort-high`'),
     rel + ': o Passo 0 tem de mandar chamar `sworn:effort-high` de Fast para Standard (senao o esforco baixo pode ficar)');
 });
 
-// D711 (T7, r5 7d74ba7e): o esforco da skill dura so o resto do turno que a chamou; o turno seguinte, no mesmo
+// D711 (T7): o esforco da skill dura so o resto do turno que a chamou; o turno seguinte, no mesmo
 // processo (o caminho do VS Code), volta ao da sessao. Chamada so no Passo 0, a tarefa AAA perde o esforco alto do
 // 2o turno em diante. Daqui: o manual a chama no comeco de cada turno, e nenhum texto promete mais que o turno.
 test('skills de nivel: o manual chama a skill no comeco de cada turno, e o texto diz que o esforco dura o turno', () => {
