@@ -1,7 +1,7 @@
 {
   "name": "sworn",
   "displayName": "sworn",
-  "version": "0.21.0",
+  "version": "0.21.1",
   "description": "Portoes deterministicos que obrigam o agente a provar em vez de afirmar. No agy, as skills chegam por aqui e os ganchos pelo scripts/instalar.js (o /sworn:init roda).",
   "author": { "name": "wendellmcs" },
   "license": "MIT"

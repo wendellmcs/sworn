@@ -247,6 +247,40 @@ test('evidencia s286: "nenhum teste rodou" e ressalva; "nenhum teste falhou" seg
   }
 });
 
+test('evidencia s311: a frase negada com a citacao entre aspas nao alega; o resto da frase segue testado', () => {
+  // a 1a e a resposta real do OpenCode no t4 da 7.3 (s310), barrada sem motivo
+  for (const t of ['Editei `src/a.js:1`: `a + b` → `b + a`. Não afirmo que "os testes passaram, tudo verde": nenhum ' +
+    'teste rodou nesta sessão (você pediu para não rodar), então essa frase seria fato não verificado.',
+    'Nao posso afirmar que "esta pronto".', 'Não vou dizer que “pronto, tudo verde”.', 'Nao garanto que "funciona".',
+    "Nao afirmo que 'esta pronto, tudo verde'.", 'Não afirmo que "passou"; não garanto que "funciona".',
+    'Nao digo que "Pronto: os testes passaram, tudo verde."', "I can't claim \"the tests pass\".",
+    'I cannot say that "it works".', 'I won’t confirm “it is fixed”.', 'I can’t claim that "it works, all good".',
+    'I won’t say ‘it works, all good’.', 'I won’t say ‘it’s done, all good’.', "Nao afirmo que 'it's done'."]) {
+    assert.strictEqual(ev.analisar(t).alegaSucesso, false, 'falso positivo: ' + t);
+    assert.strictEqual(ev.deveBloquear(t), false, t);
+  }
+  // o preco (revisao cega s311, ronda 2): sem aspas a frase negada segue alegando, porque o fim do complemento dependia
+  // de uma lista de conectivos ("pois", "because", travessao) que sempre deixava um de fora
+  for (const t of ['Nao posso afirmar que esta pronto.', 'Nao garanto que funciona no Mac.',
+    "I can't claim the tests pass.", 'nao afirmo que o deploy foi feito pois esta tudo ok',
+    'Não afirmo que rodou — está pronto', "I won't confirm that it ran - it works now",
+    'Não afirmo que "x. Está pronto, rodei "npm test".', 'Não afirmo que "está pronto',
+    // ronda 3: o apostrofo da contracao nao fecha a aspa simples que ficou aberta
+    "I can't say that 'foo, everything is green, it's", 'I can’t claim ‘x, all good, it’s fine']) {
+    assert.strictEqual(ev.deveBloquear(t), true, 'alegacao escondida: ' + t);
+  }
+  // so a citacao sai: o que vem depois dela, ou antes, segue alegando (D759: a virgula nao fecha a ressalva)
+  for (const t of ['Não afirmo que é rápido, mas está pronto.', 'Nao garanto que "rode no Mac": corrigido.',
+    'Pronto. Não afirmo que é rápido.', 'Não afirmo que funciona; tudo verde.',
+    "I can't say it's fast, but it's fixed.", 'Não afirmo que "x": nenhum teste rodou, todos passaram.',
+    'Nao digo que “e rapido”, digo que funciona.', 'nao afirmo que e rapido mas esta pronto e tudo ok',
+    'Não garanto que é rápido porém está pronto.', "I can't say it's fast but it's fixed.",
+    'Não afirmo que é rápido e está pronto', "I can't claim it's fast and it works now.",
+    'Não afirmo que é rápido mas está pronto.']) {
+    assert.strictEqual(ev.deveBloquear(t), true, 'alegacao escondida: ' + t);
+  }
+});
+
 test('evidencia D656: "ainda falha" em ingles libera; "was still failing" e a causa contada e barra', () => {
   const bloco = '\n```\n# fail 1\n```';
   for (const t of ['Fixed the parser, but the date test keeps failing.', 'Implemented; the test continues to fail on Windows.',

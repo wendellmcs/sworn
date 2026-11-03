@@ -21,6 +21,27 @@ const ALEGACOES = [
   /\b(?:is|are|it['’]s) ready(?=[ \t]*(?:[.,;:!?)\r\n]|$)|\s+(?:and|now|too|already)\b)/i
 ];
 
+// s311: a frase negada nao alega quando o que ela nega vem entre aspas ("nao afirmo que 'tudo verde'"): e mencao,
+// nao uso. Sai so a citacao, que nao atravessa fim de frase; o resto segue testado. Sem aspas a frase segue alegando,
+// do lado seguro: o fim do complemento sem aspas dependia de uma lista de conectivos que sempre deixava um de fora.
+// A aspa seguida de letra e apostrofo ("it's", "it’s"): fica dentro da citacao e nunca a fecha.
+const LETRA = '[A-Za-zÀ-ÿ]';
+function citacao(abre, fecha) {
+  return abre + '(?:[^' + fecha + '\\n.!?]|[.!?](?!\\s)|' + fecha + '(?=' + LETRA + '))*' + fecha + '(?!' + LETRA + ')';
+}
+const COMPLEMENTO = '\\s+(?:' + [citacao('"', '"'), citacao('“', '”'), citacao("'", "'"), citacao('‘', '’')].join('|') +
+  ')';
+const NEGADAS = [
+  new RegExp('\\bn[ãa]o (?:afirmo|digo|garanto|(?:posso|vou|consigo) (?:afirmar|dizer|garantir)) que' + COMPLEMENTO,
+    'gi'),
+  new RegExp('\\b(?:can(?:not|[\'’]t)|won[\'’]t|will not|do(?: not|n[\'’]t)) (?:claim|say|confirm|guarantee)' +
+    '(?: that)?' + COMPLEMENTO, 'gi')
+];
+
+function semNegadas(prosa) {
+  return NEGADAS.reduce(function (t, r) { return t.replace(r, ' '); }, prosa);
+}
+
 // s287 (D759): a ressalva nova so vale fechando a frase. Depois da virgula ou dos dois-pontos pode vir a alegacao
 // ("nenhum teste executado, todos passaram"), e o participio solto e adjetivo em "nenhum teste rodado reprovou".
 const FECHA_FRASE = '(?: (?:ainda|at[eé] agora|n?esta sess[aã]o))?[\\s)*"”\']*(?:[.!?\\n]|$)';
@@ -70,8 +91,9 @@ function semBlocos(texto) {
 function analisar(texto) {
   const bruto = comoTexto(texto);
   const prosa = semBlocos(bruto);
+  const alegavel = semNegadas(prosa);
   return {
-    alegaSucesso: ALEGACOES.some(function (r) { return r.test(prosa); }),
+    alegaSucesso: ALEGACOES.some(function (r) { return r.test(alegavel); }),
     temBloco: blocosDeSaida(bruto).length > 0,
     declaraNaoRodou: NAO_RODOU.some(function (r) { return r.test(prosa); })
   };

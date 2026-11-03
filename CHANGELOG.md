@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.21.1 — a ressalva honesta com a frase citada entre aspas deixa de ser barrada
+
+**Corrige**
+
+- **O portão de fecho barrava a resposta que recusa afirmar o sucesso.** "Não afirmo que \"os testes passaram, tudo
+  verde\": nenhum teste rodou" era lida como alegação de sucesso sem prova, por causa do "passaram" e do "verde"
+  dentro da frase recusada. Agora, depois de "não afirmo que", "não posso dizer que", "I can't claim" e afins, a frase
+  citada entre aspas não conta como alegação; o resto da resposta segue conferido. Sem aspas, a frase segue contando
+  como alegação, do lado seguro: reescreva com aspas para o portão liberar.
+
 ## 0.21.0 — o sworn fora do Claude Code: Codex, Qwen Code, agy, dsh e OpenCode
 
 **Novo**
