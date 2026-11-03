@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.21.0 — o sworn fora do Claude Code: Codex, Qwen Code, agy, dsh e OpenCode
+
+**Novo**
+
+- **O sworn roda em mais cinco harnesses** (o harness é o programa que roda o modelo e chama os ganchos): Codex,
+  Qwen Code, agy (Antigravity CLI), `dsh` (o da DeepSeek) e OpenCode. Os portões são os mesmos; uma ponte
+  (`scripts/ponte.js`) traduz a entrada e a saída de cada um. Nos cinco e no Claude Code com um modelo da DeepSeek,
+  os quatro testes passaram: as regras na abertura, a edição fora do escopo negada, o comando destrutivo
+  negado e o fecho "verde" sem prova barrado. Cada harness foi testado também com um segundo modelo de outra
+  família, e as peças além desses testes (a revisão cega, a pergunta em 3 opções, a catraca, que nega a edição que
+  baixa um piso como a cobertura mínima, e o portão do handoff) foram provadas ao vivo onde o harness deixa. No
+  OpenCode, o modelo GPT edita pelo `apply_patch`, e essa edição passa pelos mesmos portões. O que roda onde, as
+  versões e os modelos testados e o que fica só no Claude Code estão em [HARNESSES.md](HARNESSES.md).
+- **`instalar.js <harness>` liga os ganchos, e `--conferir` prova que eles rodaram.** O instalador grava os
+  ganchos onde o harness lê, os agentes do sworn na forma
+  de cada harness e as skills com o caminho real, e põe no `AGENTS.md` (ou `QWEN.md`) o aviso: sem as regras na
+  abertura, os ganchos estão desligados. O `--conferir` diz quais eventos já rodaram e o passo que falta, como a
+  aprovação no `/hooks` do Codex. O `/sworn:init` detecta o harness e não declara pronto sem o `--conferir` verde.
+- **O inspetor da revisão cega não edita nem roda comando fora do Claude Code.** No Codex, o arquivo do agente não
+  impõe só leitura: o inspetor rodava com a permissão da sessão. Agora o subagente do sworn só usa as ferramentas do
+  `tools:` do papel dele; o resto volta barrado com "ferramenta fora do papel". O leitor do `/sworn:parallel` segue
+  rodando comando, como no Claude Code.
+- **No agy e no `dsh`, o veredito da revisão cega é gravado sem cópia à mão.** O subagente devolve o resultado pelo
+  `send_message`, e o gancho grava o veredito do inspetor a partir dele. No agy, a resposta da pergunta em 3 opções
+  não vem no gancho: a ponte a lê da transcrição na chamada seguinte do modelo e a conta como decisão do dono (a
+  pergunta pulada conta zero).
+- **No Codex, cada agente do sworn roda com o esforço do papel.** O `effort:` do agente vai ao `.toml` como
+  `model_reasoning_effort`. Com um valor que o Codex não tem, o agente roda no esforço padrão do Codex, e o
+  instalador avisa quais valores servem para trocar no `agents/<papel>.md`.
+- **Portão que não roda deixa passar, e o terminal diz por quê.** Quando o tempo estoura, o sandbox (o isolamento
+  que o harness põe nos processos) nega o processo ou o plugin do OpenCode não fala com o servidor dele, o gancho
+  libera, como no Claude Code, e a saída de erro (stderr), no terminal onde o harness roda, diz qual portão ficou de
+  fora e por quê. No OpenCode, ela traz também o comando para conferir a instalação
+  (`node <sworn>/scripts/instalar.js --conferir opencode`); e, se o portão de fecho barra mas o modelo não recebe o
+  motivo, ela o mostra para você colar na conversa.
+
+**Corrige**
+
+- **O fecho que gravava o handoff passava sem o prompt do chat novo.** O handoff é o texto de passagem para o chat
+  seguinte; a resposta trazia só a prova da suíte em bloco de código, e o portão aceitava qualquer bloco. Agora ele
+  exige o último bloco do arquivo de handoff do turno na resposta.
+- **"Nenhum teste rodou" e "não foram executados" eram barrados como se alegassem sucesso.** A ressalva honesta
+  agora vale, só quando fecha a frase: em "nenhum teste executado, todos passaram" a alegação depois da vírgula
+  continua barrada.
+- **Fora do Claude Code, o `apply_patch` chamado de dentro do shell editava fora do escopo.** No Codex, o modelo que
+  não recebe a ferramenta `apply_patch` (os que não são da OpenAI) a chama dentro do comando de shell, e essa edição
+  não passava pelo portão de edição. Agora o patch dentro do comando (o texto `*** Begin Patch`) passa pelo mesmo
+  portão, arquivo por arquivo. As outras escritas pelo shell (`echo >`, `sed -i`) seguem fora, como no Claude Code.
+- **No Codex, a negação de um portão às vezes se perdia.** O Codex roda ao mesmo tempo os ganchos do mesmo evento.
+  No Windows, quando dois deles gravavam ao mesmo tempo o arquivo em que a ponte guarda o que vem de um gancho ao
+  outro, a gravação falhava depois de o portão negar, e a ação passava (2 em 30 rodadas de teste). Agora a negação
+  vale mesmo quando a gravação falha; o aviso dessa falha na saída de erro é só informação, e não pede nenhum passo.
+- **O `--conferir` do Codex ficava verde com gancho que o Codex não ia rodar.** Ele via se havia aprovação no
+  `/hooks`, não se ela era do gancho como está hoje, e o Codex não roda o gancho que mudou desde a aprovação. Agora o
+  `--conferir` só fica verde com todos os ganchos do sworn aprovados como estão e diz quantos foram aprovados de
+  quantos. Ao atualizar o sworn no Codex, rode o `--conferir`: se faltar aprovação, ele pede o `/hooks` de novo.
+- **No OpenCode, o "tudo verde" depois de editar pelo `apply_patch` passava sem prova nova.** O portão de fecho cobra
+  a prova rodada depois da última edição, mas não contava a edição pelo `apply_patch`. Agora cada arquivo do patch
+  conta como edição.
+
 ## 0.20.1 — o custo da troca de chat medido de novo, e avisos mais curtos e diretos
 
 **Corrige**

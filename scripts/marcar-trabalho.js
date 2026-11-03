@@ -101,7 +101,12 @@ io.blindar(function () {
           // D412: marca do TURNO (arquivosTocados e da sessao): o fecho cobra o prompt no chat.
           // Hoje so Write e Edit chegam aqui com file_path: e o matcher do hooks.json que garante
           // (o Read saiu acima, como so leitura). Ferramenta nova no matcher com file_path tambem marca.
-          if (saude.ehArquivoDeHandoff(arquivo)) s.gravouHandoff = true;
+          // s273: o caminho tambem, para o fecho exigir o bloco do prompt DESTE arquivo (outro bloco, como a prova da
+          // suite, passava por prompt).
+          if (saude.ehArquivoDeHandoff(arquivo)) {
+            s.gravouHandoff = true;
+            s.arquivoDoHandoff = require('node:path').resolve(typeof e.cwd === 'string' ? e.cwd : process.cwd(), arquivo);
+          }
         }
       }
       return s;

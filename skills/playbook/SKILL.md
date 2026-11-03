@@ -47,6 +47,9 @@ Then set the effort by the gear — the effort only; the model does not change b
 - AAA → call the skill `sworn:effort-high`;
 - Standard → no level skill: the session effort (one exception, when the gear goes up from Fast: below).
 
+Outside Claude Code (Codex, Qwen Code, agy, dsh, OpenCode) there are no level skills: the `effort:` of a skill exists only
+in Claude Code. Keep the session effort and say once that the gear's effort could not be set.
+
 The effort of a level skill lasts only until the end of the turn that called it: the next turn, even in the same chat,
 is back at the session effort (measured by sworn on Claude Code 2.1.311). So, in a Fast or AAA task, call the skill of
 the gear at the start of each turn of the task (each new message from the user while the task goes on), before any
@@ -379,11 +382,19 @@ opening of every session; to turn it off: `"paralelismo": false` in `projeto.jso
   `args` = list of tasks (`[{"tarefa": "...", "edita": false}]`). It applies the brake by itself: 8 per
   dispatch (it says which were left out), Haiku for those that only read, Sonnet for those that edit, isolation for
   those that edit, and returns each result with the evidence the agent pasted.
+- **Outside Claude Code there is no Workflow tool:** dispatch the harness's own subagents with the same brake (8 per
+  dispatch, the reader for those that only read): `spawn_agent` with `agent_type: "sworn-reader"` in Codex, `agent`
+  (Qwen Code; load it with `tool_search` first) or `task` (OpenCode) with `subagent_type: "sworn-reader"`; in agy and
+  dsh, the default agent with the reader's role written in the briefing. Without isolation, never two agents editing
+  the same files at the same time.
 
 ## 7. How to ask the owner for a decision
 
 Every decision that belongs to `{{campo:quemDecide}}`: **exactly 3 options (a, b, c)**, via
-`AskUserQuestion` when the harness offers it.
+`AskUserQuestion` when the harness offers it. Outside Claude Code the same gate checks the harness's own tool:
+`request_user_input` in Codex (only in Plan mode), `ask_user_question` in Qwen Code and dsh, `question` in OpenCode
+(with an interactive client, or `OPENCODE_ENABLE_QUESTION_TOOL=1`) and `ask_question` in agy, whose options are plain
+text: put "(Recommended)" in the first one. Without the tool, write the 3 options in text; the gate does not see them.
 
 - Recommended **first** and marked.
 - Each option says **what happens in practice** — consequence, not description.

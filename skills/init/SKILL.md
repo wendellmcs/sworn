@@ -792,6 +792,34 @@ update by hand" in the plugin guide (`GUIA.md`); **not now** — the next init a
 `LIGADA` is the proof. Do not write the key through `Write` or `Edit`: the command reads the file first,
 refuses what it doesn't understand without rewriting over it, and preserves the rest of the settings.
 
+## Step 7g — the gates in another harness
+
+In Claude Code the plugin's hooks are on as soon as it is installed: skip this step. In Codex, Qwen Code, agy,
+`dsh` or OpenCode the hooks only exist after the installer writes them, and **init does not call itself done
+without the proof**. Outside Claude Code `${CLAUDE_PLUGIN_ROOT}` arrives unreplaced: the plugin root is two
+folders above this `SKILL.md`.
+
+**1. Write the hooks, from inside the absolute root of Step 0**, naming the harness you are running in (`codex`,
+`qwen`, `agy`, `dsh` or `opencode`; if you are not sure, ask the user):
+
+    node "<plugin>/scripts/instalar.js" <harness>
+
+Paste the output. It writes only the harness's own hook file, a block in `AGENTS.md` (in Qwen Code, `QWEN.md`),
+the proof folder `.claude/sworn/ligado/<harness>/` and, in Codex, Qwen Code and OpenCode, the review and parallel
+agents as `sworn-<role>` (`.codex/agents/`, `.qwen/agents/`, `.opencode/agent/`, from `agents/*.md`; the effort skills
+stay in Claude Code); what it lists under `falta:` is a step only the user
+can take — in Codex, approving the hooks in `/hooks`; in `dsh`, adding the official hook bridge to the `sworn`
+profile and opening `dsh --profile sworn`.
+
+**2. Ask for those steps in one request**, plus a new session in this folder with any prompt.
+
+**3. Check:**
+
+    node "<plugin>/scripts/instalar.js" --conferir <harness>
+
+Exit 0 with `ligados` is the proof: paste that line. Without it, Step 8 says that **the gates are off in this
+harness** and lists the steps `--conferir` printed — never a table of locks that do not run.
+
 ## Step 8 — close by saying what was switched on
 
 **If you added lines to the `escopo.md` (or to the front file) of another task — in Step 0b of a

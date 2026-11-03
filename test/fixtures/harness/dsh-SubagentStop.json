@@ -1,0 +1,9 @@
+{
+  "session_id": "7da43653-5a5c-4d40-b214-a39d72eb3f67",
+  "transcript_path": "",
+  "hook_event_name": "SubagentStop",
+  "agent_id": "7da43653-5a5c-4d40-b214-a39d72eb3f67",
+  "agent_type": "general-purpose",
+  "stop_hook_active": false,
+  "cwd": "C:\\dev\\proj"
+}

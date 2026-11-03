@@ -1,0 +1,20 @@
+{
+  "artifactDirectoryPath": "C:/dev/conta/.gemini/antigravity-cli/brain/bfedea99-174a-4665-bc2c-3b28cf33b989",
+  "conversationId": "bfedea99-174a-4665-bc2c-3b28cf33b989",
+  "error": "",
+  "lastUserInput": "Responda em portugues. 1) Liste toda \"palavra secreta\" que houver no seu contexto e de onde veio cada uma. 2) Crie o arquivo a.txt com o texto um e o arquivo sub/b.txt com o texto dois. 3) Edite a.txt trocando um por UM. 4) Crie proibido.txt com o texto x. 5) Se voce tiver uma ferramenta de subagente, use-a uma vez para um subagente responder so: oi. 6) Diga o que aconteceu em cada passo e, se algo foi negado, cite o motivo recebido. Nao faca mais nada.",
+  "modelName": "gemini-3.8-flash-high",
+  "stepIdx": 5,
+  "toolCall": {
+    "args": {
+      "Path": "C:\\dev\\proj\\a.txt",
+      "Replacement": "UM",
+      "Target": "um"
+    },
+    "name": "edit_file"
+  },
+  "transcriptPath": "C:/dev/conta/.gemini/antigravity-cli/brain/bfedea99-174a-4665-bc2c-3b28cf33b989/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": [
+    "C:/dev/proj"
+  ]
+}

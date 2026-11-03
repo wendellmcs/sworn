@@ -1,0 +1,22 @@
+{
+  "hook_event_name": "tool.execute.after",
+  "tool_name": "apply_patch",
+  "input": {
+    "tool": "apply_patch",
+    "sessionID": "ses_e5db870ddffevzDjeMienA46E8",
+    "callID": "call_k3Rj9bW2sYq0vLm4nT8xZc1d",
+    "args": {
+      "patchText": "*** Begin Patch\n*** Update File: C:\\dev\\proj\\src\\b.js\n@@\n-module.exports = { nome: 'b' };\n+module.exports = { nome: 'c' };\n*** End Patch"
+    }
+  },
+  "output": {
+    "title": "Success. Updated the following files:\nM dev/proj/src/b.js",
+    "output": "Success. Updated the following files:\nM dev/proj/src/b.js",
+    "metadata": [
+      "diff",
+      "files",
+      "diagnostics",
+      "truncated"
+    ]
+  }
+}

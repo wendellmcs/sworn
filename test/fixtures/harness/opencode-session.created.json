@@ -1,0 +1,46 @@
+{
+  "hook_event_name": "session.created",
+  "properties": {
+    "sessionID": "ses_e622bb2f9ffergvg2M06lP1yIx",
+    "info": {
+      "id": "ses_e622bb2f9ffergvg2M06lP1yIx",
+      "slug": "lucky-cactus",
+      "version": "1.19.5",
+      "projectID": "global",
+      "directory": "C:\\dev\\proj",
+      "path": "dev/proj",
+      "title": "New session - 2026-11-02T19:54:58.694Z",
+      "permission": [
+        {
+          "permission": "question",
+          "pattern": "*",
+          "action": "deny"
+        },
+        {
+          "permission": "plan_enter",
+          "pattern": "*",
+          "action": "deny"
+        },
+        {
+          "permission": "plan_exit",
+          "pattern": "*",
+          "action": "deny"
+        }
+      ],
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "time": {
+        "created": 1793649298694,
+        "updated": 1793649298694
+      }
+    }
+  }
+}

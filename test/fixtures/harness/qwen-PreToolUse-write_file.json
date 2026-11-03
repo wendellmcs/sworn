@@ -1,0 +1,16 @@
+{
+  "session_id": "1e3214ef-41e7-495e-a058-eb7eba69fdac",
+  "transcript_path": "C:\\dev\\conta\\.qwen\\projects\\c--dev-proj\\chats\\1e3214ef-41e7-495e-a058-eb7eba69fdac.jsonl",
+  "cwd": "C:\\dev\\proj",
+  "hook_event_name": "PreToolUse",
+  "timestamp": "2026-11-02T19:16:12.633Z",
+  "permission_mode": "auto",
+  "prompt_id": "1e3214ef-41e7-495e-a058-eb7eba69fdac########0",
+  "tool_name": "write_file",
+  "tool_input": {
+    "file_path": "C:\\dev\\proj\\a.txt",
+    "content": "um\n"
+  },
+  "tool_use_id": "toolu_1793646972632_1htbxayae",
+  "tool_call_id": "call_00_DrDo6XWiEp7Rlyl6syEu1050"
+}

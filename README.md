@@ -98,6 +98,11 @@ gates 3 and 5 already work before it. Third-party marketplaces start with auto-u
 `/sworn:init` turns it on with your yes. Behind a corporate policy, SSH-only setups and manual updates
 are covered in the [guide](GUIA.md#como-instalar).
 
+**Other harnesses.** sworn also runs in Codex, Qwen Code, agy (Antigravity CLI), `dsh` and OpenCode: the gates are
+the same scripts, with a few limits per harness. In your project, `node "<plugin>/scripts/instalar.js" <harness>`
+writes the hooks there and `--conferir <harness>` proves they ran. What runs where, the limits, the versions tested
+and what stays Claude Code only are in [HARNESSES.md](HARNESSES.md) (in Portuguese).
+
 ## The arsenal
 
 Everything the plugin installs, by the problem it answers: what sworn does, and why it is there. The

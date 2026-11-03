@@ -85,6 +85,13 @@ debt, not excess; the ones that don't carry the trigger are listed by `/sworn:sh
 Read the lenses from the file, **not from memory**. Dispatch them all in the same burst, **one `sworn:inspector`
 subagent per lens**.
 
+Outside Claude Code the installer writes the inspector as `sworn-inspector` (and the judge as `sworn-dedupe-judge`):
+dispatch it with `spawn_agent` and `agent_type: "sworn-inspector"` in Codex (then `wait_agent` for the answers),
+with `agent` (Qwen Code; load it with `tool_search` first) or `task` (OpenCode) and `subagent_type: "sworn-inspector"`.
+agy and dsh have only the default agent: dispatch it with the briefing below preceded by the whole body of
+`agents/inspector.md` (the role). The subagent sends its JSON to the caller with `send_message`, and the hook writes it
+from there.
+
 Briefing of each one, exactly in this form:
 
 > Your lens is **<titulo>** (`<chave>`): <pergunta>.
@@ -111,7 +118,9 @@ the two files for `invertida.a` and `invertida.b` and the verdicts folder for `i
 orders counts (owner's decision, 2026-10-13). The two passes can go in the same burst. **The cost doubles**: each lens runs
 twice; tell the user that along with the number of agents.
 
-**The hook writes** (`scripts/gravar-veredito.js`, on the inspector's `SubagentStop` and on the subagent's handback): it
+**The hook writes** (`scripts/gravar-veredito.js`, on the inspector's `SubagentStop` and on the subagent's handback;
+outside Claude Code, through the bridge in all five; in agy and dsh only a `send_message` whose JSON has the
+`vereditos` field counts as the inspector's): it
 pulls the JSON out of the response and writes it to `<lente>.json` in the `vereditos` folder the inspector returned, checking that it is
 that of a round. It never blocks and never overwrites a file that already exists. Before Step 3, **check that there is
 one file per dispatched lens** in `vereditos/` (list the folder and count), and, with a reference, also in

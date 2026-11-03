@@ -102,8 +102,8 @@ const PONTOS = [
     chave: 'process_platform',
     classe: SO_NO_SISTEMA,
     titulo: 'Deducao do sistema e do idioma de shell',
-    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/lib/glob.js', 'scripts/lib/marcha.js', 'scripts/lib/plataforma.js',
-               'scripts/lib/projeto.js', 'scripts/lib/varredura.js', 'scripts/medir-qualidade.js'],
+    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/lib/glob.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
+               'scripts/lib/plataforma.js', 'scripts/lib/projeto.js', 'scripts/lib/varredura.js', 'scripts/medir-qualidade.js'],
     comoSeProva: 'rodando a suite naquele sistema: quem responde e o proprio Node',
     ressalva: 'a CONSEQUENCIA da deducao e injetavel e esta exercitada - ver tabela_de_plataforma ' +
               'e barra_invertida. O que nao se prova aqui e a deducao em si.'
@@ -130,9 +130,9 @@ const PONTOS = [
     chave: 'pasta_pessoal',
     classe: INJETAVEL,
     titulo: 'Onde o claude grava a transcricao da sessao',
-    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/lib/calibracao.js', 'scripts/lib/gasto.js',
-               'scripts/lib/injetado.js', 'scripts/lib/migracao.js', 'scripts/lib/vigia-local.js',
-               'scripts/medir-qualidade.js'],
+    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/instalar.js', 'scripts/lib/calibracao.js',
+               'scripts/lib/gasto.js', 'scripts/lib/injetado.js', 'scripts/lib/migracao.js',
+               'scripts/lib/vigia-local.js', 'scripts/medir-qualidade.js', 'scripts/ponte.js'],
     comoSeProva: 'a pasta pessoal entra por parametro, ou uma variavel a sobrepoe (CLAUDE_CONFIG_DIR, SWORN_VIGIA, ' +
                  'ou HOME e USERPROFILE, que o Node le para achar a pasta pessoal); o teste de cada modulo roda ' +
                  'por essa porta',
@@ -144,7 +144,8 @@ const PONTOS = [
     classe: SO_NO_SISTEMA,
     titulo: 'Chamada do git como processo, sem shell',
     arquivos: ['scripts/exportar.js', 'scripts/lib/git.js', 'scripts/lib/sanitacao.js',
-               'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/preparar-revisao.js', 'scripts/vigia-puxar.js'],
+               'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/ponte.js', 'scripts/preparar-revisao.js',
+               'scripts/vigia-puxar.js'],
     comoSeProva: 'rodando naquele sistema com git instalado',
     ressalva: 'com shell:false o Node nao consulta PATHEXT: um git empacotado como .cmd ou .bat ' +
               'nao seria achado no Windows. Aqui ele e .exe e e achado. Fora do Windows o ' +
@@ -164,7 +165,7 @@ const PONTOS = [
     classe: INJETAVEL,
     titulo: 'Caminho do Windows normalizado para barra normal',
     arquivos: [
-      'scripts/apurar-ronda.js', 'scripts/lib/busca.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
+      'scripts/apurar-ronda.js', 'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
       'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
       'scripts/lib/projeto.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',
       'scripts/preparar-revisao.js'

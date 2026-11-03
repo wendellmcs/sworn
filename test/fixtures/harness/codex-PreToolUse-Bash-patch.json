@@ -1,0 +1,14 @@
+{
+  "session_id": "01a1a263-c7c7-78a1-8339-395414f03cc6",
+  "turn_id": "01a1a263-cb10-7d42-9a5e-3c1f0e8a2b47",
+  "transcript_path": "C:\\dev\\conta\\.codex\\sessions\\2026\\11\\03\\rollout-2026-11-03T14-10-10-01a1a263-c7c7-78a1-8339-395414f03cc6.jsonl",
+  "cwd": "C:\\dev\\proj",
+  "hook_event_name": "PreToolUse",
+  "model": "minimax/minimax-m3.1-flash",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "$exe = \"C:\\dev\\conta\\AppData\\Local\\OpenAI\\Codex\\bin\\9691020b546a15b2\\codex.exe\"\n$p = \"*** Begin Patch`n*** Update File: src/b.js`n@@`n-module.exports = { nome: 'b' };`n+module.exports = { nome: 'c' };`n*** End Patch\"\n& $exe --codex-run-as-apply-patch $p"
+  },
+  "tool_use_id": "exec-5c1e9a70-2d4b-4f3a-9e61-8b0f2c7d4a19"
+}

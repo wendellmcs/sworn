@@ -1,0 +1,22 @@
+{
+  "hook_event_name": "tool.execute.after",
+  "tool_name": "read",
+  "input": {
+    "tool": "read",
+    "sessionID": "ses_e622bb2f9ffergvg2M06lP1yIx",
+    "callID": "call_00_cyybL4FYzntPOGesoq3f3259",
+    "args": {
+      "filePath": "C:\\dev\\proj\\a.txt"
+    }
+  },
+  "output": {
+    "title": "dev\\proj\\a.txt",
+    "output": "<path>C:\\dev\\proj\\a.txt</path>\n<type>file</type>\n<content>\n1: um\n\n(End of file - total 1 lines)\n</content>",
+    "metadata": [
+      "preview",
+      "truncated",
+      "loaded",
+      "display"
+    ]
+  }
+}

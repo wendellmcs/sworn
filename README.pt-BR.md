@@ -98,6 +98,12 @@ projeto; as travas 3 e 5 já funcionam antes dele. Marketplace de terceiros come
 automática **desligada**: o `/sworn:init` a liga com o seu sim. Empresa com política gerenciada, máquina
 sem chave SSH e atualização à mão estão no [guia](GUIA.md#como-instalar).
 
+**Outros harnesses.** O sworn roda também no Codex, no Qwen Code, no agy (Antigravity CLI), no `dsh` e no OpenCode:
+os portões são os mesmos scripts, com alguns limites por harness. No seu projeto,
+`node "<plugin>/scripts/instalar.js" <harness>` grava os ganchos lá e `--conferir <harness>` prova que eles rodaram. O
+que roda onde, os limites, as versões testadas e o que fica só no Claude Code estão em
+[HARNESSES.md](HARNESSES.md).
+
 ## O arsenal
 
 Tudo o que o plugin instala, pelo problema que resolve: o que o sworn faz, e por que está ali. O guia

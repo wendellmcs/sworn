@@ -1,0 +1,17 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000270",
+  "transcript_path": "C:\\dev\\conta\\.claude\\projects\\c--dev-proj\\00000000-0000-4000-8000-000000000270.jsonl",
+  "cwd": "C:\\dev\\proj",
+  "prompt_id": "6dcaadf7-10fc-4896-8bd1-c85eaba9ab3b",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "C:\\dev\\proj\\a.txt",
+    "content": "um"
+  },
+  "tool_use_id": "call_00_LB4hBZOTvo9cMf5Ln3Xe3955"
+}

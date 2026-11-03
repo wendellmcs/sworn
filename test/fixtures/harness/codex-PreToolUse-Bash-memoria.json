@@ -1,0 +1,14 @@
+{
+  "session_id": "01a19db0-a48c-7b80-a2ca-619e3c5ec026",
+  "turn_id": "01a19db0-a551-7883-9d3d-5b6eed8579d4",
+  "transcript_path": null,
+  "cwd": "C:\\dev\\conta\\.codex\\memories",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.6-terra",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "Get-ChildItem -Force | Select-Object Mode,Length,LastWriteTime,Name; if (Test-Path phase2_workspace_diff.md) { Get-Content -Raw phase2_workspace_diff.md }"
+  },
+  "tool_use_id": "exec-5b4bcfc1-ced8-4450-829f-37ae63b93b92"
+}

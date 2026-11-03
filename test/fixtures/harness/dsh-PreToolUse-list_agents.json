@@ -1,0 +1,9 @@
+{
+  "session_id": "session-0cfa604e-25cc-41ed-a8d4-5ed31a4d59df",
+  "transcript_path": "",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "list_agents",
+  "tool_input": {},
+  "tool_use_id": "call_00_Nrk02TYUXtBhBLq1FfAI8441",
+  "cwd": "C:\\dev\\proj"
+}

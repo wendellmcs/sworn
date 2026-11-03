@@ -1,0 +1,69 @@
+{
+  "hook_event_name": "experimental.chat.system.transform",
+  "tool_name": "",
+  "input": {
+    "sessionID": "ses_e622bb2f9ffergvg2M06lP1yIx",
+    "model": {
+      "id": "deepseek-flash",
+      "providerID": "deepseek",
+      "name": "DeepSeek V4.1 Flash 1017",
+      "family": "deepseek-flash",
+      "api": {
+        "id": "deepseek-flash",
+        "url": "https://api.deepseek.com",
+        "npm": "@ai-sdk/openai-compatible"
+      },
+      "status": "active",
+      "headers": {},
+      "options": {},
+      "cost": {
+        "input": 0.15,
+        "output": 0.6,
+        "cache": {
+          "read": 0.003,
+          "write": 0
+        }
+      },
+      "limit": {
+        "context": 1048576,
+        "output": 393216
+      },
+      "capabilities": {
+        "temperature": true,
+        "reasoning": true,
+        "attachment": true,
+        "toolcall": true,
+        "input": {
+          "text": true,
+          "audio": false,
+          "image": true,
+          "video": false,
+          "pdf": false
+        },
+        "output": {
+          "text": true,
+          "audio": false,
+          "image": false,
+          "video": false,
+          "pdf": false
+        },
+        "interleaved": {
+          "field": "reasoning_content"
+        }
+      },
+      "release_date": "2026-10-17",
+      "variants": {
+        "low": {
+          "reasoningEffort": "low"
+        },
+        "high": {
+          "reasoningEffort": "high"
+        },
+        "max": {
+          "reasoningEffort": "max"
+        }
+      }
+    }
+  },
+  "n": 1
+}

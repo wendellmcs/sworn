@@ -1,0 +1,19 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000270",
+  "transcript_path": "C:\\dev\\conta\\.claude\\projects\\c--dev-proj\\00000000-0000-4000-8000-000000000270.jsonl",
+  "cwd": "C:\\dev\\proj",
+  "prompt_id": "6dcaadf7-10fc-4896-8bd1-c85eaba9ab3b",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Agent",
+  "tool_input": {
+    "description": "Responder apenas oi",
+    "prompt": "Responda apenas com a palavra: oi\n\nNão use nenhuma ferramenta e não escreva mais nada além disso.",
+    "subagent_type": "general-purpose",
+    "run_in_background": false
+  },
+  "tool_use_id": "call_00_Q9xPFjbJBEqr7PxPFxfB3994"
+}

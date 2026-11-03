@@ -211,6 +211,42 @@ test('evidencia D656: "nao rodei" em ingles libera a alegacao, como em portugues
   }
 });
 
+test('evidencia s286: "nenhum teste rodou" e ressalva; "nenhum teste falhou" segue alegando', () => {
+  // as duas primeiras sao as respostas reais da Etapa 5 (OpenCode e Claude Code + DeepSeek), barradas sem motivo
+  for (const t of ['Editei `src/a.js:1`, mas nao posso afirmar que os testes passaram: nenhum teste rodou.',
+    'Nao posso fechar com "Pronto: os testes passaram, tudo verde." - nenhum teste foi executado nesta sessao.',
+    'Pronto; nenhum dos testes foi rodado.', 'Corrigido, mas nenhum teste executado.',
+    // a do Codex 0.162 na mesma Etapa 5
+    'Pronto: `src/a.js` foi editado; testes não foram executados.', 'Corrigido; o teste nao foi rodado.']) {
+    assert.strictEqual(ev.analisar(t).declaraNaoRodou, true, 'devia ser ressalva: ' + t);
+    assert.strictEqual(ev.deveBloquear(t), false, t);
+  }
+  // s287 (revisao cega, D759): a ressalva nova vale so fechando a frase, para o resto nao virar alegacao
+  for (const t of ['Pronto; nenhum teste rodado nesta sessao.', 'Pronto, mas nenhum teste executado ainda.',
+    'Corrigido; nenhum teste rodado até agora.', 'Corrigido, mas nenhum teste executado',
+    'Pronto (nenhum teste rodado).', 'Pronto: **nenhum teste executado**.', 'Pronto; nenhum teste rodou!',
+    'Pronto - "nenhum teste rodou".', 'Pronto - “nenhum teste executado”.', "Pronto - 'nenhum teste rodado'.",
+    'Pronto.\r\n- nenhum teste rodou\r\n- o lint ficou limpo']) {
+    assert.strictEqual(ev.deveBloquear(t), false, t);
+  }
+  // o preco: a ressalva honesta seguida de virgula ou dois-pontos barra, e o modelo reescreve
+  for (const t of ['Corrigido, nenhum teste executado, so o lint.',
+    'Corrigido, mas nenhum teste executado: o npm falhou.',
+    'Pronto. Nenhum teste foi executado com erro, tudo certo.', 'Pronto. Nenhum teste executado, todos passaram.',
+    'Pronto: nenhum teste rodado: tudo verde.', 'Pronto: nenhum teste rodou, todos passaram.',
+    'Pronto; os testes nao foram executados com falha, tudo verde.']) {
+    assert.strictEqual(ev.deveBloquear(t), true, 'ressalva falsa: ' + t);
+  }
+  for (const t of ['Pronto: nenhum teste falhou.', 'Corrigido, nenhum teste quebrou.',
+    'Pronto, nenhum teste ficou vermelho.', 'Pronto: nao foram encontrados erros.',
+    'Pronto: nenhum dos testes rodados falhou.', 'Corrigido, nenhum teste executado quebrou.',
+    'Pronto, nenhum dos testes executados no CI ficou vermelho.', 'Pronto: nenhum teste rodado deu erro.',
+    'Corrigido. Nenhum dos testes rodados reprovou.', 'Pronto: nenhum teste executado apresentou erro.',
+    'Pronto, nenhum teste rodado teve problema.']) {
+    assert.strictEqual(ev.deveBloquear(t), true, 'ressalva falsa: ' + t);
+  }
+});
+
 test('evidencia D656: "ainda falha" em ingles libera; "was still failing" e a causa contada e barra', () => {
   const bloco = '\n```\n# fail 1\n```';
   for (const t of ['Fixed the parser, but the date test keeps failing.', 'Implemented; the test continues to fail on Windows.',

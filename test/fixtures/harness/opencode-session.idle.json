@@ -1,0 +1,6 @@
+{
+  "hook_event_name": "session.idle",
+  "properties": {
+    "sessionID": "ses_e622b8010ffeZfxvE2ZxrFkjSh"
+  }
+}

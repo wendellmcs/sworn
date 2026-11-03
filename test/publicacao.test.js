@@ -147,6 +147,14 @@ test('publicacao: a versao do package.json e a do manifesto', () => {
     'package.json e manifesto discordam da versao (a 0.2.0 saiu com o package.json em 0.1.0)');
 });
 
+// Pedido 6, Etapa 6: o Codex, o agy e o Qwen leem as skills pelos manifestos deles (s274); versao velha la e o
+// plugin novo anunciado como o antigo.
+test('publicacao: os manifestos dos outros harnesses tem a versao do manifesto', () => {
+  for (const rel of ['.codex-plugin/plugin.json', '.antigravity-plugin/plugin.json', 'qwen-extension.json']) {
+    assert.strictEqual(json(rel).version, PLUGIN.version, rel + ' e o manifesto discordam da versao');
+  }
+});
+
 /**
  * Spec, secao 3: "guarde o metodo, nunca o resultado". Numero de teste congelado
  * em prosa apodrece calado - o CHANGELOG ja carregou "419 testes" quando eram

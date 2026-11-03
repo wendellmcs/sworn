@@ -1,0 +1,16 @@
+{
+  "hook_event_name": "tool.execute.before",
+  "tool_name": "task",
+  "input": {
+    "tool": "task",
+    "sessionID": "ses_e622bb2f9ffergvg2M06lP1yIx",
+    "callID": "call_00_8w2uy2X3vXrswbTPGlFF8996"
+  },
+  "output": {
+    "args": {
+      "description": "Responder oi",
+      "prompt": "Responda somente: oi",
+      "subagent_type": "general"
+    }
+  }
+}

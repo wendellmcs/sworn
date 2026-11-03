@@ -76,6 +76,7 @@ io.blindar(function () {
         // grava um arquivo de handoff, e o portao-fecho.js cobra o bloco na resposta final. O turno
         // interrompido antes do Stop nao deixa a marca para o seguinte.
         delete s.gravouHandoff;
+        delete s.arquivoDoHandoff;
         // A1: no maximo 1 sugestao a cada 5 turnos. Todo prompt gasta 1 da espera; ao sugerir, ela volta a 4.
         // Campo da SESSAO (estado.CAMPOS_DA_SESSAO): o fecho o carrega, senao a janela morria a cada turno.
         // PA1-5: ausente = 0 (primeira vez, libera). Valor que nao e numero finito (texto, null, objeto, lista)

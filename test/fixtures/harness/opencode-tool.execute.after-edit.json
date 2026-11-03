@@ -1,0 +1,24 @@
+{
+  "hook_event_name": "tool.execute.after",
+  "tool_name": "edit",
+  "input": {
+    "tool": "edit",
+    "sessionID": "ses_e622bb2f9ffergvg2M06lP1yIx",
+    "callID": "call_00_Qdx2tDB9CzHgHxzhgQwq9832",
+    "args": {
+      "filePath": "C:\\dev\\proj\\a.txt",
+      "oldString": "um",
+      "newString": "UM"
+    }
+  },
+  "output": {
+    "title": "dev\\proj\\a.txt",
+    "output": "Edit applied successfully.",
+    "metadata": [
+      "diagnostics",
+      "diff",
+      "filediff",
+      "truncated"
+    ]
+  }
+}

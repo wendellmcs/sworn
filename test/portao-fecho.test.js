@@ -580,6 +580,26 @@ test('D412: handoff gravado e o prompt colado em bloco -> libera', () => {
   });
 });
 
+test('D412: com o prompt no arquivo do handoff, outro bloco (a prova da suite) nao basta; o prompt colado libera', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'h-outro');
+    const arq = path.join(dir, HANDOFF);
+    fs.mkdirSync(path.dirname(arq), { recursive: true });
+    fs.writeFileSync(arq, '# Handoff\n\n## 7. Prompt\n```\nRetomando a frente x,\ncom bloco ``` no meio da linha.\nPASSO 1\n```\n');
+    gravar(tmp, 'h-outro', dir, 'Write', HANDOFF);
+    const r = fecho(tmp, 'h-outro', dir, 'Pronto.\n```\ntests 10 | pass 10 | fail 0\n```');
+    assert.ok(r.json && r.json.decision === 'block', 'a prova da suite passou por prompt: ' + r.stdout);
+    // So o comeco do prompt (ate a cerca do meio da linha) nao e o prompt.
+    gravar(tmp, 'h-meio', dir, 'Write', HANDOFF);
+    const meio = fecho(tmp, 'h-meio', dir, 'Prompt:\n```\nRetomando a frente x, com bloco\n```');
+    assert.ok(meio.json && meio.json.decision === 'block', 'meio prompt passou: ' + meio.stdout);
+    gravar(tmp, 'h-outro2', dir, 'Write', HANDOFF);
+    const colado = 'Pronto.\n```\ntests 10 | pass 10 | fail 0\n```\nPrompt:\n```\nRetomando a frente x, com bloco ``` no meio ' +
+      'da linha.\nPASSO 1\n```';
+    assert.strictEqual(fecho(tmp, 'h-outro2', dir, colado).json, null);
+  });
+});
+
 test('D412: controles - arquivo que nao e handoff, ou Read do handoff, nao barram', () => {
   comTmp((tmp) => {
     const dir = projetoCom(tmp, 'h-nao');

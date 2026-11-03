@@ -1,0 +1,14 @@
+{
+  "session_id": "session-0cfa604e-25cc-41ed-a8d4-5ed31a4d59df",
+  "transcript_path": "",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "edit",
+  "tool_input": {
+    "file_path": "a.txt",
+    "old_string": "um",
+    "new_string": "UM"
+  },
+  "tool_use_id": "call_00_PSMjYWmRQV61BBjdxuR24510",
+  "tool_response": "The file C:\\dev\\proj\\a.txt has been updated successfully.",
+  "cwd": "C:\\dev\\proj"
+}

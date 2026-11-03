@@ -1,0 +1,23 @@
+{
+  "hook_event_name": "tool.execute.after",
+  "tool_name": "write",
+  "input": {
+    "tool": "write",
+    "sessionID": "ses_e622bb2f9ffergvg2M06lP1yIx",
+    "callID": "call_00_TEUaedG9oqnrwnJ87ST38956",
+    "args": {
+      "filePath": "C:\\dev\\proj\\a.txt",
+      "content": "um"
+    }
+  },
+  "output": {
+    "title": "dev\\proj\\a.txt",
+    "output": "Wrote file successfully.",
+    "metadata": [
+      "diagnostics",
+      "filepath",
+      "exists",
+      "truncated"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "session_id": "01a19db0-998d-7cb3-907c-1b479f121035",
+  "turn_id": "01a19db0-9fe0-77e2-bfab-9869423cdf84",
+  "transcript_path": "C:\\dev\\conta\\.codex\\sessions\\2026\\11\\02\\rollout-2026-11-02T16-16-00-01a19db0-998d-7cb3-907c-1b479f121035.jsonl",
+  "cwd": "C:\\dev\\proj",
+  "hook_event_name": "PostToolUse",
+  "model": "gpt-5.6-luna",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "Get-ChildItem -Force | Select-Object Name,Mode"
+  },
+  "tool_response": "\r\nName             Mode  \r\n----             ----  \r\n.codex           d-----\r\n.git             d-----\r\nerro.txt         -a----\r\nerro2.txt        -a----\r\ngancho-v1.js     -a----\r\ngancho.js        -a----\r\nlog.jsonl        -a----\r\nlog2.jsonl       -a----\r\nsaida.jsonl      -a----\r\nsaida2.jsonl     -a----\r\nstop-ja-bloqueou -a----\r\n\r\n\r\n",
+  "tool_use_id": "exec-abadab27-1441-4f6f-aeac-eedcfe3b0f23"
+}

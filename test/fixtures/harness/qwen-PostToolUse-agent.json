@@ -1,0 +1,52 @@
+{
+  "session_id": "1e3214ef-41e7-495e-a058-eb7eba69fdac",
+  "transcript_path": "C:\\dev\\conta\\.qwen\\projects\\c--dev-proj\\chats\\1e3214ef-41e7-495e-a058-eb7eba69fdac.jsonl",
+  "cwd": "C:\\dev\\proj",
+  "hook_event_name": "PostToolUse",
+  "timestamp": "2026-11-02T19:16:26.290Z",
+  "permission_mode": "auto",
+  "prompt_id": "1e3214ef-41e7-495e-a058-eb7eba69fdac########0",
+  "tool_name": "agent",
+  "tool_input": {
+    "description": "Responder oi",
+    "prompt": "Responda apenas: oi",
+    "subagent_type": "general-purpose",
+    "run_in_background": false
+  },
+  "tool_response": {
+    "llmContent": [
+      {
+        "text": "oi"
+      }
+    ],
+    "returnDisplay": {
+      "type": "task_execution",
+      "subagentName": "general-purpose",
+      "taskDescription": "Responder oi",
+      "taskPrompt": "Responda apenas: oi",
+      "executionMode": "foreground",
+      "subagentSessionReady": true,
+      "status": "completed",
+      "tokenCount": 1,
+      "terminateReason": "GOAL",
+      "result": "oi",
+      "executionSummary": {
+        "rounds": 1,
+        "totalDurationMs": 2374,
+        "totalToolCalls": 0,
+        "successfulToolCalls": 0,
+        "failedToolCalls": 0,
+        "successRate": 0,
+        "inputTokens": 24802,
+        "outputTokens": 1,
+        "thoughtTokens": 0,
+        "cachedTokens": 0,
+        "totalTokens": 24803,
+        "toolUsage": []
+      }
+    }
+  },
+  "tool_use_id": "toolu_1793646982317_n9qslp9r3",
+  "tool_call_id": "call_00_xeNFTHlhbt0AHufBjeHN2592",
+  "duration_ms": 2582
+}

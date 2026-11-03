@@ -21,12 +21,21 @@ const ALEGACOES = [
   /\b(?:is|are|it['’]s) ready(?=[ \t]*(?:[.,;:!?)\r\n]|$)|\s+(?:and|now|too|already)\b)/i
 ];
 
+// s287 (D759): a ressalva nova so vale fechando a frase. Depois da virgula ou dos dois-pontos pode vir a alegacao
+// ("nenhum teste executado, todos passaram"), e o participio solto e adjetivo em "nenhum teste rodado reprovou".
+const FECHA_FRASE = '(?: (?:ainda|at[eé] agora|n?esta sess[aã]o))?[\\s)*"”\']*(?:[.!?\\n]|$)';
+
 // Declaracao explicita do que NAO rodou. Vale como evidencia honesta.
 const NAO_RODOU = [
   /n[ãa]o rodei/i, /n[ãa]o executei/i, /n[ãa]o rod(ou|aram)/i, /n[ãa]o testei/i,
   /n[ãa]o foi testad/i, /n[ãa]o testad[oa]/i, /falta rodar/i, /falta testar/i,
   /declaro que n[ãa]o/i, /n[ãa]o consegui (rodar|executar|verificar|testar|reproduzir)/i,
   /n[ãa]o verifiqu/i, /not (run|tested|verified)/i,
+  // s286 (Etapa 5): "nenhum teste rodou" barrava a resposta honesta. So com o verbo de rodar: "nenhum teste
+  // falhou" alega.
+  new RegExp('\\bnenhum (?:dos )?testes? (?:rodou|rodaram|(?:foi |foram )?(?:rodad|executad)[oa]s?)' + FECHA_FRASE,
+    'i'),
+  new RegExp('n[ãa]o (?:foi|foram) (?:rodad|executad)[oa]s?' + FECHA_FRASE, 'i'),
   // D656: os equivalentes em ingles. "you need to run" e instrucao ao usuario, nao ressalva: so "still need".
   /\b(?:did|have|has|was|were)(?: not|n['’]t) (?:yet )?(?:been )?(?:run|ran|execut|test|verif)/i, /\buntested\b/i,
   /\b(?:could not|couldn['’]t|(?:was|were)(?: not|n['’]t) able to|unable to) (?:run|execute|verify|test|reproduce)/i,

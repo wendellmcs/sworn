@@ -220,7 +220,8 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   'escalada',
   // D721 (A1-06): o aviso do padrao invalido em comandosBloqueados sai 1 vez por sessao (portao-destrutivo.js).
   'avisouBloqueadoInvalido'];
-const CAMPOS_DO_TURNO = ['trabalhoReal', 'bloqueouNesteTurno', 'buscouNesteTurno', 'contadores', 'gravouHandoff'];
+const CAMPOS_DO_TURNO = ['trabalhoReal', 'bloqueouNesteTurno', 'buscouNesteTurno', 'contadores', 'gravouHandoff',
+  'arquivoDoHandoff'];
 
 /** Os campos da sessao que este estado tem, para o fecho carregar adiante. */
 function camposDaSessao(s) {
@@ -270,5 +271,5 @@ function descarregar(cwd, contadores) {
   return true;
 }
 
-module.exports = { caminhoSessao, caminhoTrava, ler, gravar, alterar, limpar, limparVelhos, IDADE_LIMPEZA_MS,
-  LIMITE_LIMPEZA_MS, CAMPOS_DA_SESSAO, CAMPOS_DO_TURNO, camposDaSessao, incrementar, descarregar };
+module.exports = { caminhoSessao, caminhoTrava, ler, gravar, gravarAtomico, alterar, limpar, limparVelhos,
+  IDADE_LIMPEZA_MS, LIMITE_LIMPEZA_MS, CAMPOS_DA_SESSAO, CAMPOS_DO_TURNO, camposDaSessao, incrementar, descarregar };

@@ -1,0 +1,12 @@
+{
+  "session_id": "session-0cfa604e-25cc-41ed-a8d4-5ed31a4d59df",
+  "transcript_path": "",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "subagent",
+  "tool_input": {
+    "description": "Responder oi",
+    "prompt": "Responda apenas com a palavra: oi. Não use ferramentas e não acrescente mais nada."
+  },
+  "tool_use_id": "call_00_iyPbtNb5LLeMk7jNNPuR7738",
+  "cwd": "C:\\dev\\proj"
+}

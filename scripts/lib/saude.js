@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { CALADOS, TOKENS_CONTEXTO } = require('./continuo.js');
 const { veioDeSubagente } = require('./texto.js');
+const transcricoes = require('./transcricoes.js');
+const { caudaDoTranscript } = transcricoes;
 
 // Gatilhos CONTAVEIS, do arquivo de regras do projeto. Basta UM; nao e preciso somar.
 // O que nao da para contar nao vira gatilho fingido: fica de fora. O tamanho do contexto conta desde a
@@ -23,14 +25,12 @@ const LIMIARES_PADRAO = {
   tokensAlarme: 450000
 };
 
-// D445: so a cauda do transcript (ele passa de MB numa sessao longa); o ultimo `usage` esta no fim.
-const CAUDA_DO_TRANSCRIPT = 256 * 1024;
-
 /**
  * D445: tamanho do contexto da linha principal = input + cache_read + cache_creation do ULTIMO `usage`
  * do transcript (a mesma conta da medicao da s73). Pula linha de subagente (isSidechain), a sintetica
  * (tudo zero) e linha torta. Sem leitura (sem caminho, arquivo ausente, nenhum usage na cauda): null.
  * O transcript e escrito de forma assincrona: a leitura pode vir um turno atrasada.
+ * Pedido 6: a transcricao de outro harness entra pelo leitor dela (lib/transcricoes.js).
  */
 function contextoDoTranscript(caminho) {
   const c = ultimaChamadaDoTranscript(caminho);
@@ -42,41 +42,8 @@ function contextoDoTranscript(caminho) {
  * `model` da ultima chamada. Horario ilegivel ou modelo ausente vem null; o contexto vem igual.
  */
 function ultimaChamadaDoTranscript(caminho) {
-  const texto = caudaDoTranscript(caminho);
-  if (texto === null) return null;
-  const linhas = texto.split('\n');
-  // a primeira linha da cauda pode vir cortada no meio: o JSON.parse a recusa e ela fica de fora
-  for (let i = linhas.length - 1; i >= 0; i--) {
-    if (!linhas[i]) continue;
-    let o;
-    try { o = JSON.parse(linhas[i]); } catch (e) { continue; }
-    if (!o || o.isSidechain === true) continue;
-    const u = o.message && o.message.usage;
-    if (!u) continue;
-    const total = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-    if (total > 0) {
-      const horario = typeof o.timestamp === 'string' ? Date.parse(o.timestamp) : NaN;
-      const modelo = o.message.model;
-      return { contexto: total, horario: isFinite(horario) ? horario : null,
-        modelo: typeof modelo === 'string' && modelo ? modelo : null };
-    }
-  }
-  return null;
-}
-
-/** A cauda do transcript como texto; sem caminho ou sem leitura, null. */
-function caudaDoTranscript(caminho) {
-  if (typeof caminho !== 'string' || !caminho) return null;
-  try {
-    const fd = fs.openSync(caminho, 'r');
-    try {
-      const tamanho = fs.fstatSync(fd).size;
-      const n = Math.min(tamanho, CAUDA_DO_TRANSCRIPT);
-      const buf = Buffer.alloc(n);
-      fs.readSync(fd, buf, 0, n, tamanho - n);
-      return buf.toString('utf8');
-    } finally { fs.closeSync(fd); }
-  } catch (e) { return null; }
+  const t = transcricoes.ler(caminho);
+  return t ? t.ultimaChamada : null;
 }
 
 // D634 (7b/8): o que conta como rodar teste (alem da provaDePronto do projeto), o que edita e o que nao e codigo.
@@ -100,8 +67,8 @@ function pedacosDaProva(prova) {
  * conta. Pula linha de subagente. Sem leitura, null. Limite: edicao feita por comando de shell nao se ve aqui.
  */
 function testesDoTranscript(caminho, prova) {
-  const texto = caudaDoTranscript(caminho);
-  if (texto === null) return null;
+  const t = transcricoes.ler(caminho);
+  if (t === null) return null;
   // Tardios de proposito: saude.js carrega em quase todo gancho, e estes dois (com o que puxam) so servem ao fecho.
   const rodouTeste = require('./medicao-travas.js').rodouTeste;
   const textoMostraFalha = require('./evidencia.js').textoMostraFalha;
@@ -111,26 +78,18 @@ function testesDoTranscript(caminho, prova) {
   let ultimoTeste = null;
   let ultimaEdicao = -1;
   let ultimaProva = -1;
-  texto.split('\n').forEach(function (linha, i) {
-    let o;
-    try { o = JSON.parse(linha); } catch (e) { return; }
-    if (!o || o.isSidechain === true || !o.message || !Array.isArray(o.message.content)) return;
-    o.message.content.forEach(function (b) {
-      if (!b) return;
-      const entrada = b.input || {};
-      if (b.type === 'tool_use' && FERRAMENTAS_DE_COMANDO.indexOf(b.name) !== -1 && typeof entrada.command === 'string') {
-        const daProva = ehProva(entrada.command);
-        if (daProva) ultimaProva = i;
-        if (b.id && (daProva || rodouTeste([entrada.command], COMANDOS_DE_TESTE))) pendentes[b.id] = entrada.command;
-      } else if (b.type === 'tool_use' && FERRAMENTAS_DE_EDICAO.indexOf(b.name) !== -1) {
-        const arquivo = entrada.file_path || entrada.notebook_path;
-        if (typeof arquivo === 'string' && !NAO_E_CODIGO.test(arquivo)) ultimaEdicao = i;
-      } else if (b.type === 'tool_result' && b.tool_use_id in pendentes) {
-        const saida = Array.isArray(b.content)
-          ? b.content.map(function (x) { return x && typeof x.text === 'string' ? x.text : ''; }).join('\n') : b.content;
-        ultimoTeste = { comando: pendentes[b.tool_use_id], falhou: b.is_error === true || textoMostraFalha(saida) };
-      }
-    });
+  t.eventos.forEach(function (ev) {
+    const entrada = ev.entrada || {};
+    if (ev.tipo === 'chamada' && FERRAMENTAS_DE_COMANDO.indexOf(ev.nome) !== -1 && typeof entrada.command === 'string') {
+      const daProva = ehProva(entrada.command);
+      if (daProva) ultimaProva = ev.pos;
+      if (ev.id && (daProva || rodouTeste([entrada.command], COMANDOS_DE_TESTE))) pendentes[ev.id] = entrada.command;
+    } else if (ev.tipo === 'chamada' && FERRAMENTAS_DE_EDICAO.indexOf(ev.nome) !== -1) {
+      const arquivo = entrada.file_path || entrada.notebook_path;
+      if (typeof arquivo === 'string' && !NAO_E_CODIGO.test(arquivo)) ultimaEdicao = ev.pos;
+    } else if (ev.tipo === 'resultado' && ev.id in pendentes) {
+      ultimoTeste = { comando: pendentes[ev.id], falhou: ev.falhou === true || textoMostraFalha(ev.saida) };
+    }
   });
   return { ultimoTeste: ultimoTeste, provaPendente: pedacos !== null && ultimaEdicao > ultimaProva };
 }

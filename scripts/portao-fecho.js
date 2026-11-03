@@ -140,7 +140,23 @@ function tarefaACobrar(tarefas, mensagem, ativo) {
 function handoffSemPrompt(e, s, projeto) {
   if (s.gravouHandoff !== true) return false;
   if (projeto && projeto.portaoHandoff === false) return false;
-  return !saude.temBlocoDeCodigo(e.last_assistant_message);
+  if (!saude.temBlocoDeCodigo(e.last_assistant_message)) return true;
+  // s273: qualquer bloco passava, e a prova da suite em bloco passou por prompt. Com o arquivo legivel e um bloco
+  // nele, a resposta tem de trazer o ultimo bloco do arquivo (o prompt), com o espaco normalizado.
+  const prompt = promptDoHandoff(s.arquivoDoHandoff);
+  if (prompt === null) return false;
+  return espacoNormal(e.last_assistant_message).indexOf(espacoNormal(prompt)) === -1;
+}
+
+const espacoNormal = (t) => String(t).replace(/\s+/g, ' ').trim();
+
+/** O conteudo do ultimo bloco de codigo do arquivo (cerca no comeco da linha), ou null. */
+function promptDoHandoff(arquivo) {
+  let texto;
+  try { texto = require('node:fs').readFileSync(arquivo, 'utf8'); } catch (e) { return null; }
+  let ultimo = null;
+  for (const m of texto.matchAll(/^```[^\n]*\r?\n([\s\S]*?)^```[ \t]*\r?$/gm)) ultimo = m[1];
+  return ultimo !== null && ultimo.trim() ? ultimo : null;
 }
 
 // D503 (plano d503, Tarefa 5): no maximo tantos arquivos citados no motivo; o resto vira "+N".

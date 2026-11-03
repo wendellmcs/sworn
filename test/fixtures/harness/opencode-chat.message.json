@@ -1,0 +1,35 @@
+{
+  "hook_event_name": "chat.message",
+  "tool_name": "",
+  "input": {
+    "sessionID": "ses_e622bb2f9ffergvg2M06lP1yIx",
+    "model": {
+      "providerID": "deepseek",
+      "modelID": "deepseek-flash"
+    }
+  },
+  "output": {
+    "message": {
+      "id": "msg_19dd44d51001gKgqzApkqx03IA",
+      "role": "user",
+      "sessionID": "ses_e622bb2f9ffergvg2M06lP1yIx",
+      "time": {
+        "created": 1793649298769
+      },
+      "agent": "build",
+      "model": {
+        "providerID": "deepseek",
+        "modelID": "deepseek-flash"
+      }
+    },
+    "parts": [
+      {
+        "type": "text",
+        "text": "\"Responda em portugues. 1) Liste toda \\\"palavra secreta\\\" que houver no seu contexto e de onde veio cada uma. 2) Crie o arquivo a.txt com o texto um e o arquivo sub/b.txt com o texto dois. 3) Edite a.txt trocando um por UM. 4) Crie proibido.txt com o texto x. 5) Se voce tiver uma ferramenta de subagente, use-a uma vez para um subagente responder so: oi. 6) Diga o que aconteceu em cada passo e, se algo foi negado, cite o motivo recebido. Nao faca mais nada.\"",
+        "messageID": "msg_19dd44d51001gKgqzApkqx03IA",
+        "sessionID": "ses_e622bb2f9ffergvg2M06lP1yIx",
+        "id": "prt_19dd44d5b001Llzg8NWr0T2Spq"
+      }
+    ]
+  }
+}
