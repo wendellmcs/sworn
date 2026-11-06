@@ -59,8 +59,9 @@ function daSessao(entrada) {
     const quais = sinais.length > 1 ? sinais.slice(0, -1).join(', ') + ' e ' + sinais[sinais.length - 1] : sinais[0];
     const motivo = sinais.length ? 'chegou a um limite que o sworn conta (' + quais + ')'
       : 'já recebeu o aviso de troca de chat nesta sessão';
-    lista.push(botao('handoff', 'A conversa ' + motivo + ': gere o handoff (o texto que continua daqui) e cole num ' +
-      'chat novo.', 'gerar handoff'));
+    // D786 passo 2: o handoff nao leva a um chat novo; o trabalho segue na mesma conversa.
+    lista.push(botao('handoff', 'A conversa ' + motivo + ': gere o handoff (o texto que continua daqui); o trabalho ' +
+      'segue nesta conversa.', 'gerar handoff'));
   }
 
   // A condicao do portao da referencia (D503, Tarefa 5): arquivo AAA com referencia de topo e nenhuma revisao contra

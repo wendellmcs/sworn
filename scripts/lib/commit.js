@@ -176,7 +176,7 @@ function motivo(lista) {
   ], passos, [
     'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
     'repita o commit com "' + MARCA + '" no fim do comando.',
-    'Desligar esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+    'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
   ]).join('\n');
 }
 

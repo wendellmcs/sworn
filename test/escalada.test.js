@@ -78,7 +78,7 @@ test('escalada: o fim de um degrau com marcador guarda o pedido do destino acima
     [{ id: 'a1', de: 'tarefas-simples', para: 'desenvolvedor', motivo: 'logica nova', n: 1 }]);
 });
 
-test('escalada: destino fora da escada, abaixo ou igual vira o degrau seguinte; o topo nao tem destino', () => {
+test('escalada: destino fora da escada, abaixo ou igual vira o degrau seguinte; o topo pede o topo de novo', () => {
   for (const pedido of ['nao-existe', 'busca-rapida', 'tarefas-simples']) {
     const s = novo();
     s.escalada = escalada.aoFechar(s, 'tarefas-simples', 'a1', 'ESCALAR: ' + pedido + ' - x', PROJETO);
@@ -86,7 +86,10 @@ test('escalada: destino fora da escada, abaixo ou igual vira o degrau seguinte; 
   }
   const s = novo();
   s.escalada = escalada.aoFechar(s, 'arquiteto', 'a2', 'ESCALAR: especialista - x', PROJETO);
-  assert.strictEqual(s.escalada.pendentes[0].para, null, 'o topo nao tem para onde subir');
+  assert.deepStrictEqual(s.escalada.pendentes,
+    [{ id: 'a2', de: 'arquiteto', para: 'arquiteto', motivo: 'x', n: 1, deNovo: true }],
+    'D785 (2.2): sem para onde subir, o topo e despachado de novo');
+  assert.deepStrictEqual(s.escalada.refazer, { arquiteto: true });
 });
 
 test('escalada: so age com escada de 2+ degraus e agente de dentro dela', () => {
@@ -116,7 +119,7 @@ test('escalada: o mesmo subagente lido duas vezes (handback e fim) da um pedido 
 
 // ---------------------------------------------------------------- o despacho (comeco do subagente) e o teto
 
-test('escalada: o destino que nasce da baixa no pedido, e a subida seguinte conta a cadeia ate o teto', () => {
+test('escalada: o destino que nasce da baixa no pedido, e a subida seguinte conta a cadeia, sem teto de subidas', () => {
   const s = novo();
   s.escalada = escalada.aoFechar(s, 'busca-rapida', 'a1', 'ESCALAR: tarefas-simples - x', PROJETO);
   s.escalada = escalada.aoAbrir(s, 'desenvolvedor', 'b0');
@@ -129,10 +132,10 @@ test('escalada: o destino que nasce da baixa no pedido, e a subida seguinte cont
   assert.ok(!('a2' in s.escalada.subidas), 'o fim do subagente encerra a cadeia dele');
   s.escalada = escalada.aoAbrir(s, 'desenvolvedor', 'a3');
   s.escalada = escalada.aoFechar(s, 'desenvolvedor', 'a3', 'ESCALAR: arquiteto - z', PROJETO);
-  assert.strictEqual(s.escalada.pendentes[0].n, escalada.TETO_DE_SUBIDAS + 1, 'a 3a passa do teto');
+  assert.strictEqual(s.escalada.pendentes[0].n, 3, 'a 3a subida da mesma cadeia');
   const motivo = escalada.motivoDoFecho(s);
-  assert.match(motivo, /teto/, motivo);
-  assert.ok(!/Agent\(\{/.test(motivo), 'acima do teto a ordem e levar ao usuario, nao despachar: ' + motivo);
+  assert.ok(motivo.includes('Agent({ subagent_type: "arquiteto"'), 'D785 (2.2): a 3a subida despacha sozinha: ' + motivo);
+  assert.ok(!/\bteto\b|leve ao usuario|3 opcoes/.test(motivo), motivo);
 
   const fresco = novo();
   fresco.escalada = escalada.aoFechar(fresco, 'desenvolvedor', 'c1', 'ESCALAR: arquiteto - z', PROJETO);
@@ -181,10 +184,42 @@ test('escalada: o motivo do fecho escreve o despacho certo, e sem pedido nao ha 
   topo.escalada = escalada.aoFechar(topo, 'arquiteto', 'a9', 'ESCALAR: especialista - x', PROJETO);
   const m = escalada.motivoDoFecho(topo);
   assert.match(m, /ultimo da escada de agentes/, m);
-  assert.ok(!/Agent\(\{/.test(m), m);
+  assert.ok(m.includes('Agent({ subagent_type: "arquiteto", effort: "max", ... })'),
+    'D785 (2.2): o topo de novo, com esforco maximo: ' + m);
 });
 
-test('escalada: A2-57/58/59 - o despacho sem molde para copiar, as 3 opcoes nomeadas e a saida sem despacho so no despacho', () => {
+test('escalada: D785 (2.2) - o topo e despachado de novo uma vez; se pedir outra vez, a escada esgotou', () => {
+  const s = novo();
+  s.escalada = escalada.aoFechar(s, 'desenvolvedor', 'a1', 'ESCALAR: arquiteto - x', PROJETO);
+  s.escalada = escalada.aoAbrir(s, 'arquiteto', 'a2');
+  s.escalada = escalada.aoFechar(s, 'arquiteto', 'a2', 'ESCALAR: especialista - y', PROJETO);
+  assert.deepStrictEqual(s.escalada.pendentes,
+    [{ id: 'a2', de: 'arquiteto', para: 'arquiteto', motivo: 'y', n: 2, deNovo: true }]);
+  assert.strictEqual(escalada.deNovo(s, 'arquiteto'), true, 'o portao de agente le a marca');
+  assert.strictEqual(escalada.deNovo(s, 'desenvolvedor'), false);
+  assert.strictEqual(escalada.deNovo(undefined, 'arquiteto'), false);
+  s.escalada = escalada.semPendentes(s);
+  assert.strictEqual(escalada.deNovo(s, 'arquiteto'), true, 'a cobranca no fecho nao apaga a marca');
+  s.escalada = escalada.aoAbrir(s, 'arquiteto', 'a3');
+  assert.strictEqual(escalada.deNovo(s, 'arquiteto'), false, 'o despacho da baixa na marca');
+  assert.deepStrictEqual(s.escalada.refeitos, ['a3']);
+  s.escalada = escalada.aoFechar(s, 'arquiteto', 'a3', 'ESCALAR: especialista - z', PROJETO);
+  assert.deepStrictEqual(s.escalada.pendentes, [{ id: 'a3', de: 'arquiteto', para: null, motivo: 'z', n: 3 }]);
+  assert.deepStrictEqual(s.escalada.refeitos, [], 'o fim do re-despacho encerra a marca');
+  const m = escalada.motivoDoFecho(s);
+  assert.match(m, /feche dizendo o que segue falhando/, m);
+  assert.ok(!/Agent\(\{|siga sem despachar/.test(m), 'escada esgotada nao despacha mais: ' + m);
+
+  const r = novo();
+  r.escalada = escalada.aoFechar(r, 'arquiteto', 'b1', 'ESCALAR: x - y', PROJETO);
+  r.escalada = escalada.aoAbrir(r, 'arquiteto', 'b2');
+  r.escalada = escalada.aoFechar(r, 'arquiteto', 'b2', 'Resolvido.', PROJETO);
+  assert.deepStrictEqual(r.escalada.refeitos, [], 'o re-despacho que fecha sem pedido tambem sai da lista');
+  r.escalada = escalada.aoFechar(r, 'arquiteto', 'b3', 'ESCALAR: x - y', PROJETO);
+  assert.strictEqual(r.escalada.pendentes[0].deNovo, true, 'outro topo, sem cadeia, ganha o seu re-despacho');
+});
+
+test('escalada: A2-57/59 e D785 (2.2) - o despacho sem molde para copiar, nenhum ramo leva ao usuario e a saida sem despacho so no despacho', () => {
   const despacho = novo();
   despacho.escalada = escalada.aoFechar(despacho, 'tarefas-simples', 'a1', 'ESCALAR: desenvolvedor - x', PROJETO);
   const d = escalada.motivoDoFecho(despacho);
@@ -196,14 +231,28 @@ test('escalada: A2-57/58/59 - o despacho sem molde para copiar, as 3 opcoes nome
   const topo = novo();
   topo.escalada = escalada.aoFechar(topo, 'arquiteto', 'a9', 'ESCALAR: especialista - x', PROJETO);
   const t = escalada.motivoDoFecho(topo);
-  assert.match(t, /em 3 opcoes: seguir com este agente e mais contexto,\s+dividir ou mudar a tarefa, ou parar\./, t);
+  assert.match(t, /despache-o de novo com esforco maximo/, t);
+  assert.match(t, /a tarefa, o que ele viu e o motivo no prompt/, t);
+  // P2 da s328: o re-despacho do topo nao ganha a saida sem despacho (D785: o topo despacha sozinho).
+  assert.ok(!/siga sem despachar/.test(t), 'o topo de novo nao tem saida sem despacho: ' + t);
+  const misto = { escalada: { pendentes: [topo.escalada.pendentes[0], despacho.escalada.pendentes[0]] } };
+  const mm = escalada.motivoDoFecho(misto);
+  assert.match(mm, /siga sem despachar/, 'com um despacho comum junto, a saida fica: ' + mm);
+  assert.match(mm, /O re-despacho do "arquiteto" nao tem essa saida/, 'mas nao vale para o topo de novo: ' + mm);
+  assert.ok(!/nao tem essa saida/.test(d), 'sem topo de novo, a saida vale inteira: ' + d);
 
-  const teto = { escalada: { pendentes: [{ id: 'a3', de: 'desenvolvedor', para: 'arquiteto', motivo: 'z',
-    n: escalada.TETO_DE_SUBIDAS + 1 }] } };
-  const c = escalada.motivoDoFecho(teto);
-  for (const [nome, texto] of [['topo', t], ['teto', c]]) {
-    assert.ok(!/siga sem despachar|por que nao despachou/.test(texto), nome + ': quem decide e o usuario: ' + texto);
+  const esgotada = { escalada: { pendentes: [{ id: 'a3', de: 'arquiteto', para: null, motivo: 'z', n: 2 }] } };
+  const c = escalada.motivoDoFecho(esgotada);
+  assert.match(c, /a saida do teste ou do comando que falha num bloco ```/, c);
+  assert.ok(!/siga sem despachar/.test(c), 'sem despacho pedido nao ha saida sem despacho: ' + c);
+  const longe = { escalada: { pendentes: [{ id: 'a4', de: 'tarefas-simples', para: 'desenvolvedor', motivo: 'w',
+    n: 9 }] } };
+  const l = escalada.motivoDoFecho(longe);
+  assert.ok(l.includes('Despache agora: Agent({ subagent_type: "desenvolvedor"'), 'cadeia longa despacha igual: ' + l);
+  for (const [nome, texto] of [['despacho', d], ['topo', t], ['esgotada', c], ['longe', l]]) {
+    assert.ok(!/3 opcoes|leve ao usuario|Pare e/.test(texto), nome + ': D785, nenhum ramo para no usuario: ' + texto);
     assert.ok(!/degrau|subida|topo da escada/.test(texto), nome + ': sem o jargao da escada: ' + texto);
+    for (const linha of texto.split('\n')) assert.ok(linha.length <= 120, nome + ': linha longa: ' + linha);
   }
 });
 

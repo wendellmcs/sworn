@@ -148,9 +148,50 @@ io.blindar(function () {
     // Roda em toda reabertura de proposito: e depois da compactacao que a regra
     // se perde, e e por isso que ela se reinjeta em vez de so se ler uma vez.
     const projeto = config.carregarProjeto(cwd);
+    // s357 (F2): na compactacao, o limiar de tamanho cruzado sem aviso dado vale como o aviso
+    // (reinjecao.cruzouSemAviso), e a ordem "grave o handoff" sai no texto abaixo. Estado que nao grava: sem a ordem,
+    // e uma linha depois do texto diz isso (A5-05; o texto tem de comecar pela ordem, por causa do corte de 10 mil).
+    let semMarca = null;
+    if (e.source === 'compact') {
+      try {
+        /* s359 (F2b): no agy e no dsh a ponte roda este compact depois da queda, com a transcricao ja baixa, e manda
+           o pico de antes dela (sworn_pico, ponte.quedaSemAviso). */
+        const contexto = typeof e.sworn_pico === 'number' ? e.sworn_pico
+          : require('./lib/saude.js').contextoDoTranscript(e.transcript_path);
+        estado.alterar(e.session_id, function (s) {
+          if (require('./lib/reinjecao.js').cruzouSemAviso(s, contexto, projeto)) s.avisouSaude = true;
+          return s;
+        });
+      } catch (erro) {
+        semMarca = 'sworn: o tamanho desta conversa nao foi conferido na compactacao (' +
+          escopoLib.ascii(textoLib.causaDoErro(erro)).slice(0, 120) + '): se ela passou do gatilho sem o aviso de ' +
+          'saude, grave o handoff com /sworn:handoff antes de seguir.\n';
+      }
+    }
     const texto = require('./lib/reinjecao.js').montar(cwd, e.session_id, e.source);
     if (texto) process.stdout.write(texto);
     if (semEstado) process.stdout.write((texto ? '\n' : '') + semEstado);
+    if (semMarca) process.stdout.write((texto || semEstado ? '\n' : '') + semMarca);
+    // D786 passo 3: a ordem do handoff (se houve) saiu no texto acima e a marca se consome; a conversa compactada cabe
+    // de novo, entao o aviso de saude e o alarme rearmam, so pelo tamanho quando ja houve aviso (saude.avaliar).
+    if (e.source === 'compact') {
+      try {
+        estado.alterar(e.session_id, function (s) {
+          // D786 passo 5: a ordem dada acima vira cobranca no portao do Write/Edit; sem ordem, a de antes cai.
+          const ordem = require('./lib/reinjecao.js').ordemDoCompact(s);
+          if (ordem) s.ordemDoCompact = ordem; else delete s.ordemDoCompact;
+          if (s.avisouSaude === true) s.saudeRearmada = true;
+          s.avisouSaude = false;
+          s.avisouAlarme = false;
+          s.handoffDaSessao = null;
+          return s;
+        });
+      } catch (erro) {
+        process.stdout.write('\nsworn: a marca do handoff nao zerou depois da compactacao (' +
+          escopoLib.ascii(textoLib.causaDoErro(erro)).slice(0, 120) + '): a proxima pode repetir a ordem acima, e o ' +
+          'aviso de tamanho so volta na sessao seguinte.\n');
+      }
+    }
     // D420/PT-04: projeto.json PRESENTE e ilegivel (config devolve null igual ao ausente) so era
     // avisado dentro da reinjecao, que sai antes quando nao ha regras.md - e os portoes de
     // escopo/intocaveis ficavam desligados sem ninguem saber. Aqui o aviso sai com ou sem regras;

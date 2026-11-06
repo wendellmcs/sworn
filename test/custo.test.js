@@ -139,6 +139,33 @@ test('D678 T2: no topo da escada nao ha degrau de cima; valor com aspa ou quebra
   assert.ok(r.motivo.split('\n').indexOf('Voce chamou "arquiteto" com model "son\\"net x",') !== -1, r.motivo);
 });
 
+// D785 (2.2): o topo que pediu um acima e despachado de novo com effort "max"; com a tabela gravando outro esforco
+// para ele, a trava 6 negava o despacho que a escalada manda fazer.
+test('D785 (2.2): o re-despacho do topo passa com o effort fora da tabela; o model segue conferido', () => {
+  const TOPO_COM_ESFORCO = { agentes: { degraus: [
+    { agente: 'desenvolvedor', apelido: 'sonnet', esforco: 'medium' },
+    { agente: 'arquiteto', apelido: 'opus', esforco: 'high' }
+  ] } };
+  const chamada = (entrada, opcoes) => custo.chamadaDaTabela('arquiteto', entrada, TOPO_COM_ESFORCO, opcoes);
+  assert.strictEqual(chamada({ model: 'opus', effort: 'max' }).ok, false, 'sem a marca, o effort fora da tabela nega');
+  assert.strictEqual(chamada({ model: 'opus', effort: 'max' }, { esforcoLivre: true }).ok, true, 'com a marca passa');
+  const modelo = chamada({ model: 'sonnet', effort: 'max' }, { esforcoLivre: true });
+  assert.strictEqual(modelo.ok, false, 'a marca nao libera o model');
+  assert.ok(modelo.motivo.includes('com model "sonnet",\n'), 'so o model esta errado: ' + modelo.motivo);
+  assert.strictEqual(chamada({ model: 'opus', effort: 'max' }, {}).ok, false, 'opcoes sem a marca: a tabela inteira');
+  // R1 da revisao s328 (borda): a marca vale so para o effort "max" que a escalada manda, nao para qualquer um.
+  const baixo = chamada({ model: 'opus', effort: 'low' }, { esforcoLivre: true });
+  assert.strictEqual(baixo.ok, false, 'com a marca, outro effort nega');
+  assert.ok(baixo.motivo.includes('re-despacho do topo') && baixo.motivo.includes('effort: "max"'), baixo.motivo);
+  assert.strictEqual(chamada({ model: 'opus' }, { esforcoLivre: true }).ok, true, 'effort ausente segue "nao sei"');
+  // R2 da revisao s328 (correcao): degrau sem esforco gravado nao compara o effort, com ou sem a marca.
+  const SEM_ESFORCO = { agentes: { degraus: [{ agente: 'arquiteto', apelido: 'opus' }] } };
+  assert.strictEqual(custo.chamadaDaTabela('arquiteto', { model: 'opus', effort: 'high' }, SEM_ESFORCO,
+    { esforcoLivre: true }).ok, true, 'sem esforco na escada, a marca nao inventa o "max"');
+  const soModelo = custo.chamadaDaTabela('arquiteto', { model: 'sonnet' }, SEM_ESFORCO, { esforcoLivre: true });
+  assert.ok(!soModelo.motivo.includes('re-despacho') && !soModelo.motivo.includes('"max"'), soModelo.motivo);
+});
+
 // R1 da revisao da T2 (estados, borda): o String() cru lancava TypeError com {"toString": 1} no model, e o
 // `io.blindar` do portao liberava a chamada que tinha de negar.
 test('D678 T2: valor que nao e texto nao derruba a conferencia; nega com o valor escrito em JSON', () => {
@@ -223,5 +250,31 @@ test('A2 (s193): estado nao gravavel nao libera a chamada fora da tabela dos deg
       cwd: dir, encoding: 'utf8', input: entrada, env: Object.assign({}, process.env, { SWORN_TMP: arquivo }) });
     assert.ok(/"permissionDecision"\s*:\s*"deny"/.test(r.stdout) && /fora da tabela/.test(r.stdout),
       'tinha de negar com o estado fora do ar; stdout ' + JSON.stringify(r.stdout) + ' stderr ' + r.stderr);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('D785 (2.2): portao-agente.js le a marca do re-despacho do topo na sessao', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { spawnSync } = require('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-refazer-'));
+  try {
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ agentes: { degraus: [
+      { agente: 'desenvolvedor', apelido: 'sonnet', esforco: 'medium' },
+      { agente: 'arquiteto', apelido: 'opus', esforco: 'high' }] } }));
+    const tmp = path.join(dir, '_sessoes');
+    fs.mkdirSync(path.join(tmp, 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'sworn', 'refazer.json'), JSON.stringify({ escalada: { refazer: { arquiteto: true } } }));
+    const rodar = (sessao, tipo) => spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'portao-agente.js')], {
+      cwd: dir, encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp }),
+      input: JSON.stringify({ session_id: sessao, cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Agent',
+        tool_input: { subagent_type: tipo, effort: 'max', prompt: 'p' } }) });
+    const nega = (r) => /"permissionDecision"\s*:\s*"deny"/.test(r.stdout);
+    const com = rodar('refazer', 'arquiteto');
+    assert.ok(!nega(com), 'com a marca o re-despacho passa: ' + com.stdout + com.stderr);
+    assert.ok(nega(rodar('outra', 'arquiteto')), 'sessao sem a marca nega');
+    assert.ok(nega(rodar('refazer', 'desenvolvedor')), 'a marca vale so para o agente marcado');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

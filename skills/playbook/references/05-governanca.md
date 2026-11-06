@@ -95,8 +95,8 @@ Before closing, check the pairs the project declared. The most common forms:
 **Local plan:** goal, out of scope, context read, probable files, steps, acceptance criteria,
 recommended tests, risks and blocking questions.
 
-**Handoff** in `{{texto:ondeHandoff}}`. Countable triggers and the obligation to offer the chat
-switch are in `SKILL.md` §6. Mandatory content:
+**Handoff** in `{{texto:ondeHandoff}}`. Countable triggers and what to do when one fires
+are in `SKILL.md` §6. Mandatory content:
 
 - absolute path of the plan, the ledger and the previous handoff, **in reading order**;
 - topology of the repositories, branch and **HEAD SHA** of each;
@@ -109,7 +109,9 @@ switch are in `SKILL.md` §6. Mandatory content:
 Never include a secret, credential or customer data in the handoff.
 
 **Hard rule of a long plan:** reread the plan's excerpt **in the file** before writing any brief.
-Handoff is a bridge between chats, it doesn't replace the plan. A finding along the way is a temporary
+Handoff is the bridge to what comes next: a new chat, or the same chat after it is compacted (the sworn
+hook has the agent reread the handoff and follow its prompt). It doesn't replace the plan.
+A finding along the way is a temporary
 deviation: record it, resolve it and **go back to the plan explicitly**, saying which stage you are
 resuming. An addition to the plan is not a change of plan — don't rewrite or reorder because of it. A
 deliberate deviation from the plan text requires a recorded human decision. **A stage is complete only

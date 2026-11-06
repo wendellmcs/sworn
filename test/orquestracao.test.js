@@ -155,6 +155,14 @@ test('ligacao L11: o handoff leva os estudos em andamento (radar e referencia)',
   assert.ok(s.includes('.claude/sworn/referencias/'), 'a ficha de referencia');
 });
 
+// D788: .claude/ e caminho protegido do Claude Code (a escrita do modelo la pede permissao no modo padrao e e negada
+// sem tela, registro da rodada cc3 da D786): o handoff do modelo mora fora dela, onde nada pergunta.
+test('D788: o /sworn:handoff grava em .sworn/handoff/, fora da protecao de .claude/', () => {
+  const s = ler('skills/handoff/SKILL.md');
+  assert.ok(s.includes('`.sworn/handoff/AAAA-MM-DD-<slug>.md`'), 'o destino do handoff');
+  assert.ok(!s.includes('.claude/sworn/handoff'), 'a pasta protegida ainda aparece na skill');
+});
+
 test('ligacao L10: o /sworn:audit mostra a disputa das skills do projeto com as do plugin', () => {
   assert.ok(ler('skills/audit/SKILL.md').includes('`doPlugin`'), 'a skill le a chave que o script devolve');
   assert.ok(ler('scripts/lib/auditoria.js').includes('doPlugin'));

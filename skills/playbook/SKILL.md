@@ -328,9 +328,11 @@ is enough:
 
 **Triggered? In the same reply, without waiting to be asked:**
 
-1. say outright that it is time to open a new chat, citing which trigger fired;
+1. write the handoff (`/sworn:handoff`) and say which trigger fired;
 2. **paste the ready prompt in the chat, in a code block** — saving it to the file is not enough;
-3. **do not ask "shall I continue?" before offering the switch.** The switch comes first.
+3. **go on working in this conversation, without asking "shall I continue?"**: when the harness compacts it (on its
+   own, nobody runs a command), sworn has you reread the handoff. Only a newly installed sworn version calls for a new
+   chat (`/clear` does not reload the plugin).
 
 Handoff in `{{texto:ondeHandoff}}`. Mandatory content in
 [05-governanca.md](references/05-governanca.md).

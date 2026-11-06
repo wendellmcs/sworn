@@ -38,10 +38,24 @@ function commitNaSaida(resp) {
   return resp.stdout.split(/\r?\n/).some(function (linha) { return LINHA_DO_COMMIT.test(linha); });
 }
 
+/**
+ * D786 passo 5: caminho resolvido para comparar o Read com o handoff da ordem; no Windows sem a caixa (o sistema
+ * de arquivos ignora). Fica fora do `alterar` pelo mesmo motivo do `contarRespostas`.
+ */
+function caminhoComparavel(p) {
+  const r = require('node:path').resolve(p);
+  return process.platform === 'win32' ? r.toLowerCase() : r;
+}
+
 // PostToolUse em Write|Edit|Bash|PowerShell|Grep|Glob|Read|AskUserQuestion: houve trabalho real
 // neste turno (o AskUserQuestion so conta a decisao do dono; perguntar nao e trabalho).
 io.blindar(function () {
   io.lerEntrada(function (e) {
+    // s351 (D786 passo 5): o handoff que o shell acabou de gravar conta como o do Write (Codex, agy e dsh nao tem
+    // Write).
+    const ferramenta = String(e.tool_name || '').toLowerCase();
+    const doShell = ferramenta === 'bash' || ferramenta === 'powershell' ?
+      saude.handoffGravadoPeloShell((e.tool_input || {}).command, e.cwd, Date.now()) : null;
     estado.alterar(e.session_id, function (s) {
       // A caixa do nome nao decide (ronda 2 do Passo 8b): normalizado uma vez, vale para tudo abaixo.
       const nome = String(e.tool_name || '').toLowerCase();
@@ -65,6 +79,24 @@ io.blindar(function () {
         // Plano 091 T6: a skill do agente principal cumpre a ordem pendente dela (lib/ordens.js).
         if (!e.agent_id) s.ordensPendentes = require('./lib/ordens.js').marcarCumprida(s, skill);
         return s;
+      }
+
+      // D786 passo 5: o Read do handoff que a ordem do compact mandou reler a cumpre (portao-escopo.js, 1b). So o
+      // agente principal. Mesmo arquivo pelo caminho resolvido; no Windows sem a caixa (o sistema de arquivos ignora).
+      const ordem = s.ordemDoCompact;
+      const lido = (e.tool_input || {}).file_path;
+      if (!e.agent_id && nome === 'read' && ordem && ordem.tipo === 'reler' && typeof ordem.arquivo === 'string' &&
+          typeof lido === 'string' && lido) {
+        const base = typeof e.cwd === 'string' ? e.cwd : process.cwd();
+        if (caminhoComparavel(require('node:path').resolve(base, lido)) === caminhoComparavel(ordem.arquivo)) {
+          delete s.ordemDoCompact;
+        }
+      }
+      // s348: onde nao ha Read (Codex, dsh), o comando de shell que cita o handoff e a releitura
+      // (reinjecao.comandoCitaHandoff; portao-destrutivo.js o deixa passar).
+      if (!e.agent_id && (nome === 'bash' || nome === 'powershell') && ordem && ordem.tipo === 'reler' &&
+          require('./lib/reinjecao.js').comandoCitaHandoff((e.tool_input || {}).command, ordem.arquivo)) {
+        delete s.ordemDoCompact;
       }
 
       // C9: quem procurou pode criar arquivo novo neste turno.
@@ -92,12 +124,14 @@ io.blindar(function () {
           const op = resp && typeof resp === 'object' ? resp.gitOperation : null;
           if ((op && op.commit && op.commit.sha) || commitNaSaida(resp)) s.commitsFeitos = (s.commitsFeitos || 0) + 1;
         }
-        const arquivo = (e.tool_input || {}).file_path;
+        const arquivo = (e.tool_input || {}).file_path || doShell;
         if (arquivo) {
           s.arquivosTocados = s.arquivosTocados || [];
           if (s.arquivosTocados.indexOf(arquivo) === -1) s.arquivosTocados.push(arquivo);
           // Plano 091 (#1): editado depois de aprovado volta para a lista do portao do commit (lib/commit.js).
           if (Array.isArray(s.revisadosAprovados)) s.revisadosAprovados = require('./lib/commit.js').semAprovado(s.revisadosAprovados, arquivo);
+          // D785 (2.1): marca do TURNO; o laco da prova do portao do fecho so cobra o turno que editou codigo.
+          if (saude.ehArquivoDeCodigo(arquivo)) s.editouCodigo = true;
           // D412: marca do TURNO (arquivosTocados e da sessao): o fecho cobra o prompt no chat.
           // Hoje so Write e Edit chegam aqui com file_path: e o matcher do hooks.json que garante
           // (o Read saiu acima, como so leitura). Ferramenta nova no matcher com file_path tambem marca.
@@ -106,6 +140,10 @@ io.blindar(function () {
           if (saude.ehArquivoDeHandoff(arquivo)) {
             s.gravouHandoff = true;
             s.arquivoDoHandoff = require('node:path').resolve(typeof e.cwd === 'string' ? e.cwd : process.cwd(), arquivo);
+            // D786 passo 3: marca da SESSAO (a do turno morre no fecho): depois da compactacao, a abertura manda
+            // reler este arquivo. So o agente principal: o handoff que um subagente grava nao continua esta conversa.
+            // D786 passo 5: o handoff novo do agente principal cumpre a ordem do compact (reler ou gravar).
+            if (!e.agent_id) { s.handoffDaSessao = s.arquivoDoHandoff; delete s.ordemDoCompact; }
           }
         }
       }
@@ -113,12 +151,17 @@ io.blindar(function () {
     });
     // Item 13 (D674): o agente principal que le um handoff vira o dono dele (retomar.reclamar); se outra sessao o pegou
     // ha menos de 24 h, o aviso entra no contexto. Falha cala: a leitura ja aconteceu e o turno segue.
+    // s338: o agente principal que GRAVA um handoff solta as posses dele (retomar.soltar): o chat seguinte nao e
+    // avisado.
     let aviso = null;
     try {
-      const lido = (e.tool_input || {}).file_path;
-      if (String(e.tool_name || '').toLowerCase() === 'read' && !e.agent_id && saude.ehArquivoDeHandoff(lido)) {
+      const alvo = (e.tool_input || {}).file_path || doShell;
+      if (!e.agent_id && saude.ehArquivoDeHandoff(alvo)) {
         const raiz = require('./lib/config.js').raizDoProjeto(e.cwd || process.cwd());
-        aviso = require('./lib/retomar.js').reclamar(raiz, require('node:path').resolve(raiz, lido), e.session_id, Date.now());
+        const retomar = require('./lib/retomar.js');
+        if (String(e.tool_name || '').toLowerCase() === 'read') {
+          aviso = retomar.reclamar(raiz, require('node:path').resolve(raiz, alvo), e.session_id, Date.now());
+        } else retomar.soltar(raiz, e.session_id);
       }
     } catch (err) { aviso = null; }
     if (aviso) return io.permitir({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: aviso } });

@@ -66,6 +66,7 @@ O Qwen solta versão quase todo dia: versão mais nova que a da tabela não foi 
 | Pergunta ao dono em 3 opções | só no modo Plan [T] | só com interface [T] | a ponte lê a resposta da transcrição [T] | só no perfil `web` [T] | só com interface [T] |
 | Subagentes do `/sworn:review`, com o veredito gravado pelo gancho | `spawn_agent`, no app-server [T] e na TUI | `agent` [T] | veredito pelo `send_message` [T] | veredito pelo `send_message` [T] | `task` [T] |
 | Portão por papel (o subagente só usa o `tools:` do papel) | sim [T] | sim, pela ponte e pela lista nativa do papel [T] | o papel não tem nome | o papel não tem nome | sim, pela ponte e pela lista nativa do papel [T] |
+| Handoff sem chat novo (quando o harness compacta a conversa, o sworn manda reler o handoff gravado e seguir) | pelo aviso de compactação do Codex [L]; o instalador regula quando o Codex compacta | pelo aviso de compactação do Qwen [L]; o Qwen compacta no tamanho padrão dele, sem ajuste | depois do handoff gravado, o sworn vê a conversa encolher muito e manda reler antes da próxima resposta do modelo | depois do handoff gravado, o sworn vê a conversa encolher muito e manda reler junto da próxima mensagem do usuário | pelo aviso de compactação do OpenCode [L] |
 
 Os limites, um a um:
 
@@ -103,6 +104,43 @@ Os limites, um a um:
   exemplo). A ponte grava o próprio estado trocando o arquivo inteiro de uma vez; se o Windows nega a troca porque
   outro gancho está com o arquivo aberto, a negação do portão vale do mesmo jeito [T]. O usuário não precisa fazer
   nada.
+- **Handoff sem chat novo.** Quando a conversa chega ao tamanho em que o sworn pede o handoff, ele grava o handoff
+  num arquivo e o trabalho segue na mesma conversa, sem o usuário abrir outra.
+  - O harness compacta a conversa quando ela enche (resume o que veio antes, para caber no limite do modelo). O que
+    o sworn faz depende de quando isso acontece:
+    - depois de o handoff estar gravado: manda o modelo reler o arquivo e seguir dele;
+    - depois de o sworn pedir o handoff e antes de ele estar gravado: manda gravá-lo primeiro;
+    - antes de o sworn pedir o handoff: não manda nada, e o trabalho segue do resumo do harness.
+  - No agy e no `dsh` é diferente (detalhe no item do agy e do `dsh`, abaixo): valem os dois primeiros casos, só
+    quando a conversa encolhe muito, e no `dsh` o tamanho só se mede a cada mensagem do usuário.
+  - A ordem é cobrada: até o modelo ler o handoff (ou gravar o que faltava), editar outro arquivo é negado, no
+    máximo três vezes; depois a edição passa, para a sessão não travar. Editar pelo shell não é cobrado.
+  - O handoff em si não pede nada do usuário. Só duas ações continuam com ele, nos itens abaixo: no `dsh`, reenviar
+    a mensagem segurada depois de uma pausa, como sempre; e, se quiser, recomeçar com a conversa vazia.
+  - Teste de ponta a ponta (rodar o harness de verdade até compactar, reler o handoff e seguir o trabalho): passou no
+    Codex, no Qwen Code e no agy, com um modelo em cada; no OpenCode o ciclo rodou inteiro (gravar, compactar e
+    reler, seis vezes), mas o teste acabou antes do fim do trabalho; no `dsh`, ainda não. Na tabela, [L] marca o que
+    está na documentação do harness; agy e `dsh` ficam sem marca, porque o caminho deles é só do sworn (nenhum
+    evento de compactação conhecido).
+  - Codex, Qwen e OpenCode avisam a compactação ao sworn, e a ordem (reler ou gravar primeiro) vai junto desse
+    aviso; no OpenCode, ela entra no resumo que a compactação escreve. No Codex, o instalador do sworn grava no
+    `.codex/config.toml` do projeto o tamanho de conversa em que o Codex compacta, um pouco acima do tamanho em que
+    o sworn pede o handoff: assim a compactação vem logo depois de o sworn pedir o handoff. O Qwen compacta no
+    tamanho padrão dele (uma fração da janela do modelo, que o sworn não conhece) e não precisa de ajuste; vale o
+    caso de quando a compactação acontecer, na lista acima.
+  - agy e `dsh` não avisam a compactação, então o sworn guarda o maior tamanho de conversa que viu. Se esse maior
+    tamanho passou de 80 mil tokens e a conversa cai para menos de 60% dele, o sworn entende que ela foi compactada:
+    com o handoff gravado, manda reler; sem ele, se o maior tamanho tinha chegado ao tamanho em que o sworn pede o
+    handoff, manda gravá-lo primeiro. A ordem vai, no agy, antes da próxima resposta do modelo; no `dsh`, junto da
+    próxima mensagem do usuário. Uma exceção no `dsh`: se essa mensagem é a primeira depois de uma pausa, o sworn a
+    segura para mostrar onde o trabalho estava (como faz sempre depois de uma pausa) e o usuário a manda de novo, como
+    já faria sem o handoff; a ordem vai junto da mensagem reenviada. No agy o sworn não segura mensagens.
+  - No `dsh` o tamanho só se mede a cada mensagem do usuário: se a conversa passou do tamanho de pedir o handoff e
+    compactou no meio de uma resposta longa, sem mensagem nova entre as duas coisas, o sworn não vê o maior tamanho e
+    a compactação passa sem a ordem de gravar.
+  - Se a conversa não for compactada, o handoff fica gravado e o trabalho segue até o limite do harness. Para
+    recomeçar com a conversa vazia, o usuário abre uma conversa nova e cola o bloco de prompt do fim do arquivo do
+    handoff (o sworn diz o caminho dele ao gravá-lo).
 
 ## O que fica só no Claude Code, e por quê
 

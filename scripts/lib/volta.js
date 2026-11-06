@@ -81,7 +81,7 @@ function motivo(r, resumo) {
     linhas.push('', 'Sem resumo: nao consegui montar o resumo deste chat.',
       // A5-59 (D735): onde fica o handoff e como saber se esta em dia.
       '', 'Faca uma destas:', '  1. abra um chat novo e cole o prompt do ultimo handoff (o /sworn:handoff grava em ' +
-        '.claude/sworn/handoff/), se ele foi gravado depois do seu ultimo pedido;');
+        '.sworn/handoff/), se ele foi gravado depois do seu ultimo pedido;');
   }
   // A5-25 (D735): o custo (o valor, ou o que encarece quando ele falta) e que a mensagem foi segurada antes do Claude.
   const custo = r.continuar !== null ? ' (cerca de US$ ' + centavos(r.continuar) + ')' :

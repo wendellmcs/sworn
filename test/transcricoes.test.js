@@ -75,8 +75,10 @@ function jsonl(nome, objetos) {
 }
 
 const CASOS = [
+  // codex: o node --test saiu com spawn EPERM (o sandbox barrou o processo filho; D785, s328).
   { formato: 'codex', inteira: () => path.join(PASTA, 'codex.jsonl'), ate: () => cortada('codex.jsonl', 18),
-    contexto: 23169, teste: 'node --test soma.test.js .', passou: false, mensagem: /^Corrigi `soma\.js`, mas/ },
+    contexto: 23169, teste: 'node --test soma.test.js .', passou: false, sandbox: true,
+    mensagem: /^Corrigi `soma\.js`, mas/ },
   { formato: 'qwen', inteira: () => path.join(PASTA, 'qwen.jsonl'), ate: () => cortada('qwen.jsonl', 7),
     contexto: 24793, modelo: 'deepseek-chat', teste: 'node --test soma.test.js', passou: true,
     mensagem: /^Terminou com sucesso: o teste/ },
@@ -100,8 +102,8 @@ for (const c of CASOS) {
     assert.ok(Number.isFinite(chamada.horario), 'horario da ultima chamada');
     if (c.modelo) assert.strictEqual(chamada.modelo, c.modelo);
     assert.strictEqual(saude.contextoDoTranscript(caminho), c.contexto);
-    assert.deepStrictEqual(saude.testesDoTranscript(caminho, PROVA),
-      { ultimoTeste: { comando: c.teste, falhou: !c.passou }, provaPendente: false });
+    const ultimoTeste = Object.assign({ comando: c.teste, falhou: !c.passou }, c.sandbox ? { barradoPeloSandbox: true } : {});
+    assert.deepStrictEqual(saude.testesDoTranscript(caminho, PROVA), { ultimoTeste: ultimoTeste, provaPendente: false });
   });
 
   test('transcricoes ' + c.formato + ': cortada depois da edicao, o teste falhou e a prova ficou pendente', () => {

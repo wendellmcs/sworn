@@ -3,7 +3,8 @@
 // aplica a decisao do jeito do OpenCode, como a sonda da s271 mostrou:
 // - negar (PreToolUse): throw com o motivo, que o modelo recebe como erro da ferramenta;
 // - contexto da abertura e do turno: no sistema (experimental.chat.system.transform), a cada chamada ao modelo; a
-//   abertura roda uma vez por sessao e fica guardada aqui;
+//   abertura roda uma vez por sessao e fica guardada aqui; a compactacao (experimental.session.compacting) a roda de
+//   novo, como `compact`, e a poe no resumo;
 // - contexto do pos-ferramenta: no fim da saida da ferramenta;
 // - segurar (prompt): throw no chat.message (a provar na Etapa 5);
 // - bloquear (Stop): o OpenCode nao tem fim de turno que segure; no session.idle da sessao de topo o motivo volta
@@ -75,6 +76,16 @@ export function criar(rodar, lerGanchos = ponte.lerGanchos) {
         }
         if (!output || !Array.isArray(output.system)) return;
         for (const t of [inicio, turno.get(id)]) if (t) output.system.push(t);
+      },
+      // D786 passo 4: antes de compactar, a abertura do compact (que manda reler o handoff gravado na sessao) entra no
+      // resumo e passa a ser a abertura do sistema, como o SessionStart `compact` do Claude Code.
+      'experimental.session.compacting': async (input, output) => {
+        const id = input && input.sessionID;
+        if (!id) return;
+        const d = decidir('experimental.session.compacting', { input });
+        if (!d.contexto) return;
+        if (!d.falhou) abertura.set(id, d.contexto);
+        if (output && Array.isArray(output.context)) output.context.push(d.contexto);
       },
       'chat.message': async (input, output) => {
         const d = decidir('chat.message', { input, output });

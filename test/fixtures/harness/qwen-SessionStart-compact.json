@@ -1,0 +1,10 @@
+{
+  "session_id": "1e3214ef-41e7-495e-a058-eb7eba69fdad",
+  "transcript_path": "C:\\dev\\conta\\.qwen\\projects\\c--dev-proj\\chats\\1e3214ef-41e7-495e-a058-eb7eba69fdad.jsonl",
+  "cwd": "C:\\dev\\proj",
+  "hook_event_name": "SessionStart",
+  "timestamp": "2026-11-02T19:16:08.250Z",
+  "permission_mode": "auto",
+  "source": "compact",
+  "model": "deepseek-chat"
+}

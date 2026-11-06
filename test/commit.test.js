@@ -111,7 +111,7 @@ function motivoDoMock(linhas) {
     '  2. rode o commit de novo.',
     'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
     'repita o commit com "# sworn: sem-revisao" no fim do comando.',
-    'Desligar esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+    'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
   ]).join('\n');
 }
 
@@ -197,7 +197,7 @@ test('091 #8: commit negado lista o atalho novo sem gatilho e manda escrever o g
       '  3. rode o commit de novo.',
       'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
       'repita o commit com "# sworn: sem-revisao" no fim do comando.',
-      'Desligar esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+      'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
     ].join('\n'));
   });
 });

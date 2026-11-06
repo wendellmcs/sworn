@@ -360,7 +360,10 @@ test('083 T6 (sobra 5): --manter grava o limiar em vigor e preserva o resto; sem
     fs.writeFileSync(arq, JSON.stringify({ shell: 'bash', modoContinuo: true, limiares: { commits: 5 } }));
     const r = rodar(['--manter'], dir);
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
-    assert.deepStrictEqual(JSON.parse(r.stdout), { gravou: true, manteve: true, tokensDeContexto: 250000, arquivo: '.claude/sworn/projeto.json' });
+    // D786: o ponto da compactacao vai junto (test/compactacao.test.js)
+    assert.deepStrictEqual(JSON.parse(r.stdout), { gravou: true, manteve: true, tokensDeContexto: 250000,
+      arquivo: '.claude/sworn/projeto.json', compactacao: [{ harness: 'claude', arquivo: '.claude/settings.local.json',
+        chave: 'env.CLAUDE_CODE_AUTO_COMPACT_WINDOW', valor: 333000, gravou: true }] });
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(arq, 'utf8')).limiares, { commits: 5, tokensDeContexto: 250000 });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

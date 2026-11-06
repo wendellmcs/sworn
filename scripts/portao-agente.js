@@ -5,6 +5,7 @@ const estado = require('./lib/estado.js');
 const config = require('./lib/config.js');
 const escopoLib = require('./lib/escopo.js');
 const custo = require('./lib/custo.js');
+const escalada = require('./lib/escalada.js');
 
 io.blindar(function () {
   io.lerEntrada(function (e) {
@@ -20,14 +21,16 @@ io.blindar(function () {
     const projeto = config.carregarProjeto(cwd);
     if (!projeto) return io.permitir();
 
-    // D678 T2: a tabela dos degraus antes da marcha - a chamada errada se conserta primeiro.
-    const tabela = custo.chamadaDaTabela(tipo, e.tool_input, projeto);
+    // D678 T2: a tabela dos degraus antes da marcha - a chamada errada se conserta primeiro. D785 (2.2): o re-despacho
+    // do topo pedido pela escalada leva effort "max", fora da tabela.
+    const s = estado.ler(e.session_id);
+    const tabela = custo.chamadaDaTabela(tipo, e.tool_input, projeto, { esforcoLivre: escalada.deNovo(s, tipo) });
     if (!tabela.ok) {
       try { estado.incrementar(e.session_id, 'chamada_fora_da_tabela'); } catch (err) { /* a negacao sai mesmo assim */ }
       return io.negarFerramenta(tabela.motivo);
     }
 
-    const esc = escopoLib.carregar(cwd, estado.ler(e.session_id).frente);
+    const esc = escopoLib.carregar(cwd, s.frente);
     const marchaMax = custo.marchaMaximaDoEscopo(esc, projeto);
     const r = custo.permitido(tipo, marchaMax, projeto);
     if (r.ok) return io.permitir();

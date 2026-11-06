@@ -662,7 +662,7 @@ test('botoes: comando que nao e do sworn nao vira botao', async ($, on) => {
 // A7 (pedido 12): os textos de hoje do handoff e do padrao, copiados do scripts/lib/botoes.js. A7-73: o
 // test/botoes.test.js os compara com o botoes.js (o do contexto que disparou e o do src/a.js).
 const TEXTO_HANDOFF = 'A conversa chegou a um limite que o sworn conta (tamanho do contexto): ' +
-  'gere o handoff (o texto que continua daqui) e cole num chat novo.'
+  'gere o handoff (o texto que continua daqui); o trabalho segue nesta conversa.'
 const TEXTO_PADRAO = 'O arquivo src/a.js está entre os que o projeto.json marca com o cuidado mais alto: carregue ' +
   'o manual antes de seguir.'
 const ESTADOS_DO_MOCK = [

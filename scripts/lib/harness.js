@@ -20,23 +20,26 @@ const FERRAMENTAS = {
     multi_agent_v1wait_agent: 'SubagentHandback' },
   qwen: { run_shell_command: SHELL, write_file: 'Write', edit: 'Edit', agent: 'Agent', read_file: 'Read',
     glob: 'Glob', ask_user_question: 'AskUserQuestion' },
-  agy: { run_command: SHELL, write_file: 'Write', edit_file: 'Edit', invoke_subagent: 'Agent',
+  agy: { run_command: SHELL, write_file: 'Write', edit_file: 'Edit', invoke_subagent: 'Agent', read_file: 'Read',
     ask_question: 'AskUserQuestion', send_message: 'SubagentHandback' },
   dsh: { pwsh: 'PowerShell', write: 'Write', edit: 'Edit', subagent: 'Agent', ask_user_question: 'AskUserQuestion',
-    send_message: 'SubagentHandback' },
+    send_message: 'SubagentHandback', glob: 'Glob', read: 'Read' },
   opencode: { bash: 'Bash', write: 'Write', edit: 'Edit', task: 'Agent', read: 'Read', question: 'AskUserQuestion' }
 };
 
 // Evento do harness -> eventos do Claude Code que ele cobre. Codex, Qwen e dsh ja usam os nomes do Claude Code.
 // agy: sem abertura e sem evento do prompt; a PreInvocation faz os dois papeis (a ponte roda a abertura uma vez).
-// OpenCode: o plugin opencode/sworn.js manda o nome do gancho dele.
+// OpenCode: o plugin opencode/sworn.js manda o nome do gancho dele; o da compactacao e o SessionStart `compact` (D786).
+const COMPACTACAO_DO_OPENCODE = 'experimental.session.compacting';
 const EVENTOS = {
   agy: { PreInvocation: ['SessionStart', 'UserPromptSubmit'], PreToolUse: ['PreToolUse'],
     PostToolUse: ['PostToolUse'], Stop: ['Stop'] },
   opencode: { 'tool.execute.before': ['PreToolUse'], 'tool.execute.after': ['PostToolUse'],
-    'experimental.chat.system.transform': ['SessionStart'], 'chat.message': ['UserPromptSubmit'],
-    'session.idle': ['Stop'] }
+    'experimental.chat.system.transform': ['SessionStart'], [COMPACTACAO_DO_OPENCODE]: ['SessionStart'],
+    'chat.message': ['UserPromptSubmit'], 'session.idle': ['Stop'] }
 };
+// D786 passo 4: quem nao avisa a compactacao (sem evento conhecido): a ponte a ve pela queda do contexto.
+const COMPACTA_SEM_AVISO = ['agy', 'dsh'];
 
 // Eventos do Claude Code que Codex, Qwen e dsh disparam, vistos na sonda (o SessionEnd do Qwen nao chegou; o
 // SubagentStart/SubagentStop dele, na s278). O agy e o OpenCode, pela tabela EVENTOS. O instalador so grava gancho de
@@ -130,6 +133,7 @@ function camposDaFerramenta(harness, nome, args) {
         ? Object.assign({}, q, { options: q.options.map((o) => typeof o === 'string' ? { label: o } : o) }) : q) };
     }
     if (nome === 'write_file') return { file_path: a.Path, content: a.Content };
+    if (nome === 'read_file') return { file_path: a.Path };
     if (nome === 'edit_file') return { file_path: a.Path, old_string: a.Target, new_string: a.Replacement };
     if (nome === 'run_command') return { command: a.CommandLine };
     if (nome === 'send_message') return { message: a.Message };
@@ -250,7 +254,9 @@ function baseSemPadrao(harness, bruta, evento) {
     base.tool_input = camposDaFerramenta(harness, base.tool_name, args);
     if (evento === 'PostToolUse') base.tool_response = saida.output;
   }
-  if (evento === 'SessionStart') base.source = 'startup';
+  if (evento === 'SessionStart') {
+    base.source = bruta.hook_event_name === COMPACTACAO_DO_OPENCODE ? 'compact' : 'startup';
+  }
   if (evento === 'UserPromptSubmit') base.prompt = textoDasPartes(saida.parts);
   return base;
 }
@@ -451,8 +457,24 @@ function formaClaude(evento, d) {
   return s ? JSON.stringify(s) : '';
 }
 
+// Harnesses cujo Stop so leva ao modelo o `reason` de um block (no agy, do decision "continue"), nunca o contexto.
+const STOP_SO_LEVA_O_BLOCK = ['codex', 'qwen', 'dsh', 'agy'];
+
 /**
- * Decisao -> o stdout que o harness entende.
+ * Stop com contexto ao modelo e sem block nem continue false, num harness que nao leva esse contexto: vira block.
+ * Codex e Qwen: learn.chatgpt.com/docs/hooks, "Stop"; o additionalContext do Stop nao chegou no cx4 da s349 nem no qw1
+ * da s354. dsh: o README do dsh-hooks-claude-code (:43 e :95) diz que o Stop so leva o reason do block; no dshl da s361
+ * o aviso de saude saiu e o handoff nao veio. agy: o Stop nao tem contexto (sai vazio); o reason do continue chegou ao
+ * modelo na sonda s269. O block continua o turno com o texto. O laco nao se repete: o portao-fecho nao avisa com
+ * stop_hook_active (`portao-fecho.js:41`), que a ponte emula no agy e no dsh por esta mesma regra (`ponte.js`).
+ */
+function stopViraBlock(harness, evento, d) {
+  return STOP_SO_LEVA_O_BLOCK.includes(harness) && evento === 'Stop' && !!d.contexto && d.bloquear === undefined &&
+    d.segurar === undefined;
+}
+
+/**
+ * Decisao -> o stdout que o harness entende. Antes de tudo, o Stop com contexto vira block (`stopViraBlock`).
  * - Codex e Qwen: falam o formato do Claude Code e leem texto puro como contexto; a saida do portao vai como veio.
  * - dsh: texto puro some; vai tudo em JSON do Claude Code.
  * - agy: deny {decision, reason}; Stop segura com decision "continue"; contexto so na PreInvocation (injectSteps);
@@ -460,7 +482,8 @@ function formaClaude(evento, d) {
  * - OpenCode: a decisao em JSON simples; o plugin faz o throw, o contexto e o reenvio.
  */
 function escreverSaida(harness, evento, decisao) {
-  const d = decisao || {};
+  let d = decisao || {};
+  if (stopViraBlock(harness, evento, d)) d = { bloquear: d.contexto, aviso: d.aviso };
   if (harness === 'codex' || harness === 'qwen') return d.bruto !== undefined ? d.bruto : formaClaude(evento, d);
   if (harness === 'dsh') return formaClaude(evento, d);
   if (harness === 'agy') {
@@ -480,6 +503,7 @@ function escreverSaida(harness, evento, decisao) {
   return '';
 }
 
-module.exports = { HARNESSES, FERRAMENTAS, EVENTOS, EMULA_STOP, ABRE_UMA_VEZ, eventosDoHarness, eventosQueDispara,
+module.exports = { HARNESSES, FERRAMENTAS, EVENTOS, EMULA_STOP, ABRE_UMA_VEZ, COMPACTA_SEM_AVISO, eventosDoHarness,
+  eventosQueDispara,
   matcherDoHarness, normalizar, nomeDaFerramenta, camposDaFerramenta, ehMemoria, chaveDoPrompt, lerSaida, juntar,
-  escreverSaida, respostaDoAgy, arquivosDoPatch, TEXTO_DO_PATCH };
+  escreverSaida, stopViraBlock, respostaDoAgy, arquivosDoPatch, TEXTO_DO_PATCH };

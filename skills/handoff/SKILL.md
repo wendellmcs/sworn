@@ -1,13 +1,14 @@
 ---
 name: handoff
-description: Generates the continuation text for a new chat, with everything the next one needs to continue exactly where this one stopped. Use when a countable context-health trigger fires, when closing a stage of a long plan, or when the user asks.
+description: Generates the continuation text (the handoff), with everything the work needs to continue exactly where it stopped, in this conversation after it is compacted or in a new chat. Use when a countable context-health trigger fires, when closing a stage of a long plan, or when the user asks.
 argument-hint: "[short name of the work]"
 ---
 
-# `/sworn:handoff` — the bridge between chats
+# `/sworn:handoff` — the bridge over compaction
 
-Drift starts when the plan begins to be executed from memory. **Handoff is a bridge between chats, not a
-substitute for the plan.**
+Drift starts when the plan begins to be executed from memory. **Handoff is a bridge over the compaction of the
+conversation (and between chats), not a substitute for the plan.** The work goes on in the same conversation: when the
+harness compacts it, sworn has the handoff reread; nobody opens a new chat or pastes the prompt.
 
 **New chat that started from a summary** (`handoff/AAAA-MM-DD-retomar-<id>.md`, written by the notice for returning to a
 stopped chat): the summary is a mechanical snapshot of the old chat's log, not this handoff. Read it, check on disk what
@@ -22,10 +23,11 @@ is still running. Run:
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/agentes-rodando.js"
 
-If it lists an agent, stop here: tell the user it is time to open a new chat, that the handoff comes when the last
-listed agent finishes, and that nothing is needed from them meanwhile; do not stop any of them and do not launch new
-ones. Each agent's completion notice arrives in this chat on its own; when the last listed agent's notice arrives,
-run this skill again. The script counts an agent as running until its record says it finished, unless it was
+If it lists an agent, stop this skill here: tell the user in one line that the handoff comes when the last listed
+agent finishes, that the work goes on in this conversation and that nothing is needed from them;
+do not stop any of them and do not launch new ones, and go on with the work that does not depend on them.
+Each agent's completion notice arrives in this chat on its own; when the last listed agent's notice arrives, run
+this skill again. The script counts an agent as running until its record says it finished, unless it was
 stopped or has written nothing for 30 minutes.
 
 Then run, and paste the output:
@@ -39,7 +41,8 @@ Then run, and paste the output:
 
 ## Step 2 — write the file
 
-In `.claude/sworn/handoff/AAAA-MM-DD-<slug>.md`, with **all** of these sections:
+In `.sworn/handoff/AAAA-MM-DD-<slug>.md` (outside `.claude/`, a folder where Claude Code stops to ask permission
+for the write, or refuses it when nobody is there to answer), with **all** of these sections:
 
 1. **Reading order** — absolute path of the plan, the ledger and the previous handoff, in order.
 2. **Topology** — each repository involved, with branch and **HEAD SHA**, pasted from step 1.
@@ -84,11 +87,16 @@ If the session works on a plan, let the plan panel (`/sworn-plan`) find it in th
   say which session closed them, also place its mark, with its N (`(s3: what was done)`); with no
   mark, the stage counts as done, but the session that closed it stays out of the sessions spent.
 
-## Step 3 — offer the switch, in the same response
+## Step 3 — paste the prompt and keep working, in the same response
 
 Generating the file is not enough. In the **same response**:
 
-1. say in so many words that it is time to open a new chat, **citing which trigger fired**;
-2. **paste the ready prompt in the chat, in a code block** — the user must be able to copy without opening anything;
-3. **do not ask "shall I continue?" before offering the switch.** The switch comes first; if they prefer to
-   continue, they say so.
+1. **paste the ready prompt in the chat, in a code block** — the user must be able to copy it without opening
+   anything, if they ever want a new chat;
+2. say in one line that the handoff is written, **citing which trigger fired** (or that the user asked), and that the
+   work goes on in this conversation: when it is compacted, sworn has the handoff reread. Do not tell the user to open
+   a new chat;
+3. **go on with the next step of the work, if there is one; do not ask "shall I continue?".**
+
+The one exception: a new version of sworn was installed in this session. It only loads in a new chat (`/clear` does
+not reload the plugin), so then say it is time to open a new chat and point at the prompt above.

@@ -1,6 +1,6 @@
 {
   "name": "sworn",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "description": "Portoes deterministicos que obrigam o agente a provar em vez de afirmar. No Codex, as skills chegam por aqui e os ganchos pelo scripts/instalar.js (o /sworn:init roda).",
   "author": { "name": "wendellmcs" },
   "license": "MIT",

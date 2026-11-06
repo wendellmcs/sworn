@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.22.0 — o handoff não para o trabalho: a conversa compacta, relê o handoff e segue
+
+**Novo**
+
+- **Depois da compactação, a sessão relê o handoff e segue sozinha.** Quando a conversa chega ao tamanho de troca de
+  chat (o `tokensDeContexto` do `projeto.json`, 175 mil tokens por padrão), o sworn grava o handoff, o texto de
+  continuação, como antes, e o trabalho continua na mesma conversa, sem abrir chat novo nem colar prompt. Quando o
+  harness compacta a conversa, o sworn manda reler o handoff gravado nela; se a compactação chegou antes do handoff,
+  manda gravá-lo primeiro, também quando uma resposta longa passou do tamanho e compactou antes de o sworn pedir o
+  handoff (no dsh o tamanho só se mede a cada pedido seu: a compactação no meio de uma resposta longa ainda passa sem
+  esse pedido). Enquanto o Claude não relê (ou não grava) o handoff, a edição de outro arquivo é recusada
+  e o Claude recebe o caminho do handoff; enquanto o Claude não relê, o comando de shell também é recusado, salvo o
+  que lê o próprio handoff. Se o Claude encerra a resposta sem reler (ou gravar) o handoff, o sworn o pede de novo no
+  fim da resposta. As recusas e esses pedidos somam no máximo três, e depois tudo passa, para a sessão nunca travar.
+  Essa parte o Claude faz sozinho.
+- **O handoff mora em `.sworn/handoff/`.** O Claude Code protege a pasta `.claude/` e pedia permissão a cada handoff
+  gravado lá. Os handoffs antigos em `.claude/sworn/handoff/` continuam valendo. Ponha `.sworn/` no `.gitignore` do
+  projeto.
+
+**Corrigido**
+
+- **No agy, ler um arquivo conta como leitura.** O sworn não reconhecia a ferramenta de leitura do agy (`read_file`):
+  ler não contava como a busca que libera criar arquivo novo, nem como a releitura do handoff depois da compactação.
+- **No dsh, ler e procurar arquivos contam como busca.** O sworn não reconhecia as ferramentas `read` e `glob` do
+  dsh: mesmo depois de ler os arquivos do projeto, criar um arquivo novo era recusado como se nada tivesse sido
+  procurado.
+- **A ordem do handoff não se perde quando o sworn recusa o fim da resposta.** Se a conversa chegava ao tamanho de
+  troca no mesmo turno em que o sworn recusava o fim da resposta por outro motivo (dizer que os testes passaram sem
+  mostrar a prova, por exemplo), a ordem de gravar o handoff ficava para o fim da resposta seguinte, que podia não vir.
+  Agora ela sai logo depois da recusa, uma vez.
+- **A recusa que cobra o handoff não faz mais o modelo parar.** Ela dizia "antes de editar outro arquivo, grave o
+  handoff", e um modelo no Qwen Code leu isso como bloqueio e parou o trabalho. Agora diz que não é para parar: gravar
+  (ou reler) o handoff agora, repetir o que foi recusado e seguir.
+- **No dsh e no agy, o pedido de gravar o handoff chega ao modelo.** No fim da resposta, os dois só passam ao modelo o
+  texto de uma recusa do fim; o pedido ia por outro campo e o modelo nunca o via: a conversa chegava ao tamanho de
+  troca e o handoff não era gravado. Agora o pedido vai como recusa do fim, como já ia no Codex e no Qwen Code.
+- **O handoff gravado com barras dobradas no caminho é reconhecido.** No Windows, um caminho como
+  `C:\\proj\\.sworn\\handoff\\...` grava o arquivo normalmente, mas o sworn não o via como handoff: a conversa ficava
+  sem a marca do handoff gravado, e depois da compactação o sworn não mandava relê-lo.
+- **Fora do Claude Code, gravar o handoff direto vem primeiro.** Todo pedido de handoff (o do fim da resposta, o da
+  pergunta pela saúde e o da recusa depois da compactação) diz primeiro para gravar o arquivo direto, que isso é o
+  pedido e não um desvio, e deixa a skill do handoff como atalho. Com a skill na frente, um modelo no Qwen Code via a
+  skill recusada e lia o arquivo direto como contornar a recusa: parava de trabalhar sem gravar o handoff.
+- **O fim da resposta também cobra o handoff depois da compactação.** O fim da resposta só pedia o handoff quando a
+  conversa passava do tamanho de troca, e a conversa compactada fica abaixo dele: depois da compactação, só a edição
+  e o comando de shell cobravam o handoff que faltava. Um modelo no Qwen Code teve a edição recusada e parou sem
+  gravar o handoff, e o fim da resposta não pediu nada. Agora, enquanto o handoff não é gravado (ou relido), o fim da
+  resposta o pede de novo, e esses pedidos entram no mesmo limite de três das recusas.
+- **A trava que barra diz que só o dono a desliga.** A trava do prompt do handoff, a do commit sem revisão, a do
+  manual de execução e a da comparação com a referência terminavam com a linha que diz como desligá-las (começava por
+  `Desligar`), e esse texto chega ao modelo. Um modelo no Qwen Code leu essa linha como um pedido e desligou sozinho a
+  trava do handoff no projeto. Agora a linha começa por `So o dono desliga`, como a trava de comando destrutivo já diz
+  que só o dono libera.
+
+**Manutenção**
+
+- Para quem mantém o plugin: são **30 baldes** de contador: 24 que negam, 6 que só contam (`BALDES_DE_BLOQUEIO`, em
+  `scripts/lib/saude.js`). O novo, `ordem_do_compact`, soma as edições e os comandos negados antes de o handoff ser
+  relido ou gravado.
+
 ## 0.21.1 — a ressalva honesta com a frase citada entre aspas deixa de ser barrada
 
 **Corrige**

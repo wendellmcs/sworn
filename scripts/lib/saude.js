@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { CALADOS, TOKENS_CONTEXTO } = require('./continuo.js');
-const { veioDeSubagente } = require('./texto.js');
+const { veioDeSubagente, semBom } = require('./texto.js');
 const transcricoes = require('./transcricoes.js');
 const { caudaDoTranscript } = transcricoes;
 
@@ -46,12 +46,57 @@ function ultimaChamadaDoTranscript(caminho) {
   return t ? t.ultimaChamada : null;
 }
 
+// D785 (2.1b): os jeitos de rodar o script `test` do package.json.
+const RODAR_SCRIPT_TEST = ['npm test', 'npm run test', 'pnpm test', 'pnpm run test', 'yarn test', 'yarn run test'];
+
 // D634 (7b/8): o que conta como rodar teste (alem da provaDePronto do projeto), o que edita e o que nao e codigo.
-const COMANDOS_DE_TESTE = ['npm test', 'npm run test', 'pnpm test', 'yarn test', 'node --test', 'pytest', 'go test',
-  'cargo test', 'dotnet test', 'mvn test', 'gradle test', 'jest', 'vitest', 'mocha'];
+const COMANDOS_DE_TESTE = RODAR_SCRIPT_TEST.concat(['node --test', 'pytest', 'go test', 'cargo test', 'dotnet test',
+  'mvn test', 'gradle test', 'jest', 'vitest', 'mocha']);
 const FERRAMENTAS_DE_COMANDO = ['Bash', 'PowerShell'];
 const FERRAMENTAS_DE_EDICAO = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'];
 const NAO_E_CODIGO = /\.(?:md|markdown|txt|rst|adoc)$/i;
+
+/** D785 (2.1): editar este arquivo deixa a prova pendente (texto nao). A mesma regua do transcript e do turno. */
+function ehArquivoDeCodigo(arquivo) {
+  return typeof arquivo === 'string' && !NAO_E_CODIGO.test(arquivo);
+}
+
+function semEspacos(t) { return t.trim().replace(/\s+/g, ' '); }
+
+// D785 (s328): sem a opcao que roda os testes sem processo filho (o laco a manda no sandbox que barra o spawn), dos
+// dois lados: o comando com ela e a prova declarada com ela seguem casando.
+function semIsolamento(t) { return t.replace(/\s--(?:experimental-)?test-isolation(?:=|\s+)none(?=\s|$)/g, ''); }
+
+/**
+ * R1 da revisao s328 (borda): o rodouTeste casa por pedaco de texto, e `npm run test` caberia em `npm run test:unit`.
+ * true quando o pedaco e uma forma de RODAR_SCRIPT_TEST e toda vez que aparece no comando o nome do script segue
+ * (letra, digito, `:`, `.` ou `-` depois): rodou outro script. O chamador ja sabe pelo rodouTeste que o pedaco aparece.
+ */
+function soEmOutroScript(comando, pedaco) {
+  if (RODAR_SCRIPT_TEST.indexOf(pedaco) === -1) return false;
+  const c = semEspacos(String(comando));
+  for (let i = c.indexOf(pedaco); i !== -1; i = c.indexOf(pedaco, i + 1)) {
+    if (!/[\w:.-]/.test(c.charAt(i + pedaco.length))) return false;
+  }
+  return true;
+}
+
+/**
+ * D785 (2.1b, bateria s327): a provaDePronto e as formas que rodam o mesmo, pelo script `test` do package.json da
+ * `raiz`: prova igual ao script vale por `npm test` e afins, e a prova `npm test` vale pelo script direto. Sem prova,
+ * null; sem package.json legivel, so a prova.
+ */
+function provasEquivalentes(prova, raiz) {
+  if (typeof prova !== 'string' || !prova.trim()) return null;
+  let script = null;
+  try {
+    script = JSON.parse(semBom(fs.readFileSync(path.join(raiz, 'package.json'), 'utf8'))).scripts.test;
+  } catch (e) { /* sem package.json, ilegivel ou sem scripts: so a prova */ }
+  if (typeof script !== 'string' || !script.trim()) return [prova];
+  if (semEspacos(semIsolamento(script)) === semEspacos(semIsolamento(prova))) return [prova].concat(RODAR_SCRIPT_TEST);
+  if (RODAR_SCRIPT_TEST.indexOf(semEspacos(prova)) !== -1) return [prova, script];
+  return [prova];
+}
 
 /** Os pedacos da provaDePronto que o comando tem de conter: sem o `cd` (o agente o escreve do seu jeito). */
 function pedacosDaProva(prova) {
@@ -65,15 +110,27 @@ function pedacosDaProva(prova) {
  * nao rodou depois da ultima edicao de codigo (`provaPendente`; sem prova declarada, false). Falhou = saida diferente
  * de 0 (is_error, medido na s129) ou saida que mostra falha (o pipe zera o codigo). Teste sem resultado na cauda nao
  * conta. Pula linha de subagente. Sem leitura, null. Limite: edicao feita por comando de shell nao se ve aqui.
+ * D785 (2.1b): `prova` tambem pode ser a lista de formas de `provasEquivalentes`; rodar qualquer uma e rodar a prova.
+ * D785 (s328): saida com spawn EPERM poe `barradoPeloSandbox: true` no ultimo teste.
  */
 function testesDoTranscript(caminho, prova) {
   const t = transcricoes.ler(caminho);
   if (t === null) return null;
   // Tardios de proposito: saude.js carrega em quase todo gancho, e estes dois (com o que puxam) so servem ao fecho.
   const rodouTeste = require('./medicao-travas.js').rodouTeste;
-  const textoMostraFalha = require('./evidencia.js').textoMostraFalha;
-  const pedacos = typeof prova === 'string' && prova.trim() ? pedacosDaProva(prova) : null;
-  const ehProva = function (c) { return pedacos !== null && pedacos.every(function (p) { return rodouTeste([c], p); }); };
+  const { textoMostraFalha, saidaBarradaPeloSandbox } = require('./evidencia.js');
+  const formas = [].concat(prova).filter(function (p) { return typeof p === 'string' && p.trim(); });
+  // Forma sem pedaco (so separadores) sai: o every da lista vazia casaria com qualquer comando.
+  const listas = formas.map(function (f) { return pedacosDaProva(semIsolamento(f)); })
+    .filter(function (ps) { return ps.length > 0; });
+  const pedacos = listas.length ? listas : null;
+  const ehProva = function (comando) {
+    const c = semIsolamento(comando);
+    return pedacos !== null &&
+      pedacos.some(function (ps) {
+        return ps.every(function (p) { return rodouTeste([c], p) && !soEmOutroScript(c, p); });
+      });
+  };
   const pendentes = Object.create(null);
   let ultimoTeste = null;
   let ultimaEdicao = -1;
@@ -86,9 +143,10 @@ function testesDoTranscript(caminho, prova) {
       if (ev.id && (daProva || rodouTeste([entrada.command], COMANDOS_DE_TESTE))) pendentes[ev.id] = entrada.command;
     } else if (ev.tipo === 'chamada' && FERRAMENTAS_DE_EDICAO.indexOf(ev.nome) !== -1) {
       const arquivo = entrada.file_path || entrada.notebook_path;
-      if (typeof arquivo === 'string' && !NAO_E_CODIGO.test(arquivo)) ultimaEdicao = ev.pos;
+      if (ehArquivoDeCodigo(arquivo)) ultimaEdicao = ev.pos;
     } else if (ev.tipo === 'resultado' && ev.id in pendentes) {
       ultimoTeste = { comando: pendentes[ev.id], falhou: ev.falhou === true || textoMostraFalha(ev.saida) };
+      if (saidaBarradaPeloSandbox(ev.saida)) ultimoTeste.barradoPeloSandbox = true;
     }
   });
   return { ultimoTeste: ultimoTeste, provaPendente: pedacos !== null && ultimaEdicao > ultimaProva };
@@ -114,6 +172,8 @@ const BALDES_DE_BLOQUEIO = [
   'frente_invalida', 'fora_declarado',
   // D412: handoff gravado no turno sem o prompt no chat.
   'handoff_sem_prompt',
+  // D786 passo 5: edicao antes de cumprir a ordem do compact (reler ou gravar o handoff).
+  'ordem_do_compact',
   // D503 (0.8.1): entrega AAA sem revisao contra a referencia de topo na sessao.
   'fecho_sem_referencia',
   // D655: entrega com arquivo AAA mudado sem revisao aprovada na sessao.
@@ -224,7 +284,11 @@ function avaliar(estado, limiares, continuo) {
     e.tokensDeContexto >= L.tokensAlarme;
   if (e.avisouSaude && !alarme) return { disparou: false, alarme: false, gatilhos: [], aviso: null };
 
-  let cruzados = e.avisouSaude ? [] : medir(e, limiares, continuo).filter(function (g) { return g.cruzou; });
+  // D786 passo 3: depois da compactacao que seguiu um aviso (`saudeRearmada`), so o tamanho volta a valer: os outros
+  // gatilhos contam a sessao inteira, que a compactacao nao zera, e o aviso deles sai uma vez por sessao.
+  let cruzados = e.avisouSaude ? [] : medir(e, limiares, continuo).filter(function (g) {
+    return g.cruzou && (e.saudeRearmada !== true || g.chave === 'tokensDeContexto');
+  });
   if (alarme) {
     cruzados = cruzados.filter(function (g) { return g.chave !== 'tokensDeContexto'; });
     cruzados.push({ texto: e.tokensDeContexto + ' tokens de contexto (alarme ' + L.tokensAlarme + ')' });
@@ -335,8 +399,11 @@ function linhasDosAgentes(rodando) {
 }
 
 /**
- * Plano 082, Tarefa 5 (mock S10): o aviso de troca de chat na forma unica dos avisos. Vai ao usuario (systemMessage).
- * D704: com `rodando` (agentesRodando) nao vazio, o "faca assim" manda esperar os agentes antes do handoff.
+ * Plano 082, Tarefa 5 (mock S10): o aviso do gatilho de saude na forma unica dos avisos. Vai ao usuario
+ * (systemMessage).
+ * D704: com `rodando` (agentesRodando) nao vazio, o handoff espera os agentes.
+ * D786 passo 2: o handoff e gravado e o trabalho segue nesta conversa; a compactacao do harness o rele. O alarme da o
+ * atalho de baixar o custo ja: compactar a mao.
  */
 function avisoDeSaude(gatilhos, alarme, rodando) {
   // p7-21: sem gatilho nao ha aviso, como no avaliar (a lista nula lancava; a vazia saia um alarme sem motivo).
@@ -344,22 +411,25 @@ function avisoDeSaude(gatilhos, alarme, rodando) {
   const lista = gatilhos.map(function (g) { return '  - ' + g; }).join('\n');
   const espera = Array.isArray(rodando) && rodando.length > 0;
   return (alarme ? [
-    'sworn - ALARME: troque de chat agora; esta conversa ficou cara demais.',
+    'sworn - ALARME: esta conversa ficou cara demais.',
     '',
-    'Ela passou do tamanho em que cada chamada custa varias vezes a de um chat novo:',
+    'Ela passou do tamanho em que cada chamada custa varias vezes a de uma conversa curta:',
     lista
   ] : [
-    'sworn - hora de abrir chat novo.',
+    'sworn - hora do handoff: o trabalho segue nesta conversa.',
     '',
     // A5-13 e A5-14 (D735): o que e o numero e o passo, sem "gatilho contavel" nem giria.
     'O sworn faz contas nesta conversa, e o que esta abaixo chegou ao limite (o numero depois de "limiar"):',
-    lista,
-    'Nao espere ter certeza: troque agora, pelo passo abaixo.'
+    lista
   ]).concat([''], espera ? linhasDosAgentes(rodando).concat([
-    'Faca assim: espere todos terminarem e nao pare nenhum; o aviso volta quando o ultimo terminar.',
-    'Ai rode /sworn:handoff, cole o prompt pronto num chat novo e continue de la.'
-  ]) : [
-    'Faca assim: rode /sworn:handoff, cole o prompt pronto num chat novo e continue de la.'
+    'O handoff espera todos terminarem; nao pare nenhum. O aviso volta quando o ultimo terminar.', ''
+  ]) : [], [
+    // s335 (revisao, microcopy): "nada" sozinho deixava em duvida se era para agir; o atalho do alarme e opcional.
+    alarme ? 'Faca assim: nada e obrigatorio; para baixar o custo ja, compacte a conversa (/compact; no Qwen Code, ' +
+      '/compress).' : 'Faca assim: nada, voce nao precisa agir.',
+    'O Claude grava o handoff (/sworn:handoff, o texto que continua o trabalho)' +
+      (espera ? ' quando o ultimo terminar' : '') + ' e segue nesta conversa.',
+    'Quando ela for compactada (resumida sozinha para caber), o sworn manda o Claude reler o handoff.'
   ]).join('\n');
 }
 
@@ -367,11 +437,24 @@ function avisoDeSaude(gatilhos, alarme, rodando) {
 function esperaAoModelo(rodando, porque) {
   return linhasDosAgentes(rodando).concat([
     'Faca agora, nesta mesma resposta:',
-    '1. Diga ao usuario, com todas as letras, que e hora de abrir chat novo, ' + porque + ', e que o handoff sai',
-    '   quando o ultimo agente acima terminar.',
-    '2. Nao rode /sworn:handoff agora, nao dispare agente novo e nao pare nenhum dos que rodam.'
+    '1. Diga ao usuario numa linha que o handoff sai quando o ultimo agente acima terminar e que o trabalho',
+    '   segue nesta conversa, sem chat novo; ' + porque + '.',
+    '2. Nao rode /sworn:handoff agora, nao dispare agente novo e nao pare nenhum dos que rodam;',
+    '   siga no que nao depende deles.'
   ]);
 }
+
+// s353 (D786 passo 5, cx10): fora do Claude Code nao ha "/sworn:handoff"; o Ministral no Codex nao achou a skill e
+// tentou gravar em .codex/sworn/, que o sandbox nega. Toda ordem de rodar o handoff (aqui e em reinjecao.js) leva o
+// nome da skill nos outros harnesses (instalar.js:220) e a pasta onde o sworn marca o arquivo (D788).
+// s363 (F9, qw8): o Qwen sem tela negou a skill e o luna leu "grave direto" como contornar a recusa; o caminho sem a
+// skill mora aqui, para valer em toda ordem de gravar, e diz que e o pedido.
+// s365 (F10, qw10): com a skill primeiro, o luna leu o "grave direto" que vinha depois da negacao como desvio. Fora
+// do Claude Code a gravacao direta vem primeiro e a skill fica de atalho; no Claude Code o "/sworn:handoff" segue
+// antes deste parentese.
+const ONDE_GRAVAR_O_HANDOFF = '(fora do Claude Code, grave o handoff direto em ' +
+  '.sworn/handoff/AAAA-MM-DD-<tema>.md: e o caminho pedido, nao um contorno de recusa; a skill sworn-handoff faz ' +
+  'o mesmo, se abrir)';
 
 /**
  * T10-1 (D357): o texto que vai ao MODELO quando a saude dispara (additionalContext do Stop).
@@ -387,69 +470,155 @@ function esperaAoModelo(rodando, porque) {
 function instrucaoAoModelo(gatilhos, promptJaColado, rodando) {
   if (Array.isArray(rodando) && rodando.length > 0) {
     return [
-      'sworn: gatilho contavel de saude do contexto disparou. E hora de abrir chat novo, mas ainda nao de rodar o handoff.',
+      'sworn: gatilho contavel de saude do contexto disparou. E hora do handoff, mas ainda nao de roda-lo.',
       (gatilhos || []).map(function (g) { return '  - ' + g; }).join('\n')
     ].concat(esperaAoModelo(rodando, 'cite o gatilho acima que disparou'), [
       'O aviso de termino de cada agente chega sozinho; a ordem do handoff vem no primeiro fim de turno sem agente rodando.'
     ]).join('\n');
   }
+  // D786 passo 2: gravado o handoff, o trabalho segue nesta conversa; a compactacao do harness o rele.
   if (promptJaColado === true) {
     return [
-      'sworn: gatilho contavel de saude do contexto disparou. E hora de abrir chat novo.',
+      'sworn: gatilho contavel de saude do contexto disparou. E hora do handoff, e ele ja foi gravado.',
       (gatilhos || []).map(function (g) { return '  - ' + g; }).join('\n'),
       'O prompt do handoff ja esta no bloco de codigo da sua resposta acima: nao rode o handoff de novo e',
-      'nao cole o bloco outra vez. Nesta mesma resposta, diga ao usuario, com todas as letras, que e hora',
-      'de abrir chat novo, cite o gatilho acima que disparou e aponte para o bloco acima.',
-      'Nao pergunte "sigo?" antes de oferecer a troca: a troca vem primeiro.'
+      'nao cole o bloco outra vez. Nesta mesma resposta, diga ao usuario numa linha que o handoff esta gravado',
+      '(o bloco acima), cite o gatilho acima que disparou e diga que o trabalho segue nesta conversa, sem chat novo.',
+      'Siga com o proximo passo do trabalho, se houver um; nao pergunte "sigo?".'
     ].join('\n');
   }
   return [
-    'sworn: gatilho contavel de saude do contexto disparou. E hora de abrir chat novo.',
+    'sworn: gatilho contavel de saude do contexto disparou. E hora do handoff.',
     (gatilhos || []).map(function (g) { return '  - ' + g; }).join('\n'),
     'Faca agora, nesta mesma resposta:',
     '1. Rode /sworn:handoff.',
-    '2. Diga ao usuario, com todas as letras, que e hora de abrir chat novo, e cite o gatilho acima que disparou.',
-    '3. Cole o prompt pronto do handoff no chat, em bloco de codigo (nao basta gravar no arquivo).',
-    'Nao pergunte "sigo?" antes de oferecer a troca: a troca vem primeiro.'
+    '   ' + ONDE_GRAVAR_O_HANDOFF,
+    '2. Cole o prompt pronto do handoff no chat, em bloco de codigo (nao basta gravar no arquivo).',
+    '3. Diga ao usuario numa linha que o handoff esta gravado, cite o gatilho acima que disparou e diga que o',
+    '   trabalho segue nesta conversa, sem chat novo: quando ela for compactada, o sworn manda reler o handoff.',
+    '4. Siga com o proximo passo do trabalho, se houver um; nao pergunte "sigo?".'
   ].join('\n');
 }
 
 const NOME_DA_SAUDE = '(?:contexto|memoria|context(?: window)?|memory)';
 const ESTADO_DA_SAUDE = '(?:bom|boa|ok|okay|cheio|cheia|lotado|lotada|estourando|saudavel|aguenta|aguentando|full|fine|healthy|good|enough)';
-const PERGUNTAS_DE_SAUDE = [
-  // "o contexto esta bom?", "contexto ta cheio?", "sua memoria esta ok?", "is your context getting full?"
-  new RegExp('\\b' + NOME_DA_SAUDE + '\\s+(?:\\w+\\s+){0,2}?' + ESTADO_DA_SAUDE + '\\b'),
-  // "como esta a memoria?", "how is your context?", "how is the context window doing?"
-  new RegExp('\\b(?:como\\s+(?:esta|ta|anda)|how(?:\'s|s| is| are))\\s+(?:\\w+\\s+){0,2}?' + NOME_DA_SAUDE +
-    '\\s*(?:doing|going|looking|\\?|$)')
-];
+const ARTIGO_DO_NOME = '(?:o |a |seu |sua |esse |essa |your |the |this )?';
+// s337 (P1 da 2a revisao nova): a frase de estado e uma gramatica fixa, no lugar do meio livre de 0-2 palavras (cada
+// caso novo abria um P1): [artigo] nome [da conversa] [ja|ainda] [verbo de estado] [ficando|getting] [muito|quase]
+// estado. O verbo de estado diz o estado de agora (o presente, e o "ficou", o estado a que chegou): "vai ficar",
+// "estiver", "ficar" e "gets" nao casam, e o tempo separa a pergunta de agora da hipotese. O complemento e fechado de
+// proposito: "o contexto do React ta cheio?" nao e a conversa.
+const DA_CONVERSA = '(?: (?:da|desta|dessa|of|in) (?:this |the |our |nossa )?(?:conversa|chat|sessao|conversation|' +
+  'session))?';
+const JA_OU_AINDA = '(?: (?:ja|ainda|already|still))?';
+const VERBO_DE_ESTADO = "(?:'s| (?:esta|ta|anda|ficou|is|are))";
+const DEPOIS_DO_VERBO = '(?: (?:ficando|getting))?(?: (?:muito|quase|bem|meio|very|almost|nearly|pretty|too))? ' +
+  ESTADO_DA_SAUDE;
+const FRASE_SEM_VERBO = NOME_DA_SAUDE + DA_CONVERSA + JA_OU_AINDA;
+const FRASE_DE_ESTADO = FRASE_SEM_VERBO + VERBO_DE_ESTADO + '?' + DEPOIS_DO_VERBO;
+const FRASE_COM_VERBO = FRASE_SEM_VERBO + VERBO_DE_ESTADO + DEPOIS_DO_VERBO;
+// na oracao do "?": a frase de estado em qualquer ponto ("e ai, o contexto ta cheio?", "contexto cheio, ne?"; com o
+// verbo opcional, ela ja casa a pergunta com o verbo na frente, "is your context getting full?")
+const ESTADO_NA_PERGUNTA = new RegExp('\\b' + FRASE_DE_ESTADO + '\\b');
+// a pergunta com o verbo na frente, para a oracao sem "?": "is the context window full, or fine?"
+const FRASE_INVERTIDA = '(?:is|are|esta|ta) ' + ARTIGO_DO_NOME + FRASE_SEM_VERBO + DEPOIS_DO_VERBO;
+// na oracao sem "?": ela inteira e a frase ("Contexto lotado, posso continuar?") ou termina na frase com verbo ("e ai
+// o contexto ja ta cheio, ou..."). "o contexto esta cheio de logs inuteis, pode limpar?" nao termina nela.
+const ESTADO_NA_ORACAO = new RegExp('(?:^' + ARTIGO_DO_NOME + FRASE_DE_ESTADO + '|\\b' + FRASE_COM_VERBO + '|\\b' +
+  FRASE_INVERTIDA + ')$');
+// "como esta a memoria?", "how is your context?", "how is the context window doing?"
+const COMO_ESTA = new RegExp('\\b(?:como\\s+(?:esta|ta|anda)|how(?:\'s|s| is| are))\\s+(?:\\w+\\s+){0,2}?' +
+  NOME_DA_SAUDE + '\\s*(?:doing|going|looking|\\?|$)');
+
+// s335: onde a frase acaba - pontuacao (com dois-pontos e ponto e virgula), linha em branco ou item de lista. A quebra
+// de linha simples fica dentro da frase: "o contexto\nesta bom?" e uma pergunta so.
+const FIM_DA_FRASE = /(?<=[.!?:;])\s+|\n\s*\n|\n(?=\s*(?:[-*+]|\d+[.)])\s)/;
+// s335: a oracao de tempo ou condicao fala do contexto de depois ("quando o contexto estiver cheio?", achado s330),
+// nao pergunta pelo de agora. s336 (ronda 2): o conectivo vale em qualquer ponto antes do nome ("o que acontece se
+// o contexto ficar cheio?"). s337: "se"/"if" no meio seguem hipoteticos, porque a condicao em ingles vem no presente
+// ("what happens if the context is full?"); o tempo do verbo nao os separa. Conservador de proposito: "me diz se o
+// contexto ta cheio?" tambem sai; o modelo ainda responde, e o gatilho contavel do contexto segue valendo. "caso" so
+// no comeco da oracao: no meio e o substantivo ("nesse caso o contexto ta cheio?").
+const CONECTIVO_HIPOTETICO = /\b(?:quando|se|sempre que|assim que|when|whenever|if)\b|^caso\b/;
+const NOME_SOLTO = new RegExp('\\b' + NOME_DA_SAUDE + '\\b');
+// s335 (revisao, ronda 3): o nome sozinho antes da virgula ("o contexto, esta cheio?") pertence a oracao do "?". s337:
+// a cauda ("contexto cheio, ne?") deixou de juntar: a oracao antes dela conta sozinha quando e a frase de estado.
+const SO_O_NOME = new RegExp('^' + ARTIGO_DO_NOME + NOME_DA_SAUDE + '$');
+// a 1a frase sem "?" com cara de pergunta: o nome seguido do verbo de estado ou do "ainda" ("o contexto ainda aguenta")
+const COMECO_COM_NOME = new RegExp('^' + ARTIGO_DO_NOME + FRASE_SEM_VERBO + '(?:' + VERBO_DE_ESTADO +
+  '| (?:ainda|still))\\b');
+// s336: o que o usuario colou (<pasted_content> do Claude Code) e o que ele cita entre aspas nao e ele perguntando: o
+// prompt de handoff colado no chat novo cita a pergunta composta e disparava o handoff no 1o turno. Ronda 2: a
+// colagem cortada (sem a tag de fechamento) vai ate o fim da mensagem; a tag e a citacao tem teto, para a regex seguir
+// linear numa mensagem enorme (o gancho tem prazo). s337: o corpo termina tambem na abertura seguinte (duas colagens
+// abertas em seguida) e na tag de fechamento cortada antes do ">"; as aspas retas so citam quando fecham colada no
+// "?" ('"o contexto ta cheio?"'): soltas sao polegadas, e '"ok" e o contexto esta bom? "sim"' nao vira citacao.
+const COLAGEM = new RegExp('<pasted_content\\b[^>]{0,200}>(?:(?!</?pasted_content\\b)[\\s\\S])*' +
+  '(?:</pasted_content\\b[^>]{0,200}(?:>|$)|(?=<pasted_content\\b)|$)', 'gi');
+const CITACAO = /"[^"\n]{0,300}\?"|\u201c[^\u201d\n]{0,300}\u201d/g;
+
+/** A pergunta sem "?" pela forma do comeco: "como esta a memoria", "o contexto esta bom". */
+function comecaComoPergunta(t) {
+  return /^(?:como|how|is|are|esta|ta|ainda|qual)\b/.test(t) || COMECO_COM_NOME.test(t);
+}
+
+/** A oracao com conectivo de tempo ou condicao antes do nome fala do contexto de depois, nao do de agora. */
+function oracaoHipotetica(c) {
+  const nome = NOME_SOLTO.exec(c);
+  return CONECTIVO_HIPOTETICO.test(nome ? c.slice(0, nome.index) : c);
+}
 
 /**
- * T10-4 (D357): o usuario perguntou se o contexto/memoria da conversa esta bom? Conservador de
- * proposito: precisa do substantivo E de um termo de estado, E de cara de pergunta - "adicione
- * contexto ao README" e "memory leak no modulo" nao disparam. A pergunta E a resposta.
+ * A oracao fala da saude do contexto de agora: casa `frase` (ESTADO_NA_PERGUNTA na oracao do "?", ESTADO_NA_ORACAO
+ * na sem "?") ou o "como esta", e nao e hipotetica.
+ */
+function oracaoDeSaude(c, frase) {
+  return !oracaoHipotetica(c) && (frase.test(c) || COMO_ESTA.test(c));
+}
+
+/**
+ * T10-4 (D357): o usuario perguntou se o contexto/memoria da conversa esta bom? A pergunta E a resposta (o handoff).
+ * Conservador de proposito: o falso negativo e barato (o modelo ainda responde, e o gatilho contavel do contexto segue
+ * valendo); o falso positivo dispara o handoff sem pedido. Como decide (D786 passo 2, s335-s337):
+ * - a colagem (<pasted_content>) e a citacao entre aspas saem antes; o retorno de subagente nao conta;
+ * - a mensagem se parte em frases (FIM_DA_FRASE) e cada frase em oracoes (entre virgulas);
+ * - na frase com "?": a oracao do "?" conta com a frase de estado em qualquer ponto (junto do nome sozinho na oracao
+ *   de antes: "o contexto, esta cheio?"); as outras oracoes contam so quando SAO a frase de estado ("Contexto
+ *   lotado, posso continuar?"), nunca quando ela segue ("o contexto esta cheio de logs, pode limpar?");
+ * - sem "?": so a 1a frase da mensagem, com cara de pergunta no comeco e a 1a oracao sendo a frase de estado;
+ * - a oracao hipotetica (tempo ou condicao antes do nome) nunca conta.
  */
 function perguntaSobreSaude(prompt) {
   if (typeof prompt !== 'string') return false;
-  const t = prompt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-  if (!t) return false;
   // D475: o inspetor que CITA a pergunta nao e o usuario perguntando (filtro em texto.js, D484).
   if (veioDeSubagente(prompt)) return false;
-  const temCaraDePergunta = t.indexOf('?') !== -1 ||
-    /^(?:como|how|is|are|esta|ta|ainda|qual)\b/.test(t) ||
-    new RegExp('^(?:o |a |seu |sua |esse |essa |your |the |this )?' + NOME_DA_SAUDE + ' (?:esta|ta|ainda)\\b').test(t);
-  if (!temCaraDePergunta) return false;
-  return PERGUNTAS_DE_SAUDE.some(function (re) { return re.test(t); });
+  const frases = prompt.replace(COLAGEM, ' ').replace(CITACAO, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().split(FIM_DA_FRASE).map(function (f) { return f.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+  return frases.some(function (t, i) {
+    const oracoes = t.split(/\s*,\s*/);
+    if (t.indexOf('?') !== -1) {
+      return oracoes.some(function (c, k) {
+        if (c.indexOf('?') === -1) return oracaoDeSaude(c, ESTADO_NA_ORACAO);
+        const antes = k > 0 ? oracoes[k - 1] : '';
+        const junta = antes && SO_O_NOME.test(antes);
+        return oracaoDeSaude(junta ? antes + ' ' + c : c, ESTADO_NA_PERGUNTA);
+      });
+    }
+    return i === 0 && comecaComoPergunta(t) && oracaoDeSaude(oracoes[0], ESTADO_NA_ORACAO);
+  });
 }
 
-/** T10-4: o que o modelo recebe quando o usuario pergunta pela saude do contexto. */
+/** T10-4: o que o modelo recebe quando o usuario pergunta pela saude do contexto. D786 passo 2: sem chat novo. */
 const INSTRUCAO_DA_PERGUNTA = [
-  'sworn: o usuario perguntou se o contexto/memoria desta conversa esta bom. A pergunta E a resposta:',
-  'e hora de trocar de chat. Faca agora, nesta mesma resposta:',
+  'sworn: o usuario perguntou se o contexto/memoria desta conversa esta bom. A resposta e o handoff, nesta conversa.',
+  'Faca agora, nesta mesma resposta:',
   '1. Rode /sworn:handoff.',
-  '2. Diga ao usuario, com todas as letras, que e hora de abrir chat novo, e por que (ele perguntou).',
-  '3. Cole o prompt pronto do handoff no chat, em bloco de codigo.',
-  'Nao responda "esta tudo bem" nem pergunte "sigo?" antes de oferecer a troca.'
+  '   ' + ONDE_GRAVAR_O_HANDOFF,
+  '2. Cole o prompt pronto do handoff no chat, em bloco de codigo.',
+  '3. Diga ao usuario numa linha que o handoff esta gravado, por que (ele perguntou), e que o trabalho',
+  '   segue nesta conversa, sem chat novo: quando ela for compactada, o sworn manda reler o handoff.',
+  '4. Siga com o proximo passo do trabalho, se houver um.',
+  'Nao responda "esta tudo bem" nem pergunte "sigo?".'
 ].join('\n');
 
 /**
@@ -460,27 +629,65 @@ const INSTRUCAO_DA_PERGUNTA = [
 function instrucaoDaPergunta(rodando) {
   if (!Array.isArray(rodando) || rodando.length === 0) return INSTRUCAO_DA_PERGUNTA;
   return [
-    'sworn: o usuario perguntou se o contexto/memoria desta conversa esta bom. A pergunta E a resposta:',
-    'e hora de trocar de chat, mas ainda nao de rodar o handoff.'
-  ].concat(esperaAoModelo(rodando, 'e por que (ele perguntou)'), [
+    'sworn: o usuario perguntou se o contexto/memoria desta conversa esta bom. A resposta e o handoff, mas ainda nao',
+    'de roda-lo.'
+  ].concat(esperaAoModelo(rodando, 'diga por que (ele perguntou)'), [
     '3. Quando o ultimo terminar, rode /sworn:handoff e cole o prompt pronto no chat, em bloco de codigo (o aviso de',
-    '   termino de cada agente chega sozinho).',
-    'Nao responda "esta tudo bem" nem pergunte "sigo?" antes de oferecer a troca.'
+    '   termino de cada agente chega sozinho); depois siga com o proximo passo do trabalho, se houver um.',
+    '   ' + ONDE_GRAVAR_O_HANDOFF,
+    'Nao responda "esta tudo bem" nem pergunte "sigo?".'
   ]).join('\n');
 }
 
 /**
- * D412: arquivo de handoff = `.md` com data AAAA-MM-DD- na frente do nome e "handoff" no nome
+ * D412: arquivo de handoff = `.md` com data AAAA-MM-DD- na frente do nome e terminado em "handoff"
  * (`<data>-<slug>-handoff.md`, o padrao dos planos) ou na pasta (`handoff/<data>-<slug>.md`, onde
  * a skill grava, skills/handoff/SKILL.md:25). A data exclui a propria skill (`handoff/SKILL.md`).
+ * s338: "handoff" no meio do nome e o assunto, nao o tipo (o plano `...-d786-handoff-sem-chat-novo-plano.md`).
  */
 function ehArquivoDeHandoff(caminho) {
   if (typeof caminho !== 'string' || !caminho) return false;
-  const partes = caminho.replace(/\\/g, '/').split('/');
+  // s363 (F8): barras repetidas (o grok no dsh mandou `\\` dobrada, que o Windows aceita) nao abrem pedaco vazio. A
+  // troca da barra invertida fica como estava: e o ponto barra_invertida da matriz (plataforma.js:165).
+  const partes = caminho.replace(/\\/g, '/').split(/\/+/);
   const nome = partes[partes.length - 1];
   const pasta = partes.length > 1 ? partes[partes.length - 2] : '';
   if (!/^\d{4}-\d{2}-\d{2}-.*\.md$/i.test(nome)) return false;
-  return /handoff/i.test(nome) || /^handoff$/i.test(pasta);
+  return /handoff\.md$/i.test(nome) || /^handoff$/i.test(pasta);
+}
+
+// s351: comando que pode gravar arquivo (cmdlet ou utilitario de escrita, redirecionamento, escrita por script). O `>`
+// depois de digito (`2>&1`, `2>$null`), de `=` (`=>`) ou de `-` (`->`) nao grava o handoff.
+const ESCRITA_NO_SHELL = new RegExp('(^|[\\s|;&(])(set-content|add-content|out-file|new-item|copy-item|move-item|' +
+  'tee-object|tee|cp|mv|copy|move)\\b|(^|[^\\d=-])>|writealltext|writefile', 'i');
+// s351: trecho do comando que pode ser um caminho: entre aspas (sem quebra de linha) ou solto.
+const TRECHO_DO_COMANDO = /'([^'\r\n]+)'|"([^"\r\n]+)"|([^\s'"`;|&<>(){}]+)/g;
+const JANELA_DO_SHELL_MS = 120 * 1000;
+
+/**
+ * s351 (D786 passo 5): o handoff que um comando de shell acabou de gravar; o Codex, o agy e o dsh nao tem Write (no
+ * ao vivo cx6 o handoff foi gravado por Set-Content e nao virou marca). Gravado = o comando escreve
+ * (ESCRITA_NO_SHELL), cita um nome de handoff (ehArquivoDeHandoff) e esse arquivo mudou ha no maximo 2 minutos.
+ * Devolve o caminho absoluto, resolvido no `cwd`, ou null.
+ * atalho: o comando que escreve e a hora do arquivo decidem, nao o destino da escrita. limite: um comando que escreve
+ * outra coisa e so le um handoff gravado nos ultimos 2 minutos tambem marca; caminho com espaco fora de aspas ou em
+ * variavel nao se acha. trocar quando: uma rodada ao vivo mostrar uma dessas formas.
+ */
+function handoffGravadoPeloShell(comando, cwd, agora) {
+  if (typeof comando !== 'string' || !ESCRITA_NO_SHELL.test(comando)) return null;
+  const base = typeof cwd === 'string' && cwd ? cwd : process.cwd();
+  const trechos = new RegExp(TRECHO_DO_COMANDO.source, 'g');
+  let m;
+  while ((m = trechos.exec(comando)) !== null) {
+    const trecho = m[1] || m[2] || m[3];
+    if (!ehArquivoDeHandoff(trecho)) continue;
+    const arquivo = path.resolve(base, trecho);
+    try {
+      const st = fs.statSync(arquivo);
+      if (st.isFile() && agora - st.mtimeMs <= JANELA_DO_SHELL_MS) return arquivo;
+    } catch (err) { /* nao existe: o comando so citou o nome */ }
+  }
+  return null;
 }
 
 /**
@@ -595,9 +802,10 @@ const MOTIVO_HANDOFF_SEM_PROMPT = [
   '',
   'Faca assim: cole o prompt agora num bloco de codigo (entre ``` ou ~~~), nesta resposta final - uma vez so.',
   '',
-  'Desligar neste projeto: "portaoHandoff": false em .claude/sworn/projeto.json.'
+  'So o dono desliga neste projeto: "portaoHandoff": false em .claude/sworn/projeto.json.'
 ].join('\n');
 
 module.exports = { LIMIARES_PADRAO, BALDES_DE_BLOQUEIO, contextoDoTranscript, ultimaChamadaDoTranscript, testesDoTranscript, limiaresValidos, medir, acumular, avaliar, avisoDeSaude, instrucaoAoModelo, perguntaSobreSaude,
-  INSTRUCAO_DA_PERGUNTA, ehArquivoDeHandoff, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT,
-  SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, instrucaoDaPergunta };
+  INSTRUCAO_DA_PERGUNTA, ONDE_GRAVAR_O_HANDOFF, ehArquivoDeHandoff, handoffGravadoPeloShell,
+  ehArquivoDeCodigo, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT,
+  SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, instrucaoDaPergunta, provasEquivalentes };

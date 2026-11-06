@@ -43,7 +43,7 @@ test('harness: o evento do harness vira os do Claude Code que ele cobre', () => 
 
 test('harness: toda fixture normaliza sem lancar, em cada evento que cobre', () => {
   const nomes = fs.readdirSync(PASTA).filter((n) => n.endsWith('.json'));
-  assert.strictEqual(nomes.length, 74);
+  assert.strictEqual(nomes.length, 76);
   for (const n of nomes) {
     const h = n.split('-')[0];
     if (!harness.HARNESSES.includes(h)) continue;
@@ -238,6 +238,13 @@ test('harness: agy - camelCase vira o formato do Claude Code', () => {
   const g = uma('agy', 'agy-PreToolUse-invoke_subagent', 'PreToolUse');
   assert.deepStrictEqual([g.tool_name, g.tool_input.prompt, g.tool_input.subagent_type, g.tool_input.description],
     ['Agent', 'Responda apenas com a palavra: oi', 'self', 'Subagente simples']);
+  // s357 (agy2, gpt-oss): o read_file do agy e a leitura. Sem o par, ler nao contava como busca (trava 7) nem como a
+  // releitura do handoff. Os campos sao os do gancho real (sonda s357: toolCall.args = {Path}).
+  const r = harness.normalizar('agy', Object.assign(fixture('agy-PostToolUse-write_file'),
+    { toolCall: { name: 'read_file', args: { Path: 'C:\\dev\\proj\\plano.md' } } }), 'PostToolUse')[0];
+  assert.deepStrictEqual([r.tool_name, r.tool_input], ['Read', { file_path: 'C:\\dev\\proj\\plano.md' }]);
+  assert.strictEqual(require('../scripts/lib/busca.js').ehBusca(r.tool_name, r.tool_input), true,
+    'a leitura do agy nao conta como busca');
   const p = uma('agy', 'agy-PreInvocation', 'UserPromptSubmit');
   assert.ok(p.prompt.startsWith('Responda em portugues. 1)'));
   assert.strictEqual(uma('agy', 'agy-PreInvocation', 'SessionStart').source, 'startup');
@@ -252,6 +259,17 @@ test('harness: dsh - nomes proprios, campos do Claude Code, caminho relativo fic
   assert.strictEqual(uma('dsh', 'dsh-PostToolUse-write', 'PostToolUse').tool_response.includes('Created file'), true);
   // Ferramenta sem par no Claude Code segue com o proprio nome: nenhum matcher do hooks.json casa.
   assert.strictEqual(uma('dsh', 'dsh-PreToolUse-list_agents', 'PreToolUse').tool_name, 'list_agents');
+  // s360 (dshg-s360, grok): o read e o glob do dsh sao a leitura e a busca. Sem o par, 30 leituras e 18 buscas nao
+  // contaram como busca e a trava 7 barrou criar o feito.txt 10 vezes. Campos do evento real: {file_path}, {pattern}.
+  const busca = require('../scripts/lib/busca.js');
+  const pares = [['read', { file_path: 'plano.md' }, 'Read'], ['glob', { pattern: 'plano.md' }, 'Glob']];
+  for (const [nome, entrada, par] of pares) {
+    const r = harness.normalizar('dsh', Object.assign(fixture('dsh-PreToolUse-write'),
+      { tool_name: nome, tool_input: entrada }), 'PostToolUse')[0];
+    assert.deepStrictEqual([r.tool_name, r.tool_input], [par, entrada]);
+    assert.strictEqual(busca.ehBusca(r.tool_name, r.tool_input), true, 'o ' + nome + ' do dsh nao conta como busca');
+  }
+  assert.strictEqual(harness.matcherDoHarness('dsh', 'Grep|Glob|Read'), 'Grep|Glob|Read|glob|read');
 });
 
 test('harness: OpenCode - entrada do plugin vira o formato do Claude Code', () => {
@@ -311,6 +329,73 @@ test('harness: Codex e Qwen recebem a saida do portao como ela veio; juntada, na
     assert.deepStrictEqual(JSON.parse(harness.escreverSaida(h, 'PreToolUse', { negar: 'm1\n\nm2' })),
       { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'm1\n\nm2' } });
   }
+});
+
+for (const h of ['codex', 'qwen']) test('harness: no Stop do ' + h +
+    ' o contexto ao modelo vira decision block (o additionalContext dele nao chega)', () => {
+  // s349 (cx4 ao vivo): a ordem do handoff saiu no additionalContext do Stop e o Codex nao a levou ao modelo.
+  // s354 (qw1 ao vivo): no Qwen o mesmo (avisouSaude true, nenhum handoff); a sonda do Stop bloqueante levou o motivo.
+  const ordem = JSON.stringify({ systemMessage: 'u',
+    hookSpecificOutput: { hookEventName: 'Stop', additionalContext: 'grave o handoff' } });
+  assert.deepStrictEqual(JSON.parse(harness.escreverSaida(h, 'Stop', harness.lerSaida(ordem))),
+    { decision: 'block', reason: 'grave o handoff', systemMessage: 'u' });
+  assert.strictEqual(harness.stopViraBlock(h, 'Stop', harness.lerSaida(ordem)), true);
+  // O block que o portao ja deu segue igual; so aviso, sem contexto, nao vira block.
+  const barra = JSON.stringify({ decision: 'block', reason: 'cole a prova' });
+  assert.strictEqual(harness.escreverSaida(h, 'Stop', harness.lerSaida(barra)), barra);
+  const aviso = JSON.stringify({ systemMessage: 'u' });
+  assert.strictEqual(harness.escreverSaida(h, 'Stop', harness.lerSaida(aviso)), aviso);
+  // Block junto de contexto: o motivo do block manda (nao troca pelo contexto); continue false sem contexto: igual.
+  const ambos = JSON.stringify({ decision: 'block', reason: 'cole a prova',
+    hookSpecificOutput: { hookEventName: 'Stop', additionalContext: 'grave o handoff' } });
+  assert.strictEqual(harness.escreverSaida(h, 'Stop', harness.lerSaida(ambos)), ambos);
+  const para = JSON.stringify({ continue: false, stopReason: 'fim' });
+  assert.strictEqual(harness.escreverSaida(h, 'Stop', harness.lerSaida(para)), para);
+  // continue false junto de contexto: o parar manda (nao vira block); contexto vazio nao vira block vazio.
+  const paraCom = JSON.stringify({ continue: false, stopReason: 'fim',
+    hookSpecificOutput: { hookEventName: 'Stop', additionalContext: 'grave o handoff' } });
+  assert.strictEqual(harness.escreverSaida(h, 'Stop', harness.lerSaida(paraCom)), paraCom);
+  assert.strictEqual(harness.escreverSaida(h, 'Stop', { contexto: '' }),
+    JSON.stringify({ hookSpecificOutput: { hookEventName: 'Stop', additionalContext: '' } }));
+  // Fora do Stop a saida vai como veio.
+  const sessao = JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: 'releia' } });
+  assert.strictEqual(harness.escreverSaida(h, 'SessionStart', harness.lerSaida(sessao)), sessao);
+  // O OpenCode (o plugin faz o reenvio) nao entra na regra.
+  assert.strictEqual(harness.stopViraBlock('opencode', 'Stop', harness.lerSaida(ordem)), false);
+});
+
+test('harness: no Stop do dsh e do agy o contexto ao modelo vira block (dsh) e continue (agy)', () => {
+  // s361 (dshl ao vivo): avisouSaude true e nenhum handoff; o README do dsh-hooks-claude-code (:43 e :95) diz que o
+  // Stop so leva ao modelo o reason de um block. agy: na sonda s269 o reason do decision continue chegou ao modelo.
+  const ordem = harness.lerSaida(JSON.stringify({ systemMessage: 'u',
+    hookSpecificOutput: { hookEventName: 'Stop', additionalContext: 'grave o handoff' } }));
+  assert.deepStrictEqual(JSON.parse(harness.escreverSaida('dsh', 'Stop', ordem)),
+    { decision: 'block', reason: 'grave o handoff', systemMessage: 'u' });
+  assert.deepStrictEqual(JSON.parse(harness.escreverSaida('agy', 'Stop', ordem)),
+    { decision: 'continue', reason: 'grave o handoff' });
+  for (const h of ['dsh', 'agy']) assert.strictEqual(harness.stopViraBlock(h, 'Stop', ordem), true);
+  // O block que o portao ja deu manda (nao troca pelo contexto); o parar manda; contexto vazio nao vira block vazio.
+  const ambos = harness.lerSaida(JSON.stringify({ decision: 'block', reason: 'cole a prova',
+    hookSpecificOutput: { hookEventName: 'Stop', additionalContext: 'grave o handoff' } }));
+  assert.deepStrictEqual(JSON.parse(harness.escreverSaida('dsh', 'Stop', ambos)),
+    { decision: 'block', reason: 'cole a prova' });
+  assert.deepStrictEqual(JSON.parse(harness.escreverSaida('agy', 'Stop', ambos)),
+    { decision: 'continue', reason: 'cole a prova' });
+  const paraCom = { segurar: 'fim', contexto: 'grave o handoff' };
+  assert.deepStrictEqual(JSON.parse(harness.escreverSaida('dsh', 'Stop', paraCom)),
+    { continue: false, stopReason: 'fim' });
+  assert.strictEqual(harness.escreverSaida('agy', 'Stop', paraCom), '');
+  for (const h of ['dsh', 'agy']) {
+    assert.strictEqual(harness.stopViraBlock(h, 'Stop', { contexto: '' }), false);
+    assert.strictEqual(harness.stopViraBlock(h, 'Stop', paraCom), false);
+    assert.strictEqual(harness.stopViraBlock(h, 'UserPromptSubmit', ordem), false);
+  }
+  assert.strictEqual(harness.escreverSaida('agy', 'Stop', { contexto: '' }), '');
+  // Fora do Stop o contexto segue no canal de cada um.
+  assert.deepStrictEqual(JSON.parse(harness.escreverSaida('dsh', 'UserPromptSubmit', { contexto: 'releia' })),
+    { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'releia' } });
+  assert.deepStrictEqual(JSON.parse(harness.escreverSaida('agy', 'UserPromptSubmit', { contexto: 'releia' })),
+    { injectSteps: [{ ephemeralMessage: 'releia' }] });
 });
 
 test('harness: dsh - texto puro vira additionalContext (texto puro some no dsh)', () => {
@@ -532,6 +617,8 @@ test('harness: matcher de agente sai do harness (a ponte refiltra pelo nome do C
   assert.strictEqual(harness.matcherDoHarness('qwen', 'Write|Edit|NotebookEdit'),
     'Write|Edit|NotebookEdit|run_shell_command|write_file|edit');
   assert.strictEqual(harness.matcherDoHarness('agy', 'Write|Edit'), 'Write|Edit|run_command|write_file|edit_file');
+  // s357: o PostToolUse do marcar-trabalho (matcher com Read) tem de chamar a ponte para o read_file do agy.
+  assert.strictEqual(harness.matcherDoHarness('agy', 'Grep|Glob|Read'), 'Grep|Glob|Read|read_file');
   assert.strictEqual(harness.matcherDoHarness('dsh', 'Write|Edit'), 'Write|Edit|pwsh|write|edit');
   assert.strictEqual(harness.matcherDoHarness('dsh', 'Bash'), 'Bash');
   assert.ok(harness.eventosQueDispara('qwen').includes('SubagentStop'));

@@ -207,6 +207,46 @@ function motivoProvaNaoRodou(prova) {
   ].join('\n');
 }
 
+// D785 (2.1): as voltas do laco da prova que mandam consertar; a seguinte manda escalar, e dali em diante o portao
+// libera.
+const TETO_DO_LACO = 3;
+
+/** D785 (s328): a saida do teste mostra `spawn EPERM`: o sandbox (o do Codex, medido na leva 7) barrou o processo
+ *  filho que o executor de testes abre, e nao o codigo. */
+function saidaBarradaPeloSandbox(texto) {
+  return /\bspawn EPERM\b/.test(comoTexto(texto));
+}
+
+/** D785 (2.1): o motivo da volta `n` do laco da prova (`tipo` 'vermelho' ou 'pendente'). A ressalva nao e saida: ate o
+ *  teto, rodar e consertar; na volta seguinte, escalar e, se seguir falhando, fechar com o que falha. Com `sandbox`
+ *  (a saida mostrou spawn EPERM), manda a prova sem processo filho. ASCII (R5). */
+function motivoDoLaco(tipo, comando, n, sandbox) {
+  const oQue = [tipo === 'vermelho' ? 'O ultimo teste que rodou nesta sessao falhou:'
+    : 'A prova de pronto do projeto nao rodou depois da ultima edicao de codigo:', '  ' + citado(comando), ''];
+  if (sandbox === true) {
+    oQue.push('A saida mostra spawn EPERM: o sandbox barrou o processo filho que o executor de testes',
+      'abre, nao o codigo. Rode a prova com node --test --test-isolation=none no lugar de node --test',
+      '(os arquivos de teste no mesmo processo; se o node recusar a opcao, --experimental-test-isolation=none)',
+      'e conserte o que falhar depois disso.', '');
+  }
+  if (n <= TETO_DO_LACO) {
+    return ['sworn - portao de fecho (trava 3), laco da prova (' + n + ' de ' + TETO_DO_LACO + ').', ''].concat(oQue, [
+      'Sem perguntar ao usuario: rode a prova, conserte o que falhar e rode de novo,',
+      'ate passar. Depois cole a saida que passa, dentro de um bloco ``` .',
+      'Teste instavel se corrige ou se remove: rodar de novo ate passar nao e prova.'
+    ]).join('\n');
+  }
+  const titulo = 'sworn - portao de fecho (trava 3), laco da prova: ' + TETO_DO_LACO + ' voltas sem passar.';
+  return [titulo, ''].concat(oQue, [
+    'Sem perguntar ao usuario: escale. Despache o agente acima na escada',
+    '(agentes.escada em .claude/sworn/projeto.json; sem escada, o modelo mais forte',
+    'que houver) com esforco alto, com a tarefa, a saida da prova e o que ja tentou.',
+    'Depois rode a prova de novo.',
+    'Se mesmo assim ela segue falhando, feche dizendo o que segue falhando, com a',
+    'saida da prova num bloco ``` . Nao pergunte ao usuario o que fazer.'
+  ]).join('\n');
+}
+
 // R5: ASCII puro. Este texto chega ao Claude, e e o ponto de reinjecao da regra (falha A1).
 const MOTIVO = [
   'sworn - portao de fecho (trava 3).',
@@ -225,4 +265,5 @@ const MOTIVO = [
 ].join('\n');
 
 module.exports = { ALEGACOES, NAO_RODOU, semBlocos, analisar, deveBloquear, MOTIVO, blocosDeSaida,
-  textoMostraFalha, deveBloquearPorFalha, declaraRessalva, declaraSemRevisao, MOTIVO_FALHA, motivoTesteVermelho, motivoProvaNaoRodou };
+  textoMostraFalha, deveBloquearPorFalha, declaraRessalva, declaraSemRevisao, MOTIVO_FALHA, motivoTesteVermelho,
+  motivoProvaNaoRodou, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox };

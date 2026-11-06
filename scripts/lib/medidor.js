@@ -363,7 +363,10 @@ function linhaDaSessao(entrada) {
   // Plano 083 (p2-26): o verbo concorda - "1 de 7 sinais disparou", "0 de 2 sinais dispararam".
   bloco('Troca de chat — ' + cruzados.length + ' de ' + podem + ' sinais ' + (cruzados.length === 1 ? 'disparou' : 'dispararam') +
     ' (basta 1)', linhasDosSinais(medidas, avisou));
-  bloco('O que fazer', [cruzou ? 'Rode /sworn:handoff e cole o prompt pronto num chat novo.' : 'Nada por ora.']);
+  // D786 passo 2: o fim do turno manda o Claude gravar o handoff, e o trabalho segue na mesma conversa.
+  bloco('O que fazer', [avisou ? 'Nada: o handoff já foi pedido nesta sessão e o trabalho segue nesta conversa ' +
+    '(para gravar outro, /sworn:handoff).'
+    : cruzou ? 'Nada: o handoff sai sozinho no fim do turno e o trabalho segue nesta conversa.' : 'Nada por ora.']);
 
   const curta = barra({ uso: uso, gasto: gasto, js: js, cruzados: cruzados, medidas: medidas, avisou: avisou });
   // A7-49: os nomes dos sinais que dispararam, os mesmos da lista acima, para o botao do handoff (botoes.js).

@@ -220,8 +220,145 @@ function linhasDoTrabalho(cwd, s) {
   return linhas;
 }
 
+/**
+ * D786 passo 3: qual ordem segue o trabalho depois da compactacao, sem chat novo. Com handoff marcado nesta sessao
+ * (marcar-trabalho.js) e o arquivo no disco: 'reler' pelo caminho (o texto inteiro nao cabe no corte de 10 mil). Com a
+ * ordem do handoff dada e nada gravado depois dela (portao-fecho.js apaga a marca velha), ou com o arquivo sumido:
+ * 'gravar' primeiro. Senao null. O caminho (mostrarCaminho) sai sem quebra nem controle, mas sem passar a ASCII: tem
+ * de abrir. s355 (qw4: o Qwen compactou 42 vezes): a compactacao zera o handoff e o aviso (abertura.js), entao a
+ * ordem ainda nao cumprida (s.ordemDoCompact) tambem vale; senao a 2a compactacao seguida a apagava sem repetir.
+ */
+function handoffDaOrdem(s) {
+  if (typeof s.handoffDaSessao === 'string' && s.handoffDaSessao) return s.handoffDaSessao;
+  const p = s.ordemDoCompact;
+  return p && typeof p === 'object' && p.tipo === 'reler' && typeof p.arquivo === 'string' ? p.arquivo : '';
+}
+
+function tipoDaOrdem(s) {
+  const arquivo = handoffDaOrdem(s);
+  if (arquivo && fs.existsSync(arquivo)) return 'reler';
+  const p = s.ordemDoCompact;
+  if (!arquivo && s.avisouSaude !== true && !(p && typeof p === 'object' && p.tipo === 'gravar')) return null;
+  return 'gravar';
+}
+
+/**
+ * s357 (oc4, F2): o gatilho de tamanho so mede no fecho, e o turno longo que cruza o limiar e compacta antes de um fim
+ * de turno nunca recebe o aviso: sem ele, a compactacao nao pedia o handoff. Aqui, na compactacao, sem aviso dado e sem
+ * handoff da ordem, o tamanho da transcricao (`contexto`, a leitura de antes de compactar) no limiar vale como o aviso.
+ * A regua e a do fecho (saude.medir com os limiares do projeto e o modo continuo; sem leitura, null, nao cruza). Com
+ * handoff da ordem a compactacao ja manda reler, e o estado fica como antes (sem a saudeRearmada do aviso).
+ */
+function cruzouSemAviso(s, contexto, projeto) {
+  if (s.avisouSaude === true || handoffDaOrdem(s)) return false;
+  const gatilho = saude.medir({ tokensDeContexto: contexto }, projeto && projeto.limiares,
+    require('./continuo.js').ativo(projeto)).find((g) => g.chave === 'tokensDeContexto');
+  return Boolean(gatilho && gatilho.cruzou);
+}
+
+function mostrarCaminho(arquivo, cwd) {
+  return (caminhoLib.relativoAoProjeto(arquivo, cwd) || arquivo).replace(/[\x00-\x1f\x7f]+/g, ' ');
+}
+
+/**
+ * D786 passo 5 (rodada cc4: o Haiku recebeu "releia o handoff" e editou o trabalho sem ler): a ordem do compact vira
+ * cobranca no portao do Write/Edit (portao-escopo.js, 1b) ate o Read do handoff ou a gravacao de um novo
+ * (marcar-trabalho.js). Rodada ccds2 (s348: o DeepSeek seguiu por Add-Content no PowerShell): o "releia" e cobrado
+ * tambem no portao do shell (portao-destrutivo.js). Teto de negacoes: um Read que nao marca (estado sem escrita,
+ * ferramenta com outro nome) nao pode travar a sessao para sempre.
+ */
+const NEGACOES_DA_ORDEM = 3;
+
+function ordemDoCompact(s) {
+  const tipo = tipoDaOrdem(s);
+  if (!tipo) return null;
+  // s355: a contagem segue de uma compactacao a outra, e o teto continua valendo (sem trava eterna).
+  const p = s.ordemDoCompact;
+  const negadas = p && typeof p === 'object' && p.tipo === tipo ? Number(p.negadas) || 0 : 0;
+  return { tipo: tipo, arquivo: tipo === 'reler' ? handoffDaOrdem(s) : null, negadas: negadas };
+}
+
+/**
+ * Uma contagem so para os dois portoes: soma uma negacao a ordem pendente da sessao e diz se cobra; no teto a ordem
+ * cai e a ferramenta passa. Estado sem escrita: nao cobra (sem trava eterna).
+ */
+function cobrarOrdem(sessao) {
+  let cobrar = false;
+  try {
+    estado.alterar(sessao, function (x) {
+      const atual = x.ordemDoCompact;
+      if (!atual || typeof atual !== 'object') return x;
+      const negadas = Number(atual.negadas) || 0;
+      if (negadas < NEGACOES_DA_ORDEM) { atual.negadas = negadas + 1; cobrar = true; } else delete x.ordemDoCompact;
+      return x;
+    });
+  } catch (err) { cobrar = false; }
+  return cobrar;
+}
+
+/**
+ * s348: o comando de shell que cita o nome do handoff da ordem (cat, Get-Content, type) conta como a releitura: o
+ * Codex, o agy e o dsh nao tem Read e leem pelo shell. Pelo nome do arquivo e sem a caixa (o caminho vem relativo e com
+ * barra de qualquer lado; nome de handoff que so muda a caixa nao existe na pratica).
+ * atalho: citar o nome basta. limite: o comando que cita o handoff e faz outra coisa junto passa e cumpre a ordem.
+ * trocar quando: uma rodada ao vivo mostrar o modelo citando o handoff sem le-lo.
+ */
+function comandoCitaHandoff(comando, arquivo) {
+  if (typeof comando !== 'string' || typeof arquivo !== 'string') return false;
+  const nome = path.basename(arquivo).toLowerCase();
+  return nome !== '' && comando.toLowerCase().indexOf(nome) !== -1;
+}
+
+function motivoDaOrdem(ordem, cwd) {
+  /* s366 (F11): o fim da resposta (portao-fecho.js) tambem lembra a ordem e soma neste teto. */
+  const teto = 'Esta negacao se repete no maximo ' + NEGACOES_DA_ORDEM + ' vezes, somando edicoes, comandos e fins ' +
+    'de resposta; ' +
+    'depois tudo passa mesmo assim.';
+  // s361 (F4): "Antes de editar outro arquivo, rode..." soou como proibicao (o luna no Qwen parou dizendo que nao
+  // contornou a recusa). O texto diz que nao e para parar, o que fazer agora e que depois se repete o que foi negado.
+  if (ordem.tipo === 'reler') {
+    return 'sworn: depois da compactacao, o handoff desta conversa ainda nao foi relido. Nao e para parar: faca ' +
+      'agora, leia ' + mostrarCaminho(ordem.arquivo, cwd) + ' inteiro (pelo Read; onde nao houver Read, pelo ' +
+      'shell), depois repita o que foi negado e siga o bloco do prompt dele, sem perguntar. ' + teto;
+  }
+  // s361 (F7): no Qwen sem tela a skill foi negada (qw7); sem ela, o arquivo gravado direto cumpre a ordem. s363 (F9):
+  // esse caminho mora no ONDE_GRAVAR_O_HANDOFF (saude.js), que tambem vai no aviso do Stop.
+  return 'sworn: depois da compactacao, o handoff que o sworn pediu ainda nao foi gravado. Nao e para parar: faca ' +
+    'agora, rode /sworn:handoff ' + saude.ONDE_GRAVAR_O_HANDOFF + '. Esta cobranca nao vale para o arquivo do ' +
+    'handoff; depois repita esta edicao e siga pelo bloco do prompt dele, sem perguntar. ' + teto;
+}
+
+function ordemDoHandoff(cwd, s) {
+  const tipo = tipoDaOrdem(s);
+  if (tipo === 'reler') {
+    const mostrar = mostrarCaminho(handoffDaOrdem(s), cwd);
+    return [
+      '# sworn - depois da compactacao: releia o handoff',
+      '',
+      'Esta conversa foi compactada depois do handoff gravado nela: ' + mostrar,
+      'Faca agora, antes de qualquer outra coisa: leia esse arquivo inteiro e siga o bloco do prompt dele como se',
+      'fosse um chat novo, sem esperar mensagem do usuario e sem perguntar "sigo?".'
+    ].join('\n');
+  }
+  if (!tipo) return null;
+  return [
+    '# sworn - depois da compactacao: grave o handoff primeiro',
+    '',
+    'O sworn pediu o handoff nesta conversa, ou ela passou do gatilho de tamanho, e foi compactada sem ele gravado',
+    '(ou o arquivo dele sumiu).',
+    'Faca agora, antes de qualquer outra coisa: rode /sworn:handoff a partir do resumo da compactacao, do plano e do',
+    'ledger; depois siga o trabalho nesta conversa pelo bloco do prompt dele, sem perguntar "sigo?".',
+    saude.ONDE_GRAVAR_O_HANDOFF
+  ].join('\n');
+}
+
 function montar(cwd, sessionId, origem) {
   const partes = [];
+
+  // D786 passo 3: a ordem do handoff abre o texto. Acima de 10 mil caracteres o harness guarda o resto em arquivo e
+  // mostra so o comeco.
+  const ordem = String(origem) === 'compact' ? ordemDoHandoff(cwd, estado.ler(sessionId)) : null;
+  if (ordem) partes.push(ordem);
 
   const regras = nucleo(cwd);
   if (regras) partes.push(regras.replace(/\s*$/, ''));
@@ -309,4 +446,5 @@ function montar(cwd, sessionId, origem) {
   return partes.concat(estadoPartes).join('\n') + '\n';
 }
 
-module.exports = { ORIGENS_COM_ESTADO, contexto, nucleo, montar };
+module.exports = { ORIGENS_COM_ESTADO, contexto, nucleo, ordemDoHandoff, NEGACOES_DA_ORDEM, ordemDoCompact,
+  cruzouSemAviso, cobrarOrdem, comandoCitaHandoff, motivoDaOrdem, montar };

@@ -147,8 +147,9 @@ test('plano 082 (p5-36): os 7 textos e rotulos (8 menos o paralelo, 091 #5), sem
   tudo.forEach(function (x) { visto[x.nome] = x.texto + ' [' + x.rotulo + ']'; });
   assert.deepStrictEqual(visto, {
     // A7-49: o sinal que disparou (antes, a lista dos tres tipos de sinal)
+    // D786 passo 2: sem "cole num chat novo"
     handoff: 'A conversa chegou a um limite que o sworn conta (tamanho do contexto): gere o ' +
-      'handoff (o texto que continua daqui) e cole num chat novo. [gerar handoff]',
+      'handoff (o texto que continua daqui); o trabalho segue nesta conversa. [gerar handoff]',
     // A7-10, R1 da s239 (P2 do lado novo): o revisar diz qual arquivo (o mesmo do comando)
     revisar: 'O arquivo src/a.js pede o cuidado mais alto do projeto: revise-o contra a referência antes de dar por ' +
       'pronto. [revisar]',

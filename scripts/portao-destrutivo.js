@@ -48,7 +48,31 @@ io.blindar(function () {
     const comando = (e.tool_input || {}).command;
     if (!comando) return io.permitir();
 
-    const projeto = config.carregarProjeto(config.raizDoProjeto(e.cwd || process.cwd()));
+    const raiz = config.raizDoProjeto(e.cwd || process.cwd());
+    const projeto = config.carregarProjeto(raiz);
+
+    // D786 passo 5 (s348, rodada ccds2: o DeepSeek recebeu "releia" e seguiu por Add-Content no PowerShell): o "releia"
+    // do compact tambem e cobrado no shell do agente principal, antes de tudo (o escape e as travas sao do destrutivo).
+    // Todo comando salvo o que cita o handoff: ele e a releitura onde nao ha Read (Codex, dsh), e o PostToolUse
+    // (marcar-trabalho.js) o conta como cumprida. Uma contagem so com o portao do Write/Edit (reinjecao.cobrarOrdem),
+    // mesmo balde e mesmo motivo.
+    // atalho: o "grave primeiro" nao e cobrado aqui. limite: a skill do handoff roda comandos (a hora, os agentes
+    // rodando), e o shell segue livre ate o handoff novo. trocar quando: uma rodada ao vivo mostrar o modelo seguindo
+    // pelo shell sem gravar o handoff pedido.
+    // Tudo no try: este bloco roda antes do portao destrutivo, e uma excecao aqui (que o io.blindar viraria permitir)
+    // nunca pode deixar passar o comando destrutivo. Falhou: sem cobranca, e o comando segue para os portoes abaixo.
+    let motivoDaOrdem = null;
+    try {
+      const ordem = estado.ler(e.session_id).ordemDoCompact;
+      const reinjecao = require('./lib/reinjecao.js');
+      if (!e.agent_id && ordem && typeof ordem === 'object' && ordem.tipo === 'reler' &&
+          typeof ordem.arquivo === 'string' && require('node:fs').existsSync(ordem.arquivo) &&
+          !reinjecao.comandoCitaHandoff(comando, ordem.arquivo) && reinjecao.cobrarOrdem(e.session_id)) {
+        try { estado.incrementar(e.session_id, 'ordem_do_compact'); } catch (err) { /* idem: o balde vale menos */ }
+        motivoDaOrdem = reinjecao.motivoDaOrdem(ordem, raiz);
+      }
+    } catch (err) { motivoDaOrdem = null; }
+    if (motivoDaOrdem) return io.negarFerramenta(motivoDaOrdem);
 
     // X2b: o botao honesto de desligar. Substitui o comandosLiberados:[".*"],
     // que desligava o portao por efeito colateral e sem dizer que desligava.

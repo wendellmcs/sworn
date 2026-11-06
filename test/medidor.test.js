@@ -422,12 +422,16 @@ test('plano 082 (S4): sinal que disparou e aviso ja dado mandam ao handoff; "per
   assert.ok(cruzou.longa.indexOf('(basta 1)**\n- revisões independentes fechadas: 17 de 2 ← disparou\n') !== -1, cruzou.longa);
   assert.ok(cruzou.longa.indexOf('- respostas com trabalho real: 13 de 15\n') !== -1, cruzou.longa);
   assert.ok(cruzou.longa.indexOf('- decisões que você respondeu: 2 de 3\n') !== -1, cruzou.longa);
-  assert.ok(/\*\*O que fazer\*\*\nRode \/sworn:handoff e cole o prompt pronto num chat novo\.$/.test(cruzou.longa), cruzou.longa);
+  // D786 passo 2: o handoff sai sozinho no fim do turno e o trabalho segue na mesma conversa
+  assert.ok(/\*\*O que fazer\*\*\nNada: o handoff sai sozinho no fim do turno e o trabalho segue nesta conversa\.$/
+    .test(cruzou.longa), cruzou.longa);
   const perto = medidor.linhaDaSessao({ uso: null, amostras: [], avisouSaude: false, medidas: saude.medir({ turnosComTrabalho: 14 }, null) });
   assert.ok(perto.longa.indexOf('- respostas com trabalho real: 14 de 15 ← perto do limite\n') !== -1, perto.longa);
   const avisou = medidor.linhaDaSessao({ uso: null, amostras: [], avisouSaude: true, medidas: saude.medir({}, null) });
   assert.ok(avisou.longa.indexOf('\n- o aviso de troca já foi dado nesta sessão; os contadores recomeçam depois dele\n') !== -1, avisou.longa);
-  assert.ok(/Rode \/sworn:handoff/.test(avisou.longa), avisou.longa);
+  // D786 passo 2: com o aviso ja dado, o handoff ja foi pedido; o comando fica para gravar outro
+  assert.ok(avisou.longa.endsWith('**O que fazer**\nNada: o handoff já foi pedido nesta sessão e o trabalho segue ' +
+    'nesta conversa (para gravar outro, /sworn:handoff).'), avisou.longa);
 });
 
 // Plano 083 Tarefa 4: p2-26 (concordancia do titulo), p2-11 (SINAL/FALTA sem o prototipo), p2-12 (sem "-0,00").

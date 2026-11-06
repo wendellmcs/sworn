@@ -994,7 +994,7 @@ test('091 #6: arquivo AAA sem o manual carregado e negado com o motivo do mock; 
         'Faca agora: carregue pela ferramenta Skill o sworn:playbook (ou a skill do projeto com "padrao" no nome) ' +
           'e tente',
         'a edicao de novo.',
-        'Desligar neste projeto: "portaoManual": false em .claude/sworn/projeto.json.'
+        'So o dono desliga neste projeto: "portaoManual": false em .claude/sworn/projeto.json.'
       ].join('\n'));
       assert.strictEqual(carregarSkill(dir, tmp, 'sworn:review').status, 0);
       assert.ok(negou(rodar(entrada(dir, 'src/auth/login.js'), tmp)), 'skill que nao e manual liberou');

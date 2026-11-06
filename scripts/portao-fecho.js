@@ -16,6 +16,30 @@ function avisoDeAmpliacao(contadores) {
     'Se voce nao pediu isso, confira o que entrou no escopo.md e mande reverter; se pediu, nao precisa fazer nada.';
 }
 
+/**
+ * s366 (F11, qw11: depois da compactacao o luna parou na negacao do write_file e o Stop deixou): so os portoes do
+ * Write/Edit e do shell liam a ordem do compact, e a conversa compactada fica abaixo do gatilho de saude. Com a ordem
+ * pendente, o Stop a leva ao modelo (o texto da compactacao, reinjecao.ordemDoHandoff) e soma uma negacao no mesmo teto
+ * dos portoes (reinjecao.cobrarOrdem); no teto a ordem cai e o Stop passa. Em laco fica para o proximo Stop, como o
+ * aviso de saude (T10-1 e s359). Muda o `s`, nao grava: quem chama grava (no encerrarTurno, o sessao() carrega a
+ * ordemDoCompact pelo camposDaSessao).
+ */
+function cobrancaDaOrdem(e, s) {
+  const ordem = s.ordemDoCompact;
+  if (!ordem || typeof ordem !== 'object') return null;
+  if (e.stop_hook_active === true && s.bloqueouNesteTurno !== true) return null;
+  const reinjecao = require('./lib/reinjecao.js');
+  const negadas = Number(ordem.negadas) || 0;
+  if (negadas >= reinjecao.NEGACOES_DA_ORDEM) { delete s.ordemDoCompact; return null; }
+  const texto = reinjecao.ordemDoHandoff(config.raizDoProjeto(e.cwd), s);
+  if (!texto) return null;
+  ordem.negadas = negadas + 1;
+  return texto;
+}
+
+const AVISO_DA_ORDEM = 'sworn: a ordem do handoff dada na compactacao ainda nao foi cumprida; o modelo foi ' +
+  'lembrado de cumpri-la antes de parar.';
+
 function encerrarTurno(e, s, avisoExtra) {
   const contadores = s.contadores || {};
   const cwd = config.raizDoProjeto(e.cwd);
@@ -36,12 +60,16 @@ function encerrarTurno(e, s, avisoExtra) {
 
   // T10-1: em laco (stop_hook_active) nao se continua a conversa nem se marca o aviso como dado:
   // ele fica pendente para o proximo Stop. Continuar dentro do laco e o que a trava de 8 existe para cortar.
-  const avisa = vs.disparou && e.stop_hook_active !== true;
+  // s359 (F3): menos o laco que o proprio fecho causou (bloqueouNesteTurno): o barrar nao leva a ordem, e o proximo
+  // Stop pode nao vir (o turno acaba). Sai uma vez: a ordem marca avisouSaude e o bloqueio do turno morre aqui.
+  const avisa = vs.disparou && (e.stop_hook_active !== true || s.bloqueouNesteTurno === true);
   // D704: com agente de fundo rodando na sessao, a ordem do handoff espera. O aviso de espera sai uma vez (avisouEspera)
   // e o de saude fica pendente (avisouSaude nao marca): sai no primeiro Stop sem agente rodando.
   const rodando = avisa ? saude.agentesRodando(e.transcript_path, Date.now()) : [];
   const entrega = avisa && rodando.length === 0;
   const esperaNova = rodando.length > 0 && s.avisouEspera !== true;
+  // s366 (F11): a ordem do compact pendente, quando o aviso de saude nao sai agora (ele ja leva a ordem do handoff).
+  const daOrdem = entrega || esperaNova ? null : cobrancaDaOrdem(e, s);
 
   const partes = [];
   const amp = avisoDeAmpliacao(contadores);
@@ -49,6 +77,7 @@ function encerrarTurno(e, s, avisoExtra) {
   if (avisoExtra) partes.push(avisoExtra);
   if (entrega) partes.push(vs.aviso);
   if (esperaNova) partes.push(saude.avisoDeSaude(vs.gatilhos, vs.alarme, rodando));
+  if (daOrdem) partes.push(AVISO_DA_ORDEM);
 
   // O estado do TURNO morre aqui (trabalhoReal, bloqueouNesteTurno, contadores); o da
   // SESSAO sobrevive. Separar os dois e exatamente o que a T18 existe para fazer.
@@ -63,9 +92,18 @@ function encerrarTurno(e, s, avisoExtra) {
     // Zera o turno mas guarda que ja avisou: o aviso sai uma vez por sessao.
     // Plano 0.9.1: os arquivos tocados e a conta dos portoes seguem, como no outro ramo - o compact os reinjeta, e e
     // perto deste aviso que a conversa costuma compactar.
-    sessao({ avisouSaude: true, avisouAlarme: avisouAlarme, avisouEspera: avisouEspera, turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [], arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, tokensDeContexto: tokensDeContexto });
+    // D786 passo 3: a ordem do handoff que sai agora torna velho o gravado antes (a compactacao mandaria reler esse);
+    // fica so o gravado neste turno, o que a ordem ja encontra pronto (o jaColado abaixo). O ultimo handoff do turno
+    // (arquivoDoHandoff, campo do turno) tem de ser o da marca: o de um subagente tambem o grava, sem trocar a marca.
+    sessao({ avisouSaude: true, avisouAlarme: avisouAlarme, avisouEspera: avisouEspera,
+      turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [],
+      arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, tokensDeContexto: tokensDeContexto,
+      handoffDaSessao: s.handoffDaSessao === s.arquivoDoHandoff ? s.handoffDaSessao || null : null });
   } else {
-    sessao({ turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [], arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, avisouSaude: s.avisouSaude || false, avisouAlarme: avisouAlarme, avisouEspera: avisouEspera, tokensDeContexto: tokensDeContexto });
+    sessao({ turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [],
+      arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, avisouSaude: s.avisouSaude || false,
+      avisouAlarme: avisouAlarme, avisouEspera: avisouEspera, tokensDeContexto: tokensDeContexto,
+      handoffDaSessao: s.handoffDaSessao || null });
   }
   if (!partes.length) return io.permitir();
   const saida = { systemMessage: partes.join('\n\n') };
@@ -78,6 +116,8 @@ function encerrarTurno(e, s, avisoExtra) {
     saida.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: saude.instrucaoAoModelo(vs.gatilhos, jaColado) };
   } else if (esperaNova) {
     saida.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: saude.instrucaoAoModelo(vs.gatilhos, false, rodando) };
+  } else if (daOrdem) {
+    saida.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: daOrdem };
   }
   io.permitir(saida);
 }
@@ -194,7 +234,7 @@ function semRevisaoDeReferencia(e, s, projeto, cwd) {
     '     dizendo o motivo, ou comecar uma comparacao nova do zero;',
     '  3. ou diga ao usuario por que esta entrega fica sem a comparacao.',
     '',
-    'Desligar neste projeto: "portaoReferencia": false em .claude/sworn/projeto.json.'
+    'So o dono desliga neste projeto: "portaoReferencia": false em .claude/sworn/projeto.json.'
   ]).join('\n');
 }
 
@@ -235,16 +275,39 @@ function semRevisaoAprovada(e, s, projeto, cwd, jaCobrados) {
 
 /** D634: o motivo quando a prova existe mas o resultado dela nao sustenta a alegacao - o bloco colado mostra falha
  *  (7a), o ultimo teste rodado na sessao falhou (7b) ou a provaDePronto nao rodou depois da ultima edicao de codigo
- *  (8). Declarar o que nao rodou, ou que a falha segue, sempre libera. O transcript so e lido quando ha alegacao. */
+ *  (8). Declarar o que nao rodou, ou que a falha segue, libera. O transcript so e lido quando ha alegacao. D785: com
+ *  provaDePronto e codigo editado no turno, quem cobra antes e o laco da prova (motivoDoLaco), sem a ressalva. */
 function motivoDoResultado(e, projeto) {
   const msg = e.last_assistant_message;
   if (evidencia.deveBloquearPorFalha(msg)) return evidencia.MOTIVO_FALHA;
   if (!evidencia.analisar(msg).alegaSucesso || evidencia.declaraRessalva(msg)) return null;
-  const t = saude.testesDoTranscript(e.transcript_path, projeto && projeto.provaDePronto);
+  const t = saude.testesDoTranscript(e.transcript_path,
+    saude.provasEquivalentes(projeto && projeto.provaDePronto, config.raizDoProjeto(e.cwd)));
   if (!t) return null;
   if (t.ultimoTeste && t.ultimoTeste.falhou) return evidencia.motivoTesteVermelho(t.ultimoTeste.comando);
   if (t.provaPendente) return evidencia.motivoProvaNaoRodou(projeto.provaDePronto);
   return null;
+}
+
+/** D785 (2.1): o laco da prova. Com provaDePronto declarada, o turno que editou codigo (marca do marcar-trabalho.js)
+ *  barra enquanto o ultimo teste estiver vermelho ou a prova pendente, com ou sem alegacao e com ou sem ressalva, e
+ *  tambem em laco: o contador e o do turno (`lacoDaProva`), nao o stop_hook_active. A volta TETO_DO_LACO + 1 manda
+ *  escalar; dali em diante libera (teto contado). Conta a volta em `s` e no balde do fecho sem evidencia; sem barrar,
+ *  null. O transcript so e lido no turno que editou codigo. */
+function motivoDoLaco(e, s, projeto) {
+  if (!s.editouCodigo || projetoLib.travasDe(projeto).fecho === false) return null;
+  const prova = projeto && typeof projeto.provaDePronto === 'string' ? projeto.provaDePronto.trim() : '';
+  const n = (s.lacoDaProva || 0) + 1;
+  if (!prova || n > evidencia.TETO_DO_LACO + 1) return null;
+  const t = saude.testesDoTranscript(e.transcript_path, saude.provasEquivalentes(prova, config.raizDoProjeto(e.cwd)));
+  if (!t) return null;
+  const vermelho = t.ultimoTeste !== null && t.ultimoTeste.falhou;
+  if (!vermelho && !t.provaPendente) return null;
+  s.lacoDaProva = n;
+  s.contadores = s.contadores || {};
+  s.contadores.fecho_sem_evidencia = (s.contadores.fecho_sem_evidencia || 0) + 1;
+  return evidencia.motivoDoLaco(vermelho ? 'vermelho' : 'pendente', vermelho ? t.ultimoTeste.comando : prova, n,
+    vermelho && t.ultimoTeste.barradoPeloSandbox === true);
 }
 
 /** Um bloqueio por turno, com os motivos que o turno juntou - o do subitem aberto OU o da
@@ -264,8 +327,12 @@ io.blindar(function () {
   io.lerEntrada(function (e) {
     const s = estado.ler(e.session_id);
 
-    // Ja bloqueou neste turno, ou o harness avisa que estamos em laco: encerra.
-    if (s.bloqueouNesteTurno || e.stop_hook_active === true) return encerrarTurno(e, s);
+    // Ja bloqueou neste turno, ou o harness avisa que estamos em laco: encerra. D785 (2.1): menos o laco da prova, que
+    // barra de novo pelo contador dele; o resto do turno ja foi cobrado.
+    if (s.bloqueouNesteTurno || e.stop_hook_active === true) {
+      const doLaco = s.editouCodigo ? motivoDoLaco(e, s, config.carregarProjeto(config.raizDoProjeto(e.cwd))) : null;
+      return doLaco ? barrar(e, s, [doLaco], false) : encerrarTurno(e, s);
+    }
 
     // D694 (T3 da escada): o pedido de escalada sem despacho entra no bloqueio do turno com ou sem trabalho e com a
     // trava 3 desligada (e da escada de agentes, a trava 6). Cobrado uma vez: sai da sessao aqui (lib/escalada.js).
@@ -277,8 +344,16 @@ io.blindar(function () {
     }
     const motivosDaEscalada = daEscalada ? [daEscalada] : [];
 
-    // Nao houve trabalho real: conversa passa direto. Custo zero.
-    if (!s.trabalhoReal) return motivosDaEscalada.length ? barrar(e, s, motivosDaEscalada, false) : io.permitir();
+    // Nao houve trabalho real: conversa passa direto. Custo zero. s366 (F11): menos a ordem do compact pendente (a
+    // escrita negada pelo portao nao marca trabalho); a cobranca muda o `s`, gravado aqui como no barrar.
+    if (!s.trabalhoReal) {
+      if (motivosDaEscalada.length) return barrar(e, s, motivosDaEscalada, false);
+      if (!s.ordemDoCompact) return io.permitir();
+      const daOrdem = cobrancaDaOrdem(e, s);
+      estado.gravar(e.session_id, s);
+      return daOrdem ? io.permitir({ systemMessage: AVISO_DA_ORDEM,
+        hookSpecificOutput: { hookEventName: 'Stop', additionalContext: daOrdem } }) : io.permitir();
+    }
 
     // X2b: o dono desligou a cobranca de evidencia - NAO o ledger. encerrarTurno
     // e o UNICO chamador de estado.descarregar (unico escritor de
@@ -337,14 +412,18 @@ io.blindar(function () {
       }
     }
 
-    const semEvidencia = evidencia.deveBloquear(e.last_assistant_message);
+    // D785 (2.1): o laco da prova cobra antes, e no lugar, da falta de bloco e do resultado (conta o balde ele mesmo).
+    const doLaco = motivoDoLaco(e, s, projeto);
+    const semEvidencia = !doLaco && evidencia.deveBloquear(e.last_assistant_message);
     // D634: se a falta de bloco nao barrou, o resultado da prova; conta no mesmo balde (a evidencia nao sustenta a alegacao).
-    const semResultado = semEvidencia ? null : motivoDoResultado(e, projeto);
-    if (!semEvidencia && !semResultado && !semPrompt && !doTurno.length) return encerrarTurno(e, s, planoIlegivel);
+    const semResultado = doLaco || semEvidencia ? null : motivoDoResultado(e, projeto);
+    const nada = !doLaco && !semEvidencia && !semResultado && !semPrompt && !doTurno.length;
+    if (nada) return encerrarTurno(e, s, planoIlegivel);
 
     const motivos = [];
     if (planoIlegivel) motivos.push(planoIlegivel);
-    if (semEvidencia || semResultado) {
+    if (doLaco) motivos.push(doLaco);
+    else if (semEvidencia || semResultado) {
       s.contadores = s.contadores || {};
       s.contadores.fecho_sem_evidencia = (s.contadores.fecho_sem_evidencia || 0) + 1;
       motivos.push(semEvidencia ? evidencia.MOTIVO : semResultado);

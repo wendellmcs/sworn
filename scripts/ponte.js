@@ -9,6 +9,10 @@ const agentesLib = require('./lib/agentes.js');
 const estado = require('./lib/estado.js');
 const transcricoes = require('./lib/transcricoes.js');
 const texto = require('./lib/texto.js');
+const saude = require('./lib/saude.js');
+const calibracao = require('./lib/calibracao.js');
+const config = require('./lib/config.js');
+const reinjecao = require('./lib/reinjecao.js');
 
 /**
  * Pedido 6 (D752): `node ponte.js <harness> <script>` e o gancho que o instalador grava no Codex, no Qwen Code, no
@@ -21,7 +25,8 @@ const texto = require('./lib/texto.js');
  * O que o harness nao faz e a ponte emula, com o estado na pasta dos portoes (lib/estado.js):
  * - prompt repetido no mesmo pedido (Qwen, dsh, agy): o portao do prompt roda uma vez por pedido;
  * - stop_hook_active (agy, dsh, OpenCode): o Stop seguinte a um block chega com true, como no Claude Code;
- * - abertura (agy, OpenCode): roda uma vez por sessao;
+ * - abertura (agy, OpenCode): roda uma vez por sessao, e de novo na compactacao do OpenCode;
+ * - compactacao sem aviso (agy, dsh): a queda do contexto depois do handoff marcado roda a abertura do compact;
  * - Stop do subagente do dsh (chega como Stop, com o session_id do filho): nao passa pelo portao do fecho;
  * - transcript_path (o dsh manda vazio, o OpenCode nao manda): achado na casa do usuario (transcricaoDe);
  * - last_assistant_message (agy, dsh e OpenCode nao mandam no Stop): a ultima resposta da transcricao.
@@ -256,6 +261,104 @@ function perguntaDoAgy(bruta, e, s, chave, o) {
 }
 
 /**
+ * D786 passo 4: agy e dsh nao avisam a compactacao. Com handoff marcado na sessao (`handoffDaSessao`, gravado pelo
+ * marcar-trabalho), o 1o portao do prompt guarda o maior contexto visto; a queda abaixo da regua da calibracao
+ * (QUEDA_DE_COMPACTACAO do pico, vindo de mais de PISO_DA_COMPACTACAO) e a compactacao: roda a abertura com
+ * `source: compact`, que manda reler o handoff e consome a marca. `releu` guarda a marca cuja ordem ja foi entregue,
+ * para nao mandar duas vezes se a abertura nao a consumir. Sem marca, a queda se mede pelo `quedaSemAviso` (s359).
+ * Devolve o contexto da abertura ('' = nada). `opcoes.medir` troca a leitura do contexto (teste).
+ */
+function releituraSemAviso(harness, script, e, s, chave, o) {
+  const ganchos = o.ganchos || lerGanchos();
+  if (!harnessLib.COMPACTA_SEM_AVISO.includes(harness) || scriptsDe(ganchos, 'UserPromptSubmit')[0] !== script) {
+    return '';
+  }
+  const sessao = estado.ler(e.session_id);
+  const marca = typeof sessao.handoffDaSessao === 'string' ? sessao.handoffDaSessao : '';
+  // O dsh manda o transcript_path vazio: no prompt repetido ele ainda nao foi achado.
+  const caminhoDaTranscricao = () => e.transcript_path || transcricaoDe(harness, e.session_id, o.casa || os.homedir());
+  if (!marca) {
+    const antes = JSON.stringify(s);
+    delete s.picoDoHandoff;
+    delete s.releu;
+    const ordem = quedaSemAviso(ganchos, e, s, sessao, caminhoDaTranscricao, o);
+    if (JSON.stringify(s) !== antes) gravarEstado(chave, s);
+    return ordem;
+  }
+  if (s.releu === marca) return '';
+  // Com a marca, o pico sem aviso de antes dela vale nada: depois do compact que a consome, ele viraria queda de novo.
+  delete s.picoSemAviso;
+  const caminho = caminhoDaTranscricao();
+  const atual = (o.medir || saude.contextoDoTranscript)(caminho);
+  const gravado = typeof sessao.tokensDeContexto === 'number' ? sessao.tokensDeContexto : 0;
+  const pico = Math.max(Number(s.picoDoHandoff) || 0, gravado);
+  if (!caiuDe(pico, atual)) {
+    s.picoDoHandoff = typeof atual === 'number' ? Math.max(pico, atual) : pico;
+    gravarEstado(chave, s);
+    return '';
+  }
+  const ordem = abrirCompact(ganchos, e, caminho, o);
+  // So a ordem entregue conta como mandada: abertura que falhou ou saiu vazia tenta de novo no prompt seguinte (o pico
+  // fica, e a queda se ve de novo enquanto a marca durar).
+  if (!ordem) return '';
+  delete s.picoDoHandoff;
+  s.releu = marca;
+  gravarEstado(chave, s);
+  return ordem;
+}
+
+/** A regua da calibracao: `atual` abaixo de QUEDA_DE_COMPACTACAO do pico, vindo de mais de PISO_DA_COMPACTACAO. */
+function caiuDe(pico, atual) {
+  return typeof atual === 'number' && pico > calibracao.PISO_DA_COMPACTACAO &&
+    atual < calibracao.QUEDA_DE_COMPACTACAO * pico;
+}
+
+/** Roda a abertura com `source: compact` (mais os campos de `extra`) e devolve o contexto dela ('' = nada). */
+function abrirCompact(ganchos, e, caminho, o, extra = {}) {
+  const grupos = ondeRoda(ganchos, 'abertura').SessionStart || [];
+  if (!grupos.length) return '';
+  const entrada = Object.assign({}, e, { hook_event_name: 'SessionStart', source: 'compact',
+    transcript_path: caminho }, extra);
+  delete entrada.prompt;
+  const timeout = Math.max.apply(null, grupos.map((g) => Number(g.timeout) || 10));
+  return harnessLib.lerSaida((o.executar || executar)(path.join(__dirname, 'abertura.js'), entrada, timeout))
+    .contexto || '';
+}
+
+/**
+ * s359 (F2b): sem handoff marcado e sem aviso de saude, o turno longo que passou do limiar e compactou sem fim de turno
+ * no meio nao recebia ordem nenhuma (o F2 da abertura so mede a transcricao, que no agy e no dsh ja vem baixa). Aqui a
+ * ponte guarda o pico que ela mesma viu, `picoSemAviso`. O tokensDeContexto gravado nao entra: depois do compact ele
+ * fica velho e viraria queda de novo. Na queda, se o pico cruzou o limiar (reinjecao.cruzouSemAviso), roda o compact
+ * com `sworn_pico`. Com o aviso dado (ou a marca, no chamador) o pico zera: a ordem segue pelo caminho da marca. No agy
+ * a PreInvocation roda a cada chamada ao modelo e ve o pico; no dsh so a cada prompt, e o pico do meio de um turno fica
+ * fora (limite). Altera `s`; devolve a ordem ('' = nada).
+ */
+function quedaSemAviso(ganchos, e, s, sessao, caminhoDaTranscricao, o) {
+  if (sessao.avisouSaude === true) {
+    delete s.picoSemAviso;
+    return '';
+  }
+  const caminho = caminhoDaTranscricao();
+  const atual = (o.medir || saude.contextoDoTranscript)(caminho);
+  if (typeof atual !== 'number') return '';
+  const pico = Number(s.picoSemAviso) || 0;
+  if (!caiuDe(pico, atual)) {
+    s.picoSemAviso = Math.max(pico, atual);
+    return '';
+  }
+  const projeto = config.carregarProjeto(config.raizDoProjeto(e.cwd));
+  if (!reinjecao.cruzouSemAviso(sessao, pico, projeto)) {
+    s.picoSemAviso = atual;
+    return '';
+  }
+  const ordem = abrirCompact(ganchos, e, caminho, o, { sworn_pico: pico });
+  // Como com a marca: so a ordem entregue zera o pico; a que falhou tenta de novo no prompt seguinte.
+  if (ordem) delete s.picoSemAviso;
+  return ordem;
+}
+
+/**
  * O nucleo, sem processo: devolve o texto que vai ao stdout do harness ('' = passar). `opcoes.executar` troca o
  * portao (teste), `opcoes.plataforma` troca o SO do mapa do shell, `opcoes.ganchos` troca o hooks.json, `opcoes.casa`
  * troca a pasta pessoal, `opcoes.agentes` troca a pasta agents/ e `opcoes.legivel` diz se este Node le a transcricao
@@ -303,7 +406,8 @@ function rodar(harness, script, bruta, opcoes) {
   }
   if (evento === 'SubagentStart') s.subagente = true;
   if (evento === 'Stop' && s.subagente === true) return '';
-  if (evento === 'SessionStart' && harnessLib.ABRE_UMA_VEZ.includes(harness)) {
+  // D786 passo 4: a compactacao do OpenCode roda a abertura de novo (a do compact manda reler o handoff).
+  if (evento === 'SessionStart' && harnessLib.ABRE_UMA_VEZ.includes(harness) && entradas[0].source !== 'compact') {
     s.abriu = s.abriu || {};
     if (s.abriu[script] === true) return '';
     s.abriu[script] = true;
@@ -312,7 +416,10 @@ function rodar(harness, script, bruta, opcoes) {
     const pedido = harnessLib.chaveDoPrompt(harness, entradas[0]);
     if (pedido !== null) {
       s.prompt = s.prompt || {};
-      if (s.prompt[script] === pedido) return '';
+      if (s.prompt[script] === pedido) {
+        const ordem = releituraSemAviso(harness, script, entradas[0], s, chave, o);
+        return ordem ? harnessLib.escreverSaida(harness, evento, { contexto: ordem }) : '';
+      }
       s.prompt[script] = pedido;
     }
     s.bloqueouStop = false;
@@ -332,7 +439,19 @@ function rodar(harness, script, bruta, opcoes) {
   const caminho = path.join(__dirname, script + '.js');
   const timeout = Math.max.apply(null, grupos.map((g) => Number(g.timeout) || 10));
   const decisao = harnessLib.juntar(entradas.map((e) => harnessLib.lerSaida(roda(caminho, e, timeout))));
-  if (emula) s.bloqueouStop = decisao.bloquear !== undefined;
+  // s361 (F6): o contexto que a saida converte em block tambem conta (o Codex manda stop_hook_active depois dele).
+  if (emula) s.bloqueouStop = decisao.bloquear !== undefined || harnessLib.stopViraBlock(harness, evento, decisao);
+  // Depois do portao: decisao que segura, bloqueia ou nega descarta o contexto no agy e no dsh (escreverSaida); a
+  // releitura fica para o prompt seguinte, que ve a mesma queda (o pico e a marca ficam como estavam).
+  const soContexto = ['segurar', 'bloquear', 'negar'].every((k) => decisao[k] === undefined);
+  const releitura = evento === 'UserPromptSubmit' && soContexto
+    ? releituraSemAviso(harness, script, entradas[0], s, chave, o) : '';
+  if (releitura) {
+    // `bruto` e a saida do portao como veio (Codex/Qwen a repassam sem reescrita): com a releitura junta, ela ja nao
+    // e a saida inteira.
+    decisao.contexto = [releitura, decisao.contexto].filter(Boolean).join('\n\n');
+    delete decisao.bruto;
+  }
   // Formato que este Node nao le fica dito na abertura, nunca calado (o contexto e a prova do fecho dependem dele).
   if (evento === 'SessionStart' && script === 'abertura' && !(o.legivel || transcricoes.legivel)(harness)) {
     decisao.contexto = [decisao.contexto, 'sworn: o Node ' + process.version + ' nao le a transcricao do ' + harness +

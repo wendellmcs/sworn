@@ -776,7 +776,7 @@ through the scope of Step 0b.
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/ligar-atualizacao.js"
 
-Without `--gravar` the command writes nothing. `JA LIGADA` → say so in one line and move on to Step 8,
+Without `--gravar` the command writes nothing. `JA LIGADA` → say so in one line and move on to Step 7g,
 without asking. `ERRO` → paste the output, tell the user what it asks for and move on without turning it on. `PROPOSTA` → 
 item 2.
 
@@ -819,6 +819,25 @@ profile and opening `dsh --profile sworn`.
 
 Exit 0 with `ligados` is the proof: paste that line. Without it, Step 8 says that **the gates are off in this
 harness** and lists the steps `--conferir` printed — never a table of locks that do not run.
+
+## Step 7h — the compaction point
+
+When the context reaches sworn's size trigger, the handoff is written and the work goes on in the same session: the
+harness compacts, and the hook after the compaction sends the agent back to the handoff. For that, the automatic
+compaction has to come **right after** the trigger, not long after it. In every harness, from inside the absolute
+root of Step 0, without asking (it is part of the init):
+
+    node "<plugin>/scripts/calibrar.js" --ponto
+
+`<plugin>` is `${CLAUDE_PLUGIN_ROOT}` in Claude Code; outside it, as in Step 7g, the folder two levels above this
+`SKILL.md`. It writes the point for the threshold in force (the trigger plus 50 thousand tokens):
+`env.CLAUDE_CODE_AUTO_COMPACT_WINDOW` in `.claude/settings.local.json` (the project's personal file, outside git)
+and, when the Codex hooks are installed,
+`model_auto_compact_token_limit` in `.codex/config.toml`; the rest of both files stays. Paste the `compactacao` list.
+In Step 8 say it in plain words, in the user's language: when the conversation gets long, the harness (the program
+that runs the agent) now summarizes it right after sworn writes the handoff, and the agent goes on in the same chat,
+with nothing for the user to do; it applies from the next Claude Code session; Qwen Code, OpenCode, agy and `dsh`
+have no such setting. An item with `erro` (exit 1): show it and what it says to fix; never write the file by hand.
 
 ## Step 8 — close by saying what was switched on
 

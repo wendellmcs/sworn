@@ -33,6 +33,7 @@ const AMOSTRA_MINIMA = { sessoes: 30, conversasNoPadrao: 10, trocasMedidas: 10 }
 const TROCA_PADRAO = { custo: 0.86, recomeco: 82 * K };
 // a compactacao derruba o contexto: queda para menos de 60% vindo de mais de 80K abre conversa nova
 const QUEDA_DE_COMPACTACAO = 0.6;
+const PISO_DA_COMPACTACAO = 80 * K;
 // escrever o handoff so conta perto do fim da sessao (as ultimas 60 chamadas), como na D464
 const JANELA_DO_HANDOFF = 60;
 
@@ -168,7 +169,7 @@ function segmentar(sessoes) {
     const onde = [];
     s.chamadas.forEach(function (c, i) {
       const ant = atual.chamadas[atual.chamadas.length - 1];
-      if (ant && c.C < QUEDA_DE_COMPACTACAO * ant.C && ant.C > 80 * K) {
+      if (ant && c.C < QUEDA_DE_COMPACTACAO * ant.C && ant.C > PISO_DA_COMPACTACAO) {
         segs.push(atual);
         atual = { chamadas: [], turnos: new Set() };
       }
@@ -353,5 +354,5 @@ function pastaDasTranscricoes(raiz, env, casa) {
   return achada ? path.join(projetos, achada.name) : null;
 }
 
-module.exports = { PRECOS, FAIXAS, CANDIDATOS, AMOSTRA_MINIMA, TROCA_PADRAO, lerSessao, lerPasta, segmentar, custoDaTroca,
-  simular, escolher, calibrar, nomeDaPasta, pastaDasTranscricoes };
+module.exports = { PRECOS, FAIXAS, CANDIDATOS, AMOSTRA_MINIMA, TROCA_PADRAO, QUEDA_DE_COMPACTACAO, PISO_DA_COMPACTACAO,
+  lerSessao, lerPasta, segmentar, custoDaTroca, simular, escolher, calibrar, nomeDaPasta, pastaDasTranscricoes };

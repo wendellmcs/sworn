@@ -256,7 +256,7 @@ test('fecho: aviso de uma vez por sessao nao volta no turno seguinte', () => {
     const aviso = escrita('av2', torto);
     assert.ok(aviso.json && /tipo errado/.test(aviso.json.systemMessage), 'controle: ' + aviso.stdout);
     const disparou = fecharTurno('av2', torto);
-    assert.ok(disparou.json && /chat novo/.test(disparou.json.systemMessage),
+    assert.ok(disparou.json && /hora do handoff/.test(disparou.json.systemMessage),
       'controle: a saude tinha de disparar: ' + disparou.stdout);
     assert.strictEqual(escrita('av2', torto).json, null, 'o aviso de campo de tipo errado voltou');
   });
@@ -419,8 +419,10 @@ test('fecho: todo campo que um script grava no estado tem tempo de vida declarad
 
     // o estado com todo campo gravado, nos dois ramos do fecho. `abertoEm: null` e o
     // que a abertura grava sem origem: valor falso da sessao tambem tem de ser carregado
+    // D786 passo 3: a abertura grava os avisos de saude (false) no compact; com um objeto no lugar, o ramo da
+    // saude calava.
     const tipado = { trabalhoReal: true, bloqueouNesteTurno: true, contadores: {}, turnosComTrabalho: 1,
-      gitAbertura: [], arquivosTocados: [], abertoEm: null };
+      gitAbertura: [], arquivosTocados: [], abertoEm: null, avisouSaude: false, avisouAlarme: false };
     const cheio = {};
     for (const c of gravados) cheio[c] = Object.prototype.hasOwnProperty.call(tipado, c) ? tipado[c] : { campo: c };
     const sem = fs.mkdtempSync(path.join(tmp, 'sem-'));
@@ -433,7 +435,7 @@ test('fecho: todo campo que um script grava no estado tem tempo de vida declarad
       fs.writeFileSync(path.join(tmp, 'sworn', id + '.json'), JSON.stringify(cheio), 'utf8');
       const f = rodar('portao-fecho.js', { session_id: id, cwd: cwd, hook_event_name: 'Stop',
         last_assistant_message: 'Anotado.' }, tmp);
-      assert.strictEqual(Boolean(f.json && /chat novo/.test(f.json.systemMessage)), saude,
+      assert.strictEqual(Boolean(f.json && /hora do handoff/.test(f.json.systemMessage)), saude,
         'controle: o ramo da saude errado em ' + id + ': ' + f.stdout);
       const depois = sessaoDe(tmp, id);
       for (const c of daSessao) {
@@ -471,7 +473,7 @@ test('T10-1: a saude que dispara manda ao modelo o que fazer, e ao usuario o avi
     const dir = projetoQueDispara(tmp, 't101');
     const r = turnoComTrabalho(tmp, 't101', dir);
     assert.strictEqual(r.status, 0, r.stderr);
-    assert.ok(r.json && /chat novo/.test(r.json.systemMessage), 'controle: o aviso do usuario segue: ' + r.stdout);
+    assert.ok(r.json && /hora do handoff/.test(r.json.systemMessage), 'controle: o aviso do usuario segue: ' + r.stdout);
     const h = r.json.hookSpecificOutput;
     assert.ok(h, 'faltou hookSpecificOutput: ' + r.stdout);
     assert.strictEqual(h.hookEventName, 'Stop');
@@ -480,7 +482,7 @@ test('T10-1: a saude que dispara manda ao modelo o que fazer, e ao usuario o avi
     assert.ok(/turnos com trabalho real \(.+\) nesta sessao \(limiar 1\)/.test(t),
       'tem de citar o gatilho que disparou: ' + t);
     assert.ok(t.indexOf('/sworn:handoff') !== -1, 'tem de mandar rodar o handoff: ' + t);
-    assert.ok(/chat novo/.test(t), 'tem de mandar dizer que e hora de abrir chat novo: ' + t);
+    assert.ok(/segue nesta conversa/.test(t), 'tem de mandar dizer que o trabalho segue (D786): ' + t);
     assert.ok(/bloco de codigo/.test(t), 'tem de mandar colar o prompt em bloco de codigo: ' + t);
     assert.ok(/sigo/.test(t), 'tem de proibir o "sigo?": ' + t);
     assert.ok(/^[\x20-\x7E\n]+$/.test(t), 'additionalContext tem de ser ASCII: ' + JSON.stringify(t));
@@ -1122,7 +1124,7 @@ test('D445: o fecho le o transcript_path e avisa a troca de chat acima do limiar
     const alto = path.join(tmp, 'alto.jsonl');
     fs.writeFileSync(alto, linha(1000) + linha(175500));
     const r2 = turnoComTrabalho(tmp, 'ctx2', dir, { transcript_path: alto });
-    assert.ok(r2.json && /chat novo/.test(r2.json.systemMessage), 'acima do limiar avisa: ' + r2.stdout);
+    assert.ok(r2.json && /hora do handoff/.test(r2.json.systemMessage), 'acima do limiar avisa: ' + r2.stdout);
     assert.ok(/175500 tokens de contexto, o tamanho desta conversa \(limiar 175000\)/
       .test(r2.json.hookSpecificOutput.additionalContext), r2.stdout);
     const r3 = turnoComTrabalho(tmp, 'ctx3', dir, { transcript_path: path.join(tmp, 'sumiu.jsonl') });
@@ -1138,7 +1140,7 @@ test('D464: o fecho da o alarme de 450000 depois do aviso, uma vez so, e nao o m
     const linha = (n) => JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: n, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }) + '\n';
     const com = (n) => { const f = path.join(tmp, 't' + n + '.jsonl'); fs.writeFileSync(f, linha(n)); return f; };
     const r1 = turnoComTrabalho(tmp, 'al', dir, { transcript_path: com(300000) });
-    assert.ok(r1.json && /chat novo/.test(r1.json.systemMessage) && !/ALARME/.test(r1.json.systemMessage), r1.stdout);
+    assert.ok(r1.json && /hora do handoff/.test(r1.json.systemMessage) && !/ALARME/.test(r1.json.systemMessage), r1.stdout);
     assert.strictEqual(sessaoDe(tmp, 'al').avisouSaude, true);
     const r2 = turnoComTrabalho(tmp, 'al', dir, { transcript_path: com(400000) });
     assert.strictEqual(r2.json, null, 'entre o aviso e o alarme, nada: ' + r2.stdout);
@@ -1174,7 +1176,7 @@ test('D704: com agente em segundo plano rodando, o fecho manda esperar uma vez e
     const s = sessaoComAgente('d704');
     const r1 = turnoComTrabalho(tmp, 'd704', dir, { transcript_path: s.transcricao });
     assert.strictEqual(r1.status, 0, r1.stderr);
-    assert.ok(r1.json && /chat novo/.test(r1.json.systemMessage) && r1.json.systemMessage.indexOf('R1 saude correcao (agent-x1)') !== -1,
+    assert.ok(r1.json && /hora do handoff/.test(r1.json.systemMessage) && r1.json.systemMessage.indexOf('R1 saude correcao (agent-x1)') !== -1,
       'o usuario ve a espera: ' + r1.stdout);
     const ctx1 = r1.json.hookSpecificOutput && r1.json.hookSpecificOutput.additionalContext;
     assert.ok(/Nao rode \/sworn:handoff agora/.test(ctx1) && ctx1.indexOf('1. Rode /sworn:handoff.') === -1, 'o modelo espera: ' + ctx1);
@@ -1188,7 +1190,9 @@ test('D704: com agente em segundo plano rodando, o fecho manda esperar uma vez e
     const r3 = turnoComTrabalho(tmp, 'd704', dir, { transcript_path: s.transcricao });
     const ctx3 = r3.json && r3.json.hookSpecificOutput && r3.json.hookSpecificOutput.additionalContext;
     assert.ok(ctx3 && ctx3.indexOf('1. Rode /sworn:handoff.') !== -1, 'a ordem nao chegou depois do termino: ' + r3.stdout);
-    assert.ok(/Faca assim: rode \/sworn:handoff/.test(r3.json.systemMessage) && r3.json.systemMessage.indexOf('agent-x1') === -1, r3.stdout);
+    // D786 passo 2: o usuario nao faz nada; o Claude grava o handoff e segue
+    assert.ok(/Faca assim: nada, voce nao precisa agir\.\nO Claude grava o handoff \(\/sworn:handoff/.test(r3.json.systemMessage) &&
+      r3.json.systemMessage.indexOf('agent-x1') === -1, r3.stdout);
     assert.strictEqual(sessaoDe(tmp, 'd704').avisouSaude, true);
     assert.strictEqual(sessaoDe(tmp, 'd704').avisouEspera, false, 'depois da ordem, a espera de um alarme futuro sai de novo');
     // o alarme tambem espera: com agente rodando, nao marca o avisouAlarme
@@ -1200,6 +1204,31 @@ test('D704: com agente em segundo plano rodando, o fecho manda esperar uma vez e
   });
 });
 
+// s359 (F3, chat s442): o gatilho disparou, mas o fecho barrou o turno por outro motivo (trava 3). O Stop seguinte vem
+// em laco (stop_hook_active) e o aviso ficava pendente para um Stop que nao vinha: a ordem do handoff se perdia.
+test('s359 (F3): o laco do proprio bloqueio do fecho da a ordem do handoff pendente, uma vez', () => {
+  comTmp((tmp) => {
+    const dir = projetoQueDispara(tmp, 'f3');
+    gravar(tmp, 'f3', dir, 'Edit', 'a.js');
+    const r1 = fecho(tmp, 'f3', dir, 'Pronto, os testes passaram.');
+    assert.ok(r1.json && r1.json.decision === 'block', 'controle: a trava 3 barra o turno: ' + r1.stdout);
+    assert.ok(!sessaoDe(tmp, 'f3').avisouSaude, 'controle: o bloqueio nao da a ordem');
+    const comProva = 'Pronto, os testes passaram.\n```\n# pass 4\n# fail 0\n```';
+    const r2 = fecho(tmp, 'f3', dir, comProva, { stop_hook_active: true });
+    const ctx2 = r2.json && r2.json.hookSpecificOutput && r2.json.hookSpecificOutput.additionalContext;
+    assert.ok(ctx2 && ctx2.indexOf('1. Rode /sworn:handoff.') !== -1,
+      'a ordem do handoff se perdeu no laco: ' + r2.stdout);
+    assert.strictEqual(sessaoDe(tmp, 'f3').avisouSaude, true);
+    const r3 = fecho(tmp, 'f3', dir, 'Handoff gravado.', { stop_hook_active: true });
+    assert.strictEqual(r3.json, null, 'a ordem sai uma vez: ' + r3.stdout);
+    // laco que o fecho nao causou (outro gancho barrou): segue pendente, como no T10-1
+    gravar(tmp, 'f3b', dir, 'Edit', 'a.js');
+    const alheio = fecho(tmp, 'f3b', dir, 'Segue o que mudou.', { stop_hook_active: true });
+    assert.ok(!alheio.json || !alheio.json.hookSpecificOutput, alheio.stdout);
+    assert.ok(!sessaoDe(tmp, 'f3b').avisouSaude, 'em laco alheio o aviso fica pendente');
+  });
+});
+
 // D468 (0.7.0): com "modoContinuo": true no projeto, o gatilho de turnos nao pede troca no fim de turno.
 test('D468: o fecho le a chave modoContinuo do projeto e cala os gatilhos contaveis dela', () => {
   comTmp((tmp) => {
@@ -1207,7 +1236,7 @@ test('D468: o fecho le a chave modoContinuo do projeto e cala os gatilhos contav
     const pj = path.join(dir, '.claude', 'sworn', 'projeto.json');
     // Plano 091 (#9): projetoQueDispara grava modoContinuo false (controle: desligado dispara); true e chave ausente (padrao) calam
     const controle = turnoComTrabalho(tmp, 'cont0', dir);
-    assert.ok(controle.json && /chat novo/.test(controle.json.systemMessage), 'controle com modoContinuo false: ' + controle.stdout);
+    assert.ok(controle.json && /hora do handoff/.test(controle.json.systemMessage), 'controle com modoContinuo false: ' + controle.stdout);
     const base = JSON.parse(fs.readFileSync(pj, 'utf8'));
     fs.writeFileSync(pj, JSON.stringify(Object.assign({}, base, { modoContinuo: true })), 'utf8');
     const r = turnoComTrabalho(tmp, 'cont1', dir);
@@ -1343,7 +1372,7 @@ const CENA_S10 = [
   '     dizendo o motivo, ou comecar uma comparacao nova do zero;',
   '  3. ou diga ao usuario por que esta entrega fica sem a comparacao.',
   '',
-  'Desligar neste projeto: "portaoReferencia": false em .claude/sworn/projeto.json.'
+  'So o dono desliga neste projeto: "portaoReferencia": false em .claude/sworn/projeto.json.'
 ].join('\n');
 
 test('082 T5: o portao da referencia diz o que falta como a cena S10 do mock (caminhos entre aspas, 3 saidas)', () => {
@@ -1586,7 +1615,7 @@ test('D634 (7b): o ultimo teste rodado na sessao falhou -> alegacao barra, mesmo
   });
 });
 
-test('D634 (8): prova declarada que nao rodou depois da ultima edicao de codigo barra; declarar libera', () => {
+test('D634 (8) e D785: prova que nao rodou depois da ultima edicao de codigo barra; a ressalva so libera sem edicao no turno', () => {
   comTmp((tmp) => {
     const dir = projetoCom(tmp, 'f8', { provaDePronto: 'npm test' });
     const antes = linhasDoTranscript(tmp, 'f8', [usoBash('a', 'npm test'), resultado('a', '# fail 0'), usoEdit('e', path.join(dir, 'a.js'))]);
@@ -1594,8 +1623,18 @@ test('D634 (8): prova declarada que nao rodou depois da ultima edicao de codigo 
     const r = fecho(tmp, 'f8', dir, PASSA, { transcript_path: antes });
     assert.ok(r.json && r.json.decision === 'block', r.stdout);
     assert.ok(/prova de pronto/.test(r.json.reason) && r.json.reason.indexOf('npm test') !== -1, r.json.reason);
+    const RESSALVA = 'Pronto. Nao rodei o npm test depois da ultima edicao.';
     gravar(tmp, 'f8b', dir, 'Edit', 'a.js');
-    assert.strictEqual(fecho(tmp, 'f8b', dir, 'Pronto. Nao rodei o npm test depois da ultima edicao.', { transcript_path: antes }).json, null);
+    const comRessalva = fecho(tmp, 'f8b', dir, RESSALVA, { transcript_path: antes });
+    assert.ok(comRessalva.json && comRessalva.json.decision === 'block', 'D785: a ressalva nao libera o turno que editou');
+    // turno que so rodou comando (a edicao foi de antes): o D634 de antes, e a ressalva libera
+    const soComando = (id) => rodar('marcar-trabalho.js', { session_id: id, cwd: dir, tool_name: 'Bash',
+      tool_input: { command: 'git log' } }, tmp);
+    soComando('f8e');
+    assert.strictEqual(fecho(tmp, 'f8e', dir, RESSALVA, { transcript_path: antes }).json, null);
+    soComando('f8f');
+    const alega = fecho(tmp, 'f8f', dir, PASSA, { transcript_path: antes });
+    assert.ok(alega.json && /declare que nao rodou/.test(alega.json.reason), 'sem edicao no turno, o D634 segue barrando');
     const depois = linhasDoTranscript(tmp, 'f8c', [usoEdit('e', path.join(dir, 'a.js')), usoBash('a', 'npm test'), resultado('a', '# fail 0')]);
     gravar(tmp, 'f8c', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'f8c', dir, PASSA, { transcript_path: depois }).json, null);
@@ -1603,5 +1642,122 @@ test('D634 (8): prova declarada que nao rodou depois da ultima edicao de codigo 
     const semProva = projetoCom(tmp, 'f8d');
     gravar(tmp, 'f8d', semProva, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'f8d', semProva, PASSA, { transcript_path: antes }).json, null);
+  });
+});
+
+// ------------------------------- D785 (2.1): o laco da prova
+
+test('D785: com prova declarada e codigo editado no turno, a pendente barra sem alegacao e o vermelho com ressalva', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'l1', { provaDePronto: 'npm test' });
+    const pendente = linhasDoTranscript(tmp, 'l1', [usoEdit('e', path.join(dir, 'a.js'))]);
+    gravar(tmp, 'l1', dir, 'Edit', 'a.js');
+    const r = fecho(tmp, 'l1', dir, 'Segue o que mudou em a.js.', { transcript_path: pendente });
+    assert.ok(r.json && r.json.decision === 'block', r.stdout);
+    assert.ok(/sem perguntar/i.test(r.json.reason) && /1 de 3/.test(r.json.reason), r.json.reason);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(r.json.reason), 'ASCII (R5)');
+    assert.strictEqual(sessaoDe(tmp, 'l1').contadores.fecho_sem_evidencia, 1, 'conta no balde do fecho sem evidencia');
+    const vermelho = linhasDoTranscript(tmp, 'l2', [usoEdit('e', path.join(dir, 'a.js')), usoBash('a', 'npm test'),
+      resultado('a', 'Exit code 1\n# fail 1', true)]);
+    gravar(tmp, 'l2', dir, 'Edit', 'a.js');
+    const v = fecho(tmp, 'l2', dir, 'Corrigido o parser, mas um teste ainda falha.', { transcript_path: vermelho });
+    assert.ok(v.json && v.json.decision === 'block' && /falhou/.test(v.json.reason), v.stdout);
+    // a prova que passou depois da edicao libera
+    const verde = linhasDoTranscript(tmp, 'l2b', [usoEdit('e', path.join(dir, 'a.js')), usoBash('a', 'npm test'),
+      resultado('a', '# fail 0')]);
+    gravar(tmp, 'l2b', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'l2b', dir, 'Segue o que mudou.', { transcript_path: verde }).json, null);
+  });
+});
+
+test('D785 (2.1b): o npm test que roda a prova declarada vale como ela, no laco e no D634 (8)', () => {
+  comTmp((tmp) => {
+    const comPacote = (nome, prova, script) => {
+      const d = projetoCom(tmp, nome, { provaDePronto: prova });
+      fs.writeFileSync(path.join(d, 'package.json'), JSON.stringify({ scripts: { test: script } }));
+      return d;
+    };
+    const rodou = (id, d, cmd) => linhasDoTranscript(tmp, id, [usoEdit('e', path.join(d, 'a.js')), usoBash('a', cmd),
+      resultado('a', '# fail 0')]);
+    const igual = comPacote('l9', 'node --test', 'node --test');
+    const npm = rodou('l9', igual, 'npm test');
+    gravar(tmp, 'l9', igual, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'l9', igual, 'Segue o que mudou.', { transcript_path: npm }).json, null, 'o laco');
+    gravar(tmp, 'l9a', igual, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'l9a', igual, PASSA, { transcript_path: npm }).json, null, 'o D634 (8) com alegacao');
+    const viaNpm = comPacote('l9b', 'npm test', 'node --test');
+    const direto = rodou('l9b', viaNpm, 'node --test');
+    gravar(tmp, 'l9b', viaNpm, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'l9b', viaNpm, 'Segue o que mudou.', { transcript_path: direto }).json, null, 'o contrario');
+    const outro = comPacote('l9c', 'node --test', 'eslint .');
+    const lint = rodou('l9c', outro, 'npm test');
+    gravar(tmp, 'l9c', outro, 'Edit', 'a.js');
+    const r = fecho(tmp, 'l9c', outro, 'Segue o que mudou.', { transcript_path: lint });
+    assert.ok(r.json && r.json.decision === 'block', 'o npm test que nao roda a prova segue barrando: ' + r.stdout);
+  });
+});
+
+// D785 (s328): no sandbox do Codex o node --test sai com spawn EPERM; o laco manda a prova sem processo filho.
+test('D785: o laco com a saida spawn EPERM manda rodar a prova com --test-isolation=none, e ela vale', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'l10', { provaDePronto: 'node --test test/' });
+    const barrado = linhasDoTranscript(tmp, 'l10', [usoEdit('e', path.join(dir, 'a.js')),
+      usoBash('a', 'node --test test/'), resultado('a', 'Error: spawn EPERM\n# fail 1', true)]);
+    gravar(tmp, 'l10', dir, 'Edit', 'a.js');
+    const r = fecho(tmp, 'l10', dir, 'Segue o que mudou.', { transcript_path: barrado });
+    assert.ok(r.json && r.json.decision === 'block' && /node --test --test-isolation=none/.test(r.json.reason), r.stdout);
+    const verde = linhasDoTranscript(tmp, 'l11', [usoEdit('e', path.join(dir, 'a.js')),
+      usoBash('a', 'node --test --test-isolation=none test/'), resultado('a', '# fail 0')]);
+    gravar(tmp, 'l11', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'l11', dir, 'Segue o que mudou.', { transcript_path: verde }).json, null);
+  });
+});
+
+test('D785: o laco barra de novo em laco ate o teto, escala no 4o e libera no 5o; o contador morre com o turno', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'l3', { provaDePronto: 'npm test' });
+    const tr = linhasDoTranscript(tmp, 'l3', [usoEdit('e', path.join(dir, 'a.js'))]);
+    gravar(tmp, 'l3', dir, 'Edit', 'a.js');
+    const motivos = [];
+    for (let i = 0; i < 4; i++) {
+      const r = fecho(tmp, 'l3', dir, 'Pronto.', { transcript_path: tr, stop_hook_active: i > 0 });
+      assert.ok(r.json && r.json.decision === 'block', 'volta ' + (i + 1) + ': ' + r.stdout);
+      motivos.push(r.json.reason);
+    }
+    assert.ok(/2 de 3/.test(motivos[1]) && /3 de 3/.test(motivos[2]), motivos.slice(1, 3).join('\n---\n'));
+    assert.ok(/agentes\.escada/.test(motivos[3]), motivos[3]);
+    assert.strictEqual(sessaoDe(tmp, 'l3').contadores.fecho_sem_evidencia, 4);
+    const fim = fecho(tmp, 'l3', dir, 'Segue falhando o npm test.', { transcript_path: tr, stop_hook_active: true });
+    assert.strictEqual(fim.json, null, 'teto contado: libera');
+    assert.strictEqual(sessaoDe(tmp, 'l3').lacoDaProva, undefined, 'o contador e do turno');
+    // o turno novo que edita codigo volta a barrar do 1
+    gravar(tmp, 'l3', dir, 'Edit', 'a.js');
+    const novo = fecho(tmp, 'l3', dir, 'Pronto.', { transcript_path: tr });
+    assert.ok(novo.json && /1 de 3/.test(novo.json.reason), novo.stdout);
+  });
+});
+
+test('D785: o laco sai junto com os outros motivos do turno e, em laco, sozinho; trava desligada e texto nao entram', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'l4', { provaDePronto: 'npm test' });
+    const tr = linhasDoTranscript(tmp, 'l4', [usoEdit('e', path.join(dir, 'a.js'))]);
+    gravar(tmp, 'l4', dir, 'Edit', 'a.js');
+    gravar(tmp, 'l4', dir, 'Write', HANDOFF);
+    const r1 = fecho(tmp, 'l4', dir, 'Handoff gravado.', { transcript_path: tr });
+    assert.ok(r1.json && /1 de 3/.test(r1.json.reason) && /handoff/i.test(r1.json.reason), r1.stdout);
+    const r2 = fecho(tmp, 'l4', dir, 'Handoff gravado.', { transcript_path: tr, stop_hook_active: true });
+    assert.ok(r2.json && /2 de 3/.test(r2.json.reason), 'em laco, o laco da prova ainda barra: ' + r2.stdout);
+    const desl = projetoCom(tmp, 'l4c', { provaDePronto: 'npm test', travas: { fecho: false } });
+    gravar(tmp, 'l4c', desl, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'l4c', desl, 'Segue o que mudou.', { transcript_path: tr }).json, null);
+    // com a trava desligada, o handoff ainda barra (D415); o Stop seguinte, em laco, nao entra no laco da prova
+    gravar(tmp, 'l4e', desl, 'Edit', 'a.js');
+    gravar(tmp, 'l4e', desl, 'Write', HANDOFF);
+    const h = fecho(tmp, 'l4e', desl, 'Handoff gravado.', { transcript_path: tr });
+    assert.ok(h.json && h.json.decision === 'block' && !/laco da prova/.test(h.json.reason), h.stdout);
+    const emLaco = { transcript_path: tr, stop_hook_active: true };
+    assert.strictEqual(fecho(tmp, 'l4e', desl, 'Handoff gravado.', emLaco).json, null);
+    gravar(tmp, 'l4d', dir, 'Edit', 'notas.md');
+    assert.strictEqual(fecho(tmp, 'l4d', dir, 'Segue o que mudou nas notas.', { transcript_path: tr }).json, null);
   });
 });

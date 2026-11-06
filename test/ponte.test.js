@@ -195,6 +195,23 @@ test('ponte: dsh manda stop_hook_active sempre false; a ponte emula o segundo St
   assert.strictEqual(f.chamadas[2].entrada.stop_hook_active, false);
 });
 
+for (const h of ['dsh', 'agy']) test('ponte: no ' + h + ' a ordem do Stop vira block, e o Stop seguinte chega em laco',
+    () => {
+  // s361 (F6): como no Codex, que manda stop_hook_active true depois do block; sem a marca, o Stop seguinte chegaria
+  // como o primeiro.
+  const ordem = JSON.stringify({ systemMessage: 'u',
+    hookSpecificOutput: { hookEventName: 'Stop', additionalContext: 'grave o handoff' } });
+  const f = falso((e, n) => n === 1 ? ordem : '');
+  /* O agy le a sessao do conversationId. */
+  const stop = Object.assign(fixture(h + '-Stop'),
+    h === 'agy' ? { conversationId: 'agy-stop-f6' } : { session_id: 'dsh-stop-f6' });
+  const saida = JSON.parse(ponte.rodar(h, 'portao-fecho', stop, { executar: f.executar }));
+  assert.strictEqual(saida.reason, 'grave o handoff');
+  ponte.rodar(h, 'portao-fecho', stop, { executar: f.executar });
+  ponte.rodar(h, 'portao-fecho', stop, { executar: f.executar });
+  assert.deepStrictEqual(f.chamadas.map((c) => c.entrada.stop_hook_active), [false, true, false]);
+});
+
 test('ponte: o Stop do subagente do dsh (session_id do filho) nao passa pelo portao do fecho', () => {
   const f = falso(() => JSON.stringify({ decision: 'block', reason: 'x' }));
   ponte.rodar('dsh', 'abrir-subagente', fixture('dsh-SubagentStart'), { executar: function () { return ''; } });
@@ -318,6 +335,224 @@ test('ponte: agy - a abertura roda uma vez por conversa e volta como injectSteps
   const g = falso();
   ponte.rodar('agy', 'abrir-turno', e, { executar: g.executar });
   assert.strictEqual(g.chamadas[0].entrada.prompt, e.lastUserInput);
+});
+
+test('ponte: Codex e Qwen - o SessionStart da compactacao chega a abertura como compact, a cada vez (D786)', () => {
+  for (const h of ['codex', 'qwen']) {
+    const f = falso(() => 'releia o handoff');
+    const e = fixture(h + '-SessionStart-compact');
+    assert.strictEqual(ponte.rodar(h, 'abertura', e, { executar: f.executar }), 'releia o handoff', h);
+    assert.strictEqual(ponte.rodar(h, 'abertura', e, { executar: f.executar }), 'releia o handoff', h);
+    assert.deepStrictEqual(f.chamadas.map((c) => c.entrada.source), ['compact', 'compact'], h);
+  }
+});
+
+test('ponte: OpenCode - o experimental.session.compacting roda a abertura de novo, como compact (D786)', () => {
+  const f = falso((e) => 'abertura ' + e.source);
+  const base = { input: { sessionID: 'oc-compacta-1' }, cwd: 'C:\\dev\\proj' };
+  const abrir = (gancho) => ponte.rodar('opencode', 'abertura', Object.assign({ hook_event_name: gancho }, base),
+    { executar: f.executar });
+  assert.deepStrictEqual(JSON.parse(abrir('experimental.chat.system.transform')), { contexto: 'abertura startup' });
+  assert.strictEqual(abrir('experimental.chat.system.transform'), '');
+  assert.deepStrictEqual(JSON.parse(abrir('experimental.session.compacting')), { contexto: 'abertura compact' });
+  assert.deepStrictEqual(JSON.parse(abrir('experimental.session.compacting')), { contexto: 'abertura compact' });
+  assert.deepStrictEqual(f.chamadas.map((c) => c.entrada.hook_event_name), ['SessionStart', 'SessionStart',
+    'SessionStart']);
+});
+
+// D786 passo 4: agy e dsh nao avisam a compactacao; a ponte a ve pela queda do contexto depois do handoff marcado.
+function compactaSemAviso(h, nome, campo, id) {
+  const e = Object.assign(fixture(nome), { [campo]: id });
+  estado.gravar(id, { handoffDaSessao: 'C:\\dev\\proj\\h-handoff.md', tokensDeContexto: 150000 });
+  const medida = { atual: 210000 };
+  const f = falso((x) => (x.hook_event_name === 'SessionStart' ? 'RELEIA ' + x.source : 'TURNO'));
+  const rodar = () => ponte.rodar(h, 'abrir-turno', e, { executar: f.executar, medir: () => medida.atual });
+  const aberturas = () => f.chamadas.filter((c) => c.script === 'abertura.js');
+  return { e, medida, f, rodar, aberturas };
+}
+
+test('ponte: agy - a queda do contexto depois do handoff marcado roda a abertura do compact na PreInvocation', () => {
+  const t = compactaSemAviso('agy', 'agy-PreInvocation', 'conversationId', 'agy-compacta-1');
+  t.medida.atual = 120000;
+  assert.deepStrictEqual(JSON.parse(t.rodar()), { injectSteps: [{ ephemeralMessage: 'TURNO' }] });
+  // O pico (210 mil) se grava tambem na PreInvocation repetida, que nao roda o portao do turno.
+  t.medida.atual = 210000;
+  assert.strictEqual(t.rodar(), '');
+  assert.strictEqual(t.aberturas().length, 0);
+  // 125 mil = 59,5% do pico: compactou. O prompt repetido nao roda o portao do turno; a releitura sai.
+  t.medida.atual = 125000;
+  assert.deepStrictEqual(JSON.parse(t.rodar()), { injectSteps: [{ ephemeralMessage: 'RELEIA compact' }] });
+  assert.strictEqual(t.aberturas().length, 1);
+  const a = t.aberturas()[0].entrada;
+  assert.deepStrictEqual([a.hook_event_name, a.source, a.session_id], ['SessionStart', 'compact', 'agy-compacta-1']);
+  // A mesma marca nao manda reler duas vezes, ainda que a abertura nao a consuma e o contexto caia de novo.
+  t.medida.atual = 40000;
+  t.rodar();
+  assert.strictEqual(t.aberturas().length, 1);
+});
+
+test('ponte: dsh - a queda do contexto depois do handoff marcado roda a abertura do compact no prompt', () => {
+  const t = compactaSemAviso('dsh', 'dsh-UserPromptSubmit', 'session_id', 'dsh-compacta-1');
+  t.rodar();
+  t.medida.atual = 125000;
+  t.e.prompt = 'outro pedido';
+  assert.deepStrictEqual(JSON.parse(t.rodar()), { hookSpecificOutput: { hookEventName: 'UserPromptSubmit',
+    additionalContext: 'RELEIA compact\n\nTURNO' } });
+  assert.strictEqual(t.aberturas().length, 1);
+  // Consumida a marca (a abertura do compact a zera), a marca nova com o mesmo arquivo manda reler de novo.
+  estado.gravar('dsh-compacta-1', { handoffDaSessao: null });
+  t.rodar();
+  estado.gravar('dsh-compacta-1', { handoffDaSessao: 'C:\\dev\\proj\\h-handoff.md', tokensDeContexto: 150000 });
+  t.medida.atual = 40000;
+  t.rodar();
+  assert.strictEqual(t.aberturas().length, 2);
+});
+
+test('ponte: o prompt segurado ou bloqueado deixa a releitura para o prompt seguinte, agy e dsh', () => {
+  const casos = [['agy', 'agy-PreInvocation', 'conversationId', { continue: false, stopReason: 'VOLTA' }],
+    ['dsh', 'dsh-UserPromptSubmit', 'session_id', { continue: false, stopReason: 'VOLTA' }],
+    ['dsh', 'dsh-UserPromptSubmit', 'session_id', { decision: 'block', reason: 'VOLTA' }]];
+  for (const [h, nome, campo, retem] of casos) {
+    const t = compactaSemAviso(h, nome, campo, h + '-compacta-segura-' + Object.keys(retem)[0]);
+    let segura = true;
+    const f = falso((x) => (x.hook_event_name === 'SessionStart' ? 'RELEIA ' + x.source
+      : segura ? JSON.stringify(retem) : 'TURNO'));
+    const rodar = () => ponte.rodar(h, 'abrir-turno', t.e, { executar: f.executar, medir: () => t.medida.atual });
+    const pedido = h === 'agy' ? 'lastUserInput' : 'prompt';
+    segura = false;
+    rodar();
+    segura = true;
+    t.medida.atual = 40000;
+    t.e[pedido] = 'depois da pausa';
+    const segurou = rodar();
+    assert.ok(segurou.includes('VOLTA') && !segurou.includes('RELEIA'), h);
+    assert.strictEqual(f.chamadas.filter((c) => c.script === 'abertura.js').length, 0, h);
+    segura = false;
+    t.e[pedido] = 'de novo';
+    assert.ok(rodar().includes('RELEIA compact'), h);
+    assert.strictEqual(f.chamadas.filter((c) => c.script === 'abertura.js').length, 1, h);
+  }
+});
+
+test('ponte: dsh - a queda se mede na transcricao achada na casa, tambem no prompt repetido', () => {
+  const casa = fs.mkdtempSync(path.join(TMP, 'dsh-casa-'));
+  const t = compactaSemAviso('dsh', 'dsh-UserPromptSubmit', 'session_id', 'dsh-compacta-casa');
+  const arquivo = path.join(casa, '.dsh', 'sessions', 'p', 'dsh-compacta-casa', 'session.v4.jsonl.zstd');
+  fs.mkdirSync(path.dirname(arquivo), { recursive: true });
+  fs.writeFileSync(arquivo, '');
+  const lidos = [];
+  const medir = (c) => { lidos.push(c); return t.medida.atual; };
+  const rodar = () => ponte.rodar('dsh', 'abrir-turno', t.e, { executar: t.f.executar, medir, casa });
+  rodar();
+  t.medida.atual = 40000;
+  assert.ok(rodar().includes('RELEIA compact'));
+  assert.deepStrictEqual(lidos, [arquivo, arquivo]);
+  // A abertura do compact recebe a transcricao achada (o dsh a manda vazia).
+  assert.strictEqual(t.aberturas()[0].entrada.transcript_path, arquivo);
+});
+
+test('ponte: abertura do compact que falha ou sai vazia tenta de novo no prompt seguinte', () => {
+  const t = compactaSemAviso('dsh', 'dsh-UserPromptSubmit', 'session_id', 'dsh-compacta-falha');
+  let vazia = true;
+  const f = falso((x) => (x.hook_event_name === 'SessionStart' ? (vazia ? '' : 'RELEIA ' + x.source) : 'TURNO'));
+  const rodar = () => ponte.rodar('dsh', 'abrir-turno', t.e, { executar: f.executar, medir: () => t.medida.atual });
+  rodar();
+  t.medida.atual = 40000;
+  t.e.prompt = 'depois da queda';
+  assert.ok(!rodar().includes('RELEIA'));
+  vazia = false;
+  t.e.prompt = 'de novo';
+  assert.ok(rodar().includes('RELEIA compact'));
+  // Entregue, nao manda de novo.
+  t.e.prompt = 'mais um';
+  assert.ok(!rodar().includes('RELEIA'));
+  assert.strictEqual(f.chamadas.filter((c) => c.script === 'abertura.js').length, 2);
+});
+
+test('ponte: sem queda, sem marca, fora do agy e do dsh ou no 2o portao do prompt, o compact nao roda', () => {
+  // 126 mil = 60% do pico: nao e queda.
+  const t = compactaSemAviso('dsh', 'dsh-UserPromptSubmit', 'session_id', 'dsh-compacta-2');
+  t.rodar();
+  t.medida.atual = 126000;
+  t.rodar();
+  // Pico abaixo de 80 mil: queda de handoff pedido cedo nao conta.
+  const p = compactaSemAviso('dsh', 'dsh-UserPromptSubmit', 'session_id', 'dsh-compacta-3');
+  estado.gravar('dsh-compacta-3', { handoffDaSessao: 'C:\\dev\\proj\\h-handoff.md', tokensDeContexto: 70000 });
+  p.medida.atual = 79000;
+  p.rodar();
+  p.medida.atual = 10000;
+  p.rodar();
+  // Sem marca.
+  const m = compactaSemAviso('dsh', 'dsh-UserPromptSubmit', 'session_id', 'dsh-compacta-4');
+  estado.gravar('dsh-compacta-4', { tokensDeContexto: 150000 });
+  m.rodar();
+  m.medida.atual = 10000;
+  m.rodar();
+  // O Codex avisa a compactacao (SessionStart compact): a ponte nao mede.
+  const c = compactaSemAviso('codex', 'codex-UserPromptSubmit', 'session_id', 'codex-compacta-1');
+  c.rodar();
+  c.medida.atual = 10000;
+  c.rodar();
+  // So o 1o portao do UserPromptSubmit no hooks.json manda reler (cada portao chama a ponte a parte).
+  const d = compactaSemAviso('dsh', 'dsh-UserPromptSubmit', 'session_id', 'dsh-compacta-5');
+  const ganchos = { SessionStart: [{ hooks: [{ args: ['x/abertura.js'] }] }],
+    UserPromptSubmit: [{ hooks: [{ args: ['x/abrir-turno.js'] }, { args: ['x/outro.js'] }] }] };
+  const rodarOutro = () => ponte.rodar('dsh', 'outro', d.e, { executar: d.f.executar, medir: () => d.medida.atual,
+    ganchos });
+  rodarOutro();
+  d.medida.atual = 10000;
+  rodarOutro();
+  for (const x of [t, p, m, c, d]) assert.strictEqual(x.aberturas().length, 0);
+});
+
+// s359 (F2b): sem handoff marcado e sem aviso de saude, o turno longo que cruzou o limiar e compactou sem fim de turno
+// no meio nao recebia ordem nenhuma. A ponte guarda o pico que ela mesma viu e, na queda, roda o compact com ele.
+test('ponte: sem marca e sem aviso, a queda de um pico no limiar roda o compact com o pico, agy e dsh', () => {
+  const casos = [['agy', 'agy-PreInvocation', 'conversationId'], ['dsh', 'dsh-UserPromptSubmit', 'session_id']];
+  for (const [h, nome, campo] of casos) {
+    const t = compactaSemAviso(h, nome, campo, h + '-f2b');
+    estado.gravar(h + '-f2b', { tokensDeContexto: 300000 });
+    t.medida.atual = 300000;
+    t.rodar();
+    t.medida.atual = 100000;
+    assert.ok(t.rodar().includes('RELEIA compact'), h + ': a queda sem marca nao rodou o compact');
+    assert.strictEqual(t.aberturas().length, 1, h);
+    assert.strictEqual(t.aberturas()[0].entrada.sworn_pico, 300000, h + ': o pico nao foi a abertura');
+    // Entregue, o pico zera: o tokensDeContexto gravado antes do compact (velho) nao vira queda de novo.
+    t.medida.atual = 90000;
+    t.rodar();
+    assert.strictEqual(t.aberturas().length, 1, h + ': repetiu a ordem');
+    // Pico abaixo do limiar (250 mil sem projeto): compactou cedo, nada a pedir.
+    const b = compactaSemAviso(h, nome, campo, h + '-f2b-baixo');
+    estado.gravar(h + '-f2b-baixo', {});
+    b.medida.atual = 240000;
+    b.rodar();
+    b.medida.atual = 50000;
+    b.rodar();
+    // O aviso ja dado no fecho: a ordem dele segue pelo caminho de sempre (marca do handoff).
+    const a = compactaSemAviso(h, nome, campo, h + '-f2b-avisado');
+    estado.gravar(h + '-f2b-avisado', { avisouSaude: true });
+    a.medida.atual = 300000;
+    a.rodar();
+    a.medida.atual = 50000;
+    a.rodar();
+    assert.strictEqual(b.aberturas().length + a.aberturas().length, 0, h);
+    // O pico de antes do aviso (ou da marca) nao sobrevive a ele: depois do compact, que rearma o aviso e consome a
+    // marca, o contexto baixo contra o pico velho repetiria a ordem.
+    const marcas = [['aviso', { avisouSaude: true }], ['marca', { handoffDaSessao: 'C:\\dev\\h.md' }]];
+    for (const [sufixo, depois] of marcas) {
+      const v = compactaSemAviso(h, nome, campo, h + '-f2b-velho-' + sufixo);
+      estado.gravar(h + '-f2b-velho-' + sufixo, {});
+      v.medida.atual = 300000;
+      v.rodar();
+      estado.gravar(h + '-f2b-velho-' + sufixo, Object.assign({ tokensDeContexto: 300000 }, depois));
+      v.rodar();
+      estado.gravar(h + '-f2b-velho-' + sufixo, { avisouSaude: false, handoffDaSessao: null });
+      v.medida.atual = 50000;
+      v.rodar();
+      assert.strictEqual(v.aberturas().length, 0, h + ': o pico de antes do ' + sufixo + ' virou queda');
+    }
+  }
 });
 
 test('ponte: agy - a resposta do ask_question vai ao marcar-trabalho na PreInvocation seguinte, uma vez', () => {

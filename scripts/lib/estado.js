@@ -197,7 +197,8 @@ function limparVelhos(sessionIdAtual, agoraMs, opcoes) {
  *
  * CAMPOS_DA_SESSAO: o fecho os carrega como estao - os avisos de "uma vez por sessao"
  * e os registros. Os que o proprio fecho recalcula (turnosComTrabalho, gitAbertura,
- * arquivosTocados, contadoresSessao, avisouSaude, avisouAlarme, tokensDeContexto) nao entram: sao dele.
+ * arquivosTocados, contadoresSessao, avisouSaude, avisouAlarme, tokensDeContexto, handoffDaSessao) nao entram: sao
+ * dele.
  * CAMPOS_DO_TURNO: morrem no fecho, de proposito.
  */
 const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido', 'gatilho3', 'abertoEm',
@@ -219,9 +220,15 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   // D694 (T3 da escada): o pedido de escalada chega no fim do subagente e e cobrado num turno seguinte (lib/escalada.js).
   'escalada',
   // D721 (A1-06): o aviso do padrao invalido em comandosBloqueados sai 1 vez por sessao (portao-destrutivo.js).
-  'avisouBloqueadoInvalido'];
+  'avisouBloqueadoInvalido',
+  // D786 passo 3: a compactacao depois de um aviso de saude rearma so o gatilho de tamanho (abertura.js,
+  // saude.avaliar).
+  'saudeRearmada',
+  // D786 passo 5: a ordem do compact cobrada no portao do Write/Edit ate ser cumprida, mesmo atravessando o turno.
+  'ordemDoCompact'];
 const CAMPOS_DO_TURNO = ['trabalhoReal', 'bloqueouNesteTurno', 'buscouNesteTurno', 'contadores', 'gravouHandoff',
-  'arquivoDoHandoff'];
+  // D785 (2.1): a edicao de codigo do turno e a volta do laco da prova (portao-fecho.js).
+  'arquivoDoHandoff', 'editouCodigo', 'lacoDaProva'];
 
 /** Os campos da sessao que este estado tem, para o fecho carregar adiante. */
 function camposDaSessao(s) {

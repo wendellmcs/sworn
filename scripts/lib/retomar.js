@@ -22,7 +22,8 @@ const TETO = 10 * 1024;
 // lento levou 100 ms (13,6 MB); com este limite, o resumo inteiro (git e plano juntos) levou 71-87 ms nos de 7 a 19 MB.
 const BLOCO = 1024 * 1024;
 const LIMITE_DE_LEITURA = 8 * 1024 * 1024;
-const PASTA = '.claude/sworn/handoff';
+// D788: fora de .claude/ (caminho protegido do Claude Code), junto do handoff do modelo (skills/handoff/SKILL.md).
+const PASTA = '.sworn/handoff';
 const OMITIDO = '[segredo omitido]';
 
 // Blocos que o harness injeta na mensagem do dono: saem com o conteudo. O <pasted_content> e o que o dono colou:
@@ -262,7 +263,7 @@ function montar(d) {
   return texto;
 }
 
-/** Grava em .claude/sworn/handoff/AAAA-MM-DD-retomar-<8 do id>.md: o mesmo chat no mesmo dia regrava o mesmo arquivo. */
+/** Grava em .sworn/handoff/AAAA-MM-DD-retomar-<8 do id>.md: o mesmo chat no mesmo dia regrava o mesmo arquivo. */
 function gravar(raiz, sessao, agora, texto) {
   const id = String(sessao == null ? '' : sessao).slice(0, 8);
   if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error('id de sessao invalido para nome de arquivo');
@@ -341,4 +342,24 @@ function reclamar(raiz, arquivo, sessao, agora) {
     'segue. O sworn marca este chat como o ultimo a ler; o outro recebe este mesmo aviso se ler o arquivo de novo.';
 }
 
-module.exports = { PASTA, lerRegistro, montar, gravar, resumir, limpar, mascarar, cortar, reclamar };
+/**
+ * s338 (achado do aviso acima no fluxo normal): a sessao que grava um handoff passou o trabalho adiante; as posses
+ * dela (o handoff de que partiu e os que leu antes) saem, e o chat seguinte le sem o aviso. Devolve quantas sairam.
+ * Projeto sem .claude/sworn/, sem donos, com o arquivo torto ou sem id de sessao = 0, sem gravar (a posse gravada sem
+ * id pode ser de varios chats). Erro de disco lanca (o gancho cala).
+ */
+function soltar(raiz, sessao) {
+  if (sessao == null || sessao === '') return 0;
+  const arquivo = path.join(raiz, DONOS);
+  let donos;
+  try { donos = JSON.parse(fs.readFileSync(arquivo, 'utf8')); } catch (e) { return 0; }
+  if (!donos || typeof donos !== 'object' || Array.isArray(donos)) return 0;
+  const id = String(sessao).slice(0, 8);
+  const meus = Object.keys(donos).filter(function (rel) { return donos[rel] && donos[rel].sessao === id; });
+  if (!meus.length) return 0;
+  for (const rel of meus) delete donos[rel];
+  fs.writeFileSync(arquivo, JSON.stringify(donos, null, 2) + '\n');
+  return meus.length;
+}
+
+module.exports = { PASTA, lerRegistro, montar, gravar, resumir, limpar, mascarar, cortar, reclamar, soltar };

@@ -84,13 +84,16 @@ function permitido(tipo, marchaMax, projeto) {
  * D678 T2: agente dos `degraus` chamado com `model` ou `effort` diferente da tabela do projeto. O que a chamada passa
  * vence o frontmatter do agente (sonda d2/run8): sem esta conferencia a tabela nao valeria. Campo que a chamada nao
  * traz (ausente, null ou vazio, e a entrada inteira ausente) e "nao sei" (binario velho sem `effort`; o arquivo do
- * agente decide) e passa; degrau sem apelido ou sem esforco gravado nao compara esse campo.
+ * agente decide) e passa; degrau sem apelido ou sem esforco gravado nao compara esse campo. D785 (2.2):
+ * `opcoes.esforcoLivre` (o re-despacho do topo que a escalada manda) troca o esforco da tabela pelo "max" dela.
  */
-function chamadaDaTabela(tipo, entrada, projeto) {
+function chamadaDaTabela(tipo, entrada, projeto, opcoes) {
   const lista = degraus.normalizar(projeto && projeto.agentes && projeto.agentes.degraus);
   const i = lista.findIndex(function (d) { return d.agente === tipo; });
   if (i === -1) return { ok: true, motivo: null };
-  const tabela = [['model', lista[i].apelido], ['effort', lista[i].esforco]]
+  // Degrau sem esforco gravado nao compara o effort, com ou sem a marca.
+  const livre = Boolean(opcoes && opcoes.esforcoLivre === true && lista[i].esforco);
+  const tabela = [['model', lista[i].apelido], ['effort', livre ? 'max' : lista[i].esforco]]
     .filter(function (c) { return typeof c[1] === 'string' && c[1] !== ''; });
   const chamada = entrada || {};
   const errados = tabela.filter(function (c) {
@@ -108,7 +111,8 @@ function chamadaDaTabela(tipo, entrada, projeto) {
       '',
       'Voce chamou ' + entreAspas(tipo) + ' com ' +
         errados.map(function (c) { return campo(c, chamada[c[0]]); }).join(' e ') + ',',
-      'e a escada deste projeto (agentes.degraus no projeto.json) diz ' +
+      'e a escada deste projeto (agentes.degraus no projeto.json)' +
+        (livre ? ', com o esforco maximo do re-despacho do topo pedido pela escalada,' : '') + ' diz ' +
         tabela.map(function (c) { return campo(c, c[1]); }).join(' e ') + '.',
       'Na chamada, model (o modelo) e effort (o esforco) valem mais que o arquivo do agente: ele rodaria',
       'com o que a chamada pede, e nao com o que a escada grava para este degrau.',

@@ -123,3 +123,53 @@ test('A4-bus-1: find que apaga ou executa NAO e passe para criar; find que so li
   ['find . -name "*.js"', 'fd busca src', 'find . -name x | grep -c y', 'find . -executable'].forEach((c) =>
     assert.strictEqual(busca.ehBusca('Bash', { command: c }), true, c));
 });
+
+// s351 (D786 passo 5, ao vivo cx6): no Windows o Codex procura pelo PowerShell (Get-ChildItem, Select-String), e a
+// busca nao contava: a trava 7 barrou o apply_patch do handoff e o modelo gravou pelo shell, sem a marca.
+test('busca: os cmdlets de busca do PowerShell contam, em qualquer caixa', () => {
+  ['Get-ChildItem .sworn -Recurse -File', 'get-childitem src', 'gci -Recurse', 'Select-String -Path *.js -Pattern x',
+    'sls foo a.md', 'Get-Content plano.md', '$x = Get-ChildItem .; $x', 'GCI -RECURSE', 'SLS foo a.md',
+    'ls | %{sls foo $_}', '%{sls foo $_}', 'sls del src/x.js', 'Select-String -Pattern erase .',
+    'Get-Content a.md 2>&1', 'gci | % { $_.Name -> 1 }'].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('PowerShell', { command: c }), true, c));
+  // A palavra que altera, como argumento, e o que se procura; o 2> nao grava (controle do Bash).
+  ['grep -rn del src', 'rg erase scripts', 'grep -rn "rm -rf" .', 'grep foo src 2>/dev/null', 'ls 2>&1'].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('Bash', { command: c }), true, c));
+});
+
+test('busca: o cmdlet de busca que despeja no Remove-Item nao conta; nome parecido tambem nao (controle)', () => {
+  ['Get-ChildItem *.tmp | Remove-Item', 'gci build -Recurse | ri', 'Get-ChildItem x |Remove-Item',
+    'Get-ChildItemX', 'New-Item a.md', 'Set-Content a.md x', 'gci src | Set-Content x.txt', 'Remove-Item (gci *.tmp)',
+    'gci -r | % { ri $_ }', 'gci -r | %{ri $_}', 'Get-Content a.md | Out-File b.md', 'Select-String x a.md; del a.md',
+    'Get-ChildItem . | Move-Item -Destination z', 'gci src | rm -Force', 'gci . | % { rm $_ }',
+    'Get-ChildItem src > lista.txt', 'sls foo *.js >> x.md', 'dir *.tmp | Remove-Item', 'ls src | Set-Content x.txt',
+    'gci x\nRemove-Item y', 'gci x && del y', '$(rm x); gci'].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('PowerShell', { command: c }), false, c));
+  ['ls; rm -rf build', 'ls > lista.txt', 'cat a.md | tee b.md'].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('Bash', { command: c }), false, c));
+});
+
+// s352 (ronda 3 da revisao de busca.js): o que esta entre aspas e o padrao procurado, nao comando nem redirecionamento;
+// o comando que altera depois de xargs/sudo, o 1> e o 2> para arquivo, e o metodo .NET que apaga ou grava tambem tiram
+// o comando da busca.
+test('busca: | ( e > entre aspas sao o padrao procurado e seguem contando', () => {
+  ['grep -rnE "foo|del" src', 'rg "(copy|move)" scripts', 'rg "<div>" src', 'grep -rn "Array<string>" src',
+    "grep -rn 'a > b' src", 'grep -rn "rm -rf" .'].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('Bash', { command: c }), true, c));
+  ['Select-String -Pattern "a|ren" .', "sls '(del)' x.js", 'gci src 2>$null', 'gci src 1>&2'].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('PowerShell', { command: c }), true, c));
+});
+
+test('busca: xargs/sudo antes do comando que altera, 1> e 2> para arquivo, e .Delete() nao contam', () => {
+  ['grep -rl foo src | xargs rm', 'find . -name "*.tmp" | xargs rm', 'ls src | xargs -0 rm -f',
+    'ls | xargs -I {} mv {} z', 'ls src; sudo rm x', 'ls src 2>err.txt', 'ls src 1> lista.txt', 'ls src 2>> err.txt',
+    'ls src &> tudo.txt', 'ls src 2>nul.txt', 'grep "x" a.md > b.md', 'ls; touch novo.js', 'ls; mkdir novo',
+    'ls; unlink a.md', 'ls -n 1 | xargs -n 1 rm', 'if ls a; then rm a; fi',
+    'for f in $(ls); do rm $f; done'].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('Bash', { command: c }), false, c));
+  ['Get-ChildItem src 1> lista.txt', 'gci src | ForEach-Object { $_.Delete() }', 'gci *.tmp | % { $_.MoveTo("z") }',
+    'gci *.md | % { $_.CopyTo("z") }', 'gci; [IO.File]::WriteAllText("a.md", "x")',
+    "gci; [System.IO.File]::Delete('a.md')", "gci; [IO.File]::AppendAllText('a.md', 'x')",
+    "gci; [IO.File]::Move('a', 'b')", "gci; [IO.File]::Copy('a', 'b')", "gci; [IO.File]::Create('a.md')"].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('PowerShell', { command: c }), false, c));
+});

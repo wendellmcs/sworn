@@ -155,6 +155,21 @@ io.blindar(function () {
       return negar(escopoLib.motivoIntocavel(alvo));
     }
 
+    // 1b. D786 passo 5: a ordem do compact (abertura.js) cobrada ate o Read do handoff ou um handoff novo
+    // (marcar-trabalho.js). So o agente principal: o subagente nao continua esta conversa. O handoff passa sempre (e ele
+    // que cumpre o "grave primeiro"). Teto de NEGACOES_DA_ORDEM, uma contagem so com o portao do shell
+    // (reinjecao.cobrarOrdem; o "releia" tambem e cobrado em portao-destrutivo.js); se a contagem nao grava, passa.
+    const ordem = s.ordemDoCompact;
+    if (!e.agent_id && ordem && typeof ordem === 'object' && !require('./lib/saude.js').ehArquivoDeHandoff(alvo) &&
+        (ordem.tipo === 'gravar' ||
+          (ordem.tipo === 'reler' && typeof ordem.arquivo === 'string' && fs.existsSync(ordem.arquivo)))) {
+      const reinjecao = require('./lib/reinjecao.js');
+      if (reinjecao.cobrarOrdem(e.session_id)) {
+        try { estado.incrementar(e.session_id, 'ordem_do_compact'); } catch (err) { contadorNaoGravou(); }
+        return negar(reinjecao.motivoDaOrdem(ordem, cwd));
+      }
+    }
+
     // 2. Trava 5b: arquivo que ja estava modificado quando a sessao abriu (D17).
     // D45: a comparacao ignora a caixa. Mesma razao da D38: o sistema de arquivos
     // do Windows nao diferencia, e sem isto "GUIA.md" escapava da 5b por 1

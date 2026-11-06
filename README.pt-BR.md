@@ -123,10 +123,9 @@ A trava 6, na tabela abaixo, lê a **escada** do projeto: os agentes dele, do ma
 modelo e o esforço (o quanto o modelo pensa) com que deve rodar. O `/sworn:init` grava a escada na
 configuração, em `agentes.degraus`. Cada agente é um **degrau**; o mais caro é o **topo**. **Subir** é passar
 a tarefa ao degrau seguinte: o subagente que vê a tarefa passar do papel dele pede o degrau seguinte, e o
-agente principal o despacha. Numa tarefa, o agente principal sobe duas vezes sozinho. Antes da terceira
-subida, ele para e pergunta a você: subir (custo maior), manter a tarefa no degrau em que está ou parar.
-Quando quem pede é o topo, não há degrau acima: o agente principal para e traz a você o que o topo achou e
-por que pediu, numa pergunta em 3 opções, com a recomendada primeiro.
+agente principal o despacha sozinho, em todo degrau. Quando quem pede é o topo, não há degrau acima: o agente
+principal despacha o topo de novo, com esforço máximo e o que ele achou. Se o topo pedir outra vez, o agente
+principal fecha dizendo o que segue falhando, com a saída, em vez de perguntar a você.
 
 <!-- pagina:travas -->
 | # | Trava |
@@ -136,7 +135,7 @@ por que pediu, numa pergunta em 3 opções, com a recomendada primeiro.
 | 3 | **Fecho sem evidência**<br>Bloqueia: o fim do turno quando a resposta alega sucesso sem colar a saída (ou colando só saída com falha), quando o último teste rodado falhou, quando a prova de pronto do projeto não rodou depois da última edição de código, ou quando uma etapa do plano é dada como pronta com caixa ainda aberta.<br>Por quê: "Pronto" sem nada colado é a alegação falsa mais comum. Dizer o que não rodou sempre libera. |
 | 4 | **Arquivo fora do escopo declarado**<br>Bloqueia: a escrita, quando o alvo não está no arquivo de escopo, está declarado fora dele ou é intocável.<br>Por quê: Correção que passeia por arquivo que ninguém pediu é como a regressão chega à produção. |
 | 5 | **Comando destrutivo e sessão concorrente**<br>Bloqueia: o comando que apaga, o `cd` solto, a sintaxe de shell errada para a ferramenta e a escrita em arquivo que outra sessão mexeu.<br>Por quê: Trabalho perdido não volta para revisão. |
-| 6 | **Agente caro, modelo ou esforço trocado, pedido de subida esquecido**<br>Bloqueia:<br>• o despacho de um agente da metade mais cara da escada, arredondada para baixo (com 2 ou 3 agentes, o topo; com 4 ou 5, os dois de cima; com 6 ou 7, os três de cima) quando o escopo só tem caminhos de marcha rápida;<br>• a chamada de um agente da escada com modelo ou esforço diferente do que a escada grava;<br>• o fim do turno com um pedido de subida de um subagente ainda não despachado. Este bloqueio vale uma vez por pedido.<br>Cada bloqueio diz ao agente principal o que fazer no lugar; você só entra quando ele para e pergunta (antes da terceira subida ou no pedido do topo).<br>Por quê: Custo não dói em quem escolhe o modelo, então quem escolhe é a escada: nada de agente caro em trabalho leve, o modelo e o esforço que a escada grava, e o degrau seguinte quando o subagente diz que a tarefa passou do papel dele. |
+| 6 | **Agente caro, modelo ou esforço trocado, pedido de subida esquecido**<br>Bloqueia:<br>• o despacho de um agente da metade mais cara da escada, arredondada para baixo (com 2 ou 3 agentes, o topo; com 4 ou 5, os dois de cima; com 6 ou 7, os três de cima) quando o escopo só tem caminhos de marcha rápida;<br>• a chamada de um agente da escada com modelo ou esforço diferente do que a escada grava (menos o segundo despacho do topo, abaixo, que vai com esforço máximo);<br>• o fim do turno com um pedido de subida de um subagente ainda não despachado. Este bloqueio vale uma vez por pedido.<br>Cada bloqueio diz ao agente principal o que fazer no lugar, sem parar para perguntar a você: quando o topo da escada pede um acima, ele é despachado de novo com esforço máximo; se pedir outra vez, o agente principal fecha dizendo o que segue falhando, com a saída.<br>Por quê: Custo não dói em quem escolhe o modelo, então quem escolhe é a escada: nada de agente caro em trabalho leve, o modelo e o esforço que a escada grava, e o degrau seguinte quando o subagente diz que a tarefa passou do papel dele. |
 | 7 | **Criar sem ter procurado**<br>Bloqueia: arquivo novo quando nada foi buscado no turno.<br>Por quê: `utils2.js` ao lado do `utils.js` é duplicata que ninguém vai limpar. |
 | 8 | **Catraca afrouxada**<br>Bloqueia: a edição que sobe um teto ou desce um piso.<br>Por quê: Baixar a régua é o jeito fácil de o teste passar; afrouxar é decisão humana. |
 <!-- /pagina:travas -->
@@ -156,7 +155,7 @@ um `true`/`false` em `.claude/sworn/projeto.json`.
 | Referência de topo | Com referência declarada para o tipo do arquivo, a entrega `aaa` pede revisão contra ela, nas duas ordens. | Julgado contra o melhor do mesmo tipo, não contra o gosto. | `portaoReferencia` |
 | Manual antes | Nega editar arquivo `aaa` antes de o manual de execução ser carregado na sessão. | Rigor que nunca foi carregado nunca é aplicado. | `portaoManual` |
 | Três opções | Nega a pergunta a você sem exatamente 3 opções e a recomendada primeiro; a pergunta de fato passa com `(fato)` no título curto. | Escolha escondida numa muralha de texto é escolha que você não fez. | `portaoDecisao` |
-| Prompt do handoff | Devolve o turno que gravou um arquivo de handoff (a passagem do trabalho para um chat novo) quando a resposta final não tem bloco de código. | O prompt do próximo chat (o texto que você cola para abri-lo) tem de chegar a você, não só a um arquivo. | `portaoHandoff` |
+| Prompt do handoff | Devolve o turno que gravou um arquivo de handoff (o texto que continua o trabalho) quando a resposta final não tem bloco de código. | O prompt pronto (para seguir num chat novo, se um dia você quiser) tem de chegar a você, não só a um arquivo. | `portaoHandoff` |
 | Apelido do modelo | Avisa uma vez por sessão quando o `model:` de um agente (o campo do modelo no arquivo do agente) difere do apelido gravado no projeto (o nome curto do modelo, como `sonnet` ou `opus`), ou o `effort:` dele (o campo do esforço) difere do esforço que a escada grava para ele. Não barra: o agente principal oferece a você 3 opções, acertar o arquivo do agente pelo projeto, acertar o projeto pelo arquivo, ou deixar para depois. | Troca de modelo calada muda custo e qualidade. | não há; fica calado sem apelidos gravados |
 | Estilo por shell | Com design system declarado, nega o arquivo de estilo escrito por comando de shell. | A conferência de tokens mora no `Write` e no `Edit`; a escrita por shell a pularia. | não ter `design.json` |
 | Tokens de design | Com `.claude/sworn/design.json`, nega o arquivo de estilo com cor ou medida em `px`, `rem` ou `em` que o sistema não tem. | Um design system morre um valor fixo de cada vez. | não ter `design.json` |
@@ -239,7 +238,7 @@ menos 24 × 24 px em cada botão e o INP (o tempo do clique até a tela responde
 | `/sworn:init` | Varre o repositório, mostra o que inferiu, faz seis perguntas que varredura nenhuma responde e grava a configuração do projeto. |
 | `/sworn:review` | Revisão cega A/B de um arquivo mudado: um inspetor por lente, que parte de reprovar, apuração por script, no máximo 3 rondas. |
 | `/sworn:learn` | Transforma uma correção sua em regra proposta `gatilho -> ação`; só grava depois do seu OK explícito. |
-| `/sworn:handoff` | Escreve a continuação para um chat novo: caminhos, `HEAD`, etapa atual, decisões tomadas, pendências. |
+| `/sworn:handoff` | Escreve a continuação do trabalho, relida depois que a conversa é compactada (sem chat novo): caminhos, `HEAD`, etapa atual, decisões tomadas, pendências. |
 | `/sworn:audit` | Pesa as instruções do projeto contra um teto, aponta o que cortar e mostra o modelo e o esforço com que os subagentes rodaram de fato. |
 | `/sworn:calibrate` | Mede, nas suas conversas, quando trocar de chat compensa, e sugere o limiar. |
 | `/sworn:shortcuts` | Lista os atalhos deliberados do código e marca os que não dizem quando trocar. |

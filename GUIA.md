@@ -334,7 +334,7 @@ O plugin se pendura em onze pontos do ciclo de uma sessão:
 | Quando | Script | O que faz |
 |---|---|---|
 | a sessão abre, reabre ou compacta | `scripts/abertura.js` | fotografa o `git status` (o que já estava modificado é de outra frente), reinjeta as suas regras e o escopo em vigor, avisa escopo herdado de outra tarefa, `intocaveis` que não pegam nada e plano ativo de outra sessão; a cada 7 dias, roda a auditoria do `/sworn:audit` e avisa só o que passou do limite |
-| você manda um pedido | `scripts/abrir-turno.js` | zera as marcas do turno anterior: trabalho feito, busca feita, bloqueio; se você perguntar se o contexto está bom, manda o Claude trocar de chat com o handoff (o texto de continuação que leva o trabalho a um chat novo); se você corrigir o jeito dele trabalhar ("eu já te disse", "da próxima vez…"), manda o Claude rodar o `/sworn:learn` na mesma resposta e perguntar a você, em 3 opções, se grava |
+| você manda um pedido | `scripts/abrir-turno.js` | zera as marcas do turno anterior: trabalho feito, busca feita, bloqueio; se você perguntar se o contexto está bom, manda o Claude gravar o handoff (o texto de continuação do trabalho) e seguir na mesma conversa; se você corrigir o jeito dele trabalhar ("eu já te disse", "da próxima vez…"), manda o Claude rodar o `/sworn:learn` na mesma resposta e perguntar a você, em 3 opções, se grava |
 | antes de `Write` e `Edit` | `scripts/portao-escopo.js` | intocáveis, outra frente, "Fora", marcha, escopo, criar sem buscar, catraca (régua que só aperta: teto que não sobe e piso que não desce) e, com design system declarado, token fora do sistema |
 | antes de `Bash` e `PowerShell` | `scripts/portao-destrutivo.js` · `scripts/portao-estilo.js` · `scripts/portao-commit.js` | comando destrutivo, idioma de shell errado e `cd` solto (no `Bash`, corrige sozinho: o comando roda num subshell); avisa, sem negar, quando a tabela de idioma do PowerShell não se lê. Com design system declarado, nega arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`. Nega o `git commit` com código mudado na sessão sem revisão aprovada |
 | antes de `Task` e `Agent` | `scripts/portao-agente.js` · `scripts/portao-apelido.js` | agente caro em marcha rápida e chamada com modelo ou esforço fora da tabela da escada; `model:` e `effort:` do agente contra o apelido e o esforço gravados no projeto |
@@ -342,7 +342,7 @@ O plugin se pendura em onze pontos do ciclo de uma sessão:
 | depois de cada ferramenta | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; conta as decisões suas respondidas e os commits que passaram |
 | um subagente abre | `scripts/abrir-subagente.js` · `scripts/escalar.js` | entrega a ele o bloco "menos código" (o da abertura não chega ao subagente); os que só leem (`inspector`, `dedupe-judge`, `reader`, `Explore`, `Plan`) ficam de fora; `"menosCodigo": false` desliga. Se ele é o agente que um degrau da escada pediu, dá baixa no pedido |
 | um subagente termina | `scripts/gravar-veredito.js` · `scripts/escalar.js` | o inspetor da revisão cega: grava o veredito dele em `vereditos/<lente>.json` da ronda; não barra nada, não sobrescreve, e avisa o que não gravou (essa lente volta a ser gravada à mão). Um agente da escada que termina com a linha `ESCALAR: <agente> - <motivo>`: guarda o pedido do degrau de cima |
-| o turno termina | `scripts/portao-fecho.js` | cobra evidência, barra etapa com subitem aberto, barra o turno que gravou um handoff sem colar o prompt em bloco de código na resposta final, barra uma vez o turno que deixou sem despacho o degrau que um agente pediu, grava os contadores, avisa quando é hora de trocar de chat |
+| o turno termina | `scripts/portao-fecho.js` | cobra evidência, barra etapa com subitem aberto, barra o turno que gravou um handoff sem colar o prompt em bloco de código na resposta final, barra uma vez o turno que deixou sem despacho o degrau que um agente pediu, grava os contadores, avisa quando é hora do handoff |
 | a sessão fecha | `scripts/fim-sessao.js` | apaga os arquivos de sessão parados há mais de 7 dias, nunca o da sessão que está fechando; o orçamento é de 1,5 s (o `timeout` do `hooks.json` não o aumenta), e a limpeza para antes disso: o que sobrar sai na próxima |
 
 Cinco coisas acontecem sem você pedir:
@@ -352,13 +352,14 @@ Cinco coisas acontecem sem você pedir:
   se perde. Desde a 0.9.1 volta junto o que já foi feito na sessão: os arquivos tocados (quantos, e os 8
   primeiros), as ordens pendentes, as suas decisões e os commits, quando há, o `HEAD` de cada repositório
   onde houve arquivo tocado, e os portões que dispararam no turno e antes dele.
-- **Ele avisa quando é hora de abrir chat novo.** Por gatilho contável, não por palpite. Com o modo
+- **Ele avisa quando é hora do handoff, e o trabalho segue.** Por gatilho contável, não por palpite. Com o modo
   contínuo, ligado por padrão desde a 0.9.0, avisam o tamanho da conversa e 6 bloqueios de portão
   ([a seção da chave](#menos-paradas-e-modo-contínuo)). Com `"modoContinuo": false`, avisam também 15 turnos
   com trabalho, 2 revisões independentes fechadas, 25 arquivos tocados, 3 decisões suas respondidas ou
   3 commits. Basta um, e os limiares se ajustam em `limiares`, no `projeto.json`. O aviso não fica só na
-  tela: chega também ao Claude, que roda o handoff e cola o prompt pronto na mesma resposta (detalhe
-  abaixo). Funciona sem o `/sworn:init`.
+  tela: chega também ao Claude, que roda o handoff, cola o prompt pronto na mesma resposta e segue o
+  trabalho na mesma conversa; quando ela for compactada, o sworn manda reler o handoff (detalhe abaixo).
+  Você não abre chat novo nem cola nada. Funciona sem o `/sworn:init`.
 - **Etapa com subitem aberto não fecha.** Com um plano ativo, dizer que a etapa terminou enquanto ela
   ainda tem caixa aberta é barrado pelo fecho. Para ativar um plano, rode na pasta do projeto:
   `node "<plugin>/scripts/plano.js" --abrir <caminho do plano>`. O `<plugin>` é a pasta onde o plugin
@@ -389,32 +390,41 @@ BOM (comum no Windows) vale. O portão da "etapa com subitem aberto" lê só o f
 `/sworn-plan`, que entende mais (ver "Ver os números a qualquer hora", abaixo).
 
 <details>
-<summary>O aviso de troca de chat, literal</summary>
+<summary>O aviso do handoff, literal</summary>
 
 ~~~text
-sworn - hora de abrir chat novo.
+sworn - hora do handoff: o trabalho segue nesta conversa.
 
 O sworn faz contas nesta conversa, e o que esta abaixo chegou ao limite (o numero depois de "limiar"):
   - 7 bloqueios de portao (acoes que o sworn negou) nesta sessao (limiar 6)
-Nao espere ter certeza: troque agora, pelo passo abaixo.
 
-Faca assim: rode /sworn:handoff, cole o prompt pronto num chat novo e continue de la.
+Faca assim: nada, voce nao precisa agir.
+O Claude grava o handoff (/sworn:handoff, o texto que continua o trabalho) e segue nesta conversa.
+Quando ela for compactada (resumida sozinha para caber), o sworn manda o Claude reler o handoff.
 ~~~
 
 </details>
 
 ### O aviso de troca de chat: o que dispara, o que não, e como conferir
 
-**Troca de chat** é encerrar a conversa e seguir num chat novo, que continua de onde ela parou: o
-`/sworn:handoff` grava o texto de continuação (o *handoff*) e cola na resposta um prompt pronto para você abrir
-o chat novo. O medidor usa a mesma unidade na previsão das janelas de limite: "~19 trocas de chat" quer dizer que
-cabem cerca de 19 conversas, no ritmo de gasto das suas últimas, antes de a janela acabar.
+**Troca de chat**, o nome que o medidor usa, é o ponto em que a conversa passa o trabalho adiante: o `/sworn:handoff`
+grava o texto de continuação (o *handoff*) e cola na resposta um prompt pronto. O trabalho segue na mesma conversa:
+quando o harness a compacta (o resumo automático, que o `/sworn:calibrate` explica abaixo), o sworn manda reler o
+handoff, e você não abre chat novo. Enquanto o Claude não relê o handoff (ou não grava o que faltava), a edição de
+outro arquivo é recusada e o Claude recebe o caminho do handoff; enquanto o Claude não relê, o comando de shell
+também é recusado, salvo o que lê o próprio handoff. Se o Claude encerra a resposta sem reler (ou gravar) o handoff,
+o sworn o pede de novo no fim da resposta. As recusas e esses pedidos valem no máximo três vezes, somados; depois
+tudo passa. Essa parte o Claude faz sozinho.
+O prompt pronto serve se você mesmo quiser seguir num chat novo.
+A exceção é a versão nova do sworn instalada: ela só carrega num chat novo (o `/clear` não recarrega o plugin). O
+medidor usa a mesma unidade na previsão das janelas de limite: "~19 trocas de chat" quer dizer que cabem cerca de 19
+trechos de conversa, cada um até o seu handoff, no ritmo de gasto dos seus últimos, antes de a janela acabar.
 
 O aviso sai **uma vez por sessão** (mais o alarme de tamanho, abaixo), no fim do turno, e vai para dois lugares: para você (a mensagem
-acima) e para o Claude, que recebe a ordem de rodar `/sworn:handoff`, dizer com todas as letras
-que é hora de abrir chat novo, citando o gatilho, e colar o prompt pronto em bloco de código, sem
-perguntar "sigo?" antes. Se o turno já gravou o handoff e a resposta final já tem um bloco de código
-(qualquer um: o plugin não confere que é o prompt), a ordem muda: apontar para o bloco acima, sem
+acima) e para o Claude, que recebe a ordem de rodar `/sworn:handoff`, colar o prompt pronto em bloco de código,
+dizer numa linha que o handoff está gravado, citando o gatilho, e seguir com o próximo passo do trabalho, sem
+perguntar "sigo?". Se o turno já gravou o handoff e a resposta final já tem um bloco de código
+(qualquer um: o plugin não confere que é o prompt), a ordem muda: apontar para o bloco acima e seguir, sem
 rodar o handoff nem colar de novo. Se o fim de turno já for de um laço de continuação, o aviso não
 se soma ao laço: espera o próximo fim de turno com trabalho.
 
@@ -438,9 +448,11 @@ automática dos atalhos usa `diasEntreAtalhos` (ver `/sworn:shortcuts`).
 
 **Perguntar também dispara.** Se você perguntar se o contexto ou a memória da conversa está bom
 ("o contexto está bom?", "contexto tá cheio?", "is the context ok?"), a pergunta é a resposta: o
-Claude recebe a ordem de trocar de chat com o handoff, e isso vale a cada vez que perguntar, não só
+Claude recebe a ordem de gravar o handoff e seguir na mesma conversa, e isso vale a cada vez que perguntar, não só
 a primeira. Pedido que apenas cita contexto ou memória ("adicione contexto ao README", "memory leak
-no módulo") não dispara. O retorno de um subagente que cita "o contexto está bom?" também não conta como pergunta
+no módulo") não dispara. Conta só a frase que é pergunta e que fala do contexto ou da memória logo nas primeiras
+palavras: "quando o contexto estiver cheio" no meio de uma mensagem longa, com a interrogação em outra frase, não
+dispara. O retorno de um subagente que cita "o contexto está bom?" também não conta como pergunta
 sua, nem a frase de correção que ele traz vira sugestão de `/sworn:learn`: o filtro vale também na forma como
 o Claude Code 2.1.296 entrega o retorno ("Another Claude session sent a message…", seguido do retorno), e mora numa
 função só, usada pelos dois ganchos.
@@ -461,7 +473,8 @@ contínuo, ligado por padrão desde a 0.9.0, o aviso sai a 250 mil: a sessão lo
 você gravar continua mandando. Para medir no
 seu projeto, rode `/sworn:calibrate`. O erro de ferramenta não subiu com o contexto até 500 mil. O aviso sai só no fim de turno, nunca no meio da
 tarefa. **O alarme** (`tokensAlarme`) é o segundo aviso, mais firme, que sai uma vez mesmo depois do
-primeiro. Ele sai a 450 mil, antes da faixa acima de 500 mil, onde cada chamada custa cerca de 4 vezes a de
+primeiro: o Claude grava o handoff de novo, e o aviso sugere compactar a conversa à mão para baixar o custo já
+(`/compact`; no Qwen Code, `/compress`). Ele sai a 450 mil, antes da faixa acima de 500 mil, onde cada chamada custa cerca de 4 vezes a de
 200–300 mil. O medidor
 (`/sworn-session`) usa o número ao vivo.
 
@@ -481,20 +494,24 @@ hook:" (o prefixo é do Claude Code) e não repete o que você digitou: a sua me
 Para seguir no mesmo chat, mande de novo: o aviso sai uma vez por pausa.
 
 Na mesma hora, sem chamar o Claude, o sworn grava um **resumo do chat** em
-`.claude/sworn/handoff/AAAA-MM-DD-retomar-<8 primeiros do id do chat>.md` (desde a 0.11.0): os seus últimos 5
-pedidos e as últimas 3 respostas do Claude, com a hora, sem os blocos que o Claude Code injeta (lembretes, instruções
-do navegador) e cortados em ~600 e ~800 caracteres; os últimos 20 arquivos mexidos; a frente, o plano, o último
-handoff do modelo e o que está modificado sem commit na raiz (`git status`). Teto de 10 KB; chave de API reconhecida sai como "[segredo omitido]". O
-aviso traz o prompt pronto para colar no chat novo, apontando o resumo (e o handoff do modelo, se ele foi gravado
-depois do seu último pedido). O resumo é um retrato do registro do chat, não o handoff do modelo: o chat novo confere
-no disco e, se precisar, roda o `/sworn:handoff` ali, pagando só a abertura. Se o resumo não sair (registro do chat
-ilegível, disco cheio), o aviso diz "Sem resumo" e sugere colar no chat novo o prompt do último handoff. A pasta
-`handoff/` é a mesma do handoff do modelo: se ela não estiver no `.gitignore` do seu projeto, o resumo aparece entre
-os arquivos novos sem commit, como qualquer handoff. O custo de continuar é o contexto vezes a escrita de 1 hora do modelo; o do chat novo, a
-primeira chamada típica de um chat novo (68.723 tokens, a mediana medida), que é o piso, porque o chat novo ainda
-relê arquivos depois. Os valores são preço de API (a tabela do plugin); no plano por assinatura, viram consumo do
-limite. Modelo fora da tabela: o aviso sai sem o valor em US$. Se o plugin não conseguir ler o registro da sessão, a
-mensagem passa. Desliga com `"avisoDeVolta": false` no `projeto.json`.
+`.sworn/handoff/AAAA-MM-DD-retomar-<8 primeiros do id do chat>.md` (desde a 0.11.0; até a 0.21.1, em
+`.claude/sworn/handoff/`): os seus últimos 5 pedidos e as últimas 3 respostas do Claude, com a hora, sem os blocos que
+o Claude Code injeta (lembretes, instruções do navegador) e cortados em ~600 e ~800 caracteres; os últimos 20 arquivos
+mexidos; a frente, o plano, o último handoff do modelo e o que está modificado sem commit na raiz (`git status`). Teto
+de 10 KB; chave de API reconhecida sai como "[segredo omitido]". O aviso traz o prompt pronto para colar no chat novo,
+apontando o resumo (e o handoff do modelo, se ele foi gravado depois do seu último pedido). O resumo é um retrato do
+registro do chat, não o handoff do modelo: o chat novo confere no disco e, se precisar, roda o `/sworn:handoff` ali,
+pagando só a abertura. Se o resumo não sair (registro do chat ilegível, disco cheio), o aviso diz "Sem resumo" e
+sugere colar no chat novo o prompt do último handoff. A pasta `.sworn/handoff/` é a mesma do handoff do modelo. Ela
+fica fora da `.claude/` porque lá o Claude Code para e pede a sua permissão antes de o modelo gravar; aqui o handoff
+grava sem você aprovar nada. Os handoffs antigos, em `.claude/sworn/handoff/`, seguem valendo onde estão: não é
+preciso movê-los. Para o resumo e o handoff não aparecerem entre os arquivos novos sem commit, acrescente `.sworn/` ao
+`.gitignore` do projeto: uma linha que ignora a `.claude/` não cobre a pasta nova. O custo de continuar é o contexto
+vezes a escrita de 1 hora do modelo; o do chat novo, a primeira chamada típica de um chat novo (68.723 tokens, a
+mediana medida), que é o piso, porque o chat novo ainda relê arquivos depois. Os valores são preço de API (a tabela do
+plugin); no plano por assinatura, viram consumo do limite. Modelo fora da tabela: o aviso sai sem o valor em US$. Se o
+plugin não conseguir ler o registro da sessão, a mensagem passa. Desliga com `"avisoDeVolta": false` no
+`projeto.json`.
 
 **O que não dispara:** erro de medição (contagem errada, número lido do lugar errado). Hook não o
 enxerga — ele dispara em ferramenta —, então o plugin não finge contá-lo. Para esse, vale a sua
@@ -799,7 +816,7 @@ mudanca e dele, feita a mao por ele: este portao nega a edicao ao agente mesmo c
 registrada. A decisao fica onde o projeto registra as decisoes.
 ~~~
 
-**Portão do prompt do handoff** (o turno gravou `.claude/sworn/handoff/2026-10-10-frete.md` e a
+**Portão do prompt do handoff** (o turno gravou `.sworn/handoff/2026-10-10-frete.md` e a
 resposta final não tem bloco de código):
 
 ~~~text
@@ -811,7 +828,7 @@ um bloco numa mensagem anterior deste turno ela nao ve.
 
 Faca assim: cole o prompt agora num bloco de codigo (entre ``` ou ~~~), nesta resposta final - uma vez so.
 
-Desligar neste projeto: "portaoHandoff": false em .claude/sworn/projeto.json.
+So o dono desliga neste projeto: "portaoHandoff": false em .claude/sworn/projeto.json.
 ~~~
 
 </details>
@@ -1088,7 +1105,7 @@ isso repete o já visto. O roteiro não bloqueia o fecho: sai junto, sem esperar
 | `/sworn:init` | A entrevista. Varre o repositório, mostra o que inferiu — marcado como inferência — e faz seis perguntas que varredura nenhuma responde. Grava sempre `.claude/sworn/projeto.json` e `.claude/sworn/regras.md`, e registra a conferência do catálogo de modelos da instalação em `.claude/sworn/catalogo.json`. O resto é opcional: `.claude/sworn/design.json` (só quando há design system) e, cada um só com aprovação explícita e sem sobrescrever arquivo que já exista, os agentes do projeto em `.claude/agents/`, a skill do projeto em `.claude/skills/<slug>/SKILL.md` e o `AGENTS.md` na raiz. |
 | `/sworn:review` | Revisão cega A/B de um arquivo mudado: rotula os dois lados sem autoria, despacha um inspetor por lente, **dez** de código, **oito** de tela, e **dezoito** quando a mudança é de código e de tela, e **sete** quando é só lógica (as de código sem `design`, `medidor` e `escopo`; na dúvida, as dez); antes disso, a mudança pequena vai a menos inspetores (até 3 linhas, um; lógica de até 40 linhas com teste vermelho e mutação, ou texto, dois; a faixa sai do `preparar-revisao.js`, e só sobe), com default reprovar, e apura por script com teto de 3 rondas; com `referencias` declarada, compara também com a peça de topo, nas duas ordens. |
 | `/sworn:learn` | Transforma uma correção sua em regra proposta no formato `gatilho -> ação`, mostra pronta, e **só grava depois de aprovação explícita**. |
-| `/sworn:handoff` | Gera o texto de continuação para um chat novo: caminhos, `HEAD`, em que etapa o trabalho está, decisões já tomadas, pendências e erros de método que custaram tempo. Confere os fatos no disco, não na memória. |
+| `/sworn:handoff` | Gera o texto de continuação do trabalho, que a conversa relê depois de compactada (ou um chat novo lê): caminhos, `HEAD`, em que etapa o trabalho está, decisões já tomadas, pendências e erros de método que custaram tempo. Confere os fatos no disco, não na memória. |
 | `/sworn:audit` | Mede o peso de instrução do projeto contra um teto e aponta o que cortar: skills que se sobrepõem (entre si e com as do próprio sworn, como uma `padrao` do projeto repetindo o `/sworn:playbook`), regras que se contradizem e itens fora da rubrica. Não acrescenta — poda. |
 | `/sworn:calibrate` | Mede, nas conversas do seu projeto, a partir de quantos tokens de contexto trocar de chat ainda compensa, e sugere o limiar de troca. **Só grava no `projeto.json` com o seu sim.** |
 | `/sworn:shortcuts` | Lista os atalhos deliberados do repositório: os comentários `atalho: <o que>. limite: <até onde vale>. trocar quando: <gatilho>.` (também `ponytail:` e `shortcut:`), agrupados por arquivo, e marca `sem-gatilho` o que não diz quando trocar. Só lê; a marca muda pela chave `marcaDeAtalho`. |
@@ -1131,7 +1148,7 @@ Os ganchos, um por evento, com o que cada um deixa na sua tela:
 | Evento | Script | O que faz | O que você vê |
 |---|---|---|---|
 | `SessionStart` (a sessão abre, reabre ou compacta) | `scripts/abertura.js` | fotografa o `git status`, reinjeta as suas regras e o escopo, injeta os blocos de paralelismo, menos paradas, qualidade de resposta e menos código, e avisa o que está torto na configuração | a linha "sworn: lendo o estado do repositorio" enquanto roda; o resto vai ao contexto do Claude |
-| `UserPromptSubmit` | `scripts/abrir-turno.js` | zera as marcas do turno; reconhece a sua pergunta sobre o contexto e a correção do jeito de ele trabalhar | nada na tela; o Claude recebe a ordem de trocar de chat ou de rodar o `/sworn:learn` |
+| `UserPromptSubmit` | `scripts/abrir-turno.js` | zera as marcas do turno; reconhece a sua pergunta sobre o contexto e a correção do jeito de ele trabalhar | nada na tela; o Claude recebe a ordem de gravar o handoff e seguir, ou de rodar o `/sworn:learn` |
 | `PreToolUse` em `Write` e `Edit` | `scripts/portao-escopo.js` | escopo, intocáveis, outra frente, "Fora", criar sem buscar, catraca e design | a escrita volta negada, com o motivo e as saídas |
 | `PreToolUse` em `Bash` e `PowerShell` | `scripts/portao-destrutivo.js`, `scripts/portao-estilo.js`, `scripts/portao-commit.js` | comando destrutivo, idioma de shell, `cd` solto, estilo escrito por shell e commit sem revisão | o comando volta negado com o motivo; o `cd` solto no `Bash` roda corrigido, e o Claude fica sabendo |
 | `PreToolUse` em `Task` e `Agent` | `scripts/portao-agente.js`, `scripts/portao-apelido.js` | agente caro em marcha rápida e chamada fora da tabela da escada; `model:` e `effort:` do agente contra o gravado | o primeiro nega com o motivo e, na chamada fora da tabela, com a chamada certa; o segundo só avisa, uma vez por sessão, a você e ao Claude |
@@ -1139,7 +1156,7 @@ Os ganchos, um por evento, com o que cada um deixa na sua tela:
 | `PostToolUse` em `Write`, `Edit`, `Bash`, `PowerShell`, `Grep`, `Glob`, `Read` e `AskUserQuestion` | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; conta as decisões suas respondidas e os commits que passaram | nada na tela: alimenta os contadores do aviso de troca de chat |
 | `SubagentStart` (menos os que só leem) | `scripts/abrir-subagente.js` | injeta o bloco "menos código" no subagente que pode escrever código | nada na tela; o subagente recebe o bloco antes do primeiro pedido |
 | `SubagentStop` (só do agente `inspector`) e `PostToolUse` em `SubagentHandback` | `scripts/gravar-veredito.js` | grava o veredito do inspetor em `vereditos/<lente>.json` da ronda | nada quando grava; se algo não foi gravado, uma mensagem diz o quê e por quê |
-| `Stop` | `scripts/portao-fecho.js` | cobra evidência, etapa com subitem aberto e o prompt do handoff; barra uma vez o fim do turno com pedido `ESCALAR:` de subagente ainda não despachado (trava 6); grava os contadores | o turno volta com o motivo, ou fecha, com o aviso de troca de chat quando um gatilho cruzou |
+| `Stop` | `scripts/portao-fecho.js` | cobra evidência, etapa com subitem aberto e o prompt do handoff; barra uma vez o fim do turno com pedido `ESCALAR:` de subagente ainda não despachado (trava 6); grava os contadores | o turno volta com o motivo, ou fecha, com o aviso do handoff quando um gatilho cruzou |
 | `SessionEnd` | `scripts/fim-sessao.js` | apaga os arquivos de sessão parados há mais de 7 dias | nada |
 
 Os portões que nomeiam uma chave de liga/desliga estão em "Os portões que não são travas"; as chaves, em "O
@@ -1305,15 +1322,17 @@ nunca grava nada: quem grava é a skill, depois do seu sim. No máximo uma suges
 relato de bug ("o botão para de funcionar") e resposta a pergunta ("não, pode seguir") não contam.
 Desliga com `"sugerirAprender": false` no `projeto.json`; sem a chave, fica ligado.
 
-### `/sworn:handoff` — a ponte entre chats
+### `/sworn:handoff` — a ponte sobre a compactação
 
 Lê do disco o que vai no texto — `HEAD`, branch, `git status`, disparos das travas — e nunca do
 handoff anterior. O arquivo sai com oito seções fixas, da ordem de leitura aos erros de método que
-custaram tempo, e termina num prompt pronto para colar. Na mesma resposta, ele diz que é hora de
-trocar de chat e por quê, antes de perguntar se pode seguir. O prompt vai ao chat em bloco de
+custaram tempo, e termina num prompt pronto. Na mesma resposta, ele diz numa linha que o handoff está
+gravado e por quê, e o trabalho segue na mesma conversa, sem perguntar se pode seguir: quando ela for
+compactada, o sworn manda reler o handoff. Chat novo, só depois de instalar uma versão nova do sworn (ela só
+carrega num chat novo). O prompt vai ao chat em bloco de
 código: o turno que grava um handoff sem isso é barrado no fim (o portão do prompt do handoff, em
-"Como desligar uma trava"). E se o turno já gravou o handoff e colou o bloco, o aviso de troca de
-chat não manda rodar nem colar de novo: só apontar para o bloco acima.
+"Como desligar uma trava"). E se o turno já gravou o handoff e colou o bloco, o aviso do handoff
+não manda rodar nem colar de novo: só apontar para o bloco acima.
 
 **O que passa de um chat ao outro sem depender de memória:**
 
@@ -1414,6 +1433,14 @@ conversa. O limiar atual que ele mostra é o que vale hoje: o gravado no `projet
 do modo contínuo, quando ligado, senão o padrão — e ele diz qual dos três. Ele grava
 `limiares.tokensDeContexto` no `projeto.json` só com `--gravar <tokens>`, ou com `--manter` (grava o limiar
 atual, para o botão de calibrar não voltar), que a skill só roda depois do seu sim. Mede dinheiro, não qualidade.
+Junto com o limiar muda também o momento em que o harness (o programa que roda o agente, como o Claude Code ou
+o Codex) resume a conversa sozinho, a chamada compactação automática: 50 mil tokens depois do limiar. Assim,
+quando a conversa enche, o handoff (o texto de continuação) já está gravado, o harness resume a conversa, o agente
+relê o handoff e segue na mesma sessão. Você não precisa fazer nada nem abrir chat novo. No Claude Code isso fica na
+variável `CLAUDE_CODE_AUTO_COMPACT_WINDOW` do `.claude/settings.local.json` (o seu arquivo pessoal do projeto, fora
+do git); no Codex, com os ganchos do sworn instalados, na chave `model_auto_compact_token_limit` do
+`.codex/config.toml`. O `/sworn:init` grava o mesmo ponto (com `--ponto`, que não mexe no `projeto.json`). Vale a
+partir da próxima sessão; para desfazer, apague a linha nesses arquivos.
 
 ### `playbook` — o manual que o agente carrega
 
@@ -1719,9 +1746,9 @@ um `.md` com data `AAAA-MM-DD-` na frente e "handoff" no nome ou na pasta. Desli
 `"portaoHandoff": false` no `projeto.json`; `travas.fecho: false` não o desliga.
 
 Ele lê só a resposta final do turno, e só confere que há um bloco de código, não que o bloco é o
-prompt. No turno que gravou o handoff e já tem um bloco na resposta final, o aviso de troca de chat
+prompt. No turno que gravou o handoff e já tem um bloco na resposta final, o aviso do handoff
 não manda colar o prompt de novo. Com o portão desligado e a resposta sem bloco, nada barra, e o
-aviso de troca de chat, se disparar, continua mandando colar.
+aviso do handoff, se disparar, continua mandando colar.
 
 **O portão da referência de topo** também não lê a chave `travas`. Ele barra o fim do turno cuja resposta alega
 entrega (as mesmas palavras da trava 3: "pronto", "passou", "corrigido"...) quando três coisas valem juntas: um

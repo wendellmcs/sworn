@@ -647,6 +647,8 @@ test('fiacao: estado da sessao fora do ar - a abertura e o abrir-turno falam mes
     assert.ok(abrir.stdout.includes(REGRA_Q), 'a abertura calou as regras: ' + JSON.stringify(abrir.stdout));
     assert.ok(abrir.stdout.includes(TITULO_C), abrir.stdout);
     assert.ok(abrir.stdout.includes('sworn: o estado da sessao nao gravou ('), abrir.stdout);
+    // s358: no compact, o tamanho que nao se conferiu (F2) tambem e dito, com o que fazer
+    assert.ok(abrir.stdout.includes('sworn: o tamanho desta conversa nao foi conferido na compactacao ('), abrir.stdout);
     const turno = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abrir-turno.js')], {
       cwd: dir, encoding: 'utf8', env: env, timeout: 60000,
       input: JSON.stringify({ session_id: 'sem-estado', cwd: dir, prompt: 'o contexto esta bom?' })
@@ -1351,7 +1353,7 @@ test('T10-5: sem /sworn:init (sem projeto.json) o modo continuo padrao cala os d
         const dito = nome === 'commits' ? '3 commits nesta sessao (limiar 3)'
           : '3 decisoes do dono respondidas (respostas as perguntas de escolha do Claude) nesta sessao (limiar 3)';
         if (!desligado) {
-          assert.ok(f.stdout.indexOf(dito) === -1 && !/chat novo/.test(f.stdout), nome + ': o modo continuo padrao tinha de calar: ' + f.stdout);
+          assert.ok(f.stdout.indexOf(dito) === -1 && !/hora do handoff/.test(f.stdout), nome + ': o modo continuo padrao tinha de calar: ' + f.stdout);
           continue;
         }
         const j = JSON.parse(f.stdout);

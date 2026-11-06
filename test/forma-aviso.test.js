@@ -54,6 +54,9 @@ function confereForma(nome, texto, o) {
 
 const DESLIGAR = /^Desligar neste projeto: "[a-zA-Z]+": false em \.claude\/sworn\/projeto\.json\.$/;
 const LIBERAR = /^So o dono libera: .*"comandosLiberados".* \.claude\/sworn\/projeto\.json\.$/;
+// s367 (D786, qw13): a trava que barra fala com o modelo; com "Desligar neste projeto" o modelo desligou a trava
+// sozinho. Nas travas que barram, quem desliga e o dono, como na trava 5.
+const DONO_DESLIGA = /^So o dono desliga neste projeto: "[a-zA-Z]+": false em \.claude\/sworn\/projeto\.json\.$/;
 
 test('T5: gatilho 3 (apelidos) na forma unica, com o arquivo do agente entre aspas', () => {
   const t = apelidos.motivo({ divergencias: [
@@ -133,7 +136,7 @@ test('T5: os dois avisos de saude e o do handoff na forma unica', () => {
   const alarme = saude.avisoDeSaude(['500000 tokens de contexto (alarme 450000)'], true);
   confereForma('alarme', alarme, { acao: 'assim' });
   assert.match(alarme.split('\n')[0], /ALARME/);
-  confereForma('handoff', saude.MOTIVO_HANDOFF_SEM_PROMPT, { acao: 'assim', ultima: DESLIGAR });
+  confereForma('handoff', saude.MOTIVO_HANDOFF_SEM_PROMPT, { acao: 'assim', ultima: DONO_DESLIGA });
   assert.match(saude.MOTIVO_HANDOFF_SEM_PROMPT, /"portaoHandoff": false/);
 });
 

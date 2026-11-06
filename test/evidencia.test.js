@@ -102,10 +102,49 @@ test('evidencia D634: os motivos do 7b e do 8 citam o comando em ASCII (R5) e cu
   assert.ok(/prova de pronto/.test(prova) && prova.indexOf('  npm test') !== -1, prova);
 });
 
+// D785 (2.1): o motivo do laco da prova manda rodar e consertar sem perguntar; no teto, escalar; nunca a ressalva.
+test('evidencia D785: o motivo do laco conta a volta, manda consertar sem perguntar e, no teto, escalar', () => {
+  assert.strictEqual(ev.TETO_DO_LACO, 3);
+  for (const tipo of ['pendente', 'vermelho']) {
+    for (let n = 1; n <= ev.TETO_DO_LACO + 1; n++) {
+      const m = ev.motivoDoLaco(tipo, 'npm test', n);
+      assert.ok(/^[\n\x20-\x7E]*$/.test(m), 'ASCII (R5): ' + m);
+      assert.ok(m.indexOf('  npm test') !== -1 && /sem perguntar/i.test(m), m);
+      assert.ok(!/declare|"did not run"|diga que ainda falha/.test(m), 'a ressalva nao e saida: ' + m);
+      assert.ok(m.split('\n').every((l) => l.length <= 124), m);
+    }
+    assert.ok(/1 de 3/.test(ev.motivoDoLaco(tipo, 'npm test', 1)), 'conta a volta');
+    assert.ok(/3 de 3/.test(ev.motivoDoLaco(tipo, 'npm test', 3)), 'a 3a volta ainda manda consertar');
+    const teto = ev.motivoDoLaco(tipo, 'npm test', ev.TETO_DO_LACO + 1);
+    assert.ok(/escal/i.test(teto) && /agentes\.escada/.test(teto) && /esforco alto/.test(teto), teto);
+    assert.ok(/segue falhando/.test(teto) && /Nao pergunte/.test(teto), 'esgotado: fecha com o que falha, sem pergunta');
+  }
+  assert.ok(/nao rodou depois/.test(ev.motivoDoLaco('pendente', 'npm test', 1)));
+  assert.ok(/falhou/.test(ev.motivoDoLaco('vermelho', 'npm test', 1)));
+});
+
+// D785 (s328): no sandbox do Codex o node --test sai com `spawn EPERM` (o executor abre processo filho e o sandbox
+// barra); o modelo tentava variantes ate achar --test-isolation=none (18 de 24 rodadas da leva 7, entrada 2,8x).
+test('evidencia D785: saida com spawn EPERM manda a prova sem processo filho, em toda volta do laco', () => {
+  assert.strictEqual(ev.saidaBarradaPeloSandbox('Error: spawn EPERM\n    at ChildProcess._handle'), true);
+  for (const s of ['# fail 1', 'EPERM: operation not permitted, unlink', 'spawn ENOENT', null, undefined, '']) {
+    assert.strictEqual(ev.saidaBarradaPeloSandbox(s), false, String(s));
+  }
+  for (let n = 1; n <= ev.TETO_DO_LACO + 1; n++) {
+    const m = ev.motivoDoLaco('vermelho', 'node --test test/', n, true);
+    assert.ok(/spawn EPERM/.test(m) && /node --test --test-isolation=none/.test(m), m);
+    assert.ok(/recusar a opcao, --experimental-test-isolation=none/.test(m), 'o node antigo: ' + m);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(m) && m.split('\n').every((l) => l.length <= 124), m);
+    assert.ok(!/EPERM|isolation/.test(ev.motivoDoLaco('vermelho', 'node --test test/', n)), 'sem a marca, o de antes');
+  }
+});
+
 // A3-10 (pedido 12): citado() fazia String(null) e o motivo trazia "null", onde semBlocos e analisar dao ''.
 test('evidencia A3-10: comando ausente nao vira "null" nem "undefined" no motivo', () => {
   for (const v of [null, undefined]) {
-    for (const m of [ev.motivoTesteVermelho(v), ev.motivoProvaNaoRodou(v)]) assert.ok(!/null|undefined/.test(m), m);
+    for (const m of [ev.motivoTesteVermelho(v), ev.motivoProvaNaoRodou(v), ev.motivoDoLaco('pendente', v, 1)]) {
+      assert.ok(!/null|undefined/.test(m), m);
+    }
   }
 });
 

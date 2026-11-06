@@ -32,6 +32,26 @@ const COMANDOS = /(^|[\s|;&(])(grep|rg|ag|ack|find|fd|ls|dir|cat|head|tail|tree|
 // rodam comando por si - pelo mesmo motivo do `sed -i` acima, o comando inteiro deixa de contar como busca.
 const ALTERA = /(^|[\s|;&(])(find\b[^|;&]*\s-(delete|exec|execdir|ok|okdir)|fd\b[^|;&]*\s(-x|-X|--exec|--exec-batch))\b/;
 
+// s351 (D786 passo 5, ao vivo cx6): o Codex no Windows procura pelo PowerShell, e o cmdlet nao diferencia caixa. O
+// `gc` (Get-Content) fica de fora: casaria com `git gc`.
+const COMANDOS_DO_POWERSHELL = /(^|[\s|;&({])(get-childitem|gci|select-string|sls|get-content)(?![\w-])/i;
+// s351: pelo mesmo motivo do ALTERA, o comando (cmdlet ou alias, do PowerShell ou do Bash) que apaga, move ou escreve
+// tira o comando inteiro da busca. So na posicao de comando (no comeco, depois de | ; & ( { ou de quebra de linha): a
+// mesma palavra como argumento (`grep -rn del src`, `sls erase x.js`) e o que se procura. s352: tambem depois de
+// xargs, sudo, then e do (`ls | xargs rm`). O `>` grava (`1>`, `&>`, `2>arquivo`, `2>nul.txt`); o
+// `>&2`, o `2>&1`, o `2>` para /dev/null, $null ou nul, o `=>` e o `->`, nao. E o metodo .NET que apaga, move ou grava
+// (`$_.Delete()`, `[IO.File]::WriteAllText(`). Testado sobre o comando SEM o que esta entre aspas (ehBusca).
+const ALTERA_POR_COMANDO = new RegExp('(^|[|;&({\\r\\n])\\s*' +
+  '(?:(?:xargs|sudo|then|do)(?:\\s+(?:-\\S+|\\{\\}|\\d+))*\\s+)*' +
+  '(remove-item|ri|rm|del|erase|rd|rmdir|unlink|set-content|sc|add-content|ac|out-file|new-item|ni|touch|mkdir|' +
+  'copy-item|cpi|cp|copy|move-item|mi|mv|move|rename-item|rni|ren|clear-content|clc|set-item|tee-object|tee)' +
+  '(?![\\w-])|(^|[^2=-])>(?!&\\d)|2>(?!&\\d|\\s*(?:/dev/null|\\$null|nul)(?![\\w.]))' +
+  '|\\.(delete|moveto|copyto)\\s*\\(|::\\s*(write\\w*|append\\w*|delete|move|copy|create\\w*)\\s*\\(', 'i');
+// s352: o que esta entre aspas e o padrao procurado (`grep -rn "Array<string>" src`), nao comando nem redirecionamento.
+// atalho: as aspas saem inteiras antes do ALTERA_POR_COMANDO. limite: `bash -c "rm x"` e `"$(rm x)"` passam como
+// busca. trocar quando: uma rodada ao vivo mostrar o comando que altera escondido entre aspas.
+const ENTRE_ASPAS = /'[^'\r\n]*'|"[^"\r\n]*"/g;
+
 /**
  * Uma chamada de ferramenta conta como busca?
  * Bash conta pelo COMANDO, nao pelo nome da ferramenta: `Bash` sozinho nao diz
@@ -42,7 +62,8 @@ function ehBusca(toolName, toolInput) {
   if (FERRAMENTAS.indexOf(nome) !== -1) return true;
   if (nome === 'bash' || nome === 'powershell') {
     const cmd = (toolInput || {}).command;
-    return typeof cmd === 'string' && COMANDOS.test(cmd) && !ALTERA.test(cmd);
+    return typeof cmd === 'string' && (COMANDOS.test(cmd) || COMANDOS_DO_POWERSHELL.test(cmd)) && !ALTERA.test(cmd) &&
+      !ALTERA_POR_COMANDO.test(cmd.replace(ENTRE_ASPAS, '""'));
   }
   return false;
 }

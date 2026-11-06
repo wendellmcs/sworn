@@ -696,3 +696,732 @@ test('0.9.1 (D568): HEAD de cada repositorio onde houve arquivo tocado, na ordem
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
+
+// ------------------------------- D786 passo 3: depois da compactacao, o handoff da sessao (sem chat novo)
+
+const ORDEM_RELER = '# sworn - depois da compactacao: releia o handoff';
+const ORDEM_GRAVAR = '# sworn - depois da compactacao: grave o handoff primeiro';
+const BLOCO_DO_PROMPT = '```\nsiga daqui\n```';
+
+/** Projeto com o gatilho de turnos ligado (modo continuo desligado, senao ele cala) e um handoff gravado em disco. */
+function projetoComHandoff(limiar) {
+  const dir = projeto({ '.claude/sworn/projeto.json': JSON.stringify({ versaoConfig: 1, marchaPadrao: 'padrao',
+    modoContinuo: false, limiares: { turnosComTrabalho: limiar } }) });
+  const handoff = path.join(dir, '.context', 'plans', '2026-11-05-frente-handoff.md');
+  fs.mkdirSync(path.dirname(handoff), { recursive: true });
+  fs.writeFileSync(handoff, '# Handoff\n\n' + BLOCO_DO_PROMPT + '\n', 'utf8');
+  return { dir: dir, handoff: handoff };
+}
+
+/** Um turno: abre, grava `arquivo` (Write) e fecha com o bloco do prompt na resposta. Devolve o fecho. */
+function turnoQueGrava(base, id, dir, arquivo, extra) {
+  assert.strictEqual(rodarScript('abrir-turno.js', { session_id: id, cwd: dir, prompt: 'segue' }, base).status, 0);
+  const m = rodarScript('marcar-trabalho.js', Object.assign({ session_id: id, cwd: dir, tool_name: 'Write',
+    tool_input: { file_path: arquivo } }, extra || {}), base);
+  assert.strictEqual(m.status, 0, m.stderr);
+  const f = rodarScript('portao-fecho.js', { session_id: id, cwd: dir, hook_event_name: 'Stop',
+    last_assistant_message: 'Gravado.\n\n' + BLOCO_DO_PROMPT }, base);
+  assert.strictEqual(f.status, 0, f.stderr);
+  return f;
+}
+
+test('D786 passo 3: handoff gravado nesta sessao = o compact manda reler o arquivo pelo caminho, no comeco', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(99);
+    try {
+      fs.writeFileSync(path.join(p.dir, '.claude', 'sworn', 'regras.md'), '- ao editar -> rodar git status\n', 'utf8');
+      turnoQueGrava(base, 'h1', p.dir, p.handoff);
+      turnoQueGrava(base, 'h1', p.dir, path.join(p.dir, 'a.md'));
+      const t = rein.montar(p.dir, 'h1', 'compact') || '';
+      assert.strictEqual(t.indexOf(ORDEM_RELER), 0, 'a ordem tem de abrir o texto (o corte de 10 mil): ' +
+        t.slice(0, 300));
+      // a linha inteira: o caminho relativo tambem sai na lista dos arquivos tocados, mais abaixo
+      assert.ok(t.indexOf('\nEsta conversa foi compactada depois do handoff gravado nela: ' +
+        '.context/plans/2026-11-05-frente-handoff.md\n') !== -1,
+        'sem o caminho do handoff, relativo: ' + t.slice(0, 600));
+      assert.ok(/inteiro/.test(t) && /chat novo/.test(t) && /sigo/.test(t),
+        'a ordem tem de mandar ler inteiro e seguir: ' + t.slice(0, 600));
+      assert.ok(t.indexOf(ORDEM_GRAVAR) === -1, t.slice(0, 600));
+      assert.ok(t.indexOf('git status') !== -1, 'controle: as regras seguem no texto');
+      assert.ok(/^[\x20-\x7E\n]+$/.test(t.slice(0, t.indexOf('# sworn - regras'))), 'a ordem tem de ser ASCII');
+      // so o compact: o startup e o resume nao mandam reler
+      assert.ok((rein.montar(p.dir, 'h1', 'startup') || '').indexOf('depois da compactacao') === -1);
+      assert.ok((rein.montar(p.dir, 'h1', 'resume') || '').indexOf('depois da compactacao') === -1);
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 3: o gatilho apaga a marca de antes; sem handoff novo, o compact manda gravar primeiro', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(2);
+    try {
+      turnoQueGrava(base, 'h2', p.dir, p.handoff);
+      const f = turnoQueGrava(base, 'h2', p.dir, path.join(p.dir, 'a.md'));
+      assert.ok(f.stdout.indexOf('hora do handoff') !== -1,
+        'controle: o 2o turno tinha de disparar o gatilho: ' + f.stdout);
+      const t = rein.montar(p.dir, 'h2', 'compact') || '';
+      assert.strictEqual(t.indexOf(ORDEM_GRAVAR), 0, 'o handoff de antes do gatilho e velho: ' + t.slice(0, 400));
+      assert.ok(t.indexOf(ORDEM_RELER) === -1, t.slice(0, 400));
+      assert.ok(t.indexOf('/sworn:handoff') !== -1, 'tem de dizer como gravar: ' + t.slice(0, 400));
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 3: handoff gravado no mesmo turno em que o gatilho dispara vale; o de subagente nao marca', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(1);
+    try {
+      turnoQueGrava(base, 'h3', p.dir, p.handoff);
+      assert.strictEqual((rein.montar(p.dir, 'h3', 'compact') || '').indexOf(ORDEM_RELER), 0,
+        'o handoff do turno do gatilho sumiu');
+      // subagente: grava um arquivo com nome de handoff, mas nao continua esta conversa
+      turnoQueGrava(base, 'h4', p.dir, p.handoff, { agent_id: 'sub1' });
+      assert.strictEqual((rein.montar(p.dir, 'h4', 'compact') || '').indexOf(ORDEM_RELER), -1, 'o subagente marcou');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 3: handoff de subagente no turno do gatilho nao salva a marca velha do principal', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(2);
+    try {
+      turnoQueGrava(base, 'h7', p.dir, p.handoff);
+      const outro = path.join(p.dir, '.context', 'plans', '2026-11-05-sub-handoff.md');
+      fs.writeFileSync(outro, '# Handoff do subagente\n', 'utf8');
+      const f = turnoQueGrava(base, 'h7', p.dir, outro, { agent_id: 'sub2' });
+      assert.ok(f.stdout.indexOf('hora do handoff') !== -1,
+        'controle: o 2o turno tinha de disparar o gatilho: ' + f.stdout);
+      const t = rein.montar(p.dir, 'h7', 'compact') || '';
+      assert.strictEqual(t.indexOf(ORDEM_GRAVAR), 0, 'a marca de antes do gatilho voltou: ' + t.slice(0, 400));
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+// D788: o destino da skill (skills/handoff/SKILL.md) e .sworn/handoff/<data>-<slug>.md; na rodada cc3 da D786 o
+// handoff fora do padrao do nome nao virou marca e a compactacao mandou gravar de novo em vez de reler.
+test('D788: o handoff gravado em .sworn/handoff/ vira a marca e a compactacao manda reler esse arquivo', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(1);
+    const handoff = path.join(p.dir, '.sworn', 'handoff', '2026-11-05-frente.md');
+    try {
+      fs.mkdirSync(path.dirname(handoff), { recursive: true });
+      fs.writeFileSync(handoff, '# Handoff\n\n' + BLOCO_DO_PROMPT + '\n', 'utf8');
+      turnoQueGrava(base, 'h7', p.dir, handoff);
+      assert.strictEqual(require('../scripts/lib/estado.js').ler('h7').handoffDaSessao, handoff,
+        'a marca nao pegou o arquivo');
+      const t = rein.montar(p.dir, 'h7', 'compact') || '';
+      assert.strictEqual(t.indexOf(ORDEM_RELER), 0, t.slice(0, 400));
+      assert.ok(t.indexOf('gravado nela: .sworn/handoff/2026-11-05-frente.md\n') !== -1,
+        'a ordem nao aponta o arquivo: ' + t.slice(0, 400));
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+/** O PostToolUse do shell com `comando`; devolve o estado da sessao depois. */
+function shellMarca(base, id, dir, comando, extra) {
+  const m = rodarScript('marcar-trabalho.js', Object.assign({ session_id: id, cwd: dir, tool_name: 'PowerShell',
+    tool_input: { command: comando } }, extra || {}), base);
+  assert.strictEqual(m.status, 0, m.stderr);
+  return require('../scripts/lib/estado.js').ler(id);
+}
+
+// s351 (D786 passo 5, ao vivo cx6): o Codex, sem Write, gravou o handoff por Set-Content; a marca nao pegou e a
+// compactacao mandou gravar de novo em vez de reler.
+test('D786 passo 5 (s351): o handoff que o shell do principal acabou de gravar vira a marca', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(1);
+    const handoff = path.join(p.dir, '.sworn', 'handoff', '2026-11-05-frente.md');
+    try {
+      fs.mkdirSync(path.dirname(handoff), { recursive: true });
+      fs.writeFileSync(handoff, '# Handoff\n\n' + BLOCO_DO_PROMPT + '\n', 'utf8');
+      assert.strictEqual(rodarScript('abrir-turno.js', { session_id: 's1', cwd: p.dir, prompt: 'segue' }, base)
+        .status, 0);
+      const grava = "@'\n# Handoff\n'@ | Set-Content -LiteralPath '.sworn/handoff/2026-11-05-frente.md' -Encoding utf8";
+      const s = shellMarca(base, 's1', p.dir, grava);
+      assert.strictEqual(s.handoffDaSessao, handoff, 'a marca nao pegou o handoff gravado pelo shell');
+      assert.strictEqual(s.gravouHandoff, true, 'o turno nao marcou que gravou o handoff');
+      const t = rein.montar(p.dir, 's1', 'compact') || '';
+      assert.strictEqual(t.indexOf(ORDEM_RELER), 0, t.slice(0, 400));
+      // Caminho com espaco, entre aspas, pelo Bash.
+      const comEspaco = path.join(p.dir, '.sworn', 'handoff', '2026-11-05-com espaco.md');
+      fs.writeFileSync(comEspaco, '# Handoff\n', 'utf8');
+      const s2 = shellMarca(base, 's1', p.dir, 'cat > ".sworn/handoff/2026-11-05-com espaco.md" <<\'EOF\'\nx\nEOF',
+        { tool_name: 'Bash' });
+      assert.strictEqual(s2.handoffDaSessao, comEspaco, 'o caminho com espaco entre aspas, pelo Bash, nao marcou');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 5 (s351): shell que cita handoff antigo, o de subagente e o que nao grava nada nao marcam', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(1);
+    const handoff = path.join(p.dir, '.sworn', 'handoff', '2026-11-05-frente.md');
+    try {
+      fs.mkdirSync(path.dirname(handoff), { recursive: true });
+      fs.writeFileSync(handoff, '# Handoff\n', 'utf8');
+      const umaHora = (Date.now() - 3600 * 1000) / 1000;
+      fs.utimesSync(handoff, umaHora, umaHora);
+      assert.strictEqual(rodarScript('abrir-turno.js', { session_id: 's2', cwd: p.dir, prompt: 'segue' }, base)
+        .status, 0);
+      let s = shellMarca(base, 's2', p.dir, 'Get-Content .sworn/handoff/2026-11-05-frente.md');
+      assert.ok(!s.handoffDaSessao && !s.gravouHandoff, 'ler um handoff antigo virou marca');
+      s = shellMarca(base, 's2', p.dir, 'Get-Content .sworn/handoff/2026-11-05-outro.md');
+      assert.ok(!s.handoffDaSessao && !s.gravouHandoff, 'citar um handoff que nao existe virou marca');
+      fs.writeFileSync(path.join(p.dir, 'notas.md'), 'x\n', 'utf8');
+      s = shellMarca(base, 's2', p.dir, 'Set-Content notas.md y; Get-Content .sworn/handoff/2026-11-05-frente.md');
+      assert.ok(!s.handoffDaSessao && !s.gravouHandoff, 'escrever outra coisa e citar um handoff antigo virou marca');
+      assert.ok(!(s.arquivosTocados || []).some((a) => /notas\.md$/.test(a)), 'o arquivo comum do shell virou tocado');
+      fs.writeFileSync(handoff, '# Handoff novo\n', 'utf8');
+      s = shellMarca(base, 's2', p.dir, "Get-Content -LiteralPath '.sworn/handoff/2026-11-05-frente.md' -Raw");
+      assert.ok(!s.handoffDaSessao && !s.gravouHandoff, 'reler pelo shell o handoff recem-gravado virou marca');
+      s = shellMarca(base, 's2', p.dir, 'Get-Content .sworn/handoff/2026-11-05-frente.md 2>&1; $a | % { $_ -> 1 }');
+      assert.ok(!s.handoffDaSessao && !s.gravouHandoff, 'o 2>&1 de uma leitura virou gravacao');
+      s = shellMarca(base, 's2', p.dir, "Set-Content '.sworn/handoff/2026-11-05-frente.md' x", { agent_id: 'sub1' });
+      assert.ok(!s.handoffDaSessao, 'o handoff do subagente virou a marca do principal');
+      s = shellMarca(base, 's2', p.dir, "Set-Content '.sworn/handoff/2026-11-05-frente.md' x");
+      assert.strictEqual(s.handoffDaSessao, handoff, 'controle: o mesmo comando do principal marca');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 5 (s351): com "grave primeiro" pendente, o handoff gravado pelo shell cumpre a ordem', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(2);
+    try {
+      turnoQueGrava(base, 's3', p.dir, p.handoff);
+      turnoQueGrava(base, 's3', p.dir, p.trabalho);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 's3', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_GRAVAR), 0, 'controle: a ordem de gravar saiu');
+      const novo = path.join(p.dir, '.sworn', 'handoff', '2026-11-05-depois.md');
+      fs.mkdirSync(path.dirname(novo), { recursive: true });
+      fs.writeFileSync(novo, '# Handoff\n\n' + BLOCO_DO_PROMPT + '\n', 'utf8');
+      const s = shellMarca(base, 's3', p.dir, 'Set-Content -Path "' + novo + '" -Value $texto');
+      assert.strictEqual(s.ordemDoCompact, undefined, 'o handoff gravado pelo shell nao cumpriu a ordem');
+      assert.strictEqual(s.handoffDaSessao, novo, 'a marca nao pegou o handoff novo');
+      assert.strictEqual(portaoNega(base, 's3', p.dir, p.trabalho), '', 'a edicao seguiu cobrada');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 3: handoff marcado que sumiu do disco nao manda ler o que nao existe', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(99);
+    try {
+      turnoQueGrava(base, 'h5', p.dir, p.handoff);
+      fs.rmSync(p.handoff);
+      const t = rein.montar(p.dir, 'h5', 'compact') || '';
+      assert.strictEqual(t.indexOf(ORDEM_RELER), -1, t.slice(0, 400));
+      assert.strictEqual(t.indexOf(ORDEM_GRAVAR), 0, 'tem de mandar gravar de novo: ' + t.slice(0, 400));
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 3: a abertura no compact da a ordem ate ser cumprida, zera os avisos e rearma so o tamanho', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(1);
+    try {
+      turnoQueGrava(base, 'h6', p.dir, p.handoff);
+      const antes = require('../scripts/lib/estado.js').ler('h6');
+      assert.strictEqual(antes.avisouSaude, true, 'controle: o gatilho tinha de ter avisado');
+      // o alarme tambem ja saiu (acima dos 450 mil), para provar que a compactacao o rearma
+      require('../scripts/lib/estado.js').alterar('h6', function (s) { s.avisouAlarme = true; return s; });
+      const abrir = function (origem) {
+        const r = rodarScript('abertura.js', { session_id: 'h6', cwd: p.dir, source: origem }, base);
+        assert.strictEqual(r.status, 0, r.stderr);
+        return r.stdout;
+      };
+      assert.strictEqual(abrir('resume').indexOf('depois da compactacao'), -1, 'o resume nao consome a marca');
+      assert.strictEqual(abrir('compact').indexOf(ORDEM_RELER), 0, 'a ordem tem de abrir a saida do gancho');
+      const depois = require('../scripts/lib/estado.js').ler('h6');
+      assert.strictEqual(depois.avisouSaude, false, 'o aviso de saude nao rearmou');
+      assert.strictEqual(depois.avisouAlarme, false, 'o alarme nao rearmou');
+      assert.strictEqual(depois.saudeRearmada, true, 'sem a marca, os gatilhos ja avisados disparam de novo');
+      assert.ok(!depois.handoffDaSessao, 'a marca do handoff nao foi consumida');
+      // s355 (qw4): sem o handoff relido, a 2a compactacao repete a ordem (antes ela a apagava)
+      assert.strictEqual(abrir('compact').indexOf(ORDEM_RELER), 0, 'a 2a compactacao perdeu a ordem pendente');
+      // o fecho seguinte carrega a marca de rearme e nao repete o aviso dos turnos
+      const f = turnoQueGrava(base, 'h6', p.dir, path.join(p.dir, 'b.md'));
+      assert.strictEqual(f.stdout.indexOf('hora do handoff'), -1,
+        'os turnos ja avisados dispararam de novo: ' + f.stdout);
+      assert.strictEqual(require('../scripts/lib/estado.js').ler('h6').saudeRearmada, true,
+        'o fecho apagou a marca de rearme');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 3: compactacao sem aviso e sem handoff nao injeta ordem nem rearma', () => {
+  comTmp((rein, base) => {
+    const p = projetoComHandoff(99);
+    try {
+      turnoQueGrava(base, 'h7', p.dir, path.join(p.dir, 'a.md'));
+      const r = rodarScript('abertura.js', { session_id: 'h7', cwd: p.dir, source: 'compact' }, base);
+      assert.strictEqual(r.stdout.indexOf('depois da compactacao'), -1, r.stdout.slice(0, 300));
+      assert.strictEqual(require('../scripts/lib/estado.js').ler('h7').saudeRearmada, undefined,
+        'rearmou sem aviso nenhum');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+// ------------------------------- D786 passo 5: a ordem do compact cobrada no portao (rodada cc4: o Haiku recebeu
+// "releia o handoff" e editou o trabalho sem ler o arquivo)
+
+const ESCOPO_LIVRE = '# Escopo\n**Objetivo:** t\n## Dentro\n- **\n## Fora de escopo\n- nada\n';
+const MARCA_DA_COBRANCA = 'depois da compactacao';
+
+/** O portao do Write/Edit com `extra` na entrada; devolve o motivo da negacao ou '' quando passa. */
+function portaoNega(base, id, dir, arquivo, extra) {
+  const r = rodarScript('portao-escopo.js', Object.assign({ session_id: id, cwd: dir, hook_event_name: 'PreToolUse',
+    tool_name: 'Edit', tool_input: { file_path: arquivo, old_string: 'a', new_string: 'b' } }, extra || {}), base);
+  assert.strictEqual(r.status, 0, r.stderr);
+  if (!r.stdout) return '';
+  const saida = JSON.parse(r.stdout).hookSpecificOutput || {};
+  return saida.permissionDecision === 'deny' ? String(saida.permissionDecisionReason) : '';
+}
+
+function projetoDaCobranca(limiar) {
+  const p = projetoComHandoff(limiar);
+  fs.writeFileSync(path.join(p.dir, '.claude', 'sworn', 'escopo.md'), ESCOPO_LIVRE, 'utf8');
+  p.trabalho = path.join(p.dir, 'a.md');
+  fs.writeFileSync(p.trabalho, 'a\n', 'utf8');
+  return p;
+}
+
+test('D786 passo 5: depois do compact com "releia", editar antes do Read do handoff e negado; o Read libera', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(99);
+    try {
+      assert.strictEqual(portaoNega(base, 'c1', p.dir, p.trabalho), '', 'controle: antes de tudo a edicao passa');
+      turnoQueGrava(base, 'c1', p.dir, p.handoff);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'c1', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_RELER), 0, 'controle: a ordem de reler saiu');
+      const motivo = portaoNega(base, 'c1', p.dir, p.trabalho);
+      assert.ok(motivo.indexOf(MARCA_DA_COBRANCA) !== -1, 'a edicao passou sem o handoff relido: ' + motivo);
+      assert.ok(motivo.indexOf('.context/plans/2026-11-05-frente-handoff.md') !== -1,
+        'o motivo tem de apontar o arquivo: ' + motivo);
+      assert.strictEqual(portaoNega(base, 'c1', p.dir, p.trabalho, { agent_id: 'sub1' }), '',
+        'o subagente nao continua esta conversa: nao e cobrado');
+      // o fecho de um turno com trabalho (o que regrava o estado) nao apaga a ordem: campo da sessao
+      turnoQueGrava(base, 'c1', p.dir, path.join(p.dir, 'b.md'));
+      assert.ok(portaoNega(base, 'c1', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1,
+        'o fecho do turno apagou a ordem');
+      // o Read do subagente nao cumpre; o do principal, sim (caminho com outra caixa e barra no Windows)
+      // (a contagem do teto fica de fora: o estado e conferido direto, senao a 4a tentativa passaria pelo teto)
+      const ordemAgora = function () { return require('../scripts/lib/estado.js').ler('c1').ordemDoCompact; };
+      rodarScript('marcar-trabalho.js', { session_id: 'c1', cwd: p.dir, tool_name: 'Read', agent_id: 'sub1',
+        tool_input: { file_path: p.handoff } }, base);
+      assert.ok(ordemAgora(), 'o Read do subagente cumpriu a ordem');
+      const lido = process.platform === 'win32' ? p.handoff.toUpperCase().replace(/\\/g, '/') : p.handoff;
+      assert.strictEqual(rodarScript('marcar-trabalho.js', { session_id: 'c1', cwd: p.dir, tool_name: 'Read',
+        tool_input: { file_path: lido } }, base).status, 0);
+      assert.strictEqual(ordemAgora(), undefined, 'o Read do handoff nao cumpriu a ordem');
+      assert.strictEqual(portaoNega(base, 'c1', p.dir, p.trabalho), '', 'o Read do handoff nao liberou a edicao');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 5: depois do compact com "grave primeiro", so o handoff passa; gravado, o resto passa', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(2);
+    try {
+      turnoQueGrava(base, 'c2', p.dir, p.handoff);
+      turnoQueGrava(base, 'c2', p.dir, p.trabalho);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'c2', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_GRAVAR), 0, 'controle: a ordem de gravar saiu');
+      const motivo = portaoNega(base, 'c2', p.dir, p.trabalho);
+      assert.ok(motivo.indexOf(MARCA_DA_COBRANCA) !== -1 && motivo.indexOf('/sworn:handoff') !== -1,
+        'a edicao passou sem o handoff gravado: ' + motivo);
+      const novo = path.join(p.dir, '.sworn', 'handoff', '2026-11-05-depois.md');
+      assert.strictEqual(portaoNega(base, 'c2', p.dir, novo).indexOf(MARCA_DA_COBRANCA), -1,
+        'a ordem barrou o proprio handoff');
+      fs.mkdirSync(path.dirname(novo), { recursive: true });
+      fs.writeFileSync(novo, '# Handoff\n\n' + BLOCO_DO_PROMPT + '\n', 'utf8');
+      assert.strictEqual(rodarScript('marcar-trabalho.js', { session_id: 'c2', cwd: p.dir, tool_name: 'Write',
+        tool_input: { file_path: novo } }, base).status, 0);
+      assert.strictEqual(portaoNega(base, 'c2', p.dir, p.trabalho), '', 'o handoff gravado nao liberou a edicao');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('s355 (qw4): a 2a compactacao antes de cumprir a ordem repete a ordem, nao a apaga', () => {
+  // qw4 ao vivo: o Qwen compactou 42 vezes; a 1a zerava o handoff e o aviso, e a 2a apagava a ordem pendente.
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(99);
+    const q = projetoDaCobranca(2);
+    try {
+      turnoQueGrava(base, 'c9', p.dir, p.handoff);
+      for (const vez of [1, 2]) {
+        const saida = rodarScript('abertura.js', { session_id: 'c9', cwd: p.dir, source: 'compact' }, base).stdout;
+        assert.strictEqual(saida.indexOf(ORDEM_RELER), 0, 'a ordem de reler nao saiu na compactacao ' + vez);
+        assert.ok(saida.indexOf('gravado nela: .context/plans/2026-11-05-frente-handoff.md') !== -1,
+          'a ordem sem o caminho na compactacao ' + vez);
+      }
+      const motivo = portaoNega(base, 'c9', p.dir, p.trabalho);
+      assert.ok(motivo.indexOf('.context/plans/2026-11-05-frente-handoff.md') !== -1, 'a cobranca sumiu: ' + motivo);
+      // 2a negacao de "reler", de proposito: a contagem tem de recomecar quando a ordem muda de tipo
+      assert.ok(portaoNega(base, 'c9', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'reler, negacao 2');
+      // o handoff sumiu do disco: a ordem vira "gravar", com a contagem do teto do zero (ordem nova)
+      fs.rmSync(p.handoff);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'c9', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_GRAVAR), 0, 'o handoff sumido nao virou ordem de gravar');
+      for (let i = 1; i <= 3; i++) {
+        assert.ok(portaoNega(base, 'c9', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'gravar, negacao ' + i);
+      }
+      assert.strictEqual(portaoNega(base, 'c9', p.dir, p.trabalho), '', 'gravar: a 4a tentativa tem de passar');
+      turnoQueGrava(base, 'c10', q.dir, q.handoff);
+      turnoQueGrava(base, 'c10', q.dir, q.trabalho);
+      for (const vez of [1, 2]) {
+        assert.strictEqual(rodarScript('abertura.js', { session_id: 'c10', cwd: q.dir, source: 'compact' }, base)
+          .stdout.indexOf(ORDEM_GRAVAR), 0, 'a ordem de gravar nao saiu na compactacao ' + vez);
+      }
+      assert.ok(portaoNega(base, 'c10', q.dir, q.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'a cobranca sumiu');
+    } finally {
+      fs.rmSync(p.dir, { recursive: true, force: true });
+      fs.rmSync(q.dir, { recursive: true, force: true });
+    }
+  });
+});
+
+test('D786 passo 5: a cobranca nega no maximo 3 vezes e depois solta; compact sem ordem nao cobra', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(99);
+    try {
+      turnoQueGrava(base, 'c3', p.dir, p.handoff);
+      rodarScript('abertura.js', { session_id: 'c3', cwd: p.dir, source: 'compact' }, base);
+      for (let i = 1; i <= 3; i++) {
+        assert.ok(portaoNega(base, 'c3', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'negacao ' + i);
+      }
+      assert.strictEqual(portaoNega(base, 'c3', p.dir, p.trabalho), '', 'a 4a tentativa tem de passar (sem trava eterna)');
+      assert.strictEqual(require('../scripts/lib/estado.js').ler('c3').ordemDoCompact, undefined, 'a ordem nao caiu');
+      // depois do teto a ordem nao volta na compactacao seguinte (a marca e o aviso ja zeraram)
+      rodarScript('abertura.js', { session_id: 'c3', cwd: p.dir, source: 'compact' }, base);
+      assert.strictEqual(portaoNega(base, 'c3', p.dir, p.trabalho), '', 'a ordem vencida voltou na compactacao');
+      // outra sessao (s355): a ordem pendente segue na 2a compactacao, e a contagem do teto tambem
+      turnoQueGrava(base, 'c4', p.dir, p.handoff);
+      rodarScript('abertura.js', { session_id: 'c4', cwd: p.dir, source: 'compact' }, base);
+      assert.ok(portaoNega(base, 'c4', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'controle: cobrou');
+      rodarScript('abertura.js', { session_id: 'c4', cwd: p.dir, source: 'compact' }, base);
+      for (let i = 2; i <= 3; i++) {
+        assert.ok(portaoNega(base, 'c4', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'negacao ' + i);
+      }
+      assert.strictEqual(portaoNega(base, 'c4', p.dir, p.trabalho), '', 'a compactacao zerou a contagem do teto');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+// s357 (oc4, F2): o turno longo que cruzou o limiar de tamanho e compactou antes de um fim de turno nunca passou pelo
+// gatilho de saude (so o fecho mede). Na compactacao, o tamanho da transcricao no limiar vale como o aviso.
+test('D786 passo 5 (s357): compactacao com a transcricao no limiar e sem aviso dado manda gravar o handoff', () => {
+  comTmp((rein, base) => {
+    const comLimiar = projeto({ '.claude/sworn/projeto.json': JSON.stringify({ versaoConfig: 1,
+      marchaPadrao: 'padrao', modoContinuo: false, limiares: { tokensDeContexto: 28000 } }) });
+    const continuo = projeto({ '.claude/sworn/projeto.json': JSON.stringify({ versaoConfig: 1,
+      marchaPadrao: 'padrao' }) });
+    const linha = (n) => JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: n,
+      cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }) + '\n';
+    const transcricao = (dir, nome, n) => {
+      const f = path.join(dir, nome + '.jsonl');
+      fs.writeFileSync(f, linha(1000) + linha(n));
+      return f;
+    };
+    const compactar = (id, dir, caminho) => rodarScript('abertura.js', { session_id: id, cwd: dir, source: 'compact',
+      transcript_path: caminho }, base).stdout;
+    try {
+      const abaixo = compactar('f2a', comLimiar, transcricao(comLimiar, 'baixo', 27999));
+      assert.strictEqual(abaixo.indexOf('depois da compactacao'), -1,
+        'abaixo do limiar pediu: ' + abaixo.slice(0, 300));
+      const t = compactar('f2b', comLimiar, transcricao(comLimiar, 'alto', 28000));
+      assert.strictEqual(t.indexOf(ORDEM_GRAVAR), 0,
+        'o limiar cruzado sem aviso nao pediu o handoff: ' + t.slice(0, 300));
+      assert.ok(/passou do gatilho/.test(t), 'o texto tem de cobrir o caso sem o pedido do sworn: ' + t.slice(0, 500));
+      assert.strictEqual(require('../scripts/lib/estado.js').ler('f2b').ordemDoCompact.tipo, 'gravar',
+        'a ordem tem de virar a cobranca do portao, como a do aviso');
+      assert.strictEqual(compactar('f2c', comLimiar, path.join(comLimiar, 'nao-existe.jsonl'))
+        .indexOf('depois da compactacao'), -1, 'sem transcricao legivel nao ha tamanho para cruzar');
+      // a mesma regua do fecho: com o modo continuo e sem limiar proprio, o do continuo.js (250 mil)
+      assert.strictEqual(compactar('f2d', continuo, transcricao(continuo, 'medio', 200000))
+        .indexOf('depois da compactacao'), -1, 'o continuo mede pelo limiar dele');
+      assert.strictEqual(compactar('f2e', continuo, transcricao(continuo, 'cheio', 250000)).indexOf(ORDEM_GRAVAR), 0,
+        'o continuo no limiar dele nao pediu');
+      // o aviso ja dado nao e "sem aviso" (a funcao, direto)
+      assert.strictEqual(rein.cruzouSemAviso({ avisouSaude: true }, 30000, { limiares: { tokensDeContexto: 28000 } }),
+        false, 'o aviso dado contou como sem aviso');
+      // handoff gravado nesta sessao: a ordem e reler, e o estado do aviso fica como antes (sem saudeRearmada)
+      const h = path.join(comLimiar, '.context', 'plans', '2026-11-06-f2-handoff.md');
+      fs.mkdirSync(path.dirname(h), { recursive: true });
+      fs.writeFileSync(h, '# Handoff\n\n' + BLOCO_DO_PROMPT + '\n', 'utf8');
+      turnoQueGrava(base, 'f2f', comLimiar, h);
+      const comHandoff = compactar('f2f', comLimiar, transcricao(comLimiar, 'comHandoff', 30000));
+      assert.strictEqual(comHandoff.indexOf(ORDEM_RELER), 0, 'com o handoff gravado a ordem e reler');
+      assert.notStrictEqual(require('../scripts/lib/estado.js').ler('f2f').saudeRearmada, true,
+        'o handoff gravado sem aviso virou aviso dado');
+    } finally {
+      fs.rmSync(comLimiar, { recursive: true, force: true });
+      fs.rmSync(continuo, { recursive: true, force: true });
+    }
+  });
+});
+
+// s359 (F2b): no agy e no dsh a ponte ve a compactacao pela queda e roda este compact com a transcricao ja baixa; o
+// tamanho de antes vem no `sworn_pico` da entrada, e e ele que se mede.
+test('D786 passo 5 (s359): o compact da ponte mede o pico de antes da queda, nao a transcricao ja compactada', () => {
+  comTmp((rein, base) => {
+    const dir = projeto({ '.claude/sworn/projeto.json': JSON.stringify({ versaoConfig: 1,
+      marchaPadrao: 'padrao', modoContinuo: false, limiares: { tokensDeContexto: 28000 } }) });
+    const baixa = path.join(dir, 'baixa.jsonl');
+    fs.writeFileSync(baixa, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 5000,
+      cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }) + '\n');
+    const alta = path.join(dir, 'alta.jsonl');
+    fs.writeFileSync(alta, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 28000,
+      cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }) + '\n');
+    const compactar = (id, pico, transcricao) => rodarScript('abertura.js', { session_id: id, cwd: dir,
+      source: 'compact', transcript_path: transcricao || baixa, sworn_pico: pico }, base).stdout;
+    try {
+      assert.strictEqual(compactar('f2b1', 28000).indexOf(ORDEM_GRAVAR), 0, 'o pico no limiar nao pediu o handoff');
+      assert.strictEqual(compactar('f2b2', 27999).indexOf('depois da compactacao'), -1, 'abaixo do limiar pediu');
+      // pico que nao e numero (a entrada e de fora): vale a transcricao, como no compact com evento
+      assert.strictEqual(compactar('f2b3', '1', alta).indexOf(ORDEM_GRAVAR), 0, 'o pico torto escondeu a transcricao');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// s348 (rodada ccds2: o DeepSeek recebeu "releia" e seguiu por Add-Content no PowerShell, sem reler): a mesma cobranca
+// no portao do shell (portao-destrutivo.js), com uma contagem so.
+
+/** O portao do shell com `extra` na entrada; devolve o motivo da negacao ou '' quando passa. */
+function shellNega(base, id, dir, comando, extra) {
+  const r = rodarScript('portao-destrutivo.js', Object.assign({ session_id: id, cwd: dir, hook_event_name: 'PreToolUse',
+    tool_name: 'PowerShell', tool_input: { command: comando } }, extra || {}), base);
+  assert.strictEqual(r.status, 0, r.stderr);
+  if (!r.stdout) return '';
+  const saida = JSON.parse(r.stdout).hookSpecificOutput || {};
+  return saida.permissionDecision === 'deny' ? String(saida.permissionDecisionReason) : '';
+}
+
+test('D786 passo 5 (s348): com "releia" pendente, o shell do principal e negado; o Read do handoff libera', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(99);
+    try {
+      assert.strictEqual(shellNega(base, 'c5', p.dir, 'Add-Content a.md x'), '',
+        'controle: antes de tudo o shell passa');
+      turnoQueGrava(base, 'c5', p.dir, p.handoff);
+      rodarScript('abertura.js', { session_id: 'c5', cwd: p.dir, source: 'compact' }, base);
+      const motivo = shellNega(base, 'c5', p.dir, 'Add-Content a.md x');
+      assert.ok(motivo.indexOf(MARCA_DA_COBRANCA) !== -1, 'o shell seguiu sem o handoff relido: ' + motivo);
+      assert.ok(motivo.indexOf('.context/plans/2026-11-05-frente-handoff.md') !== -1,
+        'o motivo tem de apontar o arquivo: ' + motivo);
+      assert.ok(shellNega(base, 'c5', p.dir, 'echo 1', { tool_name: 'Bash' }).indexOf(MARCA_DA_COBRANCA) !== -1,
+        'o Bash escapou da cobranca');
+      assert.strictEqual(shellNega(base, 'c5', p.dir, 'Add-Content a.md x', { agent_id: 'sub1' }), '',
+        'o subagente nao continua esta conversa: nao e cobrado');
+      rodarScript('marcar-trabalho.js', { session_id: 'c5', cwd: p.dir, tool_name: 'Read',
+        tool_input: { file_path: p.handoff } }, base);
+      assert.strictEqual(shellNega(base, 'c5', p.dir, 'Add-Content a.md x'), '',
+        'o Read do handoff nao liberou o shell');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 5 (s348): o shell que le o handoff passa e cumpre a ordem (Codex e dsh nao tem Read)', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(99);
+    try {
+      turnoQueGrava(base, 'c8', p.dir, p.handoff);
+      rodarScript('abertura.js', { session_id: 'c8', cwd: p.dir, source: 'compact' }, base);
+      const ler = 'Get-Content .context\\plans\\2026-11-05-FRENTE-HANDOFF.md';
+      assert.strictEqual(shellNega(base, 'c8', p.dir, ler), '', 'a leitura do handoff pelo shell foi negada');
+      const ordemAgora = function () { return require('../scripts/lib/estado.js').ler('c8').ordemDoCompact; };
+      assert.ok(ordemAgora(), 'controle: o portao nao cumpre a ordem (so o PostToolUse, depois de rodar)');
+      rodarScript('marcar-trabalho.js', { session_id: 'c8', cwd: p.dir, tool_name: 'PowerShell', agent_id: 'sub1',
+        tool_input: { command: ler } }, base);
+      assert.ok(ordemAgora(), 'o shell do subagente cumpriu a ordem');
+      rodarScript('marcar-trabalho.js', { session_id: 'c8', cwd: p.dir, tool_name: 'Bash',
+        tool_input: { command: 'cat x.md' } }, base);
+      assert.ok(ordemAgora(), 'um comando que nao cita o handoff cumpriu a ordem');
+      rodarScript('marcar-trabalho.js', { session_id: 'c8', cwd: p.dir, tool_name: 'PowerShell',
+        tool_input: { command: ler } }, base);
+      assert.strictEqual(ordemAgora(), undefined, 'a leitura do handoff pelo shell nao cumpriu a ordem');
+      assert.strictEqual(portaoNega(base, 'c8', p.dir, p.trabalho), '', 'a leitura pelo shell nao liberou a edicao');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('D786 passo 5 (s348): Edit e shell somam no mesmo teto; com "grave primeiro" o shell passa', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(99);
+    try {
+      turnoQueGrava(base, 'c6', p.dir, p.handoff);
+      rodarScript('abertura.js', { session_id: 'c6', cwd: p.dir, source: 'compact' }, base);
+      assert.ok(portaoNega(base, 'c6', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'negacao 1 (Edit)');
+      assert.ok(shellNega(base, 'c6', p.dir, 'Add-Content a.md x').indexOf(MARCA_DA_COBRANCA) !== -1,
+        'negacao 2 (shell)');
+      assert.ok(portaoNega(base, 'c6', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'negacao 3 (Edit)');
+      assert.strictEqual(shellNega(base, 'c6', p.dir, 'Add-Content a.md x'), '',
+        'a 4a tentativa tem de passar: uma contagem so');
+      assert.strictEqual(require('../scripts/lib/estado.js').ler('c6').ordemDoCompact, undefined, 'a ordem nao caiu');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(2);
+    try {
+      turnoQueGrava(base, 'c7', p.dir, p.handoff);
+      turnoQueGrava(base, 'c7', p.dir, p.trabalho);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'c7', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_GRAVAR), 0, 'controle: a ordem de gravar saiu');
+      assert.strictEqual(shellNega(base, 'c7', p.dir, 'node agentes-rodando.js'), '',
+        'o "grave primeiro" barrou o shell que a skill do handoff usa');
+      assert.ok(portaoNega(base, 'c7', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1,
+        'controle: a edicao segue cobrada');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+// s353 (D786 passo 5, cx10: o Ministral no Codex nao achou "/sworn:handoff"): a ordem de gravar depois do compact e a
+// negacao dela dizem o nome da skill fora do Claude Code e a pasta onde o sworn marca o handoff.
+test('s353: a ordem de gravar do compact e a negacao dela dizem a skill fora do Claude Code e a pasta', () => {
+  comTmp((rein) => {
+    const cwd = os.tmpdir();
+    const textos = { ordem: rein.ordemDoHandoff(cwd, { avisouSaude: true }),
+      negacao: rein.motivoDaOrdem({ tipo: 'gravar', arquivo: null, negadas: 0 }, cwd) };
+    for (const [nome, t] of Object.entries(textos)) {
+      assert.ok(typeof t === 'string' && t.indexOf('a skill sworn-handoff') !== -1, nome + ': sem a skill: ' + t);
+      assert.ok(t.indexOf('.sworn/handoff/AAAA-MM-DD-<tema>.md') !== -1, nome + ': sem a pasta do handoff: ' + t);
+    }
+    // controle: a ordem de reler nao manda gravar
+    assert.strictEqual(rein.motivoDaOrdem({ tipo: 'reler', arquivo: path.join(cwd, 'h.md') }, cwd)
+      .indexOf('sworn-handoff'), -1);
+  });
+});
+
+// s361 (F4, D786 passo 5, qw6: o luna no Qwen leu "Antes de editar outro arquivo, rode /sworn:handoff" como bloqueio,
+// disse "nao contornei a recusa" e parou): a negacao das duas ordens diz que nao e para parar, que e para fazer agora,
+// e que depois se repete o que foi negado.
+test('s361: a negacao da ordem do compact manda fazer agora e seguir, nao parar', () => {
+  comTmp((rein) => {
+    const cwd = os.tmpdir();
+    const textos = { gravar: rein.motivoDaOrdem({ tipo: 'gravar', arquivo: null, negadas: 0 }, cwd),
+      reler: rein.motivoDaOrdem({ tipo: 'reler', arquivo: path.join(cwd, 'h.md'), negadas: 0 }, cwd) };
+    for (const [nome, t] of Object.entries(textos)) {
+      assert.ok(t.indexOf('Nao e para parar') !== -1, nome + ': sem o "nao pare": ' + t);
+      assert.ok(t.indexOf('faca agora') !== -1, nome + ': sem o "faca agora": ' + t);
+      assert.ok(t.indexOf('depois repita') !== -1, nome + ': sem o "repita": ' + t);
+      assert.strictEqual(t.indexOf('Antes de editar'), -1, nome + ': ainda soa como proibicao: ' + t);
+    }
+    assert.ok(textos.gravar.indexOf('nao vale para o arquivo do handoff') !== -1,
+      'gravar: sem dizer que o handoff passa: ' + textos.gravar);
+  });
+});
+
+// s361 (F7, qw7: o luna no Qwen tentou a skill sworn-handoff e o Qwen sem tela a negou; o texto so dava a skill): a
+// negacao do gravar da o caminho sem ela, gravar o arquivo direto (o portao-escopo deixa o handoff passar).
+test('s361: sem a skill, a negacao do gravar manda gravar o handoff direto no arquivo', () => {
+  comTmp((rein) => {
+    const t = rein.motivoDaOrdem({ tipo: 'gravar', arquivo: null, negadas: 0 }, os.tmpdir());
+    assert.ok(t.indexOf('grave o handoff direto em .sworn/handoff/') !== -1, 'sem o caminho sem a skill: ' + t);
+    const r = rein.motivoDaOrdem({ tipo: 'reler', arquivo: path.join(os.tmpdir(), 'h.md'), negadas: 0 }, os.tmpdir());
+    assert.strictEqual(r.indexOf('grave o handoff direto'), -1, 'reler nao manda gravar: ' + r);
+  });
+});
+
+// s363 (F9, qw8: o luna no Qwen leu "grave direto" como contornar a recusa da skill e parou na parte 11): toda ordem
+// de gravar o handoff (a do Stop e a da negacao depois da compactacao) diz que gravar direto e o caminho pedido.
+test('s363: a ordem de gravar diz que, sem a skill, gravar o arquivo direto nao contorna a recusa', () => {
+  comTmp((rein) => {
+    const saude = require('../scripts/lib/saude.js');
+    const textos = {
+      negacao: rein.motivoDaOrdem({ tipo: 'gravar', arquivo: null, negadas: 0 }, os.tmpdir()),
+      stop: saude.instrucaoAoModelo(['80000 tokens de contexto'], false, [])
+    };
+    for (const [nome, t] of Object.entries(textos)) {
+      assert.ok(t.indexOf('grave o handoff direto em .sworn/handoff/') !== -1,
+        nome + ': sem o caminho sem a skill: ' + t);
+      assert.ok(t.indexOf('nao um contorno de recusa') !== -1, nome + ': sem dizer que nao contorna: ' + t);
+    }
+    assert.strictEqual(textos.negacao.split('grave o handoff direto').length, 2,
+      'caminho sem a skill dobrado: ' + textos.negacao);
+  });
+});
+
+// s365 (F10, qw10: o Qwen sem tela negou a skill e o luna leu o "grave direto" que vinha depois dela como desvio; o
+// F9 valeu em 1 de 2 rodadas): fora do Claude Code, toda ordem de gravar poe a gravacao direta primeiro e a skill
+// como atalho. No Claude Code o "/sworn:handoff" segue antes do parentese.
+test('s365: fora do Claude Code, a ordem de gravar poe o arquivo direto antes da skill', () => {
+  comTmp((rein) => {
+    const saude = require('../scripts/lib/saude.js');
+    const textos = {
+      negacao: rein.motivoDaOrdem({ tipo: 'gravar', arquivo: null, negadas: 0 }, os.tmpdir()),
+      compact: rein.ordemDoHandoff(os.tmpdir(), { avisouSaude: true }),
+      stop: saude.instrucaoAoModelo(['80000 tokens de contexto'], false, []),
+      pergunta: saude.instrucaoDaPergunta()
+    };
+    for (const [nome, t] of Object.entries(textos)) {
+      const fora = t.indexOf('(fora do Claude Code, ');
+      assert.ok(fora !== -1, nome + ': sem o trecho de fora do Claude Code: ' + t);
+      const direto = t.indexOf('grave o handoff direto em .sworn/handoff/AAAA-MM-DD-<tema>.md', fora);
+      const skill = t.indexOf('sworn-handoff', fora);
+      assert.ok(direto !== -1 && skill !== -1 && direto < skill, nome + ': a skill vem antes do arquivo direto: ' + t);
+      const cc = t.indexOf('/sworn:handoff');
+      assert.ok(cc !== -1 && cc < fora, nome + ': o Claude Code perdeu o /sworn:handoff antes: ' + t);
+      assert.strictEqual(t.split('grave o handoff direto').length, 2, nome + ': gravar direto dobrado: ' + t);
+    }
+  });
+});
+
+// s366 (F11, qw11: depois da compactacao o luna parou na negacao do write_file e o Stop deixou; so os portoes do
+// Write/Edit e do shell liam a ordem, e o contexto compactado fica abaixo do gatilho de saude): com a ordem do compact
+// pendente, o Stop a leva ao modelo, no mesmo teto de negacoes dos portoes; em laco nao cobra; cumprida, nao cobra.
+test('s366: o Stop cobra a ordem do compact pendente, no mesmo teto dos portoes', () => {
+  comTmp((rein, base) => {
+    const estado = require('../scripts/lib/estado.js');
+    const p = projetoDaCobranca(2);
+    const q = projetoDaCobranca(99);
+    const fecho = function (id, dir, extra) {
+      const f = rodarScript('portao-fecho.js', Object.assign({ session_id: id, cwd: dir, hook_event_name: 'Stop',
+        last_assistant_message: 'Parei.' }, extra || {}), base);
+      assert.strictEqual(f.status, 0, f.stderr);
+      const saida = f.stdout ? JSON.parse(f.stdout) : {};
+      // a cobranca nao barra: um block (decision/reason) aqui tambem sairia '' e o "nao cobra" passaria por engano
+      assert.strictEqual(saida.decision, undefined, 'o Stop barrou em vez de lembrar: ' + f.stdout);
+      return (saida.hookSpecificOutput || {}).additionalContext || '';
+    };
+    const abrir = function (id, dir) {
+      assert.strictEqual(rodarScript('abrir-turno.js', { session_id: id, cwd: dir, prompt: 'segue' }, base).status, 0);
+    };
+    try {
+      turnoQueGrava(base, 'f11', p.dir, p.handoff);
+      turnoQueGrava(base, 'f11', p.dir, p.trabalho);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'f11', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_GRAVAR), 0, 'controle: a ordem de gravar saiu');
+      // turno sem trabalho (a escrita negada nao marca trabalho): o Stop leva a ordem e soma no teto do portao
+      abrir('f11', p.dir);
+      assert.ok(portaoNega(base, 'f11', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'controle: negacao 1');
+      assert.strictEqual(fecho('f11', p.dir).indexOf(ORDEM_GRAVAR), 0, 'o Stop deixou parar com a ordem pendente');
+      assert.strictEqual(estado.ler('f11').ordemDoCompact.negadas, 2, 'o Stop nao somou no teto dos portoes');
+      // em laco (stop_hook_active) nao cobra: o block repetido e o que o laco corta
+      assert.strictEqual(fecho('f11', p.dir, { stop_hook_active: true }), '', 'o Stop cobrou em laco');
+      assert.strictEqual(estado.ler('f11').ordemDoCompact.negadas, 2, 'o laco somou no teto');
+      // turno com trabalho (o fecho que regrava o estado): cobra a 3a; no teto a ordem cai e o Stop passa
+      abrir('f11', p.dir);
+      assert.strictEqual(rodarScript('marcar-trabalho.js', { session_id: 'f11', cwd: p.dir, tool_name: 'Write',
+        tool_input: { file_path: path.join(p.dir, 'b.md') } }, base).status, 0);
+      assert.strictEqual(fecho('f11', p.dir).indexOf(ORDEM_GRAVAR), 0, 'o fecho do turno com trabalho nao cobrou');
+      assert.strictEqual(estado.ler('f11').ordemDoCompact.negadas, 3, 'o fecho com trabalho nao somou no teto');
+      abrir('f11', p.dir);
+      assert.strictEqual(fecho('f11', p.dir), '', 'no teto o Stop tem de passar (sem trava eterna)');
+      assert.strictEqual(estado.ler('f11').ordemDoCompact, undefined, 'no teto a ordem nao caiu');
+      // "releia": o Stop leva a ordem de reler; depois do Read do handoff, nao cobra mais
+      turnoQueGrava(base, 'f12', q.dir, q.handoff);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'f12', cwd: q.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_RELER), 0, 'controle: a ordem de reler saiu');
+      abrir('f12', q.dir);
+      assert.strictEqual(fecho('f12', q.dir).indexOf(ORDEM_RELER), 0, 'o Stop nao cobrou a releitura pendente');
+      assert.strictEqual(rodarScript('marcar-trabalho.js', { session_id: 'f12', cwd: q.dir, tool_name: 'Read',
+        tool_input: { file_path: q.handoff } }, base).status, 0);
+      assert.strictEqual(fecho('f12', q.dir), '', 'a ordem cumprida ainda foi cobrada no Stop');
+    } finally {
+      fs.rmSync(p.dir, { recursive: true, force: true });
+      fs.rmSync(q.dir, { recursive: true, force: true });
+    }
+  });
+});

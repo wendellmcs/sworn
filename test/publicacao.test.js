@@ -403,7 +403,9 @@ const TRAVA_DO_BALDE = {
   // Plano 091 (#6, D559): portao proprio do manual antes de arquivo AAA, com chave propria (portaoManual)
   sem_manual: null,
   // Plano 091 (#1, D558/D559): portao proprio da revisao antes do commit, com chave propria (portaoCommit)
-  commit_sem_revisao: null
+  commit_sem_revisao: null,
+  // D786 passo 5: a ordem do compact cobrada no portao do Write/Edit, sem chave: cai sozinha depois de 3 negacoes
+  ordem_do_compact: null
 };
 const TRAVA_DO_COMANDO = { init: 1, review: 2 };
 
@@ -974,7 +976,7 @@ function saidasDosPortoes() {
       criar: rodar('portao-escopo.js', pre('Write', { file_path: em('src/carrinho/frete-novo.js'), content: 'x\n' })),
       catraca: rodar('portao-escopo.js', pre('Edit', { file_path: em('test/cobertura.json'), old_string: '"minimo": 80', new_string: '"minimo": 60' }))
     };
-    const ho = '.claude/sworn/handoff/2026-10-10-frete.md';
+    const ho = '.sworn/handoff/2026-10-10-frete.md';
     escrever(ho, '# handoff\n');
     rodar('marcar-trabalho.js', { hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: em(ho), content: '# handoff\n' } });
     s.handoff = rodar('portao-fecho.js', { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'Gravei o handoff do frete.' });

@@ -56,8 +56,12 @@ the explicit yes, write **through the command**, passing only the integer ("200 
 force (the output carries `manteve: true`). Without it, the project stays "never calibrated" and the calibrate button
 comes back in every chat.
 
-The command accepts from 50000 up to below the alarm, touches only `limiares.tokensDeContexto` and preserves the
-rest of `projeto.json`. Say it wrote only when the output carries `gravou: true`. If the command
+The command accepts from 50000 up to below the alarm; in `projeto.json` it touches only `limiares.tokensDeContexto`
+and preserves the rest. It also moves the harness's compaction point along with the threshold (the `compactacao`
+list of the output: `.claude/settings.local.json` and, with the Codex hooks installed, `.codex/config.toml`); say
+that the new
+point applies from the next session. Say it wrote only when the output carries `gravou: true`; an item of
+`compactacao` with `erro` makes the exit 1: show that `erro` too. If the command
 refuses the number, show the `erro` to the owner (it states the accepted range) and ask for another number once; refused
 again, state the range, say the current threshold stays, and stop. If the command fails for
 another reason (no `projeto.json`, invalid JSON) or the output is not JSON, show the `erro` and what it

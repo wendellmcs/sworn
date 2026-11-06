@@ -187,6 +187,18 @@ test('instalar: o arquivo de instrucoes ganha o bloco que manda conferir, um por
   assert.ok(fs.readFileSync(path.join(p.projeto, 'QWEN.md'), 'utf8').includes('--conferir qwen'));
 });
 
+// D785 item 3: o bloco mandava esperar o usuario dizer "ligados" (8 de 24 rodadas "com" do Codex paravam ali, D784).
+test('instalar: o bloco manda seguir o pedido sem esperar o usuario, ligado ou nao', () => {
+  const p = pastas();
+  instalar.instalar('codex', p);
+  const t = fs.readFileSync(path.join(p.projeto, 'AGENTS.md'), 'utf8');
+  assert.ok(!/antes de ele dizer|peça ao usuário/.test(t), t);
+  assert.ok(t.includes('siga o pedido sem pedir nada ao usuário'), t);
+  assert.ok(t.includes('diga no fecho'), t);
+  // P2 do 2.3 (s326): o --conferir que falha ou sai mudo tambem nao para o pedido.
+  assert.ok(t.includes('Se ele falhar ou não imprimir nada, siga o pedido'), t);
+});
+
 // As skills chamam scripts por ${CLAUDE_PLUGIN_ROOT}, que so o Claude Code troca (sondas s270 e s271).
 const VAR = '${CLAUDE_PLUGIN_ROOT}';
 const barra = (p) => p.replace(/\\/g, '/');
@@ -629,6 +641,34 @@ test('opencode: a abertura roda uma vez por sessao e entra no sistema a cada cha
   assert.deepStrictEqual(um.system, ['base', 'ABERTURA']);
   assert.deepStrictEqual(dois.system, ['base', 'ABERTURA', 'TURNO']);
   assert.strictEqual(o.chamadas.filter((c) => c.script === 'abertura').length, 1);
+});
+
+test('opencode: a compactacao poe a abertura do compact no resumo e no sistema das chamadas seguintes', async () => {
+  const o = await plugin((s, b) => (s === 'abertura' ? JSON.stringify({
+    contexto: b.hook_event_name === 'experimental.session.compacting' ? 'RELEIA' : 'ABERTURA' }) : ''));
+  const f = fixture('opencode-experimental.chat.system.transform');
+  await o.ganchos['experimental.chat.system.transform'](f.input, { system: [] });
+  const resumo = { context: ['base'] };
+  await o.ganchos['experimental.session.compacting']({ sessionID: f.input.sessionID }, resumo);
+  const depois = { system: [] };
+  await o.ganchos['experimental.chat.system.transform'](f.input, depois);
+  assert.deepStrictEqual(resumo.context, ['base', 'RELEIA']);
+  assert.deepStrictEqual(depois.system, ['RELEIA']);
+  // Sem sessao, nada roda; a falha da ponte nao troca a abertura guardada nem para o resumo.
+  const n = o.chamadas.length;
+  await o.ganchos['experimental.session.compacting']({}, { context: [] });
+  assert.strictEqual(o.chamadas.length, n);
+  const r = await plugin((s, b) => {
+    if (s !== 'abertura') return '';
+    if (b.hook_event_name === 'experimental.session.compacting') throw new Error('ponte fora');
+    return JSON.stringify({ contexto: 'ABERTURA' });
+  });
+  await r.ganchos['experimental.chat.system.transform'](f.input, { system: [] });
+  const vazio = { context: [] };
+  await stderrDe(() => r.ganchos['experimental.session.compacting']({ sessionID: f.input.sessionID }, vazio));
+  const segue = { system: [] };
+  await r.ganchos['experimental.chat.system.transform'](f.input, segue);
+  assert.deepStrictEqual([vazio.context, segue.system], [[], ['ABERTURA']]);
 });
 
 test('opencode: o Stop que barra reenvia o motivo na sessao de topo; a sessao filha passa', async () => {

@@ -254,9 +254,10 @@ test('volta-resumo: gravar cria a pasta handoff/ e o mesmo chat no mesmo dia nao
     const rel = retomar.gravar(raiz, ID, AGORA, 'um');
     const d = new Date(AGORA);
     const dia = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    assert.strictEqual(rel, '.claude/sworn/handoff/' + dia + '-retomar-d731fc49.md');
+    // D788: fora de .claude/, a pasta protegida do Claude Code, junto do handoff do modelo.
+    assert.strictEqual(rel, '.sworn/handoff/' + dia + '-retomar-d731fc49.md');
     assert.strictEqual(retomar.gravar(raiz, ID, AGORA + MIN, 'dois'), rel);
-    const dir = path.join(raiz, '.claude', 'sworn', 'handoff');
+    const dir = path.join(raiz, '.sworn', 'handoff');
     assert.deepStrictEqual(fs.readdirSync(dir), [dia + '-retomar-d731fc49.md']);
     assert.strictEqual(fs.readFileSync(path.join(dir, dia + '-retomar-d731fc49.md'), 'utf8'), 'dois');
   } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
@@ -272,13 +273,13 @@ test('volta-resumo: o id da sessao que nao e nome seguro nao vira caminho', () =
 
 test('volta-resumo: resumir grava e devolve o caminho; handoff em dia = gravado depois do ultimo pedido', () => {
   const raiz = pasta();
-  const ho = path.join(raiz, '.claude', 'sworn', 'handoff', '2026-10-22-frente.md');
+  const ho = path.join(raiz, '.sworn', 'handoff', '2026-10-22-frente.md');
   const r = registro([pedido(40, 'faz o handoff'), ferramenta(35, 'Write', { file_path: ho }), resposta(34, 'Handoff gravado.')]);
   try {
     const s = retomar.resumir({ raiz: raiz, sessao: ID, transcript: r.f, frente: null, agora: AGORA,
       volta: { parado: 76 * MIN, contexto: 461234, modelo: 'claude-opus-5-5' } });
-    assert.ok(s && /^\.claude\/sworn\/handoff\/\d{4}-\d\d-\d\d-retomar-d731fc49\.md$/.test(s.caminho));
-    assert.deepStrictEqual(s.handoff, { caminho: '.claude/sworn/handoff/2026-10-22-frente.md', emDia: true });
+    assert.ok(s && /^\.sworn\/handoff\/\d{4}-\d\d-\d\d-retomar-d731fc49\.md$/.test(s.caminho), s && s.caminho);
+    assert.deepStrictEqual(s.handoff, { caminho: '.sworn/handoff/2026-10-22-frente.md', emDia: true });
     assert.strictEqual(s.chat, 'd731fc49');
     const texto = fs.readFileSync(path.join(raiz, s.caminho), 'utf8');
     assert.ok(texto.indexOf('faz o handoff') !== -1);
@@ -364,5 +365,74 @@ test('item 13: o marcar-trabalho avisa no Read de handoff pego por outra sessao;
     assert.ok(saida && saida.hookSpecificOutput, JSON.stringify(saida));
     assert.strictEqual(saida.hookSpecificOutput.hookEventName, 'PostToolUse');
     assert.ok(saida.hookSpecificOutput.additionalContext.includes('s1-aaaaa'), JSON.stringify(saida));
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
+// s338 (achado retomar.js:338): o chat que grava um handoff passou o trabalho adiante; o que ele leu antes (o handoff
+// de que partiu, os anteriores) deixa de ser dele, e o chat seguinte le tudo sem o aviso de "outro chat".
+test('s338: soltar tira as posses da sessao que gravou um handoff; as das outras ficam', () => {
+  const raiz = pasta();
+  try {
+    assert.strictEqual(retomar.soltar(raiz, 'aaaaaaaa-1'), 0, 'sem .claude/sworn/ nao grava');
+    assert.strictEqual(fs.existsSync(path.join(raiz, '.claude')), false);
+    fs.mkdirSync(path.join(raiz, '.claude', 'sworn'), { recursive: true });
+    assert.strictEqual(retomar.soltar(raiz, 'aaaaaaaa-1'), 0, 'sem donos: nada a soltar');
+    const velho = path.join(raiz, 'planos', '2026-10-25-x-handoff.md');
+    const outro = path.join(raiz, 'planos', '2026-10-24-y-handoff.md');
+    const deOutro = path.join(raiz, 'planos', '2026-10-23-z-handoff.md');
+    retomar.reclamar(raiz, velho, 'aaaaaaaa-1', AGORA);
+    retomar.reclamar(raiz, outro, 'aaaaaaaa-1', AGORA);
+    retomar.reclamar(raiz, deOutro, 'cccccccc-3', AGORA);
+    assert.strictEqual(retomar.soltar(raiz, 'aaaaaaaa-1'), 2);
+    assert.strictEqual(retomar.reclamar(raiz, velho, 'bbbbbbbb-2', AGORA + 30 * MIN), null, 'chat seguinte sem aviso');
+    assert.strictEqual(retomar.reclamar(raiz, outro, 'bbbbbbbb-2', AGORA + 30 * MIN), null);
+    assert.ok(retomar.reclamar(raiz, deOutro, 'bbbbbbbb-2', AGORA + 30 * MIN), 'a posse de outra sessao fica');
+    // ronda 1 (borda): sem id de sessao, soltar nao apaga as posses gravadas sem id (que podem ser de varios chats)
+    const anonimo = path.join(raiz, 'planos', '2026-10-22-w-handoff.md');
+    retomar.reclamar(raiz, anonimo, undefined, AGORA);
+    for (const semId of [undefined, null, '']) assert.strictEqual(retomar.soltar(raiz, semId), 0, String(semId));
+    const donos = JSON.parse(fs.readFileSync(path.join(raiz, '.claude', 'sworn', 'handoff-donos.json'), 'utf8'));
+    assert.strictEqual(donos['planos/2026-10-22-w-handoff.md'].sessao, '', 'a posse sem id fica');
+    for (const torto of ['[1,', '5', '[1]', 'null']) {
+      fs.writeFileSync(path.join(raiz, '.claude', 'sworn', 'handoff-donos.json'), torto);
+      assert.strictEqual(retomar.soltar(raiz, 'aaaaaaaa-1'), 0, 'arquivo torto: nada a soltar, sem lancar: ' + torto);
+    }
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
+test('s338: o marcar-trabalho solta as posses de quem grava um handoff; subagente e arquivo comum nao soltam', () => {
+  const { spawnSync } = require('node:child_process');
+  const raiz = pasta();
+  const sessoes = path.join(raiz, 'sessoes');
+  fs.mkdirSync(path.join(raiz, '.claude', 'sworn'), { recursive: true });
+  function gancho(id, ferramenta, arquivo, extra) {
+    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'marcar-trabalho.js')], {
+      cwd: raiz, encoding: 'utf8',
+      input: JSON.stringify(Object.assign({ session_id: id, cwd: raiz, hook_event_name: 'PostToolUse',
+        tool_name: ferramenta, tool_input: { file_path: arquivo } }, extra || {})),
+      env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+    return r.stdout.trim() ? JSON.parse(r.stdout) : null;
+  }
+  function avisou(saida) { return !!(saida && saida.hookSpecificOutput && saida.hookSpecificOutput.additionalContext); }
+  try {
+    const velho = path.join(raiz, '.context', 'plans', '2026-10-24-frete-s1-handoff.md');
+    const novo = path.join(raiz, '.context', 'plans', '2026-10-25-frete-s2-handoff.md');
+    assert.strictEqual(gancho('s1-aaaaaa', 'Read', velho), null, 'o 1o chat parte do handoff velho');
+    gancho('s1-aaaaaa', 'Write', path.join(raiz, 'README.md'));
+    gancho('s1-aaaaaa', 'Write', novo, { agent_id: 'sub1' });
+    assert.ok(avisou(gancho('s2-bbbbbb', 'Read', velho)), 'arquivo comum e subagente nao soltam a posse');
+    gancho('s2-bbbbbb', 'Edit', novo);
+    assert.strictEqual(gancho('s3-cccccc', 'Read', velho), null, 'quem gravou o handoff soltou o que tinha lido');
+    // s351: o handoff gravado pelo shell (Codex, agy, dsh) solta do mesmo jeito; so citar o nome, nao.
+    const peloShell = path.join(raiz, '.sworn', 'handoff', '2026-10-26-frete.md');
+    fs.mkdirSync(path.dirname(peloShell), { recursive: true });
+    fs.writeFileSync(peloShell, '# Handoff\n', 'utf8');
+    gancho('s3-cccccc', 'PowerShell', null, { tool_input: { command: 'echo .sworn/handoff/2026-10-26-frete.md' } });
+    assert.ok(avisou(gancho('s4-dddddd', 'Read', velho)), 'o shell que so cita o handoff soltou a posse');
+    gancho('s4-dddddd', 'PowerShell', null,
+      { tool_input: { command: "Set-Content '.sworn/handoff/2026-10-26-frete.md' x" } });
+    assert.strictEqual(gancho('s5-eeeeee', 'Read', velho), null, 'o handoff gravado pelo shell nao soltou a posse');
   } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
 });

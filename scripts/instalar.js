@@ -6,6 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const harnessLib = require('./lib/harness.js');
+const compactacao = require('./lib/compactacao.js');
+const config = require('./lib/config.js');
 const ponte = require('./ponte.js');
 
 /**
@@ -14,7 +16,7 @@ const ponte = require('./ponte.js');
  * ponte.js; `node instalar.js --conferir <harness>` diz o que ja rodou (a marca que a ponte deixa em
  * `.claude/sworn/ligado/<harness>/`) e o passo que falta. Grava no projeto da pasta atual:
  * - codex: `.codex/hooks.json`. O usuario aprova no /hooks (desenho do Codex, D751); o --conferir conta a aprovacao no
- *   `~/.codex/config.toml`.
+ *   `~/.codex/config.toml`. O ponto da compactacao vai no `.codex/config.toml` do projeto (D786, lib/compactacao.js).
  * - qwen: `.qwen/settings.json`, chave hooks.
  * - agy: `.agents/hooks.json`, grupo "sworn".
  * - dsh: `.dsh/sworn-hooks.json`, lido pela ponte oficial do dsh no perfil "sworn" da pasta pessoal (a sonda lia o
@@ -128,9 +130,11 @@ function gravar(arq, texto, gravados) {
 function bloco(harness, raiz) {
   return '<!-- sworn:ligar ' + harness + ' (gravado pelo instalar.js do sworn, que refaz este bloco) -->\n' +
     '## sworn no ' + NOMES[harness] + '\n\n' +
-    'Se o bloco "sworn - regras" não apareceu no começo da sessão, os ganchos do sworn estão desligados e os\n' +
-    'portões não rodam. Rode `' + comandoDoInstalar(raiz, '--conferir ' + harness) + '`, peça ao usuário o passo\n' +
-    'que ele mostrar e não dê nada por pronto antes de ele dizer "ligados".\n' +
+    'Se o bloco "sworn - regras" não apareceu no começo da sessão, rode uma vez `' +
+    comandoDoInstalar(raiz, '--conferir ' + harness) + '`.\n' +
+    'Se ele disser "ligados", siga o pedido sem pedir nada ao usuário. Se mostrar passos que faltam, siga o pedido\n' +
+    'mesmo assim e diga no fecho os passos que o usuário faz para ligar os portões do sworn.\n' +
+    'Se ele falhar ou não imprimir nada, siga o pedido do mesmo jeito e diga no fecho o que o comando mostrou.\n' +
     '<!-- /sworn:ligar ' + harness + ' -->\n';
 }
 
@@ -399,6 +403,10 @@ function instalar(harness, opcoes) {
   if (harness === 'codex') {
     const { aprovados } = aprovacaoNoCodex(projeto, home);
     if (aprovados < contarGanchos(nossos)) passos.push(passoDoCodex(aprovados, contarGanchos(nossos)));
+    // D786: a compactacao do Codex logo depois do gatilho de contexto do sworn.
+    const c = compactacao.gravarNoCodex(projeto, compactacao.limiarEmVigor(config.carregarProjeto(projeto)).n);
+    if (c.erro) passos.push(c.erro);
+    else if (c.gravou) gravados.push(path.join(projeto, '.codex', 'config.toml'));
   }
   return { gravados, passos };
 }

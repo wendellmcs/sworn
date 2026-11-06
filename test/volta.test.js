@@ -63,7 +63,7 @@ const MOCK_SEM_RESUMO = [
   '',
   'Faca uma destas:',
   '  1. abra um chat novo e cole o prompt do ultimo handoff (o /sworn:handoff grava em ' +
-    '.claude/sworn/handoff/), se ele foi gravado depois do seu ultimo pedido;',
+    '.sworn/handoff/), se ele foi gravado depois do seu ultimo pedido;',
   '  2. para seguir neste chat (cerca de US$ 2,54), mande a mensagem de novo: o sworn a segurou antes do Claude ' +
     'e nao segura a proxima nesta pausa.',
   '',
@@ -200,7 +200,7 @@ test('0.11.0: abrir-turno para a 1a mensagem da pausa na forma curta e deixa pas
     assert.match(um.stopReason, /Desligar neste projeto: "avisoDeVolta": false/);
     // o registro so tem a chamada, sem pedido do dono: sem resumo, e o aviso diz isso
     assert.match(um.stopReason, /^Sem resumo: nao consegui montar o resumo deste chat\.$/m);
-    assert.strictEqual(fs.existsSync(path.join(t.dir, '.claude', 'sworn', 'handoff')), false);
+    assert.strictEqual(fs.existsSync(path.join(t.dir, '.sworn', 'handoff')), false);
     const dois = abrir(t.dir, sessoes, 'v1', t.f);
     assert.ok(!parou(dois), 'a 2a mensagem tinha de passar: ' + JSON.stringify(dois));
   } finally { t.fim(); }
@@ -218,11 +218,11 @@ test('0.11.0: abrir-turno grava o resumo antes de parar e o aviso traz o prompt 
   try {
     const um = abrir(t.dir, sessoes, 'abcdef12-3456', t.f);
     assert.ok(parou(um), JSON.stringify(um));
-    const pasta = path.join(t.dir, '.claude', 'sworn', 'handoff');
+    const pasta = path.join(t.dir, '.sworn', 'handoff');
     const gravados = fs.readdirSync(pasta);
     assert.strictEqual(gravados.length, 1);
     assert.match(gravados[0], /^\d{4}-\d\d-\d\d-retomar-abcdef12\.md$/);
-    const rel = '.claude/sworn/handoff/' + gravados[0];
+    const rel = '.sworn/handoff/' + gravados[0];
     assert.ok(um.stopReason.split('\n').indexOf('Resumo deste chat gravado em ' + rel + ' (sem gastar nada).') !== -1, um.stopReason);
     assert.ok(um.stopReason.split('\n').indexOf('     Retome o chat abcdef12 pelo resumo ' + rel +
       ': leia-o antes de qualquer coisa e siga de onde ele parou.') !== -1, um.stopReason);

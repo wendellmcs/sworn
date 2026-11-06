@@ -14,3 +14,5 @@ node_modules/
 
 # Estado que o plugin grava ao rodar aqui (sondagem, contadores, revisao). Nao versionar.
 .claude/
+# D788: handoffs e resumos de retomada, fora da .claude/ (pasta protegida do Claude Code).
+.sworn/
