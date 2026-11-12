@@ -392,6 +392,7 @@ const TRAVA_DO_BALDE = {
   fecho_sem_evidencia: 3, subitem_pendente: 3,
   fora_do_escopo: 4, sem_escopo: 4, intocavel: 4, frente_invalida: 4, fora_declarado: 4,
   comando_destrutivo: 5, shell_idioma_errado: 5, outra_frente: 5, cd_solto: 5, restaurou_fora_do_escopo: 5,
+  armadilha_shell: 5,
   agente_caro_em_marcha_rapida: 6, criou_sem_buscar: 7, catraca_afrouxada: 8,
   // D678 T2: o mesmo portao-agente da trava 6, quando a chamada foge da tabela dos degraus
   chamada_fora_da_tabela: 6,
@@ -963,6 +964,8 @@ function saidasDosPortoes() {
       '- src/pagamento/**', ''].join('\n'));
     escrever('src/usuarios/perfil.js', 'x\n');
     escrever('src/pagamento/cobranca.js', 'x\n');
+    // F3c: a trava 7 procura sozinha; o exemplo dela tem um arquivo de mesmo nome para mostrar
+    escrever('src/legado/frete-novo.js', 'x\n');
     escrever('.env', 'A=1\n');
     escrever('test/cobertura.json', '{ "minimo": 80 }\n');
     spawnSync('git', ['init', '-q', dir]);

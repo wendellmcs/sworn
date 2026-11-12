@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.24.0 — menos espera em cada comando
+
+**Novo**
+
+- **Cada comando de terminal espera a metade pelo sworn.** Antes de cada comando de terminal do Claude, o sworn
+  abria três conferências separadas (comando perigoso, estilo escrito pelo terminal e commit sem revisão), e depois
+  dele mais duas. Agora são uma antes e uma depois, que fazem as mesmas conferências e dão as mesmas respostas. Medido
+  no computador de quem desenvolve o sworn: a espera antes do comando caiu de cerca de 210 para 100 milissegundos, e a
+  de depois, de 125 para 70. Basta atualizar; não há nada a configurar.
+- **Esperar não exige rodar os testes.** Quando o Claude para dizendo o que espera ("Espero: ...") ou o que precisa de
+  você ("Preciso do dono: ..."), sem afirmar que o código está pronto, o sworn não cobra mais os testes do projeto
+  naquele fim de turno; eles voltam a ser cobrados no turno que disser que terminou. Um teste que já falhou continua
+  cobrado.
+- **O prompt do handoff chega a você sem barrar o trabalho.** Quando o Claude grava o handoff (o texto que continua o
+  trabalho) e esquece de colar o prompt na resposta, o próprio sworn mostra a você o prompt que está no arquivo, em vez
+  de devolver o turno ao Claude só para colar. Se o arquivo não tem um prompt pronto (um bloco de texto), o turno
+  volta ao Claude como antes.
+- **Criar um arquivo novo trava menos.** Antes, o Claude só podia criar um arquivo novo depois de procurar no projeto
+  o que já existe. Agora o próprio sworn procura arquivos com o mesmo nome (o `frete-novo.js` acha o `frete.js`): se
+  não acha nenhum, a criação passa; se acha, mostra quais são para o Claude ler antes. Numa pasta sem git (o programa
+  que guarda as versões do projeto), o Claude ainda tem de procurar antes de criar, como antes.
+- **Menos aviso repetido.** Quando o Claude escreve um comando de terminal que mudaria de pasta, o sworn o corrige;
+  o aviso dessa correção agora sai só na primeira vez da sessão, e nas seguintes a correção acontece calada.
+- **Três armadilhas do terminal barradas antes de rodar.** Alguns comandos fazem outra coisa do que parecem: o texto
+  gravado pelo terminal (`<<EOF`, sem aspas) que perde a barra invertida dupla, a contagem (`grep -c`) que dá zero e interrompe o
+  resto do comando, e uma busca (`grep -P`) que não funciona no terminal do Windows, nos projetos que declaram essa
+  plataforma. Agora o sworn não deixa esses comandos rodarem e diz ao Claude como
+  escrever do jeito certo; antes, o Claude só descobria depois, e às vezes com um arquivo estragado. O GUIA lista os
+  três casos.
+- **Você sabe o que está rodando.** Quando o Claude termina a resposta e ainda há ajudantes trabalhando em segundo
+  plano, o sworn mostra a você uma linha com quantos são, quais são e, se houver plano, em que ponto ele está. O
+  trabalho segue sozinho quando eles voltam.
+- Para quem mantém o plugin: são **45 baldes** de contador: 28 que negam, 17 que só contam (o novo é
+  `armadilha_shell`, da trava 5).
+
 ## 0.23.0 — apagar arquivo pelo nome não para o trabalho, e o handoff também não
 
 **Novo**

@@ -640,17 +640,17 @@ test('design.alvosDeEstiloNoShell: texto absurdo nao estoura nem trava (aspas ab
 
 // ----------------------------------------------------------------------------- a fiacao
 
-test('hooks.json: o portao-estilo e o SEGUNDO gancho da entrada Bash|PowerShell, depois do portao-destrutivo', () => {
+test('hooks.json: o portao-estilo e o SEGUNDO portao do shell (no portao-shell.js), depois do portao-destrutivo', () => {
   const hooks = JSON.parse(fs.readFileSync(path.join(RAIZ, 'hooks', 'hooks.json'), 'utf8')).hooks;
   const grupo = hooks.PreToolUse.filter(function (g) { return g.matcher === 'Bash|PowerShell'; });
   assert.strictEqual(grupo.length, 1, 'tem de haver uma entrada Bash|PowerShell so');
   const scripts = grupo[0].hooks.map(function (h) { return h.args[0]; });
+  // F3a (D828): os tres rodam num processo so, o portao-shell.js, nesta ordem.
+  assert.deepStrictEqual(scripts, ['${CLAUDE_PLUGIN_ROOT}/scripts/portao-shell.js']);
+  const fila = /const PORTOES = (\[[^\]]*\])/.exec(fs.readFileSync(path.join(RAIZ, 'scripts', 'portao-shell.js'), 'utf8'));
   // Plano 091 (#1): o portao do commit vem por ultimo (so ele roda git, e so no comando de commit).
-  assert.deepStrictEqual(scripts, [
-    '${CLAUDE_PLUGIN_ROOT}/scripts/portao-destrutivo.js',
-    '${CLAUDE_PLUGIN_ROOT}/scripts/portao-estilo.js',
-    '${CLAUDE_PLUGIN_ROOT}/scripts/portao-commit.js'
-  ]);
+  assert.deepStrictEqual(JSON.parse(fila[1].replace(/'/g, '"')),
+    ['portao-destrutivo.js', 'portao-estilo.js', 'portao-commit.js']);
   for (const h of grupo[0].hooks) {
     assert.strictEqual(h.type, 'command');
     assert.strictEqual(h.command, 'node');

@@ -352,11 +352,11 @@ O plugin se pendura em doze pontos do ciclo de uma sessão:
 | a sessão abre, reabre ou compacta | `scripts/abertura.js` | fotografa o `git status` (o que já estava modificado é de outra frente), reinjeta as suas regras e o escopo em vigor, avisa escopo herdado de outra tarefa, `intocaveis` que não pegam nada e plano ativo de outra sessão; a cada 7 dias, roda a auditoria do `/sworn:audit` e avisa só o que passou do limite |
 | você manda um pedido | `scripts/abrir-turno.js` | zera as marcas do turno anterior: trabalho feito, busca feita, bloqueio; se você perguntar se o contexto está bom, manda o Claude gravar o handoff (o texto de continuação do trabalho) e seguir na mesma conversa; se você corrigir o jeito dele trabalhar ("eu já te disse", "da próxima vez…"), manda o Claude rodar o `/sworn:learn` na mesma resposta e perguntar a você, em 3 opções, se grava |
 | antes de `Write` e `Edit` | `scripts/portao-escopo.js` | intocáveis, outra frente, "Fora", marcha, escopo, criar sem buscar, catraca (régua que só aperta: teto que não sobe e piso que não desce) e, com design system declarado, token fora do sistema |
-| antes de `Bash` e `PowerShell` | `scripts/portao-destrutivo.js` · `scripts/portao-estilo.js` · `scripts/portao-commit.js` | comando destrutivo, idioma de shell errado e `cd` solto (no `Bash`, corrige sozinho: o comando roda num subshell); avisa, sem negar, quando a tabela de idioma do PowerShell não se lê. Com design system declarado, nega arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`. Nega o `git commit` com código mudado na sessão sem revisão aprovada |
+| antes de `Bash` e `PowerShell` | `scripts/portao-shell.js`, que roda num processo só o `scripts/portao-destrutivo.js` · `scripts/portao-estilo.js` · `scripts/portao-commit.js` | comando destrutivo, idioma de shell errado e `cd` solto (no `Bash`, corrige sozinho: o comando roda num subshell); avisa, sem negar, quando a tabela de idioma do PowerShell não se lê. Com design system declarado, nega arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`. Nega o `git commit` com código mudado na sessão sem revisão aprovada |
 | antes de `Task` e `Agent` | `scripts/portao-agente.js` · `scripts/portao-apelido.js` · `scripts/portao-juiz.js` | agente caro em marcha rápida e chamada com modelo ou esforço fora da tabela da escada; `model:` e `effort:` do agente contra o apelido e o esforço gravados no projeto; o inspetor da revisão cega um degrau acima do modelo da sessão |
 | antes de `AskUserQuestion` | `scripts/portao-decisao.js` | barra pergunta ao dono sem exatamente 3 opções ou sem a recomendada em primeiro; pergunta de fato (sintoma, dado que só você tem) passa com `(fato)` no título curto (`header`); desliga com `"portaoDecisao": false` no `projeto.json` |
-| depois de cada ferramenta | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; conta as decisões suas respondidas e os commits que passaram |
-| depois de `Bash` e `PowerShell` | `scripts/conferir-depois.js` | o arquivo versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável) volta pelo git, e o Claude é avisado; sem escopo declarado, nada muda |
+| depois de cada ferramenta (no `Bash` e no `PowerShell`, pelo `scripts/depois-do-shell.js`) | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; conta as decisões suas respondidas e os commits que passaram |
+| depois de `Bash` e `PowerShell` | `scripts/depois-do-shell.js`, que roda num processo só o `scripts/marcar-trabalho.js` e o `scripts/conferir-depois.js` | o arquivo versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável) volta pelo git, e o Claude é avisado; sem escopo declarado, nada muda |
 | um subagente abre | `scripts/abrir-subagente.js` · `scripts/escalar.js` | entrega a ele o bloco "menos código" (o da abertura não chega ao subagente); os que só leem (`inspector`, `dedupe-judge`, `reader`, `Explore`, `Plan`) ficam de fora; `"menosCodigo": false` desliga. Se ele é o agente que um degrau da escada pediu, dá baixa no pedido |
 | um subagente termina | `scripts/gravar-veredito.js` · `scripts/escalar.js` | o inspetor da revisão cega: grava o veredito dele em `vereditos/<lente>.json` da ronda; não barra nada, não sobrescreve, e avisa o que não gravou (essa lente volta a ser gravada à mão). Um agente da escada que termina com a linha `ESCALAR: <agente> - <motivo>`: guarda o pedido do degrau de cima. Sem a linha, o pedido sai sozinho quando o agente volta pela segunda vez seguida dizendo que terminou sem a saída do teste que passa, ou quando as travas do sworn o barraram 3 vezes ou mais no mesmo despacho e ele voltou sem essa saída (lido na transcrição do subagente; só no Claude Code) |
 | o turno termina | `scripts/portao-fecho.js` | cobra evidência, barra etapa com subitem aberto, barra o turno que gravou um handoff sem colar o prompt em bloco de código na resposta final, barra uma vez o turno que deixou sem despacho o degrau que um agente pediu, grava os contadores, avisa quando é hora do handoff |
@@ -675,9 +675,9 @@ burocracia onde não há risco.
 | 2 | Revisão cega A/B por lentes distintas | Nada. Apura por script, pelo comando `/sworn:review`. | tokens só quando invocado |
 | 3 | Fecho sem evidência | O fim do turno, quando a resposta alega sucesso sem colar a saída, ou colando só saída que mostra falha; quando o último teste rodado na sessão falhou; ou quando a prova de pronto do projeto (`provaDePronto`) não rodou depois da última edição de código. Declarar o que não rodou, ou que a falha segue, sempre libera. Hook `Stop`. | zero |
 | 4 | Arquivo fora do escopo declarado | A escrita, quando o alvo não está no `.claude/sworn/escopo.md` (ou, com a sessão vinculada a uma frente, em `.claude/sworn/escopos/<frente>.md`). Hook `PreToolUse` em `Write` e `Edit`. | zero |
-| 5 | Comando destrutivo e sessão concorrente | O comando que apaga, o `cd` solto (a pasta muda para o comando seguinte; no `Bash` o comando é corrigido para rodar num subshell, no `PowerShell` é negado), e a escrita em arquivo que outra frente já mexeu. Hook `PreToolUse` em `Bash` e em `Write`/`Edit`, contra a foto do `git status` da abertura. `travas.destrutivo: false` desliga o comando que apaga **e** o `cd` solto juntos. | zero |
+| 5 | Comando destrutivo e sessão concorrente | O comando que apaga, o `cd` solto (a pasta muda para o comando seguinte; no `Bash` o comando é corrigido para rodar num subshell, no `PowerShell` é negado), a armadilha do shell no `Bash` (o comando que faria outra coisa do que parece) e a escrita em arquivo que outra frente já mexeu. Hook `PreToolUse` em `Bash` e em `Write`/`Edit`, contra a foto do `git status` da abertura. `travas.destrutivo: false` desliga o comando que apaga, o `cd` solto e a armadilha do shell juntos. | zero |
 | 6 | Agente caro, modelo ou esforço trocado, pedido de subida esquecido | • O despacho de um agente da metade mais cara da escada, arredondada para baixo (com 2 ou 3 agentes, o topo; com 4 ou 5, os dois de cima), quando o escopo declarado só tem caminhos de marcha `rapida`.<br>• A chamada de um agente da escada com `model` ou `effort` diferente do que `agentes.degraus` grava, negada com a chamada certa escrita.<br>• Uma vez por pedido, o fim do turno com um pedido `ESCALAR:` de subagente ainda não despachado.<br>Os dois primeiros pelo hook `PreToolUse` em `Task`/`Agent`; o terceiro pelo hook `Stop`. Conta **todo** despacho, inclusive os que permite. | zero |
-| 7 | Criar sem ter procurado | A criação de arquivo **novo** quando nada foi buscado antes no turno. Editar arquivo existente nunca é barrado — quem edita já achou —, e nomear o arquivo no `escopo.md` também libera: declarar já é deliberar. | zero |
+| 7 | Criar sem ter procurado | A criação de arquivo **novo** quando nada foi buscado antes no turno. O próprio sworn procura os arquivos de mesmo nome (os versionados e os da pasta do alvo): sem nenhum, a criação passa; com algum, nega e os lista; fora de um repositório git, nega como sempre. Editar arquivo existente nunca é barrado — quem edita já achou —, e nomear o arquivo no `escopo.md` também libera: declarar já é deliberar. | zero |
 | 8 | Catraca afrouxada | A edição que **sobe um teto** ou **desce um piso** (`teto`, `limite`, `maximo`, `tolerancia`; `minimo`, `piso`, `cobertura`). Apertar a régua passa sempre; afrouxar é decisão humana, não efeito colateral de uma correção. | zero |
 
 As travas 3 a 8 são portões de custo zero. **Sem `/sworn:init`, só as travas 3 e 5 funcionam** — e a 3
@@ -712,9 +712,16 @@ O que os portões leem, além do que a tabela diz:
   `git restore --staged .`, `git restore --staged -q .` (só o índice) e `git restore -p .` (interativo). Padrão
   inválido em `comandosLiberados` não libera nada.
 - **`cd` solto no `Bash`.** O comando corrigido para rodar num subshell não conta como bloqueio para o aviso de
-  troca de chat. O aviso ao Claude sai inteiro na primeira correção da sessão e numa linha curta nas seguintes
-  (desde a 0.9.1). Seguem negados o `cd` solto no `PowerShell`, o comando que termina em barra e o que o portão não
+  troca de chat. O aviso ao Claude sai inteiro na primeira correção da sessão (desde a
+  0.9.1). Nas seguintes, até a 0.23.x saía uma linha curta; desde a 0.24.0, o comando é corrigido sem aviso. Seguem negados o `cd` solto no `PowerShell`, o comando que termina em barra e o que o portão não
   consegue ler inteiro.
+- **Armadilha do shell no `Bash`** (desde a 0.24.0). O comando não roda, e o aviso traz o conserto, em três casos:
+  o heredoc com o delimitador sem aspas (`<<EOF`) e barra invertida dupla, ou barra no fim de linha, no corpo (o
+  bash come a barra; com aspas, `<<'EOF'`, o corpo vai como está); o `grep -c` logo antes de `&&` (quando conta 0, o
+  grep sai com erro e o resto da cadeia não roda; troque o `&&` por `;`); e o `grep -P` (não o `git grep -P`, que não depende disso) num projeto com a
+  plataforma `win32` declarada no `projeto.json` (o grep do Git Bash sai com erro sem a configuração de idioma
+  UTF-8; escreva `LC_ALL=C.UTF-8 grep -P ...`, ou use `grep -E`). Na procura do `grep`, o texto entre aspas, como a
+  mensagem de um commit, e o corpo de um heredoc não contam. Conta no balde `armadilha_shell`.
 - **Estado.** Se a pasta onde o plugin guarda o estado não aceita escrita, nada que estaria barrado passa por causa
   disso. E o `projeto.json` que existe mas não é um JSON válido é dito como inválido, e não como ausente, também
   na abertura.
@@ -800,19 +807,21 @@ Faca uma destas:
 So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosLiberados" de .claude/sworn/projeto.json.
 ~~~
 
-**Trava 7 — criar sem ter procurado** (`Write` de `src/carrinho/frete-novo.js`, sem busca no turno):
+**Trava 7 — criar sem ter procurado** (`Write` de `src/carrinho/frete-novo.js`, sem busca no turno, com um
+`src/legado/frete-novo.js` no projeto; sem arquivo de mesmo nome, o próprio sworn procura e a criação passa):
 
 ~~~text
-sworn - arquivo novo barrado (trava 7): sem ter procurado o que ja existe; procure antes e diga o que achou.
+sworn - arquivo novo barrado (trava 7): ja existe arquivo com o mesmo nome; leia antes de criar.
 
 Alvo: src/carrinho/frete-novo.js  (nao existe ainda: isto e criacao, nao edicao)
 
-Por que: o risco e criar arquivo novo em vez de entender o que ja existe.
-Antes de criar, procure - Grep, Glob, ou um grep/find pelo Bash - e diga na
-resposta o que a busca devolveu. Se mesmo assim nao houver onde encaixar,
-crie: depois de uma busca neste turno, criar arquivo novo fica liberado.
+O sworn procurou por voce e achou arquivo(s) com o mesmo nome (ate 10):
+  - src/legado/frete-novo.js
 
-Editar arquivo que ja existe nunca exige isso: quem edita ja achou.
+Por que: o risco e criar uma copia ao lado do que ja existe.
+Leia esses arquivos e diga na resposta o que achou. Se nenhum serve, procure
+mais (Grep, Glob, ou um grep/find pelo Bash) e crie: depois de uma busca neste
+turno, criar arquivo novo fica liberado.
 ~~~
 
 **Trava 8 — catraca afrouxada** (`Edit` que troca `"minimo": 80` por `"minimo": 60`):
@@ -832,8 +841,9 @@ mudanca e dele, feita a mao por ele: este portao nega a edicao ao agente mesmo c
 registrada. A decisao fica onde o projeto registra as decisoes.
 ~~~
 
-**Portão do prompt do handoff** (o turno gravou `.sworn/handoff/2026-10-10-frete.md` e a
-resposta final não tem bloco de código):
+**Portão do prompt do handoff** (o turno gravou `.sworn/handoff/2026-10-10-frete.md`, a
+resposta final não tem bloco de código e o arquivo não tem um prompt legível; com o prompt no arquivo, o próprio
+sworn o mostra a você no fim do turno e não barra):
 
 ~~~text
 sworn - falta colar no chat o prompt do handoff.
@@ -861,7 +871,7 @@ um módulo opcional, ou têm a própria chave. Cada um abaixo diz o que faz e co
 | Decisão (`scripts/portao-decisao.js`, antes de `AskUserQuestion`) | barra a pergunta ao dono que não tem exatamente 3 opções, ou cuja primeira não traz a marca `(Recomendado)` (valem também `(Recomendada)`, `(Recommended)` e `(Recom.)`, em qualquer caixa), ou que marca a recomendada em mais de uma opção | `"portaoDecisao": false` |
 | Apelido (`scripts/portao-apelido.js`, antes de `Task` e `Agent`) | confere o `model:` e o `effort:` de cada agente do projeto contra o apelido e o esforço gravados em `agentes.degraus`; se divergir, **avisa e deixa passar**, uma vez por sessão, a você e ao Claude, com o conserto em três opções (corrigir o arquivo do agente, corrigir o mapa do `projeto.json`, ou não mexer agora) | não há chave: sem a pasta `.claude/agents` ou sem `agentes.degraus` gravados ele não tem com o que comparar e fica calado |
 | Estilo (`scripts/portao-estilo.js`, antes de `Bash` e `PowerShell`) | com `.claude/sworn/design.json` declarado, nega o arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`, que o portão de escopo confere | não ter o `design.json` (módulo opcional, sem trava) |
-| Prompt do handoff (`scripts/portao-fecho.js`, no fim do turno) | barra o turno que gravou um arquivo de handoff e não colou o prompt em bloco de código na resposta final | `"portaoHandoff": false` (ver "Como desligar uma trava") |
+| Prompt do handoff (`scripts/portao-fecho.js`, no fim do turno) | no turno que gravou um arquivo de handoff e não colou o prompt na resposta final, mostra a você o prompt do arquivo; barra só quando o arquivo não tem um prompt legível | `"portaoHandoff": false` (ver "Como desligar uma trava") |
 | Referência de topo (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo mudado na sessão é da marcha AAA, o tipo dele tem `referencias` declarada e nenhuma revisão contra ela fechou na sessão; a mensagem diz o comando, `/sworn:review <arquivo>` | `"portaoReferencia": false` (ver "Como desligar uma trava") |
 | Revisão aprovada (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo de código mudado na sessão é da marcha AAA (de qualquer marcha, com `"revisaoTodoCodigo": true`) e não tem revisão aprovada (a mesma que libera o commit), com ou sem `referencias`; a mensagem cita os arquivos e o comando, `/sworn:review <arquivo>` | `"portaoRevisao": false` (ver "Como desligar uma trava") |
 | Qualidade de resposta (a abertura) | injeta as seis regras de clareza das respostas no chat; não barra nada | `"qualidadeDeResposta": false` (ver "Qualidade de resposta") |
@@ -1230,11 +1240,11 @@ Os ganchos, um por evento, com o que cada um deixa na sua tela:
 | `SessionStart` (a sessão abre, reabre ou compacta) | `scripts/abertura.js` | fotografa o `git status`, reinjeta as suas regras e o escopo, injeta os blocos de paralelismo, menos paradas, qualidade de resposta e menos código, e avisa o que está torto na configuração | a linha "sworn: lendo o estado do repositorio" enquanto roda; o resto vai ao contexto do Claude |
 | `UserPromptSubmit` | `scripts/abrir-turno.js` | zera as marcas do turno; reconhece a sua pergunta sobre o contexto e a correção do jeito de ele trabalhar | nada na tela; o Claude recebe a ordem de gravar o handoff e seguir, ou de rodar o `/sworn:learn` |
 | `PreToolUse` em `Write` e `Edit` | `scripts/portao-escopo.js` | escopo, intocáveis, outra frente, "Fora", criar sem buscar, catraca e design | a escrita volta negada, com o motivo e as saídas |
-| `PreToolUse` em `Bash` e `PowerShell` | `scripts/portao-destrutivo.js`, `scripts/portao-estilo.js`, `scripts/portao-commit.js` | comando destrutivo, idioma de shell, `cd` solto, estilo escrito por shell e commit sem revisão | o comando volta negado com o motivo; o `cd` solto no `Bash` roda corrigido, e o Claude fica sabendo |
+| `PreToolUse` em `Bash` e `PowerShell` | `scripts/portao-shell.js`, que roda num processo só o `scripts/portao-destrutivo.js`, o `scripts/portao-estilo.js` e o `scripts/portao-commit.js` | comando destrutivo, idioma de shell, `cd` solto, estilo escrito por shell e commit sem revisão | o comando volta negado com o motivo; o `cd` solto no `Bash` roda corrigido, e o Claude fica sabendo |
 | `PreToolUse` em `Task` e `Agent` | `scripts/portao-agente.js`, `scripts/portao-apelido.js`, `scripts/portao-juiz.js` | agente caro em marcha rápida e chamada fora da tabela da escada; `model:` e `effort:` do agente contra o gravado; o modelo do inspetor da revisão cega | o primeiro nega com o motivo e, na chamada fora da tabela, com a chamada certa; o segundo só avisa, uma vez por sessão, a você e ao Claude; o terceiro troca o modelo do inspetor da revisão cega pelo degrau acima do modelo da sessão (Haiku vira Sonnet, Sonnet vira Opus) na ronda 1 e, nas rondas 2 e 3, pelo degrau abaixo desse (a ronda sai do caminho de vereditos do briefing), e não decide permissão |
 | `PreToolUse` em `AskUserQuestion` | `scripts/portao-decisao.js` | a pergunta ao dono: 3 opções, a recomendada em primeiro | a pergunta volta negada, e a mensagem diz o que refazer |
-| `PostToolUse` em `Write`, `Edit`, `Bash`, `PowerShell`, `Grep`, `Glob`, `Read` e `AskUserQuestion` | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; conta as decisões suas respondidas e os commits que passaram | nada na tela: alimenta os contadores do aviso de troca de chat |
-| `PostToolUse` em `Bash` e `PowerShell` | `scripts/conferir-depois.js` | o versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável) | volta pelo git, e o Claude recebe a lista do que foi restaurado |
+| `PostToolUse` em `Write`, `Edit`, `Grep`, `Glob`, `Read` e `AskUserQuestion` (no `Bash` e no `PowerShell`, pelo `scripts/depois-do-shell.js`) | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; conta as decisões suas respondidas e os commits que passaram | nada na tela: alimenta os contadores do aviso de troca de chat |
+| `PostToolUse` em `Bash` e `PowerShell` | `scripts/depois-do-shell.js`, que roda num processo só o `scripts/marcar-trabalho.js` e o `scripts/conferir-depois.js` | o versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável) | volta pelo git, e o Claude recebe a lista do que foi restaurado |
 | `SubagentStart` (menos os que só leem) | `scripts/abrir-subagente.js` | injeta o bloco "menos código" no subagente que pode escrever código | nada na tela; o subagente recebe o bloco antes do primeiro pedido |
 | `SubagentStop` (só do agente `inspector`) e `PostToolUse` em `SubagentHandback` | `scripts/gravar-veredito.js` | grava o veredito do inspetor em `vereditos/<lente>.json` da ronda | nada quando grava; se algo não foi gravado, uma mensagem diz o quê e por quê |
 | `Stop` | `scripts/portao-fecho.js` | cobra evidência, etapa com subitem aberto e o prompt do handoff; barra uma vez o fim do turno com pedido `ESCALAR:` de subagente ainda não despachado (trava 6); grava os contadores | o turno volta com o motivo, ou fecha, com o aviso do handoff quando um gatilho cruzou |
@@ -1846,14 +1856,15 @@ As travas 1 e 2 são comandos: desliga-se não invocando.
 **O portão de decisão** (barra pergunta ao dono sem exatamente 3 opções ou sem a recomendada em
 primeiro) também não lê a chave `travas`: desliga com `"portaoDecisao": false` no `projeto.json`.
 
-**O portão do prompt do handoff** também não lê a chave `travas`. Ele barra o fim do turno que
-gravou um arquivo de handoff quando a resposta final não tem bloco de código. Arquivo de handoff é
+**O portão do prompt do handoff** também não lê a chave `travas`. No fim do turno que gravou um
+arquivo de handoff, quando a resposta final não traz o prompt, ele mostra a você o prompt do arquivo (o último bloco
+de código dele); só barra o fim do turno quando o arquivo não tem um prompt legível. Arquivo de handoff é
 um `.md` com data `AAAA-MM-DD-` na frente e "handoff" no nome ou na pasta. Desliga com
 `"portaoHandoff": false` no `projeto.json`; `travas.fecho: false` não o desliga.
 
-Ele lê só a resposta final do turno, e só confere que há um bloco de código, não que o bloco é o
-prompt. No turno que gravou o handoff e já tem um bloco na resposta final, o aviso do handoff
-não manda colar o prompt de novo. Com o portão desligado e a resposta sem bloco, nada barra, e o
+Ele lê só a resposta final do turno e confere que ela traz o prompt do arquivo (um bloco qualquer, como a saída
+dos testes, não conta). No turno que gravou o handoff e já trouxe o prompt, ou em que o sworn o mostrou a você, o
+aviso do handoff não manda colar o prompt de novo. Com o portão desligado e a resposta sem bloco, nada barra, e o
 aviso do handoff, se disparar, continua mandando colar.
 
 **O portão da referência de topo** também não lê a chave `travas`. Ele barra o fim do turno cuja resposta alega

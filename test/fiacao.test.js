@@ -635,26 +635,30 @@ test('fiacao: o cd solto no Bash e corrigido sozinho - subshell no updatedInput,
 });
 
 // D569 (0.9.1, licao "dica com teto"): o aviso do cd corrigido voltava inteiro a cada comando (13 vezes numa sessao,
-// 3.445 caracteres, medido pelo /sworn:audit). Agora: inteiro na 1a vez da sessao, uma linha curta depois. A marca
-// e da sessao: sobrevive ao fecho do turno, e outra sessao recebe o aviso inteiro de novo.
-test('fiacao: o aviso do cd corrigido sai inteiro na 1a vez da sessao e curto depois, mesmo depois do fecho (D569)', () => {
+// 3.445 caracteres, medido pelo /sworn:audit). Desde entao, inteiro na 1a vez da sessao; ate a 0.23.x, uma linha curta
+// depois. F3c (D828): depois do 1o aviso da sessao, a reescrita segue calada (a linha curta saiu 838 vezes numa sessao
+// so); o comando continua reescrito no subshell. A marca e da sessao: sobrevive ao fecho do turno, e outra sessao
+// recebe o aviso inteiro de novo.
+test('fiacao: o aviso do cd corrigido sai inteiro na 1a vez da sessao e calado depois, mesmo depois do fecho (D569, F3c)', () => {
   const dir = temp('cd-teto');
   try {
     comPlataforma(dir, PLATAFORMA_LINUX);
-    const aviso = function (id) { return corrigido(chamar(dir, id, 'Bash', 'cd sub && git status')).additionalContext; };
+    const saida = function (id) { return corrigido(chamar(dir, id, 'Bash', 'cd sub && git status')); };
+    const aviso = function (id) { return saida(id).additionalContext; };
     const inteiro = aviso('ct1');
     const achado = shellLib.cdSolto('cd sub && git status', 'Bash', PLATAFORMA_LINUX);
     assert.strictEqual(inteiro, shellLib.avisoCdCorrigido(achado));
-    const curto = aviso('ct1');
-    assert.strictEqual(curto, shellLib.avisoCdCorrigido(achado, true));
-    assert.notStrictEqual(curto, inteiro);
-    assert.ok(curto.length * 2 < inteiro.length, 'o curto tem de ser bem menor: ' + curto.length + ' x ' + inteiro.length);
-    assert.ok(curto.includes('( cd ') && curto.includes('git -C'), 'o curto ainda diz a forma certa: ' + curto);
+    const segunda = saida('ct1');
+    assert.strictEqual(segunda.additionalContext, undefined, 'a 2a vez e calada');
+    assert.match(segunda.updatedInput.command, /^\( cd sub && git status/, 'e o comando segue reescrito');
     // sem trabalho marcado o fecho nao regrava o estado e a marca sobreviveria de graca (o molde do tb1, acima)
     rodar('marcar-trabalho.js', dir, { session_id: 'ct1', cwd: dir, tool_name: 'Write' });
     rodar('portao-fecho.js', dir, { session_id: 'ct1', cwd: dir, hook_event_name: 'Stop', last_assistant_message: 'Anotado.' });
     assert.strictEqual(lerSessao(dir, 'ct1').trabalhoReal, undefined, 'controle: o fecho regravou o estado (trabalhoReal e do turno)');
-    assert.strictEqual(aviso('ct1'), curto, 'o fecho do turno apagou a marca da sessao');
+    const depoisDoFecho = saida('ct1');
+    assert.strictEqual(depoisDoFecho.additionalContext, undefined, 'o fecho do turno apagou a marca da sessao');
+    assert.match(depoisDoFecho.updatedInput.command, /^\( cd sub && git status/, 'depois do fecho o comando segue reescrito');
+    assert.strictEqual(aviso('ct1'), undefined, 'a 3a vez segue calada');
     assert.strictEqual(aviso('ct2'), inteiro, 'outra sessao recebe o aviso inteiro');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -2361,13 +2365,15 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
     UserPromptSubmit: [['', 'abrir-turno.js 10']],
     PreToolUse: [
       ['Write|Edit|NotebookEdit', 'portao-escopo.js 10'],
-      ['Bash|PowerShell', 'portao-destrutivo.js 10', 'portao-estilo.js 10', 'portao-commit.js 30'],
+      // F3a (D828): os tres portoes do shell (destrutivo, estilo, commit) num processo so
+      ['Bash|PowerShell', 'portao-shell.js 40'],
       ['Task|Agent', 'portao-agente.js 10', 'portao-apelido.js 10', 'portao-juiz.js 10'],
       ['AskUserQuestion', 'portao-decisao.js 10']
     ],
     PostToolUse: [
-      ['Write|Edit|Bash|PowerShell|Grep|Glob|Read|AskUserQuestion|Skill', 'marcar-trabalho.js 10'],
-      ['Bash|PowerShell', 'conferir-depois.js 10'],
+      ['Write|Edit|Grep|Glob|Read|AskUserQuestion|Skill', 'marcar-trabalho.js 10'],
+      // F3a (D828): no shell, o marcar-trabalho e o conferir-depois rodam num processo so
+      ['Bash|PowerShell', 'depois-do-shell.js 15'],
       ['SubagentHandback', 'gravar-veredito.js 10'],
       ['SubagentHandback', 'escalar.js 10']
     ],

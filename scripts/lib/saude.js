@@ -330,6 +330,8 @@ const BALDES_DE_BLOQUEIO = [
   'restaurou_fora_do_escopo',
   // T11-1: estilo escrito por comando de shell (modulo de design, como o token_fora_do_sistema).
   'estilo_por_shell',
+  // F3d (D828): comando com armadilha do shell (heredoc que come a barra, grep -c antes de &&, grep -P no Git Bash).
+  'armadilha_shell',
   // F6-04: nome de frente invalido e "Fora" declarado tinham o balde fora_do_escopo; agora cada um tem o seu.
   'frente_invalida', 'fora_declarado',
   // D412: handoff gravado no turno sem o prompt no chat.
@@ -562,6 +564,26 @@ function linhasDosAgentes(rodando) {
     ' agentes em segundo plano desta sessao ainda rodam:')].concat(rodando.map(function (a) {
     return '  - ' + (a.descricao ? ascii(a.descricao).slice(0, 80) + ' ' : '') + '(agent-' + ascii(a.id) + ')';
   }));
+}
+
+/**
+ * F3d (D828): a linha de situacao ao dono no fim do turno com agente de fundo rodando (o dono perguntou "esta rodando?
+ * falta muito? seguiu?" 19 vezes em 8 sessoes). Vai so ao usuario (systemMessage): nao continua a conversa. Ate 3
+ * agentes pelo nome; `linhaDoPlano` (plano.linhaDoPlanoDaSessao) entra quando ha plano lido.
+ */
+function linhaDeSituacao(rodando, linhaDoPlano) {
+  const ascii = require('./escopo.js').ascii;
+  const lista = Array.isArray(rodando) ? rodando : [];
+  const nomes = lista.slice(0, 3).map(function (a) {
+    return ascii(String(a.descricao || '').replace(/\s+/g, ' ').trim() || 'agent-' + a.id).slice(0, 40);
+  });
+  const um = lista.length === 1;
+  const linhas = ['sworn - situacao: ' + lista.length + (um ? ' agente em segundo plano roda (' : ' agentes em segundo plano rodam (') +
+    nomes.join('; ') + (lista.length > 3 ? '; e mais ' + (lista.length - 3) : '') + '); o trabalho segue sozinho quando ' +
+    (um ? 'ele voltar.' : 'eles voltarem.')];
+  const doPlano = typeof linhaDoPlano === 'string' ? linhaDoPlano.trim().replace(/\.+$/, '') : '';
+  if (doPlano) linhas.push('Plano: ' + doPlano + '.');
+  return linhas.join('\n');
 }
 
 /**
@@ -1013,4 +1035,4 @@ function motivoParadaSemDono(caixa, anuncia, pedeChat) {
 module.exports = { LIMIARES_PADRAO, BALDES_DE_BLOQUEIO, contextoDoTranscript, ultimaChamadaDoTranscript, testesDoTranscript, limiaresValidos, medir, acumular, avaliar, avisoDeSaude, instrucaoAoModelo, perguntaSobreSaude,
   INSTRUCAO_DA_PERGUNTA, ONDE_GRAVAR_O_HANDOFF, ehArquivoDeHandoff, handoffGravadoPeloShell,
   ehArquivoDeCodigo, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT, MOTIVO_PARADA_NO_HANDOFF, motivoParadaSemDono,
-  SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, instrucaoDaPergunta, provasEquivalentes };
+  SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, linhaDeSituacao, instrucaoDaPergunta, provasEquivalentes };

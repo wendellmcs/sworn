@@ -218,6 +218,17 @@ io.blindar(function () {
       return io.negarFerramenta(shell.motivoIdioma(comando, problemas, tentativa));
     }
 
+    // F3d (D828): o comando que faria outra coisa do que parece (heredoc que come a barra, grep -c antes de &&, grep -P
+    // no Git Bash) nao roda; o aviso traz o conserto. Mesmo lugar e mesma liberacao do idioma errado, logo acima. O
+    // sistema e o declarado no projeto.json, como o do idioma: sem plataforma declarada, o grep -P nao se confere.
+    const armadilhas = require('./lib/armadilhas-shell.js');
+    const plataforma = projeto && projeto.plataforma;
+    const achadas = armadilhas.achar(comando, e.tool_name, plataforma && plataforma.so);
+    if (achadas.length) {
+      try { estado.incrementar(e.session_id, 'armadilha_shell'); } catch (err) { /* o balde vale menos que a negacao */ }
+      return io.negarFerramenta(armadilhas.motivo(comando, achadas));
+    }
+
     const r = destrutivo.classificar(comando, projeto);
     // A5b (s369): o escopo ampliado neste turno nao vale para apagar (o da abertura do turno vale); o turno seguinte,
     // aberto pela mensagem do dono, libera.
@@ -271,9 +282,10 @@ io.blindar(function () {
           return s;
         });
       } catch (err) { jaAvisou = false; }
-      return io.permitir({ hookSpecificOutput: { hookEventName: 'PreToolUse',
-        updatedInput: Object.assign({}, e.tool_input, { command: envolto }),
-        additionalContext: shell.avisoCdCorrigido(solto, jaAvisou) } });
+      // F3c (D828): depois do 1o aviso da sessao, a reescrita segue calada (a linha curta saiu 838 vezes numa sessao).
+      const saida = { hookEventName: 'PreToolUse', updatedInput: Object.assign({}, e.tool_input, { command: envolto }) };
+      if (!jaAvisou) saida.additionalContext = shell.avisoCdCorrigido(solto, false);
+      return io.permitir({ hookSpecificOutput: saida });
     }
     if (solto) {
       // D420/SH-02: idem.

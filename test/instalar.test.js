@@ -48,8 +48,8 @@ test('instalar: o Codex ganha .codex/hooks.json com a ponte em cada portao dos e
   // D768: o shell pode trazer o apply_patch; o Codex chama a trava 4 para ele, e a ponte so roda os arquivos do patch.
   assert.ok(grupoDo(cfg.PreToolUse, 'portao-escopo').matcher.split('|').includes('Bash'));
   // A ponte roda o portao com o timeout do hooks.json; o do harness tem folga para o node a mais.
-  assert.strictEqual(grupoDo(cfg.PreToolUse, 'portao-commit').hooks.find((h) => h.command.endsWith(' portao-commit'))
-    .timeout, 35);
+  assert.strictEqual(grupoDo(cfg.PreToolUse, 'portao-shell').hooks.find((h) => h.command.endsWith(' portao-shell'))
+    .timeout, 45);
   assert.ok(r.gravados.includes(arq), r.gravados.join('\n'));
 });
 
@@ -67,7 +67,7 @@ test('instalar: no Qwen, o matcher ganha os nomes dele e o settings.json guarda 
   assert.strictEqual(comandos(cfg.hooks.PreToolUse).filter((c) => c.endsWith(' portao-escopo')).length, 1);
   const escopo = grupoDo(cfg.hooks.PreToolUse, 'portao-escopo').matcher.split('|');
   for (const nome of ['Write', 'Edit', 'write_file', 'edit']) assert.ok(escopo.includes(nome), escopo.join('|'));
-  assert.ok(grupoDo(cfg.hooks.PreToolUse, 'portao-destrutivo').matcher.split('|').includes('run_shell_command'));
+  assert.ok(grupoDo(cfg.hooks.PreToolUse, 'portao-shell').matcher.split('|').includes('run_shell_command'));
 });
 
 test('instalar: settings.json que nao e JSON nao e sobrescrito; vira passo', () => {
@@ -93,7 +93,7 @@ test('instalar: o agy ganha o grupo sworn em .agents/hooks.json, com o evento do
     [PONTE_AGY + ' agy abertura PreInvocation', PONTE_AGY + ' agy abrir-turno PreInvocation']);
   assert.deepStrictEqual(comandos(s.Stop), [PONTE_AGY + ' agy portao-fecho Stop']);
   assert.ok(s.PreInvocation.every((h) => h.type === 'command' && !h.hooks));
-  assert.ok(grupoDo(s.PreToolUse, 'portao-destrutivo').matcher.split('|').includes('run_command'));
+  assert.ok(grupoDo(s.PreToolUse, 'portao-shell').matcher.split('|').includes('run_command'));
   assert.ok(grupoDo(s.PreToolUse, 'portao-escopo').matcher.split('|').includes('write_file'));
 });
 

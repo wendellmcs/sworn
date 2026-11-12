@@ -44,20 +44,8 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/portao-destrutivo.js"],
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/portao-estilo.js"],
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/portao-commit.js"],
-            "timeout": 30
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/portao-shell.js"],
+            "timeout": 40
           }
         ]
       },
@@ -98,7 +86,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit|Bash|PowerShell|Grep|Glob|Read|AskUserQuestion|Skill",
+        "matcher": "Write|Edit|Grep|Glob|Read|AskUserQuestion|Skill",
         "hooks": [
           {
             "type": "command",
@@ -114,8 +102,8 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/conferir-depois.js"],
-            "timeout": 10
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/depois-do-shell.js"],
+            "timeout": 15
           }
         ]
       },

@@ -123,18 +123,18 @@ test('ponte: apply_patch dentro do shell roda a trava 4 por arquivo e o portao d
   assert.deepStrictEqual(f.chamadas.map((c) => [c.script, c.entrada.tool_name, c.entrada.tool_input.file_path]),
     [['portao-escopo.js', 'Edit', 'src/b.js']]);
   assert.strictEqual(saida.hookSpecificOutput.permissionDecision, 'deny');
-  ponte.rodar('codex', 'portao-destrutivo', fixture('codex-PreToolUse-Bash-patch'), o);
+  ponte.rodar('codex', 'portao-shell', fixture('codex-PreToolUse-Bash-patch'), o);
   assert.deepStrictEqual(f.chamadas.slice(1).map((c) => [c.script, c.entrada.tool_name]),
-    [['portao-destrutivo.js', 'PowerShell']]);
+    [['portao-shell.js', 'PowerShell']]);
 });
 
 test('ponte: o matcher do hooks.json decide; portao de shell nao roda para o apply_patch', () => {
   const f = falso(() => 'nao devia rodar');
-  assert.strictEqual(ponte.rodar('codex', 'portao-destrutivo', fixture('codex-PreToolUse-apply_patch'),
+  assert.strictEqual(ponte.rodar('codex', 'portao-shell', fixture('codex-PreToolUse-apply_patch'),
     { executar: f.executar }), '');
   assert.strictEqual(f.chamadas.length, 0);
   // E o portao de shell roda para o shell, com o nome que o hooks.json espera.
-  ponte.rodar('codex', 'portao-destrutivo', fixture('codex-PreToolUse-Bash'), { executar: f.executar, plataforma: 'win32' });
+  ponte.rodar('codex', 'portao-shell', fixture('codex-PreToolUse-Bash'), { executar: f.executar, plataforma: 'win32' });
   assert.deepStrictEqual(f.chamadas.map((c) => c.entrada.tool_name), ['PowerShell']);
 });
 
@@ -150,7 +150,7 @@ test('ponte: script fora do evento, harness desconhecido ou nome torto passam se
 
 test('ponte: a chamada do agente de memoria do harness passa direto', () => {
   const f = falso(() => 'x');
-  assert.strictEqual(ponte.rodar('codex', 'portao-destrutivo', fixture('codex-PreToolUse-Bash-memoria'),
+  assert.strictEqual(ponte.rodar('codex', 'portao-shell', fixture('codex-PreToolUse-Bash-memoria'),
     { executar: f.executar }), '');
   assert.strictEqual(ponte.rodar('codex', 'abertura', fixture('codex-SessionStart-memoria'), { executar: f.executar }), '');
   assert.strictEqual(f.chamadas.length, 0);
@@ -269,7 +269,7 @@ test('ponte: D758 - o papel so de leitura do sworn nao edita nem roda shell fora
   const o = { executar: f.executar, plataforma: 'win32' };
   for (const tipo of ['sworn-inspector', 'sworn-dedupe-judge']) {
     for (const [script, base, nome] of [['portao-escopo', 'codex-PreToolUse-apply_patch', 'Write'],
-      ['portao-destrutivo', 'codex-PreToolUse-Bash', 'PowerShell']]) {
+      ['portao-shell', 'codex-PreToolUse-Bash', 'PowerShell']]) {
       const s = JSON.parse(ponte.rodar('codex', script, doSub(base, tipo), o)).hookSpecificOutput;
       assert.strictEqual(s.permissionDecision, 'deny', tipo + ' ' + nome);
       for (const pedaco of [tipo.replace('sworn-', 'sworn:'), 'Read, Grep, Glob', nome]) {
@@ -279,18 +279,18 @@ test('ponte: D758 - o papel so de leitura do sworn nao edita nem roda shell fora
   }
   assert.strictEqual(f.chamadas.length, 0, 'negado antes do portao');
   // O reader tem shell no tools: e o portao de shell roda; a edicao segue negada.
-  ponte.rodar('codex', 'portao-destrutivo', doSub('codex-PreToolUse-Bash', 'sworn-reader'), o);
+  ponte.rodar('codex', 'portao-shell', doSub('codex-PreToolUse-Bash', 'sworn-reader'), o);
   assert.deepStrictEqual(f.chamadas.map((c) => c.entrada.tool_name), ['PowerShell']);
   const r = JSON.parse(ponte.rodar('codex', 'portao-escopo', doSub('codex-PreToolUse-apply_patch', 'sworn-reader'), o));
   assert.strictEqual(r.hookSpecificOutput.permissionDecision, 'deny');
   assert.strictEqual(f.chamadas.length, 1);
   // Papel que nao e do sworn (o mesmo nome sem o prefixo inclusive) e o agente principal seguem para o portao.
   for (const tipo of ['inspector', 'sonda-shell', undefined]) {
-    assert.strictEqual(ponte.rodar('codex', 'portao-destrutivo', doSub('codex-PreToolUse-Bash', tipo), o), '');
+    assert.strictEqual(ponte.rodar('codex', 'portao-shell', doSub('codex-PreToolUse-Bash', tipo), o), '');
   }
   assert.strictEqual(f.chamadas.length, 4);
   // So o PreToolUse nega: o PostToolUse do papel roda o portao dele.
-  ponte.rodar('codex', 'marcar-trabalho', doSub('codex-PostToolUse-Bash', 'sworn-inspector'), o);
+  ponte.rodar('codex', 'depois-do-shell', doSub('codex-PostToolUse-Bash', 'sworn-inspector'), o);
   assert.strictEqual(f.chamadas.length, 5);
 });
 
@@ -301,22 +301,22 @@ test('ponte: D758 - papel sem tools: libera tudo, papel sem arquivo passa e arqu
   const f = falso();
   const o = { executar: f.executar, plataforma: 'win32', agentes: pasta };
   for (const tipo of ['sworn-livre', 'sworn-outro']) {
-    assert.strictEqual(ponte.rodar('codex', 'portao-destrutivo', doSub('codex-PreToolUse-Bash', tipo), o), '');
+    assert.strictEqual(ponte.rodar('codex', 'portao-shell', doSub('codex-PreToolUse-Bash', tipo), o), '');
   }
   assert.strictEqual(f.chamadas.length, 2);
-  const t = JSON.parse(ponte.rodar('codex', 'portao-destrutivo', doSub('codex-PreToolUse-Bash', 'sworn-torto'), o));
+  const t = JSON.parse(ponte.rodar('codex', 'portao-shell', doSub('codex-PreToolUse-Bash', 'sworn-torto'), o));
   assert.strictEqual(t.hookSpecificOutput.permissionDecision, 'deny');
   assert.ok(t.hookSpecificOutput.permissionDecisionReason.includes('agents/torto.md'));
   // O arquivo que existe e nao se le (aqui, uma pasta) nega como o sem cabecalho.
   fs.mkdirSync(path.join(pasta, 'pasta.md'));
-  const p = JSON.parse(ponte.rodar('codex', 'portao-destrutivo', doSub('codex-PreToolUse-Bash', 'sworn-pasta'), o));
+  const p = JSON.parse(ponte.rodar('codex', 'portao-shell', doSub('codex-PreToolUse-Bash', 'sworn-pasta'), o));
   assert.strictEqual(p.hookSpecificOutput.permissionDecision, 'deny');
   // O tools: sem a lista na mesma linha (vazio ou em lista YAML) nega, como o instalar.js o deixa fora: o campo so le
   // a mesma linha, e liberar todas seria o contrario do papel.
   fs.writeFileSync(path.join(pasta, 'vazio.md'), '---\nname: vazio\ntools:\n---\ncorpo\n');
   fs.writeFileSync(path.join(pasta, 'yaml.md'), '---\nname: yaml\ntools:\n  - PowerShell\n---\ncorpo\n');
   for (const tipo of ['sworn-vazio', 'sworn-yaml']) {
-    const s = JSON.parse(ponte.rodar('codex', 'portao-destrutivo', doSub('codex-PreToolUse-Bash', tipo), o));
+    const s = JSON.parse(ponte.rodar('codex', 'portao-shell', doSub('codex-PreToolUse-Bash', tipo), o));
     assert.strictEqual(s.hookSpecificOutput.permissionDecision, 'deny', tipo);
     assert.ok(s.hookSpecificOutput.permissionDecisionReason.includes('mesma linha'), tipo);
   }
@@ -842,19 +842,19 @@ function chamarPonte(args, entrada, extraEnv) {
   });
 }
 
-test('ponte (processo): o portao destrutivo de hoje nega pelo Codex e pelo agy', () => {
+test('ponte (processo): o portao destrutivo de hoje (dentro do portao-shell) nega pelo Codex e pelo agy', () => {
   const proj = fs.mkdtempSync(path.join(TMP, 'proj-'));
   const c = fixture('codex-PreToolUse-Bash');
   c.cwd = proj;
   c.tool_input.command = 'git reset --hard';
-  const r = chamarPonte(['codex', 'portao-destrutivo'], c);
+  const r = chamarPonte(['codex', 'portao-shell'], c);
   assert.strictEqual(r.status, 0, r.stderr);
   assert.strictEqual(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, 'deny');
   const a = fixture('agy-PreToolUse-run_command');
   delete a.hook_event_name;
   a.workspacePaths = [proj];
   a.toolCall.args.CommandLine = 'git reset --hard';
-  const ra = chamarPonte(['agy', 'portao-destrutivo', 'PreToolUse'], a);
+  const ra = chamarPonte(['agy', 'portao-shell', 'PreToolUse'], a);
   assert.strictEqual(ra.status, 0, ra.stderr);
   const s = JSON.parse(ra.stdout);
   assert.strictEqual(s.decision, 'deny');

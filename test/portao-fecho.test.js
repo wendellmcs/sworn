@@ -844,23 +844,44 @@ test('D412: handoff gravado e o prompt colado em bloco -> libera', () => {
   });
 });
 
-test('D412: com o prompt no arquivo do handoff, outro bloco (a prova da suite) nao basta; o prompt colado libera', () => {
+// F3b (D828): com o prompt legivel no arquivo, a resposta que nao o traz nao barra mais: o proprio gancho o mostra ao
+// dono (systemMessage), num bloco, com a cerca do meio da linha virada em aspas. A resposta que o traz segue sem aviso.
+test('D412/F3b: com o prompt no arquivo do handoff e outro bloco na resposta, o gancho mostra o prompt ao dono', () => {
   comTmp((tmp) => {
     const dir = projetoCom(tmp, 'h-outro');
     const arq = path.join(dir, HANDOFF);
     fs.mkdirSync(path.dirname(arq), { recursive: true });
     fs.writeFileSync(arq, '# Handoff\n\n## 7. Prompt\n```\nRetomando a frente x,\ncom bloco ``` no meio da linha.\nPASSO 1\n```\n');
+    const mostrou = (r) => {
+      assert.ok(r.json && r.json.decision === undefined, 'nao barra mais: ' + r.stdout);
+      assert.ok(r.json.systemMessage.indexOf("```\nRetomando a frente x,\ncom bloco ''' no meio da linha.\nPASSO 1\n```") !== -1,
+        r.json.systemMessage);
+      assert.ok(r.json.systemMessage.indexOf(HANDOFF.replace(/\\/g, '/').split('/').pop()) !== -1, 'cita o arquivo');
+    };
     gravar(tmp, 'h-outro', dir, 'Write', HANDOFF);
-    const r = fecho(tmp, 'h-outro', dir, 'Pronto.\n```\ntests 10 | pass 10 | fail 0\n```');
-    assert.ok(r.json && r.json.decision === 'block', 'a prova da suite passou por prompt: ' + r.stdout);
-    // So o comeco do prompt (ate a cerca do meio da linha) nao e o prompt.
+    mostrou(fecho(tmp, 'h-outro', dir, 'Pronto.\n```\ntests 10 | pass 10 | fail 0\n```'));
+    // o turno liberado descarrega o balde no contadores.json do projeto: e la que se ve que nao contou
+    const baldes = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'), 'utf8'));
+    assert.strictEqual(baldes.handoff_sem_prompt, undefined, 'nem conta o balde: ' + JSON.stringify(baldes));
+    // So o comeco do prompt (ate a cerca do meio da linha) nao e o prompt: o gancho mostra o inteiro.
     gravar(tmp, 'h-meio', dir, 'Write', HANDOFF);
-    const meio = fecho(tmp, 'h-meio', dir, 'Prompt:\n```\nRetomando a frente x, com bloco\n```');
-    assert.ok(meio.json && meio.json.decision === 'block', 'meio prompt passou: ' + meio.stdout);
+    mostrou(fecho(tmp, 'h-meio', dir, 'Prompt:\n```\nRetomando a frente x, com bloco\n```'));
+    // barrado por outro motivo (alegacao sem evidencia): o prompt sai ao dono no mesmo bloqueio, e nao e motivo dele
+    gravar(tmp, 'h-alega', dir, 'Write', HANDOFF);
+    const b = fecho(tmp, 'h-alega', dir, 'Pronto, os testes passaram.');
+    assert.ok(b.json && b.json.decision === 'block' && /trava 3/.test(b.json.reason), b.stdout);
+    assert.ok(!/prompt do handoff/i.test(b.json.reason), 'o prompt nao e motivo do bloqueio: ' + b.json.reason);
+    assert.ok(b.json.systemMessage && b.json.systemMessage.indexOf('PASSO 1') !== -1, 'o prompt sai ao dono: ' + b.stdout);
+    // com o prompt legivel no arquivo e o prompt colado na resposta: nem barra nem aviso
     gravar(tmp, 'h-outro2', dir, 'Write', HANDOFF);
     const colado = 'Pronto.\n```\ntests 10 | pass 10 | fail 0\n```\nPrompt:\n```\nRetomando a frente x, com bloco ``` no meio ' +
       'da linha.\nPASSO 1\n```';
     assert.strictEqual(fecho(tmp, 'h-outro2', dir, colado).json, null);
+    // o handoff que existe mas nao tem um prompt legivel (sem bloco) barra como antes, pedindo para colar
+    fs.writeFileSync(arq, '# Handoff\n\n## 7. Prompt\nRetomando a frente x, sem bloco.\n');
+    gravar(tmp, 'h-sem', dir, 'Write', HANDOFF);
+    const sem = fecho(tmp, 'h-sem', dir, 'Gravei o handoff.');
+    assert.ok(sem.json && sem.json.decision === 'block' && /prompt do handoff/i.test(sem.json.reason), sem.stdout);
   });
 });
 
@@ -1442,13 +1463,17 @@ test('D704: com agente em segundo plano rodando, o fecho manda esperar uma vez e
     assert.strictEqual(r1.status, 0, r1.stderr);
     assert.ok(r1.json && /hora do handoff/.test(r1.json.systemMessage) && r1.json.systemMessage.indexOf('R1 saude correcao (agent-x1)') !== -1,
       'o usuario ve a espera: ' + r1.stdout);
+    assert.ok(r1.json.systemMessage.indexOf('sworn - situacao') === -1, 'a espera ja diz os agentes: ' + r1.stdout);
     const ctx1 = r1.json.hookSpecificOutput && r1.json.hookSpecificOutput.additionalContext;
     assert.ok(/Nao rode \/sworn:handoff agora/.test(ctx1) && ctx1.indexOf('1. Rode /sworn:handoff.') === -1, 'o modelo espera: ' + ctx1);
     assert.ok(!sessaoDe(tmp, 'd704').avisouSaude, 'com agente rodando o aviso de saude fica pendente');
     assert.strictEqual(sessaoDe(tmp, 'd704').avisouEspera, true);
-    // a espera sai uma vez: o Stop seguinte com o agente ainda rodando fica calado (nao continua a conversa a cada turno)
+    // a espera sai uma vez: o Stop seguinte com o agente ainda rodando nao continua a conversa (nada ao modelo); F3d:
+    // ao dono vai so a linha de situacao
     const r2 = turnoComTrabalho(tmp, 'd704', dir, { transcript_path: s.transcricao });
-    assert.strictEqual(r2.json, null, 'a espera repetiu: ' + r2.stdout);
+    assert.ok(r2.json && r2.json.hookSpecificOutput === undefined && r2.json.decision === undefined, 'a espera repetiu: ' + r2.stdout);
+    assert.strictEqual(r2.json.systemMessage, 'sworn - situacao: 1 agente em segundo plano roda (R1 saude correcao); o ' +
+      'trabalho segue sozinho quando ele voltar.');
     // o agente terminou: o Stop seguinte da a ordem normal do handoff e marca o aviso
     fs.writeFileSync(s.meta, JSON.stringify(Object.assign({ finished: true }, fundo)));
     const r3 = turnoComTrabalho(tmp, 'd704', dir, { transcript_path: s.transcricao });
@@ -1457,6 +1482,7 @@ test('D704: com agente em segundo plano rodando, o fecho manda esperar uma vez e
     // D786 passo 2: o usuario nao faz nada; o Claude grava o handoff e segue
     assert.ok(/Faca assim: nada, voce nao precisa agir\.\nO Claude grava o handoff \(\/sworn:handoff/.test(r3.json.systemMessage) &&
       r3.json.systemMessage.indexOf('agent-x1') === -1, r3.stdout);
+    assert.ok(r3.json.systemMessage.indexOf('situacao') === -1, 'sem agente rodando, sem situacao: ' + r3.stdout);
     assert.strictEqual(sessaoDe(tmp, 'd704').avisouSaude, true);
     assert.strictEqual(sessaoDe(tmp, 'd704').avisouEspera, false, 'depois da ordem, a espera de um alarme futuro sai de novo');
     // o alarme tambem espera: com agente rodando, nao marca o avisouAlarme
@@ -1464,6 +1490,7 @@ test('D704: com agente em segundo plano rodando, o fecho manda esperar uma vez e
     const al = sessaoComAgente('d704al', usage);
     const ra = turnoComTrabalho(tmp, 'd704al', dir, { transcript_path: al.transcricao });
     assert.ok(ra.json && /ALARME/.test(ra.json.systemMessage) && ra.json.systemMessage.indexOf('(agent-x1)') !== -1, ra.stdout);
+    assert.ok(ra.json.systemMessage.indexOf('sworn - situacao') === -1, 'a espera do alarme ja diz os agentes: ' + ra.stdout);
     assert.ok(!sessaoDe(tmp, 'd704al').avisouAlarme && !sessaoDe(tmp, 'd704al').avisouSaude, 'o alarme com agente rodando fica pendente');
   });
 });
@@ -1995,6 +2022,51 @@ test('D785: com prova declarada e codigo editado no turno, a pendente barra sem 
       resultado('a', '# fail 0')]);
     gravar(tmp, 'l2b', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'l2b', dir, 'Segue o que mudou.', { transcript_path: verde }).json, null);
+  });
+});
+
+// F3b (D828): parar esperando um agente ou o dono, sem afirmar que o codigo esta pronto, nao paga a prova so pendente
+// (o laco da prova barrava ate o "Espero:", 56 vezes numa sessao so). Com alegacao, ou com o vermelho conhecido, cobra.
+test('F3b: a parada declarada sem alegacao nao paga a prova pendente; com alegacao ou vermelho, o laco cobra', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'p1', { provaDePronto: 'npm test' });
+    const pendente = linhasDoTranscript(tmp, 'p1', [usoEdit('e', path.join(dir, 'a.js'))]);
+    // o turno liberado descarrega o balde no contadores.json do projeto: e la que se ve se contou
+    const balde = () => {
+      try { return JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'), 'utf8')).fecho_sem_evidencia || 0; }
+      catch (err) { return 0; }
+    };
+    const passa = (id, msg) => {
+      const antes = balde();
+      gravar(tmp, id, dir, 'Edit', 'a.js');
+      const r = fecho(tmp, id, dir, msg, { transcript_path: pendente });
+      assert.strictEqual(r.json, null, msg + ' -> ' + r.stdout);
+      assert.strictEqual(balde(), antes, 'nem conta no balde: ' + msg);
+    };
+    passa('p1', 'Os 3 inspetores ainda rodam.\n\nEspero: os 3 inspetores da ronda 2.');
+    passa('p2', 'Preciso do dono: publicar a 0.24.0 e fazer o push.');
+    // a alegacao so dentro de um bloco (a saida colada) nao e alegacao
+    passa('p2b', 'A saida da rodada:\n```\nPronto, os testes passaram.\n```\nEspero: o inspetor da ronda 2.');
+    const barra = (id, msg, transcript) => {
+      gravar(tmp, id, dir, 'Edit', 'a.js');
+      const r = fecho(tmp, id, dir, msg, { transcript_path: transcript || pendente });
+      assert.ok(r.json && r.json.decision === 'block' && /1 de 3/.test(r.json.reason), msg + ' -> ' + r.stdout);
+    };
+    // afirma que esta pronto: a prova pendente e cobrada, com ou sem a linha declarada
+    barra('p3', 'Pronto, os testes passaram.\n\nEspero: o dono.');
+    // a mensagem que so relata o codigo feito, sem a linha declarada, segue cobrada (D785)
+    barra('p4', 'Segue o que mudou em a.js.');
+    // o vermelho conhecido e cobrado mesmo na parada declarada
+    const vermelho = linhasDoTranscript(tmp, 'p5', [usoEdit('e', path.join(dir, 'a.js')), usoBash('a', 'npm test'),
+      resultado('a', 'Exit code 1\n# fail 1', true)]);
+    barra('p5', 'Espero: o inspetor da ronda 2.', vermelho);
+    // a linha que so pede o chat novo nao libera a parada: tambem nao livra da prova
+    barra('p6', 'Preciso do dono: abrir o chat novo e colar o prompt.');
+    // a linha declarada so dentro de um bloco (um log colado) nao e a parada do agente
+    barra('p7', 'O log do agente:\n```\nwaiting on: lock\nEspero: o lock\n```\nSegue.');
+    barra('p7b', 'O log do agente:\n~~~\nEspero: o lock\n~~~\nSegue.');
+    // a linha declarada vazia nao e parada
+    barra('p8', 'Segue o que mudou.\nPreciso do dono:');
   });
 });
 

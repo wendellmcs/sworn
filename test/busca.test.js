@@ -173,3 +173,93 @@ test('busca: xargs/sudo antes do comando que altera, 1> e 2> para arquivo, e .De
     "gci; [IO.File]::Move('a', 'b')", "gci; [IO.File]::Copy('a', 'b')", "gci; [IO.File]::Create('a.md')"].forEach((c) =>
     assert.strictEqual(busca.ehBusca('PowerShell', { command: c }), false, c));
 });
+
+// F3c (D828): a trava 7 procura sozinha. `parecidos` devolve os arquivos de mesmo nome-base (versionados ou na pasta do
+// alvo), fora o proprio; sem git, null (a trava cobra a busca como antes).
+const { pasta: pastaTemp, repo: repoTemp, rodar: rodarScript } = require('./lib/comum.js');
+const fsF3c = require('node:fs');
+const pathF3c = require('node:path');
+
+test('F3c: parecidos acha o mesmo nome-base em outra pasta e na pasta do alvo; sem git, null', () => {
+  const dir = repoTemp(pastaTemp('busca-f3c'), { 'src/calculo.js': 'x\n', 'lib/outro.js': 'y\n', 'docs/Calculo.md': 'z\n' });
+  fsF3c.writeFileSync(pathF3c.join(dir, 'src', 'calculo.ts'), 'nao versionado, na pasta do alvo\n');
+  assert.deepStrictEqual(busca.parecidos(dir, 'novo/calculo.py'), ['docs/Calculo.md', 'src/calculo.js']);
+  assert.deepStrictEqual(busca.parecidos(dir, 'src/calculo.mjs'), ['docs/Calculo.md', 'src/calculo.js', 'src/calculo.ts']);
+  assert.deepStrictEqual(busca.parecidos(dir, 'src/inedito.js'), []);
+  // o caminho do Windows, com barra invertida, acha a mesma coisa
+  assert.deepStrictEqual(busca.parecidos(dir, 'src\\calculo.mjs'), ['docs/Calculo.md', 'src/calculo.js', 'src/calculo.ts']);
+  // o proprio alvo nao conta (ja versionado, mas apagado do disco: criar de novo)
+  fsF3c.unlinkSync(pathF3c.join(dir, 'lib', 'outro.js'));
+  assert.deepStrictEqual(busca.parecidos(dir, 'lib/outro.js'), []);
+  assert.strictEqual(busca.parecidos(pastaTemp('sem-git-f3c'), 'a.js'), null);
+  assert.strictEqual(busca.parecidos(dir, ''), null);
+  // o limite corta depois de ordenar; limite que nao e inteiro positivo vale 10
+  assert.deepStrictEqual(busca.parecidos(dir, 'src/calculo.mjs', 1), ['docs/Calculo.md'], 'o limite');
+  // o da pasta do alvo chega depois dos versionados, mas vem antes na ordem: o corte e depois de ordenar
+  fsF3c.mkdirSync(pathF3c.join(dir, 'a'));
+  fsF3c.writeFileSync(pathF3c.join(dir, 'a', 'calculo.txt'), 'nao versionado\n');
+  assert.deepStrictEqual(busca.parecidos(dir, 'a/calculo.py', 1), ['a/calculo.txt'], 'ordena e depois corta');
+  for (const torto of [-5, 0, NaN, '2']) {
+    assert.strictEqual(busca.parecidos(dir, 'src/calculo.mjs', torto).length, 3, 'limite torto: ' + torto);
+  }
+  // com 12 parecidos, o padrao e o limite torto cortam em 10 (o aviso diz "ate 10"); um limite maior passa dele
+  fsF3c.mkdirSync(pathF3c.join(dir, 'muitos'));
+  for (const ext of 'abcdefghijkl') fsF3c.writeFileSync(pathF3c.join(dir, 'muitos', 'taxa.' + ext), 'x\n');
+  assert.strictEqual(busca.parecidos(dir, 'muitos/taxa.js').length, 10, 'o padrao corta em 10');
+  for (const torto of [-5, 0, NaN, '2', 2.5]) {
+    assert.strictEqual(busca.parecidos(dir, 'muitos/taxa.js', torto).length, 10, 'limite torto corta em 10: ' + torto);
+  }
+  assert.strictEqual(busca.parecidos(dir, 'muitos/taxa.js', 11).length, 11, 'limite maior que 10');
+  // uma pasta de mesmo nome nao e arquivo parecido
+  fsF3c.mkdirSync(pathF3c.join(dir, 'src', 'calculo'));
+  assert.deepStrictEqual(busca.parecidos(dir, 'src/calculo.mjs'), ['docs/Calculo.md', 'src/calculo.js', 'src/calculo.ts']);
+  // o alvo fora da raiz nao e lido
+  for (const fora of ['../fora/calculo.js', 'src/../../calculo.js', '/tmp/calculo.js', 'C:/x/calculo.js']) {
+    assert.strictEqual(busca.parecidos(dir, fora), null, 'fora da raiz: ' + fora);
+  }
+  // a variante que nasce ao lado da original (o caso do README: utils2.js ao lado do utils.js)
+  assert.deepStrictEqual(busca.parecidos(dir, 'lib/outro2.js'), ['lib/outro.js']);
+  assert.deepStrictEqual(busca.parecidos(dir, 'src/calculo-novo.js'), ['docs/Calculo.md', 'src/calculo.js', 'src/calculo.ts']);
+  assert.deepStrictEqual(busca.parecidos(dir, 'src/calculo_v2.js'), ['docs/Calculo.md', 'src/calculo.js', 'src/calculo.ts']);
+  for (const v of ['calculo-copia', 'calculo.old', 'calculo velho', 'calculoNew', 'calculo-v3']) {
+    assert.deepStrictEqual(busca.parecidos(dir, 'src/' + v + '.js'), ['docs/Calculo.md', 'src/calculo.js', 'src/calculo.ts'], v);
+  }
+  // so o nome do ALVO perde o sufixo: o arquivo que ja existe casa pelo nome inteiro (sha256 nao acha sha512; o
+  // conta2 acha o conta2 e o conta, nunca o conta3)
+  for (const f of ['sha512.txt', 'conta.txt', 'conta2.txt', 'conta3.txt']) fsF3c.writeFileSync(pathF3c.join(dir, 'src', f), 'x\n');
+  assert.deepStrictEqual(busca.parecidos(dir, 'src/sha256.js'), []);
+  assert.deepStrictEqual(busca.parecidos(dir, 'src/conta2.js'), ['src/conta.txt', 'src/conta2.txt']);
+  // so o nome de variante, sem base: sem busca (a trava cobra como antes)
+  assert.strictEqual(busca.parecidos(dir, 'src/2.js'), null);
+});
+
+test('F3c: pelo portao, a criacao sem busca passa sem parecido e e negada com a lista quando ha', () => {
+  const dir = repoTemp(pastaTemp('portao-f3c'), { 'src/calculo.js': 'x\n' });
+  const sworn = pathF3c.join(dir, '.claude', 'sworn');
+  fsF3c.mkdirSync(sworn, { recursive: true });
+  fsF3c.writeFileSync(pathF3c.join(sworn, 'projeto.json'), JSON.stringify({ marchaPadrao: 'padrao' }));
+  fsF3c.writeFileSync(pathF3c.join(sworn, 'escopo.md'), '# Escopo\n**Objetivo:** F3c\n## Dentro\n- src/**\n');
+  const escrever = (id, rel) => rodarScript('scripts/portao-escopo.js', [], { cwd: dir, env: { SWORN_TMP: pastaTemp('tmp-f3c') },
+    entrada: { session_id: id, cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Write',
+      tool_input: { file_path: pathF3c.join(dir, rel), content: 'novo\n' } } });
+  const negado = (r) => { try { return JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason; } catch (e) { return null; } };
+  const passa = escrever('f3c1', 'src/inedito.js');
+  assert.strictEqual(passa.status, 0, passa.stderr);
+  // liberar e nao escrever nada (o portao sai sem opiniao)
+  assert.strictEqual(passa.stdout.trim(), '', 'sem parecido, cria: ' + passa.stdout);
+  const nega = negado(escrever('f3c2', 'src/util/calculo.ts'));
+  assert.ok(nega && /^sworn - arquivo novo barrado \(trava 7\): ja existe arquivo com o mesmo nome; leia antes/.test(nega), nega);
+  assert.ok(/O sworn procurou por voce e achou arquivo\(s\) com o mesmo nome \(ate 10\):\n {2}- src\/calculo\.js\n/.test(nega), nega);
+  assert.ok(!/sem ter procurado/.test(nega), 'a lista nao diz que nada foi procurado: ' + nega);
+  assert.ok(/^[\n\x20-\x7E]*$/.test(nega), 'ASCII (R5)');
+});
+
+test('F3c: o motivo sem lista e o de sempre; com lista, o que diz o que achou', () => {
+  const sem = busca.motivo('src/a.js');
+  assert.match(sem, /^sworn - arquivo novo barrado \(trava 7\): sem ter procurado/);
+  assert.strictEqual(busca.motivo('src/a.js', []), sem);
+  assert.strictEqual(busca.motivo('src/a.js', null), sem);
+  const com = busca.motivo('src/a2.js', ['src/a.js', 'lib/a.ts']);
+  assert.match(com, /\n {2}- src\/a\.js\n {2}- lib\/a\.ts\n/);
+  assert.match(com, /Leia esses arquivos/);
+});

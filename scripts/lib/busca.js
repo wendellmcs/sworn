@@ -90,7 +90,65 @@ function nomeadoNoEscopo(alvo, esc) {
   });
 }
 
-function motivo(alvo) {
+/**
+ * F3c (D828): a busca que a trava 7 faz sozinha, no lugar de so cobrar a busca. Devolve os arquivos versionados e os
+ * arquivos da pasta do alvo com o mesmo nome-base (sem a extensao e sem caixa; o do alvo tambem sem o sufixo de
+ * variante: utils2, frete-novo, calc_v2, a-copy acham utils, frete, calc, a), fora o proprio alvo, em ordem e ate
+ * `limite` (inteiro positivo; senao 10). `raiz` e a raiz do projeto e `alvo` o caminho relativo a ela. Devolve null (a trava cobra a busca como antes) sem o git (fora de
+ * repositorio, git que falha ou demora), com o alvo fora da raiz ou sem nome, ou com a pasta do alvo ilegivel (a pasta
+ * que nao existe ainda e a de um arquivo novo: conta como vazia).
+ */
+function parecidos(raiz, alvo, limite) {
+  const path = require('node:path');
+  const fs = require('node:fs');
+  const rel = String(alvo || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  if (path.posix.isAbsolute(rel) || /^[a-z]:/i.test(rel) || rel.split('/').indexOf('..') !== -1) return null;
+  const teto = Number.isInteger(limite) && limite > 0 ? limite : 10;
+  // o nome-base sem a extensao e sem caixa. So o do ALVO perde o sufixo de variante (utils2, frete-novo, calc_v2,
+  // a-copy): a copia que nasce ao lado da original e o caso que esta trava existe para pegar. O do arquivo que ja
+  // existe fica inteiro, ou sha256.js acharia o sha512.js (os dois virariam "sha").
+  const nome = function (f) { return path.posix.basename(f).replace(/\.[^.]*$/, '').toLowerCase(); };
+  const inteiro = nome(rel);
+  const base = inteiro.replace(/[-_. ]?(?:v?\d+|novo|nova|new|copy|copia|old|velho)$/, '');
+  if (!base) return null;
+  const casa = function (f) { const n = nome(f); return n === base || n === inteiro; };
+  const r = require('node:child_process').spawnSync('git', ['-C', raiz, 'ls-files', '-z'],
+    { encoding: 'utf8', timeout: 5000, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
+  if (r.error || r.status !== 0 || typeof r.stdout !== 'string') return null;
+  const achados = new Set();
+  for (const f of r.stdout.split('\0')) if (f && f.toLowerCase() !== rel.toLowerCase() && casa(f)) achados.add(f);
+  const pasta = path.posix.dirname(rel);
+  let entradas = [];
+  try {
+    entradas = fs.readdirSync(path.join(raiz, pasta), { withFileTypes: true });
+  } catch (err) {
+    if (!err || err.code !== 'ENOENT') return null;
+  }
+  for (const d of entradas) {
+    if (!d.isFile()) continue;
+    const f = pasta === '.' ? d.name : pasta + '/' + d.name;
+    if (f.toLowerCase() !== rel.toLowerCase() && casa(d.name)) achados.add(f);
+  }
+  return Array.from(achados).sort().slice(0, teto);
+}
+
+function motivo(alvo, achados) {
+  // F3c: com a lista do que o proprio sworn achou, o aviso diz isso e manda ler; sem ela, o de sempre
+  if (Array.isArray(achados) && achados.length) {
+    return [
+      'sworn - arquivo novo barrado (trava 7): ja existe arquivo com o mesmo nome; leia antes de criar.',
+      '',
+      'Alvo: ' + alvo + '  (nao existe ainda: isto e criacao, nao edicao)',
+      '',
+      'O sworn procurou por voce e achou arquivo(s) com o mesmo nome (ate 10):'
+    ].concat(achados.map(function (f) { return '  - ' + f; }), [
+      '',
+      'Por que: o risco e criar uma copia ao lado do que ja existe.',
+      'Leia esses arquivos e diga na resposta o que achou. Se nenhum serve, procure',
+      'mais (Grep, Glob, ou um grep/find pelo Bash) e crie: depois de uma busca neste',
+      'turno, criar arquivo novo fica liberado.'
+    ]).join('\n');
+  }
   return [
     // A4-104 (pedido 12, microcopy): a 1a linha na forma unica dos avisos, com o passo. A4-124: com "barrado" e o
     // numero da trava, como as travas 5 e 8.
@@ -108,4 +166,4 @@ function motivo(alvo) {
   ].join('\n');
 }
 
-module.exports = { FERRAMENTAS, COMANDOS, ehBusca, nomeadoNoEscopo, motivo };
+module.exports = { FERRAMENTAS, COMANDOS, ehBusca, nomeadoNoEscopo, motivo, parecidos };

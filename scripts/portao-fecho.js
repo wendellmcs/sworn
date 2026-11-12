@@ -130,9 +130,18 @@ function encerrarTurno(e, s, avisoExtra) {
   const amp = avisoDeAmpliacao(contadores);
   if (amp) partes.push(amp);
   if (avisoExtra) partes.push(avisoExtra);
+  if (promptAoDono) partes.push(promptAoDono);
   if (entrega) partes.push(vs.aviso);
   if (esperaNova) partes.push(saude.avisoDeSaude(vs.gatilhos, vs.alarme, rodando));
   if (daOrdem) partes.push(AVISO_DA_ORDEM);
+  // F3d (D828): com agente de fundo rodando, a linha de situacao ao dono (so a ele: nao continua a conversa). A espera
+  // nova ja diz quais agentes rodam.
+  const fundo = rodando.length ? rodando : saude.agentesRodando(e.transcript_path, Date.now());
+  if (fundo.length && !esperaNova) {
+    let doPlano = '';
+    try { doPlano = require('./lib/plano.js').linhaDoPlanoDaSessao(cwd, s.frente); } catch (err) { doPlano = ''; }
+    partes.push(saude.linhaDeSituacao(fundo, doPlano));
+  }
 
   // O estado do TURNO morre aqui (trabalhoReal, bloqueouNesteTurno, contadores); o da
   // SESSAO sobrevive. Separar os dois e exatamente o que a T18 existe para fazer.
@@ -169,7 +178,7 @@ function encerrarTurno(e, s, avisoExtra) {
   if (entrega) {
     // D412: o turno que gravou o handoff e ja colou o bloco nao recebe a ordem de colar de novo.
     // Mesma regra do portao (handoffSemPrompt, declarada mais abaixo: `function` sobe ao topo do arquivo), sem o projeto: a ordem nao depende do portaoHandoff.
-    const jaColado = s.gravouHandoff === true && !handoffSemPrompt(e, s, null);
+    const jaColado = s.gravouHandoff === true && (!handoffSemPrompt(e, s, null) || promptAoDono !== null);
     saida.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: saude.instrucaoAoModelo(vs.gatilhos, jaColado) };
   } else if (esperaNova) {
     saida.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: saude.instrucaoAoModelo(vs.gatilhos, false, rodando) };
@@ -330,6 +339,18 @@ function linhaDeclarada(msg) {
   return { libera: linhas.some(function (l) { return !soChat(l); }), pedeChat: linhas.length > 0 && linhas.every(soChat) };
 }
 
+/** F3b (D828): a resposta para numa linha declarada que libera ("Espero:" ou "Preciso do dono:" com um pedido de
+ *  verdade), fora dos blocos de codigo (uma saida colada com "waiting on:" nao e a parada do agente), e nao afirma
+ *  sucesso fora dos blocos. */
+function paradaSemAlegacao(msg) {
+  const texto = String(msg || '');
+  // o semBlocos tira as cercas de crase; a de til (~~~) tambem e bloco de codigo no markdown
+  const prosa = evidencia.semBlocos(texto).replace(/^[ \t]*~~~[^\n]*\n[\s\S]*?^[ \t]*~~~[ \t]*$/gm, ' ');
+  // a linha vazia ("Preciso do dono:" sem nada) nao e parada: tem de pedir ou esperar alguma coisa
+  return PARADA_COM_PEDIDO.test(prosa) && linhaDeclarada(prosa).libera && !evidencia.analisar(texto).alegaSucesso;
+}
+const PARADA_COM_PEDIDO = /^[ \t>*_-]*(?:preciso do dono|espero|need the owner|waiting on)[ \t]*:[ \t]*\S/im;
+
 function paradaSemDono(e, s, projeto, cwd) {
   if (!s.trabalhoReal || e.agent_id) return null;
   if (!require('./lib/continuo.js').ativo(projeto)) return null;
@@ -354,6 +375,17 @@ function encerrarOuSeguir(e, s, projeto, avisoExtra) {
 }
 
 const espacoNormal = (t) => String(t).replace(/\s+/g, ' ').trim();
+
+// F3b (D828): o handoff gravado e a resposta sem o prompt: com o prompt legivel no arquivo, o proprio gancho o mostra ao
+// dono (systemMessage) e o fim do turno nao barra por isso. Vale para este Stop; o barrar e o encerrarTurno o levam.
+let promptAoDono = null;
+
+/** F3b: o aviso ao dono com o prompt do handoff, num bloco (a cerca de tres crases do proprio prompt vira aspas). */
+function avisoDoPrompt(prompt, arquivo) {
+  return 'sworn - o handoff foi gravado (' + require('./lib/escopo.js').ascii(String(arquivo || '')) + '). O prompt ' +
+    'pronto, se um dia precisar de um chat novo; o trabalho segue nesta conversa:\n```\n' +
+    String(prompt).replace(/```/g, "'''").replace(/\s+$/, '') + '\n```';
+}
 
 /** O conteudo do ultimo bloco de codigo do arquivo (cerca no comeco da linha), ou null. */
 function promptDoHandoff(arquivo) {
@@ -609,6 +641,11 @@ function cobrarOuRodarProva(e, s, projeto) {
   if (!prova || n > evidencia.TETO_DO_LACO + 1) return null;
   const t = comProvaDoGancho(e, s, lerTranscript(e, prova, projeto), prova);
   if (!t) return null;
+  // F3b (D828): a parada declarada ("Espero:" ou "Preciso do dono:") que nao afirma sucesso nao paga a prova so
+  // pendente: esperando um agente ou o dono, o turno nao diz que o codigo esta pronto (a prova volta a ser cobrada no
+  // turno que disser). O teste vermelho conhecido segue cobrado.
+  const vermelhoConhecido = t.ultimoTeste !== null && t.ultimoTeste.falhou;
+  if (!vermelhoConhecido && paradaSemAlegacao(e.last_assistant_message)) return null;
   const g = rodarProvaNoGancho(e, s, prova, t);
   if (g && g.passou) return null;
   if (g && typeof g.cauda === 'string') {
@@ -641,7 +678,7 @@ function barrar(e, s, motivos, semPrompt) {
   if (semPrompt) s.contadores.handoff_sem_prompt = (s.contadores.handoff_sem_prompt || 0) + 1;
   s.bloqueouNesteTurno = true;
   estado.gravar(e.session_id, s);
-  io.bloquearFecho(todos.join('\n\n'));
+  io.bloquearFecho(todos.join('\n\n'), promptAoDono || undefined);
 }
 
 io.blindar(function () {
@@ -689,7 +726,13 @@ io.blindar(function () {
     const cwd = config.raizDoProjeto(e.cwd);
     const projeto = config.carregarProjeto(cwd);
     const travas = projetoLib.travasDe(projeto);
-    const semPrompt = handoffSemPrompt(e, s, projeto);
+    let semPrompt = handoffSemPrompt(e, s, projeto);
+    // F3b (D828): com o prompt legivel no arquivo, o gancho o mostra ao dono e nao barra por ele.
+    const legivel = semPrompt ? promptDoHandoff(s.arquivoDoHandoff) : null;
+    if (legivel !== null) {
+      promptAoDono = avisoDoPrompt(legivel, s.arquivoDoHandoff);
+      semPrompt = false;
+    }
     // D503: como o do handoff, calculado antes do retorno da trava 3 desligada; todo caminho abaixo com ele barra.
     const semReferencia = semRevisaoDeReferencia(e, s, projeto, cwd);
     // D655: o da revisao aprovada, calculado aqui pelo mesmo motivo, sem repetir os arquivos que o da referencia ja cita.

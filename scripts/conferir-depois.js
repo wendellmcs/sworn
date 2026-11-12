@@ -123,7 +123,8 @@ function conferir(e) {
     hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: m } });
 }
 
-if (require.main === module) {
+// F3a: tambem roda carregado pelo depois-do-shell.js (io.rodarJuntos); o teste que so importa o `separar` nao o roda.
+if (require.main === module || io.embutidoAtivo()) {
   io.blindar(function () { io.lerEntrada(conferir); });
 }
 

@@ -14,9 +14,10 @@ const design = require('./lib/design.js');
 const buscaLib = require('./lib/busca.js');
 const catraca = require('./lib/catraca.js');
 
-/** C9: o alvo ja existe? Se nao existe, isto e criacao, e criacao exige busca. */
+/** C9: o alvo ja existe? Se nao existe, isto e criacao, e criacao exige busca. F3c (D828): no erro (entrada torta), conta
+ *  como criacao, o lado que exige a busca; antes contava como "existe" e liberava a trava 7. */
 function existe(cwd, alvo) {
-  try { return fs.existsSync(path.join(cwd, alvo)); } catch (err) { return true; }
+  try { return fs.existsSync(path.join(cwd, alvo)); } catch (err) { return false; }
 }
 
 /*
@@ -257,8 +258,13 @@ io.blindar(function () {
     // porque quem edita ja achou. Vem depois do escopo de proposito: "fora do
     // escopo" e a resposta mais especifica, e tem de ganhar quando as duas valem.
     if (!existe(cwd, alvo) && !s.buscouNesteTurno && !buscaLib.nomeadoNoEscopo(alvo, esc)) {
-      try { estado.incrementar(e.session_id, 'criou_sem_buscar'); } catch (err) { contadorNaoGravou(); }
-      return negar(buscaLib.motivo(alvo));
+      // F3c (D828): a trava procura sozinha os arquivos de mesmo nome; sem nenhum, a criacao segue. Achou algum, ou a
+      // busca falhou (sem git): nega como antes, com a lista do que achou.
+      const achados = buscaLib.parecidos(cwd, alvo);
+      if (!achados || achados.length) {
+        try { estado.incrementar(e.session_id, 'criou_sem_buscar'); } catch (err) { contadorNaoGravou(); }
+        return negar(buscaLib.motivo(alvo, achados));
+      }
     }
 
     // 7. B7: subir a catraca e decisao humana, nunca efeito colateral de uma
