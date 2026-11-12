@@ -23,12 +23,17 @@ covers what counts as proof, and how not to be fooled by your own instrument.
   the file invalidates the measurement that goes with it. **Count by script**, with the test's
   method, never by `wc -l` nor `grep -c` (which counts lines, not occurrences). A list inside the
   document itself is also counted by script, after it is written.
-- **Page screenshot: use the debugging protocol (CDP), not the command-line headless browser.** The
+- **Page screenshot: `scripts/capturar-tela.js`, not the command-line headless browser.** The
   headless browser called from the shell may return exit 0 before writing the file (the following
   `ls` says "does not exist" and looks like a failure), ignore the URL anchor and not write a very
   tall page — measured in a browser on Windows; exit 0 doesn't prove the screenshot, the opened file
-  does. CDP, on its own port and waiting on a condition, not on time, takes the screenshot that was
-  asked for.
+  does. The script drives the user's Chrome or Edge through the debugging protocol (CDP), on its own
+  port, waiting on a condition, not on time:
+  `node "${CLAUDE_PLUGIN_ROOT}/scripts/capturar-tela.js" --url <url> --saida <pasta> [--largura 1280]
+  [--altura 800] [--esperar <seletor CSS>]`. It writes `tela.png` (the whole page, up to 16000 px) and
+  `evidencia.json` (URL, time, the image's SHA-256, console messages, page errors, the accessibility
+  tree) and prints a JSON line; a line starting with `ERRO:` says what failed and what to do. Open the
+  PNG before citing it, and quote the console and errors from `evidencia.json`, not from memory.
 
 **In the close-out, the line that proves is enough;** a failure goes whole, as in section 1. A short answer is not
 an answer without proof: a one-line block satisfies the gate, and it is cheaper to paste the proof than to fix later a

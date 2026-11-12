@@ -123,6 +123,8 @@ io.blindar(function () {
       const depois = depoisTexto === null ? null : escopoLib.parse(depoisTexto);
       if (escopoLib.ampliou(escopoLib.parse(atual), depois)) {
         try { estado.incrementar(e.session_id, 'escopo_ampliado'); } catch (err) { contadorNaoGravou(); }
+        // A5b (s369): o apagar confere o escopo da abertura do turno; o ampliado agora so vale no turno seguinte
+        marcar(e.session_id, function (x) { x.escopoAmpliadoNoTurno = true; return x; });
       }
       // Ultima frente escrita vence: uma sessao so tem um vinculo por vez.
       // S2/L1-7: a edicao do arquivo da frente segue LIBERADA se o vinculo nao grava (nao fura
@@ -153,6 +155,22 @@ io.blindar(function () {
     if (projeto && glob.casaAlgum(projeto.intocaveis, alvo)) {
       try { estado.incrementar(e.session_id, 'intocavel'); } catch (err) { contadorNaoGravou(); }
       return negar(escopoLib.motivoIntocavel(alvo));
+    }
+
+    // 1a. A5b (s369): a edicao que apaga (o Delete File do Codex chega como Write vazio com `apagar`) no mesmo turno em
+    // que o escopo foi ampliado barra: o escopo que vale para apagar e o da abertura do turno.
+    // A5f (leva 16): o arquivo que ja estava no escopo da abertura do turno (a foto da A5e) apaga como sempre.
+    // revisao (P1): a foto torta que fizesse lancar cai no false (a A5b barra), nunca no io.blindar (que liberaria)
+    let naAbertura = false;
+    try {
+      const ab = s.aberturaDoTurno;
+      const escAb = ab && Array.isArray(ab.dentro) ? { dentro: ab.dentro, fora: Array.isArray(ab.fora) ? ab.fora : [] } : null;
+      naAbertura = !!escAb && !!alvo && escopoLib.dentro(alvo, escAb) && !escopoLib.declaradoFora(alvo, escAb);
+    } catch (err) { naAbertura = false; }
+    if (entrada.apagar === true && s.escopoAmpliadoNoTurno === true && !naAbertura) {
+      try { estado.incrementar(e.session_id, 'fora_do_escopo'); } catch (err) { contadorNaoGravou(); }
+      return negar(require('./lib/destrutivo.js').motivo('apagar ' + alvo,
+        { motivo: require('./lib/destrutivo.js').MOTIVO_APAGAR_DEPOIS_DE_AMPLIAR }));
     }
 
     // 1b. D786 passo 5: a ordem do compact (abertura.js) cobrada ate o Read do handoff ou um handoff novo
@@ -265,7 +283,8 @@ io.blindar(function () {
       const sistema = config.carregarDesign(cwd);
       const conteudo = (entrada.content !== undefined) ? entrada.content : entrada.new_string;
       if (sistema && typeof conteudo === 'string') {
-        const r = design.conferir(conteudo, sistema, entrada.content !== undefined ? undefined : entrada.old_string);
+        // E2: o caminho leva os desvios declarados para esta tela.
+        const r = design.conferir(conteudo, sistema, entrada.content !== undefined ? undefined : entrada.old_string, alvo);
         if (!r.ok) {
           try { estado.incrementar(e.session_id, 'token_fora_do_sistema'); } catch (err) { contadorNaoGravou(); }
           return negar(design.motivo(alvo, r.fora, sistema));

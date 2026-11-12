@@ -212,7 +212,7 @@ test('091 T6: estado torto nao lanca; tipo desconhecido nao conta', () => {
 // A5-37 (D735): o "-" diz o que o sworn nao ve e o passo; o cabecalho diz de quem e a ordem.
 const NOTA = [
   '  ("-": o sworn so ve a recusa no commit sem revisao; nas outras, a ordem que o Claude nao cumpriu foi ignorada ou',
-  '  recusada na conversa. Ordem que se repete sem cumprir: vale perguntar ao dono se ela ainda serve.)'
+  '  recusada na conversa. Ordem que se repete sem cumprir: o sworn segue cobrando; o dono decide se ela fica.)'
 ];
 
 test('091 T6: as linhas da auditoria - diferenca contra a foto anterior, os nunca disparados e a nota do "-"', () => {

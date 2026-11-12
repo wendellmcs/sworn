@@ -205,16 +205,21 @@ io.blindar(function () {
     // Qualidade de resposta: sai em toda abertura, com ou sem projeto.json, depois das regras;
     // so `qualidadeDeResposta: false` no projeto desliga.
     // D451: a regra de paralelismo, antes da qualidade e no mesmo molde; so `paralelismo: false` desliga.
-    const paralelo = require('./lib/paralelismo.js').bloco(projeto);
+    // C6 (D815): com "aberturaEnxuta": true, os 4 blocos abaixo saem como uma linha de resumo cada
+    const curta = require('./lib/abertura-enxuta.js');
+    const paralelo = curta.bloco('paralelo', require('./lib/paralelismo.js').bloco(projeto), projeto);
     if (paralelo) process.stdout.write((texto ? '\n' : '') + paralelo);
     // D467: menos paradas, entre paralelismo e qualidade; sai sempre (com a chave modoContinuo, com o modo continuo).
-    const continuo = require('./lib/continuo.js').bloco(projeto);
+    const continuoLib = require('./lib/continuo.js');
+    const continuo = curta.bloco(continuoLib.ativo(projeto) ? 'continuo' : 'continuoDesligado', continuoLib.bloco(projeto),
+      projeto);
     process.stdout.write((texto || paralelo ? '\n' : '') + continuo);
-    const qualidade = require('./lib/qualidade.js').bloco(projeto);
+    const qualidade = curta.bloco('qualidade', require('./lib/qualidade.js').bloco(projeto), projeto);
     if (qualidade) process.stdout.write('\n' + qualidade);
     // D554 (0.9.0): menos codigo, por ultimo, no mesmo molde; so `menosCodigo: false` desliga.
-    const enxuto = require('./lib/enxuto.js').bloco(projeto);
+    const enxuto = curta.bloco('enxuto', require('./lib/enxuto.js').bloco(projeto), projeto);
     if (enxuto) process.stdout.write('\n' + enxuto);
+    if (curta.ativa(projeto)) process.stdout.write('\n' + curta.RODAPE + '\n');
     const heranca = require('./lib/escopo.js').avisoHeranca(cwd, estado.ler(e.session_id).frente);
     if (heranca) process.stdout.write('\n' + heranca + '\n');
 

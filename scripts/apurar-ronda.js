@@ -7,6 +7,8 @@ const estado = require('./lib/estado.js');
 const cegar = require('./lib/cegar.js');
 const caminho = require('./lib/caminho.js');
 const textoLib = require('./lib/texto.js');
+const citacao = require('./lib/citacao.js');
+const diffLinhas = require('./lib/diff-linhas.js');
 
 // F2-01: so e "valor que falta" quando o proximo argumento e outra flag do USO deste script (como o
 // FLAGS_DO_USO do preparar-revisao.js): um arquivo chamado `--x.js` vale como caminho.
@@ -227,7 +229,14 @@ const baseRel = relDoCwd(base);
 const arquivoRevisado = arquivoDaBase(base, pastas);
 const mapas = [];
 const faixas = [];
+const lentesDoMapa = [];
 const semMapa = [];
+// B2: o motivo da revisao degradada (o da ultima ronda que o trouxe); null = revisao com isolamento. Uma ronda
+// degradada basta: as duas secas da aprovacao contam com ela, e ela aprovou sem isolamento.
+let degradado = null;
+// E1 parte 2 (D827): a evidencia da foto de cada lado (endereco, hora, hash, contagens), da ultima ronda que teve foto.
+// O preparar-revisao.js a grava no mapa.json, que o inspetor nao abre; aqui ela volta para o fecho, com antes e depois.
+let telas = null;
 const semVeredito = [];
 const ilegiveis = [];
 const invalidos = [];
@@ -305,6 +314,15 @@ const rondas = pastas
     // D244/defeito 3: o mapa diz qual rotulo e o lado novo. Sem ele (pacote antigo), a ronda
     // e contada como antes, pelos dois lados, e a saida diz que foi assim.
     const mj = lerMapaJson(base, e.name);
+    // B2 (R-impeccable): a ronda preparada com --degradado (sem isolamento, sem navegador) degrada a revisao.
+    if (mj && typeof mj.degradado === 'string' && mj.degradado.trim()) degradado = mj.degradado.trim();
+    if (mj && mj.telas && typeof mj.telas === 'object' && !Array.isArray(mj.telas)) {
+      // So o lado que e objeto conta; a ronda sem nenhum lado com foto nao apaga a evidencia da anterior.
+      const lado = function (v) { return v && typeof v === 'object' && !Array.isArray(v) ? v : null; };
+      const antes = lado(mj.telas.HEAD);
+      const depois = lado(mj.telas.trabalho);
+      if (antes || depois) telas = { ronda: Number(e.name), pasta: [baseRel, e.name].join('/'), antes: antes, depois: depois };
+    }
     let mapa = (mj && mj.mapa) || null;
     // D503 (E8): o pacote com referencia grava `invertida` (o mapa da ordem trocada) no mapa.json.
     let mapaInv = mj && mj.invertida && typeof mj.invertida === 'object' && !Array.isArray(mj.invertida) ? mj.invertida : null;
@@ -326,6 +344,8 @@ const rondas = pastas
     mapas.push(mapa);
     // L3 (A3-03): a faixa que o preparar-revisao.js gravou; com a da ronda 1, o apurar confere as lentes.
     faixas.push(mj && typeof mj.faixa === 'string' ? mj.faixa : null);
+    // F2d (c): as lentes da faixa completa que o preparar escolheu pelo risco; sem elas, vale o minimo de antes
+    lentesDoMapa.push(mj && Array.isArray(mj.lentes) ? mj.lentes : null);
     const pass1 =lerVereditos(e.name, [e.name, 'vereditos'], mapaInv !== null);
     invertidas.push(mapaInv ? { mapa: mapaInv, vereditos: lerVereditos(e.name, [e.name, 'invertida', 'vereditos'], true,
       pass1.map(function (v) { return v && v.lente; })) } : null);
@@ -389,7 +409,8 @@ if (fs.existsSync(arqMesmos)) {
 // chave e evidencia nova. Arquivo que falta ou linha fora dele = null, e a conta fica a de antes. Arquivo que existe e
 // nao se le (permissao, pasta no lugar) para com a causa, como o resto deste script (s104).
 const linhasDe = new Map();
-function textoDaLinha(indice, rotulo, linha, passada) {
+/** As linhas do A.txt/B.txt da ronda (o de invertida/ na 2a passada); null se o arquivo nao existe. */
+function linhasDoArquivo(indice, rotulo, passada) {
   // D503 (E7): o achado da 2a passada cita o A.txt/B.txt de invertida/, que sao os lados trocados.
   const partes = [pastas[indice].name].concat(passada === 2 ? ['invertida'] : [], [rotulo + '.txt']);
   const arq = path.join.apply(path, [base].concat(partes));
@@ -404,7 +425,10 @@ function textoDaLinha(indice, rotulo, linha, passada) {
     }
     linhasDe.set(arq, linhas);
   }
-  const linhas = linhasDe.get(arq);
+  return linhasDe.get(arq);
+}
+function textoDaLinha(indice, rotulo, linha, passada) {
+  const linhas = linhasDoArquivo(indice, rotulo, passada);
   const n = Number.isInteger(linha) ? linha : parseInt(linha, 10);
   return linhas && n >= 1 && n <= linhas.length ? linhas[n - 1] : null;
 }
@@ -412,7 +436,7 @@ function textoDaLinha(indice, rotulo, linha, passada) {
 // Colheita 10-20, lote 3/4a: o trecho do achado confirmado tem de estar na linha citada ou ate 2 acima ou abaixo
 // (o inspetor erra a linha por pouco), com os espacos normalizados. Arquivo que falta = null: conta como antes.
 const VIZINHAS = 2;
-function semEspaco(s) { return String(s).replace(/\s+/g, ' ').trim(); }
+const semEspaco = citacao.semEspaco;
 function trechoNoArquivo(indice, rotulo, linha, trecho, passada) {
   const n = Number.isInteger(linha) ? linha : parseInt(linha, 10);
   if (textoDaLinha(indice, rotulo, 1, passada) === null) return null;
@@ -424,10 +448,35 @@ function trechoNoArquivo(indice, rotulo, linha, trecho, passada) {
   return semEspaco(perto.join('\n')).indexOf(semEspaco(trecho)) !== -1;
 }
 
+// D821 (D2): a prova da refutacao conferida no repositorio, a partir da pasta onde o comando roda (a raiz do
+// projeto). So vale caminho dentro dela; o arquivo que falta ou nao se le e a linha fora dele nao conferem.
+// Quem chama e o provaConfere da lib: o simbolo ja chega com texto (temTexto) e a linha como inteiro (parseInt).
+// D826: a conferencia (raiz, caminho real, linha, simbolo +-2 linhas) mora em lib/citacao.js.
+function provaNoRepo(caminho, linha, simbolo) {
+  return citacao.citacaoConfere(cwd, caminho, linha, simbolo, VIZINHAS);
+}
+
+// F2a (D828.5): o que o conserto mudou entre uma ronda e a seguinte, medido no lado novo de cada uma (o texto do
+// trabalho na 1a passada; o rotulo dele muda de ronda para ronda). Sem o mapa ou sem o texto de um dos dois lados a
+// posicao fica null, e o apurar conta dali em diante como antes, sem "linha nova". O mapa que nao diz os dois lados
+// nao se confere aqui: o veredito.apurar ja larga a medida da ronda dele (mapaDoTrabalho).
+function ladoNovo(indice) {
+  const mapa = mapas[indice];
+  if (!mapa) return null;
+  return linhasDoArquivo(indice, mapa.A === 'trabalho' ? 'A' : 'B', 1);
+}
+const mudancas = rondas.map(function (_, i) {
+  if (i === 0) return null;
+  const antes = ladoNovo(i - 1);
+  const depois = ladoNovo(i);
+  return antes && depois ? diffLinhas.blocos(antes, depois) : null;
+});
+
 let r;
 try {
   r = veredito.apurar(rondas, { mapas: mapas, refutados: refutados, mesmos: mesmos, textoDaLinha: textoDaLinha,
-    trechoNoArquivo: trechoNoArquivo, invertidas: invertidas, faixas: faixas });
+    trechoNoArquivo: trechoNoArquivo, provaNoRepo: provaNoRepo, invertidas: invertidas, faixas: faixas,
+    lentesDoMapa: lentesDoMapa, mudancas: mudancas });
 } catch (err) {
   // 0.3.3, item 7: o erro diz o defeito; a linha seguinte diz onde corrigir e o que fazer depois.
   // L3 (A3-03): o voto que falta ja diz o que fazer; a linha da refutacao nao e com ele.
@@ -455,6 +504,15 @@ if (r.encerrar && r.motivo === 'duas rondas secas seguidas: aprovado' && descart
   r.motivo += ', com ' + descartados.length + ' achado(s) descartado(s) por estar fora do formato: leia ' +
     'vereditosDescartados antes de dar por aprovado';
 }
+// B2: a revisao degradada diz isso antes de tudo; o fecho cobra a mesma linha na resposta. O "aprovado" se le no
+// motivo da apuracao, antes do prefixo: o motivo da degradada e texto livre e pode trazer a palavra.
+const aprovou = r.encerrar && /aprovado/.test(String(r.motivo));
+// F2a (D828.2/.5): o que nao segurou a ronda (melhoria, ou achado em linha nova) nao some no fecho: vai para o plano.
+if (r.encerrar && r.registros.length) {
+  r.motivo += '; ha ' + r.registros.length + ' achado(s) em "registros" (melhoria ou linha nova): copie-os para o ' +
+    'registro do plano';
+}
+if (degradado) r.motivo = 'DEGRADADO: ' + degradado + '. ' + r.motivo;
 
 /**
  * D21/D120: "2+ revisoes independentes fechadas" e gatilho contavel de troca de chat, e ate aqui
@@ -500,9 +558,22 @@ if (r.encerrar) {
         if (r.referencia) s.contadores.revisao_referencia_fechada = (s.contadores.revisao_referencia_fechada || 0) + 1;
         // Plano 091 (#1, D559): so o "aprovado" (nao o teto) libera o arquivo no portao do commit; o marcar-trabalho.js
         // o tira da lista quando ele e editado de novo.
-        if (arquivoRevisado && /aprovado/.test(String(r.motivo))) {
-          s.revisadosAprovados = require('./lib/commit.js').comAprovado(s.revisadosAprovados,
-            path.resolve(process.cwd(), arquivoRevisado));
+        // F2a (D828.3): o fecho no teto marca o arquivo (com o blob dele no HEAD de agora) e o portao do commit troca a
+        // ordem de revisar pela do commit com a marca, sem perguntar; a aprovacao de uma revisao nova tira a marca.
+        const commit = require('./lib/commit.js');
+        if (arquivoRevisado && !aprovou) {
+          s.revisadosNoTeto = commit.comTeto(s.revisadosNoTeto, path.resolve(process.cwd(), arquivoRevisado));
+        }
+        if (arquivoRevisado && aprovou) {
+          const abs = path.resolve(process.cwd(), arquivoRevisado);
+          s.revisadosAprovados = commit.comAprovado(s.revisadosAprovados, abs);
+          s.revisadosNoTeto = commit.semTeto(s.revisadosNoTeto, abs);
+          // B2: a aprovacao degradada fica marcada (o fecho cobra a linha DEGRADADO); a sem degradar desmarca.
+          const antes = s.revisoesDegradadas;
+          const marcadas = antes && typeof antes === 'object' && !Array.isArray(antes) ? Object.assign({}, antes) : {};
+          if (degradado) marcadas[abs] = degradado;
+          else delete marcadas[abs];
+          s.revisoesDegradadas = marcadas;
         }
         return s;
       })).revisao_fechada;
@@ -510,7 +581,8 @@ if (r.encerrar) {
       falhar('ERRO: a revisao fechou, mas o fecho nao foi contado (' + err.message + '). Rode este comando de novo.\n');
     }
     try {
-      fs.writeFileSync(arqFechada, JSON.stringify({ ronda: r.ronda, sessao: sessao, motivo: r.motivo }, null, 2),
+      fs.writeFileSync(arqFechada, JSON.stringify({ ronda: r.ronda, sessao: sessao, motivo: r.motivo,
+        degradado: degradado }, null, 2),
         'utf8');
     } catch (err) {
       falhar('ERRO: o fecho foi contado, mas ' + baseRel + '/fechada.json nao foi gravado (' + err.message + '). ' +
@@ -537,11 +609,15 @@ process.stdout.write(JSON.stringify({
   rondasSecas: r.secas,
   encerrar: r.encerrar,
   motivo: r.motivo,
+  degradado: degradado,
+  telas: telas,
   placarDaUltimaRonda: r.placar,
   achadosNovosP0P1: r.novos,
+  registros: r.registros,
   achadosDoLadoAntigo: r.achadosDoLadoAntigo,
   refutados: r.refutados,
   paresCandidatos: r.paresCandidatos,
+  paresFortes: r.paresFortes,
   provaveisMesmos: r.provaveisMesmos,
   referencia: r.referencia,
   pendentes: r.pendentes,

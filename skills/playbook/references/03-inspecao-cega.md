@@ -108,15 +108,19 @@ and where it looked.
 
 ## 4. Convergence
 
-- **Dry round** = no new finding of severity **P1 or above**.
-- **Two consecutive dry rounds** → approved. The loop ends.
+- **Dry round** = no new finding of severity **P0, P1 or P2 `erro`**.
+- **Two consecutive dry rounds** → approved. The loop ends. A complete round 1 with no finding at all (no error,
+  no doubt, no improvement) also approves, by itself.
+- **Rounds 2 and 3 only verify**: a finding holds the round only on a line the fix touched or a line cited
+  before (up to 2 lines away); anywhere else it becomes a record.
 - **Cap of 3 rounds.**
-- Third round with **P0 or P1 open** → **stop**. Take it to `{{campo:quemDecide}}` with three options
-  (format in `SKILL.md` §7) and record what is left in `{{texto:ondeRegistrar}}`.
-- **P2 never reopens a round.** It becomes a record, not a fix.
+- Third round with an **error open** → **do not ask**. Fix what is an error, each fix with a test that fails
+  when the code is broken on purpose, run `{{campo:provaDePronto}}` until it is green, commit with the mark
+  `# sworn: sem-revisao`, and record what is left in `{{texto:ondeRegistrar}}`.
+- **A P2 `melhoria` never reopens a round.** It becomes a record, not a fix.
 
-Between rounds: fix only P0 and P1, and only within the requested scope. Fixing P2 is the start of
-the scope creep that the guardrails forbid.
+Between rounds: fix only P0, P1 and P2 `erro`, and only within the requested scope. Fixing a P2 `melhoria`
+is the start of the scope creep that the guardrails forbid.
 
 ### When the fix becomes the defect
 
@@ -128,15 +132,15 @@ the cause** — enumerate the whole class of the defect before writing the next 
 3-round rite that becomes a 12-round one didn't discover more things: it discovered its own design,
 late.
 
-If it still doesn't close, that is a decision for `{{campo:quemDecide}}`, with three options — and
-one of them is always "close with the defect recorded and not fixed".
+If it still doesn't close by the third round, the cap rule above applies, without asking: fix what is an
+error, with its test, and record the class of the defect and what the sweep found in `{{texto:ondeRegistrar}}`.
 
 ### Narrow the following rounds — round 1 is the expensive one
 
 Round 1 runs **all** applicable lenses: it is the one that discovers. The following ones **verify**,
 and verifying is cheaper than discovering.
 
-**Round 2+ calls only the lenses that had a P0/P1 finding against the work itself.** A lens that only
+**Round 2+ calls only the lenses that had a P0, P1 or P2 `erro` finding against the work itself.** A lens that only
 reported a pre-existing defect, or that approved with no caveat, doesn't come back.
 
 Order of magnitude for a small change: 8 in round 1, 4 to 5 in round 2, 2 to 3 in round 3.
@@ -153,7 +157,7 @@ verifiable answer; a generic question returns the same opinion as the previous r
 ### A repeated finding does not reopen a round
 
 A lens that restates in round 2 the same finding from round 1 — same evidence, same `arquivo:linha` —
-does **not** make the round wet. A dry round is the absence of a **new** finding of P1 or above.
+does **not** make the round wet. A dry round is the absence of a **new** finding of P0, P1 or P2 `erro`.
 
 Without this rule the loop never converges: an out-of-scope finding, correctly recorded and correctly
 not fixed, would reappear in every round and consume the cap of 3 by itself.

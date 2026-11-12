@@ -175,7 +175,9 @@ function arquivosDoPatch(texto) {
     let m;
     if ((m = /^\*\*\* (Add|Update|Delete) File: (.+)$/.exec(linha))) {
       fechar();
-      if (m[1] === 'Delete') escrever(m[2].trim(), '');
+      /* A5b: o Delete vai marcado, para o portao de escopo saber que a edicao apaga */
+      if (m[1] === 'Delete') saida.push({ tool_name: 'Write', tool_input: { file_path: m[2].trim(), content: '',
+        apagar: true } });
       else atual = { tipo: m[1].toLowerCase(), arquivo: m[2].trim(), velho: [], novo: [] };
     } else if ((m = /^\*\*\* Move to: (.+)$/.exec(linha))) {
       if (atual) atual.destino = m[1].trim();

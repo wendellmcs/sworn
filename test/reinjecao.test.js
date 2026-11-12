@@ -741,6 +741,12 @@ test('D786 passo 3: handoff gravado nesta sessao = o compact manda reler o arqui
         'sem o caminho do handoff, relativo: ' + t.slice(0, 600));
       assert.ok(/inteiro/.test(t) && /chat novo/.test(t) && /sigo/.test(t),
         'a ordem tem de mandar ler inteiro e seguir: ' + t.slice(0, 600));
+      // B1 (R-ai-memory): a cerca de confianca - o handoff e dado; a mensagem atual, as regras e o repositorio mandam
+      const fimDaOrdem = t.indexOf('# sworn - regras');
+      assert.ok(fimDaOrdem > 0, 'controle: as regras vem depois da ordem: ' + t.slice(0, 300));
+      const ordem = t.slice(0, fimDaOrdem);
+      assert.ok(/handoff e dado/.test(ordem) && /mensagem atual do dono/.test(ordem) && /repositorio/.test(ordem) &&
+        /confira no disco/.test(ordem), 'a ordem tem de cercar o handoff como dado: ' + ordem);
       assert.ok(t.indexOf(ORDEM_GRAVAR) === -1, t.slice(0, 600));
       assert.ok(t.indexOf('git status') !== -1, 'controle: as regras seguem no texto');
       assert.ok(/^[\x20-\x7E\n]+$/.test(t.slice(0, t.indexOf('# sworn - regras'))), 'a ordem tem de ser ASCII');
@@ -1423,5 +1429,26 @@ test('s366: o Stop cobra a ordem do compact pendente, no mesmo teto dos portoes'
       fs.rmSync(p.dir, { recursive: true, force: true });
       fs.rmSync(q.dir, { recursive: true, force: true });
     }
+  });
+});
+
+// B5 (s369, D748 T6, P21): a escalada pedida e sem despacho volta no texto da compactacao, e so nela.
+test('B5: o compact reinjeta a escalada pedida e ainda nao despachada', () => {
+  comTmp((rein) => {
+    const p = projeto();
+    try {
+      const estado = require('../scripts/lib/estado.js');
+      estado.alterar('esc1', function (s) {
+        s.escalada = { pendentes: [{ id: 'x1', de: 'tarefas-simples', para: 'desenvolvedor', motivo: 'logica nova', n: 1 }],
+          aguardando: { desenvolvedor: 1 } };
+        return s;
+      });
+      const t = rein.montar(p, 'esc1', 'compact') || '';
+      assert.ok(t.indexOf('# sworn - escalada em aberto') !== -1, t.slice(0, 600));
+      assert.match(t, /despache "desenvolvedor": "logica nova"/);
+      assert.ok((rein.montar(p, 'esc1', 'startup') || '').indexOf('escalada em aberto') === -1, 'so no compact');
+      assert.ok((rein.montar(p, 'sem-escalada', 'compact') || '').indexOf('escalada em aberto') === -1,
+        'sem escalada, nada');
+    } finally { fs.rmSync(p, { recursive: true, force: true }); }
   });
 });

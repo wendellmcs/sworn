@@ -8,7 +8,7 @@
 <p align="center">
   <strong>Your coding agent says "done". sworn makes it show the proof.</strong><br>
   A Claude Code plugin with eight numbered gates, nine more gates outside that count (each one a script that
-  blocks or hands back the agent's action), and nine commands.
+  blocks or hands back the agent's action), and twelve commands.
   Each gate runs in a hook: a fixed point in the session where Claude Code calls a script.
   The script is deterministic, with no model in the loop.
 </p>
@@ -134,7 +134,7 @@ more, the main agent closes saying what still fails, with the output, instead of
 | 2 | **Blind A/B review by distinct lenses**<br>Blocks: nothing; `/sworn:review` tallies by script.<br>Why: The author is the worst judge of the work; the inspector does not know which side is new. |
 | 3 | **Done without evidence**<br>Blocks: the end of the turn when the reply claims success without pasting output (or pastes only failing output), when the last test run failed, when the project's proof command did not run after the last code edit, or when a plan step is called finished with a box still open.<br>Why: "Done" with nothing pasted is the most common false claim. Saying what did not run always passes. |
 | 4 | **File outside the declared scope**<br>Blocks: the write, when the target is not in the scope file, is listed as out of scope, or is untouchable.<br>Why: A fix that wanders into files nobody asked about is how a regression ships. |
-| 5 | **Destructive command and concurrent session**<br>Blocks: the command that deletes, the stray `cd`, the wrong shell syntax for the tool, and writes to files another session touched.<br>Why: Lost work cannot be reviewed back. |
+| 5 | **Destructive command and concurrent session**<br>Blocks: the command that deletes (deleting named files inside the scope passes), the stray `cd`, the wrong shell syntax for the tool, and writes to files another session touched.<br>Why: Lost work cannot be reviewed back. |
 | 6 | **Expensive agent, wrong model or effort, dropped request to move up**<br>Blocks:<br>• dispatching an agent from the more expensive half of the ladder, rounded down (with 2 or 3 agents, the top; with 4 or 5, the top two; with 6 or 7, the top three) when the scope only has fast-gear paths;<br>• calling a ladder agent with a model or an effort other than the one the ladder records (except the top's second dispatch below, which goes with maximum effort);<br>• ending the turn while a subagent's request to move up has not been dispatched. This block fires once per request.<br>Each block tells the main agent what to do instead, without stopping to ask you: when the top of the ladder asks for one above, it is dispatched again with maximum effort; if it asks again, the main agent closes saying what still fails, with the output.<br>Why: Cost does not hurt whoever picks the model, so the ladder picks it: no expensive agent on light work, the model and effort the ladder records, and the next rung when a subagent says the task is beyond its role. |
 | 7 | **Creating without searching**<br>Blocks: a new file when nothing was searched in the turn.<br>Why: `utils2.js` next to `utils.js` is a duplicate nobody will clean up. |
 | 8 | **Loosened ratchet**<br>Blocks: the edit that raises a ceiling or lowers a floor.<br>Why: Lowering the bar is the easy way to make a test pass; loosening is a human decision. |
@@ -225,7 +225,8 @@ command that is due.
 `/sworn:review` labels both sides A and B with no authorship and sends one inspector per lens (a single
 angle of reading, such as correctness, edge cases or text): **ten** for code, **eight** for screens. Each
 inspector starts from reject. A round is one pass of all the inspectors; a dry round is one that finds no
-new serious defect. Two dry rounds in a row approve, and the cap is 3 rounds. A small change goes to fewer
+new serious defect. Two dry rounds in a row approve, a first round in which no inspector points out anything
+approves by itself, and the cap is 3 rounds. A small change goes to fewer
 inspectors: up to 3 changed lines get a single inspector. A second agent judges whether two findings are
 the same defect, and the tally is a script. On screens, the lenses check every state, the minimum
 reading contrast (level AA of WCAG, the web accessibility standard), a clickable area of at least 24 × 24 px per
@@ -243,6 +244,9 @@ button, and INP (the time from a click to the screen's response).
 | `/sworn:audit` | Weighs the project's instructions against a ceiling, points at what to cut, and shows the model and effort the subagents actually ran with. |
 | `/sworn:calibrate` | Measures, in your own chats, when switching to a new chat pays off, and suggests the threshold. |
 | `/sworn:shortcuts` | Lists the deliberate shortcuts in the code and flags the ones with no condition to replace them. |
+| `/sworn:review-plan` | Checks a plan before coding: a script confirms every cited path, symbol and command exists and each open step has a proof command; then the blind review reads the plan. |
+| `/sworn:drift` | Shows where the code moved away from the plan: changed files the plan does not cite, done steps whose file did not change. |
+| `/sworn:diagnose` | When a session went wrong, reads its transcripts with one analyst per dimension and reports only the findings whose transcript line a script confirms. |
 | `/sworn:reference` | Studies 2-3 leading products of the same kind and writes a sourced reference sheet. |
 | `/sworn:radar` | Finds similar public projects and says what is worth bringing over, with effort, value and license. |
 <!-- /pagina:comandos -->

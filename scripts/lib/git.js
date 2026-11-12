@@ -78,6 +78,52 @@ function modificados(cwd) {
   return arquivos;
 }
 
+/**
+ * A5e (D793): os arquivos RASTREADOS que mudaram ou sumiram na arvore, relativos ao cwd, sem os nao rastreados.
+ * So os que existem no HEAD contam (modificado, apagado, tipo trocado): o adicionado (A) nao tem o que restaurar, e a
+ * renomeacao conta pela origem, que sumiu. `null` quando o git nao respondeu.
+ */
+function rastreadosMudados(cwd) {
+  const r = mudancasRastreadas(cwd);
+  return r && r.mudados;
+}
+
+/**
+ * A4 (s369): a mesma leitura, com os arquivos em conflito de merge a parte (UU, AA, DD, AU, UA, DU, UD), que o
+ * `rastreadosMudados` deixa de fora: restaurar um deles resolveria o merge. `{ mudados, conflitos }` ou `null`.
+ */
+function mudancasRastreadas(cwd) {
+  if (!cwd) return null;
+  const saida = correr(cwd, ['status', '--porcelain', '--untracked-files=no', '-z']);
+  if (saida === null) return null;
+  const pre = prefixo(cwd);
+  if (pre === null) return null;
+  const aoCwd = function (c) { return pre === '' ? c : (c.indexOf(pre) === 0 ? c.slice(pre.length) : null); };
+  const partes = saida.split('\0').filter(function (p) { return p !== ''; });
+  const mudados = [];
+  const conflitos = [];
+  for (let i = 0; i < partes.length; i++) {
+    const entrada = partes[i];
+    if (entrada.length < 4) continue;
+    const xy = entrada.slice(0, 2);
+    if (xy[0] === 'R' || xy[0] === 'C') {
+      const origem = partes[++i];
+      const o = origem ? aoCwd(origem.replace(/\\/g, '/')) : null;
+      if (o && xy[0] === 'R') mudados.push(o);
+      continue;
+    }
+    const c = aoCwd(entrada.slice(3).replace(/\\/g, '/'));
+    if (/U/.test(xy) || xy === 'AA' || xy === 'DD') {
+      if (c) conflitos.push(c);
+      continue;
+    }
+    // adicionado no indice (A, mesmo mudado depois: AM, AD) nao existe no HEAD
+    if (xy[0] === 'A' || !/[MDT]/.test(xy)) continue;
+    if (c) mudados.push(c);
+  }
+  return { mudados: mudados, conflitos: conflitos };
+}
+
 // D118: `prefixo` passa a ser publico. O `preparar-revisao.js` (T12) precisa da mesma
 // conversao "caminho relativo ao cwd -> caminho relativo a raiz do repositorio" que a
 // D41 resolveu aqui: sem ela, `git show HEAD:<caminho>` rodado de uma subpasta nega
@@ -164,4 +210,4 @@ function diffContraHead(cwd, rel) {
   return { removidas: soma('antigoQtd'), acrescentadas: soma('novoQtd'), blocos: blocos };
 }
 
-module.exports = { modificados, prefixo, rastreados, ultimasMudancas, correr, diffContraHead };
+module.exports = { modificados, rastreadosMudados, mudancasRastreadas, prefixo, rastreados, ultimasMudancas, correr, diffContraHead };

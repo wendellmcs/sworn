@@ -868,6 +868,32 @@ function notaViva(anterior, mtime, turnos) {
   return { marca: anterior, avisar: false };
 }
 
+/** s369 (A6, P1 do dono): a 1a caixa aberta (`- [ ]`) do plano da sessao - o do plano-ativo.json ou, sem ele, o da
+ *  frente vinculada ou do escopo.md (a mesma busca do painel e da nota viva; o de outra frente sem vinculo nao conta).
+ *  Devolve { arquivo, caixa } ou null; plano que nao se le = null (sem cobranca). */
+function caixaAberta(cwd, frente) {
+  let arquivo = null;
+  const ativo = lerAtivo(cwd);
+  if (ativo && typeof ativo.arquivo === 'string' && ativo.arquivo) arquivo = ativo.arquivo;
+  if (!arquivo) {
+    const achado = acharPlanoDaFrente(cwd, frente || null);
+    if (achado && achado.arquivo && !achado.semVinculo) arquivo = achado.arquivo;
+  }
+  if (!arquivo) return null;
+  let texto;
+  try { texto = fs.readFileSync(caminhoDoPlano(cwd, arquivo), 'utf8'); } catch (e) { return null; }
+  let cerca = null;
+  for (const linha of texto.split(/\r?\n/)) {
+    /* a caixa de exemplo dentro de bloco de codigo (```/~~~, ate indentado) nao e tarefa */
+    const f = /^\s*(`{3,}|~{3,})/.exec(linha);
+    if (f) { if (!cerca) cerca = f[1][0]; else if (f[1][0] === cerca) cerca = null; continue; }
+    if (cerca) continue;
+    const m = /^\s*-\s*\[ \]\s*(.*)$/.exec(linha);
+    if (m) return { arquivo: String(arquivo), caixa: m[1].replace(/\*\*/g, '').trim().slice(0, 160) };
+  }
+  return null;
+}
+
 function motivoNotaViva(arquivo, turnos) {
   return 'sworn: nota viva - ' + turnos + ' turnos com trabalho e o plano ' + escopoLib.ascii(String(arquivo)) +
     ' nao mudou. Grave nele o que ja foi feito (a caixa da tarefa ou uma linha de progresso): a troca de chat no meio ' +
@@ -875,7 +901,7 @@ function motivoNotaViva(arquivo, turnos) {
 }
 
 module.exports = {
-  notaViva, motivoNotaViva, TURNOS_SEM_NOTA,
+  notaViva, motivoNotaViva, TURNOS_SEM_NOTA, caixaAberta,
   ATIVO, RE_TAREFA, RE_CAIXA, parseTarefas, parseItens, lerAtivo, abrir, donoOutro, linhaDoPlano, linhaDoPlanoDaSessao,
   proximaDecisao, alegaEtapaConcluida, motivoSubitemAberto, painelTexto, painelIlegivel, comandoDeAbrir,
   planoDoObjetivo, planosDoObjetivo, planosCitados, frentesComPlano, acharPlanoDaFrente, painelVariasFrentes,

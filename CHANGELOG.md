@@ -1,5 +1,250 @@
 # Changelog
 
+## 0.23.0 — apagar arquivo pelo nome não para o trabalho, e o handoff também não
+
+**Novo**
+
+- **A prova de cada turno pode ser só a dos arquivos mexidos.** Com `"provaPorArquivoTocado": true` no
+  `.claude/sworn/projeto.json`, o Claude prova cada turno com os testes que cobrem os arquivos de código que ele mudou
+  (o teste que cita o arquivo pelo nome, ou o próprio arquivo de teste mudado, rodado depois da última mudança e
+  verde), e não precisa rodar a suíte inteira a cada edição. A suíte inteira (a `provaDePronto`) continua obrigatória,
+  agora antes de cada commit: o commit espera até ela rodar depois da última mudança e passar (com o portão do commit
+  desligado, `"portaoCommit": false`, essa espera sai junto). Sem a chave, nada muda.
+- **Os testes que conferem o disco inteiro entram na prova do turno.** Com `"provaDeCoerencia"` no `projeto.json` (o
+  comando de terminal dos testes que conferem o repositório de uma vez, como
+  `"node --test test/plataforma.test.js test/readme.test.js"`) e a prova por arquivo mexido ligada, o Claude roda
+  esse comando no turno, depois da última mudança, e ele tem de passar: a edição esquecida em outro arquivo aparece
+  na hora, e não só na suíte inteira antes do commit. Quando o turno é barrado sem a prova, a mensagem diz o caminho
+  curto: o teste de cada arquivo mexido e esse comando. Sem a chave, nada muda.
+- **Comando novo `/sworn:diagnose`: por que a sessão deu errado, com prova.** Quando uma sessão demorou, repetiu
+  trabalho, ignorou o plano ou bateu na mesma trava várias vezes, você chama `/sworn:diagnose`: o Claude pergunta o que você esperava, lê as
+  transcrições dessa sessão no disco (só lendo) e manda um analista para cada lado do problema: custo e tempo,
+  plano, trabalho repetido, tropeços, o que foi dito pronto sem prova, seus pedidos e as ações que o sworn bloqueou. Cada
+  achado cita a linha da transcrição, e um script tira do relatório o que não está lá; o relatório diz quantos
+  saíram e por quê. O relatório fica salvo em `.claude/sworn/diagnose/` e conta o que aconteceu; mudar algo fica
+  para você decidir depois.
+- **O sworn não depende de outro produto.** Quando o `/sworn:radar` acha um projeto bom para melhorar o próprio sworn,
+  a ideia entra reescrita dentro do plugin, cobrindo o que faltava no original; o produto de fora só se instala para
+  comparar, com o seu sim, e sai depois. Um teste reprova o plugin que passar a usar código de outro pacote.
+- **A foto da tela é do próprio sworn.** Quando o Claude precisa ver uma página (a sua, ou a de um produto que ele
+  estuda), ele usa o Chrome ou o Edge que você já tem, numa janela escondida e separada da sua, e guarda a imagem da
+  página inteira. Junto vão as mensagens que a página deixa para quem a programa (o console), os erros dela e a lista
+  do que dá para ler e clicar nela. Nada é instalado, e a janela fecha sozinha no fim.
+- **A revisão de tela vê a tela, antes e depois.** No `/sworn:review` de uma mudança de tela, o Claude tira a foto da
+  página na versão nova e, quando a antiga também está rodando, na antiga. Os revisores recebem as duas fotos marcadas
+  só como A e B, com as mesmas letras do texto de cada versão, sem saber qual é a nova. O endereço e a hora de cada
+  foto ficam de fora, porque diriam qual é qual. No fim, o resultado traz de onde e quando veio cada foto, com os erros
+  e as mensagens que a página deixou.
+- **Uma tela pode fugir do sistema de design, mas só dizendo por quê.** Quando uma tela precisa de uma cor ou medida
+  que o sistema de design do projeto não tem, você declara um desvio para ela: um item em `desvios`, no
+  `.claude/sworn/design.json`, com os arquivos dela, o motivo e, se quiser, até quando vale (o GUIA mostra um exemplo).
+  O desvio é de uma tela: um padrão que pega o projeto todo, como `**/*.css`, não vale, e o valor que serve a todas as
+  telas entra no próprio sistema. O sworn aceita esse valor só naquela tela; fora dela, ou depois da data, ele volta a ser
+  barrado. Na revisão, os revisores recebem o sistema e os desvios da tela, e reprovam o valor que não está em
+  nenhum dos dois.
+- **A conferência de design reconhece a mesma cor escrita de outro jeito, e o sistema de design pode declarar as
+  fontes.** `#fff`, `#FFFFFF`,
+  `rgb(255 255 255)` e `hsl(0, 0%, 100%)` são o mesmo branco para o sworn: a mesma cor escrita de outro jeito não é
+  mais barrada. O `design.json` aceita duas chaves opcionais, listas como as outras: `tamanhos` (de fonte, como
+  `"13px"`) e `fontes` (as famílias, como `"Inter"`). Sem elas, nada muda; com `fontes`, a família que o sistema não
+  tem é barrada, e as genéricas, como `sans-serif`, sempre valem. O GUIA, em "A parte visual", traz os exemplos e o que
+  não é conferido.
+- **A revisão cega segue sozinha até não sobrar erro.** No `/sworn:review`, os revisores dão a cada problema uma
+  gravidade: P0 é grave, P1 é médio e P2 é menor. Agora o P2 que é erro (muda o funcionamento, a segurança, o que
+  aparece na tela ou arrisca dado) também segura a revisão, como o P1: enquanto ele estiver aberto, a revisão não
+  aprova, e o Claude conserta e roda a revisão de novo, sem parar para perguntar. Só sai sem conserto o que tiver
+  prova de que não é problema, ou o que estiver fora do que você pediu, com o motivo escrito. O P2 que é só melhoria
+  simples (sem nenhum desses efeitos) não segura a revisão: fica numa lista à parte, que o Claude copia para o
+  registro do plano quando a revisão fecha.
+- **A 2ª e a 3ª rodada da revisão só conferem o conserto.** Nelas, só segura a revisão o problema apontado numa linha
+  que o conserto mudou, numa linha já apontada antes, ou a até 2 linhas de uma delas. O que aparecer em outro ponto do
+  arquivo vai para a mesma lista à parte, em vez de custar mais uma rodada.
+- **A revisão em que ninguém aponta nada aprova na 1ª rodada.** Quando todos os revisores da 1ª rodada respondem e
+  nenhum aponta nada (nem problema, nem dúvida, nem melhoria), a revisão aprova ali, sem a 2ª rodada de confirmação.
+  Com qualquer apontamento, segue como antes: aprova com duas rodadas seguidas sem problema novo.
+- **Todo problema menor diz se é erro ou melhoria.** Quando um revisor aponta um P2 sem dizer qual dos dois ele é, a
+  revisão recusa o parecer e pede outro ao revisor, em vez de contar o P2 como erro. Só o revisor pode chamar um
+  problema de melhoria: o Claude, que escreveu o que está em revisão, não pode.
+- **Na mudança pequena de código, o revisor vê o que o trecho usa.** Quando a revisão manda só o trecho mudado, o
+  revisor também recebe, de cada nome que o trecho usa, de onde ele vem e o que ele faz: a importação e a definição
+  no próprio arquivo, e o comentário e a assinatura do que vem de outro arquivo do projeto. Antes, dois terços das
+  dúvidas que ficavam sem resposta eram "isso está fora do trecho". Vale para arquivo JavaScript.
+- **A 2ª e a 3ª rodada da revisão custam menos.** Elas só conferem se o problema apontado na rodada anterior foi
+  consertado, então rodam um degrau abaixo do modelo da 1ª rodada, que é a que procura: com a sessão no Opus, a 1ª
+  roda no Opus e a 2ª e a 3ª no Sonnet.
+- **O revisor que procura problema repetido é chamado menos.** Ele avisa quando dois apontamentos são o mesmo
+  problema, e agora só recebe os que estão na mesma linha (antes, qualquer par a até 10 linhas um do outro). Nas
+  revisões passadas, a mesma linha tinha 49 dos 58 repetidos que ele achou, com um quarto dos pares para conferir;
+  o repetido que ele deixar de ver conta como problema novo, como já contava sem o aviso dele.
+- **Na revisão de uma mudança grande, só entram os revisores que têm o que olhar.** O revisor de segurança só é
+  chamado quando o que mudou mexe em algo de risco (rodar programa, ler ou gravar arquivo, dado que vem de fora,
+  rede, senha); o que procura código desnecessário, só em arquivo novo ou mudança grande; os de tela, só quando a
+  revisão tem a foto da tela. Nas revisões passadas, os dois primeiros quase nunca acharam um problema grave que
+  outro revisor não tivesse achado. Isso tira um ou dois revisores da maioria das revisões grandes.
+- **A revisão confere o que foi pedido, à parte do padrão do código.** No `/sworn:review`, um revisor recebe o
+  objetivo da tarefa e aponta o que você pediu e não foi feito, o que foi feito sem você pedir e o que parece pronto
+  mas está errado, citando a linha do pedido. O resultado traz duas listas, a dos problemas no código e a do que fugiu
+  do que você pediu, e a revisão só aprova com as duas vazias: um código bem escrito não esconde mais um pedido mal
+  atendido. Vale também quando a mudança é só de tela: a revisão leva as oito lentes de tela e esse revisor.
+- **O revisor de segurança mostra o caminho do ataque.** No `/sworn:review`, o revisor de segurança que aponta uma
+  falha grave diz por onde entra o que o usuário digita (um nome de arquivo, por exemplo), qual proteção isso
+  atravessa e o estrago que causa. Se o revisor não disser o estrago, a falha conta como problema menor (P2), mas
+  ainda precisa de atenção: a revisão não aprova enquanto o Claude não a consertar ou mostrar, com o arquivo e a linha
+  do projeto, que ela não existe. O que depende de algo fora do código (a configuração
+  do servidor, por exemplo) fica como dúvida, com o passo para conferir. Se o revisor deixa uma dessas partes de fora,
+  a revisão pede a ele um novo parecer completo, e a falha segue na lista em vez de sumir.
+- **Descartar um apontamento da revisão exige prova que o sworn confere.** No `/sworn:review`, quando o Claude diz que
+  um problema apontado não existe, ele cita o arquivo e a linha do projeto que mostram isso e o trecho que está lá (ou
+  o comando que rodou), e o sworn abre o arquivo e confere. Se a prova não bate, a revisão para e pede a prova certa,
+  e o problema segue na lista em vez de sair só pela palavra de quem escreveu o código.
+- **Apagar arquivo pelo nome, dentro do escopo, passa.** `rm -f a.txt b.txt` ou `Remove-Item -Force a.txt` deixam de
+  ser barrados quando cada arquivo (ou o nome de um que já não existe) está na lista "Dentro" do escopo da tarefa, fora dos intocáveis e do
+  "Fora", fora de `.claude/` e `.git`, e não foi mexido por outra frente antes da sessão abrir (quando a sessão não
+  guardou o que já estava mexido na abertura, vale o que está modificado agora). O nome conferido é o
+  real (o nome curto do Windows e o atalho de pasta não enganam). Recursivo, curinga, comando composto e fora do
+  escopo seguem barrados.
+- **Apagar sem `-f` também confere o escopo.** Num projeto com escopo declarado, o `rm`, `del`, `erase`, `cmd /c del`
+  ou `Remove-Item` sem `-Force` de arquivo fora do escopo passa a ser barrado, e o comando composto que apaga
+  (`ls && rm a.txt`, `sudo rm`, `xargs rm`) também, e o apagar por API do sistema dentro do shell
+  (`[IO.File]::Delete`, `.Delete()`, `node -e` com `fs.unlinkSync`, `python -c` com `os.remove`), que não tem nome
+  para conferir: o aviso manda apagar pelo nome com `rm` ou `Remove-Item`. `git rm` e o texto que só cita `rm` ou a
+  API (um `grep`, uma mensagem de commit) não contam. Sem escopo declarado, nada muda.
+- **O que o shell muda fora do escopo volta pelo git.** Depois de cada comando de shell, o arquivo versionado que
+  mudou ou sumiu, que estava limpo no começo do turno e fica fora do escopo de então (ou é intocável), é restaurado,
+  e o Claude é avisado. Pega o que nenhum portão vê antes do comando: esvaziar ou sobrescrever por API do sistema,
+  apagar por um caminho que a lista não conhece. O escopo ampliado no turno só vale a partir da sua próxima mensagem.
+  Sem escopo declarado, nada muda; desliga com `"travas": { "destrutivo": false }`.
+- **Ampliar o escopo e apagar no mesmo turno é barrado.** Apagar arquivo confere o escopo da abertura do turno: se o
+  Claude ampliou o escopo neste turno, o apagar (pelo shell ou pela edição que apaga, como o `Delete File` do Codex)
+  fica para o turno seguinte, e a resposta final diz o que ficou para apagar (o arquivo que já estava no escopo do
+  começo do turno apaga como sempre, num repositório git). A próxima mensagem do dono libera; a
+  continuação que o próprio sworn pede no fim do turno (o handoff do gatilho, o laço da prova) não libera.
+- **O aviso de comando destrutivo não manda mais perguntar ao dono.** Ele diz como seguir por outro caminho e, se o
+  trabalho depende mesmo do comando, manda terminar o resto e contar ao dono, na resposta final, que o comando ficou
+  para ele rodar.
+- **O teto da revisão cega não para mais para perguntar.** Quando a revisão chega a 3 rodadas com achado aberto (ou a
+  comparação com a referência não fecha), o sworn manda consertar o que é erro, cada conserto com um teste que reprova
+  quando o código é estragado de propósito, e rodar todos os testes. Com tudo verde, o commit sai com a marca
+  `# sworn: sem-revisao` no fim do comando: o aviso do commit reconhece os arquivos que fecharam no teto e pede essa
+  marca, em vez de mandar revisar de novo. O que sobrou vai para o registro do plano. Não se abre revisão nova.
+- **A revisão que não pôde ser cega avisa.** Quando os revisores não conseguem trabalhar separados de quem escreveu
+  (o agente não tem subagentes, ou o revisor enxerga o repositório) ou quando uma tela é julgada sem foto do navegador,
+  a revisão sai marcada "DEGRADADO: motivo", e a resposta que dá o trabalho por pronto tem de trazer essa linha, ou o
+  fim do turno barra. Para você: essa linha diz o que a revisão não viu. Se quiser a revisão completa, peça para rodar
+  de novo num agente com subagentes (ou com o navegador, no caso de tela).
+- **O handoff relido depois da compactação é tratado como dado.** A ordem de reler diz que o handoff foi escrito antes:
+  se ele discordar da mensagem atual do dono, das regras do projeto ou do que o repositório mostra, mandam estes, e o
+  fato que ele afirma se confere no disco.
+- **Testes rodando em segundo plano são esperados.** Quando o Claude roda os testes em segundo plano depois de mexer
+  no código, o sworn não trata mais isso como "os testes não rodaram": ele espera o aviso do Claude Code de que eles
+  terminaram. Antes, o sworn mandava rodar os testes de novo a cada fim de resposta e, na quarta vez, mandava chamar
+  um agente mais forte, com os testes ainda rodando. Agora quem diz se passaram é esse aviso (se o comando terminou
+  sem erro e o que os testes imprimiram), e dizer "pronto" antes dele é barrado. Só no Claude Code, que grava esse
+  aviso.
+- **Menos perguntas ao dono.** O Claude pergunta só regra de negócio, aparência (com opções), o irreversível ou externo
+  (publicar, push, envio) e credencial, permissão ou segurança; custo dentro do pedido não se pergunta, e falha,
+  teste, navegador e conserto ele faz sozinho.
+- **Parar logo depois do handoff é barrado uma vez.** Quando o sworn pede o handoff pelo tamanho da conversa e a
+  resposta para logo depois de gravá-lo, sem mais trabalho, o fim do turno manda seguir com o próximo passo: a
+  conversa continua sozinha e compacta quando encher. Desliga com o mesmo `"portaoHandoff": false`.
+- **Parar com trabalho por fazer é barrado.** Quando o turno trabalhou e para com uma tarefa do plano ainda por marcar
+  (`- [ ]`), ou anunciando o próximo passo em vez de fazê-lo, e nada ali precisa do dono, o fim do turno manda seguir
+  (até 3 vezes por turno). Só libera a linha que o próprio Claude escreve na resposta: "Preciso do dono: ..." (regra de
+  negócio, aparência, publicar/push/envio, credencial/permissão/segurança) ou "Espero: ..." (trabalho rodando em
+  segundo plano). "Preciso do dono: abrir o chat novo e colar o prompt" não libera: a conversa segue e a compactação
+  relê o handoff (só a versão nova do sworn instalada na sessão pede chat novo). Vale em todo projeto e em todo agente onde o sworn roda (Claude Code, Codex e os outros); desliga com
+  `"modoContinuo": false`.
+- **Cada fim de turno diz em que estado ficou, e cada pergunta ao dono é contada pelo tipo.** O sworn conta se o turno
+  terminou pronto (com a prova passando), esperando algo que roda, parado num pedido ao dono ou com falha, e separa os
+  pedidos ao dono pelos quatro tipos que valem (regra de negócio, aparência, publicar ou enviar, credencial ou
+  segurança). O pedido que não é de nenhum deles conta como pergunta que o Claude devia ter decidido sozinho.
+- **O teste de admissão do modelo, oferecido pelo `/sworn:init`.** Os portões são ganchos, mas valer depende também
+  do modelo: um lê as regras injetadas e outro não, um contorna a negação pelo shell. Com o seu sim, o init roda os 4
+  testes ao vivo com o modelo do chat (ou outro que você nomear), cada um numa pasta temporária: a abertura põe as
+  regras, a edição fora do escopo é negada, o apagar é negado, o "passou" sem a saída do teste é barrado. Cada
+  resultado sai `ok`, `falhou` (com o que não valeu), `inconclusivo` ou `nao rodou`, e fica em `admissao` no
+  `projeto.json`. Comando: `node <sworn>/scripts/admissao.js --modelo <id> --gravar`, e no Codex com `--harness codex`
+  (e `--codex <codex.exe>`). Rodado com o Haiku no Claude Code: 4 de 4, perto de US$ 0,02 a 0,03 por teste. No Codex,
+  os ganchos do sworn e o estado da sessão foram conferidos numa sonda; a rodada inteira com um modelo não pôde ser
+  feita, porque a conta usada bateu no limite de uso do Codex.
+- **A abertura enxuta, para modelo de contexto curto.** Com `"aberturaEnxuta": true` no `projeto.json`, a abertura
+  da sessão deixa as regras do projeto inteiras e troca os blocos de trabalho em paralelo, menos paradas, qualidade de
+  resposta e menos código por uma linha de resumo cada: perto de 2,3 mil caracteres a menos. O rodapé diz como voltar
+  ao texto inteiro. **Medido** (bateria, Haiku, 4 tarefas, 5 repetições, a mesma semente): 15 de 20 tarefas sem defeito
+  com a abertura enxuta e 15 de 20 com a cheia, os mesmos 5 defeitos, a US$ 0,0063 por tarefa contra 0,0072. Nada se
+  perdeu na medida; a chave vem desligada, e só `true` liga.
+- **O agente que volta duas vezes sem prova passa a tarefa ao de cima.** Na escada de agentes (`agentes.escada`), o
+  agente que diz duas vezes seguidas que terminou sem a saída do teste que passa (ou com ela mostrando falha) é tratado
+  como se tivesse pedido ajuda: o Claude despacha o agente seguinte da escada. O mesmo vale, já no primeiro retorno,
+  para o agente que o sworn barrou 3 vezes ou mais no mesmo despacho e que voltou sem essa saída: preso nas
+  negativas, ele passa a tarefa ao de cima (o sworn conta as negações na transcrição do subagente, só no Claude
+  Code). E o pedido de escalada ainda não despachado volta depois da compactação da conversa, em vez de se perder.
+- **O plano conferido antes do código, e o código conferido contra o plano.** Dois comandos novos. O
+  `/sworn:review-plan` roda um script que confere no disco cada caminho, símbolo e comando que o plano cita entre
+  crases e cobra, em cada passo aberto, o comando que o prova; o que falta sai com a linha ("caminho que não existe e a
+  linha não diz que será criado", "símbolo que não está no arquivo", "comando sem o script", "passo sem prova"), e só
+  então a revisão cega lê o plano. O `/sworn:drift` cruza os arquivos mudados desde o commit do plano com o que ele
+  cita e mostra o arquivo mudado que o plano não cita e o passo marcado feito cujo arquivo não mudou. No projeto de
+  referência estudado (google/elephant-goldfish-model), as duas conferências são um pedido ao modelo; aqui são script,
+  e o relatório conta quantas citações conferiu. **Medido:** na bateria, numa tarefa com um caminho errado plantado no plano, as 40 rodadas (Haiku e Opus,
+  com e sem o sworn) terminaram sem defeito, e nenhuma chamou o `/sworn:review-plan`; numa segunda tarefa, com um
+  comando de prova que não existe, o piloto sem o sworn também não errou. Os modelos desviam sozinhos desses dois erros
+  de plano, então o efeito do comando não se mediu; ele fica como comando que você chama. Depois dessa medida, a
+  descrição do `/sworn:review-plan` passou a pedir que o agente o rode ao receber um plano para seguir; se o agente
+  passa a fazer isso sozinho não foi medido.
+- **O juiz da revisão cega um degrau acima de quem escreveu, e uma chave para o fim do turno cobrar a revisão de
+  todo código.** Quando a revisão cega despacha um inspetor, o sworn lê o modelo que responde a sessão e sobe o
+  inspetor um degrau: com o Haiku escrevendo, o Sonnet julga; com o Sonnet, o Opus. Um pedido que já vem igual ou mais
+  forte fica como veio. `"juizAcima": false` no `projeto.json` desliga. Com `"revisaoTodoCodigo": true`, o fim do
+  turno que diz "pronto" com arquivo de código mudado sem revisão aprovada barra para qualquer arquivo de código, não
+  só os da marcha mais rigorosa: o mesmo conjunto que o commit já cobrava. Sem a chave, fica como antes.
+  **Medido** (bateria, 4 tarefas, 5 repetições por braço, com as duas mudanças ligadas): com o Haiku, 12 de 20 tarefas
+  sem defeito com o sworn contra 10 sem ele, ao custo de US$ 0,105 por tarefa contra 0,005; com o Opus, 19 de 20
+  contra 16, a US$ 0,363 contra 0,149, 2,44 vezes. Poucos pares diferentes para dizer que houve ganho, e o custo do
+  Opus passou do limite de 1,5 vez. Por isso a cobrança de todo código vem desligada.
+- **A prova de pronto rodada pelo próprio sworn no fim do turno, só onde você ligar.** No projeto em que você roda
+  `node <sworn>/scripts/prova-no-fecho.js ligar` (a chave fica na sua máquina, em `sworn/prova-no-fecho.json` dentro da
+  pasta do Claude, `~/.claude` ou a de `CLAUDE_CONFIG_DIR`, nunca no repositório), o fim do turno que editou código sem
+  rodar a `provaDePronto` a roda sozinho, com teto de 60 s: passou, o turno encerra sem o Claude gastar outro turno para
+  rodá-la (e o "pronto" vale até a próxima edição); falhou, o Claude recebe as últimas linhas da saída para consertar;
+  estourou o teto, segue como antes (o Claude roda) e o sworn não tenta de novo naquela sessão. Repositório clonado
+  nunca roda nada sozinho, e a chave guarda o comando que você ligou: se um commit trocar a `provaDePronto`, o sworn
+  para de rodá-la até você ligar de novo. `desligar` desliga; `ver` diz se está ligada e qual prova roda. O tempo
+  máximo do gancho de fim de turno subiu de 10 para 90 s; no Codex, rode `node <sworn>/scripts/instalar.js codex` de
+  novo e aprove o gancho de novo no `/hooks` (sem isso, o Codex não roda o gancho mudado).
+  **Medido.** Numa bateria de 4 tarefas pequenas de código (consertar um bug, deixar uma suíte de testes verde,
+  formatar um valor, criar um comando), cada uma feita 5 vezes com o sworn e 5 vezes sem, com a prova no fecho ligada:
+  - no Haiku, a rodada sem nenhum defeito saiu 15 de 20 vezes com o sworn e 10 de 20 sem ele. O defeito que caiu foi
+    o "pronto" dito sem a prova ter rodado: 0 vezes com o sworn, 10 sem (5 dessas 10 rodadas também tinham código
+    duplicado, um defeito que apareceu igual nos dois lados, 5 e 5). A amostra é pequena (só 2 das 4 tarefas mudaram de resultado), então é um indício,
+    não uma prova estatística: as faixas de 95% de confiança dos dois lados (53–89% e 30–70%) ainda se cruzam;
+  - no Opus, a qualidade não piorou: 20 de 20 com o sworn e 17 de 20 sem. O preço é o custo: cada rodada custou 1,40
+    vez mais com o sworn (US$ 0,208 contra US$ 0,149) e levou 8,6 turnos contra 7,4; o método de medição aceita até
+    1,5 vez no custo.
+  Numa primeira medição, o Haiku tinha empatado. A régua da época só contava o teste que aparecia na conversa e não
+  via a prova que o próprio sworn rodou no fim do turno, então contou como "pronto sem prova" justamente as 10 vezes
+  em que o sworn provou. A régua ganhou uma emenda (`docs/bateria/metodo-melhorias-2.md`) e a medição foi refeita. As
+  duas medições custaram US$ 14,67.
+- **"Achei a causa" só com o defeito reproduzido.** O fim do turno que diz ter achado a causa de um defeito ("achei a
+  causa", "a causa era", "found the root cause") é barrado sem um bloco de saída que mostre o defeito acontecendo (o
+  teste que falha, a linha de erro, o esperado contra o obtido); saída verde ou sem relação não vale. O Claude roda o
+  comando que reproduz o defeito e cola a saída, ou diz que a causa é hipótese, ou que não a reproduziu. Conta no
+  mesmo contador da afirmação de sucesso sem prova; desliga junto com ela.
+- **Cada decisão que o Claude toma sozinho fica registrada.** A escolha técnica feita sem perguntar sai na resposta
+  numa linha "Decisão: o quê - por quê - custo se errado", para você ver o que foi decidido e o que quebraria se
+  estivesse errado; o sworn conta essas linhas e as que vêm sem o custo se errado.
+- Para quem mantém o plugin: são **44 baldes** de contador: 27 que negam, 17 que só contam (os novos são
+  `parada_no_handoff`, `parada_sem_dono`, `restaurou_fora_do_escopo`, os quatro `fecho_*` do estado tipado, os
+  cinco `pergunta_*` por classe, `decisao_autonoma` e `decisao_sem_custo`).
+
+**Corrigido**
+
+- **Um padrão de caminho com muitos curingas não trava mais a escrita.** Os padrões que você escreve no
+  `escopo.md`, no `projeto.json` e no `design.json` (como `src/**`) eram conferidos pelo sworn de um jeito que, num
+  padrão com muitos `*` e `**` (como `**/**/**/a*a*a*b`) contra um caminho fundo, podia levar minutos a cada arquivo
+  escrito, e o Claude ficava parado. O defeito era do sworn, não do padrão: agora a conferência lê o caminho uma vez
+  só e volta na hora, com o mesmo resultado de antes.
+
 ## 0.22.0 — o handoff não para o trabalho: a conversa compacta, relê o handoff e segue
 
 **Novo**

@@ -95,6 +95,16 @@ agent you call.
 code. Open and compatible license: code only with attribution, and only if it is less code than
 rewriting.
 
+**When the radar runs in maintainer mode (Step 1), sworn makes its own version and never takes a
+dependency** (owner's decision). The license rule above still holds, and this one is stricter: whatever the
+license, an adopted candidate is rewritten inside the plugin, with the gaps the study found closed — no code copied, and no package,
+binary or backend of the third party that sworn installs or calls. What the user already runs (Node, git, their
+browser) is the environment, not a dependency. The third-party product is installed only to test it
+against sworn's version, with the owner's yes, in a temporary folder outside the repository, and removed
+afterwards. `test/sem-terceiros.test.js`
+fails when the plugin imports a third-party module or `package.json` declares a dependency: remove the import or
+the dependency, and rewrite what it did inside the plugin.
+
 ## Step 4 — the interview (user mode)
 
 When the fit of a candidate is uncertain, ask before deciding: **at most 3 questions**, all at

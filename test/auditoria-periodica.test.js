@@ -626,7 +626,7 @@ test('091 T6: nada a cortar, com ordens na janela - so a retroalimentacao, sem a
       '  nunca disparadas: auditar, calibrar, init, revisar, manual',
       '  ("-": o sworn so ve a recusa no commit sem revisao; nas outras, ' +
         'a ordem que o Claude nao cumpriu foi ignorada ou',
-      '  recusada na conversa. Ordem que se repete sem cumprir: vale perguntar ao dono se ela ainda serve.)'
+      '  recusada na conversa. Ordem que se repete sem cumprir: o sworn segue cobrando; o dono decide se ela fica.)'
     ].join('\n'));
     assert.strictEqual(ap.pedeCorte(t), false, 'nada a cortar nao pode acender o botao nem contar a ordem');
     assert.deepStrictEqual(lerMarcaBruta(dir).ordens, { ordem_aprender_dada: 3, ordem_aprender_cumprida: 2 });

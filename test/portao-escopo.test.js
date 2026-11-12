@@ -961,6 +961,47 @@ test('TS-03 (lote 3, D423): token_fora_do_sistema - Write (content) e Edit (new_
   });
 });
 
+test('E2 (D827): o desvio declarado no design.json libera o valor so na tela dele', () => {
+  comTmp((tmp) => {
+    const dir = montarProjeto();
+    try {
+      escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/**\n');
+      escrever(dir, '.claude/sworn/design.json', JSON.stringify({ cores: ['#ff6600'], raios: [], espacos: [], sombras: [],
+        antiReferencias: [], desvios: [{ arquivos: ['src/checkout/**'], motivo: 'marca do banco', cores: ['#0050aa'] }] }));
+      // Os dois arquivos ja existem: a escrita e edicao (arquivo novo e outra trava, a 7).
+      escrever(dir, 'src/checkout/pagar.css', '.pagar { color: #ff6600; }\n');
+      escrever(dir, 'src/home.css', '.home { color: #ff6600; }\n');
+      const escrita = (alvo, id) => {
+        const w = comSessao(entrada(dir, alvo), id);
+        w.tool_input.content = '.pagar { color: #0050aa; }\n';
+        return w;
+      };
+      const dentro = rodar(escrita('src/checkout/pagar.css', 'e2-dentro'), tmp);
+      assert.ok(!negou(dentro), 'na tela do desvio a cor tinha de passar: ' + motivoDeNegacao(dentro));
+      liberou(dentro);
+      const fora = rodar(escrita('src/home.css', 'e2-fora'), tmp);
+      assert.ok(negou(fora), 'a cor do desvio fora da tela dele tinha de negar');
+      assert.match(motivoDeNegacao(fora), /#0050aa/);
+      assert.match(motivoDeNegacao(fora), /desvios desta tela: nenhum/);
+      // O Edit passa pelo mesmo caminho do Write (o E26 so lia `content`): new_string na tela do desvio passa, fora nega.
+      const edicao = (alvo, id, antigo) => {
+        const e = comSessao(entrada(dir, alvo), id);
+        e.tool_name = 'Edit';
+        delete e.tool_input.content;
+        e.tool_input.old_string = antigo;
+        e.tool_input.new_string = antigo.replace('#ff6600', '#0050aa');
+        return e;
+      };
+      const editaDentro = rodar(edicao('src/checkout/pagar.css', 'e2-edit-dentro', '.pagar { color: #ff6600; }'), tmp);
+      assert.ok(!negou(editaDentro), 'o Edit na tela do desvio tinha de passar: ' + motivoDeNegacao(editaDentro));
+      liberou(editaDentro);
+      const editaFora = rodar(edicao('src/home.css', 'e2-edit-fora', '.home { color: #ff6600; }'), tmp);
+      assert.ok(negou(editaFora), 'o Edit com a cor do desvio fora da tela dele tinha de negar');
+      assert.match(motivoDeNegacao(editaFora), /#0050aa/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 // ------------------------------- Plano 091 (#6, D559): o manual antes de arquivo AAA
 // O motivo e o texto do mock aprovado (prints-091); o manual conta pelo PostToolUse da ferramenta Skill
 // (marcar-trabalho.js), com a mesma regra do mod: skill do agente principal com "padrao" no nome.

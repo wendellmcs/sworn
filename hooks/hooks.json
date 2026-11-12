@@ -75,6 +75,12 @@
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/portao-apelido.js"],
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/portao-juiz.js"],
+            "timeout": 10
           }
         ]
       },
@@ -98,6 +104,17 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/marcar-trabalho.js"],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/conferir-depois.js"],
             "timeout": 10
           }
         ]
@@ -173,7 +190,7 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/portao-fecho.js"],
-            "timeout": 10
+            "timeout": 90
           }
         ]
       }

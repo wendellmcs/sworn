@@ -448,7 +448,16 @@ return any path.** Locate the files that match that pattern yourself — without
 folders that Step 1 skips (`node_modules`, `.git`, `dist`, `build` and the like) —, read them and **confirm
 with the owner** that they really are the project's tokens (an authentication `tokens.ts` matches too). **Only
 after asking the anti-references** (paragraph below) write `.claude/sworn/design.json` with
-`cores`, `raios`, `espacos`, `sombras` and `antiReferencias`.
+`cores`, `raios`, `espacos`, `sombras` and `antiReferencias`; when the tokens also name the font sizes and font
+families, add `tamanhos` (sizes, like `13px`) and `fontes` (families, like `"Inter"`), both optional: without them
+fonts are not checked. A screen that already uses values outside the system
+may get a deviation, an item of the `desvios` list. Ask the owner first: "this screen uses <value>, which the system
+lacks; keep it only here, with what reason and until when?". Only after their yes, write the item with:
+- `arquivos`: the paths of that screen, with a written folder (`src/checkout/**`); `**` or `**/*.css` is not valid;
+- `motivo`: the reason, required;
+- `ate`: optional end date, as YYYY-MM-DD;
+- the extra values, in the same keys as the system (`cores`, `raios`, `espacos`, `sombras`, `tamanhos`, `fontes`).
+Never declare one to make a value pass.
 **In a re-init, the `Write` here is denied by the scope gate** if `escopo.md` does not cover that file:
 declare it first, as Step 0b says. **If `design.json` already exists, do not overwrite it without
 asking:** show the owner what changes (field by field) and only write with their OK.
@@ -838,6 +847,35 @@ In Step 8 say it in plain words, in the user's language: when the conversation g
 that runs the agent) now summarizes it right after sworn writes the handoff, and the agent goes on in the same chat,
 with nothing for the user to do; it applies from the next Claude Code session; Qwen Code, OpenCode, agy and `dsh`
 have no such setting. An item with `erro` (exit 1): show it and what it says to fix; never write the file by hand.
+
+## Step 7i — the model admission test, only with the user's yes
+
+In Claude Code and in Codex (in the other harnesses, skip this step and say in Step 8 that the test runs only in
+Claude Code and Codex for now).
+The gates are hooks, but whether they hold also depends on the model: one model reads the injected rules and another
+does not; one works around a denial through the shell. The admission test checks the 4 protections live with the
+model this chat uses: the opening puts the rules in context; an edit outside the scope is denied; a destructive
+command is denied; a "tests passed" close without the test output is blocked. Ask through `AskUserQuestion`, 3
+options, the recommended one first:
+
+1. **Run the admission test now (recommended)** — "Opens 4 short sessions of `<model>`, each in its own temporary
+   folder, and checks each protection by its effect on disk. The model runs there with full permissions (no
+   confirmation prompts): sworn's gates are what limits it, and they are what the test measures. Cost: near US$ 0.02
+   with Haiku and near US$ 1 with Opus, 2 to 4 minutes. The result goes into `admissao` in `projeto.json`."
+2. **Not now** — "Nothing runs. It can run later with the command below."
+3. **With another model** — "The same test with the model you name, the one this project will use."
+
+With option 1 or 3, from the absolute root of Step 0:
+
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/admissao.js" --modelo <model id> --gravar
+
+`<model id>` is the id of the model that answers this chat (option 1) or the one the user named (option 3). In
+Codex, `<plugin>` is the folder two levels above this `SKILL.md` (as in Step 7g), and the command adds
+`--harness codex --codex <path of the codex executable>`; it runs `codex exec` with the user's login, so it spends
+from the user's Codex quota (say this in option 1). Paste the report. In Step 8, in the user's language: each `falhou` line is a protection that does not hold with that
+model, and why; a model that passes the 4 is safer for this project. `inconclusivo` means the model did not do what
+the scenario needs to measure (for example, it refused to say the tests passed): not a failure. `nao rodou` gives
+the cause. Option 2: write nothing and say the command.
 
 ## Step 8 — close by saying what was switched on
 

@@ -8,11 +8,11 @@ const { spawnSync } = require('node:child_process');
 
 const RAIZ = path.join(__dirname, '..');
 
-function rodar(script, entrada, tmp) {
+function rodar(script, entrada, tmp, envExtra) {
   const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
     input: JSON.stringify(entrada),
     encoding: 'utf8',
-    env: Object.assign({}, process.env, { SWORN_TMP: tmp })
+    env: Object.assign({}, process.env, { SWORN_TMP: tmp }, envExtra || {})
   });
   let json = null;
   if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
@@ -137,6 +137,45 @@ test('fecho D33: descarga persiste no arquivo duravel sem duplicar o contador (D
     const bruto = fs.readFileSync(path.join(tmp, '.claude', 'sworn', 'contadores.json'), 'utf8');
     const contadores = JSON.parse(bruto);
     assert.strictEqual(contadores.fecho_sem_evidencia, 1, 'esperava 1, nao 2: descarregar nao pode duplicar');
+  });
+});
+
+// B3 (s369, R-dsh): o turno que encerra conta o estado tipado do fecho e cada pedido ao dono pela classe da D785;
+// o pedido fora das 4 classes e a falha medida (pergunta_fora_da_classe).
+test('B3: o fecho conta o estado tipado e as perguntas ao dono por classe', () => {
+  comTmp((tmp) => {
+    fs.mkdirSync(path.join(tmp, '.claude', 'sworn'), { recursive: true });
+    const turno = (id, msg) => {
+      rodar('marcar-trabalho.js', { session_id: id, cwd: tmp, tool_name: 'Edit' }, tmp);
+      rodar('portao-fecho.js', { session_id: id, cwd: tmp, hook_event_name: 'Stop', last_assistant_message: msg }, tmp);
+    };
+    turno('b3a', 'Feito o que dava.\nPreciso do dono: publicar a 0.23.0 e empurrar o backup.');
+    turno('b3b', 'Preciso do dono: qual nome de variavel eu uso?');
+    turno('b3c', 'Espero: a leva do Codex rodando em segundo plano.');
+    turno('b3d', 'Pronto, os testes passaram.\n```\n# pass 4\n# fail 0\n```');
+    // a linha colada num bloco de codigo e o pedido vazio nao sao pedido ao dono
+    turno('b3e', 'O log da rodada:\n```\nPreciso do dono: publicar\n```\nPreciso do dono:');
+    const c = JSON.parse(fs.readFileSync(path.join(tmp, '.claude', 'sworn', 'contadores.json'), 'utf8'));
+    assert.strictEqual(c.fecho_bloqueado, 2, 'os dois pedidos ao dono: ' + JSON.stringify(c));
+    assert.strictEqual(c.pergunta_externo, 1, JSON.stringify(c));
+    assert.strictEqual(c.pergunta_fora_da_classe, 1, 'o nome de variavel e decisao tecnica: ' + JSON.stringify(c));
+    assert.strictEqual(c.fecho_esperando, 1, JSON.stringify(c));
+    assert.strictEqual(c.fecho_pronto, 1, 'pronto com o bloco que passa: ' + JSON.stringify(c));
+    assert.strictEqual(c.fecho_falhou, undefined, JSON.stringify(c));
+  });
+});
+
+// B4 (s369, R-superpowers): a decisao autonoma registrada no fecho conta; a sem o "custo se errado" e a falha medida.
+test('B4: o fecho conta as decisoes autonomas, e as registradas sem o custo se errado', () => {
+  comTmp((tmp) => {
+    fs.mkdirSync(path.join(tmp, '.claude', 'sworn'), { recursive: true });
+    rodar('marcar-trabalho.js', { session_id: 'b4', cwd: tmp, tool_name: 'Edit' }, tmp);
+    rodar('portao-fecho.js', { session_id: 'b4', cwd: tmp, hook_event_name: 'Stop', last_assistant_message:
+      'Feito o item.\nDecisao: usar matchAll - por que: diz a intencao - custo se errado: nenhum, e leitura\n' +
+      'Decisao: lote de 100 - por que: linha de comando do Windows\n```\nDecisao: colada no log\n```' }, tmp);
+    const c = JSON.parse(fs.readFileSync(path.join(tmp, '.claude', 'sworn', 'contadores.json'), 'utf8'));
+    assert.strictEqual(c.decisao_autonoma, 2, 'as duas do texto corrido: ' + JSON.stringify(c));
+    assert.strictEqual(c.decisao_sem_custo, 1, 'a sem o custo se errado: ' + JSON.stringify(c));
   });
 });
 
@@ -574,6 +613,229 @@ test('D412: handoff gravado (Write ou Edit) e resposta final sem bloco de codigo
   });
 });
 
+// s369 (A6b, dono: "corrija isso de uma vez por todas, terceira vez"): a linha declarada que so pede chat novo (abrir o
+// chat novo, colar o prompt, e o para-que-serve que fecha a linha) nao libera: a conversa segue e a compactacao rele o
+// handoff. Qualquer outra coisa na linha, ou nas linhas nao vazias logo abaixo, libera, como toda linha declarada.
+test('A6b: "Preciso do dono:" que so pede chat novo barra; com qualquer outro pedido, libera', () => {
+  comTmp((tmp) => {
+    const barrou = (r) => !!(r.json && r.json.decision === 'block');
+    const CHAT = /pedir chat novo nao e motivo de parada/;
+    const SO_CHAT = [
+      ['a6chat1', 'Handoff gravado.\nPreciso do dono: abrir o chat novo e colar o prompt acima para comecar a A5e.'],
+      ['a6chat2', 'Feito.\nNeed the owner: open a new chat and paste the prompt.'],
+      ['a6chat3', 'Feito.\nPreciso do dono: iniciar uma nova conversa com o prompt do handoff.'],
+      ['a6chat7', 'Feito.\nPreciso do dono: abrir um Chat Novo e colar o prompt.'], // caixa
+      ['a6chat8', 'Feito.\nPreciso do dono: iniciar uma nova sessão.'], // acento
+      ['a6chat9', 'Feito.\nPreciso do dono: colar o prompt no chat.'], // so colar o prompt
+      ['a6chat12', 'Feito.\nPreciso do dono: abrir chat novo e colar o prompt para continuar.'], // para-que-serve no fim
+      ['a6chat17', 'Feito.\nPreciso do dono: abrir o chat novo e colar o prompt lá.'], // o lugar do prompt
+      ['a6chat18', 'Feito.\nNeed the owner: start a new session with the prompt of the handoff.']];
+    for (const [id, m] of SO_CHAT) {
+      const d = projetoCom(tmp, id);
+      gravar(tmp, id, d, 'Write', 'a.js');
+      const r = fecho(tmp, id, d, m);
+      assert.ok(barrou(r) && CHAT.test(r.json.reason), 'so chat, barra - ' + id + ': ' + r.stdout);
+      assert.ok(/^[\x20-\x7E\n]+$/.test(r.json.reason), 'ASCII: ' + r.json.reason);
+    }
+    const COM_OUTRO_PEDIDO = [
+      ['a6chat4', 'Instalada.\nPreciso do dono: abrir um chat novo para carregar a versao nova do sworn.'],
+      ['a6chat5', 'Feito.\nPreciso do dono: credencial - a chave do servidor (o chat novo pode esperar).'],
+      ['a6chat6', 'Feito.\nPreciso do dono: aprovar o PR e abrir chat novo.'],
+      ['a6chat10', 'Feito.\nPreciso do dono: aprovar o PR depois abrir chat novo.'], // sem separador
+      ['a6chat11', 'Feito.\nPreciso do dono: abrir chat novo para publicar a 0.23.0.'],
+      ['a6chat13', 'Feito.\nPreciso do dono: abrir o chat novo e autorizar o merge.'], // pedido fora de lista
+      ['a6chat14', 'Feito.\nPreciso do dono: coletar os logs do chat novo.'], // palavra parecida com o verbo
+      ['a6chat15', 'Feito.\nPreciso do dono: abrir chat novo e colar o prompt\n- aprovar o PR'], // item abaixo
+      ['a6chat16', 'Feito.\nPreciso do dono:'], // vazia: libera, como toda linha declarada
+      ['a6chat19', 'Feito.\nPreciso do dono: abrir o chat novo para continuar a migração depois que você aprovar o merge'],
+      ['a6chat20', 'Feito.\nPreciso do dono: abrir o chat novo para continuar e autorizar o merge'],
+      ['a6chat21', 'Feito.\n**Espero:** pra seguir'], // so o para-que-serve, sem pedir chat
+      ['a6chat22', 'Feito.\nPreciso do dono: abrir o chat novo para continuar após você aprovar'],
+      ['a6chat23', 'Feito.\nPreciso do dono: abrir o chat novo e colar o prompt.\n1. aprovar o merge da PR'], // numerada
+      ['a6chat24', 'Feito.\nPreciso do dono: abrir o chat novo para continuar a migração depois'], // nao fecha a linha
+      ['a6chat25', 'Feito.\nPreciso do dono: abrir o chat novo para continuar\nAprovação.']]; // nao atravessa a quebra
+    for (const [id, m] of COM_OUTRO_PEDIDO) {
+      const d = projetoCom(tmp, id);
+      gravar(tmp, id, d, 'Write', 'a.js');
+      const r = fecho(tmp, id, d, m);
+      assert.ok(!barrou(r), 'com outro pedido, libera - ' + id + ': ' + r.stdout);
+    }
+  });
+});
+
+// s369 (A6, P1 do dono: "entenda pq nao continuou, isso nao pode acontecer"; vale em todo projeto e harness): o turno
+// com trabalho que para com trabalho por fazer, sem precisar do dono, barra (teto 3 por turno); so a linha
+// declarada libera.
+test('A6: parar com caixa aberta ou anunciando o proximo passo barra; "Preciso do dono:" ou "Espero:" libera', () => {
+  comTmp((tmp) => {
+    const PARADA = /o turno parou com trabalho por fazer/;
+    const barrou = (r) => !!(r.json && r.json.decision === 'block' && PARADA.test(r.json.reason));
+    const comPlano = (id, extra) => {
+      const dir = projetoCom(tmp, id, extra);
+      fs.writeFileSync(path.join(dir, 'plano.md'),
+        '# Plano\n- [x] passo 1\n- [ ] **passo 2**: rodar a suite\n', 'utf8');
+      fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'escopo.md'),
+        '# Escopo\n**Objetivo:** testar o A6. Plano: `plano.md`\n## Dentro\n- src/**\n', 'utf8');
+      return dir;
+    };
+    // 1. caixa aberta: barra 3 vezes no turno (o laco de stop_hook_active tambem), cita a caixa, e na 4a passa
+    const d1 = comPlano('a6a');
+    gravar(tmp, 'a6a', d1, 'Write', path.join('src', 'a.js'));
+    const r1 = fecho(tmp, 'a6a', d1, 'Anotado.');
+    assert.ok(barrou(r1), 'caixa aberta: ' + r1.stdout);
+    assert.ok(/passo 2: rodar a suite/.test(r1.json.reason) && /Preciso do dono:/.test(r1.json.reason), r1.json.reason);
+    assert.ok(/^[\x20-\x7E\n]+$/.test(r1.json.reason), 'ASCII: ' + r1.json.reason);
+    assert.strictEqual(sessaoDe(tmp, 'a6a').contadores.parada_sem_dono, 1);
+    assert.ok(barrou(fecho(tmp, 'a6a', d1, 'Anotado.', { stop_hook_active: true })), '2a no mesmo turno');
+    assert.ok(barrou(fecho(tmp, 'a6a', d1, 'Anotado.', { stop_hook_active: true })), '3a no mesmo turno');
+    assert.ok(!barrou(fecho(tmp, 'a6a', d1, 'Anotado.', { stop_hook_active: true })), 'teto de 3');
+    // 2. a linha declarada libera; a palavra solta no meio do texto, nao
+    const d2 = comPlano('a6b');
+    gravar(tmp, 'a6b', d2, 'Write', path.join('src', 'a.js'));
+    assert.ok(!barrou(fecho(tmp, 'a6b', d2, 'Anotado.\nPreciso do dono: credencial - a chave do servidor')), 'Preciso');
+    const d3 = comPlano('a6c');
+    gravar(tmp, 'a6c', d3, 'Write', path.join('src', 'a.js'));
+    assert.ok(!barrou(fecho(tmp, 'a6c', d3, 'Anotado.\n**Espero:** a leva roda em segundo plano')), 'Espero');
+    const d4 = comPlano('a6d');
+    gravar(tmp, 'a6d', d4, 'Write', path.join('src', 'a.js'));
+    assert.ok(barrou(fecho(tmp, 'a6d', d4, 'Anotado. Publicar e credencial sao do dono.')), 'palavra solta nao libera');
+    // 3. sem plano: anunciar o proximo passo barra; sem anuncio passa
+    const d5 = projetoCom(tmp, 'a6e');
+    gravar(tmp, 'a6e', d5, 'Write', 'a.js');
+    const r5 = fecho(tmp, 'a6e', d5, 'Anotado. O proximo passo e rodar a suite.');
+    assert.ok(barrou(r5) && /anuncia o proximo passo/.test(r5.json.reason), 'anuncio: ' + r5.stdout);
+    const d6 = projetoCom(tmp, 'a6f');
+    gravar(tmp, 'a6f', d6, 'Write', 'a.js');
+    assert.ok(!barrou(fecho(tmp, 'a6f', d6, 'Anotado.')), 'sem plano e sem anuncio passa');
+    const d6b = projetoCom(tmp, 'a6f2');
+    gravar(tmp, 'a6f2', d6b, 'Write', 'a.js');
+    assert.ok(barrou(fecho(tmp, 'a6f2', d6b, 'Noted. Next step: run the tests.')), 'anuncio em ingles');
+    // revisao (borda P1): o passo do dono, o bloco de codigo e a citacao nao sao anuncio de fazer
+    for (const [id, m] of [['a6k', 'Anotado. O proximo passo e do dono: aprovar o PR.'],
+      ['a6l', 'Anotado.\n```\nproximo passo: rodar a suite\n```'], ['a6m', 'Anotado.\n> o proximo passo e rodar a suite'],
+      ['a6n', 'Anotado. O proximo passo e seu.'],
+      // revisao r2 (borda P1): o ":" nao corta a frase do dono; a negacao; cerca indentada ou sem fim; codigo em linha
+      ['a6p', 'Anotado. Proximo passo: você aprova o PR.'], ['a6q', 'Next step: you review the diff.'],
+      ['a6r', 'Anotado. N\u00e3o h\u00e1 pr\u00f3ximo passo nenhum.'], ['a6s', 'Noted. No next step needed.'],
+      ['a6t', 'Anotado.\n  ```\n  next step: run the suite\n  ```\nFim.'], ['a6u', 'Anotado.\n```\nproximo passo: x'],
+      ['a6v', 'O texto diz `proximo passo` e so.'], ['a6w', 'Anotado. O próximo passo é de você.']]) {
+      const d = projetoCom(tmp, id);
+      gravar(tmp, id, d, 'Write', 'a.js');
+      assert.ok(!barrou(fecho(tmp, id, d, m)), 'nao e anuncio de fazer: ' + JSON.stringify(m));
+    }
+    // ... e o anuncio real que escapava: o plural, o "sua" que so modifica o objeto, o "no" do portugues
+    for (const [id, m] of [['a6x', 'Noted. The next steps are: I will run the suite.'],
+      ['a6y', 'Em seguida, vou ajustar a sua funcao de parse.'], ['a6z', 'Anotado. No próximo passo, rodo a suite.'],
+      ['a6za', 'Anotado. Como o owner do modulo pediu, o proximo passo e rodar a suite.']]) {
+      const d = projetoCom(tmp, id);
+      gravar(tmp, id, d, 'Write', 'a.js');
+      assert.ok(barrou(fecho(tmp, id, d, m)), 'anuncio real: ' + JSON.stringify(m));
+    }
+    // revisao r2 (correcao P1 do plano.js): a caixa de exemplo dentro de bloco de codigo nao e tarefa
+    const dF = projetoCom(tmp, 'a6zb');
+    fs.writeFileSync(path.join(dF, 'plano.md'), '# Plano\n```md\n- [ ] exemplo\n```\n- [x] feito\n- [ ] a real\n', 'utf8');
+    fs.writeFileSync(path.join(dF, '.claude', 'sworn', 'escopo.md'),
+      '# Escopo\n**Objetivo:** testar. Plano: `plano.md`\n## Dentro\n- **\n', 'utf8');
+    gravar(tmp, 'a6zb', dF, 'Write', path.join('src', 'a.js'));
+    const rF = fecho(tmp, 'a6zb', dF, 'Anotado.');
+    assert.ok(barrou(rF) && /a real/.test(rF.json.reason) && !/exemplo/.test(rF.json.reason), 'caixa real: ' + rF.stdout);
+    const dG = projetoCom(tmp, 'a6zc');
+    fs.writeFileSync(path.join(dG, 'plano.md'), '# Plano\n~~~\n- [ ] exemplo\n~~~\n- [x] feito\n', 'utf8');
+    fs.writeFileSync(path.join(dG, '.claude', 'sworn', 'escopo.md'),
+      '# Escopo\n**Objetivo:** testar. Plano: `plano.md`\n## Dentro\n- **\n', 'utf8');
+    gravar(tmp, 'a6zc', dG, 'Write', path.join('src', 'a.js'));
+    assert.ok(!barrou(fecho(tmp, 'a6zc', dG, 'Anotado.')), 'so a caixa do exemplo: sem cobranca');
+    // 4. "modoContinuo": false desliga
+    const d7 = comPlano('a6g', { modoContinuo: false });
+    gravar(tmp, 'a6g', d7, 'Write', path.join('src', 'a.js'));
+    assert.ok(!barrou(fecho(tmp, 'a6g', d7, 'Anotado. O proximo passo e rodar a suite.')), 'modoContinuo false');
+    // 5. turno sem trabalho (so conversa) passa, tambem pela guarda do laco (stop_hook_active)
+    const d8 = comPlano('a6h');
+    assert.ok(!barrou(fecho(tmp, 'a6h', d8, 'O proximo passo e rodar a suite.')), 'sem trabalho');
+    assert.ok(!barrou(fecho(tmp, 'a6h', d8, 'O proximo passo e rodar a suite.', { stop_hook_active: true })),
+      'sem trabalho, pela guarda');
+    // 5b. revisao (correcao P1): o aviso do plano ilegivel vai junto na barrada da parada
+    const d10 = projetoCom(tmp, 'a6o');
+    fs.writeFileSync(path.join(d10, '.claude', 'sworn', 'plano-ativo.json'),
+      JSON.stringify({ arquivo: 'nao-existe.md', sessionId: 'a6o', tarefa: null }), 'utf8');
+    gravar(tmp, 'a6o', d10, 'Write', 'a.js');
+    const r10 = fecho(tmp, 'a6o', d10,
+      'A Tarefa 1 esta concluida.\n```\n$ node --test\ntests 3 | pass 3 | fail 0\n```\nO proximo passo e rodar a suite.');
+    assert.ok(barrou(r10), 'controle: barrou pela parada: ' + r10.stdout);
+    assert.ok(/nao pode ser lido/.test(r10.json.reason), 'aviso do plano ilegivel junto: ' + r10.json.reason);
+    // 6. a mensagem nova do usuario zera o contador do turno (com ele ainda alto: o turno barrou e nao fechou)
+    const d9 = comPlano('a6j');
+    gravar(tmp, 'a6j', d9, 'Write', path.join('src', 'a.js'));
+    assert.ok(barrou(fecho(tmp, 'a6j', d9, 'Anotado.')), 'controle: barrou');
+    assert.strictEqual(sessaoDe(tmp, 'a6j').paradaSemDono, 1, 'controle: contador 1');
+    rodar('abrir-turno.js', { session_id: 'a6j', cwd: d9, prompt: 'oi' }, tmp);
+    assert.strictEqual(sessaoDe(tmp, 'a6j').paradaSemDono, undefined, 'abrir-turno zera');
+  });
+});
+
+// s369 (P1 do dono, pedido 70 / D786): o handoff que o gatilho pediu e uma ponte; parar logo depois dele barra uma vez.
+test('s369: parar logo depois do handoff pedido pelo gatilho barra uma vez; seguir trabalhando passa', () => {
+  comTmp((tmp) => {
+    const PARADA = /o trabalho para depois do handoff/;
+    const abrirGatilho = (id, projeto) => {
+      const dir = projetoQueDispara(tmp, id);
+      if (projeto) {
+        const p = path.join(dir, '.claude', 'sworn', 'projeto.json');
+        fs.writeFileSync(p, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(p, 'utf8')), projeto)), 'utf8');
+      }
+      const r = turnoComTrabalho(tmp, id, dir);
+      assert.ok(r.json && r.json.hookSpecificOutput, id + ': controle, o gatilho pede o handoff: ' + r.stdout);
+      assert.strictEqual(sessaoDe(tmp, id).handoffDoGatilho, true, id + ': a marca do gatilho');
+      return dir;
+    };
+    // 1. gatilho -> handoff gravado (e editado de novo) -> para com o prompt colado: barra, conta, e so uma vez
+    const d1 = abrirGatilho('pn1');
+    gravar(tmp, 'pn1', d1, 'Write', HANDOFF);
+    gravar(tmp, 'pn1', d1, 'Edit', HANDOFF);
+    const r1 = fecho(tmp, 'pn1', d1, PROMPT);
+    assert.ok(r1.json && r1.json.decision === 'block' && PARADA.test(r1.json.reason), 'tinha de barrar: ' + r1.stdout);
+    assert.ok(/siga agora com o proximo passo/.test(r1.json.reason), r1.json.reason);
+    assert.ok(/^[\x20-\x7E\n]+$/.test(r1.json.reason), 'ASCII: ' + r1.json.reason);
+    assert.strictEqual(sessaoDe(tmp, 'pn1').contadores.parada_no_handoff, 1);
+    const r1b = fecho(tmp, 'pn1', d1, PROMPT);
+    const barrou = (r) => !!(r.json && r.json.decision === 'block' && PARADA.test(r.json.reason));
+    assert.ok(!barrou(r1b), 'so uma vez: ' + r1b.stdout);
+    // 2. gatilho -> handoff -> uma ferramenta fora do handoff (seguiu o trabalho): passa
+    const d2 = abrirGatilho('pn2');
+    gravar(tmp, 'pn2', d2, 'Write', HANDOFF);
+    const bash = (id, d) => rodar('marcar-trabalho.js',
+      { session_id: id, cwd: d, tool_name: 'Bash', tool_input: { command: 'npm test' } }, tmp);
+    bash('pn2', d2);
+    const r2 = fecho(tmp, 'pn2', d2, PROMPT);
+    assert.ok(!(r2.json && r2.json.decision === 'block'), 'seguiu trabalhando, nao barra: ' + r2.stdout);
+    // 3. a ferramenta ANTES do handoff nao conta como seguir
+    const d3 = abrirGatilho('pn3');
+    bash('pn3', d3);
+    gravar(tmp, 'pn3', d3, 'Write', HANDOFF);
+    const r3 = fecho(tmp, 'pn3', d3, PROMPT);
+    assert.ok(barrou(r3), 'antes do handoff nao conta: ' + r3.stdout);
+    // 4. "portaoHandoff": false desliga
+    const d4 = abrirGatilho('pn4', { portaoHandoff: false });
+    gravar(tmp, 'pn4', d4, 'Write', HANDOFF);
+    const r4 = fecho(tmp, 'pn4', d4, PROMPT);
+    assert.ok(!(r4.json && r4.json.decision === 'block'), 'portaoHandoff false: ' + r4.stdout);
+    // 5. sem gatilho (o usuario pediu o handoff): parar passa
+    const d5 = projetoCom(tmp, 'pn5');
+    gravar(tmp, 'pn5', d5, 'Write', HANDOFF);
+    const r5 = fecho(tmp, 'pn5', d5, PROMPT);
+    assert.ok(!(r5.json && r5.json.decision === 'block' && PARADA.test(r5.json.reason)), 'sem gatilho: ' + r5.stdout);
+    // 7. gatilho sem handoff gravado: esta trava nao barra (a ordem do handoff e de outra)
+    const d7 = abrirGatilho('pn7');
+    rodar('marcar-trabalho.js', { session_id: 'pn7', cwd: d7, tool_name: 'Write' }, tmp);
+    const r7 = fecho(tmp, 'pn7', d7, 'Anotado.');
+    assert.ok(!(r7.json && r7.json.decision === 'block' && PARADA.test(r7.json.reason)), 'sem handoff: ' + r7.stdout);
+    // 6. a marca do gatilho nao atravessa a mensagem nova do usuario
+    const d6 = abrirGatilho('pn6');
+    rodar('abrir-turno.js', { session_id: 'pn6', cwd: d6, prompt: 'oi' }, tmp);
+    assert.strictEqual(sessaoDe(tmp, 'pn6').handoffDoGatilho, undefined, 'abrir-turno tinha de zerar');
+  });
+});
+
 test('D412: handoff gravado e o prompt colado em bloco -> libera', () => {
   comTmp((tmp) => {
     const dir = projetoCom(tmp, 'h-ok');
@@ -714,7 +976,9 @@ test('D417: portaoHandoff false, handoff gravado sem bloco e a saude dispara -> 
 const SAIDA = '\n```text\n3 passed\n```';
 
 function planoComTarefas(tmp, nome, texto, ativoExtra) {
-  const dir = projetoCom(tmp, nome);
+  // s369 (A6): estes testes isolam o portao do subitem aberto; o plano com tarefa futura aberta faria a parada sem dono
+  // (paradaSemDono, ligada pelo modo continuo) barrar antes. Ela tem teste proprio ("A6: ...").
+  const dir = projetoCom(tmp, nome, { modoContinuo: false });
   fs.writeFileSync(path.join(dir, 'plano.md'), texto, 'utf8');
   fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'plano-ativo.json'),
     JSON.stringify(Object.assign({ arquivo: 'plano.md', sessionId: nome, tarefa: null }, ativoExtra || {})), 'utf8');
@@ -1367,9 +1631,9 @@ const CENA_S10 = [
   '',
   'Faca uma destas:',
   '  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";',
-  '  2. se chegar a 3 rondas sem fechar, pare e leve ao usuario 3 opcoes para',
-  '     escolher: corrigir e comparar mais uma vez, entregar sem a comparacao',
-  '     dizendo o motivo, ou comecar uma comparacao nova do zero;',
+  '  2. se chegar a 3 rondas sem fechar, conserte o que e erro, cada conserto com um',
+  '     teste que reprova quando o codigo e estragado de proposito, rode a suite inteira',
+  '     e entregue sem a comparacao dizendo o que ficou atras, sem perguntar;',
   '  3. ou diga ao usuario por que esta entrega fica sem a comparacao.',
   '',
   'So o dono desliga neste projeto: "portaoReferencia": false em .claude/sworn/projeto.json.'
@@ -1406,19 +1670,18 @@ function aprovar(tmp, id, abs) {
 }
 
 const CENA_REVISAO = [
-  'sworn - the review is missing on a strictest-rigor file.',
+  'sworn - the review is missing on a changed code file.',
   '',
-  'You said the work is done, and you changed files that this project puts in the',
-  'strictest rigor level (list "marchas.aaa" in .claude/sworn/projeto.json) with no',
-  'approved review in this session:',
+  'You said the work is done, and you changed code files with no approved review',
+  'in this session:',
   '  - "src/a b.js"',
   '  - "src/c.js"',
   '',
   'Do one of these:',
   '  1. run /sworn:review "<file>" for each one, until it says "aprovado";',
-  '  2. if 3 rounds pass without approval, stop and ask the user to pick one of',
-  '     3 options: fix and recheck once, deliver "without review" with the',
-  '     reason, or run a new full review;',
+  '  2. if 3 rounds pass without approval, fix what is an error, each fix with a',
+  '     test that fails when the code is broken on purpose, run the whole suite and',
+  '     deliver "without review" naming what stays open, without asking;',
   '  3. or tell the user why this delivery goes "without review" (those words',
   '     in your answer release this check).',
   '',
@@ -1436,6 +1699,46 @@ test('D655 T1: entrega alegada + arquivo AAA mudado sem revisao aprovada (sem re
     assert.strictEqual(r.json.reason, CENA_REVISAO);
     assert.strictEqual(sessaoDe(tmp, 'rev').contadores.fecho_sem_revisao, 1);
     assert.strictEqual(fecho(tmp, 'rev', dir, ENTREGA).json, null, 'uma vez por turno: a segunda passada libera');
+  });
+});
+
+// B2 (s369, R-impeccable): a revisao aprovada mas degradada (sem isolamento, sem navegador) so libera o pronto com a
+// linha "DEGRADADO: <motivo>" na resposta; o arquivo editado de novo sai da cobranca (a aprovacao caiu com ele).
+test('B2: o pronto com revisao degradada sem a linha DEGRADADO barra; com ela, passa', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'dg', SO_AAA);
+    mudar(tmp, 'dg', dir, path.join('src', 'a.js'));
+    aprovar(tmp, 'dg', path.join(dir, 'src', 'a.js'));
+    const arq = path.join(tmp, 'sworn', 'dg.json');
+    const s = JSON.parse(fs.readFileSync(arq, 'utf8'));
+    s.revisoesDegradadas = { [path.resolve(dir, 'src', 'a.js')]: 'sem navegador' };
+    fs.writeFileSync(arq, JSON.stringify(s), 'utf8');
+    const r = fecho(tmp, 'dg', dir, ENTREGA);
+    assert.ok(r.json && r.json.decision === 'block', 'sem a linha: ' + r.stdout);
+    assert.match(r.json.reason, /DEGRADADO: sem navegador/);
+    assert.match(r.json.reason, /src\/a\.js/);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(r.json.reason), 'ASCII (R5)');
+    mudar(tmp, 'dg2', dir, path.join('src', 'a.js'));
+    aprovar(tmp, 'dg2', path.join(dir, 'src', 'a.js'));
+    const arq2 = path.join(tmp, 'sworn', 'dg2.json');
+    const s2 = JSON.parse(fs.readFileSync(arq2, 'utf8'));
+    s2.revisoesDegradadas = { [path.resolve(dir, 'src', 'a.js')]: 'sem navegador' };
+    fs.writeFileSync(arq2, JSON.stringify(s2), 'utf8');
+    assert.strictEqual(fecho(tmp, 'dg2', dir, 'DEGRADADO: sem navegador.\n' + ENTREGA).json, null, 'com a linha, passa');
+    // "portaoRevisao": false desliga esta cobranca tambem
+    const dirSem = projetoCom(tmp, 'dg3', { portaoRevisao: false });
+    mudar(tmp, 'dg3', dirSem, path.join('src', 'a.js'));
+    aprovar(tmp, 'dg3', path.join(dirSem, 'src', 'a.js'));
+    const arq3 = path.join(tmp, 'sworn', 'dg3.json');
+    const s3 = JSON.parse(fs.readFileSync(arq3, 'utf8'));
+    s3.revisoesDegradadas = { [path.resolve(dirSem, 'src', 'a.js')]: '' };
+    fs.writeFileSync(arq3, JSON.stringify(s3), 'utf8');
+    const rSem = fecho(tmp, 'dg3', dirSem, ENTREGA);
+    assert.ok(!rSem.json || !/DEGRADADO/.test(rSem.json.reason), 'portaoRevisao false: ' + rSem.stdout);
+    // editado de novo depois de aprovado: a aprovacao cai, e quem cobra e a revisao que falta, nao a degradada
+    mudar(tmp, 'dg2', dir, path.join('src', 'a.js'));
+    const r3 = fecho(tmp, 'dg2', dir, ENTREGA);
+    assert.ok(r3.json && !/DEGRADADO/.test(r3.json.reason), 'sem aprovacao, nao cobra o aviso: ' + r3.stdout);
   });
 });
 
@@ -1460,11 +1763,36 @@ test('D655 T1: a revisao aprovada libera; o arquivo editado de novo depois dela 
   });
 });
 
-test('D655 T1: controles - sem alegacao, fora da AAA, texto, arquivo que nao existe, chave desligada, declarado sem revisao', () => {
+test('C3 (D808, D812): por padrao so a marcha AAA cobra; com revisaoTodoCodigo, todo arquivo de codigo, como no commit', () => {
+  comTmp((tmp) => {
+    // padrao (D812): o codigo fora da AAA nao cobra no fim do turno
+    const padrao = projetoCom(tmp, 'c3-padrao', SO_AAA);
+    mudar(tmp, 'c3-padrao', padrao, path.join('lib', 'a.js'));
+    assert.strictEqual(fecho(tmp, 'c3-padrao', padrao, ENTREGA).json, null, 'por padrao, fora da AAA passa');
+    // "true" entre aspas nao liga (GUIA: so o booleano)
+    const aspas = projetoCom(tmp, 'c3-aspas', Object.assign({ revisaoTodoCodigo: 'true' }, SO_AAA));
+    mudar(tmp, 'c3-aspas', aspas, path.join('lib', 'a.js'));
+    assert.strictEqual(fecho(tmp, 'c3-aspas', aspas, ENTREGA).json, null, '"true" entre aspas nao liga');
+    const amplo = Object.assign({ revisaoTodoCodigo: true }, SO_AAA);
+    const dir = projetoCom(tmp, 'c3-fora', amplo);
+    mudar(tmp, 'c3-fora', dir, path.join('lib', 'a.js'));
+    const r = fecho(tmp, 'c3-fora', dir, ENTREGA);
+    assert.ok(r.json && r.json.decision === 'block', 'com a chave, fora da AAA tambem barra: ' + r.stdout);
+    assert.match(r.json.reason, /lib\/a\.js/);
+    // com a chave e sem marchas declaradas, o codigo mudado cobra do mesmo jeito
+    const sem = projetoCom(tmp, 'c3-sem', { revisaoTodoCodigo: true });
+    mudar(tmp, 'c3-sem', sem, path.join('src', 'a.js'));
+    assert.ok((fecho(tmp, 'c3-sem', sem, ENTREGA).json || {}).decision === 'block', 'sem marchas: barra');
+    // a marcha omitida vale como qualquer marcha, nunca como lista vazia
+    const marcha = require('../scripts/lib/marcha.js');
+    assert.deepStrictEqual(marcha.semRevisao([path.join(sem, 'src', 'a.js')], [], {}, sem), ['src/a.js']);
+  });
+});
+
+test('D655 T1: controles - sem alegacao, texto, arquivo que nao existe, chave desligada, declarado sem revisao', () => {
   comTmp((tmp) => {
     const casos = [
       ['c-sem-alegacao', SO_AAA, path.join('src', 'a.js'), 'Anotado; sigo na proxima tarefa.', true],
-      ['c-fora-aaa', SO_AAA, path.join('lib', 'a.js'), ENTREGA, true],
       ['c-texto', SO_AAA, path.join('src', 'guia.md'), ENTREGA, true],
       ['c-nao-existe', SO_AAA, path.join('src', 'a.js'), ENTREGA, false],
       ['c-desligado', Object.assign({ portaoRevisao: false }, SO_AAA), path.join('src', 'a.js'), ENTREGA, true],
@@ -1670,6 +1998,44 @@ test('D785: com prova declarada e codigo editado no turno, a pendente barra sem 
   });
 });
 
+// A4 (s369, P2 da s453): a prova em segundo plano contava como "nao rodou", e o laco ia ao teto e mandava escalar
+// com ela ainda rodando. Rodando, o laco nao conta volta (o aviso de fim acorda o modelo), e o pronto sem o resultado
+// barra; o fim vermelho volta a barrar no laco.
+test('A4: a prova rodando em segundo plano nao conta volta do laco, e o pronto antes do aviso de fim barra', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'bg1', { provaDePronto: 'npm test' });
+    const lanca = { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'a', name: 'Bash',
+      input: { command: 'npm test', run_in_background: true } }] } };
+    const aviso = resultado('a', 'Command running in background with ID: bxa. Output is being written to: x.output.');
+    const roda = linhasDoTranscript(tmp, 'bg1', [usoEdit('e', path.join(dir, 'a.js')), lanca, aviso]);
+    gravar(tmp, 'bg1', dir, 'Edit', 'a.js');
+    const r = fecho(tmp, 'bg1', dir, 'Lancei a suite em segundo plano; sigo quando ela terminar.', { transcript_path: roda });
+    assert.strictEqual(r.json, null, 'rodando, o laco nao barra: ' + r.stdout);
+    assert.strictEqual((sessaoDe(tmp, 'bg1').contadores || {}).fecho_sem_evidencia, undefined, 'nem conta no balde');
+    // o vermelho de antes da edicao nao conta volta com a prova nova rodando
+    const antes = linhasDoTranscript(tmp, 'bg1b', [usoBash('v', 'npm test'), resultado('v', 'Exit code 1\n# fail 1', true),
+      usoEdit('e', path.join(dir, 'a.js')), lanca, aviso]);
+    gravar(tmp, 'bg1b', dir, 'Edit', 'a.js');
+    const rv = fecho(tmp, 'bg1b', dir, 'Corrigi; a suite roda em segundo plano.', { transcript_path: antes });
+    assert.strictEqual(rv.json, null, 'vermelho velho com a prova rodando: ' + rv.stdout);
+    gravar(tmp, 'bg2', dir, 'Edit', 'a.js');
+    const p = fecho(tmp, 'bg2', dir, PASSA, { transcript_path: roda });
+    assert.ok(p.json && p.json.decision === 'block' && /segundo plano/.test(p.json.reason) &&
+      !/de 3\)/.test(p.json.reason), 'o pronto sem o resultado barra, fora do laco: ' + p.stdout);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(p.json.reason), 'ASCII (R5)');
+    const saida = path.join(tmp, 'bg.output');
+    fs.writeFileSync(saida, '# pass 1\n# fail 2\n');
+    const fim = { type: 'user', message: { role: 'user', content: '<task-notification>\n<task-id>bxa</task-id>\n' +
+      '<tool-use-id>a</tool-use-id>\n<output-file>' + saida + '</output-file>\n<status>completed</status>\n' +
+      '<summary>Background command "npm test" completed (exit code 0)</summary>\n</task-notification>' } };
+    const terminou = linhasDoTranscript(tmp, 'bg3', [usoEdit('e', path.join(dir, 'a.js')), lanca, aviso, fim]);
+    gravar(tmp, 'bg3', dir, 'Edit', 'a.js');
+    const v = fecho(tmp, 'bg3', dir, 'Segue o que mudou.', { transcript_path: terminou });
+    assert.ok(v.json && v.json.decision === 'block' && /falhou/.test(v.json.reason) && /1 de 3/.test(v.json.reason),
+      'o fim vermelho barra no laco: ' + v.stdout);
+  });
+});
+
 test('D785 (2.1b): o npm test que roda a prova declarada vale como ela, no laco e no D634 (8)', () => {
   comTmp((tmp) => {
     const comPacote = (nome, prova, script) => {
@@ -1759,5 +2125,241 @@ test('D785: o laco sai junto com os outros motivos do turno e, em laco, sozinho;
     assert.strictEqual(fecho(tmp, 'l4e', desl, 'Handoff gravado.', emLaco).json, null);
     gravar(tmp, 'l4d', dir, 'Edit', 'notas.md');
     assert.strictEqual(fecho(tmp, 'l4d', dir, 'Segue o que mudou nas notas.', { transcript_path: tr }).json, null);
+  });
+});
+
+// P04 (C1): o fecho que diz ter achado a causa, sem a saida do bug reproduzido, e barrado pela trava 3, no mesmo balde.
+test('P04: o fecho que acha a causa sem reproduzir o bug barra; com a saida colada, encerra', () => {
+  comTmp((tmp) => {
+    rodar('marcar-trabalho.js', { session_id: 'p04', cwd: tmp, tool_name: 'Edit' }, tmp);
+    const r = rodar('portao-fecho.js', {
+      session_id: 'p04', cwd: tmp, hook_event_name: 'Stop',
+      last_assistant_message: 'Achei a causa: o laco le um item a mais. Ajustei o limite.'
+    }, tmp);
+    assert.strictEqual(r.json && r.json.decision, 'block', r.stdout);
+    assert.ok(r.json.reason.includes('reproduz'), r.json.reason);
+    rodar('marcar-trabalho.js', { session_id: 'p05', cwd: tmp, tool_name: 'Edit' }, tmp);
+    const ok = rodar('portao-fecho.js', {
+      session_id: 'p05', cwd: tmp, hook_event_name: 'Stop',
+      last_assistant_message: 'Achei a causa: o laco le um item a mais.\n```\n$ node --test\nnot ok 1 - limite\n```'
+    }, tmp);
+    assert.ok(!(ok.json && ok.json.decision === 'block'), 'com a saida colada encerra: ' + ok.stdout);
+  });
+});
+
+// ------------------------------- D794 (C1): a prova rodada pelo gancho do fecho, so no projeto ligado pelo dono
+
+// O fecho com a pasta do Claude dentro do tmp: a chave da prova no fecho (ligada ou nao, conforme o teste chama
+// pnf.ligar) mora la, nunca na do dono. tetoMs, quando vem, encurta o limite da prova.
+function fechoComClaudeEmTmp(tmp, id, cwd, mensagem, extra, tetoMs) {
+  return rodar('portao-fecho.js', Object.assign({ session_id: id, cwd: cwd, hook_event_name: 'Stop',
+    last_assistant_message: mensagem }, extra || {}), tmp,
+  Object.assign({ CLAUDE_CONFIG_DIR: path.join(tmp, 'claude') }, tetoMs ? { SWORN_PROVA_TETO_MS: String(tetoMs) } : {}));
+}
+
+test('D794: com a chave local, o gancho roda a prova pendente; passou libera e vale ate a proxima edicao', () => {
+  comTmp((tmp) => {
+    const pnf = require('../scripts/lib/prova-no-fecho.js');
+    const dir = projetoCom(tmp, 'g1', { provaDePronto: 'node prova.js' });
+    // cada vez que a prova roda, ela soma uma linha em vezes.txt: o teste conta quantas vezes o gancho a rodou
+    const vezes = path.join(dir, 'vezes.txt');
+    fs.writeFileSync(path.join(dir, 'prova.js'), 'require("fs").appendFileSync(' + JSON.stringify(vezes) + ', "x\\n");' +
+      'console.log("# pass 3"); console.log("# fail 0");');
+    const rodou = () => (fs.existsSync(vezes) ? fs.readFileSync(vezes, 'utf8').split('\n').filter(Boolean).length : 0);
+    pnf.ligar(dir, 'node prova.js', { CLAUDE_CONFIG_DIR: path.join(tmp, 'claude') });
+    const pendente = linhasDoTranscript(tmp, 'g1', [usoEdit('e', path.join(dir, 'a.js'))]);
+    gravar(tmp, 'g1', dir, 'Edit', 'a.js');
+    const r = fechoComClaudeEmTmp(tmp, 'g1', dir, 'Pronto, os testes passaram.', { transcript_path: pendente });
+    assert.strictEqual(r.json, null, 'o gancho rodou a prova e ela passou: ' + r.stdout);
+    assert.strictEqual(rodou(), 1, 'a prova rodou uma vez');
+    // turno seguinte, sem edicao nova: a alegacao segue sustentada pela prova do gancho
+    rodar('marcar-trabalho.js', { session_id: 'g1', cwd: dir, tool_name: 'Bash', tool_input: { command: 'git log' } }, tmp);
+    const depois = fechoComClaudeEmTmp(tmp, 'g1', dir, 'Pronto, tudo funcionando.', { transcript_path: pendente });
+    assert.strictEqual(depois.json, null, 'sem edicao depois da prova do gancho: ' + depois.stdout);
+    assert.strictEqual(rodou(), 1, 'a marca vale: o gancho nao rodou a prova de novo');
+    // outro transcript (outra conversa na mesma sessao gravada) nao herda a prova do gancho
+    fs.writeFileSync(path.join(dir, 'prova.js'), 'console.log("boom-quebrou"); process.exit(1);');
+    const outro = linhasDoTranscript(tmp, 'g1-outro', [usoEdit('e', path.join(dir, 'a.js'))]);
+    gravar(tmp, 'g1', dir, 'Edit', 'a.js');
+    const o = fechoComClaudeEmTmp(tmp, 'g1', dir, 'Pronto.', { transcript_path: outro });
+    assert.ok(o.json && o.json.decision === 'block', 'outro transcript: a prova roda de novo e falha: ' + o.stdout);
+    assert.ok(/e falhou/.test(o.json.reason) && /boom-quebrou/.test(o.json.reason),
+      'a falha e da prova rodada pelo gancho para o outro transcript, nao do laco de hoje: ' + o.json.reason);
+    // edicao nova depois da prova do gancho: pendente de novo, e o gancho roda outra vez
+    const editouDeNovo = linhasDoTranscript(tmp, 'g1', [usoEdit('e', path.join(dir, 'a.js')), usoBash('x', 'git log'),
+      resultado('x', 'ok'), usoEdit('f', path.join(dir, 'b.js'))]);
+    // a prova.js segue a que falha (gravada acima, para o outro transcript)
+    gravar(tmp, 'g1', dir, 'Edit', 'b.js');
+    const v = fechoComClaudeEmTmp(tmp, 'g1', dir, 'Pronto.', { transcript_path: editouDeNovo });
+    assert.ok(v.json && v.json.decision === 'block', 'a prova nova falhou: ' + v.stdout);
+    assert.ok(/boom-quebrou/.test(v.json.reason) && /falhou/.test(v.json.reason), v.json.reason);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(v.json.reason), 'ASCII (R5)');
+    // o modelo ja rodou a prova depois da edicao e ela ficou vermelha: nada pendente, o gancho nao roda de novo
+    const marca = path.join(dir, 'gancho-rodou.txt');
+    fs.writeFileSync(path.join(dir, 'prova.js'), 'require("fs").writeFileSync(' + JSON.stringify(marca) + ', "x");' +
+      'process.exit(1);');
+    const vermelha = linhasDoTranscript(tmp, 'g1', [usoEdit('e', path.join(dir, 'a.js')), usoBash('p', 'node prova.js'),
+      resultado('p', 'Exit code 1\n# fail 1', true)]);
+    gravar(tmp, 'g1', dir, 'Edit', 'a.js');
+    const w = fechoComClaudeEmTmp(tmp, 'g1', dir, 'Segue o que mudou.', { transcript_path: vermelha });
+    assert.ok(w.json && w.json.decision === 'block', w.stdout);
+    assert.strictEqual(fs.existsSync(marca), false, 'a prova que o modelo ja rodou nao roda de novo no gancho');
+  });
+});
+
+test('D794: sem a chave local o laco de hoje segue (o gancho nao roda nada); a prova que estoura o teto tambem', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'g2', { provaDePronto: 'node prova.js' });
+    const marca = path.join(dir, 'rodou.txt');
+    fs.writeFileSync(path.join(dir, 'prova.js'), 'require("fs").writeFileSync(' + JSON.stringify(marca) + ', "x");');
+    const pendente = linhasDoTranscript(tmp, 'g2', [usoEdit('e', path.join(dir, 'a.js'))]);
+    gravar(tmp, 'g2', dir, 'Edit', 'a.js');
+    const r = fechoComClaudeEmTmp(tmp, 'g2', dir, 'Segue o que mudou.', { transcript_path: pendente });
+    assert.ok(r.json && r.json.decision === 'block' && /1 de 3/.test(r.json.reason), r.stdout);
+    assert.strictEqual(fs.existsSync(marca), false, 'repositorio sem a chave do dono nunca roda a prova');
+    // ligado, mas a prova estoura o teto: volta o laco de hoje (o modelo roda), com o aviso, e o gancho nao tenta de
+    // novo na sessao (cada volta gastaria o teto inteiro)
+    const pnf = require('../scripts/lib/prova-no-fecho.js');
+    fs.writeFileSync(path.join(dir, 'prova.js'), 'require("fs").writeFileSync(' + JSON.stringify(marca) + ', "x");' +
+      'setTimeout(function () {}, 5000);');
+    pnf.ligar(dir, 'node prova.js', { CLAUDE_CONFIG_DIR: path.join(tmp, 'claude') });
+    gravar(tmp, 'g3', dir, 'Edit', 'a.js');
+    const t = fechoComClaudeEmTmp(tmp, 'g3', dir, 'Segue o que mudou.', { transcript_path: pendente }, 2000);
+    assert.ok(t.json && t.json.decision === 'block' && /1 de 3/.test(t.json.reason) && !/e falhou/.test(t.json.reason),
+      'estourou o teto: o laco de hoje: ' + t.stdout);
+    assert.ok(/passou do limite de tempo de 2 s\. Rode voce a prova neste turno \(node prova\.js\)/.test(t.json.reason),
+      'o modelo sabe que o gancho tentou e o que fazer: ' + t.json.reason);
+    // a prova grava a marca logo ao comecar; o teto (2 s) da folga ao node lento subir antes de ser morto
+    assert.ok(fs.existsSync(marca), "a prova chegou a rodar antes do teto");
+    fs.rmSync(marca, { force: true });
+    rodar('marcar-trabalho.js', { session_id: 'g3', cwd: dir, tool_name: 'Bash', tool_input: { command: 'ls' } }, tmp);
+    gravar(tmp, 'g3', dir, 'Edit', 'a.js');
+    const t2 = fechoComClaudeEmTmp(tmp, 'g3', dir, 'Segue o que mudou.', { transcript_path: pendente }, 2000);
+    assert.ok(t2.json && t2.json.decision === 'block' && !/passou do limite de tempo/.test(t2.json.reason), t2.stdout);
+    assert.strictEqual(fs.existsSync(marca), false, 'nesta sessao o gancho nao roda de novo a prova que estourou');
+  });
+});
+
+test('D794: o gancho so roda o comando que o dono ligou; a marca nao vale para outra prova; crases nao fecham o bloco',
+  () => {
+  comTmp((tmp) => {
+    const pnf = require('../scripts/lib/prova-no-fecho.js');
+    const dir = projetoCom(tmp, 'g4', { provaDePronto: 'node prova.js' });
+    fs.writeFileSync(path.join(dir, 'prova.js'), 'console.log("# fail 0");');
+    fs.writeFileSync(path.join(dir, 'outra.js'), 'console.log("```"); console.log("boom-outra"); process.exit(1);');
+    const env = { CLAUDE_CONFIG_DIR: path.join(tmp, 'claude') };
+    pnf.ligar(dir, 'node prova.js', env);
+    const pendente = linhasDoTranscript(tmp, 'g4', [usoEdit('e', path.join(dir, 'a.js'))]);
+    gravar(tmp, 'g4', dir, 'Edit', 'a.js');
+    assert.strictEqual(fechoComClaudeEmTmp(tmp, 'g4', dir, 'Pronto.', { transcript_path: pendente }).json, null);
+    // um commit troca a prova declarada: o gancho NAO roda o comando novo (o dono ligou outro), e a marca da prova
+    // antiga nao sustenta o pronto; o laco de hoje segue, com o aviso
+    const marca = path.join(dir, 'outra-rodou.txt');
+    fs.writeFileSync(path.join(dir, 'outra.js'), 'require("fs").writeFileSync(' + JSON.stringify(marca) + ', "x");' +
+      'console.log("```"); console.log("boom-outra"); process.exit(1);');
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
+      JSON.stringify({ versaoConfig: 1, marchaPadrao: 'padrao', provaDePronto: 'node outra.js' }));
+    gravar(tmp, 'g4', dir, 'Edit', 'a.js');
+    const q = fechoComClaudeEmTmp(tmp, 'g4', dir, 'Pronto.', { transcript_path: pendente });
+    assert.strictEqual(fs.existsSync(marca), false, 'o comando trocado pelo repositorio nao roda sozinho');
+    // o aviso diz o que fazer agora (rodar a prova) e traz o comando inteiro, com o caminho do script, para o dono
+    assert.ok(q.json && q.json.decision === 'block' && /Rode a prova neste turno/.test(q.json.reason), q.stdout);
+    assert.ok(/o dono ligou "node prova\.js", e o projeto\.json declara agora "node outra\.js"/.test(q.json.reason),
+      'os dois comandos, para o dono comparar: ' + q.json.reason);
+    assert.ok(/Voce nao roda o comando de ligar/.test(q.json.reason), 'o modelo nao liga sozinho: ' + q.json.reason);
+    const ligar = (q.json.reason.match(/node "([^"]+prova-no-fecho\.js)" ligar$/) || [])[1];
+    assert.ok(ligar && fs.existsSync(ligar), 'o caminho do script existe: ' + q.json.reason);
+    // o dono liga a nova: ela roda, falha, e a cauda vem num bloco so
+    pnf.ligar(dir, 'node outra.js', env);
+    gravar(tmp, 'g4', dir, 'Edit', 'a.js');
+    const r = fechoComClaudeEmTmp(tmp, 'g4', dir, 'Pronto.', { transcript_path: pendente });
+    assert.ok(fs.existsSync(marca), 'ligada pelo dono, a nova roda');
+    assert.ok(r.json && r.json.decision === 'block' && /boom-outra/.test(r.json.reason), r.stdout);
+    const bloco = r.json.reason.slice(r.json.reason.indexOf('A prova rodou no fim do turno'));
+    assert.strictEqual((bloco.match(/```/g) || []).length, 2, 'so a cerca de abrir e a de fechar: ' + bloco);
+  });
+});
+
+// F1d (D828.4): com "provaPorArquivoTocado": true, o teste verde que cobre o arquivo editado (o cita pelo nome),
+// depois da edicao, tira a pendencia da suite inteira no laco e no pronto; sem a chave, a suite inteira segue cobrada.
+test('F1d: com provaPorArquivoTocado, a prova focada vale no laco da prova e no pronto', () => {
+  comTmp((tmp) => {
+    const PROVA = 'node --test test/*.test.js';
+    const dir = projetoCom(tmp, 'f1', { provaDePronto: PROVA, provaPorArquivoTocado: true });
+    fs.mkdirSync(path.join(dir, 'test'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'test', 'a.test.js'), "require('../a.js');\n");
+    const focada = linhasDoTranscript(tmp, 'f1', [usoEdit('e', path.join(dir, 'a.js')),
+      usoBash('a', 'node --test test/a.test.js'), resultado('a', '# pass 2\n# fail 0')]);
+    gravar(tmp, 'f1', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'f1', dir, 'Segue o que mudou em a.js.', { transcript_path: focada }).json, null,
+      'o laco aceita a prova focada');
+    gravar(tmp, 'f1b', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'f1b', dir, PASSA, { transcript_path: focada }).json, null, 'o pronto tambem');
+    // o teste que nao cita o arquivo nao vale: o laco cobra a suite inteira
+    fs.writeFileSync(path.join(dir, 'test', 'b.test.js'), '// outro\n');
+    const VERDE = '# pass 2\n# fail 0';
+    const barra = function (id, eventos) {
+      const tr = linhasDoTranscript(tmp, id, eventos);
+      gravar(tmp, id, dir, 'Edit', 'a.js');
+      const r = fecho(tmp, id, dir, 'Segue o que mudou.', { transcript_path: tr });
+      return Boolean(r.json && r.json.decision === 'block' && /1 de 3/.test(r.json.reason));
+    };
+    // a mesma saida verde do caso que passa, so trocando o que se quer provar: o teste que nao cita o arquivo nao vale
+    assert.ok(barra('f2', [usoEdit('e', path.join(dir, 'a.js')), usoBash('a', 'node --test test/b.test.js'),
+      resultado('a', VERDE)]), 'o teste que nao cita a.js');
+    // o teste focado vermelho nao vale
+    assert.ok(barra('f2b', [usoEdit('e', path.join(dir, 'a.js')), usoBash('a', 'node --test test/a.test.js'),
+      resultado('a', 'Exit code 1\n# pass 1\n# fail 1', true)]), 'o focado vermelho');
+    // o teste focado rodado antes da edicao nao vale
+    assert.ok(barra('f2c', [usoBash('a', 'node --test test/a.test.js'), resultado('a', VERDE),
+      usoEdit('e', path.join(dir, 'a.js'))]), 'o focado antes da edicao');
+    // a suite inteira vermelha antes nao se apaga com a prova focada da edicao de agora
+    assert.ok(barra('f2d', [usoEdit('e0', path.join(dir, 'b.js')), usoBash('s', PROVA),
+      resultado('s', 'Exit code 1\n# fail 3', true), usoEdit('e', path.join(dir, 'a.js')),
+      usoBash('a', 'node --test test/a.test.js'), resultado('a', VERDE)]), 'a suite vermelha antes');
+    // sem a chave, a prova focada nao basta
+    const sem = projetoCom(tmp, 'f3', { provaDePronto: PROVA });
+    fs.mkdirSync(path.join(sem, 'test'), { recursive: true });
+    fs.writeFileSync(path.join(sem, 'test', 'a.test.js'), "require('../a.js');\n");
+    const semChave = linhasDoTranscript(tmp, 'f3', [usoEdit('e', path.join(sem, 'a.js')),
+      usoBash('a', 'node --test test/a.test.js'), resultado('a', '# pass 2\n# fail 0')]);
+    gravar(tmp, 'f3', sem, 'Edit', 'a.js');
+    const s = fecho(tmp, 'f3', sem, 'Segue o que mudou.', { transcript_path: semChave });
+    assert.ok(s.json && s.json.decision === 'block' && /nao rodou depois/.test(s.json.reason),
+      'sem a chave, a suite inteira segue cobrada: ' + s.stdout);
+    assert.strictEqual(s.json.reason.indexOf('Com a prova por arquivo tocado'), -1, 'sem a chave, sem o caminho curto');
+  });
+});
+
+// F1c (D828): com "provaDeCoerencia" (o grupo de coerencia do disco), a prova focada tambem cobra esse grupo verde
+// depois da ultima edicao; o motivo do laco diz o caminho curto (o teste de cada arquivo e o grupo).
+test('F1c: com provaDeCoerencia, a prova focada so vale com o grupo de coerencia verde depois da edicao', () => {
+  comTmp((tmp) => {
+    const PROVA = 'node --test test/*.test.js';
+    const COERENCIA = 'node --test test/plataforma.test.js test/readme.test.js';
+    const dir = projetoCom(tmp, 'c1', { provaDePronto: PROVA, provaPorArquivoTocado: true, provaDeCoerencia: COERENCIA });
+    fs.mkdirSync(path.join(dir, 'test'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'test', 'a.test.js'), "require('../a.js');\n");
+    const VERDE = '# pass 2\n# fail 0';
+    const focado = [usoEdit('e', path.join(dir, 'a.js')), usoBash('a', 'node --test test/a.test.js'), resultado('a', VERDE)];
+    const tentar = function (id, eventos) {
+      const tr = linhasDoTranscript(tmp, id, eventos);
+      gravar(tmp, id, dir, 'Edit', 'a.js');
+      return fecho(tmp, id, dir, 'Segue o que mudou em a.js.', { transcript_path: tr });
+    };
+    // so o focado, sem o grupo: barra, e o motivo diz o caminho curto com o comando do grupo
+    const so = tentar('c1', focado);
+    assert.ok(so.json && so.json.decision === 'block' && /1 de 3/.test(so.json.reason), 'so o focado: ' + so.stdout);
+    assert.match(so.json.reason, /Com a prova por arquivo tocado, basta o teste de cada arquivo de codigo mexido/);
+    assert.ok(so.json.reason.indexOf(COERENCIA) !== -1, 'o motivo cita o grupo: ' + so.json.reason);
+    // o focado e o grupo verde depois da edicao: passa
+    assert.strictEqual(tentar('c2', focado.concat([usoBash('g', COERENCIA), resultado('g', VERDE)])).json, null,
+      'o focado e o grupo verde');
+    // o grupo vermelho, ou rodado antes da edicao, nao vale
+    const vermelho = tentar('c3', focado.concat([usoBash('g', COERENCIA), resultado('g', 'Exit code 1\n# fail 1', true)]));
+    assert.ok(vermelho.json && vermelho.json.decision === 'block' && /1 de 3/.test(vermelho.json.reason) &&
+      vermelho.json.reason.indexOf(COERENCIA) !== -1, 'o grupo vermelho: ' + vermelho.stdout);
+    const antes = tentar('c4', [usoBash('g', COERENCIA), resultado('g', VERDE)].concat(focado));
+    assert.ok(antes.json && antes.json.decision === 'block' && /1 de 3/.test(antes.json.reason), 'o grupo antes da edicao');
   });
 });

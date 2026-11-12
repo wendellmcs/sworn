@@ -150,8 +150,9 @@ readiness, hard-to-reverse decision.
    handoff.
 2. **Count before the brief**: grep the whole repository, not only the files you already intend to
    touch, and put the per-file count in the brief. A brief with a wrong number produces wrong scope.
-3. **Blind inspection loop** — the lenses of the change (ten for code, eight for screen), cap of 3
-   rounds, stop at 2 dry rounds. See [03-inspecao-cega.md](03-inspecao-cega.md).
+3. **Blind inspection loop** — the lenses of the change (one or two for a small change; for a large one, the
+   family of code or of screen), cap of 3 rounds, stop at 2 dry rounds or at a complete round 1 with no finding
+   at all. See [03-inspecao-cega.md](03-inspecao-cega.md).
 4. **The complete done-proof** — `{{campo:provaDePronto}}`, without stopping at the first error, to see
    all the failures at once. **Separate a new failure from a pre-existing one with evidence** — run
    before editing, or show that the files read by the failing test are not in the diff. "It already

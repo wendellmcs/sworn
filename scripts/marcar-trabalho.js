@@ -125,6 +125,11 @@ io.blindar(function () {
           if ((op && op.commit && op.commit.sha) || commitNaSaida(resp)) s.commitsFeitos = (s.commitsFeitos || 0) + 1;
         }
         const arquivo = (e.tool_input || {}).file_path || doShell;
+        // s369 (P1 do dono): depois do handoff gravado, qualquer ferramenta do agente principal fora do proprio
+        // arquivo do handoff conta como seguir o trabalho (o portao-fecho.js barra a parada logo depois do handoff).
+        if (s.gravouHandoff === true && !e.agent_id && !(arquivo && saude.ehArquivoDeHandoff(arquivo))) {
+          s.trabalhoDepoisDoHandoff = true;
+        }
         if (arquivo) {
           s.arquivosTocados = s.arquivosTocados || [];
           if (s.arquivosTocados.indexOf(arquivo) === -1) s.arquivosTocados.push(arquivo);

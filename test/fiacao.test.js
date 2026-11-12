@@ -7,26 +7,27 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const RAIZ = path.join(__dirname, '..');
 const auditoria = require('../scripts/lib/auditoria.js');
 const shellLib = require('../scripts/lib/shell.js');
+const comum = require('./lib/comum.js');
 
 function temp(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fiacao-' + nome + '-'));
+  return comum.pasta('fiacao-' + nome);
 }
 
-/** Roda um script de entrada como processo, com estado de sessao isolado; `env` soma ao ambiente (NODE_OPTIONS). */
+/**
+ * Roda um script de entrada como processo, com estado de sessao isolado; `env` soma ao ambiente (NODE_OPTIONS).
+ * Pelo `comum.rodar` (F1e): sem a sessao real, com pasta de config vazia e com prazo. A entrada vai sempre em JSON.
+ */
 function rodar(script, dir, entrada, env) {
-  const sessoes = path.join(dir, '_sessoes');
-  return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
+  return comum.rodar(path.join('scripts', script), [], {
     cwd: dir,
-    encoding: 'utf8',
-    input: entrada === undefined ? undefined : JSON.stringify(entrada),
-    env: Object.assign({}, process.env, { SWORN_TMP: sessoes }, env)
+    entrada: entrada === undefined ? undefined : JSON.stringify(entrada),
+    env: Object.assign({ SWORN_TMP: path.join(dir, '_sessoes') }, env)
   });
 }
 
@@ -52,7 +53,9 @@ test('fiacao: auditar.js enxerga uma skill real e devolve exatamente as chaves d
     escrever(dir, path.join('.claude', 'skills', 'zelador', 'SKILL.md'),
       '---\nname: zelador\ndescription: varre a casa\n---\n\n- um item de instrucao\n- outro item\n');
 
-    const r = rodar('auditar.js', dir);
+    // F1a (D828): sem a sessao do ambiente e com config vazia, o auditar.js nao le a conversa real (centenas de MB).
+    // Desde a F1e quem isola e o `rodar` daqui, pelo test/lib/comum.js.
+    const r = rodar('auditar.js', dir, undefined);
     assert.strictEqual(r.status, 0, r.stderr);
 
     const saida = JSON.parse(r.stdout);
@@ -278,6 +281,217 @@ test('fiacao: todo scripts/*.js e citado por algum teste', () => {
   const semTeste = fs.readdirSync(path.join(RAIZ, 'scripts'))
     .filter(function (n) { return n.endsWith('.js') && testes.indexOf(n) === -1; });
   assert.deepStrictEqual(semTeste, [], 'script sem nenhum teste que o cite: ' + semTeste.join(', '));
+});
+
+// ------------------------- F1b (D828): a suite em duas rodadas
+// Os testes que abrem o navegador de verdade (e o que varre os processos do sistema) disputavam a maquina com o resto
+// da suite: levavam cerca de 245 s em vez de 42 s e davam falso vermelho por prazo. A 1a rodada roda tudo em paralelo
+// e pula esses testes pelo nome; a 2a roda so eles, um arquivo por vez. O que amarra as duas e o nome do teste, e um
+// teste fora da regra some calado: a 1a rodada o pula e a 2a nao le o arquivo dele.
+// atalho: ler o texto dos testes. limite: navegador aberto sem a constante NAVEGADOR nao e visto; titulo montado em
+// tempo de execucao conta como sem nome; uma linha na coluna 0 que comeca com `}` ou `test(` dentro de um texto de
+// varias linhas fecha o teste antes da hora. trocar quando: um teste de navegador passar por aqui sem ser visto.
+const NOME_DA_2A_RODADA = 'ponta.a.ponta';
+const ARQUIVOS_DA_2A_RODADA = ['test/captura.test.js', 'test/tela-cega.test.js'];
+const SUITE = 'node --test --test-skip-pattern=' + NOME_DA_2A_RODADA + ' test/*.test.js && ' +
+  'node --test --test-concurrency=1 --test-name-pattern=' + NOME_DA_2A_RODADA + ' ' + ARQUIVOS_DA_2A_RODADA.join(' ');
+
+/** As linhas que abrem teste (`test(` ou `t.test(`, com ou sem recuo), do titulo em diante. */
+function aberturasDeTeste(texto) {
+  return texto.split(/\r?\n/).map(function (l) { return /^\s*(?:t\.)?test\((.*)$/.exec(l); })
+    .filter(Boolean).map(function (m) { return m[1]; });
+}
+
+/**
+ * O titulo escrito na abertura: o texto entre aspas logo depois do `test(`. E so nele que o node procura o nome; o
+ * resto da linha e corpo. Titulo montado em tempo de execucao (sem aspas no comeco) sai vazio: conta como sem nome.
+ */
+function tituloDaAbertura(abertura) {
+  const m = /^(['"`])((?:\\.|(?!\1).)*)\1/.exec(abertura);
+  return m ? m[2] : '';
+}
+
+/**
+ * As aberturas dos testes cujo corpo usa o navegador (a constante NAVEGADOR). O teste vai do `test(` na coluna 0 ate a
+ * linha da coluna 0 que comeca com `}` (`});`, `}, 60000);`), ou ate o `test(` seguinte, ou ate o fim do texto; o de
+ * uma linha so (a linha seguinte nao e corpo: nao tem recuo) acaba nela. O que fica entre dois testes nao e de nenhum:
+ * o `usa` que uma linha solta liga e desligado pelo `fechar` do `test(` seguinte, antes de qualquer teste abrir.
+ */
+function testesComNavegador(texto) {
+  const achados = [];
+  const linhas = texto.split(/\r?\n/);
+  let aberto = null;
+  let usa = false;
+  const fechar = function () {
+    if (aberto !== null && usa) achados.push(aberto);
+    aberto = null;
+    usa = false;
+  };
+  linhas.forEach(function (l, i) {
+    const abre = /^test\((.*)$/.exec(l);
+    if (abre) { fechar(); aberto = abre[1]; }
+    if (/\bNAVEGADOR\b/.test(l)) usa = true;
+    const umaLinha = abre && !/^\s/.test(linhas.slice(i + 1).find(function (s) { return s.trim() !== ''; }) || '');
+    if (umaLinha || /^\}/.test(l)) fechar();
+  });
+  fechar();
+  return achados;
+}
+
+/**
+ * O que as duas rodadas cobram dos arquivos de teste (`[{ arquivo, texto }]`), com `nome` sendo a expressao que a 1a
+ * rodada pula e a 2a exige: `comNome`, os arquivos com algum teste de nome pulado (a 2a rodada tem de ler cada um);
+ * `comNavegador`, os que tem teste de navegador; `foraDaRegra`, os testes de navegador sem o nome (rodariam na 1a).
+ */
+function rodadasDosTestes(textos, nome) {
+  const r = { comNome: [], comNavegador: [], foraDaRegra: [] };
+  textos.forEach(function (t) {
+    const temNome = function (a) { return nome.test(tituloDaAbertura(a)); };
+    if (aberturasDeTeste(t.texto).some(temNome)) r.comNome.push(t.arquivo);
+    const comNavegador = testesComNavegador(t.texto);
+    if (comNavegador.length > 0) r.comNavegador.push(t.arquivo);
+    comNavegador.forEach(function (a) { if (!temNome(a)) r.foraDaRegra.push(t.arquivo + ': ' + a); });
+  });
+  return r;
+}
+
+function textosDosTestes() {
+  const dirTeste = path.join(RAIZ, 'test');
+  return fs.readdirSync(dirTeste).filter(function (n) { return n.endsWith('.test.js'); }).sort().map(function (n) {
+    return { arquivo: 'test/' + n, texto: fs.readFileSync(path.join(dirTeste, n), 'utf8') };
+  });
+}
+
+// @N@ e o nome da constante do navegador: escrito por extenso nos textos de mentira, os testes daqui entrariam na
+// propria regra.
+function nav(t) { return t.replace(/@N@/g, 'NAVE' + 'GADOR'); }
+
+test('fiacao (F1b): aberturasDeTeste e testesComNavegador leem o texto de um arquivo de teste', () => {
+  const texto = nav([
+    "const @N@ = achar();",
+    "test('unitario: soma', () => { assert.ok(1); });",
+    "const outra = @N@;",
+    "test('unitario: usa @N@ numa linha so', () => { assert.ok(@N@); });",
+    "test(\"com aspas duplas\", function (t) {",
+    "  [1].forEach(function () {",
+    "  });",
+    "  if (!@N@) { t.skip('sem'); return; }",
+    "});",
+    "before(function () {",
+    "  preparar(@N@);",
+    "});",
+    "const SWORN_NAVEGADOR = 1;",
+    "  t.test('aninhado', () => {});",
+    "test('sem navegador: cita SWORN_NAVEGADOR e o navegador', function () {",
+    "  rodar({ SWORN_NAVEGADOR: 'x' });",
+    "});",
+    "// test('comentado', () => {",
+    "contest('nao e teste', () => {});",
+    "test('abre o navegador', function () {",
+    "  rodar(@N@);",
+    "});",
+    "test('fecha com opcoes', function () {",
+    "  rodar(@N@);",
+    "}, { timeout: 300000 });",
+    "test('fecha com prazo, sem navegador', function () {",
+    "  rodar();",
+    "}, 120000);",
+    "const depoisDoPrazo = @N@;",
+    "test('abre e fecha um laco na primeira linha', function (t) { [1].forEach(function () { f(); });",
+    "",
+    "  rodar(@N@);",
+    "});",
+    "test('vazio, com o fecho na linha seguinte', function () {",
+    "});",
+    "const depoisDoVazio = @N@;",
+    "test('fecho com recuo: acaba no teste seguinte', function () {",
+    "  rodar(@N@);",
+    "  });",
+    "test('sem navegador, depois do fecho com recuo', function () {",
+    "  rodar();",
+    "});",
+    "test('sem fecho, no fim do texto', function () {",
+    "  rodar(@N@);",
+  ].join('\r\n'));
+  assert.deepStrictEqual(aberturasDeTeste(texto), [
+    "'unitario: soma', () => { assert.ok(1); });",
+    nav("'unitario: usa @N@ numa linha so', () => { assert.ok(@N@); });"),
+    '"com aspas duplas", function (t) {',
+    "'aninhado', () => {});",
+    "'sem navegador: cita SWORN_NAVEGADOR e o navegador', function () {",
+    "'abre o navegador', function () {",
+    "'fecha com opcoes', function () {",
+    "'fecha com prazo, sem navegador', function () {",
+    "'abre e fecha um laco na primeira linha', function (t) { [1].forEach(function () { f(); });",
+    "'vazio, com o fecho na linha seguinte', function () {",
+    "'fecho com recuo: acaba no teste seguinte', function () {",
+    "'sem navegador, depois do fecho com recuo', function () {",
+    "'sem fecho, no fim do texto', function () {",
+  ]);
+  assert.deepStrictEqual(testesComNavegador(texto), [
+    nav("'unitario: usa @N@ numa linha so', () => { assert.ok(@N@); });"),
+    '"com aspas duplas", function (t) {',
+    "'abre o navegador', function () {",
+    "'fecha com opcoes', function () {",
+    "'abre e fecha um laco na primeira linha', function (t) { [1].forEach(function () { f(); });",
+    "'fecho com recuo: acaba no teste seguinte', function () {",
+    "'sem fecho, no fim do texto', function () {",
+  ]);
+  assert.deepStrictEqual(aberturasDeTeste(''), []);
+  // O que fica fora de teste (a propria constante, o fecho solto) nao e de teste nenhum.
+  assert.deepStrictEqual(testesComNavegador(nav('const @N@ = 1;\n});\n')), []);
+  assert.deepStrictEqual(testesComNavegador(''), []);
+});
+
+test('fiacao (F1b): tituloDaAbertura devolve so o titulo escrito, sem o corpo da linha', () => {
+  assert.strictEqual(tituloDaAbertura("'abre a pagina', () => { rodar('ponta a ponta'); });"), 'abre a pagina');
+  assert.strictEqual(tituloDaAbertura('"com \'aspas\' dentro", function () {'), "com 'aspas' dentro");
+  assert.strictEqual(tituloDaAbertura('`com crase`, function () {'), 'com crase');
+  assert.strictEqual(tituloDaAbertura("'com a aspa \\' escapada', function () { f('x'); });"), "com a aspa \\' escapada");
+  assert.strictEqual(tituloDaAbertura("'', function () {"), '');
+  // Sem aspas no comeco (montado em tempo de execucao) ou sem a aspa que fecha: nao ha titulo escrito.
+  assert.strictEqual(tituloDaAbertura("nome + ' de ponta a ponta', function () {"), '');
+  assert.strictEqual(tituloDaAbertura(" 'com espaco antes', function () {"), '');
+  assert.strictEqual(tituloDaAbertura("'sem a aspa que fecha"), '');
+  assert.strictEqual(tituloDaAbertura(''), '');
+});
+
+test('fiacao (F1b): rodadasDosTestes aponta o arquivo com o nome pulado e o teste de navegador sem o nome', () => {
+  const deNavegador = function (titulo) { return nav("test('" + titulo + "', function () {\n  rodar(@N@);\n});\n"); };
+  const semNavegador = function (titulo) { return "test('" + titulo + "', function () {\n  rodar();\n});\n"; };
+  const textos = [
+    { arquivo: 'test/a.test.js', texto: deNavegador('ponta a ponta: abre a pagina') + semNavegador('unitario: soma') },
+    { arquivo: 'test/b.test.js', texto: semNavegador('o gancho de ponta-a-ponta, sem navegador') },
+    { arquivo: 'test/c.test.js', texto: deNavegador('abre a pagina') + deNavegador('Ponta a ponta: com maiuscula') },
+    { arquivo: 'test/d.test.js', texto: semNavegador('unitario: nada') + '// ponta a ponta\n' },
+    { arquivo: 'test/e.test.js', texto: deNavegador('fora da regra') + deNavegador('ponta a ponta: dentro') },
+    // O nome so no corpo da linha, ou em titulo montado em tempo de execucao, nao e nome: o node le so o titulo.
+    { arquivo: 'test/f.test.js', texto: nav("test('abre', () => { rodar(@N@, 'ponta a ponta'); });\n") +
+      nav("test(nome + ' de ponta a ponta', function () {\n  rodar(@N@);\n});\n") },
+  ];
+  assert.deepStrictEqual(rodadasDosTestes(textos, /ponta.a.ponta/), {
+    comNome: ['test/a.test.js', 'test/b.test.js', 'test/e.test.js'],
+    comNavegador: ['test/a.test.js', 'test/c.test.js', 'test/e.test.js', 'test/f.test.js'],
+    foraDaRegra: ["test/c.test.js: 'abre a pagina', function () {", "test/c.test.js: 'Ponta a ponta: com maiuscula', function () {",
+      "test/e.test.js: 'fora da regra', function () {",
+      nav("test/f.test.js: 'abre', () => { rodar(@N@, 'ponta a ponta'); });"),
+      "test/f.test.js: nome + ' de ponta a ponta', function () {"],
+  });
+  assert.deepStrictEqual(rodadasDosTestes([], /x/), { comNome: [], comNavegador: [], foraDaRegra: [] });
+});
+
+test('fiacao (F1b): o npm test sao as duas rodadas, e a 2a e em fila e so pelo nome que a 1a pula', () => {
+  const pacote = JSON.parse(fs.readFileSync(path.join(RAIZ, 'package.json'), 'utf8'));
+  assert.strictEqual(pacote.scripts.test, SUITE);
+});
+
+test('fiacao (F1b): a 2a rodada le todo arquivo com teste que a 1a pula, e todo teste de navegador e pulado na 1a', () => {
+  const r = rodadasDosTestes(textosDosTestes(), new RegExp(NOME_DA_2A_RODADA));
+  assert.deepStrictEqual(r.foraDaRegra, [], 'teste de navegador que roda na 1a rodada, junto com a suite inteira');
+  assert.deepStrictEqual(r.comNome, ARQUIVOS_DA_2A_RODADA,
+    'teste com o nome da 2a rodada em arquivo que ela nao le (nunca roda), ou arquivo da 2a rodada sem teste dela');
+  // Os dois arquivos da 2a rodada tem teste de navegador: a leitura do texto acha o que procura.
+  assert.deepStrictEqual(r.comNavegador, ARQUIVOS_DA_2A_RODADA);
 });
 
 // ------------------------- A3: os dois que a medicao da D130 achou ABERTOS
@@ -1700,8 +1914,7 @@ test('092: a abertura mede o injetado da conversa anterior e revisa os atalhos; 
   const projects = temp('092-projects');
   try {
     escrever(dir, '.claude/sworn/projeto.json', '{}');
-    const g = spawnSync('git', ['init', '-q'], { cwd: dir, encoding: 'utf8' });
-    assert.strictEqual(g.status, 0, g.stderr);
+    comum.repo(dir);
     escrever(dir, 'a.js', 'x\n// atalho: lista lida inteira. limite: 1 MB. trocar quando: arquivo maior.\n');
     const anexo = JSON.stringify({ type: 'attachment', attachment: { type: 'hook_additional_context',
       content: ['sworn - aviso que se repete'], hookEvent: 'PreToolUse', hookName: 'PreToolUse:Bash', toolUseID: 't' } });
@@ -2149,17 +2362,19 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
     PreToolUse: [
       ['Write|Edit|NotebookEdit', 'portao-escopo.js 10'],
       ['Bash|PowerShell', 'portao-destrutivo.js 10', 'portao-estilo.js 10', 'portao-commit.js 30'],
-      ['Task|Agent', 'portao-agente.js 10', 'portao-apelido.js 10'],
+      ['Task|Agent', 'portao-agente.js 10', 'portao-apelido.js 10', 'portao-juiz.js 10'],
       ['AskUserQuestion', 'portao-decisao.js 10']
     ],
     PostToolUse: [
       ['Write|Edit|Bash|PowerShell|Grep|Glob|Read|AskUserQuestion|Skill', 'marcar-trabalho.js 10'],
+      ['Bash|PowerShell', 'conferir-depois.js 10'],
       ['SubagentHandback', 'gravar-veredito.js 10'],
       ['SubagentHandback', 'escalar.js 10']
     ],
     SubagentStart: [['', 'abrir-subagente.js 10', 'escalar.js 10']],
     SubagentStop: [['^sworn:inspector$', 'gravar-veredito.js 10'], ['', 'escalar.js 10']],
-    Stop: [['', 'portao-fecho.js 10']],
+    // D794: o fecho pode rodar a prova de pronto (teto de 60 s) no projeto que o dono ligou
+    Stop: [['', 'portao-fecho.js 90']],
     SessionEnd: [['', 'fim-sessao.js 10']]
   });
 });

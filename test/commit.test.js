@@ -42,11 +42,12 @@ test('commit: pastaDoComando le o -C e o ultimo cd antes do commit; sem nenhum, 
   assert.strictEqual(commit.pastaDoComando('git commit -m x'), null);
 });
 
-test('commit: inspetores pela faixa (D485): uma 1, duas 2, completa 10 de codigo e 8 de estilo', () => {
+test('commit: inspetores pela faixa (D485): uma 1, duas 2, completa 10 de codigo e 9 de estilo (D825)', () => {
   assert.strictEqual(commit.inspetores('uma', false), 1);
   assert.strictEqual(commit.inspetores('duas', false), 2);
   assert.strictEqual(commit.inspetores('completa', false), 10);
-  assert.strictEqual(commit.inspetores('completa', true), 8);
+  // D825: o estilo leva as 8 de tela e a lente do pedido
+  assert.strictEqual(commit.inspetores('completa', true), 9);
 });
 
 // ------------------------------- o gancho, num repositorio de verdade
@@ -85,9 +86,10 @@ function tocar(dir, tmp, rel) {
     tool_input: { file_path: path.join(dir, rel) } });
 }
 
-function commitar(dir, tmp, comando) {
-  const r = hook('portao-commit.js', dir, tmp, { hook_event_name: 'PreToolUse', tool_name: 'Bash',
-    tool_input: { command: comando } });
+function commitar(dir, tmp, comando, transcrito) {
+  const entrada = { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: comando } };
+  if (transcrito) entrada.transcript_path = transcrito;
+  const r = hook('portao-commit.js', dir, tmp, entrada);
   let json = null;
   try { json = JSON.parse(r.stdout); } catch (e) { json = null; }
   return { status: r.status, json: json, stderr: r.stderr };
@@ -364,4 +366,322 @@ test('A2-31 (D721): item torto na lista de aprovados nao libera o arquivo', () =
       ['src/pequeno.js']);
     assert.deepStrictEqual(commit.pendentes([abs], [abs], dir, null, null, []), [], 'o texto segue aprovando');
   });
+});
+
+// F1d (D828.4): com "provaPorArquivoTocado": true, o portao do commit cobra a suite inteira (a provaDePronto) depois da
+// ultima edicao de codigo da sessao, terminada e verde; vale tambem com a marca de commit sem revisao.
+test('F1d: com provaPorArquivoTocado, o commit espera a suite inteira verde depois da ultima edicao', () => {
+  comRepo(function (dir, tmp) {
+    const PROVA = 'node --test test/*.test.js';
+    // Nenhum caso marca arquivo tocado no estado da sessao: a parte da revisao do portao nao tem o que cobrar, e
+    // so a suite decide.
+    const projeto = function (extra) {
+      fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
+        JSON.stringify(Object.assign({ provaDePronto: PROVA }, extra)));
+    };
+    let n = 0;
+    const transcrito = function (linhas) {
+      const f = path.join(tmp, 't' + (n++) + '.jsonl');
+      fs.writeFileSync(f, linhas.map(function (l) { return JSON.stringify(l); }).join('\n') + '\n');
+      return f;
+    };
+    const cmd = function (id, c, extra) { return { type: 'assistant', message: { content: [{ type: 'tool_use', id: id, name: 'Bash', input: Object.assign({ command: c }, extra) }] } }; };
+    const res = function (id, c, erro) { return { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: c, is_error: erro === true }] } }; };
+    const edita = function (id) { return { type: 'assistant', message: { content: [{ type: 'tool_use', id: id, name: 'Edit', input: { file_path: path.join(dir, 'src', 'pequeno.js') } }] } }; };
+    const tentar = function (f, comando) { return commitar(dir, tmp, comando || 'git commit -m "x"', f); };
+    // negou com o motivo da suite: o motivo so e lido depois de conferir a negacao, para a falha dizer o caso
+    const negouPelaSuite = function (r, estado, caso) {
+      assert.ok(negou(r), caso + ': o commit devia ser negado; saida: ' + JSON.stringify(r.json) + ' ' + r.stderr);
+      assert.match(motivo(r), /sworn - portao de commit \(a suite inteira antes do commit\)\./, caso);
+      assert.match(motivo(r), estado, caso);
+    };
+    // passou de verdade: o portao terminou com 0 e sem erro (um portao que quebra libera pelo blindar, com stderr)
+    const passou = function (r, caso) {
+      assert.strictEqual(r.status, 0, caso + ': status');
+      assert.strictEqual(String(r.stderr || '').trim(), '', caso + ': o portao escreveu erro');
+      assert.ok(!negou(r), caso + ': o commit devia passar; motivo: ' + (r.json ? motivo(r) : ''));
+    };
+    const NAO_RODOU = /A suite inteira nao rodou depois da ultima edicao de codigo\./;
+    projeto({ provaPorArquivoTocado: true });
+    const semSuite = tentar(transcrito([edita('e'), cmd('a', 'node --test test/x.test.js'), res('a', '# fail 0')]));
+    negouPelaSuite(semSuite, NAO_RODOU, 'sem a suite');
+    assert.match(motivo(semSuite), /node --test test\/\*\.test\.js/);
+    const foraDoAscii = motivo(semSuite).match(/[^\x20-\x7E\n]/);
+    assert.strictEqual(foraDoAscii, null, 'o motivo tem de ser ASCII; achou ' + JSON.stringify(foraDoAscii && foraDoAscii[0]));
+    // a suite verde ANTES da ultima edicao nao vale: nega igual
+    negouPelaSuite(tentar(transcrito([cmd('a', PROVA), res('a', '# pass 9\n# fail 0'), edita('e')])), NAO_RODOU,
+      'suite verde antes da edicao');
+    // a marca de commit sem revisao dispensa a revisao, nao a suite
+    negouPelaSuite(tentar(transcrito([edita('e')]), 'git commit -m "x" # sworn: sem-revisao'), NAO_RODOU, 'marca sem-revisao');
+    // a suite vermelha depois da edicao tambem nega
+    negouPelaSuite(tentar(transcrito([edita('e'), cmd('a', PROVA), res('a', 'Exit code 1\n# fail 2', true)])),
+      /A ultima rodada da suite inteira falhou\./, 'suite vermelha');
+    // a suite lancada em segundo plano, sem o aviso de fim, ainda roda
+    negouPelaSuite(tentar(transcrito([edita('e'), cmd('b', PROVA, { run_in_background: true }),
+      res('b', 'Command running in background with ID: b1')])), /A suite inteira ainda roda/, 'suite em segundo plano');
+    // verde depois da edicao: passa
+    passou(tentar(transcrito([edita('e'), cmd('a', PROVA), res('a', '# pass 9\n# fail 0')])), 'verde depois da edicao');
+    // sem o transcrito, o portao nao tem como ver a suite: passa (como o resto do portao, nao inventa falta)
+    passou(tentar(null), 'sem transcrito');
+    // sem a chave, o portao nao cobra a suite
+    projeto({});
+    passou(tentar(transcrito([edita('e')])), 'sem a chave');
+    // "portaoCommit": false desliga o portao inteiro, a cobranca da suite tambem
+    projeto({ provaPorArquivoTocado: true, portaoCommit: false });
+    passou(tentar(transcrito([edita('e')])), 'portaoCommit false');
+  });
+});
+
+// ---------------------------------------------------------------- F2a (D828.3): o teto da revisao no portao do commit
+
+// O apurar-ronda.js grava em `revisadosNoTeto` o arquivo cuja revisao fechou no teto, com o blob dele no HEAD daquela
+// hora ('' no arquivo novo). A marca vale enquanto o HEAD do arquivo for esse: editar nao a tira (o conserto depois do
+// teto e esperado), o commit feito a vence.
+const blobNoHead = function (dir, rel) {
+  return spawnSync('git', ['rev-parse', '--verify', '-q', 'HEAD:' + rel], { cwd: dir, encoding: 'utf8', shell: false }).stdout.trim();
+};
+function noEstado(tmp, fn) {
+  const anterior = process.env.SWORN_TMP;
+  process.env.SWORN_TMP = tmp;
+  try {
+    require('../scripts/lib/estado.js').alterar('c1', function (s) { fn(s); return s; });
+  } finally {
+    if (anterior === undefined) delete process.env.SWORN_TMP; else process.env.SWORN_TMP = anterior;
+  }
+}
+const lerEstado = function (tmp) { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'c1.json'), 'utf8')); };
+/** Marca no estado da sessao c1 a revisao fechada no teto de cada arquivo, com o HEAD de agora. */
+function marcarTeto(dir, tmp, rels) {
+  noEstado(tmp, function (s) {
+    const marcas = {};
+    for (const rel of rels) marcas[path.join(dir, rel)] = blobNoHead(dir, rel);
+    s.revisadosNoTeto = marcas;
+  });
+}
+const MOTIVO_DO_TETO = function (nomes, comAtalho) {
+  return [
+    'sworn - commit parado: a revisao destes arquivos fechou no teto de 3 rondas, sem aprovar.',
+    '',
+    'Arquivos de codigo com a revisao fechada no teto:'
+  ].concat(nomes, comAtalho || [], [
+    '',
+    'Nao pergunte ao usuario. Faca agora:',
+    '  1. confira que cada conserto feito depois do teto tem um teste que reprova quando o codigo e',
+    '     estragado de proposito;',
+    '  2. rode a suite inteira e espere o verde;',
+    '  3. registre no plano o que a revisao deixou aberto;'
+  ], comAtalho ? ['  4. escreva "trocar quando: ..." em cada atalho listado;'] : [], [
+    '  ' + (comAtalho ? 5 : 4) + '. repita o commit com "# sworn: sem-revisao" no fim do comando.',
+    'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+  ]).join('\n');
+};
+
+test('F2a (D828.3): com todos os pendentes fechados no teto, o motivo manda commitar com a marca, sem perguntar', () => {
+  comRepo(function (dir, tmp) {
+    tocar(dir, tmp, 'src/grande.js');
+    tocar(dir, tmp, 'src/novo.js');
+    assert.strictEqual(blobNoHead(dir, 'src/novo.js'), '', 'o novo.js nao esta no HEAD');
+    marcarTeto(dir, tmp, ['src/grande.js', 'src/novo.js']);
+    const r = commitar(dir, tmp, 'git commit -m "fix: x"');
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(negou(r), 'sem a marca o commit passou: ' + JSON.stringify(r.json));
+    assert.strictEqual(motivo(r), MOTIVO_DO_TETO(['  - "src/grande.js"', '  - "src/novo.js"']));
+    assert.strictEqual(motivo(r).match(/[^\x20-\x7E\n]/), null, 'o motivo tem de ser ASCII');
+    assert.strictEqual(lerEstado(tmp).contadores.commit_sem_revisao, 1, 'o balde do portao conta a negacao');
+    assert.strictEqual(lerEstado(tmp).contadores.ordem_revisar_dada, undefined, 'no teto nao ha ordem de revisar');
+    assert.strictEqual(lerEstado(tmp).ordensPendentes, undefined, 'no teto nao se grava ordem pendente');
+    assert.ok(!negou(commitar(dir, tmp, 'git commit -m "fix: x" # sworn: sem-revisao')), 'a marca nao liberou');
+  });
+});
+
+test('F2a (D828.3): pendente no teto ao lado de pendente sem revisao: a revisao e so do segundo, e o teto e dito', () => {
+  comRepo(function (dir, tmp) {
+    for (const rel of ['src/grande.js', 'src/pequeno.js', 'src/novo.js']) tocar(dir, tmp, rel);
+    marcarTeto(dir, tmp, ['src/grande.js']);
+    const r = commitar(dir, tmp, 'git commit -m x');
+    assert.ok(negou(r), JSON.stringify(r.json));
+    assert.strictEqual(motivo(r), [
+      'sworn - commit parado: falta a revisao antes do commit.',
+      '',
+      'Arquivos de codigo mudados nesta sessao sem revisao aprovada',
+      '(faixa: o tamanho da revisao; inspetores: quantos revisores ela chama):',
+      '  - "src/pequeno.js"   faixa uma, 1 inspetor',
+      '  - "src/novo.js"      faixa completa, 10 inspetores',
+      'Com a revisao fechada no teto de 3 rondas (nao se revisam de novo):',
+      '  - "src/grande.js"',
+      '',
+      'Faca agora:',
+      '  1. rode /sworn:review "<arquivo>" so nos arquivos sem revisao aprovada (os do teto nao), ate sair "aprovado";',
+      '  2. rode o commit de novo: ele para mais uma vez e diz o que fazer com os do teto.',
+      'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
+      'repita o commit com "# sworn: sem-revisao" no fim do comando.',
+      'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+    ].join('\n'));
+    assert.strictEqual(lerEstado(tmp).contadores.ordem_revisar_dada, 1, 'ha arquivo por revisar: a ordem conta');
+  });
+});
+
+test('F2a (D828.3): a marca do teto vale com o arquivo editado de novo e vence quando o HEAD dele muda', () => {
+  comRepo(function (dir, tmp) {
+    const g = function (args) { return spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false }); };
+    tocar(dir, tmp, 'src/pequeno.js');
+    tocar(dir, tmp, 'src/novo.js');
+    marcarTeto(dir, tmp, ['src/pequeno.js', 'src/novo.js']);
+    // o conserto depois do teto: o arquivo muda de novo, a marca segue
+    fs.writeFileSync(path.join(dir, 'src', 'pequeno.js'), 'consertado\n');
+    tocar(dir, tmp, 'src/pequeno.js');
+    assert.strictEqual(motivo(commitar(dir, tmp, 'git commit -m x')), MOTIVO_DO_TETO(['  - "src/pequeno.js"', '  - "src/novo.js"']));
+    // o commit saiu: o HEAD dos dois e outro, e a mudanca seguinte pede revisao como qualquer uma
+    g(['add', 'src/pequeno.js', 'src/novo.js']);
+    assert.strictEqual(g(['commit', '-qm', 'no teto']).status, 0);
+    assert.ok(!negou(commitar(dir, tmp, 'git commit -m x')), 'igual ao HEAD: nada a cobrar');
+    fs.writeFileSync(path.join(dir, 'src', 'pequeno.js'), 'consertado de novo\n');
+    fs.writeFileSync(path.join(dir, 'src', 'novo.js'), 'y\n');
+    tocar(dir, tmp, 'src/pequeno.js');
+    tocar(dir, tmp, 'src/novo.js');
+    assert.strictEqual(motivo(commitar(dir, tmp, 'git commit -m x')), motivoDoMock([
+      '  - "src/pequeno.js"   faixa uma, 1 inspetor',
+      '  - "src/novo.js"      faixa uma, 1 inspetor'
+    ]));
+  });
+});
+
+test('F2a (D828.3): no teto, o atalho novo sem gatilho segue cobrado, antes do commit com a marca', () => {
+  comRepo(function (dir, tmp) {
+    fs.writeFileSync(path.join(dir, 'src', 'novo.js'), 'x\n// atalho: so um fuso. limite: BRT.\n');
+    tocar(dir, tmp, 'src/novo.js');
+    marcarTeto(dir, tmp, ['src/novo.js']);
+    assert.strictEqual(motivo(commitar(dir, tmp, 'git commit -m x')), MOTIVO_DO_TETO(['  - "src/novo.js"'], [
+      'Atalho novo (simplificacao marcada no codigo) sem o "trocar quando:":',
+      '  - "src/novo.js:2"'
+    ]));
+  });
+});
+
+test('F2a (D828.3): com mais de 5 arquivos no teto, o motivo cita 5 e diz "e mais N"', () => {
+  comRepo(function (dir, tmp) {
+    const rels = [];
+    for (let i = 1; i <= 7; i++) {
+      fs.writeFileSync(path.join(dir, 'src', 'n' + i + '.js'), 'x\n');
+      tocar(dir, tmp, 'src/n' + i + '.js');
+      rels.push('src/n' + i + '.js');
+    }
+    marcarTeto(dir, tmp, rels);
+    assert.strictEqual(motivo(commitar(dir, tmp, 'git commit -m x')), MOTIVO_DO_TETO(rels.slice(0, 5)
+      .map(function (rel) { return '  - "' + rel + '"'; }).concat(['  - e mais 2'])));
+    // misto: 6 no teto e 1 sem revisao; a lista do teto tambem para em 5
+    marcarTeto(dir, tmp, rels.slice(1));
+    const linhas = motivo(commitar(dir, tmp, 'git commit -m x')).split('\n');
+    const ini = linhas.indexOf('Com a revisao fechada no teto de 3 rondas (nao se revisam de novo):');
+    assert.deepStrictEqual(linhas.slice(ini - 1, ini + 8), ['  - "src/n1.js"   faixa completa, 10 inspetores',
+      'Com a revisao fechada no teto de 3 rondas (nao se revisam de novo):', '  - "src/n2.js"', '  - "src/n3.js"',
+      '  - "src/n4.js"', '  - "src/n5.js"', '  - "src/n6.js"', '  - e mais 1', '']);
+  });
+});
+
+test('F2a (D828.3): pendentes diz o teto de cada um; marca torta, de outro HEAD ou de outro arquivo nao vale', () => {
+  comRepo(function (dir) {
+    const grande = path.join(dir, 'src', 'grande.js');
+    const novo = path.join(dir, 'src', 'novo.js');
+    const blob = blobNoHead(dir, 'src/grande.js');
+    assert.match(blob, /^[0-9a-f]{40,64}$/);
+    const teto = function (marcas) {
+      return commit.pendentes([grande, novo], [], dir, null, null, [], marcas).map(function (p) { return p.teto; });
+    };
+    const par = function (a, b) { const m = {}; m[grande] = a; m[novo] = b; return m; };
+    assert.deepStrictEqual(teto(par(blob, '')), [true, true]);
+    assert.deepStrictEqual(teto(undefined), [false, false], 'sem as marcas (chamador antigo)');
+    assert.deepStrictEqual(teto(null), [false, false]);
+    assert.deepStrictEqual(teto([grande, novo]), [false, false], 'lista nao e o mapa das marcas');
+    assert.deepStrictEqual(teto('x'), [false, false]);
+    assert.deepStrictEqual(teto(par('', blob)), [false, false], 'o blob de outro HEAD nao vale');
+    assert.deepStrictEqual(teto(par(5, null)), [false, false], 'valor que nao e texto nao vale');
+    assert.deepStrictEqual(teto(par(blob.slice(0, 12), undefined)), [false, false], 'blob pela metade nao vale');
+    // o caminho se compara como o dos aprovados: sem diferenca de caixa
+    const caixa = {};
+    caixa[grande.toUpperCase()] = blob;
+    assert.deepStrictEqual(teto(caixa), [true, false]);
+  });
+});
+
+test('F2a (D828.3): comTeto grava o blob do HEAD de agora (vazio no arquivo novo) e semTeto tira a marca', () => {
+  comRepo(function (dir) {
+    const grande = path.join(dir, 'src', 'grande.js');
+    const novo = path.join(dir, 'src', 'novo.js');
+    const blob = blobNoHead(dir, 'src/grande.js');
+    const esperado = function (pares) { const m = {}; for (const [k, v] of pares) m[path.resolve(k)] = v; return m; };
+    const m1 = commit.comTeto(undefined, grande);
+    assert.deepStrictEqual(m1, esperado([[grande, blob]]));
+    const m2 = commit.comTeto(m1, novo);
+    assert.deepStrictEqual(m2, esperado([[grande, blob], [novo, '']]));
+    assert.deepStrictEqual(m1, esperado([[grande, blob]]), 'o comTeto nao mexe no mapa que recebeu');
+    // marcar de novo o mesmo arquivo, com outra caixa, nao duplica
+    assert.deepStrictEqual(Object.keys(commit.comTeto(m2, grande.toUpperCase())).length, 2);
+    assert.deepStrictEqual(commit.semTeto(m2, grande.toUpperCase()), esperado([[novo, '']]));
+    assert.deepStrictEqual(m2, esperado([[grande, blob], [novo, '']]), 'o semTeto nao mexe no mapa que recebeu');
+    for (const torta of [['x'], 'x', null, 5]) {
+      assert.deepStrictEqual(commit.comTeto(torta, novo), esperado([[novo, '']]), JSON.stringify(torta));
+      assert.deepStrictEqual(commit.semTeto(torta, novo), {}, JSON.stringify(torta));
+    }
+  });
+});
+
+test('F2a (D828.3): fora de repositorio nao ha HEAD: a marca do teto sai vazia, como a do arquivo novo', (t) => {
+  const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-fora-'));
+  try {
+    if (spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: fora, encoding: 'utf8' }).status === 0) {
+      // o salto aparece no relatorio dos testes, em vez de o teste passar sem conferir nada
+      t.skip('a pasta temporaria do sistema esta dentro de um repositorio git');
+      return;
+    }
+    const abs = path.join(fora, 'a.js');
+    fs.writeFileSync(abs, 'x\n');
+    const esperado = {};
+    esperado[path.resolve(abs)] = '';
+    assert.deepStrictEqual(commit.comTeto({}, abs), esperado);
+  } finally {
+    fs.rmSync(fora, { recursive: true, force: true });
+  }
+});
+
+test('F2a (D828.3): o motivo, direto: 5 no teto cabem sem "e mais"; no misto o "e mais" e o atalho sao dos sem revisao; teto que nao e true nao vale', () => {
+  const item = function (rel, teto, atalhos) {
+    return { rel: rel, faixa: 'uma', inspetores: 1, atalhos: atalhos || [], teto: teto };
+  };
+  const BLOCO_DO_TETO = 'Com a revisao fechada no teto de 3 rondas (nao se revisam de novo):';
+  // exatamente 5 no teto: os 5 citados, sem a linha "e mais 0"
+  const cinco = [1, 2, 3, 4, 5].map(function (i) { return item('src/n' + i + '.js', true); });
+  assert.strictEqual(commit.motivo(cinco), MOTIVO_DO_TETO(cinco.map(function (p) { return '  - "' + p.rel + '"'; })));
+  // 6 sem revisao e 1 no teto: o "e mais" conta so os sem revisao
+  const misto = [1, 2, 3, 4, 5, 6].map(function (i) { return item('src/s' + i + '.js', false); })
+    .concat([item('src/t.js', true)]);
+  const linhas = commit.motivo(misto).split('\n');
+  const ini = linhas.indexOf(BLOCO_DO_TETO);
+  assert.deepStrictEqual(linhas.slice(ini - 2, ini + 3),
+    ['  - "src/s5.js"   faixa uma, 1 inspetor', '  - e mais 1', BLOCO_DO_TETO, '  - "src/t.js"', '']);
+  // a marca do teto e so o true: outro valor e arquivo sem revisao, e nao aparece duas vezes
+  for (const torta of ['sim', 1, {}, null, undefined]) {
+    assert.strictEqual(commit.motivo([item('src/a.js', torta)]),
+      motivoDoMock(['  - "src/a.js"   faixa uma, 1 inspetor']), JSON.stringify(torta));
+  }
+  // misto com atalho novo sem gatilho: o bloco do atalho e o passo dele seguem no texto
+  assert.strictEqual(commit.motivo([item('src/a.js', false, [2]), item('src/t.js', true)]), [
+    'sworn - commit parado: falta a revisao antes do commit.',
+    '',
+    'Arquivos de codigo mudados nesta sessao sem revisao aprovada',
+    '(faixa: o tamanho da revisao; inspetores: quantos revisores ela chama):',
+    '  - "src/a.js"   faixa uma, 1 inspetor',
+    BLOCO_DO_TETO,
+    '  - "src/t.js"',
+    'Atalho novo (simplificacao marcada no codigo) sem o "trocar quando:":',
+    '  - "src/a.js:2"',
+    '',
+    'Faca agora:',
+    '  1. rode /sworn:review "<arquivo>" so nos arquivos sem revisao aprovada (os do teto nao), ate sair "aprovado";',
+    '  2. escreva "trocar quando: ..." em cada atalho listado;',
+    '  3. rode o commit de novo: ele para mais uma vez e diz o que fazer com os do teto.',
+    'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
+    'repita o commit com "# sworn: sem-revisao" no fim do comando.',
+    'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+  ].join('\n'));
 });

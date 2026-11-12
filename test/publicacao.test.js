@@ -54,7 +54,9 @@ const NUMEROS = {
   'tres': 3, 'três': 3, 'quatro': 4,
   'cinco': 5, 'seis': 6, 'sete': 7, 'oito': 8, 'nove': 9, 'dez': 10,
   'onze': 11, 'doze': 12, 'treze': 13, 'quatorze': 14, 'quinze': 15,
-  'dezesseis': 16, 'dezessete': 17, 'dezoito': 18
+  'dezesseis': 16, 'dezessete': 17, 'dezoito': 18, 'dezenove': 19, 'vinte': 20,
+  // F1d (D828): a 21a chave (provaPorArquivoTocado); o numero por extenso tem mais de uma palavra daqui em diante.
+  'vinte e uma': 21, 'vinte e duas': 22, 'vinte e tres': 23, 'vinte e três': 23, 'vinte e quatro': 24
 };
 
 // ── a licenca ────────────────────────────────────────────────────────────
@@ -109,7 +111,7 @@ test('publicacao: o diario de trabalho e o vocabulario privado NAO vao junto', (
 // Revisao da 0.13.0, R1: o README dizia "treze chaves" de liga/desliga com quinze no codigo (a T3b do radar somou o
 // oferecerRadar, e a anterior ja tinha passado sem acertar o numero).
 test('publicacao: o numero de chaves de liga/desliga do README vem do codigo', () => {
-  const m = README.match(/A lista das (\S+) chaves, com o padr[aã]o de cada uma/);
+  const m = README.match(/A lista das (\S+(?: e \S+)?) chaves, com o padr[aã]o de cada uma/);
   assert.ok(m, 'o README nao diz quantas chaves de liga/desliga ha');
   assert.strictEqual(NUMEROS[m[1].toLowerCase()], projetoLib.CHAVES_LIGA_DESLIGA.length,
     'o README conta ' + m[1] + ' chaves, e o codigo tem ' + projetoLib.CHAVES_LIGA_DESLIGA.length);
@@ -260,7 +262,9 @@ test('publicacao: a skill padrao conta as duas familias de lentes, com os numero
   assert.ok(secao.includes('skills/review/SKILL.md'), 'a secao 4.2 tem de apontar para a tabela do revisar');
   assert.ok(!/(?:in|on|for) every change/.test(secao), 'a secao 4.2 manda as de codigo em toda mudanca: ' + secao);
   const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8').split('\n');
-  const despacho = { 'Code only': FAMILIA.codigo, 'Screen only': FAMILIA.tela, 'Code and screen': FAMILIA.codigo + FAMILIA.tela };
+  // D825: so tela leva tambem a lente do pedido; codigo e tela ja a trazem pela familia de codigo
+  const despacho = { 'Code only': FAMILIA.codigo, 'Screen only': veredito.lentesSoTela().length,
+    'Code and screen': FAMILIA.codigo + FAMILIA.tela };
   for (const [mudanca, n] of Object.entries(despacho)) {
     const linha = revisar.find((l) => l.startsWith('| ' + mudanca + ' |'));
     assert.ok(linha && linha.includes('**' + n + '**'), 'o revisar manda "' + mudanca + '" com outro numero: ' + linha);
@@ -306,11 +310,13 @@ test('publicacao: a padrao aponta, na secao do pronto, para o bloco de qualidade
 
 // T2/item 13 da D257 (decisao do dono, 2026-09-29): arquivo so de logica - nao e de estilo e nao
 // monta tela - e revisado sem a `design`. D448 (2026-10-11): saem tambem `medidor` e `escopo` (11 de 13 e
-// 5 de 6 achados refutados na ronda 1 de 41 revisoes). O numero nao e escrito a mao: e LENTES.length menos
+// 5 de 6 achados refutados na ronda 1 de 41 revisoes); D824 (2026-11-09): a `escopo` volta, agora julgando contra o
+// pedido.md, e saem so `design` e `medidor`. O numero nao e escrito a mao: e LENTES.length menos
 // SAEM_SO_LOGICA, e cada lente que sai tem de existir em LENTES. Na duvida, todas (LENTES.length; D554: 10).
 test('publicacao: a linha "So logica" do revisar diz LENTES menos SAEM_SO_LOGICA, e cada lente que sai existe', () => {
   const saem = veredito.SAEM_SO_LOGICA;
-  assert.deepStrictEqual(saem, ['design', 'medidor', 'escopo'], 'D448: saem design, medidor e escopo');
+  // D824: a lente escopo voltou ao arquivo so de logica (julga contra o pedido.md)
+  assert.deepStrictEqual(saem, ['design', 'medidor'], 'D448/D824: saem design e medidor');
   saem.forEach((k) => assert.ok(veredito.LENTES.some((l) => l.chave === k), 'lente que sai nao existe: ' + k));
   const n = veredito.LENTES.length - saem.length;
   const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8').split('\n');
@@ -374,7 +380,8 @@ test('L3: o revisar cita --completa, manda ler vereditosDescartados e diz que o 
   const revisar = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   assert.ok(revisar.includes('--completa'), 'o revisar nao diz como subir a completa');
   assert.ok(revisar.includes('`vereditosDescartados`'), 'o revisar nao manda ler os descartados');
-  assert.match(revisar, /lens that found P0 or P1 and didn't come back/i, 'o revisar nao diz que a lente tem de voltar');
+  assert.match(revisar, /lens that found P0, P1 or P2 `erro` in the round before \(a finding in `novos`\) didn't come back/i,
+    'o revisar nao diz que a lente tem de voltar');
 });
 
 // Ronda 2 do Passo 8b: "oito travas" batia o README com o CHANGELOG e o manifesto, e o
@@ -384,7 +391,7 @@ test('L3: o revisar cita --completa, manda ler vereditosDescartados e diz que o 
 const TRAVA_DO_BALDE = {
   fecho_sem_evidencia: 3, subitem_pendente: 3,
   fora_do_escopo: 4, sem_escopo: 4, intocavel: 4, frente_invalida: 4, fora_declarado: 4,
-  comando_destrutivo: 5, shell_idioma_errado: 5, outra_frente: 5, cd_solto: 5,
+  comando_destrutivo: 5, shell_idioma_errado: 5, outra_frente: 5, cd_solto: 5, restaurou_fora_do_escopo: 5,
   agente_caro_em_marcha_rapida: 6, criou_sem_buscar: 7, catraca_afrouxada: 8,
   // D678 T2: o mesmo portao-agente da trava 6, quando a chamada foge da tabela dos degraus
   chamada_fora_da_tabela: 6,
@@ -396,6 +403,10 @@ const TRAVA_DO_BALDE = {
   estilo_por_shell: null,
   // D412/D415: portao proprio do prompt do handoff, com chave propria como o de decisao: fora da conta das travas
   handoff_sem_prompt: null,
+  // s369 (P1 do dono): parte do mesmo portao do handoff, com a mesma chave (portaoHandoff): fora da conta das travas
+  parada_no_handoff: null,
+  // s369 (A6): parte do modo continuo (desliga com "modoContinuo": false), fora da conta das travas
+  parada_sem_dono: null,
   // D503 (0.8.1): portao proprio da referencia de topo, com chave propria (portaoReferencia) como o do handoff
   fecho_sem_referencia: null,
   // D655: portao proprio da revisao aprovada no fecho da marcha AAA, com chave propria (portaoRevisao)

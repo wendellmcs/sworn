@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="titulo desc">
   <title id="titulo">sworn</title>
-  <desc id="desc">Social preview: sworn, proof instead of claims. A Claude Code plugin with 8 gates and 9 commands. Beside it, a card with the literal end-of-turn message of gate 3 (trava 3), in Portuguese, as the agent gets it. In English: you claimed success and pasted no evidence from this round; do not rewrite the sentence to escape the gate; run it, or declare.</desc>
+  <desc id="desc">Social preview: sworn, proof instead of claims. A Claude Code plugin with 8 gates and 12 commands. Beside it, a card with the literal end-of-turn message of gate 3 (trava 3), in Portuguese, as the agent gets it. In English: you claimed success and pasted no evidence from this round; do not rewrite the sentence to escape the gate; run it, or declare.</desc>
   <defs>
     <pattern id="grade" width="32" height="32" patternUnits="userSpaceOnUse">
       <path d="M32 0H0V32" fill="none" stroke="#1B222C" stroke-width="1"/>
@@ -47,5 +47,5 @@
     </text>
   </g>
 
-  <text x="72" y="560" font-family="'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="24" fill="#D1D5DB">A Claude Code plugin · 8 gates · 9 commands · MIT</text>
+  <text x="72" y="560" font-family="'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="24" fill="#D1D5DB">A Claude Code plugin · 8 gates · 12 commands · MIT</text>
 </svg>

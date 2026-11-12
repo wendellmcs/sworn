@@ -44,9 +44,10 @@ code or art — the sheet keeps the pattern and where it came from.
 ## Step 2 — the layers
 
 1. **what you see** — the first screen, the order, what comes before what. A public page the command opens
-   and photographs by itself, through CDP (its own port, waiting on a condition), not through the browser
-   headless from the command line (`${CLAUDE_PLUGIN_ROOT}/skills/playbook/references/04-verificacao.md`). Open the
-   PNG with Read before citing it. A page that does not open in 30 seconds, returns an error, asks for login or
+   and photographs by itself with `node "${CLAUDE_PLUGIN_ROOT}/scripts/capturar-tela.js" --url <url> --saida
+   <folder> --tempo-max 30000` (CDP on its own port, waiting on a condition), not through the browser headless from
+   the command line (`${CLAUDE_PLUGIN_ROOT}/skills/playbook/references/04-verificacao.md`). Open the PNG with Read
+   before citing it; the console and page errors come from the `evidencia.json` next to it. A page that does not open in 30 seconds, returns an error, asks for login or
    blocks bots — or a debugging browser that does not respond: do not insist or work around it; that product's layer
    goes to "what is still unknown" as `bloqueado`, with what would measure it. The photo is only valid with the
    content on screen, not with the page still loading. If all products are blocked in one
@@ -147,5 +148,6 @@ stays as it was, and so does the sheet.
 
 - **Does not copy code or art.** It keeps the pattern and where it came from.
 - **Does not log in or use credentials.** With login, only the tab the owner opened.
-- **Does not install a third-party product** without the owner's yes.
+- **Does not install a third-party product** without the owner's yes. When the study feeds sworn itself, the
+  product installed is only to compare against sworn's own version, never a dependency of the plugin (owner's decision).
 - **Does not swap the reference on its own.** Without the yes, `referencias` stays as it was.

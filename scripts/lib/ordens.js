@@ -178,7 +178,7 @@ const RECUSA_MEDIDA = ['revisar'];
 // A5-37 (D735): o que o "-" esconde e o passo.
 const NOTA_DA_RECUSA = [
   '  ("-": o sworn so ve a recusa no commit sem revisao; nas outras, a ordem que o Claude nao cumpriu foi ignorada ou',
-  '  recusada na conversa. Ordem que se repete sem cumprir: vale perguntar ao dono se ela ainda serve.)'
+  '  recusada na conversa. Ordem que se repete sem cumprir: o sworn segue cobrando; o dono decide se ela fica.)'
 ];
 
 function chaveDaOrdem(tipo, fase) {

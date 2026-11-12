@@ -18,7 +18,8 @@ You are an inspector. You receive **one lens** and **two artifacts**, labeled A 
 - Read **only** the two files whose paths were given in your briefing. Nothing else — with one
   exception: if the briefing passes a `regua.md`, read it too. It is the project's ruler (tokens, values,
   reference screens). A finding about a value outside the ruler **cites the ruler value** that should be there.
-  The same goes for an `R.txt` the briefing passes (the reference, below).
+  The same goes for an `R.txt` the briefing passes (the reference, below), and for a `contrato.txt` (what the
+  excerpt uses from other files: context, never cited in a finding).
 - If a file named `mapa.json` shows up in the path, **don't open it**. It contains the answer.
 - A and B may be **excerpts**: a line `[fora do trecho: linhas a-b]`, followed by blank lines,
   marks what was left out on purpose. The gap is not a defect. The line number is the file's: cite it
@@ -55,7 +56,17 @@ Rejecting a finding is not your job: whoever runs the review refutes it at the s
 |---|---|
 | `P0` | Breaks function, leaks a secret, loses data, hangs execution |
 | `P1` | Required state missing, broken contract, regression, error swallowed silently |
-| `P2` | Real improvement, **outside the scope of the request** — becomes a record, never a fix |
+| `P2` | A smaller defect or a real improvement; mark its `tipo` (below) |
+
+Every `P2` carries `"tipo"`:
+
+- `"erro"` — it changes a result, weakens security, shows the user something wrong or unclear, or can lose data
+  (example: a message that tells the user to do the wrong thing);
+- `"melhoria"` — none of those: only a cleaner way to write the same behavior (example: a helper with a vague name).
+
+A `P2` without `tipo` invalidates the whole verdict: it has to be written again. A review runs up to 3 rounds (one round = one batch of inspectors on the same
+file). An `erro` holds the review until it is fixed or refuted at the source. A `melhoria` never holds it: it is
+listed for later, so mark `melhoria` only when none of the effects above applies.
 
 ## What you return
 
@@ -74,6 +85,7 @@ Rejecting a finding is not your job: whoever runs the review refutes it at the s
       "arquivo": "A.txt",
       "linha": 42,
       "trecho": "<the text of the cited line, copied from the cited file>",
+      "tipo": "erro | melhoria (only on P2)",
       "descricao": "<the defect, in one or two sentences>",
       "comoFalha": "<concrete input -> wrong result>"
     },
@@ -90,6 +102,19 @@ Rejecting a finding is not your job: whoever runs the review refutes it at the s
 
 A finding in `achados` without `estado` invalidates the whole verdict: it has to be written again. The `lacunas`
 (below, only with `R.txt`) keep their own format, with no `estado`.
+
+**Only in the `seguranca` lens**, two more fields, which the review's count (`apurar-ronda.js`) checks:
+
+- a `confirmado` `P0` or `P1` carries `"fronteira": { "entrada": "<the lowest-trust input and where it comes in>",
+  "controle": "<the control it crosses>", "efeito": "<the concrete damage>" }`. The severity does not go above the
+  damage you show: `P0` fully defeats the control with concrete damage; `P1` weakens it; with no damage stated, `P2`
+  (which needs no `fronteira`);
+- a `pendente` carries `"plano": "<how to check the missing fact without risk>"`, next to the `falta`. A fact outside
+  the file (proxy, configuration, deployment) is never presumed present or absent: it is `pendente`, with the plan.
+
+A `seguranca` verdict with a P0/P1 whose `fronteira` lacks `entrada`, `controle` or `efeito`, or with a `pendente`
+without `plano`, is not written: it comes back to be written again with the missing field filled, like a `confirmado`
+without `trecho`.
 
 The `vereditos` field is just the path the briefing passed: copy it untouched and **don't open** the folder. The
 plugin's hook uses it to know where to write your verdict; without it (or with a wrong path), the verdict

@@ -26,7 +26,8 @@ test('continuo: sem a chave (e sem projeto), o bloco diz o que para e o que nao 
   assert.ok(/Modo continuo ligado/.test(b), b);
   assert.ok(/tamanho da conversa/.test(b) && /bloqueios/.test(b), 'o que ainda pede troca');
   assert.ok(/Releia o trecho do plano/.test(b), 'reler o plano antes de cada subitem');
-  assert.ok(/irreversivel/.test(b) && /custo/.test(b) && /produto/.test(b), 'quando ainda perguntar');
+  // D785 item 6 (s369, 2.6): "o de produto" virou regra de negocio; o custo segue citado (o de dentro do pedido nao)
+  assert.ok(/irreversivel/.test(b) && /custo/.test(b) && /regra de negocio/.test(b), 'quando ainda perguntar');
   assert.ok(/credencial, permissao ou seguranca/.test(b), 'SP7: credencial, permissao e seguranca vao ao dono');
   assert.ok(b.indexOf('"' + c.CHAVE + '": false') !== -1, 'diz como desligar');
 });
@@ -169,4 +170,73 @@ test('continuo: a sworn:playbook e o README falam da chave e da validacao pelo p
   assert.ok(/validate by the agent itself/.test(skill), 'a skill nao manda validar antes de pedir');
   const readme = ler('GUIA.md');
   assert.ok(readme.indexOf('`modoContinuo`') !== -1, 'o README nao cita a chave');
+});
+
+// D785 item 6 (s369, 2.6): o "menos paradas" deixa a pergunta ao dono so para regra de negocio, aparencia (com opcoes),
+// o irreversivel ou externo e credencial; custo dentro do pedido sai da lista, e o resto o agente faz sozinho.
+test('D785/2.6: o modo continuo pergunta so regra de negocio, aparencia, irreversivel/externo e credencial', () => {
+  const t = c.bloco({});
+  assert.ok(/regra de negocio/.test(t) && /aparencia \(com opcoes\)/.test(t) && /credencial/.test(t), t);
+  assert.ok(/custo dentro do pedido nao se pergunta/.test(t), t);
+  // a SP7 segue: credencial, permissao ou seguranca vao ao dono (a D785 so tira o custo de dentro do pedido)
+  assert.ok(!/o de custo e o de produto/.test(t) && /credencial, permissao ou seguranca/.test(t), t);
+  assert.ok(/sem perguntar/.test(t), t);
+  assert.ok(/^[\x20-\x7E\n]+$/.test(t), 'ASCII: ' + t);
+});
+
+// B3 (s369, R-dsh): a pergunta ao dono por classe (as 4 da D785) e o estado tipado do fecho.
+test('B3: a pergunta ao dono cai numa das 4 classes da D785, ou fica de fora', () => {
+  const casos = [
+    ['publicar a 0.23.0 e empurrar o backup', 'externo'],
+    ['enviar o e-mail ao cliente', 'externo'],
+    ['a chave da API do xKiro (credencial)', 'credencial'],
+    ['permissao de escrita na pasta do servidor', 'credencial'],
+    ['qual das 3 cores do botao (aparencia)', 'aparencia'],
+    ['regra de negocio: o desconto vale para o plano anual?', 'regra_de_negocio'],
+    ['qual nome de variavel eu uso?', null],
+    ['abrir o chat novo e colar o prompt', null],
+    ['', null]
+  ];
+  for (const [texto, classe] of casos) assert.strictEqual(c.classeDaPergunta(texto), classe, texto);
+});
+
+test('B3: o estado do fecho - bloqueado, esperando, falhou, pronto (pela prova da trava 3) ou nenhum', () => {
+  const e = (o) => c.estadoDoFecho(Object.assign({ pedeDono: false, espera: false, alegaSucesso: false,
+    comEvidencia: false, mostraFalha: false, teste: null }, o));
+  assert.strictEqual(e({ pedeDono: true, alegaSucesso: true, comEvidencia: true }), 'bloqueado', 'o dono vem primeiro');
+  assert.strictEqual(e({ espera: true }), 'esperando');
+  assert.strictEqual(e({ pedeDono: true, espera: true }), 'bloqueado', 'o pedido ao dono vence a espera');
+  assert.strictEqual(e({ alegaSucesso: true, comEvidencia: true, teste: { provaRodando: true } }), 'esperando',
+    'a prova em segundo plano espera');
+  assert.strictEqual(e({ mostraFalha: true }), 'falhou');
+  assert.strictEqual(e({ alegaSucesso: true, comEvidencia: true, teste: { ultimoTeste: { falhou: true } } }), 'falhou');
+  assert.strictEqual(e({ alegaSucesso: true, comEvidencia: true }), 'pronto');
+  assert.strictEqual(e({ alegaSucesso: true, comEvidencia: true, teste: { ultimoTeste: { falhou: false } } }), 'pronto');
+  assert.strictEqual(e({ alegaSucesso: true, comEvidencia: false }), null, 'pronto sem evidencia nao e pronto');
+  assert.strictEqual(e({ alegaSucesso: true, comEvidencia: true, teste: { provaPendente: true } }), null,
+    'a prova que nao rodou depois da edicao nao e pronto');
+  assert.strictEqual(e({}), null, 'conversa nao tem estado');
+  assert.strictEqual(c.estadoDoFecho(), null, 'sem argumento: sem estado, sem erro');
+  assert.strictEqual(c.estadoDoFecho(null), null);
+  assert.strictEqual(c.classeDaPergunta(null), null, 'pergunta nula: fora');
+});
+
+// B4 (s369, R-superpowers): a decisao autonoma registrada em uma linha "Decisao: <o que> - por que: ... - custo se
+// errado: ...", que o fecho conta; a linha sem o custo e a falha medida.
+test('B4: o bloco manda registrar a decisao com o que, por que e custo se errado', () => {
+  const t = c.bloco(null);
+  assert.ok(/Decisao: <o que> - por que: <motivo> - custo se errado: <o que quebra>/.test(t), t);
+});
+
+test('B4: as decisoes da resposta, cada uma dizendo se traz o custo se errado', () => {
+  assert.deepStrictEqual(c.decisoesDaResposta('Feito.\nDecisao: usar matchAll - por que: diz a intencao - custo se ' +
+    'errado: nenhum, e leitura\nDecisão: lote de 100 - por que: linha de comando do Windows'), [true, false]);
+  assert.deepStrictEqual(c.decisoesDaResposta('```\nDecisao: colada num bloco\n```\n> Decisao: citada'), [],
+    'a colada ou citada nao conta');
+  assert.deepStrictEqual(c.decisoesDaResposta('**Decisão**: lote - por que: x - custo se errado: y'), [true],
+    'o negrito do markdown conta');
+  assert.deepStrictEqual(c.decisoesDaResposta('Decisao: x - por que: y - custo se errado: <o que quebra>'), [false],
+    'o molde sem preencher nao e o custo');
+  assert.deepStrictEqual(c.decisoesDaResposta(''), []);
+  assert.deepStrictEqual(c.decisoesDaResposta(null), []);
 });

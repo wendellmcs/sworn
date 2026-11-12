@@ -50,7 +50,9 @@ for the write, or refuses it when nobody is there to answer), with **all** of th
    file**, not paraphrased. With a study in progress, the path of each sheet: the radar one
    (`.claude/sworn/radar/<AAAA-MM-DD>.md`) and the reference one (`.claude/sworn/referencias/`), and whether it
    has already entered `referencias` or is waiting for the owner's yes — otherwise the new chat studies everything again.
-4. **Human decisions already made** — in the form "do not ask again", with the date.
+4. **Human decisions already made** — in the form "do not ask again", with the date. Then the **autonomous decisions**
+   of this session: each `Decisao:` line your answers wrote (what, why, cost if wrong), so the next chat neither redoes
+   nor reverses them without seeing why.
 5. **Pending items and blockers that are NOT findings of this session** — a pre-existing failure is this, and without
    this section the next chat will "discover" it and lose time. **A pending item is not dragged from handoff
    to handoff**: a list that only grows has no owner. Before the prompt, take each new pending item to the owner,

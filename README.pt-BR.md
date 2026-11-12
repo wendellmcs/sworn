@@ -8,7 +8,7 @@
 <p align="center">
   <strong>O seu agente de código diz "pronto". O sworn o obriga a mostrar a prova.</strong><br>
   Um plugin do Claude Code com oito travas numeradas, mais nove portões fora dessa conta (cada um, um script
-  que barra ou devolve a ação do agente), e nove comandos.
+  que barra ou devolve a ação do agente), e doze comandos.
   Cada portão roda num gancho (hook): o momento fixo da sessão em que o Claude Code chama um script.
   O script é determinístico, sem modelo no meio.
 </p>
@@ -134,7 +134,7 @@ principal fecha dizendo o que segue falhando, com a saída, em vez de perguntar 
 | 2 | **Revisão cega A/B por lentes distintas**<br>Bloqueia: nada; o `/sworn:review` apura por script.<br>Por quê: Quem fez é o pior juiz do próprio trabalho; o inspetor não sabe qual lado é o novo. |
 | 3 | **Fecho sem evidência**<br>Bloqueia: o fim do turno quando a resposta alega sucesso sem colar a saída (ou colando só saída com falha), quando o último teste rodado falhou, quando a prova de pronto do projeto não rodou depois da última edição de código, ou quando uma etapa do plano é dada como pronta com caixa ainda aberta.<br>Por quê: "Pronto" sem nada colado é a alegação falsa mais comum. Dizer o que não rodou sempre libera. |
 | 4 | **Arquivo fora do escopo declarado**<br>Bloqueia: a escrita, quando o alvo não está no arquivo de escopo, está declarado fora dele ou é intocável.<br>Por quê: Correção que passeia por arquivo que ninguém pediu é como a regressão chega à produção. |
-| 5 | **Comando destrutivo e sessão concorrente**<br>Bloqueia: o comando que apaga, o `cd` solto, a sintaxe de shell errada para a ferramenta e a escrita em arquivo que outra sessão mexeu.<br>Por quê: Trabalho perdido não volta para revisão. |
+| 5 | **Comando destrutivo e sessão concorrente**<br>Bloqueia: o comando que apaga (apagar arquivo nomeado dentro do escopo passa), o `cd` solto, a sintaxe de shell errada para a ferramenta e a escrita em arquivo que outra sessão mexeu.<br>Por quê: Trabalho perdido não volta para revisão. |
 | 6 | **Agente caro, modelo ou esforço trocado, pedido de subida esquecido**<br>Bloqueia:<br>• o despacho de um agente da metade mais cara da escada, arredondada para baixo (com 2 ou 3 agentes, o topo; com 4 ou 5, os dois de cima; com 6 ou 7, os três de cima) quando o escopo só tem caminhos de marcha rápida;<br>• a chamada de um agente da escada com modelo ou esforço diferente do que a escada grava (menos o segundo despacho do topo, abaixo, que vai com esforço máximo);<br>• o fim do turno com um pedido de subida de um subagente ainda não despachado. Este bloqueio vale uma vez por pedido.<br>Cada bloqueio diz ao agente principal o que fazer no lugar, sem parar para perguntar a você: quando o topo da escada pede um acima, ele é despachado de novo com esforço máximo; se pedir outra vez, o agente principal fecha dizendo o que segue falhando, com a saída.<br>Por quê: Custo não dói em quem escolhe o modelo, então quem escolhe é a escada: nada de agente caro em trabalho leve, o modelo e o esforço que a escada grava, e o degrau seguinte quando o subagente diz que a tarefa passou do papel dele. |
 | 7 | **Criar sem ter procurado**<br>Bloqueia: arquivo novo quando nada foi buscado no turno.<br>Por quê: `utils2.js` ao lado do `utils.js` é duplicata que ninguém vai limpar. |
 | 8 | **Catraca afrouxada**<br>Bloqueia: a edição que sobe um teto ou desce um piso.<br>Por quê: Baixar a régua é o jeito fácil de o teste passar; afrouxar é decisão humana. |
@@ -242,6 +242,9 @@ menos 24 × 24 px em cada botão e o INP (o tempo do clique até a tela responde
 | `/sworn:audit` | Pesa as instruções do projeto contra um teto, aponta o que cortar e mostra o modelo e o esforço com que os subagentes rodaram de fato. |
 | `/sworn:calibrate` | Mede, nas suas conversas, quando trocar de chat compensa, e sugere o limiar. |
 | `/sworn:shortcuts` | Lista os atalhos deliberados do código e marca os que não dizem quando trocar. |
+| `/sworn:review-plan` | Confere o plano antes de codar: um script vê se cada caminho, símbolo e comando citado existe e se cada passo aberto tem o comando que o prova; depois a revisão cega lê o plano. |
+| `/sworn:drift` | Mostra onde o código se afastou do plano: arquivo mudado que o plano não cita, passo feito cujo arquivo não mudou. |
+| `/sworn:diagnose` | Quando uma sessão deu errado, lê as transcrições com um analista por dimensão e só relata o achado cuja linha da transcrição um script confirma. |
 | `/sworn:reference` | Estuda 2-3 produtos líderes do mesmo tipo e grava uma ficha com a fonte de cada achado. |
 | `/sworn:radar` | Acha projetos públicos parecidos e diz o que vale trazer, com esforço, valor e licença. |
 <!-- /pagina:comandos -->

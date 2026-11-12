@@ -41,7 +41,10 @@ function tamanho(projeto) {
 const LIGADO = [
   '2. Modo continuo ligado: so o tamanho da conversa %TAMANHO% e os bloqueios de portao pedem troca de chat; revisoes, decisoes, commits, turnos e arquivos nao encerram a sessao.',
   '3. Releia o trecho do plano no arquivo antes de cada subitem.',
-  '4. Escolha tecnica dentro do escopo: decida, registre o motivo e liste no fecho. Pergunte ao dono so o irreversivel, o externo (publicar, push, envio), credencial, permissao ou seguranca, o de custo e o de produto.'
+  // D785 item 6 (s369, 2.6): a lista do que se pergunta encolhe; o resto o agente faz sozinho.
+  '4. Escolha tecnica: decida e registre: "Decisao: <o que> - por que: <motivo> - custo se errado: <o que quebra>". Ao dono so regra de negocio, aparencia (com opcoes), irreversivel (publicar, push, envio) e credencial, permissao ou seguranca; custo dentro do pedido nao se pergunta. Falha e conserto: sem perguntar.',
+  // s369 (A6, P1 do dono): a regra que o portao do fecho cobra (paradaSemDono), dita antes, em toda sessao.
+  '5. Nao feche o turno anunciando o proximo passo: faca-o ja. Parar so com a linha "Preciso do dono: <o que>" ou "Espero: <o que roda>".'
 ];
 
 /** A chave ligada? Plano 091 (#9, D556/D559): ligada por padrao, com ou sem projeto.json; so o booleano false
@@ -62,4 +65,56 @@ function bloco(projeto) {
     .join('\n') + '\n';
 }
 
-module.exports = { CHAVE, TETO, CALADOS, TOKENS_CONTEXTO, ativo, bloco };
+/**
+ * B3 (s369, R-dsh): as 4 classes da D785 em que o pedido ao dono cabe, na ordem em que se conferem (o pedido que cita
+ * a credencial de um envio e da credencial). Fora delas, null: a pergunta que o laco devia ter decidido sozinho.
+ */
+const CLASSES_DA_PERGUNTA = [
+  ['credencial', /\b(?:credencia\w*|senhas?|tokens?|chaves?|api[ -]?key|permiss(?:[aã]o|[oõ]es|ions?)|seguran[cç]a|acesso|credentials?|passwords?|security)\b/i],
+  ['externo', /\b(?:publica\w*|push|empurr\w*|envi\w*|e-?mail|deploy\w*|release|irrevers[ií]ve\w*|extern\w*|publish\w*|send\w*)\b/i],
+  ['aparencia', /\b(?:apar[eê]ncia|visua\w*|design|cor(?:es)?|layout|appearance|look)\b/i],
+  ['regra_de_negocio', /\b(?:regras? de neg[oó]cio|business rules?|decis[aã]o de produto|product decision)\b/i]
+];
+function classeDaPergunta(texto) {
+  const t = String(texto || '');
+  const achada = CLASSES_DA_PERGUNTA.filter(function (c) { return c[1].test(t); })[0];
+  return achada ? achada[0] : null;
+}
+
+/**
+ * B3 (s369, R-dsh): o estado tipado do fecho. Pela ordem: o pedido ao dono (bloqueado), a espera declarada ou a prova
+ * em segundo plano (esperando), a falha mostrada ou o ultimo teste vermelho (falhou) e o pronto com evidencia e sem
+ * prova pendente (pronto: a mesma conta da trava 3). Fora disso, null. `teste` e o que o saude.testesDoTranscript le.
+ */
+function estadoDoFecho(entrada) {
+  const o = entrada || {};
+  const t = o.teste || {};
+  if (o.pedeDono) return 'bloqueado';
+  if (o.espera || t.provaRodando === true) return 'esperando';
+  if (o.mostraFalha || (t.ultimoTeste && t.ultimoTeste.falhou === true)) return 'falhou';
+  if (o.alegaSucesso && o.comEvidencia && t.provaPendente !== true) return 'pronto';
+  return null;
+}
+
+/** O texto corrido da resposta: sem bloco de codigo cercado, sem codigo em linha e sem citacao ("> ..."). O que esta
+ *  colado ou citado nao e o que a resposta declara. */
+function textoCorrido(msg) {
+  return String(msg || '').replace(/^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1[ \t]*$|(?![\s\S]))/gm, '')
+    .replace(/`[^`\n]*`/g, ' ').replace(/^[ \t]*>.*$/gm, '');
+}
+
+/**
+ * B4 (s369, R-superpowers): as decisoes autonomas que a resposta registra, uma por linha "Decisao: ..." do texto
+ * corrido; cada uma vira true quando traz o "custo se errado: <algo>" (o registro inteiro) e false quando nao.
+ */
+// o negrito do markdown vale dos dois lados ("**Decisao**:"); o molde copiado sem preencher ("<o que quebra>") nao e o
+// custo se errado
+const DECISAO = /^[ \t*_-]*decis[aã]o[*_]*[ \t]*:(.*)$/gim;
+function decisoesDaResposta(msg) {
+  return Array.from(textoCorrido(msg).matchAll(DECISAO), function (m) {
+    return /custo se errado[*_]*[ \t]*:[ \t]*[^\s<]/i.test(m[1]);
+  });
+}
+
+module.exports = { CHAVE, TETO, CALADOS, TOKENS_CONTEXTO, ativo, bloco, CLASSES_DA_PERGUNTA, classeDaPergunta,
+  estadoDoFecho, textoCorrido, decisoesDaResposta };

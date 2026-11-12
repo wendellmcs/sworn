@@ -3,12 +3,28 @@ const test = require('node:test');
 const assert = require('node:assert');
 const v = require('../scripts/lib/veredito.js');
 
+// F2b: o P2 confirmado diz o tipo, e sem ele o veredito e invalido. O P2 destes testes e de erro (o que segura a ronda);
+// quem quer a melhoria troca o tipo, e quem quer o P2 sem tipo usa o p2SemTipo.
 function achado(sev, arq, linha, desc) {
-  return { estado: 'confirmado', severidade: sev, arquivo: arq, linha: linha, trecho: 'x', descricao: desc || 'defeito',
+  const a = { estado: 'confirmado', severidade: sev, arquivo: arq, linha: linha, trecho: 'x', descricao: desc || 'defeito',
     comoFalha: 'x -> y' };
+  if (sev === 'P2') a.tipo = 'erro';
+  return a;
+}
+function p2SemTipo(arq, linha) {
+  const a = achado('P2', arq, linha);
+  delete a.tipo;
+  return a;
 }
 function veredito(lente, achados, melhor) {
   return { lente: lente, melhor: melhor || 'A', porQue: 'A.txt:1', achados: achados };
+}
+// D820: o P0/P1 da lente de seguranca nomeia a fronteira (sem ela, o veredito volta). `fronteira` omitida = a inteira;
+// o achado sem o campo e o achado() de sempre.
+const FRONTEIRA = { entrada: 'o nome do arquivo que vem do usuario', controle: 'a checagem de caminho de abrir()',
+  efeito: 'le um arquivo fora da pasta do projeto' };
+function achadoSeg(sev, arq, linha, desc, fronteira) {
+  return Object.assign(achado(sev, arq, linha, desc), { fronteira: fronteira === undefined ? FRONTEIRA : fronteira });
 }
 
 test('veredito: sao dez lentes distintas', () => {
@@ -68,6 +84,21 @@ test('veredito: mudanca so de tela despacha so a familia de tela; na duvida, as 
   assert.deepStrictEqual(v.familiasPara(false, true), ['ui']);
   assert.deepStrictEqual(v.familiasPara(false, false), ['codigo', 'ui']);
   assert.deepStrictEqual(v.familiasPara(), ['codigo', 'ui']);
+});
+
+// D825 (D3b): a mudanca so de tela tambem e conferida contra o pedido. A familia de tela segue com 8; a revisao so de
+// tela despacha as 8 e a lente do pedido (a `escopo`, que ja vem na familia de codigo quando a mudanca e dos dois).
+test('D825: a revisao so de tela despacha as oito de tela e a lente do pedido', () => {
+  assert.strictEqual(v.LENTE_DO_PEDIDO, 'escopo');
+  assert.ok(v.LENTES.some((l) => l.chave === v.LENTE_DO_PEDIDO), 'a lente do pedido e da familia de codigo');
+  const soTela = v.lentesSoTela();
+  assert.deepStrictEqual(soTela, v.LENTES_UI.map((l) => l.chave).concat('escopo'));
+  assert.strictEqual(new Set(soTela).size, 9);
+  soTela.push('x');
+  assert.strictEqual(v.lentesSoTela().length, 9, 'cada chamada devolve uma lista nova');
+  // codigo e tela: as duas familias inteiras ja trazem a do pedido uma vez so
+  const juntas = v.LENTES.concat(v.LENTES_UI).map((l) => l.chave);
+  assert.strictEqual(juntas.filter((c) => c === v.LENTE_DO_PEDIDO).length, 1);
 });
 
 // D485 (s106): revisao proporcional ao diff. So comentario, numero ou frase curta = 1 inspetor; logica pequena
@@ -164,9 +195,91 @@ test('apurar: ronda 1 com P1 novo nao e seca', () => {
   assert.strictEqual(r.encerrar, false);
 });
 
-test('apurar: ronda so com P2 e seca (P2 vira registro, nao correcao)', () => {
-  const r = v.apurar([[veredito('correcao', [achado('P2', 'A.txt', 10)])]]);
+// D823 (R1, dono): o P2 aberto molha a ronda, como o P1 (antes: P2 virava registro e a ronda saia seca).
+// D828.2 (F2a) tira a melhoria desta lista: ela vira registro (os testes dela vem logo abaixo).
+// F2b: o P2 sem a marca, ou com marca desconhecida, deixou de contar como erro: invalida o veredito (testes no fim).
+test('D823: a ronda com P2 de erro aberto nao e seca, em qualquer grafia do tipo', () => {
+  for (const tipo of ['erro', 'ERRO', ' Erro ']) {
+    const a = Object.assign(p2SemTipo('A.txt', 10), { tipo: tipo });
+    const r = v.apurar([[veredito('correcao', [a])]]);
+    assert.strictEqual(r.secas, 0, tipo);
+    assert.deepStrictEqual(r.registros, [], tipo);
+    assert.deepStrictEqual(r.novos.map((n) => n.linha), [10], tipo);
+  }
+});
+
+const achadoMelhoria = (linha) => Object.assign(achado('P2', 'A.txt', linha, 'nome melhor'), { tipo: 'melhoria' });
+const achadoErroP2 = (linha) => Object.assign(achado('P2', 'A.txt', linha, 'pode perder dado'), { tipo: 'erro' });
+
+// D828.2 (F2a): o P2 de melhoria nao segura a ronda; sai em `registros`, com a ronda, a lente e o porque.
+test('D828.2: o P2 de melhoria vira registro e a ronda sai seca', () => {
+  const r = v.apurar([[veredito('correcao', [achadoMelhoria(7)])]]);
   assert.strictEqual(r.secas, 1);
+  assert.deepStrictEqual(r.novos, []);
+  assert.deepStrictEqual(r.registros, [Object.assign({ ronda: 1, lente: 'correcao' }, achadoMelhoria(7), { registro: 'melhoria' })]);
+  assert.deepStrictEqual(r.eixos.padrao, { novos: 0, pior: null }, 'o registro nao entra na conta dos novos');
+});
+
+test('D828.2: duas rondas so com melhoria aprovam, e as melhorias de todas as rondas saem no registro', () => {
+  const r = v.apurar([[veredito('correcao', [achadoMelhoria(1)])], [veredito('correcao', [achadoMelhoria(2)])]]);
+  assert.strictEqual(r.motivo, 'duas rondas secas seguidas: aprovado');
+  assert.deepStrictEqual(r.registros.map((a) => [a.ronda, a.linha, a.registro]), [[1, 1, 'melhoria'], [2, 2, 'melhoria']]);
+});
+
+test('D828.2: a melhoria repetida entra uma vez; a do lado antigo e a refutada nao sao registro', () => {
+  const repetida = v.apurar([[veredito('correcao', [achadoMelhoria(1)])], [veredito('correcao', [achadoMelhoria(1)])]]);
+  assert.deepStrictEqual(repetida.registros.map((a) => a.ronda), [1]);
+  const melhoriaEmB = Object.assign(achadoMelhoria(4), { arquivo: 'B.txt' });
+  const antiga = v.apurar([[veredito('correcao', [melhoriaEmB])]], { mapas: [{ A: 'trabalho', B: 'HEAD' }] });
+  assert.deepStrictEqual(antiga.registros, []);
+  assert.strictEqual(antiga.achadosDoLadoAntigo.length, 1);
+  const refutada = v.apurar([[veredito('correcao', [achadoMelhoria(4)])]], { refutados: [{ ronda: 1, lente: 'correcao',
+    arquivo: 'A.txt', linha: 4, severidade: 'P2', prova: 'scripts/x.js:1' }] });
+  assert.deepStrictEqual(refutada.registros, []);
+  assert.strictEqual(refutada.secas, 1);
+});
+
+test('D828.2: a melhoria nao faz par para o juiz de mesmo defeito, e nao obriga a lente a voltar', () => {
+  const r1 = [veredito('correcao', [achado('P1', 'A.txt', 10)]), veredito('borda', [achadoMelhoria(11)])];
+  const r = v.apurar([r1], { mapas: [{ A: 'trabalho', B: 'HEAD' }] });
+  assert.deepStrictEqual(r.paresCandidatos, []);
+  // com a faixa, a ronda 2 sem a lente que achou P0/P1 para com erro; a que so deixou melhoria pode ficar de fora
+  const r2 = v.apurar([r1, [veredito('correcao', [])]], { mapas: [{ A: 'trabalho', B: 'HEAD' }, { A: 'trabalho', B: 'HEAD' }],
+    faixas: ['duas', 'duas'] });
+  assert.strictEqual(r2.secas, 1);
+});
+
+test('D828.2/D823: no teto, o P2 de erro e o P1 (mesmo marcado melhoria) nao aprovam', () => {
+  // o P1 marcado "melhoria" por engano segue P1: so o P2 pode ser melhoria
+  const p1Marcado = Object.assign(achado('P1', 'A.txt', 3), { tipo: 'melhoria' });
+  for (const aberto of [achadoErroP2(3), achado('P1', 'A.txt', 3), p1Marcado]) {
+    const r = v.apurar([[veredito('correcao', [achado('P1', 'A.txt', 1)])], [veredito('correcao', [achado('P1', 'A.txt', 2)])],
+      [veredito('correcao', [achadoMelhoria(4), aberto])]]);
+    assert.strictEqual(r.encerrar, true);
+    assert.doesNotMatch(r.motivo, /aprovado/, JSON.stringify(aberto));
+    assert.match(r.motivo, /^teto de 3 rondas com 3 achado\(s\) aberto\(s\)/, JSON.stringify(aberto));
+    assert.deepStrictEqual(r.novos.map((a) => a.linha), [3], 'so o que segura a ronda sai em novos');
+    assert.deepStrictEqual(r.registros.map((a) => a.linha), [4], 'a melhoria da ronda do teto sai no registro');
+  }
+});
+
+test('D828.2: antes do teto, a ronda so com melhoria e seca, e a seguinte chama as lentes do que segura a ronda', () => {
+  const r = v.apurar([[veredito('correcao', [achadoMelhoria(1)])]]);
+  assert.strictEqual(r.encerrar, false);
+  assert.strictEqual(r.secas, 1);
+  assert.strictEqual(r.motivo, 'ronda 2 chama so as lentes que acharam P0, P1 ou P2 de erro');
+});
+
+test('D823: o P2 sai pela refutacao "fora do pedido" com o motivo; com o motivo em branco, ou sendo P0 ou P1, nao', () => {
+  const rondas = (sev) => [[veredito('correcao', [achado(sev, 'A.txt', 3)])], [veredito('correcao', [])]];
+  const refutacaoForaDoPedido = (sev, motivo) => ({ ronda: 1, lente: 'correcao', arquivo: 'A.txt', linha: 3,
+    severidade: sev, prova: 'texto de outra entrada', foraDoPedido: motivo });
+  const discoSemProva = () => false;
+  const apurarCom = (sev, motivo) => v.apurar(rondas(sev), { mapas: [MAPA_AB, MAPA_AB],
+    refutados: [refutacaoForaDoPedido(sev, motivo)], provaNoRepo: discoSemProva });
+  assert.strictEqual(apurarCom('P2', 'e de outra mudanca').motivo, 'duas rondas secas seguidas: aprovado');
+  assert.throws(() => apurarCom('P2', '  '), /nao confere/);
+  for (const sev of ['P0', 'P1']) assert.throws(() => apurarCom(sev, 'e de outra mudanca'), /nao confere/, sev);
 });
 
 test('apurar: achado repetido com a mesma evidencia nao molha a ronda', () => {
@@ -187,19 +300,24 @@ test('apurar: duas rondas secas seguidas encerram aprovado', () => {
   assert.strictEqual(r.secas, 2);
 });
 
-test('apurar: teto de 3 rondas com P1 aberto para e manda ao dono', () => {
+// D785 item 5 (s369, 2.5): o teto encerra a revisao, mas nao manda ao dono.
+// D828.3 (F2a): e tambem nao abre revisao nova: conserto com teste e mutacao, suite verde, commit com a marca.
+test('D828.3: teto de 3 rondas com P1 aberto encerra e manda consertar com teste e commitar com a marca, sem perguntar', () => {
   const r = v.apurar([
     [veredito('correcao', [achado('P1', 'A.txt', 1)])],
     [veredito('correcao', [achado('P1', 'A.txt', 2)])],
     [veredito('correcao', [achado('P1', 'A.txt', 3)])]
   ]);
   assert.strictEqual(r.encerrar, true);
-  assert.ok(r.motivo.includes('teto'));
-  assert.ok(r.motivo.includes('dono') || r.motivo.includes('humano'));
+  assert.strictEqual(r.motivo, 'teto de 3 rondas com 3 achado(s) aberto(s) (P0, P1 ou P2 de erro): conserte o que e ' +
+    'erro, cada conserto com um teste que reprova quando o codigo e estragado de proposito; com a suite inteira verde, ' +
+    'o commit sai com "# sworn: sem-revisao" no fim do comando, sem perguntar; o que sobrar vira registro no plano');
+  assert.ok(!/dono|humano|3 opcoes|aprovado|prepare de novo|revisao nova/.test(r.motivo), r.motivo);
+  assert.ok(/^[\x20-\x7E]+$/.test(r.motivo), 'o motivo vai ao modelo: so ASCII');
 });
 
 test('apurar: P0 novo nunca e ronda seca', () => {
-  const r = v.apurar([[veredito('seguranca', [achado('P0', 'B.txt', 7)])]]);
+  const r = v.apurar([[veredito('seguranca', [achadoSeg('P0', 'B.txt', 7)])]]);
   assert.strictEqual(r.secas, 0);
 });
 
@@ -218,7 +336,7 @@ test('apurar: placar A/B e sinal, e vem separado dos achados', () => {
 test('apurar: lentes diferentes na mesma linha sao dois achados; a mesma lente repetida, um', () => {
   const r = v.apurar([[
     veredito('correcao', [achado('P1', 'A.txt', 42, 'quebra com lista vazia')]),
-    veredito('seguranca', [achado('P1', 'A.txt', 42, 'caminho sem guarda')])
+    veredito('seguranca', [achadoSeg('P1', 'A.txt', 42, 'caminho sem guarda')])
   ]]);
   assert.deepStrictEqual(r.novos.map((a) => a.descricao).sort(), ['caminho sem guarda', 'quebra com lista vazia'],
     'duas lentes, dois defeitos na mesma linha: ' + JSON.stringify(r.novos));
@@ -226,7 +344,7 @@ test('apurar: lentes diferentes na mesma linha sao dois achados; a mesma lente r
   const r2 = v.apurar([
     [veredito('correcao', [achado('P1', 'A.txt', 42, 'quebra com lista vazia')])],
     [veredito('correcao', [achado('P1', 'A.txt', 42, 'quebra com lista vazia')]),
-      veredito('seguranca', [achado('P1', 'A.txt', 42, 'caminho sem guarda')])]
+      veredito('seguranca', [achadoSeg('P1', 'A.txt', 42, 'caminho sem guarda')])]
   ]);
   assert.deepStrictEqual(r2.novos.map((a) => a.descricao), ['caminho sem guarda'],
     'na ronda 2 so a lente nova naquela linha e novidade: ' + JSON.stringify(r2.novos));
@@ -235,10 +353,11 @@ test('apurar: lentes diferentes na mesma linha sao dois achados; a mesma lente r
   // O motivo do teto conta os abertos pelo comeco da chave: a severidade tem de seguir primeiro.
   const r3 = v.apurar([
     [veredito('correcao', [achado('P1', 'A.txt', 42, 'quebra com lista vazia')])],
-    [veredito('seguranca', [achado('P1', 'A.txt', 42, 'caminho sem guarda')])],
+    [veredito('seguranca', [achadoSeg('P1', 'A.txt', 42, 'caminho sem guarda')])],
     [veredito('correcao', [achado('P2', 'A.txt', 7, 'nome que mente')])]
   ]);
-  assert.ok(r3.motivo.includes('com 2 achado(s) P0/P1'), 'o teto conta os dois P1 e nao o P2: ' + r3.motivo);
+  // D823: o P2 aberto tambem conta (sem a marca de melhoria, e erro)
+  assert.ok(r3.motivo.includes('com 3 achado(s) aberto(s)'), 'o teto conta os dois P1 e o P2: ' + r3.motivo);
 });
 
 // Ronda 2 do 8c.10: o apurar contava o que nao e veredito como voto sem achado, e a ronda saia
@@ -480,10 +599,9 @@ test('veredito: a pergunta da lente seguranca cobra as tres conferencias e o P2 
   assert.ok(!/[^\x00-\x7f]/.test(p), 'a pergunta tem de ser ASCII');
 });
 
-test('veredito: as outras oito lentes de codigo seguem com a pergunta de antes', () => {
+test('veredito: as lentes de codigo fora seguranca, enxuto e escopo seguem com a pergunta de antes', () => {
   const antes = {
     correcao: 'Qual dos dois quebra? Entrada concreta que produz resultado errado, com arquivo:linha.',
-    escopo: 'O que mudou alem do necessario? Renomeacao, extracao, formatacao junto de correcao funcional.',
     estados: 'Erro, vazio, carregando, limite e timeout estao tratados, ou so o caso feliz?',
     borda: 'null, string vazia, lista vazia, numero negativo, unicode, caminho com espaco, arquivo enorme.',
     manutencao: 'O que um leitor novo entende errado? Nome que mente, funcao que faz duas coisas, erro engolido.',
@@ -493,7 +611,8 @@ test('veredito: as outras oito lentes de codigo seguem com a pergunta de antes',
   };
   const hoje = {};
   // D554: a `enxuto` e nova, e tem teste proprio (acima); esta guarda as que ja existiam.
-  for (const l of v.LENTES) if (l.chave !== 'seguranca' && l.chave !== 'enxuto') hoje[l.chave] = l.pergunta;
+  // D824: a escopo mudou (julga contra o pedido.md) e tem teste proprio (D824, no fim)
+  for (const l of v.LENTES) if (l.chave !== 'seguranca' && l.chave !== 'enxuto' && l.chave !== 'escopo') hoje[l.chave] = l.pergunta;
   assert.deepStrictEqual(hoje, antes);
 });
 
@@ -513,6 +632,28 @@ test('D387/pares: distancia 10 entra e 11 fica fora', () => {
   assert.strictEqual(v.DISTANCIA_PAR, 10);
 });
 
+// F2d parte b: o juiz so ve o par na mesma linha (paresFortes); os outros candidatos seguem em paresCandidatos
+test('F2d: paresFortes sao os paresCandidatos na mesma linha, na mesma ordem', () => {
+  const r = v.apurar([[veredito('correcao', [achado('P1', 'A.txt', 50), achado('P2', 'A.txt', 52)]),
+    veredito('borda', [achado('P1', 'A.txt', 50), achado('P0', 'A.txt', 58)]),
+    veredito('estados', [achado('P2', 'A.txt', 50)])]], { mapas: [MAPA_AB] });
+  assert.ok(r.paresCandidatos.length > 3, 'ha vizinhos a mais de 0 linha');
+  assert.deepStrictEqual(r.paresFortes, r.paresCandidatos.filter((p) => p.distancia === 0));
+  assert.deepStrictEqual(CHAVES(r.paresFortes), [
+    ['P1|trabalho|50|correcao', 'P1|trabalho|50|borda'],
+    ['P1|trabalho|50|correcao', 'P2|trabalho|50|estados'],
+    ['P1|trabalho|50|borda', 'P2|trabalho|50|estados']
+  ]);
+  // sem par na mesma linha (a 1 linha ja nao e forte), a lista vem vazia (nunca ausente)
+  const longe = v.apurar([[veredito('correcao', [achado('P1', 'A.txt', 5), achado('P2', 'A.txt', 6)])]], { mapas: [MAPA_AB] });
+  assert.strictEqual(longe.paresCandidatos.length, 1);
+  assert.deepStrictEqual(longe.paresFortes, []);
+  // o lado antigo nao faz par, nem forte
+  const antigo = v.apurar([[veredito('correcao', [achado('P1', 'B.txt', 5)]), veredito('borda', [achado('P1', 'B.txt', 5)])]],
+    { mapas: [MAPA_AB] });
+  assert.deepStrictEqual(antigo.paresFortes, []);
+});
+
 test('D387/pares: o par leva o que o juiz le dos dois lados', () => {
   const r = v.apurar([[veredito('correcao', [achado('P1', 'A.txt', 5, 'quebra um')]),
     veredito('borda', [achado('P2', 'A.txt', 8, 'quebra dois')])]], { mapas: [MAPA_AB] });
@@ -530,12 +671,13 @@ test('D387/pares: a mesma chave nunca faz par com ela mesma', () => {
   assert.deepStrictEqual(r.paresCandidatos, []);
 });
 
-test('D387/pares: sem P0/P1 novo na ultima ronda nao ha par', () => {
-  const r1 = v.apurar([[veredito('correcao', [achado('P1', 'A.txt', 5), achado('P2', 'A.txt', 6)])],
-    [veredito('correcao', [achado('P2', 'A.txt', 7), achado('P2', 'A.txt', 9)])]], { mapas: [MAPA_AB, MAPA_AB] });
-  assert.deepStrictEqual(r1.paresCandidatos, [], 'P1 so da ronda 1 nao e A');
+test('D387/pares: sem achado novo na ultima ronda nao ha par; dois P2 novos vizinhos fazem par', () => {
+  // D823: o P2 tambem e achado novo; a ronda 2 que so repete a 1 nao traz novo, e nao faz par
+  const igual = [veredito('correcao', [achado('P1', 'A.txt', 5), achado('P2', 'A.txt', 6)])];
+  const r1 = v.apurar([igual, igual], { mapas: [MAPA_AB, MAPA_AB] });
+  assert.deepStrictEqual(r1.paresCandidatos, [], 'o repetido da ronda 1 nao e A');
   const r2 = v.apurar([[veredito('correcao', [achado('P2', 'A.txt', 5), achado('P2', 'A.txt', 6)])]], { mapas: [MAPA_AB] });
-  assert.deepStrictEqual(r2.paresCandidatos, [], 'so P2 nao e A');
+  assert.strictEqual(r2.paresCandidatos.length, 1, 'D823: dois P2 novos vizinhos fazem par');
 });
 
 test('D387/pares: o novo da ultima ronda faz par com achado de ronda anterior, e a ronda do par e a 1a em que a chave apareceu', () => {
@@ -673,11 +815,13 @@ test('D396 n. 23: muitos achados no mesmo arquivo nao viram conta quadratica, e 
   // ordem e conteudo: a de antes (a ordem em que os achados apareceram), com vizinhos dos dois lados
   const perto = v.apurar([[veredito('correcao', [achado('P2', 'A.txt', 40), achado('P1', 'A.txt', 30), achado('P2', 'A.txt', 21),
     achado('P1', 'A.txt', 35), achado('P2', 'A.txt', 19)])]], { mapas: [MAPA_AB] });
+  // D823: o P2 tambem e novo, entao ele tambem abre par com os vizinhos (cada par uma vez, na ordem em que apareceram)
   assert.deepStrictEqual(CHAVES(perto.paresCandidatos), [
-    ['P1|trabalho|30|correcao', 'P2|trabalho|40|correcao'],
+    ['P2|trabalho|40|correcao', 'P1|trabalho|30|correcao'],
+    ['P2|trabalho|40|correcao', 'P1|trabalho|35|correcao'],
     ['P1|trabalho|30|correcao', 'P2|trabalho|21|correcao'],
     ['P1|trabalho|30|correcao', 'P1|trabalho|35|correcao'],
-    ['P1|trabalho|35|correcao', 'P2|trabalho|40|correcao']
+    ['P2|trabalho|21|correcao', 'P2|trabalho|19|correcao']
   ]);
 });
 
@@ -1116,14 +1260,60 @@ test('L3 A3-03: com a faixa, a ronda 1 sem as lentes da faixa e voto que falta',
   assert.throws(() => v.apurar([[vazio('correcao')], [vazio('correcao')]], { faixas: ['duas', 'duas'] }),
     (e) => /ronda 1/.test(e.message) && /borda/.test(e.message) && e.codigo === 'VOTO_QUE_FALTA');
   assert.throws(() => v.apurar([[vazio('banana')], [vazio('banana')]], { faixas: ['uma'] }), /correcao/);
-  const sete = ['correcao', 'estados', 'borda', 'seguranca', 'manutencao', 'microcopy', 'enxuto'];
-  assert.throws(() => v.apurar([sete.slice(0, 6).map(vazio), [vazio('correcao')]], { faixas: ['completa'] }), /7/);
-  assert.throws(() => v.apurar([sete.slice(0, 6).concat(['banana']).map(vazio), [vazio('correcao')]], { faixas: ['completa'] }), /7/);
+  // D824: a familia de logica tem 8 (a escopo voltou)
+  const oito = ['correcao', 'estados', 'borda', 'seguranca', 'manutencao', 'microcopy', 'enxuto', 'escopo'];
+  assert.throws(() => v.apurar([oito.slice(0, 7).map(vazio), [vazio('correcao')]], { faixas: ['completa'] }), /8/);
+  assert.throws(() => v.apurar([oito.slice(0, 7).concat(['banana']).map(vazio), [vazio('correcao')]], { faixas: ['completa'] }), /8/);
   // controles
   assert.strictEqual(v.apurar([[vazio('correcao'), vazio('borda')], [vazio('correcao')]], { faixas: ['duas'] }).encerrar, true);
-  assert.strictEqual(v.apurar([sete.map(vazio), [vazio('correcao')]], { faixas: ['completa'] }).encerrar, true);
+  assert.strictEqual(v.apurar([oito.map(vazio), [vazio('correcao')]], { faixas: ['completa'] }).encerrar, true);
   assert.doesNotThrow(() => v.apurar([[vazio('Correção e regressão')]], { faixas: ['uma'] }), 'o titulo com acento e a lente');
   assert.doesNotThrow(() => v.apurar([[vazio('banana')], [vazio('banana')]]), 'sem faixa (base antiga), a conta de antes');
+});
+
+// F2d parte c: na faixa completa, as lentes pelo risco; o mapa.json da ronda 1 leva a lista e o apurar a confere
+test('F2d: lentesDaCompleta corta seguranca sem risco, enxuto na mudanca pequena, e poe as de tela so com foto', () => {
+  const logica = ['correcao', 'escopo', 'estados', 'borda', 'seguranca', 'manutencao', 'microcopy', 'enxuto'];
+  assert.deepStrictEqual(v.lentesDaCompleta(), logica, 'sem saber, todas as de logica');
+  assert.deepStrictEqual(v.lentesDaCompleta({ risco: true, grande: true }), logica);
+  assert.deepStrictEqual(v.lentesDaCompleta({ risco: false }), logica.filter((l) => l !== 'seguranca'));
+  assert.deepStrictEqual(v.lentesDaCompleta({ grande: false }), logica.filter((l) => l !== 'enxuto'));
+  assert.deepStrictEqual(v.lentesDaCompleta({ estilo: true }), v.LENTES.map((l) => l.chave), 'estilo: as dez');
+  const comFoto = v.lentesDaCompleta({ fotos: true });
+  assert.deepStrictEqual(comFoto, logica.concat(v.LENTES_UI.map((l) => l.chave)), 'com foto, as de tela no fim');
+  assert.ok(comFoto.indexOf('estados') !== -1 && comFoto.indexOf('borda') !== -1, 'estados e borda seguem separadas');
+});
+
+test('F2d: temRisco pega o risco nas linhas e no caminho, e deixa passar a linha comum', () => {
+  for (const t of ["fs.readFileSync(p)", "spawnSync('git', a)", "JSON.parse(x)", "process.env.TOKEN", "el.innerHTML = s",
+    "path.join(a, b)", "require(nome)", "fetch(url)", "const senha = 1"]) {
+    assert.strictEqual(v.temRisco(t, 'a.js'), true, t);
+  }
+  for (const t of ['const x = 1;', 'return a + b;', '', null, "const m = require('./m');"]) {
+    assert.strictEqual(v.temRisco(t, 'src/a.js'), false, String(t));
+  }
+  for (const rel of ['hooks/hooks.json', '.claude-plugin/plugin.json', 'package.json', 'x/run.sh', 'ci.yml', 'a\\hooks\\b.js']) {
+    assert.strictEqual(v.temRisco('const x = 1;', rel), true, rel);
+  }
+});
+
+test('F2d: na completa, o apurar confere as lentes do mapa.json da ronda 1; sem a lista, o minimo de antes', () => {
+  const vazio = (l) => veredito(l, []);
+  const lista = ['correcao', 'escopo', 'estados', 'borda', 'manutencao', 'microcopy'];
+  // as seis da lista votaram: a ronda 1 sem achado aprova (F2b), mesmo abaixo do minimo de oito
+  assert.strictEqual(v.apurar([lista.map(vazio)], { faixas: ['completa'], lentesDoMapa: [lista] }).encerrar, true);
+  // falta uma da lista: voto que falta, com o nome dela
+  assert.throws(() => v.apurar([lista.slice(1).map(vazio)], { faixas: ['completa'], lentesDoMapa: [lista] }),
+    (e) => e.codigo === 'VOTO_QUE_FALTA' && /correcao/.test(e.message));
+  // lista que nao e de texto: vale o minimo de antes
+  assert.throws(() => v.apurar([lista.map(vazio)], { faixas: ['completa'], lentesDoMapa: [[1, 2]] }), /8/);
+  // lista vazia (ou ausente na ronda 1): tambem o minimo de antes, nunca "nada a cobrar"
+  assert.throws(() => v.apurar([[vazio('correcao')]], { faixas: ['completa'], lentesDoMapa: [[]] }),
+    (e) => e.codigo === 'VOTO_QUE_FALTA' && /o minimo e 8/.test(e.message));
+  assert.throws(() => v.apurar([[vazio('correcao')]], { faixas: ['completa'], lentesDoMapa: [null] }),
+    (e) => e.codigo === 'VOTO_QUE_FALTA' && /o minimo e 8/.test(e.message));
+  // a lista so vale na completa: na faixa duas, as da faixa
+  assert.throws(() => v.apurar([[vazio('correcao')]], { faixas: ['duas'], lentesDoMapa: [['correcao']] }), /borda/);
 });
 
 test('L3 A3-03: com a faixa, a lente que achou P0/P1 do lado novo tem de voltar na ronda seguinte', () => {
@@ -1226,4 +1416,467 @@ test('lote 3/4a: o trecho do confirmado e conferido no arquivo citado; o que nao
   assert.strictEqual(semTexto.novos.length, 2);
   assert.strictEqual(v.apurar([r1], { mapas: [M] }).novos.length, 2);
   assert.deepStrictEqual(v.apurar([r1], { mapas: [M] }).trechoNaoConfere, []);
+});
+
+// ---------------------------------------------------------------- D1 (D820): a fronteira e o plano da lente de seguranca
+
+test('D820: a pergunta da lente de seguranca pede a fronteira, a regua da gravidade e o plano do pendente', () => {
+  const s = v.LENTES.find((l) => l.chave === 'seguranca');
+  assert.match(s.pergunta, /entrada/);
+  assert.match(s.pergunta, /controle/);
+  assert.match(s.pergunta, /efeito/);
+  assert.match(s.pergunta, /P0 derrota o controle/);
+  assert.match(s.pergunta, /plano/);
+});
+
+test('D820: o P0/P1 de seguranca sem a fronteira inteira invalida o veredito e sai dos validos; o P2 nao precisa dela', () => {
+  const sem = (sev, linha) => achado(sev, 'A.txt', linha);
+  const ruins = [sem('P1', 2), achadoSeg('P1', 'A.txt', 3, 'd', Object.assign({}, FRONTEIRA, { efeito: '  ' })),
+    achadoSeg('P0', 'A.txt', 4, 'd', 'texto solto'), achadoSeg('P1', 'A.txt', 5, 'd', Object.assign({}, FRONTEIRA, { controle: 7 })),
+    achadoSeg('p1', 'A.txt', 7, 'd', null), achadoSeg('P0', 'A.txt', 8, 'd', {}),
+    achadoSeg('P1', 'A.txt', 10, 'd', { controle: 'c', efeito: 'f' })];
+  const r = v.validarVeredito(veredito('seguranca', [achadoSeg('P0', 'A.txt', 1), sem('P2', 6)].concat(ruins)));
+  assert.deepStrictEqual(r.achadosValidos.map((a) => a.linha), [1, 6]);
+  // um descarte por achado + o erro do veredito inteiro (como o sem trecho, D672)
+  assert.strictEqual(r.erros.length, ruins.length + 1, JSON.stringify(r.erros));
+  const doVeredito = v.errosDoVeredito(veredito('seguranca', ruins));
+  assert.strictEqual(doVeredito.length, 1, JSON.stringify(doVeredito));
+  assert.match(doVeredito[0], /^7 achado\(s\) P0\/P1 de seguranca sem a fronteira inteira: .*regrave o veredito$/);
+  // o inteiro e o P2 sem fronteira nao invalidam; a grafia solta da lente e a mesma lente; as outras lentes nao cobram
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('seguranca', [achadoSeg('P0', 'A.txt', 1), sem('P2', 6)])), []);
+  assert.strictEqual(v.errosDoVeredito(veredito('Seguranca e dado sensivel', [sem('P1', 2)])).length, 1);
+  assert.strictEqual(v.validarVeredito(veredito('Seguranca e dado sensivel', [sem('P1', 2)])).achadosValidos.length, 0);
+  // o pendente com severidade ja e descartado pelo que e; a fronteira so se cobra do confirmado
+  const pendenteComSev = Object.assign(pendente('A.txt', 2, 'x'), { severidade: 'P1', plano: 'p' });
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('seguranca', [pendenteComSev])), []);
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('correcao', [sem('P1', 2)])), []);
+  assert.strictEqual(v.validarVeredito(veredito('correcao', [sem('P1', 2)])).achadosValidos.length, 1);
+});
+
+test('D820: o pendente de seguranca sem plano invalida o veredito; o das outras lentes nao precisa', () => {
+  const comPlano = Object.assign(pendente('A.txt', 1, 'se o proxy limpa o cabecalho'), { plano: 'rodar abrir() com ../x' });
+  const ruins = [pendente('A.txt', 2, 'se o proxy limpa o cabecalho'),
+    Object.assign(pendente('A.txt', 3, 'se o proxy limpa o cabecalho'), { plano: ' ' })];
+  const r = v.validarVeredito(veredito('seguranca', [comPlano].concat(ruins)));
+  assert.deepStrictEqual(r.pendentesValidos.map((p) => p.linha), [1]);
+  assert.strictEqual(r.erros.length, ruins.length + 1, JSON.stringify(r.erros));
+  assert.ok(r.erros.every((e) => /plano/.test(e)), JSON.stringify(r.erros));
+  const doVeredito = v.errosDoVeredito(veredito('seguranca', ruins));
+  assert.strictEqual(doVeredito.length, 1, JSON.stringify(doVeredito));
+  assert.match(doVeredito[0], /^2 achado\(s\) pendente\(s\) de seguranca sem plano: .*regrave o veredito$/);
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('seguranca', [comPlano])), []);
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('correcao', [pendente('A.txt', 2, 'x')])), []);
+  assert.strictEqual(v.validarVeredito(veredito('correcao', [pendente('A.txt', 2, 'x')])).pendentesValidos.length, 1);
+});
+
+test('D820: o P1 de seguranca sem fronteira para a apuracao (nada some calado); com ela, molha a ronda', () => {
+  const M = { A: 'trabalho', B: 'HEAD' };
+  assert.throws(() => v.apurar([[veredito('seguranca', [achado('P1', 'A.txt', 9)])], [veredito('seguranca', [])]],
+    { mapas: [M, M] }), /lente "seguranca": 1 achado\(s\) P0\/P1 de seguranca sem a fronteira inteira/);
+  const molhada = v.apurar([[veredito('seguranca', [achadoSeg('P1', 'A.txt', 9)])], [veredito('seguranca', [])]],
+    { mapas: [M, M] });
+  assert.strictEqual(molhada.encerrar, false);
+});
+
+// ---------------------------------------------------------------- D2 (D821): a prova da refutacao conferida por script
+
+const M_D821 = { A: 'trabalho', B: 'HEAD' };
+const RONDAS_D821 = [[veredito('correcao', [achado('P1', 'A.txt', 3)])], [veredito('correcao', [])]];
+const REFUTA_D821 = { ronda: 1, lente: 'correcao', arquivo: 'A.txt', linha: 3, severidade: 'P1' };
+/** Apura as duas rondas com uma refutacao do P1 da linha 3, `campos` por cima da base, e o disco `provaNoRepo`. */
+function apurarRefutando(campos, provaNoRepo) {
+  return v.apurar(RONDAS_D821, { mapas: [M_D821, M_D821], refutados: [Object.assign({}, REFUTA_D821, campos)],
+    provaNoRepo: provaNoRepo });
+}
+/** O disco de mentira: so `scripts/instalar.js:433` tem `sha256:`; guarda cada consulta em `vistos`. */
+function discoD821(vistos) {
+  return (caminho, linha, simbolo) => {
+    vistos.push([caminho, linha, simbolo]);
+    return caminho === 'scripts/instalar.js' && linha === 433 && simbolo === 'sha256:';
+  };
+}
+
+test('D821: o simbolo achado no arquivo:linha citado refuta', () => {
+  const vistos = [];
+  const ok = apurarRefutando({ prova: 'o hash e hex: scripts/instalar.js:433', simbolo: 'sha256:' }, discoD821(vistos));
+  assert.strictEqual(ok.motivo, 'duas rondas secas seguidas: aprovado');
+  assert.deepStrictEqual(vistos, [['scripts/instalar.js', 433, 'sha256:']]);
+});
+
+test('D821: com varias citacoes, basta uma conferir', () => {
+  const vistos = [];
+  const ok = apurarRefutando({ prova: 'ver docs/x.md:2 e scripts/instalar.js:433', simbolo: 'sha256:' }, discoD821(vistos));
+  assert.strictEqual(ok.motivo, 'duas rondas secas seguidas: aprovado');
+  assert.deepStrictEqual(vistos.map((x) => x[0] + ':' + x[1]), ['docs/x.md:2', 'scripts/instalar.js:433']);
+});
+
+test('D821: a citacao de intervalo (arquivo:a-b) vale pela primeira linha', () => {
+  const vistos = [];
+  apurarRefutando({ prova: 'scripts/instalar.js:433-440', simbolo: 'sha256:' }, discoD821(vistos));
+  assert.deepStrictEqual(vistos.map((x) => x[1]), [433]);
+});
+
+test('D821: o comando rodado refuta sem citar arquivo, e o disco nem e consultado', () => {
+  const vistos = [];
+  assert.strictEqual(apurarRefutando({ prova: 'a suite passa', comando: 'node --test test/a.test.js' },
+    discoD821(vistos)).motivo, 'duas rondas secas seguidas: aprovado');
+  assert.deepStrictEqual(vistos, []);
+});
+
+// a mensagem diz o que trazer: o simbolo da linha citada, ou o comando
+const NAO_CONFERE = /refutacao com prova que nao confere.*"simbolo".*"comando"/;
+
+test('D821: o simbolo ausente ou em branco para, mesmo com o disco que aceitaria tudo', () => {
+  // o texto vazio esta em toda linha: o disco nem chega a ser consultado
+  for (const simbolo of [undefined, '', '   ']) {
+    assert.throws(() => apurarRefutando({ prova: 'scripts/instalar.js:433', simbolo: simbolo }, () => true), NAO_CONFERE,
+      String(simbolo));
+  }
+});
+
+test('D821: o simbolo que nao esta na linha citada para', () => {
+  assert.throws(() => apurarRefutando({ prova: 'scripts/instalar.js:433', simbolo: 'md5' }, discoD821([])), NAO_CONFERE);
+});
+
+test('D821: a prova sem nenhuma citacao arquivo:linha para', () => {
+  assert.throws(() => apurarRefutando({ prova: 'olhei e esta certo', simbolo: 'sha256:' }, discoD821([])), NAO_CONFERE);
+});
+
+test('D821: o comando em branco nao vale como comando', () => {
+  assert.throws(() => apurarRefutando({ prova: 'scripts/instalar.js:433', comando: ' ' }, discoD821([])), NAO_CONFERE);
+});
+
+test('D822: a lente que nao e texto e veredito sem lente (antes escapava das regras da lente de seguranca)', () => {
+  for (const lente of [7, ['seguranca'], { k: 1 }, null, undefined]) {
+    assert.ok(v.errosDoVeredito({ lente: lente, melhor: 'A', achados: [] }).includes('veredito sem lente'), String(lente));
+  }
+  // e a apuracao para nela, em vez de seguir com a lente virada texto
+  assert.throws(() => v.apurar([[{ lente: ['seguranca'], melhor: 'A', achados: [] }]]), /veredito sem lente/);
+  assert.deepStrictEqual(v.errosDoVeredito({ lente: 'seguranca', melhor: 'A', achados: [] }), []);
+});
+
+test('D822: a lente em branco tambem e veredito sem lente', () => {
+  assert.ok(v.errosDoVeredito({ lente: '  ', melhor: 'A', achados: [] }).includes('veredito sem lente'));
+});
+
+test('D821: sem o disco (quem chama a lib pura), vale a regra de antes', () => {
+  assert.strictEqual(apurarRefutando({ prova: 'x.js:9' }).motivo, 'duas rondas secas seguidas: aprovado');
+});
+
+
+// ---------------------------------------------------------------- D3 (D824): a lente do pedido e os dois eixos
+
+test('D824: a lente escopo julga contra o pedido (o que falta, o que nao foi pedido, o que esta errado) e roda em logica', () => {
+  const l = v.LENTES.find((x) => x.chave === 'escopo');
+  for (const t of ['pedido.md', 'falta', 'nao foi pedido', 'errado', 'cite a linha do pedido.md']) {
+    assert.ok(l.pergunta.includes(t), 'a pergunta nao diz: ' + t);
+  }
+  assert.ok(/^[\x20-\x7E]+$/.test(l.pergunta), 'pergunta fora de ASCII');
+  assert.strictEqual(v.SAEM_SO_LOGICA.indexOf('escopo'), -1, 'a lente do pedido roda no arquivo so de logica');
+});
+
+test('D824: a apuracao separa os achados novos em dois eixos, padrao e pedido, sem placar unico', () => {
+  const r = v.apurar([[veredito('correcao', [achado('P1', 'A.txt', 3), achado('P2', 'A.txt', 9)]),
+    veredito('escopo', [achado('P2', 'A.txt', 5, 'faltou o item 2 do pedido')])]], { mapas: [MAPA_AB] });
+  assert.deepStrictEqual(r.eixos, {
+    padrao: { novos: 2, pior: 'P1' },
+    pedido: { novos: 1, pior: 'P2' }
+  });
+  const seco = v.apurar([[veredito('correcao', [])]]);
+  assert.deepStrictEqual(seco.eixos, { padrao: { novos: 0, pior: null }, pedido: { novos: 0, pior: null } });
+  // o P0 e o pior de qualquer ordem, e o achado do lado antigo (B = HEAD) nao entra em eixo nenhum
+  const comP0 = v.apurar([[veredito('escopo', [achado('P2', 'A.txt', 1), achado('P0', 'A.txt', 2), achado('P1', 'A.txt', 3)]),
+    veredito('correcao', [achado('P0', 'B.txt', 4)])]], { mapas: [MAPA_AB] });
+  assert.deepStrictEqual(comP0.eixos, { padrao: { novos: 0, pior: null }, pedido: { novos: 3, pior: 'P0' } });
+});
+
+// ---------------------------------------------------------------- F2a (D828.5): as rondas 2 e 3 so verificam
+
+// `mudancas[i]` = os blocos (forma do diff-linhas.js) entre o lado novo da ronda i e o da ronda i+1 (indice a partir
+// de 0; a posicao 0 nao se usa). So segura a ronda 2 ou 3 o achado do lado novo a ate 2 linhas de uma linha que o
+// conserto tocou ou que uma ronda anterior citou; o resto sai em `registros` como "linha nova".
+const TRAB = { A: 'trabalho', B: 'HEAD' };
+const blocoDe = (antigoIni, antigoQtd, novoIni, novoQtd) => ({ antigoIni, antigoQtd, novoIni, novoQtd });
+const p1DaBorda = (linha) => veredito('borda', [achado('P1', 'A.txt', linha, 'quebra na borda')]);
+/** Ronda 1 com um P1 da correcao na linha 10 do lado novo; a ronda 2 e a lista dada, com a mudanca entre as duas. */
+function apurarRonda2(vereditos2, mudanca, extra) {
+  return v.apurar([[veredito('correcao', [achado('P1', 'A.txt', 10)])], vereditos2],
+    Object.assign({ mapas: [TRAB, TRAB], mudancas: [null, mudanca] }, extra || {}));
+}
+/** As linhas (do lado novo da ronda 2) em que um P1 de outra lente segura a ronda, entre as dadas. */
+function linhasQueSeguram(linhas, mudanca, ronda1) {
+  return linhas.filter(function (linha) {
+    const rondas = [ronda1 || [veredito('correcao', [achado('P1', 'A.txt', 10)])], [p1DaBorda(linha)]];
+    const r = v.apurar(rondas, { mapas: [TRAB, TRAB], mudancas: [null, mudanca] });
+    const daRonda2 = r.registros.filter((a) => a.ronda === 2);
+    assert.strictEqual(r.novos.length + daRonda2.length, 1, 'linha ' + linha + ': ou segura, ou e registro');
+    return r.novos.length === 1;
+  });
+}
+
+test('D828.5: na ronda 2, o achado em linha nova vira registro e nao molha; a ate 2 linhas da tocada, segura', () => {
+  const trocouA10 = [blocoDe(10, 1, 10, 1)];
+  const r = apurarRonda2([p1DaBorda(30)], trocouA10);
+  assert.strictEqual(r.secas, 1);
+  assert.deepStrictEqual(r.novos, []);
+  assert.deepStrictEqual(r.registros, [Object.assign({ ronda: 2, lente: 'borda' }, achado('P1', 'A.txt', 30, 'quebra na borda'),
+    { registro: 'linha nova' })]);
+  assert.deepStrictEqual(r.paresCandidatos, [], 'o registro nao faz par para o juiz');
+  assert.deepStrictEqual(linhasQueSeguram([7, 8, 9, 10, 11, 12, 13], trocouA10), [8, 9, 10, 11, 12]);
+  // o bloco de varias linhas: todas as novas dele, e 2 de cada lado
+  assert.deepStrictEqual(linhasQueSeguram([17, 18, 20, 24, 26, 27], [blocoDe(20, 1, 20, 5)]), [18, 20, 24, 26]);
+});
+
+test('D828.5: a linha citada antes (achado ou pendente do lado novo) segura a ate 2 linhas; a do lado antigo nao cita', () => {
+  const ronda1 = [veredito('correcao', [achado('P1', 'A.txt', 10), pendente('A.txt', 50, 'o que ler() devolve'),
+    achado('P1', 'B.txt', 70)])];
+  assert.deepStrictEqual(linhasQueSeguram([7, 8, 12, 13, 47, 48, 52, 53, 68, 70, 72], [], ronda1), [8, 12, 48, 52]);
+  // a melhoria da ronda 1 tambem cita a linha dela: o que vier ali na ronda 2 e verificacao, nao linha nova
+  const comMelhoria = [veredito('correcao', [achado('P1', 'A.txt', 10), achadoMelhoria(90)])];
+  assert.deepStrictEqual(linhasQueSeguram([87, 88, 92, 93], [], comMelhoria), [88, 92]);
+});
+
+test('D828.5: a linha citada acompanha o arquivo: desce com a insercao, sobe com a remocao, some com a troca', () => {
+  // 2 linhas entram depois da 3: tocadas 4 e 5; a citada 10 vira 12
+  assert.deepStrictEqual(linhasQueSeguram([1, 2, 7, 8, 9, 10, 14, 15], [blocoDe(3, 0, 4, 2)]), [2, 7, 10, 14]);
+  // as linhas 4 e 5 saem: o ponto da remocao sao as novas 3 e 4; a citada 10 vira 8
+  assert.deepStrictEqual(linhasQueSeguram([1, 2, 3, 5, 6, 7, 10, 11], [blocoDe(4, 2, 3, 0)]), [1, 2, 3, 5, 6, 7, 10]);
+  // a propria linha citada sai (remocao da 10): fica o ponto da remocao, as novas 9 e 10
+  assert.deepStrictEqual(linhasQueSeguram([6, 7, 12, 13], [blocoDe(10, 1, 9, 0)]), [7, 12]);
+});
+
+test('D828.5: sem a medida (sem mudancas, sem mapa do trabalho, mudanca que nao e lista) tudo molha como antes', () => {
+  const rondas = [[veredito('correcao', [achado('P1', 'A.txt', 10)])], [p1DaBorda(30)]];
+  const molha = function (opcoes, caso) {
+    const r = v.apurar(rondas, opcoes);
+    assert.deepStrictEqual([r.novos.length, r.registros.length, r.secas], [1, 0, 0], caso);
+  };
+  molha(undefined, 'sem opcoes');
+  molha({ mapas: [TRAB, TRAB] }, 'sem mudancas');
+  molha({ mapas: [TRAB, TRAB], mudancas: [null, null] }, 'mudanca nula');
+  molha({ mapas: [TRAB, TRAB], mudancas: [null, 'x'] }, 'mudanca que nao e lista');
+  molha({ mapas: [TRAB, TRAB], mudancas: 'x' }, 'mudancas que nao e lista');
+  molha({ mapas: [null, TRAB], mudancas: [null, []] }, 'ronda 1 sem mapa: nao ha linha citada para levar');
+  molha({ mapas: [{ A: 'trabalho' }, TRAB], mudancas: [null, []] }, 'ronda 1 com o mapa pela metade');
+  molha({ mapas: [TRAB, null], mudancas: [null, []] }, 'ronda 2 sem mapa: o achado nao tem lado');
+  // controle: com tudo no lugar, o mesmo achado e registro
+  assert.strictEqual(v.apurar(rondas, { mapas: [TRAB, TRAB], mudancas: [null, []] }).registros.length, 1);
+  // a ronda 1 descobre: nela nada e "linha nova", com ou sem mudancas
+  const r1 = v.apurar([[p1DaBorda(30)]], { mapas: [TRAB], mudancas: [[]] });
+  assert.deepStrictEqual([r1.novos.length, r1.registros.length], [1, 0]);
+});
+
+test('D828.5: na ronda 3 valem as citadas das duas rondas e as tocadas dos dois consertos, levadas ate ela', () => {
+  const r1 = [veredito('correcao', [achado('P1', 'A.txt', 10)])];
+  const ronda3 = function (linha, mudancas) {
+    // a ronda 2 deixa um registro na linha 40 (linha nova): a linha fica citada para a ronda 3
+    const r = v.apurar([r1, [p1DaBorda(40)], [veredito('enxuto', [achado('P1', 'A.txt', linha, 'sobra')])]],
+      { mapas: [TRAB, TRAB, TRAB], mudancas: mudancas });
+    return r.novos.length === 1 ? 'segura' : r.registros.filter((a) => a.ronda === 3).map((a) => a.registro).join();
+  };
+  const parado = [null, [], []];
+  assert.deepStrictEqual([10, 12, 13, 38, 40, 42, 43, 70].map((l) => ronda3(l, parado)),
+    ['segura', 'segura', 'linha nova', 'segura', 'segura', 'segura', 'linha nova', 'linha nova']);
+  // dois consertos: 2 linhas entram depois da 3 (ronda 2), 1 entra depois da 1 (ronda 3). A citada 10 vira 12 e 13;
+  // as tocadas 4 e 5 da ronda 2 viram 5 e 6; a tocada da ronda 3 e a 2; a citada 40 (ja da ronda 2) vira 41.
+  const doisConsertos = [null, [blocoDe(3, 0, 4, 2)], [blocoDe(1, 0, 2, 1)]];
+  assert.deepStrictEqual([8, 9, 10, 11, 15, 16, 38, 39, 43, 44].map((l) => ronda3(l, doisConsertos)),
+    ['segura', 'linha nova', 'linha nova', 'segura', 'segura', 'linha nova', 'linha nova', 'segura', 'segura', 'linha nova']);
+  // a medida que falta numa ronda nao volta na seguinte: sem a da ronda 2, a ronda 3 molha tudo
+  assert.strictEqual(ronda3(70, [null, null, []]), 'segura');
+});
+
+test('D828.5: o registro de linha nova nao obriga a lente a voltar, e duas rondas secas aprovam com ele listado', () => {
+  const r = v.apurar([[veredito('correcao', [achado('P1', 'A.txt', 10)])],
+    [veredito('correcao', [achado('P1', 'A.txt', 30, 'outro defeito')])], [veredito('borda', [])]],
+  { mapas: [TRAB, TRAB, TRAB], mudancas: [null, [blocoDe(10, 1, 10, 1)], []], faixas: ['uma', 'uma', 'uma'] });
+  assert.strictEqual(r.motivo, 'duas rondas secas seguidas: aprovado');
+  assert.deepStrictEqual(r.registros.map((a) => [a.ronda, a.lente, a.linha, a.severidade, a.registro]),
+    [[2, 'correcao', 30, 'P1', 'linha nova']]);
+});
+
+test('D828.5: o achado que foi registro de linha nova e volta igual na ronda seguinte segura; a melhoria repetida nao', () => {
+  const r1 = [veredito('correcao', [achado('P1', 'A.txt', 10)])];
+  const parado = { mapas: [TRAB, TRAB, TRAB], mudancas: [null, [], []] };
+  // a ronda 2 registra o P1 da borda na linha 30 (linha nova) e a linha fica citada; a ronda 3 traz o mesmo achado
+  const r = v.apurar([r1, [p1DaBorda(30)], [p1DaBorda(30)]], parado);
+  assert.deepStrictEqual(r.registros.map((a) => [a.ronda, a.linha, a.registro]), [[2, 30, 'linha nova']]);
+  assert.deepStrictEqual(r.novos.map((a) => [a.linha, a.descricao]), [[30, 'quebra na borda']]);
+  assert.strictEqual(r.secas, 0);
+  // abertos: o P1 da ronda 1, que a correcao nao voltou para fechar, e este
+  assert.match(r.motivo, /^teto de 3 rondas com 2 achado\(s\) aberto\(s\)/);
+  // com o conserto entre as rondas 2 e 3 (1 linha entra depois da 3), o mesmo achado volta na 31 e segura igual
+  const levado = v.apurar([r1, [p1DaBorda(30)], [p1DaBorda(31)]],
+    { mapas: [TRAB, TRAB, TRAB], mudancas: [null, [], [blocoDe(3, 0, 4, 1)]] });
+  assert.deepStrictEqual(levado.novos.map((a) => a.linha), [31]);
+  // a melhoria repetida na ronda seguinte e um registro so, e nao segura
+  const melhoria = () => veredito('borda', [achadoMelhoria(30)]);
+  const m = v.apurar([r1, [melhoria()], [melhoria()]], parado);
+  assert.deepStrictEqual([m.novos.length, m.registros.map((a) => [a.ronda, a.registro])], [0, [[2, 'melhoria']]]);
+});
+
+test('D828.5: na ronda 2, a melhoria segue melhoria; o refutado e o do lado antigo nao viram registro', () => {
+  const melhoria = apurarRonda2([veredito('borda', [achadoMelhoria(30)])], []);
+  assert.deepStrictEqual(melhoria.registros.map((a) => a.registro), ['melhoria']);
+  const refutado = apurarRonda2([p1DaBorda(30)], [], { refutados: [{ ronda: 2, lente: 'borda', arquivo: 'A.txt', linha: 30,
+    severidade: 'P1', prova: 'scripts/x.js:1' }] });
+  assert.deepStrictEqual([refutado.novos.length, refutado.registros.length, refutado.secas], [0, 0, 1]);
+  const antigo = apurarRonda2([veredito('borda', [achado('P1', 'B.txt', 30)])], []);
+  assert.deepStrictEqual([antigo.novos.length, antigo.registros.length, antigo.achadosDoLadoAntigo.length], [0, 0, 1]);
+  // o achado que cita um arquivo que nao e o A.txt nem o B.txt nao tem lado: nao ha linha medida para ele, e ele segura
+  const semLado = apurarRonda2([veredito('borda', [achado('P1', 'scripts/x.js', 30)])], []);
+  assert.deepStrictEqual([semLado.novos.length, semLado.registros.length, semLado.secas], [1, 0, 0]);
+});
+
+test('D828.5: com referencia, o achado da ordem trocada em linha nova sai no registro com passada 2', () => {
+  const ok = (achados) => comRef('correcao', 'empata', 'empata', achados);
+  const r1 = rondaRef([ok([achado('P1', 'A.txt', 10)])], [ok([])]);
+  // na 2a passada o lado novo e o B.txt
+  const r2 = rondaRef([ok([])], [ok([achado('P1', 'B.txt', 30, 'so na ordem trocada'), achado('P1', 'B.txt', 11, 'ao lado do conserto')])]);
+  const r = apurarRef([r1, r2], { mudancas: [null, [blocoDe(10, 1, 10, 1)]] });
+  assert.deepStrictEqual(r.registros.map((a) => [a.ronda, a.passada, a.linha, a.registro]), [[2, 2, 30, 'linha nova']]);
+  assert.deepStrictEqual(r.novos.map((a) => [a.passada, a.linha]), [[2, 11]]);
+});
+
+// F2b (D828, programa da Fase O): o `tipo` do P2 e obrigatorio. O P2 confirmado sem `tipo` (ou com um valor que nao e
+// erro nem melhoria) invalida o veredito inteiro, como o achado sem estado: o apurar para e o gravador nao grava.
+test('F2b: o P2 confirmado sem tipo, ou com tipo que nao e erro nem melhoria, invalida o veredito', () => {
+  const p2 = (tipo) => Object.assign(p2SemTipo('A.txt', 3), tipo === undefined ? {} : { tipo: tipo });
+  for (const tipo of [undefined, null, '', '  ', 'outra coisa', 'erro grave', true, 1, ['erro'], { tipo: 'erro' }]) {
+    const erros = v.errosDoVeredito(veredito('correcao', [p2(tipo)]));
+    assert.strictEqual(erros.length, 1, JSON.stringify([tipo, erros]));
+    assert.match(erros[0], /^1 achado\(s\) P2 sem "tipo"/, String(tipo));
+    assert.match(erros[0], /"erro"/);
+    assert.match(erros[0], /"melhoria"/);
+    assert.match(erros[0], /regrave o veredito$/);
+    assert.match(erros[0], /^[\x20-\x7E]+$/, 'a mensagem vai ao modelo: so ASCII');
+    assert.throws(() => v.apurar([[veredito('correcao', [p2(tipo)])]]), /P2 sem "tipo"/, String(tipo));
+  }
+  // a conta e por achado, e a severidade vale em qualquer grafia ("p2", " P2 ")
+  const tres = v.errosDoVeredito(veredito('correcao', [p2(), achado('p2', 'A.txt', 4), achado(' P2 ', 'A.txt', 5), p2('erro')]));
+  assert.strictEqual(tres.length, 1);
+  assert.match(tres[0], /^3 achado\(s\) P2 sem "tipo"/);
+});
+
+test('F2b: com tipo erro ou melhoria o P2 vale; o P0, o P1 e o pendente nao pedem tipo', () => {
+  const p2 = (tipo) => Object.assign(achado('P2', 'A.txt', 3), { tipo: tipo });
+  for (const tipo of ['erro', 'melhoria', ' Melhoria ', 'ERRO']) {
+    assert.deepStrictEqual(v.errosDoVeredito(veredito('correcao', [p2(tipo)])), [], tipo);
+  }
+  assert.deepStrictEqual(v.errosDoVeredito(veredito('correcao', [achado('P0', 'A.txt', 1), achado('P1', 'A.txt', 2),
+    pendente('A.txt', 3, 'o que a funcao devolve')])), []);
+  // o estado que falta segue sendo o erro do achado sem estado, nao o do tipo
+  const semEstado = v.errosDoVeredito(veredito('correcao', [{ severidade: 'P2', arquivo: 'A.txt', linha: 3, descricao: 'x' }]));
+  assert.ok(semEstado.length > 0 && semEstado.every((e) => !/"tipo"/.test(e)), JSON.stringify(semEstado));
+});
+
+test('F2b: o tipo vale em qualquer grafia de caixa e espaco: " Melhoria " e registro, "ERRO" segura a ronda', () => {
+  const p2 = (tipo, linha) => Object.assign(achado('P2', 'A.txt', linha), { tipo: tipo });
+  const r = v.apurar([[veredito('correcao', [p2(' Melhoria ', 3), p2('ERRO', 9)])]]);
+  assert.deepStrictEqual(r.registros.map((a) => [a.linha, a.registro]), [[3, 'melhoria']]);
+  assert.deepStrictEqual(r.novos.map((a) => a.linha), [9]);
+  assert.strictEqual(r.secas, 0);
+});
+
+// F2b: a ronda 1 completa (todas as lentes da faixa votaram) em que nenhum veredito traz achado nenhum aprova em 1
+// ronda. No diagnostico da D828, 21% das revisoes tinham a ronda 1 assim e ainda gastavam a ronda 2.
+const UMA_RONDA = 'ronda 1 completa sem achado nenhum: aprovado';
+const OITO = ['correcao', 'estados', 'borda', 'seguranca', 'manutencao', 'microcopy', 'enxuto', 'escopo'];
+const vazios = (lentes) => lentes.map((l) => veredito(l, []));
+
+test('F2b: a ronda 1 com todas as lentes da faixa e sem achado nenhum aprova em 1 ronda', () => {
+  for (const [faixa, lentes] of [['uma', ['correcao']], ['duas', ['correcao', 'borda']], ['texto', ['correcao', 'microcopy']],
+    ['completa', OITO]]) {
+    const r = v.apurar([vazios(lentes)], { faixas: [faixa], mapas: [{ A: 'trabalho', B: 'HEAD' }] });
+    assert.deepStrictEqual([r.encerrar, r.motivo, r.ronda, r.secas], [true, UMA_RONDA, 1, 1], faixa);
+    assert.deepStrictEqual([r.novos, r.registros, r.pendentes], [[], [], []], faixa);
+  }
+});
+
+test('F2b: sem a faixa (base antiga), a ronda 1 sem achado nao aprova: ninguem conferiu as lentes', () => {
+  const r = v.apurar([vazios(['correcao'])]);
+  assert.deepStrictEqual([r.encerrar, r.secas], [false, 1]);
+  assert.match(r.motivo, /^ronda 2 chama/);
+  // e a ronda 1 da faixa sem uma das lentes segue sendo voto que falta, nao aprovacao
+  assert.throws(() => v.apurar([vazios(['correcao'])], { faixas: ['duas'] }), (e) => e.codigo === 'VOTO_QUE_FALTA');
+});
+
+test('F2b: qualquer achado na ronda 1, mesmo o que nao segura a ronda, pede a ronda 2', () => {
+  const M = { A: 'trabalho', B: 'HEAD' };
+  const melhoria = Object.assign(achado('P2', 'A.txt', 3), { tipo: 'melhoria' });
+  const casos = {
+    'pendente': [pendente('A.txt', 3, 'o que a funcao devolve')],
+    'melhoria (registro)': [melhoria],
+    'do lado antigo': [achado('P1', 'B.txt', 3)],
+    'fora do formato (descartado)': [achado('alta', 'A.txt', 3)],
+    'sem arquivo:linha (descartado)': [achado('P1', '', 3)]
+  };
+  for (const nome of Object.keys(casos)) {
+    const r = v.apurar([[veredito('correcao', casos[nome])]], { faixas: ['uma'], mapas: [M] });
+    assert.deepStrictEqual([r.encerrar, r.secas], [false, 1], nome);
+    assert.match(r.motivo, /^ronda 2 chama/, nome);
+  }
+  // o refutado e o de trecho que nao confere tambem: houve achado, e a ronda 2 confere
+  const p1 = [veredito('correcao', [achado('P1', 'A.txt', 3)])];
+  const refutado = v.apurar([p1], { faixas: ['uma'], mapas: [M], refutados: [{ ronda: 1, lente: 'correcao', arquivo: 'A.txt',
+    linha: 3, severidade: 'P1', prova: 'scripts/x.js:1' }] });
+  assert.deepStrictEqual([refutado.encerrar, refutado.secas], [false, 1]);
+  const semTrecho = v.apurar([p1], { faixas: ['uma'], mapas: [M], trechoNoArquivo: () => false });
+  assert.deepStrictEqual([semTrecho.encerrar, semTrecho.secas, semTrecho.trechoNaoConfere.length], [false, 1, 1]);
+  // um veredito so com achado, entre os da faixa, ja basta
+  const umSo = v.apurar([[veredito('correcao', []), veredito('borda', [melhoria])]], { faixas: ['duas'], mapas: [M] });
+  assert.strictEqual(umSo.encerrar, false);
+});
+
+test('F2b: so a ronda 1 aprova sozinha: a ronda 2 seca depois de uma ronda 1 com achado segue pedindo a 3', () => {
+  const M = { A: 'trabalho', B: 'HEAD' };
+  const r = v.apurar([[veredito('correcao', [achado('P1', 'A.txt', 3)])], vazios(['correcao'])], { faixas: ['uma', 'uma'],
+    mapas: [M, M], mudancas: [null, []] });
+  assert.deepStrictEqual([r.encerrar, r.secas], [false, 1]);
+  assert.match(r.motivo, /^ronda 3 chama/);
+});
+
+test('F2b: com referencia, a ronda 1 sem achado so aprova com a referencia alcancada e sem lacuna nenhuma', () => {
+  const ok = () => comRef('correcao', 'empata', 'vence');
+  const pronta = apurarRef([rondaRef([ok()], [ok()])], { faixas: ['uma'] });
+  assert.deepStrictEqual([pronta.encerrar, pronta.motivo, pronta.referencia.pronta], [true, UMA_RONDA, true]);
+  const atras = apurarRef([rondaRef([comRef('correcao', 'perde', 'vence')], [ok()])], { faixas: ['uma'] });
+  assert.deepStrictEqual([atras.encerrar, atras.referencia.pronta], [false, false]);
+  assert.match(atras.motivo, /^ronda 2 chama/);
+  // a lacuna P2 nao barra a referencia, mas e um achado contra ela: a ronda 2 confere
+  const comLacuna = apurarRef([rondaRef([comRef('correcao', 'empata', 'empata', [], [lacuna('P2', 'A.txt', 4)])], [ok()])],
+    { faixas: ['uma'] });
+  assert.deepStrictEqual([comLacuna.encerrar, comLacuna.referencia.pronta], [false, true]);
+  // o achado so na ordem trocada tambem conta
+  const naTrocada = apurarRef([rondaRef([ok()], [comRef('correcao', 'empata', 'empata', [pendente('B.txt', 3, 'x')])])],
+    { faixas: ['uma'] });
+  assert.strictEqual(naTrocada.encerrar, false);
+  // e a lacuna so na ordem trocada tambem
+  const lacunaNaTrocada = apurarRef([rondaRef([ok()], [comRef('correcao', 'empata', 'empata', [], [lacuna('P2', 'B.txt', 4)])])],
+    { faixas: ['uma'] });
+  assert.deepStrictEqual([lacunaNaTrocada.encerrar, lacunaNaTrocada.referencia.pronta], [false, true]);
+});
+
+test('F2b: a lente que nao voltou e a que achou P0, P1 ou P2 de erro, e a mensagem diz isso', () => {
+  const M = { A: 'trabalho', B: 'HEAD' };
+  const p2Erro = Object.assign(achado('P2', 'A.txt', 9), { tipo: 'erro' });
+  const r1 = [veredito('correcao', []), veredito('borda', [p2Erro])];
+  assert.throws(() => v.apurar([r1, vazios(['correcao'])], { mapas: [M, M], faixas: ['duas'], mudancas: [null, []] }),
+    (e) => e.codigo === 'VOTO_QUE_FALTA' && /acharam P0, P1 ou P2 de erro do lado novo na ronda 1: borda/.test(e.message));
+});
+
+test('F2b: a base com a ronda 2 ja aberta nao aprova pela ronda 1 vazia: vale a regra das duas secas', () => {
+  const M = { A: 'trabalho', B: 'HEAD' };
+  const opcoes = { faixas: ['uma', 'uma'], mapas: [M, M], mudancas: [null, null] };
+  const molhada = v.apurar([vazios(['correcao']), [veredito('correcao', [achado('P1', 'A.txt', 3)])]], opcoes);
+  assert.deepStrictEqual([molhada.encerrar, molhada.ronda, molhada.secas], [false, 2, 0]);
+  assert.match(molhada.motivo, /^ronda 3 chama/);
+  const seca = v.apurar([vazios(['correcao']), vazios(['correcao'])], opcoes);
+  assert.deepStrictEqual([seca.encerrar, seca.motivo], [true, 'duas rondas secas seguidas: aprovado']);
+});
+
+test('F2b: o pendente que traz severidade P2 por engano nao pede tipo: so o confirmado pede', () => {
+  const comSeveridade = Object.assign(pendente('A.txt', 3, 'o que a funcao devolve'), { severidade: 'P2' });
+  const erros = v.errosDoVeredito(veredito('correcao', [comSeveridade]));
+  assert.ok(erros.every((e) => !/"tipo"/.test(e)), JSON.stringify(erros));
 });

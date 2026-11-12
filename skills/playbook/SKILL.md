@@ -174,7 +174,8 @@ every task, and run what costs only with the owner's yes:
 - before a release, or when closing AAA code → `/sworn:shortcuts` (shortcut without a swap trigger);
 - accumulated skills and rules → `/sworn:audit`; doubt whether the chat-switch threshold fits →
   `/sworn:calibrate`;
-- owner correction that holds for next times → `/sworn:learn`.
+- owner correction that holds for next times → `/sworn:learn`;
+- the owner asks why a session went wrong (it took too long, repeated work, ignored the plan) → `/sworn:diagnose`.
 
 ## 4. The AAA standard
 
@@ -208,7 +209,7 @@ Sending several inspectors at once (the *fan-out*) uses **different lenses**, on
 Copies of the same reviewer find the same problem several times; distinct lenses find distinct classes of problem. There are two families,
 which coexist and do not merge: the **ten code lenses**, in `LENTES`, and the **eight screen
 lenses**, below, in `LENTES_UI`, both lists in `scripts/lib/veredito.js` of the plugin. Which ones go
-depends on what the change touches: code only, the ten code lenses; screen only, the eight screen lenses; code and
+depends on what the change touches: code only, the ten code lenses; screen only, the eight screen lenses and the request lens (`escopo`); code and
 screen, both families; when in doubt, both. That is the `/sworn:review` rule, in the table of Step 2
 of `skills/review/SKILL.md`. Before the family comes the band: a small change goes to fewer inspectors, by
 diff size, in the other table of the same Step 2.
@@ -249,13 +250,17 @@ Loop assembly, how to blind and reference script:
 
 ### 4.4 Convergence with a cap
 
-- **Dry round** = zero **new** finding of severity P1 or above. A repeated finding with the same
-  evidence does not wet the round.
-- **Two dry rounds in a row** → approved.
-- **Round 1 discovers; the following ones verify.** Round 2+ calls only the lenses that found P0/P1 against
-  the work itself, with the brief reworded as a specific question. Order of magnitude: 8 → 4 → 2.
-- **Cap of 3 rounds.** Reached the third with a P0 or P1 open: **stop**, take it to `{{campo:quemDecide}}`
-  with three options, and what is left becomes a record in `{{texto:ondeRegistrar}}`.
+- **Dry round** = zero **new** finding of severity P0, P1 or P2 `erro`. A repeated finding with the same
+  evidence does not wet the round, and a P2 `melhoria` never does: it becomes a record.
+- **Two dry rounds in a row** → approved. A complete round 1 in which no lens points out anything at all
+  approves by itself.
+- **Round 1 discovers; the following ones verify.** Round 2+ calls only the lenses that found P0, P1 or P2
+  `erro` against the work itself, with the brief reworded as a specific question about their own finding (is it
+  still there?), on a cheaper model. In them a finding holds the round only on a line the fix touched or a line
+  cited before (up to 2 lines away); anywhere else it becomes a record. Order of magnitude: 8 → 4 → 2.
+- **Cap of 3 rounds.** Reached the third with an error open: do not ask. Fix what is an error, each fix with a
+  test that fails when the code is broken on purpose, run `{{campo:provaDePronto}}` until it is green, and commit
+  with the mark `# sworn: sem-revisao`; what is left becomes a record in `{{texto:ondeRegistrar}}`.
 - **A fix that breaks the previous fix is a sign of design, not of carelessness.** If the finding of
   round N hits the fix made in round N-1, **stop patching**: run a single adversarial sweep
   over the cause before writing more fixes. Patch on top of patch is how a
@@ -267,7 +272,8 @@ Severity:
 |---|---|---|
 | **P0** | Breaks function, leaks a secret, visible overflow, illegible contrast, permission violated | Blocks delivery |
 | **P1** | Required state missing, value outside the declared ruler, microcopy outside the standard, contract regression | Blocks the release |
-| **P2** | Real improvement, out of the request's scope | Becomes a record, **does not** become a fix |
+| **P2 `erro`** | Smaller, but it changes a result, weakens security, shows the user something wrong or confusing, or can lose data | Holds the round, like a P1: it is fixed |
+| **P2 `melhoria`** | A simple improvement with none of those effects | Becomes a record, **does not** become a fix |
 
 Always declare how many agents ran per round. Cost is information, not detail.
 
@@ -361,9 +367,10 @@ context. The other triggers on the list, the doubt "is it time yet?" and the
 plugin's counters (closed reviews, owner decisions, commits, turns with work and files
 touched), which do not even warn, stop calling for a chat switch. The "Triggered?" paragraph still applies to the triggers that remain, and
 "Always" does not change. In exchange: re-read the plan excerpt in the file before each sub-item; a technical choice
-within scope is decided, recorded with the reason and listed at close-out; to the owner goes only the
-irreversible, the external (publish, push, send), credentials, permission or security, cost and
-product matters, in the format of §7.
+within scope is decided, recorded with the reason and listed at close-out; to the owner goes only business
+rules, appearance (with options), the irreversible or external (publish, push, send) and credentials, permission
+or security, in the
+format of §7; cost inside the request is not asked, and failures, tests, the browser and fixes are done alone.
 
 ## 6-bis. Parallel work
 

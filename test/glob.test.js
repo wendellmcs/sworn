@@ -85,6 +85,90 @@ test('A2-27: o padrao e aparado e o caminho nao', () => {
   assert.strictEqual(glob.normalizar(' a '), ' a ', 'normalizar nao apara o caminho');
 });
 
+// Glob sem backtracking (dono, 2026-11-10): o padrao virava regex com `(?:.*/)?` e `[^/]*` sem teto, e um padrao
+// patologico do escopo.md, do projeto.json ou do design.json travava o portao a cada Write/Edit (passou de 120 s).
+// A conta roda num processo filho com prazo: o defeito volta como prazo estourado, sem travar a suite. O prazo do
+// filho (10 s, com folga para a maquina carregada) e a unica medida de tempo: um teto em milissegundos oscilaria.
+test('glob: o padrao patologico casa em tempo linear, sem travar o portao', () => {
+  const { spawnSync } = require('node:child_process');
+  const codigo = 'const g = require(' + JSON.stringify(require.resolve('../scripts/lib/glob.js')) + ');' +
+    'const caminho = "a/".repeat(20) + "a".repeat(40) + ".css";' +
+    // Um caminho de milhares de caracteres: o custo cresce com o caminho, nunca com potencia dele.
+    'const longo = "a/".repeat(3000) + "a".repeat(3000) + ".css";' +
+    'const r = [g.casa("**/**/**/**/**/**/**/**/a*a*a*a*a*a*b", caminho), g.casa("**/**/**/**/**/**/**/**/a*a*a*a*a*a*.css", caminho),' +
+    ' g.casa("**/**/**/**/a*a*a*a*b", longo), g.casa("**/**/**/**/a*a*a*a*.css", longo)];' +
+    'process.stdout.write(JSON.stringify(r));';
+  const filho = spawnSync(process.execPath, ['-e', codigo], { encoding: 'utf8', timeout: 10000 });
+  if (filho.error && filho.error.code === 'ETIMEDOUT') {
+    assert.fail('o casamento passou do prazo de 10 s: o glob.js voltou a ter backtracking (veja casa e fecho)');
+  }
+  assert.strictEqual(filho.status, 0, 'o processo filho do teste caiu antes de casar: ' + (filho.error ? filho.error.message : filho.stderr));
+  assert.deepStrictEqual(JSON.parse(filho.stdout), [false, true, false, true], 'o "b" nao existe nos caminhos; o ".css" existe');
+});
+
+// O oraculo: o casa que virava regex (copia fiel do glob.js ate o commit e2199a8). Fica so no teste, para
+// o glob.js ter um motor so; o automato tem de dar o mesmo resultado dele em todo o corpo, e nunca travar.
+const ESPECIAIS_DE_ANTES = new Set(['.', '+', '?', '^', '$', '{', '}', '(', ')', '|', '[', ']', '\\']);
+function casaPelaRegex(padrao, caminho, ignorarCaixa) {
+  if (!padrao) return false;
+  const p = glob.normalizar(String(padrao == null ? '' : padrao).trim());
+  let re = '';
+  let i = 0;
+  while (i < p.length) {
+    const c = p[i];
+    if (c === '*' && p[i + 1] === '*') {
+      if (p[i + 2] === '/') { re += '(?:.*/)?'; i += 3; } else { re += '.*'; i += 2; }
+    } else if (c === '*') {
+      re += '[^/]*'; i += 1;
+    } else if (ESPECIAIS_DE_ANTES.has(c)) {
+      re += '\\' + c; i += 1;
+    } else {
+      re += c; i += 1;
+    }
+  }
+  const semCaixa = ignorarCaixa === undefined ? process.platform === 'win32' : Boolean(ignorarCaixa);
+  return new RegExp('^' + re + '$', semCaixa ? 'i' : '').test(glob.normalizar(caminho));
+}
+
+test('glob: o casamento sem regex da o mesmo resultado que a regex de antes, num corpo de padroes e caminhos', () => {
+  const padroes = ['src/**', '**/auth/**', '**/*.md', '*.md', 'src/*', 'src/*.js', 'a**b', '**', '*', '**/*', './**',
+    'src/a.js', 'a.b+c', 'x(1).js', '[a].js', 'docs/**/x.md', '**/**/a', 'a/**/b/**/c', 'a*b*c', '*.{css,scss}',
+    'src/checkout/**', '**/checkout/*.css', '../**', 'a/', '/abs/**', 'A/B', 'segredos/**',
+    // O `**/` no meio com quebra de linha, e letras que a flag `i` nao iguala (Kelvin, s longo,
+    // as ligaduras \uFB05 e \uFB06, que viram as duas "ST").
+    'a/**/b', 'k.txt', 'segredos/k.txt', 'a.kss', 'strasse.md', 'STRASSE.md', '\u00E9.md', '\uFB05.md', '\u1F80.md'];
+  const caminhos = ['src/a.js', 'src/sub/a.js', 'auth/login.js', 'src/auth/x.js', 'src/author/x.js', 'README.md',
+    'docs/a/b.md', 'docs/x.md', 'docs/q/w/x.md', 'a/x/b', 'ab', 'a/b/c', 'a/q/b/w/c', 'axbxc', 'a.b+c', 'x(1).js',
+    '[a].js', 'a.css', 'a.{css,scss}', 'src/checkout/pagar.css', 'x/checkout/a.css', '', 'a', 'a/b', 'A/B', 'a/B',
+    'segredos/k.txt', 'nota.md.old', '../x', 'abs/q', 'src\\win\\a.js',
+    // O `**/` so sai depois de uma barra: `xauth/a` nao e `auth/a` em pasta nenhuma.
+    'xauth/a', 'src/xauth/login.js', 'xdocs/x.md', 'a/qb', 'a/q/xb/c', 'qa/b',
+    // A barra logo na entrada do `**/` (pasta de nome vazio) tambem fecha um nivel, como na regex.
+    'a//b', 'docs//x.md', 'a//b//c', 'src//a.js',
+    // Quebra de linha: o `.` da regex nao a le e o `[^/]` le; o casamento faz igual.
+    'a\nb', 'a\rb', 'a\u2028b', 'src/x\ny.js', 'docs/a\n/b.md', 'a/\n/b', 'x\n.md',
+    // Sem caixa, a comparacao e a da flag `i` da regex: o sinal de Kelvin e o s longo nao viram
+    // "k" e "s", e o "ss" alemao nao vira "SS".
+    'segredos/\u212A.txt', '\u017Fegredos/k.txt', 'a.\u212Ass', 'stra\u00DFe.md', 'STRASSE.md', '\u00E9.md', '\u00C9.MD', 'k.txt', '\u212A.txt', '\uFB06.md', '\uFB05.md',
+    // Maiuscula de dois caracteres: \u1F80 e \u1F88 tem a mesma maiuscula de dois caracteres, e a flag `i` nao os iguala.
+    '\u1F88.md', '\u1F80.md',
+    // Caminho nulo ou ausente vira vazio; o "5" casa o padrao numero 5; o emoji (par substituto) e lido em duas
+    // unidades, como a regex sem a flag `u` le.
+    '5', String.fromCharCode(0x61, 0xD83D, 0xDE00) + '.md', String.fromCharCode(0xD83D, 0xDE00),
+    null, undefined];
+  // Padrao vazio, so de espaco, nulo ou numero: a guarda e o aparo do casa os tratam como antes.
+  padroes.push('a*.md', '?.md');
+  padroes.push('', '  ', null, undefined, 0, 5);
+  for (const p of padroes) {
+    for (const c of caminhos) {
+      for (const caixa of [true, false, undefined, null]) {
+        const esperado = casaPelaRegex(p, c, caixa);
+        assert.strictEqual(glob.casa(p, c, caixa), esperado, JSON.stringify({ padrao: p, caminho: c, ignorarCaixa: caixa }));
+      }
+    }
+  }
+});
+
 // A2-25: so o omitido segue a plataforma; null e false deixam a caixa sensivel.
 test('A2-25: ignorarCaixa null ou false deixa a caixa sensivel', () => {
   assert.strictEqual(glob.casa('Src/A.js', 'src/a.js', null), false);

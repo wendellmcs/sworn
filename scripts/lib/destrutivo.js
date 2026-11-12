@@ -116,9 +116,14 @@ const FUNDO = 2;
 // parentese dentro da prosa citada, e o falso positivo que a D68 fechou fica
 // fechado.
 // ===========================================================================
+// Os grupos que o ABRE_RESTO e as listas do temApagar (NOME_DE_SHELL, NAO_PORTA_AQUI) usam: cada nome escrito uma vez.
+const SHELLS = ['bash', 'sh', 'zsh', 'ksh', 'dash', 'fish', 'busybox', 'pwsh', 'powershell', 'cmd'];
+const PACOTES = ['npm', 'pnpm', 'npx', 'yarn', 'bun', 'bunx', 'deno', 'pipx', 'poetry', 'uv', 'conda', 'cargo', 'bundle',
+  'direnv', 'asdf', 'mise', 'rbenv', 'pyenv', 'nvm'];
+const REMOTOS = ['ssh', 'docker', 'podman', 'kubectl', 'oc', 'lxc', 'incus', 'heroku', 'vagrant', 'ansible'];
 const ABRE_RESTO = new Set([
   // shells e interpretadores
-  'bash', 'sh', 'zsh', 'ksh', 'dash', 'fish', 'busybox', 'pwsh', 'powershell', 'cmd',
+  ...SHELLS,
   // wrappers de processo do Unix
   'env', 'nohup', 'time', 'command', 'builtin', 'exec', 'eval', 'nice', 'ionice',
   'taskset', 'chrt', 'timeout', 'stdbuf', 'setsid', 'setarch', 'flock', 'unbuffer',
@@ -136,12 +141,10 @@ const ABRE_RESTO = new Set([
   // sessao, agendamento e servico
   'screen', 'tmux', 'systemd-run', 'systemd-cat', 'start', 'call', 'for', 'doskey',
   'rundll32', 'schtasks', 'psexec', 'wmic', 'spawn', 'at',
-  // rede e container
-  'ssh', 'docker', 'podman', 'kubectl', 'oc', 'lxc', 'incus', 'distrobox-enter',
-  'toolbox', 'wsl', 'heroku', 'vagrant', 'ansible',
+  // rede e container (os que rodam noutra maquina, em REMOTOS)
+  ...REMOTOS, 'distrobox-enter', 'toolbox', 'wsl',
   // gerenciador de pacote e de ambiente
-  'npm', 'pnpm', 'npx', 'yarn', 'bun', 'bunx', 'deno', 'pipx', 'poetry', 'uv', 'conda',
-  'cargo', 'bundle', 'direnv', 'asdf', 'mise', 'rbenv', 'pyenv', 'nvm',
+  ...PACOTES,
   // o git multiplexa subcomando que executa comando alheio:
   // `git submodule foreach X`, `git bisect run X`
   'git',
@@ -160,7 +163,8 @@ const CASCA = /[%,=!\\/]/;
 
 /**
  * Separa o comando em segmentos (um por comando) e em tokens (um por argumento).
- * Devolve [{ texto, semAspas, tokens: string[], posCmd: Set<number> }].
+ * Devolve [{ texto, semAspas, tokens: string[], citados: boolean[], posCmd: Set<number>, posAmpla: Set<number>,
+ * posCam: Set<number>, nivel: number }] (o `nivel` > 0 e a string entre aspas relida como comando).
  *
  * - `texto`: texto cru do segmento, COM as aspas, sem comentario e com as
  *   continuacoes de linha ja juntadas. E sobre ele que as regras de texto rodam,
@@ -1112,16 +1116,236 @@ function classificar(comando, projeto) {
   }
   // Regra do projeto roda sobre o comando inteiro, como sempre rodou: o dono
   // escreve o padrao contra o comando que ele ve, nao contra o segmento.
-  for (const r of extras(projeto).compiladas) {
-    if (r.re.test(cmd)) return { destrutivo: true, motivo: r.motivo };
-  }
+  const doDono = regraDoProjeto(cmd, projeto);
+  if (doDono) return { destrutivo: true, motivo: doDono.motivo };
   return { destrutivo: false, motivo: null };
 }
 
+/** A 1a regra de `comandosBloqueados` do dono que casa o comando inteiro, ou null. Um lugar so: o `classificar` e a
+ *  excecao do arquivo nomeado (`bloqueadoPeloProjeto`) leem o mesmo criterio. */
+function regraDoProjeto(cmd, projeto) {
+  return extras(projeto).compiladas.find(function (r) { return r.re.test(cmd); }) || null;
+}
+
+// D785 item 4 (s369, 2.4): apagar arquivo NOMEADO, sem curinga e sem recursao, passa no portao quando cada arquivo esta
+// no escopo e fora dos intocaveis (a conferencia do escopo e do portao-destrutivo.js). Leitura propria e estrita, fora
+// do leitor acima de proposito: so um comando simples, sem nada que o shell separe, expanda ou redirecione; o que nao
+// for exatamente esta forma devolve null e segue pela trava como sempre.
+const REMOVE_NOME = /^(?:rm|remove-item|ri|del|erase)$/i;
+// A5a (s369, leva 12: `cmd /c del /q saida\LICENCAS.txt`): o `del`/`erase` do cmd (ou o apelido do PowerShell) so com
+// as chaves que nao recursam; `/s` e qualquer outra barra devolvem null (segue pela trava).
+const DEL_NOME = /^(?:del|erase)$/i;
+const DEL_CHAVE = /^\/[qf]$/i;
+const REMOVE_FLAG = /^(?:-f|--force|--|-force|-literalpath|-path)$/i;
+// Separador, redirecao, subshell, crase, chave, variavel, curinga, historico, comentario, lista e splat; e todo espaco
+// que nao e espaco nem tab (o `\s` do JS corta no U+00A0, o shell nao: os nomes conferidos seriam outros).
+const REMOVE_PROIBIDO = /[;|&<>\r\n()`{}$*?[\]!#,%^=@]/;
+// Fora do ASCII, so letra, marca e digito (nome com acento passa). O resto barra: aspas tipograficas e travessao
+// (U+2013-U+2015) o PowerShell le como aspas e como o `-` de parametro, e o espaco U+00A0 o shell le como letra.
+// Lista do que pode, nao do que nao pode: a de proibidos feita a mao deixava algum de fora.
+const REMOVE_FORA_DA_LISTA = /[^\x20-\x7e\t\p{L}\p{M}\p{N}]/u;
+// `:` so na letra de drive (`C:/x`): provedor do PowerShell (`HKCU:`, `Env:`) e fluxo alternativo (`a.txt:s`) nao.
+const REMOVE_DOIS_PONTOS = /^(?:[^:]*|[A-Za-z]:[\\/][^:]*)$/;
+// Grupos: 1 = entre aspas duplas, 2 = entre aspas simples, 3 = sem aspas. Separador: so espaco e tab.
+const REMOVE_TOKEN = /[ \t]*(?:"([^"]*)"|'([^']*)'|([^ \t"']+))(?=[ \t]|$)/y;
+
+/** Os nomes de um apagar simples - `rm`, `Remove-Item`/`ri`, `del`/`erase` (com `/q` e `/f` so dentro de `cmd /c|/r`)
+ *  - ou null. `ferramenta`: o `tool_name` (a barra invertida so e caminho no PowerShell; no bash ela escapa). So le os
+ *  nomes: quem chama confere que cada um e arquivo (o `del` de pasta apaga o que tem dentro; portao-destrutivo.js). */
+function arquivosNomeados(comando, ferramenta) {
+  /* so espaco e tab nas pontas: o trim() do JS tiraria o U+00A0 antes da guarda ver (o shell o le como letra) */
+  const cmd = String(comando == null ? '' : comando).replace(/^[ \t]+|[ \t]+$/g, '');
+  if (!cmd || REMOVE_PROIBIDO.test(cmd) || REMOVE_FORA_DA_LISTA.test(cmd)) return null;
+  if (ferramenta !== 'PowerShell' && cmd.indexOf('\\') !== -1) return null;
+  const tokens = [];
+  REMOVE_TOKEN.lastIndex = 0;
+  while (REMOVE_TOKEN.lastIndex < cmd.length) {
+    const m = REMOVE_TOKEN.exec(cmd);
+    if (!m) return null;
+    const citado = m[3] === undefined;
+    tokens.push({ texto: citado ? (m[1] !== undefined ? m[1] : m[2]) : m[3], citado: citado });
+  }
+  /* `cmd /c del ...` (e `//c`, `/r`, a grafia do INTRODUTOR): o cmd e so o portador; o que vale e o del que ele roda */
+  const viaCmd = tokens.length > 2 && !tokens[0].citado && /^cmd(?:\.exe)?$/i.test(tokens[0].texto) &&
+    !tokens[1].citado && tokens[1].texto[0] === '/' && INTRODUTOR.test(tokens[1].texto) &&
+    !/k$/i.test(tokens[1].texto); /* o /k deixa o cmd aberto depois do comando: so o /c (e o /r, que e o mesmo) */
+  if (viaCmd) tokens.splice(0, 2);
+  if (!tokens.length || tokens[0].citado || !REMOVE_NOME.test(tokens[0].texto)) return null;
+  const ehDel = DEL_NOME.test(tokens[0].texto);
+  const arquivos = [];
+  let fimDasOpcoes = false;
+  for (const tok of tokens.slice(1)) {
+    /* no del a barra e chave em qualquer posicao e ate entre aspas (`del a.txt/s`, `del "/s" x`): so /q e /f soltos, e
+       so no cmd - no PowerShell o `del` e o Remove-Item e o `/q` e caminho (o `\q` da raiz da unidade) */
+    if (ehDel && tok.texto.indexOf('/') !== -1) {
+      if (viaCmd && !tok.citado && DEL_CHAVE.test(tok.texto)) continue;
+      return null;
+    }
+    /* depois do `--` tudo e nome: `rm -- -f a` apaga o arquivo `-f`, que o teste do traco abaixo barra */
+    if (!fimDasOpcoes && !tok.citado && REMOVE_FLAG.test(tok.texto)) {
+      if (tok.texto === '--') fimDasOpcoes = true;
+      continue;
+    }
+    if (tok.texto === '' || tok.texto[0] === '-' || tok.texto[0] === '~') return null;
+    if (!REMOVE_DOIS_PONTOS.test(tok.texto)) return null;
+    arquivos.push(tok.texto);
+  }
+  return arquivos.length ? arquivos : null;
+}
+
+const VERBO_DE_APAGAR = /^(?:rm|del|erase|ri|remove-item|rmdir|rd)(?:\.exe)?$/i;
+// O portador de processo e o ABRE_RESTO (a lista unica de quem roda outro programa), menos quem nao roda o argumento
+// como comando local: o git e os gerenciadores de pacote (`git rm`, `npm uninstall rm`), o shell (o `-c` dele e lido
+// abaixo), o find (o `-exec`) e quem roda noutra maquina ou container (`ssh host rm` nao apaga daqui).
+const NAO_PORTA_AQUI = new Set(['git', 'find', 'for', ...PACOTES, ...SHELLS, ...REMOTOS]);
+function portaAqui(t) { return abreResto(t) && !NAO_PORTA_AQUI.has(nomeBase(t)); }
+const PALAVRA_DO_SHELL = /^(?:if|while|until|then|do|else|elif|!|\{)$/i;
+// A string que o shell roda: o argumento logo depois do `-c` (`-lc`, `-ec`), `-Command`, `/c` ou `/k` de um shell, com
+// so flags entre o nome e ele (`pwsh -NoProfile -Command "..."`; em `bash build.sh -c "..."` o -c e do script). Lida
+// por token, com o espaco normalizado: aspas e TAB dentro da string (`bash -c "cd 'a b'; rm x"`) nao a escondem.
+const NOME_DE_SHELL = new Set(SHELLS);
+const RODA_O_TEXTO = new Set(['eval', 'iex', 'invoke-expression']);
+const FLAG_DO_C = /^(?:-[a-z]*c|-command|\/c|\/k)$/i;
+const espacoNormal = (t) => String(t).replace(/\s+/g, ' ').trim();
+function nomeBase(t) { return String(nomeCmd(nu(t), true)).toLowerCase().replace(/\.exe$/, ''); }
+function stringsDoShell(segmentos) {
+  const out = [];
+  for (const seg of segmentos) {
+    const tk = seg.tokens;
+    /* `eval "rm a"`, `iex 'del a'`: o que vem depois e o texto que ele roda, sem -c */
+    for (let k = 0; k < tk.length - 1; k++) {
+      if (RODA_O_TEXTO.has(nomeBase(tk[k]))) out.push(espacoNormal(tk.slice(k + 1).join(' ')));
+    }
+    for (let k = 0; k < tk.length - 2; k++) {
+      if (!NOME_DE_SHELL.has(nomeBase(tk[k]))) continue;
+      /* entre o shell e o -c so flags e o valor delas (`-ExecutionPolicy Bypass`, `-o pipefail`); o primeiro token
+         que nao e flag nem valor e o script (`bash build.sh -c`), e o -c depois dele e do script */
+      let p = k + 1;
+      while (p < tk.length && !FLAG_DO_C.test(tk[p]) && (/^-/.test(tk[p]) || /^-/.test(tk[p - 1]))) p++;
+      if (p < tk.length - 1 && FLAG_DO_C.test(tk[p])) out.push(espacoNormal(tk[p + 1]));
+      /* o que ja foi andado e flag ou valor deste shell, nao outro shell: segue dali (linear em `bash -x bash -x ...`) */
+      k = Math.max(k, p - 1);
+    }
+  }
+  return out;
+}
+
+// O que o shell roda de dentro do texto: `$(...)` e crase. Nao olha aspa: o `'$(rm x)'` literal tambem conta (barra a
+// mais, nunca a menos).
+const SUBSTITUICAO = /\$\(([^()]*)\)|`([^`]*)`/g;
+// Quantos niveis de string relida (`bash -c`, `eval`, `$()`) se leem; alem disso o comando conta como apagar.
+const TETO_DE_ANINHAMENTO = 4;
+
+/** A5a (s369): algum segmento do comando roda um verbo de apagar (rm, del, erase, ri, Remove-Item, rmdir, rd)? Pelo
+ *  leitor de cima (o mesmo que acha o comando em `a && b`, `$(...)`, `cmd /c`), para o composto que o
+ *  `arquivosNomeados` recusa ler. Le a posicao de comando, o argumento sem aspas de portador (`sudo`, `xargs`) e a
+ *  string do `-c` de um shell; o leitor serve ao rm -rf (onde a flag corrobora) e e largo de proposito - le os
+ *  argumentos do `git` e rele toda string entre aspas como comando -, e aqui isso fazia `git rm a.txt` e
+ *  `git commit -m "del a"` contarem como apagar. Usa do segmento: tokens, citados, nivel, posCmd e posCam. */
+function temApagar(comando, prof) {
+  const cmd = String(comando == null ? '' : comando);
+  if (!cmd.trim()) return false;
+  /* aninhamento alem do que se le: conta como apagar (o composto barra), nunca abre */
+  if ((prof || 0) > TETO_DE_ANINHAMENTO) return true;
+  const segmentos = lerTudo(cmd);
+  /* So o segmento de nivel 0 conta: o de nivel > 0 e a string entre aspas que o leitor rele por cautela, e nela
+     `git commit -m "del a"` (ou o mesmo dentro de `bash -c "..."`) acusava apagar. O que o shell roda de fato - a
+     string do `-c` e o `$(...)`/crase - e relido por esta funcao, com o seu proprio nivel 0. */
+  if (segmentos.some(function (seg) { return !seg.nivel && segmentoApaga(seg); })) return true;
+  const proximo = (prof || 0) + 1;
+  if (stringsDoShell(segmentos).some(function (r) { return temApagar(r, proximo); })) return true;
+  for (const m of cmd.matchAll(SUBSTITUICAO)) if (temApagar(m[1] !== undefined ? m[1] : m[2], proximo)) return true;
+  return false;
+}
+
+function segmentoApaga(seg) {
+  const tk = seg.tokens;
+  /* duas listas: `pos` e posicao de comando (o caminho se descasca: `/usr/bin/rm` e o rm); `args` e argumento de
+     portador, que conta so pelo nome cru - `sudo chmod 755 /opt/rm` nao apaga (D80/R3, a mesma regra do achaCmd) */
+  const pos = Array.from(seg.posCmd || []).concat(Array.from(seg.posCam || []));
+  const args = [];
+  /* do comeco: a palavra do shell passa a vez ao token seguinte; depois do portador, todo argumento sem aspas
+     (`sudo -u root rm`, `xargs -n 1 rm`, `timeout 5 rm`), e o 1o que nao e flag nem valor dela e o comando */
+  for (let j = 0; j < tk.length; j++) {
+    pos.push(j);
+    if (portaAqui(tk[j])) {
+      let livre = false;
+      for (let q = j + 1; q < tk.length; q++) {
+        if (seg.citados && seg.citados[q]) continue;
+        /* `time git rm a`: o git (e os outros que nao rodam o argumento aqui) fecha a leitura */
+        if (NAO_PORTA_AQUI.has(nomeBase(tk[q]))) break;
+        /* ate achar o comando, o que nao e flag pode ser ele (`sudo -E /bin/rm`: o valor da flag e o comando se
+           parecem); o 1o que nao vem depois de flag fecha a busca, e dali em diante e argumento */
+        if (livre || /^-/.test(tk[q])) { args.push(q); continue; }
+        pos.push(q);
+        if (!/^-/.test(tk[q - 1])) livre = true;
+      }
+      break;
+    }
+    if (!PALAVRA_DO_SHELL.test(tk[j])) break;
+  }
+  for (let k = 0; k < tk.length - 1; k++) if (/^-(?:exec|execdir|ok|okdir)$/i.test(tk[k])) pos.push(k + 1);
+  const apaga = function (x) { return VERBO_DE_APAGAR.test(x); };
+  return pos.some(function (k) {
+    const t = tk[k];
+    return t !== undefined && [t, nu(t), nomeCmd(t, true), nomeCmd(nu(t), true)].some(apaga);
+  }) || args.some(function (k) { return [tk[k], nu(tk[k])].some(apaga); });
+}
+
+/** O comando casa um padrao de `comandosBloqueados` do dono? A regra do dono ganha da excecao do arquivo nomeado. */
+function bloqueadoPeloProjeto(comando, projeto) {
+  return regraDoProjeto(String(comando == null ? '' : comando), projeto) !== null;
+}
+
+// A5d (s369, leva 13 do luna: barrado no Remove-Item, apagou pelo [System.IO.File]::Delete): apagar por API do sistema
+// dentro do shell (.NET, Node, Python) nao tem verbo nem nome que o leitor confira.
+// So conta quando roda de fato: a do .NET no PowerShell, a de script com o interpretador rodando codigo na linha
+// (`node -e`, `python -c`). Sem isso `grep -rn "unlinkSync(" src` barrava.
+// atalho: lista de APIs e de formas de rodar codigo, nao a classe inteira. limite: pega o caso da leva 13 e as formas
+// comuns; nao ve o interpretador dentro de `bash -c "..."`, de `xargs`, depois de `do`/`then` ou em variavel
+// (`& $py -c`), nem `Path(x).unlink(missing_ok=True)`, `require('fs').unlink(` assincrono, `fsp.rm(`, o `unlink` do
+// perl e o `File.delete` do ruby; e barra a busca que cita `$x.Delete()` ou `[IO.File]::Delete` (revisao A5d, r3, 9 P1
+// no teto, s369). trocar quando: uma leva mostrar o modelo apagando por uma dessas formas - ai a conferencia vira
+// depois do comando (o que sumiu fora do escopo), nao mais uma forma na lista.
+// revisao A5d (r3): o `.Delete()` so conta depois de `)` ou de `$var`, a chamada do PowerShell; senao a busca por
+// `cache.delete()` no Select-String barrava
+const API_DOTNET = new RegExp('\\[(?:System\\.)?IO\\.(?:File|Directory|FileInfo|DirectoryInfo)\\]::Delete\\b|' +
+  '(?:\\)|\\$[\\w:]+)\\.Delete\\(\\s*(?:\\$true|\\$false)?\\s*\\)|::DeleteFile\\b|::DeleteDirectory\\b', 'i');
+const API_SCRIPT = new RegExp('\\b(?:unlinkSync|rmSync|rmdirSync)\\s*\\(|\\bfs(?:\\.promises)?\\.(?:unlink|rm|rmdir)\\s*\\(|' +
+  '\\bos\\.(?:remove|unlink|rmdir|removedirs)\\s*\\(|\\bshutil\\.rmtree\\s*\\(|\\.unlink\\s*\\(\\s*\\)|' +
+  '\\bFileUtils\\.(?:rm|rm_rf|rm_r|remove)\\b|\\bDeno\\.remove(?:Sync)?\\s*\\(', 'i');
+// revisao A5d (P1, ronda 1): a flag junta (`-pe`, `-Ic`, `-0e`), com `=` (`--eval=`) ou colada ao codigo (`-e"..."`)
+// tambem roda codigo. (ronda 2): o interpretador e a palavra que abre o comando (depois de sudo/env/&, com ou sem
+// caminho), senao o `.py` de `grep "os.remove(" main.py -C 3` contava; e o codigo pela entrada (`python - <<EOF`,
+// `python <<EOF`) e o `deno eval` rodam sem flag.
+const RODA_CODIGO = new RegExp('(?:^|[;&|(\\n])\\s*(?:(?:sudo|env|exec|time|nohup|command)\\s+|\\w+=\\S*\\s+)*' +
+  '(?:"[^"]*[\\\\/]|\'[^\']*[\\\\/]|[^\\s"\';&|]*[\\\\/])?(?:node|nodejs|deno|bun|python[0-9.]*|py|ruby|perl)' +
+  '(?:\\.exe)?["\']?(?=[\\s<]|$)[^|;&]*?(?:\\s(?:-[a-z0-9]*[ecp][a-z0-9]*|--(?:eval|print)|eval)(?=[\\s"\'=]|$)|' +
+  '\\s-(?=\\s|$)|<<)', 'i');
+/** O comando apaga por API do sistema (`[IO.File]::Delete`, `.Delete()`, `fs.unlinkSync`, `os.remove`...)? */
+function apagaPorApi(comando, ferramenta) {
+  const c = String(comando == null ? '' : comando);
+  if (API_DOTNET.test(c) && (ferramenta === 'PowerShell' || /\b(?:powershell|pwsh)(?:\.exe)?\b/i.test(c))) return true;
+  return API_SCRIPT.test(c) && RODA_CODIGO.test(c);
+}
+const MOTIVO_APAGA_POR_API = 'apagar por API do sistema dentro do shell ([IO.File]::Delete, .Delete(), fs.unlinkSync, ' +
+  'os.remove...) nao confere o escopo; apague pelo nome com rm ou Remove-Item, um arquivo de cada vez, que conferem';
+
+// A5b (s369): o motivo de apagar no mesmo turno em que o escopo foi ampliado (portao-destrutivo e portao-escopo).
+const MOTIVO_APAGAR_DEPOIS_DE_AMPLIAR = 'o escopo foi ampliado neste turno, e apagar so confere o escopo da abertura ' +
+  'do turno (sem isso o proprio agente libera o que vai apagar); deixe o apagar para o turno seguinte e diga ao dono ' +
+  'na resposta final o que ficou para apagar e por que';
+
+// Os motivos das regras de apagar arquivo (REGRAS acima): so neles o aviso fala do arquivo nomeado que passa.
+const MOTIVO_DE_APAGAR = /^(?:rm |Remove-Item |apelido do PowerShell para Remove-Item)/;
+
 function motivo(comando, r) {
   // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos. A liberacao fica por ultimo, como acao do dono.
+  // D785 item 4 (s369, 2.4): erro e falha se resolvem sem perguntar; a trava manda seguir por outro caminho, e o que
+  // so o dono roda fica dito a ele na resposta final, sem parar o trabalho.
+  const apagar = MOTIVO_DE_APAGAR.test(String(r.motivo));
   return [
-    'sworn - comando destrutivo barrado (trava 5): falta o sim do dono.',
+    'sworn - comando destrutivo barrado (trava 5): siga por outro caminho, sem parar o trabalho.',
     '',
     'Comando: ' + escopo.ascii(String(comando).slice(0, 400)),
     // O MOTIVO tambem e higienizado (D64). Ate a ronda 7 so o comando era, e
@@ -1131,15 +1355,20 @@ function motivo(comando, r) {
     // caso normal, nao o exotico, e os dois testes de ASCII que ja existiam
     // eram cegos a este caminho porque so exercitavam motivo built-in.
     'Por que barrou: ' + escopo.ascii(String(r.motivo).slice(0, 400)) + '.',
-    'Nenhum comando destrutivo roda sem o sim do dono.',
     '',
+    /* a 1a opcao depende da regra: so as de apagar arquivo tem a forma que passa */
+    apagar ? 'Apagar arquivo pelo nome (sem -r e sem curinga), dentro do escopo e fora dos intocaveis, passa.' : null,
+    apagar ? '' : null,
     'Faca uma destas:',
-    // A2-84: a pergunta ao dono na redacao do intocavel (escopo.js) e do design.
-    '  1. peca ao dono que decida: 3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo;',
-    '  2. ou siga sem este comando, se o trabalho nao depende dele.',
+    apagar
+      ? '  1. apague arquivo por arquivo pelo nome, num comando so (rm -f a.txt b.txt, ou Remove-Item -Force a.txt);'
+      : '  1. siga sem ele, por outro caminho que nao destroi, nao descarta e nao publica nada;',
+    '  2. ou termine o resto e diga ao dono, na resposta final, que este comando ficou para ele rodar.',
     '',
     'So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosLiberados" de .claude/sworn/projeto.json.'
-  ].join('\n');
+  ].filter(function (l) { return l !== null; }).join('\n');
 }
 
-module.exports = { REGRAS, classificar, motivo, lerComando, regrasRecusadas, avisoRecusadas };
+module.exports = { REGRAS, classificar, motivo, lerComando, regrasRecusadas, avisoRecusadas, arquivosNomeados,
+  temApagar, MOTIVO_APAGAR_DEPOIS_DE_AMPLIAR, apagaPorApi, MOTIVO_APAGA_POR_API,
+  bloqueadoPeloProjeto };

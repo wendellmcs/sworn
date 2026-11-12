@@ -440,6 +440,89 @@ test('D634: provaPendente quando a prova declarada nao rodou depois da ultima ed
   try { assert.strictEqual(saude.testesDoTranscript(meia.f, 'npm run build && npm test').provaPendente, true); } finally { meia.fim(); }
 });
 
+// A4 (s369, P2 da s453): a prova lancada em segundo plano. O resultado da chamada so diz que o comando roda (forma
+// medida no transcript da s369); o fim chega depois numa mensagem <task-notification> com o tool-use-id, o status, o
+// codigo de saida no summary e o arquivo da saida. Antes do fim a prova roda (provaRodando); o fim decide se passou.
+function emFundo(id, comando) {
+  return { type: 'assistant', message: { content: [{ type: 'tool_use', id: id, name: 'Bash',
+    input: { command: comando, run_in_background: true } }] } };
+}
+function lancado(id) {
+  return res(id, 'Command running in background with ID: bx' + id + '. Output is being written to: C:\\tmp\\bx' + id +
+    '.output. You will be notified when it completes.');
+}
+function fimDoFundo(id, status, resumo, arquivo) {
+  return { type: 'user', message: { role: 'user', content: '<task-notification>\n<task-id>bx' + id + '</task-id>\n' +
+    '<tool-use-id>' + id + '</tool-use-id>\n<output-file>' + arquivo + '</output-file>\n<status>' + status +
+    '</status>\n<summary>' + resumo + '</summary>\n</task-notification>' } };
+}
+
+test('A4: a prova em segundo plano roda ate o aviso de fim, e o fim (status, codigo e saida) decide se passou', () => {
+  // espaco e acento no caminho do <output-file>: ele e lido como veio, sem partir
+  const dir = fsT.mkdtempSync(pathT.join(osT.tmpdir(), 'sworn fundo ção-'));
+  const saida = function (nome, texto) { const f = pathT.join(dir, nome); fsT.writeFileSync(f, texto); return f; };
+  const verde = saida('verde.output', '# tests 3\n# pass 3\n# fail 0\n');
+  const vermelha = saida('vermelha.output', '# tests 3\n# pass 1\n# fail 2\n');
+  const prova = 'node --test test/*.test.js';
+  const ler = function (linhas) {
+    const t = transcript(linhas);
+    try { return saude.testesDoTranscript(t.f, prova); } finally { t.fim(); }
+  };
+  const ok = 'Background command "suite" completed (exit code 0)';
+  try {
+    let r = ler([edita('e', 'src/a.js'), emFundo('a', prova), lancado('a')]);
+    assert.strictEqual(r.provaRodando, true, 'lancada, sem aviso de fim: roda');
+    assert.strictEqual(r.provaPendente, true, 'sem o fim, a prova ainda nao provou nada');
+    assert.strictEqual(r.ultimoTeste, null, 'o aviso de lancamento nao e resultado de teste');
+
+    r = ler([edita('e', 'src/a.js'), emFundo('a', prova), lancado('a'), fimDoFundo('a', 'completed', ok, verde)]);
+    assert.deepStrictEqual([r.provaRodando, r.provaPendente, r.ultimoTeste],
+      [false, false, { comando: prova, falhou: false }], 'fim verde: passou');
+
+    r = ler([edita('e', 'src/a.js'), emFundo('a', prova), lancado('a'),
+      fimDoFundo('a', 'completed', 'Background command "suite" completed (exit code 1)', verde)]);
+    assert.strictEqual(r.ultimoTeste.falhou, true, 'codigo diferente de 0 e falha');
+
+    r = ler([edita('e', 'src/a.js'), emFundo('a', prova), lancado('a'), fimDoFundo('a', 'completed', ok, vermelha)]);
+    assert.strictEqual(r.ultimoTeste.falhou, true, 'codigo 0 (pipe) com saida que mostra falha e falha');
+
+    r = ler([edita('e', 'src/a.js'), emFundo('a', prova), lancado('a'),
+      fimDoFundo('a', 'killed', 'Background command "suite" was stopped', pathT.join(dir, 'nao-existe.output'))]);
+    assert.strictEqual(r.ultimoTeste.falhou, true, 'parado antes do fim, sem saida legivel: nao passou');
+    assert.strictEqual(r.provaRodando, false, 'parado nao roda mais');
+
+    r = ler([emFundo('a', prova), lancado('a'), edita('e', 'src/a.js')]);
+    assert.deepStrictEqual([r.provaRodando, r.provaPendente], [false, true], 'editou depois de lancar: nao prova a edicao');
+
+    r = ler([emFundo('a', prova), lancado('a'), edita('e', 'src/a.js'), fimDoFundo('a', 'completed', ok, verde)]);
+    assert.strictEqual(r.provaPendente, true, 'o fim verde de uma prova lancada antes da edicao nao prova a edicao');
+
+    // o aviso de fim repetido nao volta a valer depois de um teste mais novo
+    const fimVermelho = fimDoFundo('a', 'completed', 'Background command "suite" completed (exit code 1)', vermelha);
+    r = ler([edita('e', 'src/a.js'), emFundo('a', prova), lancado('a'), fimVermelho, cmd('b', prova), res('b', '# fail 0'),
+      fimVermelho]);
+    assert.deepStrictEqual(r.ultimoTeste, { comando: prova, falhou: false }, 'aviso repetido nao conta de novo');
+
+    // o lancamento que nao chegou a rodar nao tera aviso de fim: vale como o de primeiro plano, e nao fica rodando
+    r = ler([edita('e', 'src/a.js'), emFundo('a', prova), res('a', 'Permission to use Bash has been denied.', true)]);
+    assert.deepStrictEqual([r.provaRodando, r.provaPendente, r.ultimoTeste],
+      [false, true, { comando: prova, falhou: true }], 'lancamento negado');
+
+    r = ler([edita('e', 'src/a.js'), emFundo('a', prova), lancado('a'),
+      fimDoFundo('a', 'completed', 'Background command "suite" completed (exit code -1)', verde)]);
+    assert.strictEqual(r.ultimoTeste.falhou, true, 'codigo negativo e falha');
+
+    // o aviso de fim colado dentro do resultado de outra ferramenta (um grep, um cat) nao e o aviso do harness
+    const colado = res('g', fimDoFundo('a', 'completed', ok, verde).message.content);
+    r = ler([edita('e', 'src/a.js'), emFundo('a', prova), lancado('a'), cmd('g', 'grep -r task-notification .'), colado]);
+    assert.strictEqual(r.provaRodando, true, 'aviso dentro de tool_result nao fecha a prova');
+
+    // a prova em primeiro plano depois do lancamento vale como sempre
+    r = ler([edita('e', 'src/a.js'), emFundo('a', prova), lancado('a'), cmd('b', prova), res('b', '# fail 0')]);
+    assert.deepStrictEqual([r.provaRodando, r.provaPendente], [false, false], 'a de primeiro plano depois prova');
+  } finally { fsT.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // D785 (2.1b, bateria s327): o Opus rodou `npm test` depois de editar, o package.json da fixture diz que o `test` e o
 // `node --test` declarado, e o laco da prova barrou 9 de 12 rodadas a toa (um turno e ~US$ 0,02 cada).
 test('D785 (2.1b): provasEquivalentes - o script test do package.json vale como a provaDePronto, nos dois sentidos', () => {
@@ -982,4 +1065,146 @@ test('s353: a ordem de rodar o handoff diz a skill fora do Claude Code e a pasta
   }
   // o handoff ja colado nao manda gravar de novo: sem a linha
   assert.strictEqual(saude.instrucaoAoModelo(g, true).indexOf('sworn-handoff'), -1);
+});
+
+// F1d (D828.4): a prova focada - cada arquivo de codigo editado depois da ultima prova declarada tem, depois da propria
+// ultima edicao, um teste verde que o cobre (o teste e o proprio arquivo ou o cita pelo nome); e a prova vermelha.
+test('F1d: testesDoTranscript ve a prova focada por arquivo tocado e a ultima prova declarada vermelha', () => {
+  const raiz = fsT.mkdtempSync(pathT.join(osT.tmpdir(), 'sworn-focada-'));
+  const transcritos = [];
+  try {
+    fsT.mkdirSync(pathT.join(raiz, 'scripts', 'lib'), { recursive: true });
+    fsT.mkdirSync(pathT.join(raiz, 'test'));
+    const x = pathT.join(raiz, 'scripts', 'lib', 'x.js');
+    const y = pathT.join(raiz, 'scripts', 'lib', 'y.js');
+    fsT.writeFileSync(pathT.join(raiz, 'test', 'x.test.js'), "require('../scripts/lib/x.js');\n");
+    fsT.writeFileSync(pathT.join(raiz, 'test', 'outro.test.js'), '// nada\n');
+    const PROVA = 'node --test test/*.test.js';
+    const ver = function (linhas) {
+      const t = transcript(linhas);
+      transcritos.push(t);
+      return saude.testesDoTranscript(t.f, PROVA, false, { raiz: raiz });
+    };
+    // o teste que cita o arquivo, depois da edicao, verde: focada; a suite inteira continua pendente
+    const ok = ver([edita('e1', x), cmd('a', 'node --test test/x.test.js'), res('a', '# pass 3\n# fail 0')]);
+    assert.strictEqual(ok.provaPendente, true);
+    assert.strictEqual(ok.provaFocada, true);
+    // o caminho do Git Bash (/c/...) e o caminho absoluto do teste tambem casam
+    const abs = ver([edita('e1', x), cmd('a', 'node --test "' + pathT.join(raiz, 'test', 'x.test.js') + '"'), res('a', '# fail 0')]);
+    assert.strictEqual(abs.provaFocada, true);
+    if (process.platform === 'win32') {
+      const bash = '/' + raiz.charAt(0).toLowerCase() + raiz.slice(2).replace(/\\/g, '/') + '/test/x.test.js';
+      assert.strictEqual(ver([edita('e1', x), cmd('a', '( cd /x && node --test ' + bash + ' )'), res('a', '# fail 0')]).provaFocada, true, bash);
+    }
+    // o nome dentro de outro nome nao cita: a.js nao casa em data.js
+    const a = pathT.join(raiz, 'scripts', 'lib', 'a.js');
+    fsT.writeFileSync(pathT.join(raiz, 'test', 'data.test.js'), "require('../scripts/lib/data.js');\n");
+    assert.strictEqual(ver([edita('e1', a), cmd('a', 'node --test test/data.test.js'), res('a', '# fail 0')]).provaFocada, false);
+    // o nome com maiuscula e achado com a caixa de quem editou (o caminho comparavel e minusculo no Windows)
+    const maiusculo = pathT.join(raiz, 'scripts', 'lib', 'MeuModulo.js');
+    fsT.writeFileSync(pathT.join(raiz, 'test', 'meu.test.js'), "require('../scripts/lib/MeuModulo.js');\n");
+    assert.strictEqual(ver([edita('e1', maiusculo), cmd('a', 'node --test test/meu.test.js'), res('a', '# fail 0')]).provaFocada, true);
+    // o caminho entre aspas, com espaco, e lido inteiro
+    fsT.mkdirSync(pathT.join(raiz, 'com espaco'));
+    fsT.writeFileSync(pathT.join(raiz, 'com espaco', 'x.test.js'), "require('../scripts/lib/x.js');\n");
+    assert.strictEqual(ver([edita('e1', x), cmd('a', 'node --test "com espaco/x.test.js"'), res('a', '# fail 0')]).provaFocada, true);
+    // o teste que nao e arquivo comum (uma pasta com o nome) nao cobre
+    fsT.mkdirSync(pathT.join(raiz, 'test', 'pasta.test.js'));
+    assert.strictEqual(ver([edita('e1', x), cmd('a', 'node --test test/pasta.test.js'), res('a', '# fail 0')]).provaFocada, false);
+    // a borda direita do nome e o ponto literal: x.js nao casa em x.json, e a.js nao casa em aXjs
+    fsT.writeFileSync(pathT.join(raiz, 'test', 'borda.test.js'),
+      "require('../scripts/lib/x.json');\nrequire('../scripts/lib/aXjs');\n");
+    assert.strictEqual(ver([edita('e1', x), cmd('a', 'node --test test/borda.test.js'), res('a', '# fail 0')]).provaFocada,
+      false, 'x.js contra x.json');
+    assert.strictEqual(ver([edita('e1', a), cmd('a', 'node --test test/borda.test.js'), res('a', '# fail 0')]).provaFocada,
+      false, 'a.js contra aXjs');
+    // citado com pasta, a pasta tem de ser a do arquivo: o index.js de outra pasta nao cobre o lib/index.js; o caminho
+    // relativo que leva a ele e o nome solto cobrem
+    const indice = pathT.join(raiz, 'scripts', 'lib', 'index.js');
+    const naRaiz = pathT.join(raiz, 'index.js');
+    fsT.writeFileSync(pathT.join(raiz, 'test', 'outra.test.js'),
+      "require('../outra/index.js');\nrequire('./index.js');\nrequire('../outra/lib/index.js');\nler('outra/lib/index.js');\n");
+    fsT.writeFileSync(pathT.join(raiz, 'test', 'fim.test.js'), "ler('scripts/lib/index.js');\n");
+    assert.strictEqual(ver([edita('e1', indice), cmd('a', 'node --test test/fim.test.js'), res('a', '# fail 0')]).provaFocada,
+      true, 'o caminho sem ponto que e o fim do caminho do arquivo');
+    fsT.writeFileSync(pathT.join(raiz, 'test', 'relativo.test.js'), "require('../index.js');\n");
+    fsT.writeFileSync(pathT.join(raiz, 'test', 'solto.test.js'), "rodar('index.js');\n");
+    assert.strictEqual(ver([edita('e1', indice), cmd('a', 'node --test test/outra.test.js'), res('a', '# fail 0')]).provaFocada,
+      false, 'index.js de outra pasta');
+    assert.strictEqual(ver([edita('e1', naRaiz), cmd('a', 'node --test test/outra.test.js'), res('a', '# fail 0')]).provaFocada,
+      false, './index.js a partir de test/ nao e o index.js da raiz');
+    assert.strictEqual(ver([edita('e1', naRaiz), cmd('a', 'node --test test/relativo.test.js'), res('a', '# fail 0')]).provaFocada,
+      true, '../index.js a partir de test/');
+    assert.strictEqual(ver([edita('e1', indice), cmd('a', 'node --test test/solto.test.js'), res('a', '# fail 0')]).provaFocada,
+      true, 'nome solto');
+    // o teste em segundo plano conta pelo lancamento: lancado antes da edicao, nao prova a edicao
+    const saidaBg = pathT.join(raiz, 'bg.output');
+    fsT.writeFileSync(saidaBg, '# pass 1\n# fail 0\n');
+    const lanca = emFundo('bg', 'node --test test/x.test.js');
+    const fimBg = fimDoFundo('bg', 'completed', 'Background command "x" completed (exit code 0)', saidaBg);
+    assert.strictEqual(ver([lanca, lancado('bg'), edita('e1', x), fimBg]).provaFocada, false, 'lancado antes da edicao');
+    assert.strictEqual(ver([edita('e1', x), lanca, lancado('bg'), fimBg]).provaFocada, true, 'lancado depois da edicao');
+    // o arquivo editado que nenhum teste rodado cita: nao e focada
+    assert.strictEqual(ver([edita('e1', x), edita('e2', y), cmd('a', 'node --test test/x.test.js'), res('a', '# fail 0')]).provaFocada, false);
+    // o teste que nao cita o arquivo: nao cobre
+    assert.strictEqual(ver([edita('e1', x), cmd('a', 'node --test test/outro.test.js'), res('a', '# fail 0')]).provaFocada, false);
+    // vermelho nao vale
+    assert.strictEqual(ver([edita('e1', x), cmd('a', 'node --test test/x.test.js'), res('a', 'Exit code 1\n# fail 1', true)]).provaFocada, false);
+    // o verde seguido de um vermelho do mesmo teste, sem edicao no meio, nao vale
+    assert.strictEqual(ver([edita('e1', x), cmd('a', 'node --test test/x.test.js'), res('a', '# fail 0'),
+      cmd('b', 'node --test test/x.test.js'), res('b', 'Exit code 1\n# fail 1', true),
+      cmd('c', 'node --test test/outro.test.js'), res('c', '# fail 0')]).provaFocada, false);
+    // o teste antes da ultima edicao do arquivo nao vale
+    assert.strictEqual(ver([cmd('a', 'node --test test/x.test.js'), res('a', '# fail 0'), edita('e1', x)]).provaFocada, false);
+    // o teste editado e rodado cobre a si mesmo
+    const proprio = pathT.join(raiz, 'test', 'outro.test.js');
+    assert.strictEqual(ver([edita('e1', proprio), cmd('a', 'node --test test/outro.test.js'), res('a', '# fail 0')]).provaFocada, true);
+    // depois da suite inteira, sem edicao nova, nao ha o que focar
+    assert.strictEqual(ver([edita('e1', x), cmd('a', PROVA), res('a', '# fail 0')]).provaFocada, false);
+    // a ultima prova declarada que falhou e vermelha; a verde depois dela, nao
+    assert.strictEqual(ver([cmd('a', PROVA), res('a', 'Exit code 1\n# fail 2', true)]).provaVermelha, true);
+    assert.strictEqual(ver([cmd('a', PROVA), res('a', 'Exit code 1', true), cmd('b', PROVA), res('b', '# fail 0')]).provaVermelha, false);
+    // a prova em segundo plano que terminou vermelha tambem e vermelha; sem prova nenhuma, nao
+    const saidaVermelha = pathT.join(raiz, 'vermelha.output');
+    fsT.writeFileSync(saidaVermelha, '# pass 1\n# fail 2\n');
+    assert.strictEqual(ver([emFundo('bv', PROVA), lancado('bv'),
+      fimDoFundo('bv', 'failed', 'Background command "x" failed with exit code 1', saidaVermelha)]).provaVermelha,
+    true, 'prova em segundo plano vermelha');
+    assert.strictEqual(ver([edita('e1', x)]).provaVermelha, false, 'sem prova nenhuma');
+    // sem a raiz, os campos novos nao aparecem (quem chama sem pedir nao muda)
+    const t = transcript([edita('e1', x), cmd('a', 'node --test test/x.test.js'), res('a', '# fail 0')]);
+    transcritos.push(t);
+    assert.strictEqual('provaFocada' in saude.testesDoTranscript(t.f, PROVA), false);
+    // F1c (D828): com opcoes.coerencia, coerenciaVerde = a ultima rodada do grupo depois da ultima edicao passou
+    const G = 'node --test test/plataforma.test.js test/readme.test.js';
+    const comGrupo = function (linhas) {
+      const tg = transcript(linhas);
+      transcritos.push(tg);
+      return saude.testesDoTranscript(tg.f, PROVA, false, { raiz: raiz, coerencia: G });
+    };
+    assert.strictEqual(comGrupo([edita('e1', x), cmd('g', G), res('g', '# fail 0')]).coerenciaVerde, true, 'grupo verde');
+    assert.strictEqual(comGrupo([edita('e1', x)]).coerenciaVerde, false, 'grupo nao rodou');
+    assert.strictEqual(comGrupo([cmd('g', G), res('g', '# fail 0'), edita('e1', x)]).coerenciaVerde, false,
+      'grupo antes da edicao');
+    assert.strictEqual(comGrupo([edita('e1', x), cmd('g', G), res('g', 'Exit code 1\n# fail 1', true)]).coerenciaVerde,
+      false, 'grupo vermelho');
+    assert.strictEqual(comGrupo([edita('e1', x), cmd('g', G), res('g', '# fail 0'), cmd('h', G),
+      res('h', 'Exit code 1\n# fail 1', true)]).coerenciaVerde, false, 'verde e depois vermelho');
+    assert.strictEqual(comGrupo([edita('e1', x), cmd('g', 'node --test test/plataforma.test.js'), res('g', '# fail 0')])
+      .coerenciaVerde, false, 'so uma parte do grupo');
+    assert.strictEqual('coerenciaVerde' in ver([edita('e1', x)]), false, 'sem o grupo, o campo nao aparece');
+    // o grupo de dois pedacos (a && b) so vale com os dois no comando
+    const G2 = 'node --test test/plataforma.test.js && node --test test/readme.test.js';
+    const doisPedacos = function (comando) {
+      const tg = transcript([edita('e1', x), cmd('g', comando), res('g', '# fail 0')]);
+      transcritos.push(tg);
+      return saude.testesDoTranscript(tg.f, PROVA, false, { raiz: raiz, coerencia: G2 }).coerenciaVerde;
+    };
+    assert.strictEqual(doisPedacos(G2), true, 'os dois pedacos');
+    assert.strictEqual(doisPedacos('node --test test/plataforma.test.js'), false, 'so o primeiro pedaco');
+    assert.strictEqual(doisPedacos('node --test test/readme.test.js'), false, 'so o segundo pedaco');
+  } finally {
+    transcritos.forEach(function (c) { c.fim(); });
+    fsT.rmSync(raiz, { recursive: true, force: true });
+  }
 });

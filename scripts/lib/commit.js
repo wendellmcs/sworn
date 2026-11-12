@@ -62,11 +62,12 @@ function pastaDoComando(comando) {
   return ultima;
 }
 
-/** Quantos inspetores a faixa pede: a das faixas pequenas, ou a familia inteira na completa (estilo = tela). */
+/** Quantos inspetores a faixa pede: a das faixas pequenas, ou a familia inteira na completa (estilo = tela, com a
+ *  lente do pedido, D825). */
 function inspetores(faixa, estilo) {
   const lentes = veredito.lentesDaFaixa(faixa);
   if (lentes) return lentes.length;
-  return estilo ? veredito.LENTES_UI.length : veredito.LENTES.length;
+  return estilo ? veredito.lentesSoTela().length : veredito.LENTES.length;
 }
 
 const chave = function (p) { return path.resolve(String(p)).toLowerCase(); };
@@ -122,12 +123,48 @@ function atalhosNovos(abs, novas, marcas) {
     .map(function (a) { return a.linha; });
 }
 
+/** O blob de `abs` no HEAD do repositorio dele; '' no arquivo que o HEAD nao tem (novo) e fora de repositorio. */
+function blobNoHead(abs) {
+  const s = git.correr(path.dirname(abs), ['rev-parse', 'HEAD:./' + path.basename(abs)]);
+  return s === null ? '' : s.trim();
+}
+
+const ehMapa = function (v) { return Boolean(v) && typeof v === 'object' && !Array.isArray(v); };
+
+/** F2a (D828.3): as marcas de teto ({ caminho: blob no HEAD }) sem a de `arquivo`. Entrada torta = sem marca nenhuma. */
+function semTeto(tetos, arquivo) {
+  const k = chave(arquivo);
+  const novo = {};
+  for (const c of Object.keys(ehMapa(tetos) ? tetos : {})) if (chave(c) !== k) novo[c] = tetos[c];
+  return novo;
+}
+
+/** As marcas de teto com a de `arquivo` (absoluto): a revisao dele fechou no teto com o HEAD de agora. */
+function comTeto(tetos, arquivo) {
+  const novo = semTeto(tetos, arquivo);
+  const abs = path.resolve(String(arquivo));
+  novo[abs] = blobNoHead(abs);
+  return novo;
+}
+
 /**
- * Os arquivos que barram o commit, na ordem em que foram tocados: [{ rel, faixa, inspetores, atalhos }]. So os do
+ * A revisao de `abs` fechou no teto e o HEAD dele ainda e o daquela hora? Editar o arquivo nao tira a marca (o conserto
+ * depois do teto e esperado); o commit feito a vence, porque o blob do HEAD muda. Marca que nao e texto nao vale.
+ */
+function noTeto(tetos, abs) {
+  if (!ehMapa(tetos)) return false;
+  const k = chave(abs);
+  const c = Object.keys(tetos).find(function (x) { return chave(x) === k; });
+  return c !== undefined && tetos[c] === blobNoHead(abs);
+}
+
+/**
+ * Os arquivos que barram o commit, na ordem em que foram tocados: [{ rel, faixa, inspetores, atalhos, teto }]. So os do
  * repositorio do commit (`topoDoCommit`; null = todos) e fora dos `aprovados`. `ehEstilo(rel)` diz se o arquivo e de
  * tela. `marcas` (lista do atalhos.js; sem ela, nenhuma) da as linhas dos atalhos novos sem gatilho em `atalhos`.
+ * `tetos` (o `revisadosNoTeto` do estado; sem ele, nenhum) diz em `teto` se a revisao do arquivo fechou no teto.
  */
-function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas) {
+function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas, tetos) {
   if (!Array.isArray(arquivos)) return [];
   const lista = [];
   for (const a of arquivos) {
@@ -139,31 +176,73 @@ function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas) {
     if (!t || (topoDoCommit && chave(t) !== chave(topoDoCommit))) continue;
     const m = medir(abs, typeof ehEstilo === 'function' && ehEstilo(rel) === true);
     if (m) lista.push({ rel: rel, faixa: m.faixa, inspetores: m.inspetores,
-      atalhos: Array.isArray(marcas) && marcas.length ? atalhosNovos(abs, m.novas, marcas) : [] });
+      atalhos: Array.isArray(marcas) && marcas.length ? atalhosNovos(abs, m.novas, marcas) : [],
+      teto: noTeto(tetos, abs) });
   }
   return lista;
 }
 
-/** O motivo da negacao, no texto do mock: nomes alinhados, faixa e inspetores de cada um; os atalhos novos sem gatilho. */
+/** Ate MAX_CITADOS itens, cada um numa linha `  - <item>`, e a linha `  - e mais N` com o que passou. */
+function citar(itens) {
+  const linhas = itens.slice(0, MAX_CITADOS).map(function (i) { return '  - ' + i; });
+  if (itens.length > MAX_CITADOS) linhas.push('  - e mais ' + (itens.length - MAX_CITADOS));
+  return linhas;
+}
+
+const DESLIGAR = 'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.';
+
+/**
+ * O motivo da negacao, no texto do mock: nomes alinhados, faixa e inspetores de cada um; os atalhos novos sem gatilho.
+ * F2a (D828.3): o arquivo com a revisao fechada no teto nao se revisa de novo; com todos nesse caso, o texto manda
+ * conferir a mutacao, rodar a suite, registrar o que ficou aberto e commitar com a marca, sem perguntar.
+ */
 function motivo(lista) {
   const ascii = require('./escopo.js').ascii;
-  const citados = lista.slice(0, MAX_CITADOS).map(function (p) { return { nome: '"' + ascii(p.rel) + '"', p: p }; });
+  const nome = function (p) { return '"' + ascii(p.rel) + '"'; };
+  const noTetoDaLista = lista.filter(function (p) { return p.teto === true; });
+  const semRevisaoFeita = lista.filter(function (p) { return p.teto !== true; });
+  const atalhos = [];
+  for (const p of lista) for (const n of (Array.isArray(p.atalhos) ? p.atalhos : [])) atalhos.push('"' + ascii(p.rel) + ':' + n + '"');
+  const blocoDosAtalhos = atalhos.length
+    ? ['Atalho novo (simplificacao marcada no codigo) sem o "trocar quando:":'].concat(citar(atalhos)) : [];
+  const passoDoAtalho = function (n) { return '  ' + n + '. escreva "trocar quando: ..." em cada atalho listado;'; };
+  const teto = 'teto de ' + veredito.TETO + ' rondas';
+  if (!semRevisaoFeita.length) {
+    return [
+      'sworn - commit parado: a revisao destes arquivos fechou no ' + teto + ', sem aprovar.',
+      '',
+      'Arquivos de codigo com a revisao fechada no teto:'
+    ].concat(citar(noTetoDaLista.map(nome)), blocoDosAtalhos, [
+      '',
+      'Nao pergunte ao usuario. Faca agora:',
+      '  1. confira que cada conserto feito depois do teto tem um teste que reprova quando o codigo e',
+      '     estragado de proposito;',
+      '  2. rode a suite inteira e espere o verde;',
+      '  3. registre no plano o que a revisao deixou aberto;'
+    ], atalhos.length ? [passoDoAtalho(4)] : [], [
+      '  ' + (atalhos.length ? 5 : 4) + '. repita o commit com "' + MARCA + '" no fim do comando.',
+      DESLIGAR
+    ]).join('\n');
+  }
+  const citados = semRevisaoFeita.slice(0, MAX_CITADOS).map(function (p) { return { nome: nome(p), p: p }; });
   const largura = citados.reduce(function (n, c) { return Math.max(n, c.nome.length); }, 0) + 3;
   const linhas = citados.map(function (c) {
     return '  - ' + c.nome.padEnd(largura) + 'faixa ' + c.p.faixa + ', ' + c.p.inspetores +
       (c.p.inspetores === 1 ? ' inspetor' : ' inspetores');
   });
-  if (lista.length > MAX_CITADOS) linhas.push('  - e mais ' + (lista.length - MAX_CITADOS));
-  const atalhos = [];
-  for (const p of lista) for (const n of (Array.isArray(p.atalhos) ? p.atalhos : [])) atalhos.push('"' + ascii(p.rel) + ':' + n + '"');
-  const passos = ['  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";'];
-  if (atalhos.length) {
-    linhas.push('Atalho novo (simplificacao marcada no codigo) sem o "trocar quando:":');
-    for (const a of atalhos.slice(0, MAX_CITADOS)) linhas.push('  - ' + a);
-    if (atalhos.length > MAX_CITADOS) linhas.push('  - e mais ' + (atalhos.length - MAX_CITADOS));
-    passos.push('  2. escreva "trocar quando: ..." em cada atalho listado;');
+  if (semRevisaoFeita.length > MAX_CITADOS) linhas.push('  - e mais ' + (semRevisaoFeita.length - MAX_CITADOS));
+  if (noTetoDaLista.length) {
+    linhas.push('Com a revisao fechada no ' + teto + ' (nao se revisam de novo):');
+    for (const l of citar(noTetoDaLista.map(nome))) linhas.push(l);
   }
-  passos.push('  ' + (passos.length + 1) + '. rode o commit de novo.');
+  const passos = [noTetoDaLista.length
+    ? '  1. rode /sworn:review "<arquivo>" so nos arquivos sem revisao aprovada (os do teto nao), ate sair "aprovado";'
+    : '  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";'];
+  for (const l of blocoDosAtalhos) linhas.push(l);
+  if (atalhos.length) passos.push(passoDoAtalho(2));
+  // com arquivo no teto, o commit seguinte cai no ramo de cima, que da os passos deles
+  passos.push('  ' + (passos.length + 1) + '. rode o commit de novo' +
+    (noTetoDaLista.length ? ': ele para mais uma vez e diz o que fazer com os do teto.' : '.'));
   // A2-33: faixa, inspetor e atalho explicados na 1a vez; a chave de desligar diz o que desliga.
   return [
     'sworn - commit parado: falta a revisao antes do commit.',
@@ -176,7 +255,7 @@ function motivo(lista) {
   ], passos, [
     'Se o usuario quer este commit sem revisao, pergunte em 3 opcoes; com o sim,',
     'repita o commit com "' + MARCA + '" no fim do comando.',
-    'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+    DESLIGAR
   ]).join('\n');
 }
 
@@ -192,4 +271,4 @@ function comAprovado(aprovados, arquivo) {
 }
 
 module.exports = { MARCA, ehCommit, semRevisao, pastaDoComando, inspetores, topo, pendentes, motivo, semAprovado,
-  comAprovado, ehTexto, aprovado };
+  comAprovado, ehTexto, aprovado, comTeto, semTeto, noTeto };

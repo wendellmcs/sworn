@@ -43,6 +43,116 @@ function avisarUmaVez(sessao, marca, texto) {
   io.permitir({ systemMessage: t, hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: t } });
 }
 
+/**
+ * D785 item 4 (s369, 2.4): o `rm`/`Remove-Item` de arquivos nomeados (destrutivo.arquivosNomeados) passa quando CADA
+ * arquivo existe como arquivo comum dentro do projeto, fora de `.claude/` e de `.git` (apagar o projeto.json desligaria
+ * as travas), fora dos intocaveis e do "Fora", na lista "Dentro" do escopo em vigor (exigido em qualquer marcha), e
+ * nao estava modificado quando a sessao abriu (`gitAbertura`: trabalho nao commitado de outra frente). E o
+ * portao-escopo.js (:153-226) para gravar, mais estrito em dois pontos de proposito, porque apagar nao tem desfazer: o
+ * escopo vale na marcha rapida, e o arquivo de outra frente barra mesmo dentro do escopo. Sem projeto.json, sem escopo
+ * ou com padrao do dono em `comandosBloqueados` casando: barra. Qualquer erro aqui = barra.
+ */
+/**
+ * A4 (s369, P2 da s454): os arquivos de outra frente para o `rm`. Sem a foto da abertura (o estado nao gravou, a
+ * abertura nao rodou), a trava ficava aberta: vale o git de agora, que inclui o trabalho desta sessao (mais estrito, e
+ * o arquivo limpo volta pelo git). Fora de repositorio nao ha outra frente: lista vazia. Repositorio cujo git falha:
+ * lanca, e o chamador barra.
+ */
+function fotoDaAbertura(s, raiz) {
+  if (Array.isArray(s.gitAbertura)) return s.gitAbertura;
+  const git = require('./lib/git.js');
+  const agora = git.modificados(raiz);
+  if (agora !== null) return agora;
+  if (git.correr(raiz, ['rev-parse', '--is-inside-work-tree']) === null) return [];
+  throw new Error('git status falhou e a foto da abertura falta');
+}
+
+function apagaSoNoEscopo(e, comando, raiz, projeto) {
+  try {
+    if (!projeto) return false;
+    const nomes = destrutivo.arquivosNomeados(comando, e.tool_name);
+    if (!nomes || destrutivo.bloqueadoPeloProjeto(comando, projeto)) return false;
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const caminho = require('./lib/caminho.js');
+    const escopoLib = require('./lib/escopo.js');
+    const glob = require('./lib/glob.js');
+    const s = estado.ler(e.session_id);
+    const esc = escopoLib.carregar(raiz, s.frente);
+    if (!esc) return false;
+    const deOutraFrente = projetoLib.travasDe(projeto).outraFrente !== false
+      ? fotoDaAbertura(s, raiz).map(function (p) { return String(p).toLowerCase(); }) : [];
+    const base = e.cwd || process.cwd();
+    const raizReal = fs.realpathSync.native(raiz);
+    const passa = function (alvo) {
+      if (!alvo || /^\.claude(\/|$)|(^|\/)\.git(\/|$)/i.test(alvo)) return false;
+      if (glob.casaAlgum(projeto.intocaveis, alvo) || escopoLib.declaradoFora(alvo, esc)) return false;
+      if (!escopoLib.dentro(alvo, esc)) return false;
+      return deOutraFrente.indexOf(alvo.toLowerCase()) === -1;
+    };
+    return nomes.every(function (nome) {
+      const abs = path.resolve(base, nome);
+      let st = null;
+      try { st = fs.lstatSync(abs); } catch (err) { if (!err || err.code !== 'ENOENT') throw err; }
+      /* o que nao existe (ja apagado) nao tem caminho real e o rm nao leva nada: vale o nome escrito, no mesmo escopo
+         (o curinga ja foi recusado no arquivosNomeados). Menos o pedaco com ponto ou espaco no fim: o Node nao o
+         acha, e o Windows o apara e apaga o outro (`segredo.txt.` leva `segredo.txt`) */
+      if (!st) {
+        if (String(nome).split(/[\\/]/).some(function (p) { return p !== '.' && p !== '..' && /[. ]$/.test(p); })) {
+          return false;
+        }
+        return passa(caminho.relativoAoProjeto(abs, raiz));
+      }
+      if (!st.isFile()) return false;
+      /* confere o nome REAL, que e o que o shell apaga: o nome curto 8.3 (`SEGRED~1.TXT`) e a juncao numa pasta-mae
+         (para fora do projeto, ou para .claude/) dao um texto escrito que nao e o do arquivo */
+      return passa(caminho.relativoAoProjeto(fs.realpathSync.native(abs), raizReal));
+    });
+  } catch (err) { return false; }
+}
+
+/**
+ * A5a (s369, leva 12 do Codex: `cmd /c del /q saida\LICENCAS.txt` passou e levou o arquivo a preservar): o apagar que a
+ * classificacao nao acha destrutivo (sem -f, sem -r, um arquivo so) tambem confere o escopo, quando o projeto declara
+ * um (D785 item 4: "fora do escopo seguem barrados"). Sem projeto.json ou sem escopo, segue como antes (passa): o rm
+ * simples nunca foi barrado sem escopo, e barrar todo rm seria mais duro que o portao de gravar. Devolve o motivo
+ * (texto do REGRAS, comecando por "rm " para o aviso dar a forma que passa) ou null.
+ */
+function apagarForaDoEscopo(e, comando, raiz, projeto) {
+  try {
+    if (!projeto) return null;
+    const s = estado.ler(e.session_id);
+    if (!require('./lib/escopo.js').carregar(raiz, s.frente)) return null;
+    // A5d (s369): o apagar por API do sistema nao tem nome que se confira; o motivo diz como apagar pelo nome
+    if (destrutivo.apagaPorApi(comando, e.tool_name)) return destrutivo.MOTIVO_APAGA_POR_API;
+    if (destrutivo.arquivosNomeados(comando, e.tool_name)) {
+      return apagaSoNoEscopo(e, comando, raiz, projeto) ? null : 'rm de arquivo fora do escopo ou dos permitidos';
+    }
+    return destrutivo.temApagar(comando) ? 'rm dentro de comando composto (apague arquivo por arquivo, num comando so)'
+      : null;
+  } catch (err) { return null; }
+}
+
+/**
+ * A5f (leva 16 do luna: no turno da ampliacao, o `rm saida/util.js`, que ja estava em `saida/*.js`, foi barrado e a
+ * tarefa ficou pela metade - D7). Todos os arquivos nomeados estao no escopo da ABERTURA do turno (a foto da A5e)?
+ * Entao a ampliacao nao muda nada para eles, e o apagar segue para as conferencias de sempre. Sem a foto (sem git, sem
+ * escopo na abertura), false: a A5b barra como antes.
+ */
+function nomeadosNaAbertura(e, comando, raiz, ab) {
+  if (!ab || !Array.isArray(ab.dentro)) return false;
+  const nomes = destrutivo.arquivosNomeados(comando, e.tool_name);
+  if (!nomes || !nomes.length) return false;
+  const path = require('node:path');
+  const escopoLib = require('./lib/escopo.js');
+  const caminho = require('./lib/caminho.js');
+  const esc = { dentro: ab.dentro, fora: Array.isArray(ab.fora) ? ab.fora : [] };
+  return nomes.every(function (nome) {
+    const rel = caminho.relativoAoProjeto(path.resolve(e.cwd || process.cwd(), nome), raiz);
+    return !!rel && escopoLib.dentro(rel, esc) && !escopoLib.declaradoFora(rel, esc);
+  });
+}
+
 io.blindar(function () {
   io.lerEntrada(function (e) {
     const comando = (e.tool_input || {}).command;
@@ -109,6 +219,33 @@ io.blindar(function () {
     }
 
     const r = destrutivo.classificar(comando, projeto);
+    // A5b (s369): o escopo ampliado neste turno nao vale para apagar (o da abertura do turno vale); o turno seguinte,
+    // aberto pela mensagem do dono, libera.
+    let ampliadoNoTurno = false;
+    let naAbertura = false;
+    /* o estado que nao se le nao derruba o portao (o io.blindar liberaria o comando inteiro): segue sem a marca */
+    let s = {};
+    try {
+      s = estado.ler(e.session_id);
+      ampliadoNoTurno = s.escopoAmpliadoNoTurno === true;
+    } catch (err) {
+      ampliadoNoTurno = false;
+    }
+    // revisao (P1): try proprio - a foto torta que fizesse lancar nao pode zerar a marca acima; falhou, a A5b barra
+    try { naAbertura = ampliadoNoTurno && nomeadosNaAbertura(e, comando, raiz, s.aberturaDoTurno); } catch (err) {
+      naAbertura = false;
+    }
+    if (ampliadoNoTurno && !naAbertura && (destrutivo.arquivosNomeados(comando, e.tool_name) ||
+      destrutivo.temApagar(comando) || destrutivo.apagaPorApi(comando, e.tool_name))) {
+      try { estado.incrementar(e.session_id, 'comando_destrutivo'); } catch (err) { /* o balde vale menos */ }
+      return io.negarFerramenta(destrutivo.motivo(comando, { motivo: destrutivo.MOTIVO_APAGAR_DEPOIS_DE_AMPLIAR }));
+    }
+    if (r.destrutivo && apagaSoNoEscopo(e, comando, raiz, projeto)) return io.permitir();
+    const fora = r.destrutivo ? null : apagarForaDoEscopo(e, comando, raiz, projeto);
+    if (fora) {
+      try { estado.incrementar(e.session_id, 'comando_destrutivo'); } catch (err) { /* o balde vale menos */ }
+      return io.negarFerramenta(destrutivo.motivo(comando, { motivo: fora }));
+    }
     if (r.destrutivo) {
       // D420/SH-02: idem - o contador nunca impede a negacao.
       try { estado.incrementar(e.session_id, 'comando_destrutivo'); } catch (err) { /* idem */ }

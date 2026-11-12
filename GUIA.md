@@ -7,7 +7,7 @@
 
 <p align="center">
   <strong>Um plugin do Claude Code que força o agente a provar em vez de afirmar.</strong><br>
-  Oito travas: seis portões de custo zero e dois dos nove comandos. Todo portão é um script determinístico: nenhum modelo no meio.
+  Oito travas: seis portões de custo zero e dois dos doze comandos. Todo portão é um script determinístico: nenhum modelo no meio.
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@
   <a href="#como-instalar">Instalar</a> ·
   <a href="#um-exemplo-do-começo-ao-fim">Exemplo</a> ·
   <a href="#as-oito-travas">As travas</a> ·
-  <a href="#os-nove-comandos">Os comandos</a> ·
+  <a href="#os-doze-comandos">Os comandos</a> ·
   <a href="#o-que-ele-já-pegou-em-uso-real">Casos reais</a> ·
   <a href="#o-que-o-sworn-não-promete">O que não promete</a>
 </p>
@@ -306,6 +306,22 @@ cima. Volta também quando a saída colada mostra falha, quando o último teste 
 falhou, ou quando a prova de pronto que o `/sworn:init` gravou (`provaDePronto`) não rodou depois da
 última edição de código. Com a saída do `npm test` que passa num bloco, o turno fecha.
 
+Para o próprio sworn rodar essa prova no fim do turno em que o Claude editou código e não a rodou (sem gastar outro
+turno para isso), rode na pasta do projeto, na sua máquina: `node "<plugin>/scripts/prova-no-fecho.js" ligar`, com
+`<plugin>` sendo a pasta onde o sworn está instalado (`desligar` desliga; `ver` diz se está ligada e qual prova roda).
+A lista dos projetos ligados fica em `sworn/prova-no-fecho.json`, dentro da pasta do Claude (`~/.claude`, ou a de
+`CLAUDE_CONFIG_DIR`), fora do repositório: um projeto clonado nunca roda nada sozinho. A lista guarda o comando que
+você ligou: se um commit trocar a `provaDePronto`, o sworn para de rodá-la, o Claude avisa no fim do turno e o `ver`
+mostra a troca, até você ligar de novo. A prova passou: o turno fecha.
+Falhou: o Claude recebe as últimas linhas da saída para consertar. Demorou mais de 60 s: o sworn desiste e o Claude
+roda a prova, como no passo 5; nessa sessão o sworn não tenta de novo.
+
+Com um plano escrito, antes de codar, o `/sworn:review-plan` roda o `scripts/revisar-plano.js`: ele confere no disco
+cada caminho, símbolo e comando que o plano cita entre crases e cobra o comando de prova de cada caixa aberta; depois
+a revisão cega lê o plano. Ao fechar uma etapa, o `/sworn:drift` roda o `scripts/drift.js`: ele cruza os arquivos
+mudados desde o commit do plano com o que o plano cita e mostra o arquivo mudado fora do plano e a caixa feita cujo
+arquivo não mudou.
+
 ---
 
 ## Como funciona
@@ -329,7 +345,7 @@ token, e um modelo julgando se houve evidência é o mesmo modelo que inventou a
 portão nega, a mensagem diz o motivo e as saídas possíveis — o agente lê e corrige o rumo no mesmo
 turno.
 
-O plugin se pendura em onze pontos do ciclo de uma sessão:
+O plugin se pendura em doze pontos do ciclo de uma sessão:
 
 | Quando | Script | O que faz |
 |---|---|---|
@@ -337,11 +353,12 @@ O plugin se pendura em onze pontos do ciclo de uma sessão:
 | você manda um pedido | `scripts/abrir-turno.js` | zera as marcas do turno anterior: trabalho feito, busca feita, bloqueio; se você perguntar se o contexto está bom, manda o Claude gravar o handoff (o texto de continuação do trabalho) e seguir na mesma conversa; se você corrigir o jeito dele trabalhar ("eu já te disse", "da próxima vez…"), manda o Claude rodar o `/sworn:learn` na mesma resposta e perguntar a você, em 3 opções, se grava |
 | antes de `Write` e `Edit` | `scripts/portao-escopo.js` | intocáveis, outra frente, "Fora", marcha, escopo, criar sem buscar, catraca (régua que só aperta: teto que não sobe e piso que não desce) e, com design system declarado, token fora do sistema |
 | antes de `Bash` e `PowerShell` | `scripts/portao-destrutivo.js` · `scripts/portao-estilo.js` · `scripts/portao-commit.js` | comando destrutivo, idioma de shell errado e `cd` solto (no `Bash`, corrige sozinho: o comando roda num subshell); avisa, sem negar, quando a tabela de idioma do PowerShell não se lê. Com design system declarado, nega arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`. Nega o `git commit` com código mudado na sessão sem revisão aprovada |
-| antes de `Task` e `Agent` | `scripts/portao-agente.js` · `scripts/portao-apelido.js` | agente caro em marcha rápida e chamada com modelo ou esforço fora da tabela da escada; `model:` e `effort:` do agente contra o apelido e o esforço gravados no projeto |
+| antes de `Task` e `Agent` | `scripts/portao-agente.js` · `scripts/portao-apelido.js` · `scripts/portao-juiz.js` | agente caro em marcha rápida e chamada com modelo ou esforço fora da tabela da escada; `model:` e `effort:` do agente contra o apelido e o esforço gravados no projeto; o inspetor da revisão cega um degrau acima do modelo da sessão |
 | antes de `AskUserQuestion` | `scripts/portao-decisao.js` | barra pergunta ao dono sem exatamente 3 opções ou sem a recomendada em primeiro; pergunta de fato (sintoma, dado que só você tem) passa com `(fato)` no título curto (`header`); desliga com `"portaoDecisao": false` no `projeto.json` |
 | depois de cada ferramenta | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; conta as decisões suas respondidas e os commits que passaram |
+| depois de `Bash` e `PowerShell` | `scripts/conferir-depois.js` | o arquivo versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável) volta pelo git, e o Claude é avisado; sem escopo declarado, nada muda |
 | um subagente abre | `scripts/abrir-subagente.js` · `scripts/escalar.js` | entrega a ele o bloco "menos código" (o da abertura não chega ao subagente); os que só leem (`inspector`, `dedupe-judge`, `reader`, `Explore`, `Plan`) ficam de fora; `"menosCodigo": false` desliga. Se ele é o agente que um degrau da escada pediu, dá baixa no pedido |
-| um subagente termina | `scripts/gravar-veredito.js` · `scripts/escalar.js` | o inspetor da revisão cega: grava o veredito dele em `vereditos/<lente>.json` da ronda; não barra nada, não sobrescreve, e avisa o que não gravou (essa lente volta a ser gravada à mão). Um agente da escada que termina com a linha `ESCALAR: <agente> - <motivo>`: guarda o pedido do degrau de cima |
+| um subagente termina | `scripts/gravar-veredito.js` · `scripts/escalar.js` | o inspetor da revisão cega: grava o veredito dele em `vereditos/<lente>.json` da ronda; não barra nada, não sobrescreve, e avisa o que não gravou (essa lente volta a ser gravada à mão). Um agente da escada que termina com a linha `ESCALAR: <agente> - <motivo>`: guarda o pedido do degrau de cima. Sem a linha, o pedido sai sozinho quando o agente volta pela segunda vez seguida dizendo que terminou sem a saída do teste que passa, ou quando as travas do sworn o barraram 3 vezes ou mais no mesmo despacho e ele voltou sem essa saída (lido na transcrição do subagente; só no Claude Code) |
 | o turno termina | `scripts/portao-fecho.js` | cobra evidência, barra etapa com subitem aberto, barra o turno que gravou um handoff sem colar o prompt em bloco de código na resposta final, barra uma vez o turno que deixou sem despacho o degrau que um agente pediu, grava os contadores, avisa quando é hora do handoff |
 | a sessão fecha | `scripts/fim-sessao.js` | apaga os arquivos de sessão parados há mais de 7 dias, nunca o da sessão que está fechando; o orçamento é de 1,5 s (o `timeout` do `hooks.json` não o aumenta), e a limpeza para antes disso: o que sobrar sai na próxima |
 
@@ -771,15 +788,14 @@ Faca uma destas:
 **Trava 5 — comando destrutivo** (`git reset --hard origin/main` pelo `Bash`):
 
 ~~~text
-sworn - comando destrutivo barrado (trava 5): falta o sim do dono.
+sworn - comando destrutivo barrado (trava 5): siga por outro caminho, sem parar o trabalho.
 
 Comando: git reset --hard origin/main
 Por que barrou: git reset --hard descarta trabalho nao commitado.
-Nenhum comando destrutivo roda sem o sim do dono.
 
 Faca uma destas:
-  1. peca ao dono que decida: 3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo;
-  2. ou siga sem este comando, se o trabalho nao depende dele.
+  1. siga sem ele, por outro caminho que nao destroi, nao descarta e nao publica nada;
+  2. ou termine o resto e diga ao dono, na resposta final, que este comando ficou para ele rodar.
 
 So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosLiberados" de .claude/sworn/projeto.json.
 ~~~
@@ -847,7 +863,7 @@ um módulo opcional, ou têm a própria chave. Cada um abaixo diz o que faz e co
 | Estilo (`scripts/portao-estilo.js`, antes de `Bash` e `PowerShell`) | com `.claude/sworn/design.json` declarado, nega o arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`, que o portão de escopo confere | não ter o `design.json` (módulo opcional, sem trava) |
 | Prompt do handoff (`scripts/portao-fecho.js`, no fim do turno) | barra o turno que gravou um arquivo de handoff e não colou o prompt em bloco de código na resposta final | `"portaoHandoff": false` (ver "Como desligar uma trava") |
 | Referência de topo (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo mudado na sessão é da marcha AAA, o tipo dele tem `referencias` declarada e nenhuma revisão contra ela fechou na sessão; a mensagem diz o comando, `/sworn:review <arquivo>` | `"portaoReferencia": false` (ver "Como desligar uma trava") |
-| Revisão aprovada (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo de código mudado na sessão é da marcha AAA e não tem revisão aprovada (a mesma que libera o commit), com ou sem `referencias`; a mensagem cita os arquivos e o comando, `/sworn:review <arquivo>` | `"portaoRevisao": false` (ver "Como desligar uma trava") |
+| Revisão aprovada (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo de código mudado na sessão é da marcha AAA (de qualquer marcha, com `"revisaoTodoCodigo": true`) e não tem revisão aprovada (a mesma que libera o commit), com ou sem `referencias`; a mensagem cita os arquivos e o comando, `/sworn:review <arquivo>` | `"portaoRevisao": false` (ver "Como desligar uma trava") |
 | Qualidade de resposta (a abertura) | injeta as seis regras de clareza das respostas no chat; não barra nada | `"qualidadeDeResposta": false` (ver "Qualidade de resposta") |
 | Vigia (a abertura) | mostra uma vez a "novidade da semana" do plugin e a conta do radar da semana; só para quem mantém o plugin | **desligado por padrão**, menos no repositório do próprio plugin; `"vigia": true` liga, `false` desliga |
 
@@ -884,7 +900,7 @@ sworn: ATENCAO - valor de tipo errado em .claude/sworn/projeto.json: portaoDecis
 ~~~
 
 E a conferência final do `/sworn:init` (`scripts/validar.js`) reprova o arquivo com a mesma frase, `<chave> tem
-de ser true ou false`. O `vigia` é o contrário (só `true` liga), e `"true"` entre aspas também não liga. A lista das dezessete chaves, com o padrão de cada uma, está em "O `projeto.json` chave por chave".
+de ser true ou false`. O `vigia`, o `revisaoTodoCodigo`, o `aberturaEnxuta` e o `provaPorArquivoTocado` são o contrário (só `true` liga), e `"true"` entre aspas também não liga. A lista das vinte e uma chaves, com o padrão de cada uma, está em "O `projeto.json` chave por chave".
 
 ---
 
@@ -954,13 +970,34 @@ Desde a 0.7.0, a abertura de toda sessão injeta, entre o bloco de paralelismo e
 CDP), ler o resultado, e pedir a você só o que só você pode — credencial, publicar ou implantar, tela com dado de
 cliente no seu login —, tudo num pedido só.
 
+Desde a 0.23.0, a foto de uma página sai do `scripts/capturar-tela.js`, que usa o Chrome ou o Edge que você já tem,
+numa janela escondida e separada da sua, e guarda a imagem da página inteira com o que ela escreveu no console, os
+erros dela e a lista do que dá para ler e clicar. No texto que vai para o disco (o endereço, o console, os erros, a
+lista), os segredos que ele reconhece pela forma (um `token=`, uma senha, um cabeçalho de login, um cookie) são
+trocados por `[segredo]`; um segredo escrito de outro jeito pode passar, e a imagem guarda o que estava na tela, sem
+limpeza. O Claude roda o script sozinho
+quando precisa; para rodar à mão: `node scripts/capturar-tela.js --url <endereço> --saida <pasta>`, que grava
+`tela.png` e `evidencia.json` nessa pasta.
+
+Na revisão cega de uma tela, o `scripts/preparar-revisao.js` faz essa foto dos dois lados: `--tela-depois <endereço>`
+é a página com o trabalho, e `--tela-antes <endereço>` é a mesma página na versão anterior, rodando em outro lugar
+(uma cópia do repositório em outra pasta ou em outra porta). Cada foto ganha a letra do seu lado (`A.png`,
+`B.png`), a mesma do texto daquela versão, e o endereço da página some da evidência que o revisor lê: assim ele não
+sabe qual foto é a nova. O endereço, a hora e a impressão digital de cada foto (o sha256, que prova que ela não foi
+trocada) ficam no `mapa.json`, que o revisor não abre. Quando a revisão fecha, eles aparecem na saída do
+`scripts/apurar-ronda.js`, no campo `telas`, com o antes e o depois.
+Só com `--tela-depois`, o lado sem foto é o antigo, então o revisor sabe qual é o novo; para ele comparar sem saber,
+passe também `--tela-antes`.
+
 O **modo contínuo** fica numa chave, `modoContinuo`, ligada por padrão desde a 0.9.0, com ou sem `projeto.json` (só o
 booleano `false` desliga). Ligado, só quatro coisas pedem troca de chat: o tamanho da conversa (aviso a 250 mil no lugar dos 175 mil, alarme a
 450 mil), os bloqueios de portão (quando chegam ao limiar `bloqueios`, 6 por padrão), o incidente que exigiu
 cirurgia e a sua pergunta sobre o contexto; revisões, decisões, commits, turnos e arquivos não encerram a sessão (o medidor os mostra com "modo
 contínuo: não dispara"). Em troca, o Claude relê o trecho do plano antes de cada subitem, decide sozinho a escolha
-técnica dentro do escopo (registra o motivo e lista no fecho) e só pergunta o irreversível, o externo, credencial,
-permissão ou segurança, o de custo e o de produto. Desligar: `"modoContinuo": false` em `.claude/sworn/projeto.json`.
+técnica dentro do escopo (registra o motivo e lista no fecho) e só pergunta regra de negócio, aparência (com opções),
+o irreversível ou externo e credencial, permissão ou segurança; custo dentro do pedido não se pergunta, e falha,
+teste, navegador e conserto
+ele faz sozinho. Desligar: `"modoContinuo": false` em `.claude/sworn/projeto.json`.
 
 ---
 
@@ -1054,6 +1091,45 @@ sistema não tem é negada, com a lista dos valores e o que existe no sistema; e
 é negado (portão de estilo). Medida em `%` e em outras unidades não é conferida (está na lista do que o `sworn`
 não promete).
 
+Desde a 0.23.0, a cor é comparada pelo valor, não pela grafia: `#fff`, `#FFFFFF`, `rgb(255 255 255)` e
+`hsl(0, 0%, 100%)` são a mesma cor, e nenhuma delas é barrada se o sistema tem o branco (a transparência também:
+`#00000080` e `rgba(0, 0, 0, .5)` são a mesma).
+
+Na mesma versão, o `design.json` ganhou duas chaves opcionais: `tamanhos` (os tamanhos de fonte, como `"13px"`) e
+`fontes` (as famílias, como `"Inter"` ou a pilha `"Inter, sans-serif"`). Sem elas, nada muda. `tamanhos` soma às
+medidas aceitas: um tamanho que não está em lista nenhuma segue negado (troque por um tamanho do sistema, ou peça ao
+dono o tamanho novo em `tamanhos` ou num desvio da tela). Com `fontes`, a escrita com uma família que o sistema não tem
+é negada; para seguir, troque por uma das `fontes` ou por uma genérica, ou peça ao dono a família nova no sistema ou
+num desvio da tela (abaixo).
+
+Ficam fora da conferência de fonte (sempre passam):
+
+- as famílias genéricas (`sans-serif`, `system-ui` e outras) e a fonte do sistema operacional (`-apple-system`,
+  `BlinkMacSystemFont`);
+- o atalho `font:`, a variável de pré-processador (`$corpo`, `@corpo`) e a função (`theme(...)`);
+- o comentário `//` no fim da linha e o `font-family` de dentro do `@font-face`, que dá nome à família carregada.
+
+Também desde a 0.23.0, uma tela que precisa de um valor que o sistema não tem ganha um **desvio declarado**: um item da lista
+`desvios`, no mesmo `design.json`. Cada desvio diz em quais arquivos vale (`arquivos`), por que (`motivo`, obrigatório)
+e, se quiser, até quando (`ate`, no formato AAAA-MM-DD), com os valores a mais (`cores`, `raios`, `espacos`,
+`sombras`, `tamanhos`, `fontes`). Por exemplo, para o botão de pagar seguir a cor do banco até o fim do ano:
+
+~~~json
+"desvios": [
+  { "arquivos": ["src/checkout/**"], "motivo": "o botão de pagar segue a marca do banco",
+    "ate": "2026-12-31", "cores": ["#0050aa"] }
+]
+~~~
+
+O caminho em `arquivos` tem uma pasta escrita, como `src/checkout/**`. Um padrão como `**` ou `**/*.css` pega todas as
+telas e não vale: se o valor serve a todas, ele entra em `cores` (ou na chave dele) do próprio sistema. O portão aceita
+os valores do desvio só naqueles arquivos, até a data; quando a escrita é negada, o aviso diz se a tela tem desvio e
+como declarar um. O desvio sem motivo, mal formado ou vencido não vale, e o `scripts/validar.js` diz qual é e por
+quê. Na revisão cega de um arquivo de
+estilo, o pacote leva um `design.md` com o sistema e os desvios daquele arquivo, e a lente de tela reprova o valor
+que não está em nenhum dos dois. Quando ela reprova, a saída é a mesma do portão: trocar o valor por um do sistema ou
+declarar o desvio. Declarar um desvio é decisão sua: o Claude propõe, com o motivo, e não grava sozinho.
+
 **As lentes de tela.** Quando a mudança é visível, o `/sworn:review` despacha as lentes de tela, uma por
 inspetor (a lista está em "Por dentro de cada comando"). A rubrica completa, com a pergunta e o corte de severidade
 de cada uma, está em `skills/playbook/references/02-rubrica-aaa.md`. Três delas pedem mais do que a tabela diz:
@@ -1098,21 +1174,24 @@ isso repete o já visto. O roteiro não bloqueia o fecho: sai junto, sem esperar
 
 ---
 
-## Os nove comandos
+## Os doze comandos
 
 | Comando | O que faz |
 |---|---|
 | `/sworn:init` | A entrevista. Varre o repositório, mostra o que inferiu — marcado como inferência — e faz seis perguntas que varredura nenhuma responde. Grava sempre `.claude/sworn/projeto.json` e `.claude/sworn/regras.md`, e registra a conferência do catálogo de modelos da instalação em `.claude/sworn/catalogo.json`. O resto é opcional: `.claude/sworn/design.json` (só quando há design system) e, cada um só com aprovação explícita e sem sobrescrever arquivo que já exista, os agentes do projeto em `.claude/agents/`, a skill do projeto em `.claude/skills/<slug>/SKILL.md` e o `AGENTS.md` na raiz. |
-| `/sworn:review` | Revisão cega A/B de um arquivo mudado: rotula os dois lados sem autoria, despacha um inspetor por lente, **dez** de código, **oito** de tela, e **dezoito** quando a mudança é de código e de tela, e **sete** quando é só lógica (as de código sem `design`, `medidor` e `escopo`; na dúvida, as dez); antes disso, a mudança pequena vai a menos inspetores (até 3 linhas, um; lógica de até 40 linhas com teste vermelho e mutação, ou texto, dois; a faixa sai do `preparar-revisao.js`, e só sobe), com default reprovar, e apura por script com teto de 3 rondas; com `referencias` declarada, compara também com a peça de topo, nas duas ordens. |
+| `/sworn:review` | Revisão cega A/B de um arquivo mudado: rotula os dois lados sem autoria, despacha um inspetor por lente, **dez** de código, **oito** de tela, e **dezoito** quando a mudança é de código e de tela, e **oito** quando é só lógica (as de código sem `design` e `medidor`; na dúvida, as dez), e **nove** quando é só de tela (as oito de tela e a do pedido, `escopo`); antes disso, a mudança pequena vai a menos inspetores (até 3 linhas, um; lógica de até 40 linhas com teste vermelho e mutação, ou texto, dois; a faixa sai do `preparar-revisao.js`, e só sobe), com default reprovar, e apura por script com teto de 3 rondas; com `referencias` declarada, compara também com a peça de topo, nas duas ordens. |
 | `/sworn:learn` | Transforma uma correção sua em regra proposta no formato `gatilho -> ação`, mostra pronta, e **só grava depois de aprovação explícita**. |
 | `/sworn:handoff` | Gera o texto de continuação do trabalho, que a conversa relê depois de compactada (ou um chat novo lê): caminhos, `HEAD`, em que etapa o trabalho está, decisões já tomadas, pendências e erros de método que custaram tempo. Confere os fatos no disco, não na memória. |
 | `/sworn:audit` | Mede o peso de instrução do projeto contra um teto e aponta o que cortar: skills que se sobrepõem (entre si e com as do próprio sworn, como uma `padrao` do projeto repetindo o `/sworn:playbook`), regras que se contradizem e itens fora da rubrica. Não acrescenta — poda. |
 | `/sworn:calibrate` | Mede, nas conversas do seu projeto, a partir de quantos tokens de contexto trocar de chat ainda compensa, e sugere o limiar de troca. **Só grava no `projeto.json` com o seu sim.** |
 | `/sworn:shortcuts` | Lista os atalhos deliberados do repositório: os comentários `atalho: <o que>. limite: <até onde vale>. trocar quando: <gatilho>.` (também `ponytail:` e `shortcut:`), agrupados por arquivo, e marca `sem-gatilho` o que não diz quando trocar. Só lê; a marca muda pela chave `marcaDeAtalho`. |
+| `/sworn:review-plan` | Antes de codar, confere o plano contra o disco: o `scripts/revisar-plano.js` lê cada caminho, símbolo e comando que o plano cita entre crases e diz, com a linha, o que não existe, e cobra o comando de prova de cada caixa `- [ ]` aberta. Depois, a revisão cega (`/sworn:review`) lê o plano. Só aponta; quem corrige o plano é você. |
+| `/sworn:drift` | Ao fechar uma etapa, confere o código contra o plano: o `scripts/drift.js` cruza os arquivos mudados desde o commit que criou o plano (ou desde `--desde <commit>`) com o que o plano cita, e mostra o arquivo mudado que o plano não cita, a caixa feita cujo arquivo não mudou e o arquivo que a caixa feita dizia criar e não existe. Cada achado diz o próximo passo: citar no plano, desfazer, reabrir a caixa. |
+| `/sworn:diagnose` | Quando uma sessão deu errado (demorou, repetiu trabalho, ignorou o plano, o sworn barrou a mesma coisa várias vezes), pergunta o que você esperava, lê as transcrições da sessão no disco, sem mexer nelas, e despacha um analista por dimensão: custo e tempo, plano, trabalho repetido, tropeços, evidência, pedidos e travas. Cada achado cita a linha da transcrição, e o `scripts/conferir-diagnostico.js` descarta o que não está lá. O relatório diz o que aconteceu, e fica em `.claude/sworn/diagnose/`; o que mudar, você decide depois, em 3 opções. |
 | `/sworn:reference` | Estuda 2-3 produtos líderes do mesmo tipo do projeto, pelo que é público e em camadas (o que se vê, estados e fluxos, textos, rede e desempenho), e grava uma ficha em `.claude/sworn/referencias/<tipo>-<assunto>.md` em que cada achado diz de onde veio, com que grau (observado, derivado, inferido) e quem agiu, mais o que ficou sem saber. Página com login, só a aba que você abriu. **Só põe a ficha na `referencias` com o seu sim.** |
 | `/sworn:radar` | Busca projetos públicos parecidos com o que você está construindo (até 10, por tema, pela busca do GitHub), ou uma lista que você passar, e cruza cada um com o seu projeto: triagem de todos, até 5 lidos a fundo, e uma ficha em `.claude/sworn/radar/<AAAA-MM-DD>.md` com o que vale trazer, como entra, como fica melhor que o original, esforço, valor e licença (ELv2, AGPL, fechada ou sem licença: só a ideia). Na dúvida sobre o encaixe, faz no máximo 3 perguntas. **Só lê e propõe: o escolhido entra com teste vermelho e revisão cega, com o seu sim.** Se oferece sozinho quando você pede melhoria ou função nova (uma vez por sessão, só com o seu sim; `"oferecerRadar": false` desliga). A lista dos projetos em alta da semana (`github.com/trending?since=weekly`) é só do mantenedor do plugin, para melhorar o sworn. |
 
-Três das doze skills instaladas **não são comando**. A `playbook` é o manual de execução, que o agente carrega
+Três das quinze skills instaladas **não são comando**. A `playbook` é o manual de execução, que o agente carrega
 no começo da tarefa e que traz junto a conferência do mapa de modelos deste projeto. A `sworn:effort-low` e a
 `sworn:effort-high` o agente chama sozinho pela marcha que classificou (Passo 0 do manual), no começo de cada turno da
 tarefa, porque o esforço de uma skill dura só até o fim do turno (medido pelo sworn no Claude Code 2.1.311): a Rápida
@@ -1120,10 +1199,11 @@ baixa o esforço da conversa principal, a AAA sobe, a Padrão fica no esforço d
 agente não troca o modelo da conversa principal (medido pelo sworn no Claude Code 2.1.310), e a skill avisa, uma vez por
 conversa, que o modelo muda pelo `/model` digitado.
 
-Dos nove comandos, só os dois primeiros são travas — a 1 e a 2. Os outros sete **não são travas**: `learn` é o
+Dos doze comandos, só os dois primeiros são travas — a 1 e a 2. Os outros dez **não são travas**: `learn` é o
 autoaprimoramento mínimo — o plugin **não aprende sozinho**, ele transforma correção em proposta e
-espera o OK; `handoff`, `audit`, `calibrate` e `shortcuts` são ferramentas de manutenção, `reference` e `radar` são as de estudo, e nenhum dos
-seis bloqueia nada.
+espera o OK; `handoff`, `audit`, `calibrate` e `shortcuts` são ferramentas de manutenção, `review-plan` e `drift`
+conferem o plano contra o disco e o código contra o plano (só apontam), `diagnose` conta, com prova, o que aconteceu
+numa sessão, `reference` e `radar` são as de estudo, e nenhum deles bloqueia nada.
 
 ---
 
@@ -1135,7 +1215,7 @@ dispara no evento dele.
 
 | Tipo | Nome | O que é |
 |---|---|---|
-| Skills dos comandos | `sworn:init`, `sworn:review`, `sworn:learn`, `sworn:handoff`, `sworn:audit`, `sworn:calibrate`, `sworn:shortcuts`, `sworn:reference`, `sworn:radar` | os comandos da tabela acima; cada um é uma skill que você chama pelo nome |
+| Skills dos comandos | `sworn:init`, `sworn:review`, `sworn:learn`, `sworn:handoff`, `sworn:audit`, `sworn:calibrate`, `sworn:shortcuts`, `sworn:review-plan`, `sworn:drift`, `sworn:diagnose`, `sworn:reference`, `sworn:radar` | os comandos da tabela acima; cada um é uma skill que você chama pelo nome |
 | Skill-manual | `playbook` | não é comando: o manual de execução que o agente carrega no começo da tarefa (marchas, lentes, loop de revisão, decisão em três opções, o que um "pronto" precisa provar). Traz as seis referências listadas mais abaixo |
 | Skills de esforço | `sworn:effort-low`, `sworn:effort-high` | não são comando: o agente chama sozinho pela marcha, no começo de cada turno da tarefa (a Rápida baixa o esforço da conversa principal naquele turno, a AAA sobe); só o esforço muda, o modelo não (ver o parágrafo depois da tabela de comandos) |
 | Workflow | `sworn:parallel` | tarefas independentes em paralelo, com teto de agentes, modelo barato e cópia isolada para quem edita; o Claude roda direto com 3 ou mais tarefas independentes (ver "Trabalho em paralelo") |
@@ -1151,9 +1231,10 @@ Os ganchos, um por evento, com o que cada um deixa na sua tela:
 | `UserPromptSubmit` | `scripts/abrir-turno.js` | zera as marcas do turno; reconhece a sua pergunta sobre o contexto e a correção do jeito de ele trabalhar | nada na tela; o Claude recebe a ordem de gravar o handoff e seguir, ou de rodar o `/sworn:learn` |
 | `PreToolUse` em `Write` e `Edit` | `scripts/portao-escopo.js` | escopo, intocáveis, outra frente, "Fora", criar sem buscar, catraca e design | a escrita volta negada, com o motivo e as saídas |
 | `PreToolUse` em `Bash` e `PowerShell` | `scripts/portao-destrutivo.js`, `scripts/portao-estilo.js`, `scripts/portao-commit.js` | comando destrutivo, idioma de shell, `cd` solto, estilo escrito por shell e commit sem revisão | o comando volta negado com o motivo; o `cd` solto no `Bash` roda corrigido, e o Claude fica sabendo |
-| `PreToolUse` em `Task` e `Agent` | `scripts/portao-agente.js`, `scripts/portao-apelido.js` | agente caro em marcha rápida e chamada fora da tabela da escada; `model:` e `effort:` do agente contra o gravado | o primeiro nega com o motivo e, na chamada fora da tabela, com a chamada certa; o segundo só avisa, uma vez por sessão, a você e ao Claude |
+| `PreToolUse` em `Task` e `Agent` | `scripts/portao-agente.js`, `scripts/portao-apelido.js`, `scripts/portao-juiz.js` | agente caro em marcha rápida e chamada fora da tabela da escada; `model:` e `effort:` do agente contra o gravado; o modelo do inspetor da revisão cega | o primeiro nega com o motivo e, na chamada fora da tabela, com a chamada certa; o segundo só avisa, uma vez por sessão, a você e ao Claude; o terceiro troca o modelo do inspetor da revisão cega pelo degrau acima do modelo da sessão (Haiku vira Sonnet, Sonnet vira Opus) na ronda 1 e, nas rondas 2 e 3, pelo degrau abaixo desse (a ronda sai do caminho de vereditos do briefing), e não decide permissão |
 | `PreToolUse` em `AskUserQuestion` | `scripts/portao-decisao.js` | a pergunta ao dono: 3 opções, a recomendada em primeiro | a pergunta volta negada, e a mensagem diz o que refazer |
 | `PostToolUse` em `Write`, `Edit`, `Bash`, `PowerShell`, `Grep`, `Glob`, `Read` e `AskUserQuestion` | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; conta as decisões suas respondidas e os commits que passaram | nada na tela: alimenta os contadores do aviso de troca de chat |
+| `PostToolUse` em `Bash` e `PowerShell` | `scripts/conferir-depois.js` | o versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável) | volta pelo git, e o Claude recebe a lista do que foi restaurado |
 | `SubagentStart` (menos os que só leem) | `scripts/abrir-subagente.js` | injeta o bloco "menos código" no subagente que pode escrever código | nada na tela; o subagente recebe o bloco antes do primeiro pedido |
 | `SubagentStop` (só do agente `inspector`) e `PostToolUse` em `SubagentHandback` | `scripts/gravar-veredito.js` | grava o veredito do inspetor em `vereditos/<lente>.json` da ronda | nada quando grava; se algo não foi gravado, uma mensagem diz o quê e por quê |
 | `Stop` | `scripts/portao-fecho.js` | cobra evidência, etapa com subitem aberto e o prompt do handoff; barra uma vez o fim do turno com pedido `ESCALAR:` de subagente ainda não despachado (trava 6); grava os contadores | o turno volta com o motivo, ou fecha, com o aviso do handoff quando um gatilho cruzou |
@@ -1239,20 +1320,35 @@ produziu o bug reproduz o bug.
   problema dez vezes; dez lentes acham dez classes de problema. Cada lente é um inspetor
   somente leitura, com **default reprovar**, que devolve JSON citando `arquivo:linha` e dá a cada
   achado uma severidade: **P0** quebra função ou vaza segredo, **P1** quebra contrato ou deixa um
-  estado obrigatório de fora, **P2** é melhoria fora do pedido, e vira registro, não correção.
+  estado obrigatório de fora, **P2** é o que fica abaixo disso e diz o `tipo`: o de `erro` (muda um resultado,
+  enfraquece a segurança, mostra ao usuário algo errado ou confuso, ou pode perder dado) segura a ronda; o de
+  `melhoria` vira registro, não correção.
 - **Cada achado diz se foi lido ou deduzido.** O `confirmado` traz a severidade e o `trecho` copiado do arquivo
   citado; o `apurar-ronda.js` procura esse texto no `A.txt` ou no `B.txt` da ronda, na linha citada ou em até 2
   linhas em volta, e o que não está lá sai em `trechoNaoConfere`, sem molhar a ronda. O `pendente` não tem severidade:
   diz em `falta` o fato exato que o confirmaria, sai em `pendentes` e também não molha. Achado sem estado invalida o
-  veredito inteiro, para que um veredito no formato antigo nunca aprove calado. O rejeitado é o `refutados.json`.
+  veredito inteiro, para que um veredito no formato antigo nunca aprove calado. O P2 confirmado sem `tipo` (`erro` ou
+  `melhoria`) também invalida o veredito: a lente é chamada de novo, ou quem orquestra completa o campo com `erro`
+  (nunca com `melhoria`). O rejeitado é o `refutados.json`.
 - **Proporcional ao tamanho da mudança.** O `preparar-revisao.js` mede o diff contra o HEAD e diz a
   faixa: até 3 linhas, um inspetor; lógica de até 40 linhas com teste vermelho e mutação, dois; texto,
-  dois; arquivo novo, lógica maior ou estilo, as lentes da família inteira. Quem revisa pode subir de
-  faixa, nunca descer.
+  dois; arquivo novo, lógica maior ou estilo, a faixa completa, com as lentes da família escolhidas pelo
+  risco (abaixo). Quem revisa pode subir de
+  faixa, nunca descer. Na faixa completa, o próprio script escolhe as lentes pelo risco e diz a lista em `lentes`
+  (que vai também no `mapa.json`, e o apurar confere que todas votaram): a de segurança só entra quando as linhas
+  mudadas, dos dois lados, mexem em algo de risco (processo, arquivo ou caminho, leitura de entrada de fora,
+  ambiente, rede, a página, segredo) ou o arquivo é gancho, manifesto, configuração ou script de shell; a `enxuto`
+  só em arquivo novo ou mudança de mais de 40 linhas; as de tela só com a foto. Nas revisões passadas, a de
+  segurança e a `enxuto` acharam só 4 problemas graves cada que nenhuma outra lente achou. A `estados` e a `borda`
+  seguem separadas: só 32% do que a `estados` achou a `borda` também achou.
 - **Nas faixas pequenas, o inspetor lê só o trecho mudado.** O `A.txt` e o `B.txt` levam o trecho com 20 linhas de
   margem; o resto fica em branco, com uma linha `[fora do trecho: linhas a-b]` no início de cada vão. Os números de
   linha seguem os do arquivo, então a apuração e a refutação não mudam, e o inspetor sabe que o vão não é defeito: o
   que depender dele vira "não consigo ver", e o achado sai `pendente`. Na faixa completa, o arquivo inteiro.
+  Em arquivo JavaScript, o recorte também deixa à mostra, nos dois lados, a linha do `require` e a definição de topo
+  de cada nome que o trecho usa (inteira até 15 linhas; maior, o comentário de cima e a assinatura), e o que ele usa
+  de outro arquivo do projeto vai num `contrato.txt`, que não está em revisão e nunca é citado em achado. É o que o
+  inspetor mais pedia: dois terços dos pendentes das faixas pequenas eram "fora do trecho".
 - **A régua do projeto vai junto.** A seção "Régua" do `regras.md` entra no pacote, e o inspetor
   cita o valor dela — não o gosto dele. Sem régua declarada, a revisão diz que rodou sem régua.
 - **Contra a peça de topo, nas duas ordens.** Com `referencias` declarada no `projeto.json` para o tipo do
@@ -1267,9 +1363,19 @@ produziu o bug reproduz o bug.
   em `refutados.json` **com a prova**, ou o script para com erro. Achado na mesma linha, lente e severidade da
   ronda anterior só é repetição se o texto da linha citada não mudou: o script lê a linha no `A.txt` e no `B.txt` de
   cada ronda, e a linha reescrita entre as rondas (espaços não contam) faz o achado contar como novo.
-- **Convergência com teto.** Duas rondas secas seguidas aprovam. A ronda 1 descobre; as seguintes
-  só chamam as lentes que acharam P0 ou P1, com a pergunta reformulada. No teto de 3 rondas com
-  achado aberto, **para** e leva a decisão ao dono em três opções.
+- **Convergência com teto.** Duas rondas secas seguidas aprovam. A ronda 1 em que todas as lentes da faixa votaram
+  e nenhuma trouxe achado nenhum (nem pendente, nem melhoria) aprova sozinha, sem a ronda 2; com referência de topo,
+  só quando também nenhuma trouxe lacuna, em nenhuma das duas ordens, e a referência foi alcançada
+  (`referencia.pronta`). A ronda 1 descobre; as seguintes
+  só chamam as lentes que acharam P0, P1 ou P2 de erro, com a pergunta reformulada sobre o próprio achado, um
+  degrau abaixo do modelo da ronda 1 (com a sessão no Opus: Opus na ronda 1, Sonnet nas rondas 2 e 3; conferir um
+  defeito já nomeado não pede o modelo que descobre), e nelas só segura a ronda o
+  achado numa linha que o conserto mudou ou que já foi citada antes (ou a até 2 linhas de uma delas). O P2 de
+  melhoria, em qualquer ronda, e o achado em outro ponto do arquivo, nas rondas 2 e 3, não seguram: saem em
+  `registros`, e vão para o registro do plano no fecho. No teto de 3 rondas com achado aberto, conserta o que é
+  erro, cada conserto com um teste que reprova quando o código é estragado de propósito, roda a suíte inteira e faz
+  o commit com `# sworn: sem-revisao` no fim do comando, sem perguntar e sem abrir revisão nova; o que sobrou vai
+  para o registro do plano.
 
 <details>
 <summary>As dezessete lentes e a pergunta de cada uma</summary>
@@ -1758,15 +1864,17 @@ arquivo mudado na sessão resolve para a marcha `aaa`; o tipo dele (`texto` para
 `referencias`, nada muda. Desliga com `"portaoReferencia": false` no `projeto.json`; `travas.fecho: false` não o
 desliga.
 
-**O portão da revisão aprovada** vale para todo arquivo da marcha `aaa`, com ou sem `referencias`. Ele barra o fim do
-turno cuja resposta alega entrega quando um arquivo de código mudado na sessão resolve para a marcha `aaa` e não tem
-revisão aprovada: a revisão cega que terminou em "aprovado" (duas rondas secas), a mesma que libera o commit. Texto
+**O portão da revisão aprovada** vale para todo arquivo da marcha `aaa`, com ou sem `referencias`. Com
+`"revisaoTodoCodigo": true` no `projeto.json`, vale para todo arquivo de código, de qualquer marcha: o mesmo conjunto
+que o portão do commit cobra. A chave vem desligada porque, na bateria, com ela e o juiz um degrau acima ligados, o Opus
+custou 2,44 vezes mais por tarefa, sem ganho medido em tarefas entregues sem defeito. Ele barra o fim do turno cuja resposta alega entrega
+quando um arquivo de código mudado na sessão, da marcha que ele cobra, não tem revisão aprovada: a revisão cega que terminou em "aprovado" (duas rondas secas, ou a ronda 1 sem achado nenhum), a mesma que libera o commit. Texto
 (`.md`, `.txt`) e arquivo apagado ficam fora, como no commit; arquivo editado de novo depois de aprovado volta a
-cobrar. A mensagem dá três saídas: rodar `/sworn:review <arquivo>` até "aprovado"; no teto de 3 rondas, parar e pedir
-ao usuário que escolha entre corrigir e conferir uma vez, entregar sem revisão com o motivo, ou revisar tudo de novo;
+cobrar. A mensagem dá três saídas: rodar `/sworn:review <arquivo>` até "aprovado"; no teto de 3 rondas, consertar o que
+é erro, cada conserto com um teste que reprova quando o código é estragado de propósito, rodar a suíte inteira e
+entregar sem revisão dizendo o que segue aberto;
 ou dizer ao usuário que a entrega fica sem revisão, e por quê ("sem revisão", "without review"
-na resposta liberam). O arquivo que o portão da referência já cita no turno não sai de novo. Marcha `padrao` e
-`rapida` não mudam. Desliga com `"portaoRevisao": false` no `projeto.json`; `travas.fecho: false` não o desliga.
+na resposta liberam). O arquivo que o portão da referência já cita no turno não sai de novo. Desliga com `"portaoRevisao": false` no `projeto.json`; `travas.fecho: false` não o desliga.
 
 ---
 
@@ -1810,12 +1918,16 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 | `portaoHandoff` | o portão do prompt do handoff no chat | ligado; `false` desliga |
 | `portaoReferencia` | o portão da referência de topo: barra a entrega AAA sem revisão contra a `referencias` na sessão | ligado; `false` desliga |
 | `portaoRevisao` | o portão da revisão aprovada: barra a entrega com arquivo de código da marcha AAA mudado na sessão sem revisão aprovada | ligado; `false` desliga |
+| `revisaoTodoCodigo` | o portão da revisão aprovada cobra todo arquivo de código mudado na sessão, de qualquer marcha, como o portão do commit | desligado; `true` liga |
 | `portaoManual` | o portão do manual: nega editar arquivo da marcha AAA enquanto o manual de execução (skill com "padrao" no nome) não foi carregado na sessão | ligado; `false` desliga |
-| `portaoCommit` | o portão do commit (`scripts/portao-commit.js`): nega o `git commit` enquanto um arquivo de código mudado na sessão não tem revisão aprovada; diz a faixa e quantos inspetores cada um pede, e aponta o atalho novo sem "trocar quando:" | ligado; `false` desliga |
+| `portaoCommit` | o portão do commit (`scripts/portao-commit.js`): nega o `git commit` enquanto um arquivo de código mudado na sessão não tem revisão aprovada; diz a faixa e quantos inspetores cada um pede, e aponta o atalho novo sem "trocar quando:". Do arquivo cuja revisão fechou no teto de 3 rondas ele não pede revisão nova: pede o commit com `# sworn: sem-revisao`, depois dos consertos com teste e da suíte inteira verde | ligado; `false` desliga |
 | `paralelismo` | as regras de trabalho em paralelo que a abertura injeta | ligado; `false` desliga |
 | `avisoDeVolta` | o aviso antes de gastar: a 1ª mensagem num chat de 200 mil tokens ou mais, parado há mais de 1 hora, é parada com a conta de continuar contra abrir um chat novo e o resumo do chat gravado para o chat novo; mandada de novo, passa | ligado; `false` desliga |
 | `pedidos` | a lista dos seus pedidos: cada mensagem que chega ao Claude vira uma linha numerada, com data e hora, em `.claude/sworn/pedidos/<frente>.md`, e o `/sworn:handoff` a lê | ligado; `false` desliga |
+| `juizAcima` | o inspetor da ronda 1 da revisão cega roda um degrau acima do modelo da sessão (Haiku vira Sonnet, Sonnet vira Opus; Opus fica), e o das rondas 2 e 3, que só conferem, um degrau abaixo desse (sessão Opus: Sonnet); sem saber o modelo da sessão, fica o do agente | ligado; `false` desliga |
 | `menosCodigo` | o bloco "menos código" que a abertura injeta: a escada de 7 degraus antes de escrever código e o formato do comentário de atalho | ligado; `false` desliga |
+| `aberturaEnxuta` | a abertura enxuta, para modelo de contexto curto: as regras do projeto inteiras e os blocos de paralelo, menos paradas, qualidade de resposta e menos código numa linha de resumo cada (perto de 2,3 mil caracteres a menos) | desligado; `true` liga |
+| `provaPorArquivoTocado` | a prova de cada turno passa a ser a dos arquivos de código mexidos: o teste que cita o arquivo pelo nome (ou é o próprio arquivo), rodado depois da última edição dele e verde. A suíte inteira (a `provaDePronto`) passa a ser cobrada pelo portão do commit, antes de cada commit; com `"portaoCommit": false`, essa cobrança sai junto | desligado; `true` liga |
 | `vigia` | a novidade da semana e a conta do radar da semana na abertura (só para quem mantém o plugin) | desligado, menos no repositório do próprio plugin; `true` liga, `false` desliga |
 | `modoContinuo` | o modo contínuo: troca de chat só por tamanho (aviso a 250 mil), decisão técnica sem parar | ligado, com ou sem `projeto.json`; `false` desliga |
 
@@ -1826,6 +1938,8 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 | `referencias` | a peça de topo contra a qual o `/sworn:review` compara (o `R.txt` no pacote e uma 2ª passada com A e B trocados, que dobra os inspetores), por tipo (`tela`, `codigo`, `texto`), cada tipo uma lista de caminhos ou URLs; tipo desconhecido (`telas`) e lista que tem item que não é texto reprovam no `node scripts/validar.js`, que diz a chave a corrigir; no `/sworn:init` rodado de novo, o tipo que você responder troca a lista dele e o tipo que você não citar fica como estava (lista vazia, `[]`, tira um tipo; `{}` não apaga nada); o `/sworn:reference` junta a ficha dele à lista do tipo, com o seu sim | sem a chave: nada muda |
 | `marcaDeAtalho` | a marca que o `/sworn:shortcuts` procura nos comentários, no lugar de `atalho` (`ponytail` e `shortcut` seguem valendo); uma palavra só (letras, números, `-` ou `_`), senão reprova no validar | `atalho` |
 | `fontesDeConsulta` | as fontes canônicas que se consultam, mas não se carregam como instrução (um registro de decisões, por exemplo): seguem mandando, mas saem do peso de instrução do `/sworn:audit`, que as mostra à parte com a contagem de cada uma; cada item tem de estar em `fontesCanonicas`, senão reprova no validar | sem a chave: todas as canônicas pesam |
+| `admissao` | o resultado do teste de admissão do modelo, que o `/sworn:init` oferece e só roda com o seu sim (`node scripts/admissao.js --modelo <id> --gravar`): os 4 testes ao vivo (a abertura põe as regras, a edição fora do escopo é negada, o apagar é negado, o "passou" sem a saída do teste é barrado), cada um numa pasta temporária, com o modelo e a data; cada resultado é `ok`, `falhou`, `inconclusivo` ou `nao rodou`, e o que falhou é o que, com aquele modelo, não vale. No Claude Code e no Codex (com `--harness codex --codex <codex.exe>`, que gasta da cota do seu login do Codex) | sem a chave: o teste não rodou |
+| `provaDeCoerencia` | o comando dos testes que conferem o disco inteiro de uma vez (a lista dos arquivos por sistema, a documentação de cada chave, o que não pode ir a público), que costumam reprovar por uma edição esquecida em outro arquivo. Com `provaPorArquivoTocado` ligada, a prova de cada turno também cobra esse comando verde depois da última edição de código, e o erro aparece no turno, não só na suíte inteira antes do commit. É um comando de terminal, como `"node --test test/plataforma.test.js test/readme.test.js"`; sem a `provaPorArquivoTocado`, não muda nada. Texto não vazio, senão reprova no validar | sem a chave: só os testes dos arquivos mexidos |
 
 **As quatro travas**, dentro de `travas`. As quatro são obrigatórias e booleanas.
 

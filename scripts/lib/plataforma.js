@@ -102,9 +102,9 @@ const PONTOS = [
     chave: 'process_platform',
     classe: SO_NO_SISTEMA,
     titulo: 'Deducao do sistema e do idioma de shell',
-    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/lib/glob.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
-               'scripts/lib/plataforma.js', 'scripts/lib/projeto.js', 'scripts/lib/varredura.js',
-               'scripts/marcar-trabalho.js', 'scripts/medir-qualidade.js'],
+    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/capturar-tela.js', 'scripts/lib/admissao.js', 'scripts/lib/glob.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
+               'scripts/lib/plataforma.js', 'scripts/lib/projeto.js', 'scripts/lib/prova-no-fecho.js', 'scripts/lib/saude.js',
+               'scripts/lib/varredura.js', 'scripts/marcar-trabalho.js', 'scripts/medir-qualidade.js'],
     comoSeProva: 'rodando a suite naquele sistema: quem responde e o proprio Node',
     ressalva: 'a CONSEQUENCIA da deducao e injetavel e esta exercitada - ver tabela_de_plataforma ' +
               'e barra_invertida. O que nao se prova aqui e a deducao em si.'
@@ -122,7 +122,7 @@ const PONTOS = [
     chave: 'pasta_temporaria',
     classe: INJETAVEL,
     titulo: 'Onde o estado de sessao e gravado',
-    arquivos: ['scripts/lib/estado.js'],
+    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/lib/estado.js', 'scripts/preparar-revisao.js'],
     comoSeProva: 'SWORN_TMP sobrepoe a pasta temporaria do sistema, e a suite inteira usa essa porta',
     ressalva: 'o caminho PADRAO, quando ninguem sobrepoe, e diferente nos tres sistemas ' +
               'e so se ve naquele sistema. O que se prova aqui e que a sobreposicao manda.'
@@ -131,9 +131,10 @@ const PONTOS = [
     chave: 'pasta_pessoal',
     classe: INJETAVEL,
     titulo: 'Onde o claude grava a transcricao da sessao',
-    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/instalar.js', 'scripts/lib/calibracao.js',
+    arquivos: ['scripts/admissao.js', 'scripts/autorizar-paralelo.js', 'scripts/instalar.js', 'scripts/lib/calibracao.js',
                'scripts/lib/gasto.js', 'scripts/lib/injetado.js', 'scripts/lib/migracao.js',
-               'scripts/lib/vigia-local.js', 'scripts/medir-qualidade.js', 'scripts/ponte.js'],
+               'scripts/lib/prova-no-fecho.js', 'scripts/lib/vigia-local.js', 'scripts/medir-qualidade.js',
+               'scripts/ponte.js'],
     comoSeProva: 'a pasta pessoal entra por parametro, ou uma variavel a sobrepoe (CLAUDE_CONFIG_DIR, SWORN_VIGIA, ' +
                  'ou HOME e USERPROFILE, que o Node le para achar a pasta pessoal); o teste de cada modulo roda ' +
                  'por essa porta',
@@ -143,20 +144,22 @@ const PONTOS = [
   {
     chave: 'processo_externo',
     classe: SO_NO_SISTEMA,
-    titulo: 'Chamada do git como processo, sem shell',
-    arquivos: ['scripts/exportar.js', 'scripts/lib/git.js', 'scripts/lib/sanitacao.js',
-               'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/ponte.js', 'scripts/preparar-revisao.js',
-               'scripts/vigia-puxar.js'],
-    comoSeProva: 'rodando naquele sistema com git instalado',
+    titulo: 'Chamada de processo externo sem shell (o git; o navegador da captura de tela)',
+    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/drift.js', 'scripts/exportar.js', 'scripts/lib/git.js', 'scripts/lib/prova-no-fecho.js',
+               'scripts/lib/sanitacao.js', 'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/ponte.js',
+               'scripts/preparar-revisao.js', 'scripts/lib/tela-cega.js', 'scripts/revisar-plano.js', 'scripts/vigia-puxar.js'],
+    comoSeProva: 'rodando naquele sistema com git instalado (e o Chrome ou o Edge, para a captura de tela)',
     ressalva: 'com shell:false o Node nao consulta PATHEXT: um git empacotado como .cmd ou .bat ' +
-              'nao seria achado no Windows. Aqui ele e .exe e e achado. Fora do Windows o ' +
+              'nao seria achado no Windows. Aqui ele e .exe e e achado. O navegador da captura e chamado ' +
+              'pelo caminho inteiro, e o encerramento usa o taskkill do Windows. Fora do Windows o ' +
               'problema nao existe, mas tambem nunca foi rodado la.'
   },
   {
     chave: 'caminho_especifico',
     classe: SO_NO_SISTEMA,
     titulo: 'Caminho relativo remontado pelo separador do sistema',
-    arquivos: ['scripts/apurar-ronda.js', 'scripts/lib/cicatriz.js', 'scripts/medir-qualidade.js', 'scripts/medir-travas.js'],
+    arquivos: ['scripts/apurar-ronda.js', 'scripts/drift.js', 'scripts/lib/cicatriz.js', 'scripts/lib/citacao.js', 'scripts/lib/contrato.js',
+               'scripts/medir-qualidade.js', 'scripts/medir-travas.js'],
     comoSeProva: 'rodando a suite naquele sistema: o separador e o do proprio Node',
     ressalva: 'no Windows a troca vira barra normal; fora dele e identidade. ' +
               'A suite so exercita o lado do Windows.'
@@ -166,10 +169,10 @@ const PONTOS = [
     classe: INJETAVEL,
     titulo: 'Caminho do Windows normalizado para barra normal',
     arquivos: [
-      'scripts/apurar-ronda.js', 'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
+      'scripts/apurar-ronda.js', 'scripts/conferir-depois.js', 'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
       'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
       'scripts/lib/projeto.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',
-      'scripts/preparar-revisao.js'
+      'scripts/lib/veredito.js', 'scripts/preparar-revisao.js'
     ],
     comoSeProva: 'e trabalho de string puro: a entrada com barra invertida se passa de qualquer maquina',
     ressalva: 'no Linux e no macOS a barra invertida e caractere LEGAL em nome de arquivo, ' +

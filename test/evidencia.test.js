@@ -346,3 +346,83 @@ test('evidencia D634: MOTIVO_FALHA e ASCII (R5), diz o que fazer e traz a regra 
   assert.ok(/mostra falha/.test(ev.MOTIVO_FALHA));
   assert.ok(/instavel/.test(ev.MOTIVO_FALHA));
 });
+
+// P04 (R-mattpocock, C1 do plano unico): "achei a causa" so com o bug reproduzido - a saida do comando que mostra o
+// bug, colada num bloco. Hipotese declarada, ou a reproducao que nao se conseguiu, liberam.
+test('P04: alegar a causa sem o bug reproduzido barra; com bloco de saida, ou como hipotese, passa', () => {
+  const alegam = [
+    'Achei a causa: o laco le um item a mais.',
+    'Encontrei a causa do erro no parser.',
+    'Causa encontrada: a data vem em UTC.',
+    'A causa raiz e o cache que nao expira.',
+    'A causa é o cache desatualizado.',
+    'Achei a causa: o cache. Isso talvez demore a subir no deploy de amanha.',
+    'The root cause was the missing null check. This might also help other callers.',
+    '**A causa é o filtro.** Talvez também o cache.',
+    '(a causa é o filtro.) Provavelmente também o cache.',
+    'O job de lint nao rodou. A causa e o filtro de rota.',
+    'Concluí que a causa\né o filtro de rota.',
+    'A causa do bug era o indice comecar em 1.',
+    'O bug estava no arredondamento do total.',
+    'Found the root cause: the loop reads one extra item.',
+    'The root cause is the stale cache.',
+    'The bug was in the rounding of the total.',
+    'Root cause identified: off-by-one in the parser.'
+  ];
+  for (const t of alegam) {
+    assert.strictEqual(ev.alegaCausa(t), true, 'alega: ' + t);
+    assert.strictEqual(ev.deveBloquearPorCausa(t), true, 'barra: ' + t);
+    assert.strictEqual(ev.deveBloquearPorCausa(t + '\n```\n$ node --test\nnot ok 1 - soma\n# fail 1\n```'), false,
+      'com a saida colada passa: ' + t);
+  }
+  const naoAlegam = [
+    'A causa ainda e desconhecida.',
+    'Nao sei a causa; vou investigar o parser.',
+    'The root cause is unknown so far.',
+    'Mudei o arquivo e rodei os testes.',
+    'Nao digo que "achei a causa".',
+    'I am still investigating what the cause is.',
+    'Ainda nao descobri a causa.',
+    'Ainda não achei a causa do erro.',
+    "I haven't found the cause yet.",
+    'We have not identified the root cause.',
+    'I have not yet found the cause.',
+    "I haven't yet found the cause.",
+    'Ainda nem achei a causa.',
+    'Ainda nem sequer achei a causa.',
+    '```\nAchei a causa\n```'
+  ];
+  for (const t of naoAlegam) assert.strictEqual(ev.deveBloquearPorCausa(t), false, 'nao barra: ' + t);
+  const hipotese = [
+    'Minha hipotese: a causa e o cache. Nao consegui reproduzir ainda.',
+    'Provavelmente a causa e o fuso; falta reproduzir.',
+    'The root cause is probably the cache, but I could not reproduce it.',
+    'Achei a causa no parser, mas nao consegui reproduzir.',
+    'A causa e o fuso. Ainda nao reproduzi.',
+    'A causa e o filtro, mas nao rodei o teste que mostraria isso.'
+  ];
+  for (const t of hipotese) assert.strictEqual(ev.deveBloquearPorCausa(t), false, 'hipotese passa: ' + t);
+  assert.strictEqual(ev.deveBloquearPorCausa(null), false);
+  // o bloco tem de mostrar o defeito: saida verde ou sem relacao nao reproduz nada
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa: o cache.\n```\nok 1 - tudo passou\n# fail 0\n```'), true);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa: o cache.\n```\n$ ls\nsrc test\n```'), true);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa: o cache.\n```\nTypeError: x is undefined\n```'), false);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nexpected 4, got 3\n```'), false);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nerror: cannot find module x\n```'), false);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nTraceback (most recent call last):\n```'), false);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\npanic: runtime fault\n```'), false);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nesperado 4, obtido 3\n```'), false);
+  // a palavra no nome de um teste que passou nao reproduz nada
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nok 3 - returns expected value\n```'), true);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nok 1 - handles Error case\n```'), true);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\n✔ handles error: empty input (1ms)\n# fail 0\n```'), true);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\n✔ returns expected value but trims (1ms)\n```'), true);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nlog: error: retrying\n# pass 3\n# fail 0\n```'), true);
+  // fora das linhas de teste que passou: a palavra solta sem os dois-pontos, ou o esperado sem o obtido, nao reproduz
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nhandles Error case\n```'), true);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nreturns expected value\n```'), true);
+  // CRLF: a linha em branco separa os paragrafos como no LF
+  assert.strictEqual(ev.deveBloquearPorCausa('A causa é o cache\r\n\r\nTalvez seja outra coisa no deploy'), true);
+  assert.match(ev.MOTIVO_CAUSA, /reproduz/);
+  assert.ok(/^[\x20-\x7E\n]+$/.test(ev.MOTIVO_CAUSA), 'ASCII (R5)');
+});

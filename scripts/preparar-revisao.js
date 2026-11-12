@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const cegar = require('./lib/cegar.js');
@@ -10,6 +11,10 @@ const config = require('./lib/config.js');
 const textoLib = require('./lib/texto.js');
 const veredito = require('./lib/veredito.js');
 const design = require('./lib/design.js');
+const estado = require('./lib/estado.js');
+const escopoLib = require('./lib/escopo.js');
+const telaCega = require('./lib/tela-cega.js');
+const contratoLib = require('./lib/contrato.js');
 
 /**
  * D244/defeito 9: a secao "## Regua ..." do regras.md do projeto, do cabecalho ate o proximo
@@ -39,7 +44,8 @@ function secaoDaRegua(texto) {
   return linhas.slice(ini, fim).join('\n').trim() + '\n';
 }
 
-const USO = 'uso: preparar-revisao.js --arquivo <caminho relativo> [--completa] [--semente <texto>]\n';
+const USO = 'uso: preparar-revisao.js --arquivo <caminho relativo> [--completa] [--degradado <motivo>] ' +
+  '[--semente <texto>] [--tela-depois <endereco> [--tela-antes <endereco>]]\n';
 
 // 0.3.2, item 10: flag presente sem valor (ultima da linha) ou seguida de outra flag ("--arquivo
 // --semente x") deixava o alvo virar "--semente", ou a semente cair calada no pid. Agora e erro de uso
@@ -47,7 +53,7 @@ const USO = 'uso: preparar-revisao.js --arquivo <caminho relativo> [--completa] 
 //
 // 0.3.3, itens 13 e 14: so e "valor que falta" quando o proximo argumento e outra flag do USO (um arquivo
 // chamado `--x.js` vale) ou quando e vazio (`--semente ''` caia no pid, calado).
-const FLAGS_DO_USO = ['--arquivo', '--semente', '--completa'];
+const FLAGS_DO_USO = ['--arquivo', '--semente', '--completa', '--degradado', '--tela-antes', '--tela-depois'];
 function arg(nome) {
   const i = process.argv.indexOf('--' + nome);
   if (i === -1) return null;
@@ -189,6 +195,22 @@ const faixaMedida = veredito.faixaDaMudanca({
 // L3 (A3-04): o revisar manda subir de faixa por julgamento (mudanca que monta tela, duas sem teste vermelho); sem a
 // flag o pacote seguia recortado. --completa sobe a completa (arquivo inteiro); descer nao tem flag.
 const pediuCompleta = process.argv.indexOf('--completa') !== -1;
+// B2 (s369, R-impeccable): a revisao que roda sem isolamento (inspetor que ve o repositorio ou o contexto de quem
+// escreveu) ou sem navegador (lente de tela sem captura) diz o motivo; o apurar-ronda.js o leva ao fecho.
+const degradado = arg('degradado');
+if (degradado !== null && !degradado.trim()) {
+  process.stdout.write('ERRO: --degradado pede um motivo, e veio so espaco.\n' + USO);
+  process.exit(1);
+}
+// E1 parte 2 (D827): a foto de cada lado da tela, pelo scripts/capturar-tela.js. --tela-depois e o endereco do
+// trabalho; --tela-antes, o da versao do HEAD rodando em outro lugar. O uso errado para aqui, antes de arquivar.
+const telaAntes = arg('tela-antes');
+const telaDepois = arg('tela-depois');
+const erroDasTelas = telaCega.conferirTelas(telaAntes, telaDepois);
+if (erroDasTelas) {
+  process.stdout.write('ERRO: ' + erroDasTelas + '. Nada foi gravado.\n' + USO);
+  process.exit(1);
+}
 const faixa = pediuCompleta ? 'completa' : faixaMedida;
 
 // D503/D508 (escolhas E1-E4 do plano d503): a referencia de topo do tipo deste arquivo, do projeto.json. Sem ela, o
@@ -270,6 +292,12 @@ const base = formatoAntigo ? revisao : cegar.baseDoArquivo(revisao, rel);
 // 0.3.3, item 11: a regua e parte do pacote. Le-se ANTES de criar qualquer pasta: ausente (ENOENT) ou sem a
 // secao = sem regua, como antes; outra falha de leitura e ERRO e nao grava nada. O regras.md mora na raiz do
 // projeto, que pode estar acima da pasta atual (D244/defeito 1). A gravacao do regua.md e la embaixo, no try.
+// E2 (D827): no arquivo de estilo, o sistema de design do projeto e os desvios declarados para este arquivo vao a lente
+// de tela (design.md). Sem design.json (o modulo e opcional), nada muda.
+const sistemaDeDesign = ehEstilo ? config.carregarDesign(raizProjeto) : null;
+const textoDoDesign = sistemaDeDesign && typeof sistemaDeDesign === 'object' && !Array.isArray(sistemaDeDesign)
+  ? design.paraARevisao(sistemaDeDesign, relNaRaiz) : null;
+
 let secaoRegua = null;
 try {
   secaoRegua = secaoDaRegua(fs.readFileSync(path.join(config.raizDoProjeto(cwd), '.claude', 'sworn', 'regras.md'), 'utf8'));
@@ -278,6 +306,65 @@ try {
     process.stdout.write('ERRO: nao consegui ler .claude/sworn/regras.md (causa: ' + (e ? textoLib.causaDoErro(e) : 'desconhecida') +
       '). Nada foi gravado. Confira se e um arquivo que voce pode ler, e nao uma pasta, e rode de novo.\n');
     process.exit(1);
+  }
+}
+
+// cada item do Dentro, no maximo este tanto de caracteres (o item enorme nao incha o pedido.md)
+const CARACTERES_POR_ITEM = 300;
+
+/** O `texto` com no maximo `max` grafemas (o emoji composto conta como um e nao se parte), e se cortou. Para de
+ *  contar no grafema seguinte ao limite: o texto enorme nao vira uma lista inteira so para sair cortado. */
+function cortarPorGrafema(texto, max) {
+  const partes = [];
+  for (const g of new Intl.Segmenter().segment(texto)) {
+    if (partes.length === max) return { texto: partes.join(''), cortou: true };
+    partes.push(g.segment);
+  }
+  return { texto: partes.join(''), cortou: false };
+}
+
+// D824 (D3, do mattpocock/skills, code-review/SKILL.md:72): o pedido da tarefa vai ao pacote, para a lente escopo
+// julgar contra ele (o que falta, o que nao foi pedido, o que parece feito e esta errado). E o objetivo e o Dentro do
+// escopo em vigor: o da frente da sessao (pelo estado), senao o escopo.md. Sem escopo declarado, nada de pedido.md.
+const TETO_DO_OBJETIVO = 4000; // grafemas do objetivo
+const TETO_DO_DENTRO = 200; // itens da lista Dentro
+let textoPedido = null;
+let semPedido = null;
+let origemDoPedido = null;
+{
+  let frente = null;
+  let semFrente = null;
+  const sid = process.env.CLAUDE_CODE_SESSION_ID;
+  if (!sid) {
+    semFrente = 'sem CLAUDE_CODE_SESSION_ID, nao sei a frente da sessao';
+  } else {
+    try {
+      frente = estado.ler(sid).frente || null;
+      if (!frente) semFrente = 'o estado da sessao nao tem frente (ou nao se leu)';
+    } catch (e) {
+      semFrente = 'nao li o estado da sessao (causa: ' + ((e && e.message) || String(e)) + ')';
+    }
+  }
+  const relEscopo = escopoLib.arquivoEmVigor(raizProjeto, frente);
+  if (frente && relEscopo === escopoLib.ARQUIVO) semFrente = 'a frente ' + frente + ' nao tem arquivo de escopo valido';
+  // a frente que caiu para o escopo geral se diz: o inspetor nao julga contra o pedido de outra tarefa sem saber
+  origemDoPedido = relEscopo + (semFrente ? ' (' + semFrente + ')' : ' (frente ' + frente + ')');
+  const esc = escopoLib.carregar(raizProjeto, frente);
+  if (!esc || (!esc.objetivo && !esc.dentro.length)) {
+    semPedido = 'sem escopo declarado em ' + relEscopo + ': a lente escopo julga so o que mudou alem do necessario; ' +
+      'para ela julgar contra o pedido, declare o **Objetivo:** e a lista "## Dentro" em ' + relEscopo;
+  } else {
+    // o texto cortado diz que foi cortado: o inspetor nao toma o pedaco pelo pedido inteiro
+    const obj = cortarPorGrafema(esc.objetivo || '', TETO_DO_OBJETIVO);
+    const objetivo = !obj.texto ? '(sem objetivo)'
+      : obj.texto + (obj.cortou ? ' [...cortado: o objetivo inteiro esta em ' + relEscopo + ']' : '');
+    const dentro = esc.dentro.slice(0, TETO_DO_DENTRO).map(function (d) {
+      const item = cortarPorGrafema(d, CARACTERES_POR_ITEM);
+      return '- ' + item.texto + (item.cortou ? ' [...cortado]' : '');
+    });
+    if (esc.dentro.length > TETO_DO_DENTRO) dentro.push('- [...mais ' + (esc.dentro.length - TETO_DO_DENTRO) + ' em ' + relEscopo + ']');
+    textoPedido = '# O pedido desta tarefa\n\nDe `' + relEscopo + '`.\n\n**Objetivo:** ' + objetivo + '\n\n## Dentro\n' +
+      (dentro.length ? dentro.join('\n') : '- (nada declarado)') + '\n';
   }
 }
 
@@ -303,6 +390,41 @@ function pastasQueFaltam(pai) {
 function desfazerPastasVazias(faltavam) {
   for (const p of faltavam) {
     try { fs.rmdirSync(p); } catch (e) { return; }
+  }
+}
+
+// E1 parte 2 (D827): as fotos saem antes de tudo o que mexe no disco (o arquivamento da revisao fechada, logo abaixo,
+// e a ronda nova): a captura que falha para aqui, com nada mudado. A pasta de trabalho e uma temporaria do sistema
+// (SWORN_TMP manda sobre ela, como no estado.js) e sai quando o processo termina, por qualquer caminho.
+let fotos = null;
+// Os dois lados da revisao (as chaves de fotos e de mapa.json.telas) e a flag e a palavra de cada um.
+const FLAG_DO_LADO = { HEAD: '--tela-antes', trabalho: '--tela-depois' };
+const PALAVRA_DO_LADO = { HEAD: 'antes', trabalho: 'depois' };
+if (telaDepois) {
+  let pastaDasFotos;
+  try { pastaDasFotos = fs.mkdtempSync(path.join(process.env.SWORN_TMP || os.tmpdir(), 'sworn-tela-')); } catch (e) {
+    process.stdout.write('ERRO: nao consegui criar a pasta temporaria das fotos (' + textoLib.causaDoErro(e) + '). ' +
+      'Nada foi gravado. Confira o espaco e a permissao da pasta temporaria do sistema (ou de SWORN_TMP) e rode de ' +
+      'novo.\n');
+    process.exit(1);
+  }
+  process.on('exit', function () {
+    try { fs.rmSync(pastaDasFotos, { recursive: true, force: true }); } catch (e) { /* o sistema recolhe a temporaria */ }
+  });
+  fotos = { HEAD: null, trabalho: null };
+  const pedidas = telaAntes ? [['HEAD', telaAntes], ['trabalho', telaDepois]] : [['trabalho', telaDepois]];
+  for (const [lado, url] of pedidas) {
+    let feita;
+    // O capturar devolve { erro } em todo caso previsto; o que ele lancar e falha inesperada, dita como tal.
+    try { feita = telaCega.capturar(url, path.join(pastaDasFotos, lado)); } catch (e) {
+      feita = { erro: 'a captura de ' + FLAG_DO_LADO[lado] + ' parou num erro inesperado (' + textoLib.causaDoErro(e) +
+        '): confira se o endereco abre no navegador e rode de novo' };
+    }
+    if (feita.erro) {
+      process.stdout.write('ERRO: ' + feita.erro + '. Nada foi gravado.\n');
+      process.exit(1);
+    }
+    fotos[lado] = feita;
   }
 }
 
@@ -376,22 +498,59 @@ if (formatoAntigo) {
 // D486 (s108): nas faixas pequenas (lentes da faixa, nao a tabela de familias) cada lado leva so o trecho mudado,
 // com margem, nos numeros de linha do proprio arquivo. Na completa, ou sem bloco medido, o arquivo inteiro.
 const recorte = !!(diff && diff.blocos.length > 0 && veredito.lentesDaFaixa(faixa) !== null);
-const doLado = function (texto, ini, qtd) {
+const blocosDoLado = function (ini, qtd) {
+  return diff.blocos.map(function (b) { return { ini: b[ini], qtd: b[qtd] }; });
+};
+// F2c (D828): no recorte de codigo, o require e a definicao de topo do que o trecho usa ficam a mostra nos dois lados,
+// e o que vem de outro modulo do projeto vai no contrato.txt (scripts/lib/contrato.js).
+const contrato = recorte
+  ? contratoLib.doTrecho({
+    lados: [{ texto: anterior, blocos: blocosDoLado('antigoIni', 'antigoQtd') },
+      { texto: atual, blocos: blocosDoLado('novoIni', 'novoQtd') }],
+    margem: cegar.TRECHO_MARGEM, rel: rel, raiz: cwd
+  })
+  : null;
+const doLado = function (texto, ini, qtd, extras) {
   if (!recorte) return texto;
-  return cegar.recortarTrecho(texto, diff.blocos.map(function (b) { return { ini: b[ini], qtd: b[qtd] }; }),
-    cegar.TRECHO_MARGEM);
+  return cegar.recortarTrecho(texto, blocosDoLado(ini, qtd), cegar.TRECHO_MARGEM, extras);
 };
 const r = cegar.rotular(
-  [{ nome: 'HEAD', conteudo: doLado(anterior, 'antigoIni', 'antigoQtd') },
-    { nome: 'trabalho', conteudo: doLado(atual, 'novoIni', 'novoQtd') }],
+  [{ nome: 'HEAD', conteudo: doLado(anterior, 'antigoIni', 'antigoQtd', contrato ? contrato.extras[0] : undefined) },
+    { nome: 'trabalho', conteudo: doLado(atual, 'novoIni', 'novoQtd', contrato ? contrato.extras[1] : undefined) }],
   sementeTexto + '|' + rel
 );
+
+// F2d parte c (D828): na faixa completa, as lentes pelo risco (veredito.lentesDaCompleta): a `seguranca` olha as
+// linhas mudadas dos DOIS lados (tirar uma validacao tambem e risco), a `enxuto` so na mudanca grande, as de tela so
+// com a foto. Sem medida (igual ao HEAD, sem diff), o "nao sei" deixa a lente. Nas faixas pequenas, as da faixa.
+const textoMudado = (function () {
+  if (novo) return atual;
+  if (!diff) return null;
+  const pega = function (texto, ini, qtd) {
+    const ls = String(texto).split('\n');
+    const saida = [];
+    diff.blocos.forEach(function (b) { for (let i = b[ini]; i < b[ini] + b[qtd]; i++) saida.push(ls[i - 1] || ''); });
+    return saida.join('\n');
+  };
+  return pega(anterior, 'antigoIni', 'antigoQtd') + '\n' + pega(atual, 'novoIni', 'novoQtd');
+})();
+const lentesDaRevisao = faixa === 'completa'
+  ? veredito.lentesDaCompleta({
+    estilo: ehEstilo,
+    risco: textoMudado === null ? undefined : veredito.temRisco(textoMudado, rel),
+    grande: novo ? true : (identico || !Number.isInteger(linhasMudadas) ? undefined : linhasMudadas > veredito.FAIXA_DUAS_ATE),
+    fotos: !!(fotos && fotos.trabalho)
+  })
+  : veredito.lentesDaFaixa(faixa);
+
 
 // 0.3.2, item 9: falha de disco ao criar a pasta ou gravar o pacote vira ERRO com o caminho, sem
 // stack trace. Se a pasta da ronda ja existe, o erro diz qual ficou pela metade: o apurar-ronda conta
 // toda pasta numerada como ronda, entao ela tem de ser apagada antes de rodar de novo.
 let criada = false;
 let regua = null;
+let pedido = null;
+let designMd = null;
 try {
   fs.mkdirSync(dir, { recursive: true });
   criada = true;
@@ -399,11 +558,16 @@ try {
   // defeito; o recorte das faixas pequenas (D486) marca cada vao e o aviso manda dizer isso no briefing.
   fs.writeFileSync(path.join(dir, 'A.txt'), r.A.conteudo, 'utf8');
   fs.writeFileSync(path.join(dir, 'B.txt'), r.B.conteudo, 'utf8');
+  // F2c: o contrato do que o trecho usa de outro arquivo e o mesmo para os dois lados (e para a 2a passada).
+  if (contrato && contrato.texto) fs.writeFileSync(path.join(dir, 'contrato.txt'), contrato.texto, 'utf8');
   // L3 (A3-03): a faixa vai no mapa.json; com a da ronda 1, o apurar-ronda.js confere as lentes que votaram.
   const mapaJson = { arquivo: rel, mapa: r.mapa, faixa: faixa };
+  // F2d (c): na completa, a lista das lentes escolhidas pelo risco; o apurar confere que todas votaram
+  if (faixa === 'completa') mapaJson.lentes = lentesDaRevisao;
   if (novo) mapaJson.novo = true;
   // RV-01 (D422): revisar depois de commitar deixa os dois lados iguais; o apurar le este campo.
   if (identico) mapaJson.identico = true;
+  if (degradado) mapaJson.degradado = degradado.trim();
   // D503/D508: a referencia e o terceiro arquivo, nomeado (R nao e cego: e a peca de topo). A 2a passada troca A e B
   // dentro do mesmo pacote (E3): outra pasta numerada seria contada como ronda e gastaria o teto.
   if (referencia) {
@@ -415,12 +579,37 @@ try {
     fs.writeFileSync(path.join(dir, 'invertida', 'A.txt'), r.B.conteudo, 'utf8');
     fs.writeFileSync(path.join(dir, 'invertida', 'B.txt'), r.A.conteudo, 'utf8');
   }
+  // E1 parte 2: cada foto com o rotulo cego do lado; a evidencia do inspetor vai sem o endereco e sem a hora, que ficam
+  // no mapa.json. Na 2a passada (referencia), as fotos trocam de rotulo junto com o texto.
+  if (fotos) {
+    mapaJson.telas = { HEAD: null, trabalho: null };
+    const gravarFoto = function (pasta, rotulo, f) {
+      fs.copyFileSync(f.imagem, path.join(pasta, rotulo + '.png'));
+      fs.writeFileSync(path.join(pasta, rotulo + '.evidencia.json'),
+        JSON.stringify(telaCega.evidenciaCega(f.evidencia, rotulo), null, 2) + '\n', 'utf8');
+    };
+    for (const rotulo of ['A', 'B']) {
+      const f = fotos[r.mapa[rotulo]];
+      if (!f) continue;
+      mapaJson.telas[r.mapa[rotulo]] = telaCega.resumoDoFecho(f.evidencia, rotulo);
+      gravarFoto(dir, rotulo, f);
+      if (referencia) gravarFoto(path.join(dir, 'invertida'), rotulo === 'A' ? 'B' : 'A', f);
+    }
+  }
   fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify(mapaJson, null, 2), 'utf8');
   fs.mkdirSync(path.join(dir, 'vereditos'), { recursive: true });
   // 0.3.3, item 11: a regua e parte do pacote, gravada aqui dentro: falha = "ficou pela metade".
   if (secaoRegua) {
     fs.writeFileSync(path.join(dir, 'regua.md'), secaoRegua, 'utf8');
     regua = path.join(dir, 'regua.md');
+  }
+  if (textoPedido) {
+    fs.writeFileSync(path.join(dir, 'pedido.md'), textoPedido, 'utf8');
+    pedido = path.join(dir, 'pedido.md');
+  }
+  if (textoDoDesign) {
+    fs.writeFileSync(path.join(dir, 'design.md'), textoDoDesign, 'utf8');
+    designMd = path.join(dir, 'design.md');
   }
 } catch (e) {
   const causa = textoLib.causaDoErro(e);
@@ -439,6 +628,22 @@ try {
 }
 
 let aviso = 'mapa.json revela os lados. Nao o abra, e nao o mostre a nenhum inspetor.';
+if (fotos) {
+  const comFoto = ['A', 'B'].filter(function (rotulo) { return fotos[r.mapa[rotulo]]; });
+  aviso += comFoto.length === 2
+    ? ' A foto de cada lado esta em A.png e B.png, com A.evidencia.json e B.evidencia.json (console, erros e a arvore ' +
+      'de acessibilidade da pagina, sem o endereco): mande os dois pares a cada inspetor de tela, que os abre com Read.'
+    : ' So o lado ' + comFoto[0] + ' tem foto (' + comFoto[0] + '.png e ' + comFoto[0] + '.evidencia.json): sem ' +
+      '--tela-antes, o lado sem foto e o do HEAD, entao a foto nao e cega nesta ronda. Mande o par a cada inspetor de ' +
+      'tela e diga isso no fecho.';
+  aviso += ' O endereco, a hora e a impressao digital (sha256) de cada foto, que prova que ela nao foi trocada, ficam ' +
+    'no mapa.json e voltam no fecho da revisao, na saida do apurar-ronda.js.';
+  for (const lado of ['HEAD', 'trabalho']) {
+    if (fotos[lado] && fotos[lado].aviso) aviso += ' A captura do ' + PALAVRA_DO_LADO[lado] + ' avisou: ' + fotos[lado].aviso + '.';
+  }
+}
+aviso += pedido ? ' pedido.md vai a lente escopo, com o pedido de ' + origemDoPedido + '.'
+  : ' Sem pedido.md: o escopo em vigor, ' + origemDoPedido + ', nao declara objetivo nem Dentro (veja semPedido).';
 if (arquivada) {
   // 0.3.3, item 2: a saida diz para onde a revisao fechada foi.
   aviso += ' A revisao anterior deste arquivo ja estava fechada (fechada.json): foi movida inteira, sem apagar ' +
@@ -453,6 +658,22 @@ if (recorte) {
   aviso += ' A e B sao recortes (faixa ' + faixa + '): so o trecho mudado, com ' + cegar.TRECHO_MARGEM + ' linhas de ' +
     'margem; as linhas de fora estao em branco e a primeira de cada vao diz "[fora do trecho: linhas a-b]". ' +
     'Diga isso no briefing de cada inspetor.';
+  const extras = contrato ? contrato.extras[0].length + contrato.extras[1].length : 0;
+  if (extras > 0) {
+    aviso += ' Nos vaos ficam tambem a mostra o require e a definicao de topo de cada nome que o trecho usa (o contrato ' +
+      'do proprio arquivo), nos dois lados.';
+  }
+  if (contrato && contrato.texto) {
+    aviso += ' O contrato.txt traz o comentario e a assinatura do que o trecho usa de outro arquivo do projeto (' +
+      contrato.nomes + ' nome(s)): ele vai a cada inspetor junto de A e B, e nao e citado em achado.';
+  }
+  if (contrato && contrato.cortados.length) {
+    aviso += ' Ficaram fora do contrato.txt, pelo teto de tamanho: ' + contrato.cortados.join(', ') + '.';
+  }
+  if (contrato && contrato.cortadosDoProprio.length) {
+    aviso += ' Ficaram sem as linhas a mostra, pelo teto de ' + contratoLib.TETO_EXTRAS + ' linhas a mais por lado: ' +
+      contrato.cortadosDoProprio.join(', ') + '.';
+  }
 }
 if (novo) {
   aviso += ' E arquivo novo: um dos lados e vazio, entao nao ha lado escondido; julgue o lado cheio pelo que ele e, ' +
@@ -532,14 +753,20 @@ const saida = {
   a: path.join(dir, 'A.txt'),
   b: path.join(dir, 'B.txt'),
   regua: regua,
+  pedido: pedido,
   vereditos: path.join(dir, 'vereditos'),
-  // D485: lentes null = a faixa completa, e vale a tabela de familias do revisar.
+  // D485: as lentes da faixa; na completa (F2d), as que veredito.lentesDaCompleta escolheu pelo risco.
   faixa: faixa,
-  lentes: veredito.lentesDaFaixa(faixa),
+  lentes: lentesDaRevisao,
   linhasMudadas: linhasMudadas,
   aviso: aviso
 };
 if (recorte) saida.trecho = { margem: cegar.TRECHO_MARGEM };
+// F2c: com linhas do contrato a mostra nos vaos, quantas (nos dois lados); o briefing diz ao inspetor o que elas sao.
+if (recorte && contrato && contrato.extras[0].length + contrato.extras[1].length > 0) {
+  saida.trecho.extras = contrato.extras[0].length + contrato.extras[1].length;
+}
+if (contrato && contrato.texto) saida.contrato = path.join(dir, 'contrato.txt');
 if (referencia) {
   saida.referencia = path.join(dir, 'R.txt');
   saida.invertida = {
@@ -547,7 +774,26 @@ if (referencia) {
     vereditos: path.join(dir, 'invertida', 'vereditos')
   };
 }
+// A saida leva as fotos pelas letras cegas (A, B); o mapa.json leva o resumo pelos lados (HEAD, trabalho), em `telas`.
+if (fotos) {
+  saida.fotos = {};
+  for (const rotulo of ['A', 'B']) {
+    saida.fotos[rotulo] = fotos[r.mapa[rotulo]]
+      ? { imagem: path.join(dir, rotulo + '.png'), evidencia: path.join(dir, rotulo + '.evidencia.json') } : null;
+  }
+}
 if (faltasDaReferencia.length) saida.referenciaQueFalta = faltasDaReferencia;
+if (semPedido) saida.semPedido = semPedido;
 if (arquivada) saida.arquivada = arquivada;
+if (degradado) {
+  saida.degradado = degradado.trim();
+  saida.aviso += ' Revisao degradada (--degradado): a aprovacao dela sai com "DEGRADADO: ' + degradado + '", e a ' +
+    'resposta que der o trabalho por pronto tem de trazer essa linha.';
+}
 if (!regua) saida.semRegua = 'nenhuma regua declarada no regras.md do projeto (secao "## Regua ...")';
+if (designMd) {
+  saida.design = designMd;
+  saida.aviso += ' design.md vai a cada lente de tela: o sistema de design do projeto e os desvios declarados para este ' +
+    'arquivo; o valor fora dos dois e desvio nao declarado.';
+}
 process.stdout.write(JSON.stringify(saida, null, 2) + '\n');

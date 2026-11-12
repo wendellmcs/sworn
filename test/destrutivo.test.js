@@ -3073,7 +3073,377 @@ test('D721 A1-06/A1-08/A1-09: o padrao que nao compila sai listado; o motivo diz
   const drop = destrutivo.classificar('DROP TABLE clientes');
   assert.strictEqual(drop.destrutivo, true);
   assert.ok(!/DDL/.test(drop.motivo) && /apaga/.test(drop.motivo), drop.motivo);
-  // A1-09: quem confirma e o dono, com um termo so
+  // A1-09: sem "confirmacao humana". D785 item 4 (s369, 2.4): a trava 5 manda seguir por outro caminho, sem pedir o sim
   const m = destrutivo.motivo('rm -rf x', { motivo: 'apaga' });
-  assert.ok(!/confirmacao humana/.test(m) && m.includes('Nenhum comando destrutivo roda sem o sim do dono.'), m);
+  assert.ok(!/confirmacao humana/.test(m) && m.includes('siga por outro caminho, sem parar o trabalho'), m);
+  assert.ok(!/3 opcoes|peca ao dono|sim do dono/.test(m), m);
+  // s369 (revisao do 2.4): a dica do arquivo nomeado sai so nos motivos de apagar arquivo; o resto diz o que fazer
+  for (const c of ['rm -rf x', 'Remove-Item -Recurse x', 'rd x -Recurse']) {
+    const t = destrutivo.motivo(c, destrutivo.classificar(c));
+    assert.ok(/Apagar arquivo pelo nome/.test(t) && /rm -f a\.txt b\.txt/.test(t), c + ': ' + t);
+  }
+  for (const c of ['git reset --hard', 'npm publish', 'DROP TABLE x', 'git push --force']) {
+    const t = destrutivo.motivo(c, destrutivo.classificar(c));
+    assert.ok(!/Apagar arquivo|rm -f a\.txt/.test(t), c + ': ' + t);
+    assert.ok(/que este comando ficou para ele rodar/.test(t) && !/fecho|git stash|usuario/.test(t), c + ': ' + t);
+  }
+});
+
+// D785 item 4 (s369, 2.4): remover arquivo NOMEADO (sem curinga, sem recursao) no escopo e fora dos intocaveis passa,
+// mesmo com -f/-Force. A leitura e estrita e propria: um comando so, sem nada que o shell expanda ou separe.
+test('D785/2.4: arquivosNomeados le so o rm/Remove-Item simples de arquivos nomeados', () => {
+  const n = destrutivo.arquivosNomeados;
+  assert.deepStrictEqual(n('rm -f a.txt b.txt', 'Bash'), ['a.txt', 'b.txt']);
+  assert.deepStrictEqual(n('rm src/a.js', 'Bash'), ['src/a.js']);
+  assert.deepStrictEqual(n('rm --force -- "a b.txt"', 'Bash'), ['a b.txt']);
+  assert.deepStrictEqual(n('  rm -f a.txt  ', 'Bash'), ['a.txt']);
+  assert.deepStrictEqual(n('Remove-Item -Force src/a.js', 'PowerShell'), ['src/a.js']);
+  assert.deepStrictEqual(n("Remove-Item -LiteralPath 'x y/a.txt' -Force", 'PowerShell'), ['x y/a.txt']);
+  assert.deepStrictEqual(n('ri -Force .\\tmp\\a.txt', 'PowerShell'), ['.\\tmp\\a.txt']);
+  const bash = ['rm -rf a', 'rm -r a', 'rm -fr a', 'rm -fv a', 'rm -R a', 'rm --recursive a', 'rm -f *.log',
+    'rm -f a?.txt', 'rm -f [ab].txt', 'rm -f {a,b}.txt', 'rm -f ~/a', 'rm -f $HOME/a', 'rm -f $(ls)', 'rm -f `ls`',
+    'rm -f a; rm -f b', 'rm -f a && echo x', 'rm -f a | x', 'rm -f a > b', 'rm -f a # c', 'sudo rm -f a', 'rm -f', 'rm',
+    'rm -f a"b"', 'rm -f .\\a.txt', 'rm -f -x', 'rm -f a\nrm -f b', '(rm -f a)', 'rm -f -- -x', 'rm -f a=b',
+    'rm -f a%b', 'rm -f !a', 'rm -f "a" "b', 'command rm -f a', 'rm -f "~/a"', '"rm" -f a', 'rm -f ""', '',
+    'rm -- -f a.txt', 'rm -- --force a.txt', 'rm -- -path a.txt', 'rm -- -- a.txt'];
+  assert.deepStrictEqual(n('rm -f -- a.txt b.txt', 'Bash'), ['a.txt', 'b.txt'], 'o -- antes dos nomes passa');
+  assert.deepStrictEqual(n('rm -f relatório.txt', 'Bash'), ['relatório.txt'], 'nome com acento passa');
+  for (const c of ['Remove-Item -Force ‘.env’', 'Remove-Item -Force “.env”', 'rm -f ‛a.txt',
+    'Remove-Item –Recurse pasta', 'Remove-Item —Recurse pasta', 'Remove-Item ―Force a', 'rm -f a​b']) {
+    assert.strictEqual(n(c, 'PowerShell'), null, 'aspas tipograficas: ' + c);
+  }
+  assert.deepStrictEqual(n('rm -f D:/dados/X~1.Y/a.txt', 'Bash'), ['D:/dados/X~1.Y/a.txt'], 'o ~ no meio nao expande');
+  for (const c of bash) assert.strictEqual(n(c, 'Bash'), null, 'Bash: ' + JSON.stringify(c));
+  const ps = ['Remove-Item -Recurse -Force a', 'Remove-Item -Force a,b', 'Remove-Item -Force @a', 'del /s a',
+    'Remove-Item -Force -Path a -Include x', 'Remove-Item -Force `a', 'Remove-Item -Force $a', 'rd a', 'del /s a',
+    'erase /s /q a', 'cmd /c del /s a', 'cmd /c rd a', 'del /a a', 'del a.txt/s', 'cmd /c del "/s" a.txt',
+    'del "/q" a.txt', 'del src/a.js',
+    'Remove-Item -Force -Confirm:$false a', 'Remove-Item -Force (Get-Item a)', 'Remove-Item -Force HKCU:\\Software\\X',
+    'Remove-Item -Force Env:FOO', 'Remove-Item -Force a.txt:s', 'Remove-Item -Force C:\\a:b'];
+  assert.deepStrictEqual(n('Remove-Item -Force C:\\x\\a.txt', 'PowerShell'), ['C:\\x\\a.txt'], 'letra de drive passa');
+  // A5a (s369): o del/erase do cmd e do PowerShell, so com /q e /f; o cmd /c e so o portador
+  assert.deepStrictEqual(n('cmd /c del /q saida\\LICENCAS.txt', 'PowerShell'), ['saida\\LICENCAS.txt']);
+  assert.deepStrictEqual(n('cmd /c erase /f a.txt b.txt', 'PowerShell'), ['a.txt', 'b.txt']);
+  assert.strictEqual(n('erase /f a.txt b.txt', 'PowerShell'), null, 'no PowerShell o erase e o Remove-Item');
+  assert.deepStrictEqual(n('del a.txt', 'PowerShell'), ['a.txt']);
+  // temApagar acha o verbo de apagar dentro do composto que o leitor estrito recusa
+  assert.strictEqual(destrutivo.temApagar('cmd /c del /q a & del /q b'), true);
+  assert.strictEqual(destrutivo.temApagar('npm test && rm a'), true);
+  assert.strictEqual(destrutivo.temApagar('npm test && echo rm'), false);
+  assert.strictEqual(destrutivo.temApagar(''), false);
+  // revisao A5a (pendente confirmado): so a posicao de comando conta - nao o argumento do git, nem a string citada
+  for (const c of ['git rm a.txt', 'git commit -m "del a"', 'grep -n rm a.txt', 'git log --grep "rm a"',
+    'node x.js "del"', 'echo do rm']) assert.strictEqual(destrutivo.temApagar(c), false, c);
+  for (const c of ['sudo rm a.txt', 'ls | xargs -r rm', 'if true; then rm a; fi', 'find . -name x -exec rm {} \\;',
+    'bash -c "rm a"', 'pwsh -Command "ri a"', 'env X=1 rm a', 'echo $(rm a.txt)', '/usr/bin/rm a.txt',
+    'for f in *; do rm $f; done', 'cmd /c del a.txt', 'xargs -n 1 rm a.txt', 'sudo -u root rm a',
+    'timeout 5 rm a', 'then sudo rm a', 'bash -lc "rm a"', 'sh -ec "rm a"']) {
+    assert.strictEqual(destrutivo.temApagar(c), true, c);
+  }
+  assert.strictEqual(destrutivo.temApagar('sudo grep -n "rm" a.txt'), false, 'o argumento citado do portador nao conta');
+  // revisao nova r1 (manutencao P1): o -c so porta a string que o shell roda; o portador vem do ABRE_RESTO
+  for (const c of ['git -c u=x commit -m "del a"', 'grep -c "del a" f.txt', 'ssh host rm a', 'npm uninstall rm',
+    'bash build.sh -c "del a"']) {
+    assert.strictEqual(destrutivo.temApagar(c), false, c);
+  }
+  for (const c of ['runuser -u x rm a', 'gosu x rm a', 'bash -lc "cd x; rm a"', '/bin/sh -c "rm a"',
+    'pwsh -NoProfile -Command "ri a"', 'cmd /c "del a.txt"',
+    // revisao nova r2 (correcao P1): aspa e TAB dentro da string do shell nao a escondem
+    'bash -c "cd \'meu dir\'; rm a.txt"', 'bash -c "rm\ta.txt"', 'sudo bash -c "rm a"',
+    // revisao nova r3 (correcao P1): flag com valor antes do -Command; o if/while/until do shell
+    'pwsh -ExecutionPolicy Bypass -Command "rm x"', 'bash -o pipefail -c "rm a"', 'if rm a.txt; then echo ok; fi',
+    'while rm a; do sleep 1; done', 'until rm a; do sleep 1; done']) {
+    assert.strictEqual(destrutivo.temApagar(c), true, c);
+  }
+  for (const c of ['time git rm a.txt', 'sudo npm uninstall rm']) assert.strictEqual(destrutivo.temApagar(c), false, c);
+  // revisao rev3 r1 (correcao P1): argumento de portador e caminho, nao comando (D80/R3); o 1o livre e o comando
+  // revisao rev3 r3 (correcao P1): a frase citada dentro da string do shell nao e comando; o $() citado roda
+  assert.strictEqual(destrutivo.temApagar('bash -c "git commit -m \'del a\'"'), false, 'commit dentro do bash -c');
+  assert.strictEqual(destrutivo.temApagar('echo "$(rm a.txt)"'), true, '$() entre aspas duplas roda');
+  assert.strictEqual(destrutivo.temApagar('echo "`rm a.txt`"'), true, 'crase entre aspas duplas roda');
+  // revisao rev4 r1 (estados, pendente confirmado): aninhamento alem do que se le barra, nunca abre
+  // (cada eval e relido como um nivel novo: a cadeia chega de verdade ao fundo)
+  assert.strictEqual(destrutivo.temApagar('eval '.repeat(2) + 'ls'), false, 'aninhado raso sem apagar');
+  assert.strictEqual(destrutivo.temApagar('eval '.repeat(9) + 'ls'), true, 'aninhado alem do teto barra');
+  // revisao rev4 r1 (seguranca P2): o texto que o eval/iex roda e relido
+  for (const c of ['eval "rm a.txt"', "iex 'del a.txt'", 'Invoke-Expression "Remove-Item a"']) {
+    assert.strictEqual(destrutivo.temApagar(c), true, c);
+  }
+  assert.strictEqual(destrutivo.temApagar('eval "ls -la"'), false, 'eval sem apagar');
+  for (const c of ['sudo chmod 755 /opt/rm', 'sudo ls /usr/bin/rm', 'xargs -n 1 grep /opt/del']) {
+    assert.strictEqual(destrutivo.temApagar(c), false, c);
+  }
+  for (const c of ['sudo /usr/bin/rm a', 'xargs -n 1 /bin/rm', 'sudo -u root /usr/bin/rm a', 'sudo -E /bin/rm a.txt']) {
+    assert.strictEqual(destrutivo.temApagar(c), true, c);
+  }
+  // revisao rev3 r1 (P2): o /k deixa o cmd aberto: so /c e /r; o stringsDoShell e linear em entrada enorme
+  assert.strictEqual(n('cmd /k del /q a.txt', 'PowerShell'), null);
+  const t0 = Date.now();
+  assert.strictEqual(destrutivo.temApagar('bash -x '.repeat(10000) + 'ls'), false);
+  // medido: 18 ms linear, 4180 ms quadratico (s369)
+  assert.ok(Date.now() - t0 < 1500, 'linear: ' + (Date.now() - t0) + ' ms');
+  // revisao nova r1 (borda P1): no PowerShell o del e o Remove-Item e o /q e caminho; a chave so vale no cmd
+  assert.strictEqual(n('del /q a.txt', 'PowerShell'), null);
+  assert.deepStrictEqual(n('cmd //c del /q a.txt', 'Bash'), ['a.txt']);
+  assert.deepStrictEqual(n('cmd /r del /q a.txt', 'PowerShell'), ['a.txt']);
+  // o \s do JS corta no U+00A0 e no U+3000, o shell nao: espaco que nao e espaco nem tab barra
+  for (const c of ['rm -f a\u00a0b', 'rm\u3000-f a', 'rm -f\u2028a', 'rm -f a.txt\u00a0', '\u00a0rm -f a.txt',
+    'rm -f a.txt\u3000']) {
+    assert.strictEqual(n(c, 'Bash'), null, JSON.stringify(c));
+  }
+  assert.deepStrictEqual(n('rm -f a\tb', 'Bash'), ['a', 'b'], 'o tab separa, como no shell');
+  for (const c of ps) assert.strictEqual(n(c, 'PowerShell'), null, 'PowerShell: ' + JSON.stringify(c));
+});
+
+test('D785/2.4: portao-destrutivo deixa apagar arquivo nomeado no escopo e barra o resto, sem pedir o sim', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-24-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-24-tmp-'));
+  try {
+    const sworn = path.join(dir, '.claude', 'sworn');
+    fs.mkdirSync(sworn, { recursive: true });
+    const projeto = { versaoConfig: 1, marchaPadrao: 'padrao', intocaveis: ['src/segredo.txt'],
+      marchas: { rapida: ['notas/**'] } };
+    const gravarProjeto = (p) => fs.writeFileSync(path.join(sworn, 'projeto.json'), JSON.stringify(p), 'utf8');
+    gravarProjeto(projeto);
+    // `.claude/**` e `.git/**` no Dentro de proposito: a guarda deles tem de barrar sozinha, sem a do escopo.
+    fs.writeFileSync(path.join(sworn, 'escopo.md'), '# Escopo\n**Objetivo:** 2.4\n## Dentro\n- src/**\n' +
+      '- .claude/**\n- .git/**\n## Fora\n- src/vendor/**\n', 'utf8');
+    for (const f of ['src/a.js', 'src/b.js', 'src/vendor/v.js', 'src/segredo.txt', 'src/dir/c.js', 'fora.txt',
+      'notas/n.md', '.git/config']) {
+      fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
+      fs.writeFileSync(path.join(dir, f), 'x', 'utf8');
+    }
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
+    const chamar = (comando, ferramenta, cwd) => {
+      const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-destrutivo.js')], {
+        input: JSON.stringify({ session_id: 's24', cwd: cwd || dir, tool_name: ferramenta || 'Bash',
+          tool_input: { command: comando } }),
+        encoding: 'utf8', env: env
+      });
+      let o = null;
+      try { o = JSON.parse(r.stdout); } catch (e) { o = null; }
+      const h = o && o.hookSpecificOutput;
+      return h && h.permissionDecision === 'deny' ? h.permissionDecisionReason : 'passa';
+    };
+    assert.strictEqual(chamar('rm -f src/a.js src/b.js'), 'passa');
+    assert.strictEqual(chamar('rm src/a.js'), 'passa');
+    assert.strictEqual(chamar('Remove-Item -Force src/a.js', 'PowerShell'), 'passa');
+    assert.strictEqual(chamar('Remove-Item -Force .\\src\\a.js', 'PowerShell'), 'passa');
+    assert.strictEqual(chamar('rm -f a.js', 'Bash', path.join(dir, 'src')), 'passa', 'relativo ao cwd do comando');
+    // A5a (s369, leva 12: `cmd /c del /q saida\LICENCAS.txt` passou): apagar sem -f/-r tambem confere o escopo
+    for (const [c, f] of [['rm fora.txt', 'Bash'], ['Remove-Item fora.txt', 'PowerShell'],
+      ['del fora.txt', 'PowerShell'],
+      ['cmd /c del /q fora.txt', 'PowerShell'], ['erase src\\segredo.txt', 'PowerShell'],
+      ['cmd /c del /q src\\a.js & del /q fora.txt', 'PowerShell'], ['rm src/a.js; rm fora.txt', 'Bash']]) {
+      const t = chamar(c, f);
+      assert.notStrictEqual(t, 'passa', 'sem -f, fora do escopo: ' + c);
+      assert.match(t, /siga por outro caminho/, c + ': ' + t);
+    }
+    for (const [c, f] of [['rm src/a.js', 'Bash'], ['Remove-Item src/a.js', 'PowerShell'],
+      ['del src\\a.js', 'PowerShell'],
+      ['cmd /c del /q src\\a.js', 'PowerShell']]) {
+      assert.strictEqual(chamar(c, f), 'passa', 'sem -f, dentro do escopo: ' + c);
+    }
+    // A5d (s369, leva 13 do luna: barrado no Remove-Item, apagou pelo [System.IO.File]::Delete): o apagar por API do
+    // sistema no shell nao tem nome que se confira; com escopo declarado, barra e diz para apagar pelo nome
+    for (const [c, f] of [["[System.IO.File]::Delete((Join-Path (Get-Location) 'fora.txt'))", 'PowerShell'],
+      ["[IO.File]::Delete('src\\a.js')", 'PowerShell'], ["(Get-Item fora.txt).Delete()", 'PowerShell'],
+      ["$f = Get-Item fora.txt; $f.Delete()", 'PowerShell'],
+      ["[IO.Directory]::Delete('src', $true)", 'PowerShell'],
+      ['node -e "require(\'fs\').unlinkSync(\'fora.txt\')"', 'Bash'],
+      ['node -e "require(\'fs\').rmSync(\'src\', {recursive: true})"', 'Bash'],
+      ['python -c "import os; os.remove(\'fora.txt\')"', 'Bash'], ['python3 -c "import shutil; shutil.rmtree(\'src\')"', 'Bash'],
+      // revisao A5d (P1): a flag junta, com `=` ou colada ao codigo tambem roda codigo
+      ['node -pe "require(\'fs\').unlinkSync(\'fora.txt\')"', 'Bash'],
+      ['node --eval="require(\'fs\').unlinkSync(\'fora.txt\')"', 'Bash'],
+      ['node -e"require(\'fs\').unlinkSync(\'fora.txt\')"', 'Bash'], ['python -Ic "import os; os.remove(\'fora.txt\')"', 'Bash'],
+      // revisao A5d, ronda 2: o codigo pela entrada, o subcomando, o nome com caminho e o prefixo
+      ["python3 - <<'EOF'\nimport os; os.remove('fora.txt')\nEOF", 'Bash'],
+      ["python <<EOF\nimport os; os.remove('fora.txt')\nEOF", 'Bash'],
+      ['deno eval "Deno.removeSync(\'fora.txt\')"', 'Bash'], ['nodejs -e "require(\'fs\').unlinkSync(\'fora.txt\')"', 'Bash'],
+      ['ruby -0e "FileUtils.rm_rf(\'src\')"', 'Bash'], ['env FOO=1 python -c "import os; os.remove(\'fora.txt\')"', 'Bash'],
+      ['& "C:\\Program Files\\nodejs\\node.exe" -e "require(\'fs\').unlinkSync(\'fora.txt\')"', 'PowerShell']]) {
+      const t = chamar(c, f);
+      assert.match(t, /apagar por API do sistema/, c + ': ' + t);
+      assert.match(t, /siga por outro caminho/, c + ': ' + t);
+    }
+    assert.strictEqual(chamar('Get-Content fora.txt', 'PowerShell'), 'passa', 'A5d: ler nao e apagar');
+    // ... e o texto que so cita a API (procurar no codigo, mensagem de commit, Bash sem PowerShell) nao e apagar
+    for (const [c, f] of [['grep -rn "unlinkSync(" src', 'Bash'], ['git log --grep "os.remove("', 'Bash'],
+      ["echo '[IO.File]::Delete(x)'", 'Bash'], ['rg "shutil.rmtree(" src', 'Bash'],
+      ['python -m pytest -k "os.remove(" test', 'Bash'],
+      // revisao A5d, ronda 2: o `.py` do nome de arquivo nao e o interpretador
+      ['grep "os.remove(" main.py -C 3', 'Bash'], ['git log -S "unlinkSync(" -- a.py -p', 'Bash'],
+      // revisao A5d, ronda 3: o `.delete()` de JS citado numa busca do PowerShell nao e o metodo do .NET
+      ['Select-String -Path src\\*.js -Pattern "cache.delete()"', 'PowerShell']]) {
+      assert.strictEqual(chamar(c, f), 'passa', 'A5d, so cita: ' + c);
+    }
+    // revisao A5a (P1): o arquivo que nao existe (ja apagado) dentro do escopo passa; fora, segue barrado
+    for (const c of ['rm src/nada.js', 'rm -f src/nada.js']) assert.strictEqual(chamar(c), 'passa', 'inexistente: ' + c);
+    for (const c of ['rm fora-nada.txt', 'rm -f fora-nada.txt', 'rm -f src/vendor/nada.js', 'rm "src/nada.js. "']) {
+      assert.match(chamar(c), /siga por outro caminho/, 'inexistente fora: ' + c);
+    }
+    const barrados = ['rm -f fora.txt', 'rm -f src/vendor/v.js', 'rm -f src/segredo.txt', 'rm -f src/dir',
+      'rm -f src/*.js', 'rm -rf src/a.js', 'rm -f src/a.js && echo ok', 'rm -f ../x',
+      'rm -f notas/n.md', 'rm -f .claude/sworn/projeto.json', 'rm -f .claude/sworn/escopo.md', 'rm -f .git/config',
+      'rm -f src/a.js fora.txt', 'rm -f ' + path.join(dir, 'fora.txt').replace(/\\/g, '/')];
+    for (const c of barrados) {
+      const t = chamar(c);
+      assert.notStrictEqual(t, 'passa', c);
+      assert.match(t, /siga por outro caminho/, c + ': ' + t);
+      assert.ok(!/3 opcoes|peca ao dono/.test(t), c + ': ' + t);
+    }
+    const absoluto = path.join(dir, 'src', 'a.js').replace(/\\/g, '/');
+    assert.strictEqual(chamar('rm -f ' + absoluto), 'passa', 'absoluto dentro');
+    // o nome escrito difere do real: ponto/espaco no fim (Windows) e o nome curto 8.3 seguem barrados pelo nome real
+    if (process.platform === 'win32') {
+      assert.notStrictEqual(chamar('rm -f "src/segredo.txt."'), 'passa', 'intocavel com ponto no fim');
+      assert.notStrictEqual(chamar('rm -f "src/vendor/v.js "'), 'passa', 'Fora com espaco no fim');
+      const curto = spawnSync('cmd', ['/c', 'for %I in ("' + path.join(dir, 'src', 'segredo.txt') + '") do @echo %~sI'],
+        { encoding: 'utf8' }).stdout.trim();
+      if (curto && !/segredo\.txt$/i.test(curto) && fs.existsSync(curto)) {
+        const rel = 'src/' + path.basename(curto);
+        assert.notStrictEqual(chamar('rm -f ' + rel), 'passa', 'nome curto 8.3 do intocavel: ' + rel);
+      }
+    }
+    // juncao numa pasta do escopo que aponta para fora do projeto: o caminho real e de fora, barra
+    const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-24-fora-'));
+    try {
+      fs.writeFileSync(path.join(fora, 'alvo.txt'), 'x', 'utf8');
+      fs.symlinkSync(fora, path.join(dir, 'src', 'ponte'), 'junction');
+      assert.notStrictEqual(chamar('rm -f src/ponte/alvo.txt'), 'passa', 'juncao para fora');
+    } finally {
+      /* so o link: a juncao some, o alvo de fora fica (e e limpo na linha seguinte) */
+      try { fs.unlinkSync(path.join(dir, 'src', 'ponte')); } catch (e) { fs.rmdirSync(path.join(dir, 'src', 'ponte')); }
+      fs.rmSync(fora, { recursive: true, force: true });
+    }
+    // o padrao do dono em comandosBloqueados ganha da excecao
+    gravarProjeto(Object.assign({}, projeto, { comandosBloqueados: ['src/a\\.js'] }));
+    assert.notStrictEqual(chamar('rm -f src/a.js'), 'passa', 'comandosBloqueados');
+    assert.strictEqual(chamar('rm -f src/b.js'), 'passa', 'so o padrao do dono barra');
+    gravarProjeto(projeto);
+    // arquivo modificado quando a sessao abriu (outra frente) barra mesmo dentro do escopo; a trava desligada solta
+    const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
+    fs.rmSync(path.join(dir, '.git'), { recursive: true, force: true });
+    g(['init', '-q']);
+    g(['config', 'user.email', 'teste@exemplo.com']);
+    g(['config', 'user.name', 'teste']);
+    g(['add', '-A']);
+    assert.strictEqual(g(['commit', '-q', '-m', 'inicial']).status, 0, 'commit do fixture');
+    fs.writeFileSync(path.join(dir, 'src', 'b.js'), 'outra frente', 'utf8');
+    // A4 (s369, P2 da s454): sem a foto da abertura (o estado nao gravou, a abertura nao rodou), o git de agora vale
+    // por ela: o arquivo modificado agora barra, o limpo (que o git devolve) passa
+    assert.notStrictEqual(chamar('rm -f src/b.js'), 'passa', 'sem a foto, o modificado agora barra');
+    assert.strictEqual(chamar('rm -f src/a.js'), 'passa', 'sem a foto, o limpo passa');
+    // ... e no repositorio cujo git status falha (indice corrompido; o rev-parse ainda responde), barra
+    const indice = path.join(dir, '.git', 'index');
+    const indiceBom = fs.readFileSync(indice);
+    fs.writeFileSync(indice, 'lixo');
+    try {
+      assert.notStrictEqual(g(['status', '--porcelain']).status, 0, 'controle: o indice corrompido quebra o status');
+      assert.notStrictEqual(chamar('rm -f src/a.js'), 'passa', 'sem a foto e sem o git status: barra');
+    } finally { fs.writeFileSync(indice, indiceBom); }
+    spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
+      input: JSON.stringify({ session_id: 's24', cwd: dir, source: 'startup' }), encoding: 'utf8', env: env
+    });
+    assert.notStrictEqual(chamar('rm -f src/b.js'), 'passa', 'outra frente');
+    assert.strictEqual(chamar('rm -f src/a.js'), 'passa', 'o resto do escopo segue passando depois da abertura');
+    fs.writeFileSync(path.join(dir, 'src', 'a.js'), 'trabalho desta sessao', 'utf8');
+    assert.strictEqual(chamar('rm -f src/a.js'), 'passa', 'com a foto, o modificado depois da abertura e desta sessao');
+    gravarProjeto(Object.assign({}, projeto, { travas: { outraFrente: false } }));
+    assert.strictEqual(chamar('rm -f src/b.js'), 'passa', 'travas.outraFrente false');
+    gravarProjeto(projeto);
+    // sem escopo declarado: barra
+    fs.renameSync(path.join(sworn, 'escopo.md'), path.join(dir, 'escopo-guardado.md'));
+    assert.notStrictEqual(chamar('rm -f src/a.js'), 'passa', 'sem escopo.md');
+    assert.strictEqual(chamar('rm fora.txt'), 'passa', 'A5a: sem escopo declarado, o rm simples segue como antes');
+    fs.renameSync(path.join(dir, 'escopo-guardado.md'), path.join(sworn, 'escopo.md'));
+    assert.strictEqual(chamar('rm -f src/a.js'), 'passa', 'controle: com o escopo de volta, passa');
+    // sem projeto.json nao ha escopo: barra
+    fs.unlinkSync(path.join(sworn, 'projeto.json'));
+    assert.notStrictEqual(chamar('rm -f src/a.js'), 'passa', 'sem projeto.json');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// A5b (s369, leva 12 do Codex: o modelo ampliou o proprio escopo e apagou o arquivo no mesmo turno): apagar confere o
+// escopo da abertura do turno. Ampliar o escopo e apagar no mesmo turno barra (shell e ferramenta de edicao) e diz
+// por que; a mensagem nova do dono abre outro turno, e ai o escopo ampliado vale.
+test('A5b: ampliar o escopo e apagar no mesmo turno barra, pelo shell e pela edicao; o turno seguinte libera', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-a5b-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-a5b-tmp-'));
+  try {
+    const sworn = path.join(dir, '.claude', 'sworn');
+    fs.mkdirSync(sworn, { recursive: true });
+    fs.writeFileSync(path.join(sworn, 'projeto.json'), JSON.stringify({ versaoConfig: 1, marchaPadrao: 'padrao' }),
+      'utf8');
+    const escopo = path.join(sworn, 'escopo.md');
+    fs.writeFileSync(escopo, '# Escopo\n**Objetivo:** A5b\n## Dentro\n- src/**\n', 'utf8');
+    for (const f of ['src/a.js', 'saida/LICENCAS.txt']) {
+      fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
+      fs.writeFileSync(path.join(dir, f), 'x', 'utf8');
+    }
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
+    const rodar = (script, entrada) => {
+      const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
+        input: JSON.stringify(Object.assign({ session_id: 'sa5b', cwd: dir }, entrada)), encoding: 'utf8', env: env });
+      let o = null;
+      try { o = JSON.parse(r.stdout); } catch (e) { o = null; }
+      const h = o && o.hookSpecificOutput;
+      return h && h.permissionDecision === 'deny' ? h.permissionDecisionReason : 'passa';
+    };
+    const shell = (c) => rodar('portao-destrutivo.js', { tool_name: 'Bash', tool_input: { command: c } });
+    const apagarPelaEdicao = (f) => rodar('portao-escopo.js',
+      { tool_name: 'Write', tool_input: { file_path: path.join(dir, f), content: '', apagar: true } });
+    rodar('abrir-turno.js', { prompt: 'comeca' });
+    // controle: antes de ampliar, apagar dentro passa e fora barra
+    assert.strictEqual(shell('rm src/a.js'), 'passa', 'controle: dentro do escopo');
+    assert.match(shell('rm saida/LICENCAS.txt'), /siga por outro caminho/, 'controle: fora do escopo');
+    assert.strictEqual(apagarPelaEdicao('src/a.js'), 'passa', 'controle: edicao que apaga dentro');
+    // o modelo amplia o escopo neste turno (o passe livre do arquivo de escopo deixa)
+    const novo = '# Escopo\n**Objetivo:** A5b\n## Dentro\n- src/**\n- saida/**\n';
+    assert.strictEqual(rodar('portao-escopo.js', { tool_name: 'Write', tool_input: { file_path: escopo,
+      content: novo } }), 'passa', 'ampliar o escopo passa');
+    fs.writeFileSync(escopo, novo, 'utf8');
+    // ... e apagar no mesmo turno barra, pelo shell e pela edicao, com o motivo
+    for (const c of ['rm saida/LICENCAS.txt', 'rm -f saida/LICENCAS.txt', 'cmd /c del /q saida\\LICENCAS.txt',
+      'rm src/a.js', 'ls && rm src/a.js']) {
+      const t = shell(c);
+      assert.match(t, /escopo foi ampliado neste turno/, c + ': ' + t);
+      assert.match(t, /siga por outro caminho/, c + ': ' + t);
+    }
+    assert.match(apagarPelaEdicao('saida/LICENCAS.txt'), /escopo foi ampliado neste turno/, 'edicao que apaga');
+    assert.match(rodar('portao-destrutivo.js', { tool_name: 'PowerShell', tool_input: {
+      command: "[System.IO.File]::Delete('saida\\LICENCAS.txt')" } }), /escopo foi ampliado neste turno/, 'A5d: por API');
+    assert.strictEqual(shell('ls saida'), 'passa', 'o que nao apaga segue passando');
+    assert.strictEqual(rodar('portao-escopo.js', { tool_name: 'Write', tool_input: { file_path:
+      path.join(dir, 'saida/LICENCAS.txt'), content: 'y' } }), 'passa', 'gravar no escopo ampliado passa');
+    // leva 14 (luna r2): o Stop que o proprio sworn barra (gatilho do handoff) abre uma continuacao, nao um turno do
+    // dono; o fecho regravava o estado so com os campos da sessao e a marca sumia - o `cmd /c del` seguinte passou
+    rodar('marcar-trabalho.js', { hook_event_name: 'PostToolUse', tool_name: 'Write',
+      tool_input: { file_path: path.join(dir, 'src/b.js'), content: 'x' }, tool_response: {} });
+    rodar('portao-fecho.js', { hook_event_name: 'Stop', stop_hook_active: false,
+      last_assistant_message: 'Preciso do dono: apagar saida/LICENCAS.txt.' });
+    // A4 (s369, P2 do s460): o Stop seguinte em laco (stop_hook_active, o que o harness manda depois do barrado) e o
+    // caminho que encerra o turno: a marca tambem sobrevive a ele
+    rodar('portao-fecho.js', { hook_event_name: 'Stop', stop_hook_active: true,
+      last_assistant_message: 'Preciso do dono: apagar saida/LICENCAS.txt.' });
+    assert.match(shell('cmd /c del /f /q saida\\LICENCAS.txt'), /escopo foi ampliado neste turno/,
+      'depois do Stop, sem mensagem do dono, segue barrado');
+    assert.match(apagarPelaEdicao('saida/LICENCAS.txt'), /escopo foi ampliado neste turno/, 'depois do Stop, pela edicao');
+    // o turno seguinte (mensagem nova do dono) libera
+    rodar('abrir-turno.js', { prompt: 'segue' });
+    assert.strictEqual(shell('rm saida/LICENCAS.txt'), 'passa', 'turno seguinte: o escopo ampliado vale');
+    assert.strictEqual(apagarPelaEdicao('saida/LICENCAS.txt'), 'passa', 'turno seguinte, pela edicao');
+    // o Delete File do apply_patch do Codex chega marcado como apagar
+    const harness = require('../scripts/lib/harness.js');
+    const ev = harness.arquivosDoPatch('*** Begin Patch\n*** Delete File: saida/x.txt\n*** End Patch');
+    assert.deepStrictEqual(ev, [{ tool_name: 'Write', tool_input: { file_path: 'saida/x.txt', content: '',
+      apagar: true } }]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

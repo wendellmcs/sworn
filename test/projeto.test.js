@@ -29,6 +29,20 @@ function copia(mudancas) {
   return Object.assign(JSON.parse(JSON.stringify(VALIDO)), mudancas || {});
 }
 
+// F1c (D828): `provaDeCoerencia` e opcional; quando vem, e texto nao vazio (o comando do grupo de coerencia), no
+// validar (erro) e na leitura do portao (aviso).
+test('F1c: provaDeCoerencia opcional, texto nao vazio', () => {
+  const MSG = 'provaDeCoerencia tem de ser texto nao vazio (o comando do grupo de coerencia)';
+  assert.strictEqual(projeto.validar(copia({ provaDeCoerencia: 'node --test test/plataforma.test.js' })).ok, true);
+  assert.strictEqual(projeto.validar(copia()).ok, true, 'sem a chave');
+  assert.strictEqual(projeto.avisosDeTipo({}).indexOf(MSG), -1, 'sem a chave, sem aviso');
+  for (const ruim of ['', '   ', '\t\n', 0, false, 1, null, ['node --test'], {}]) {
+    assert.ok(projeto.validar(copia({ provaDeCoerencia: ruim })).erros.indexOf(MSG) !== -1, JSON.stringify(ruim));
+    assert.ok(projeto.avisosDeTipo({ provaDeCoerencia: ruim }).indexOf(MSG) !== -1, 'aviso: ' + JSON.stringify(ruim));
+  }
+  assert.strictEqual(projeto.avisosDeTipo({ provaDeCoerencia: 'node --test x' }).indexOf(MSG), -1);
+});
+
 // D732 (fila D687): `fontesDeConsulta` e opcional; quando vem, e lista de texto, e cada item e uma das fontesCanonicas
 // (o que nao e canonico nao sai do peso por ela: item fora ficaria inerte calado, como o intocavel da D104).
 test('D732: fontesDeConsulta opcional, lista de texto, so com fonte canonica', () => {
@@ -569,7 +583,8 @@ test('D442/5: re-init aceita as chaves de liga/desliga em vez de ignorar', () =>
 // D503 (plano d503, Tarefa 1): `referencias` e a peca de topo contra a qual a revisao compara. Opcional: sem ela,
 // nada muda. Por tipo (tela, codigo, texto), cada um uma lista de caminho ou URL - por isso fora de conferirCaminhos.
 test('D503: referencias e opcional e aceita listas de caminho ou URL por tipo', () => {
-  assert.deepStrictEqual(projeto.CHAVES_OPCIONAIS, ['referencias', 'marcaDeAtalho', 'fontesDeConsulta']);
+  assert.deepStrictEqual(projeto.CHAVES_OPCIONAIS, ['referencias', 'marcaDeAtalho', 'fontesDeConsulta', 'admissao',
+    'provaDeCoerencia']);
   assert.deepStrictEqual(projeto.TIPOS_REFERENCIA, ['tela', 'codigo', 'texto']);
   assert.strictEqual(projeto.CHAVES.indexOf('referencias'), -1, 'opcional nao entra nas obrigatorias');
   const com = copia({ referencias: { tela: ['docs/ref.png', 'https://exemplo.com/painel'], codigo: [], texto: ['README.md'] } });

@@ -109,10 +109,12 @@ test('T5: comando destrutivo na forma unica; a liberacao e do dono, por ultimo',
 });
 
 // A2-84 (P2 do pedido 12): a pergunta ao dono tinha duas redacoes (a trava 5 e o design pediam "3 opcoes com a
-// recomendada marcada"); a do intocavel diz o que cada opcao traz, e vale nos tres.
-test('A2-84: destrutivo, design e intocavel pedem as 3 opcoes ao dono com a mesma redacao', () => {
+// recomendada marcada"); a do intocavel diz o que cada opcao traz, e vale nos dois. D785 item 4 (s369, 2.4): a trava 5
+// saiu da lista; ela manda seguir por outro caminho, sem pedir o sim.
+test('A2-84: design e intocavel pedem as 3 opcoes ao dono com a mesma redacao; a trava 5 nao pede', () => {
+  const t5 = destrutivo.motivo('rm -rf build', { motivo: 'apaga pasta' });
+  assert.ok(!/3 opcoes|peca ao dono/.test(t5) && /siga por outro caminho/.test(t5), t5);
   const avisos = {
-    destrutivo: destrutivo.motivo('rm -rf build', { motivo: 'apaga pasta' }),
     design: design.motivo('src/a.css', [{ linha: 3, valor: '#123456', tipo: 'cor' }], { cores: ['#fff'] }),
     intocavel: escopo.motivoIntocavel('.env')
   };

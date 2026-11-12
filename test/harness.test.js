@@ -83,7 +83,8 @@ test('harness: apply_patch com Update, Move e Delete', () => {
   assert.deepStrictEqual(r.map((e) => [e.tool_name, e.tool_input]), [
     ['Edit', { file_path: 'a.txt', old_string: 'fica\num', new_string: 'fica\nUM' }],
     ['Write', { file_path: 'c.txt', content: 'fica\nUM' }],
-    ['Write', { file_path: 'velho.txt', content: '' }]
+    // A5b (s369): o Delete vai marcado como apagar, para o portao de escopo
+    ['Write', { file_path: 'velho.txt', content: '', apagar: true }]
   ]);
 });
 

@@ -4,16 +4,21 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const aud = require('../scripts/lib/auditoria.js');
+const comum = require('./lib/comum.js');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'auditar.js');
+
+// F1a (D828): sem --transcricao, o auditar.js procura a conversa da sessao do ambiente (CLAUDE_CODE_SESSION_ID) na
+// pasta de config. Rodando dentro de uma sessao real, ele le a conversa inteira e as dos subagentes (centenas de MB),
+// e um teste levava de 144 a 288 s. O teste roda isolado: sem a sessao e com uma pasta de config vazia, pelo
+// `comum.rodar` (F1e), que tambem poe prazo no processo.
 
 // ---------------------------------------------------------------- memoria (item 3 da 0.3.4, D288)
 // Fixture em pasta temporaria criada pelo teste. Nunca o MEMORY.md real.
 
 function pasta(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-auditoria-' + nome + '-'));
+  return comum.pasta('auditoria-' + nome);
 }
 
 /** Grava um MEMORY.md de brinquedo e devolve o caminho (Buffer ou texto, sem tocar em mais nada). */
@@ -278,7 +283,7 @@ test('memoria: auditar.js --memoria mede; sem o argumento, ou com ele vazio, diz
   try {
     const arq = memoria(dir, linhas(10, 4));
     const rodar = function (args) {
-      const r = spawnSync(process.execPath, [SCRIPT].concat(args), { cwd: dir, encoding: 'utf8' });
+      const r = comum.rodar(SCRIPT, args, { cwd: dir });
       assert.strictEqual(r.status, 0, r.stderr);
       return JSON.parse(r.stdout);
     };
@@ -361,7 +366,7 @@ test('regras (A): auditar.js tambem traz a chave regras', () => {
   const dir = pasta('regras-cli');
   try {
     regrasMd(dir, '- ao editar -> rodar git status\n');
-    const r = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: 'utf8' });
+    const r = comum.rodar(SCRIPT, [], { cwd: dir });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.deepStrictEqual(JSON.parse(r.stdout).regras, { lidas: true, total: 1 });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -549,7 +554,7 @@ test('peso (D370): auditar.js sem projeto.json pesa o CLAUDE.md como candidata; 
   try {
     claudeMd(dir);
     const rodar = function () {
-      const r = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: 'utf8' });
+      const r = comum.rodar(SCRIPT, [], { cwd: dir });
       assert.strictEqual(r.status, 0, r.stderr);
       return JSON.parse(r.stdout);
     };
@@ -625,10 +630,7 @@ test('item 15: regras - idade pelo git blame do regras.md; sem git, dias null (n
     fs.writeFileSync(arq, '# Regras\n\n- ao commitar -> rodar a suite\n');
     const regras = aud.idadeDasRegras(dir, require('../scripts/lib/regra.js').parseRegras(fs.readFileSync(arq, 'utf8')), agora);
     assert.deepStrictEqual(regras, [{ linha: 3, gatilho: 'ao commitar', dias: null, fria: false }], 'fora do git: nao sei');
-    const git = function (args, env) {
-      const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', env: Object.assign({}, process.env, env || {}) });
-      assert.strictEqual(r.status, 0, r.stderr);
-    };
+    const git = function (args, env) { comum.git(dir, args, env); };
     git(['init', '-q']);
     git(['add', '.']);
     const velho = new Date(agora - 200 * DIA).toISOString();

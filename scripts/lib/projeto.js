@@ -15,7 +15,9 @@ const CHAVES = [
 // qual a revisao compara, por tipo, cada um uma lista de caminho ou URL (por isso fora de conferirCaminhos).
 // Plano 090 Tarefa 5: `marcaDeAtalho`, a marca do /sworn:shortcuts (padrao `atalho`), uma palavra.
 // D732 (fila D687): `fontesDeConsulta`, as fontes canonicas que saem do peso de instrucao da auditoria.
-const CHAVES_OPCIONAIS = ['referencias', 'marcaDeAtalho', 'fontesDeConsulta'];
+// C7 (D816): `admissao`, o resultado do teste de admissao do modelo (scripts/admissao.js --gravar).
+// F1c (D828): `provaDeCoerencia`, o comando do grupo de coerencia do disco que a prova por arquivo tocado tambem cobra.
+const CHAVES_OPCIONAIS = ['referencias', 'marcaDeAtalho', 'fontesDeConsulta', 'admissao', 'provaDeCoerencia'];
 const TIPOS_REFERENCIA = ['tela', 'codigo', 'texto'];
 
 const TRAVAS = ['fecho', 'escopo', 'destrutivo', 'outraFrente'];
@@ -57,7 +59,7 @@ const LISTAS_LIDAS = ['comandosLiberados', 'comandosBloqueados', 'intocaveis'];
 // D611 (T3b): `oferecerRadar` liga por padrao (so `=== false` desliga, radar-oferta.js).
 // D655: `portaoRevisao` liga por padrao (so `=== false` desliga, portao-fecho.js), como o portaoReferencia.
 // D674 (item 10): `pedidos` liga por padrao (so `=== false` desliga, pedidos.js).
-const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura', 'pedidos'];
+const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura', 'pedidos', 'juizAcima', 'revisaoTodoCodigo', 'aberturaEnxuta', 'provaPorArquivoTocado'];
 
 // Padrao que NUNCA casa um alvo relativo: letra de unidade (C: ou C:\) ou esquema
 // (file://). O alvo que chega aos portoes e sempre relativo a raiz do projeto
@@ -148,6 +150,9 @@ function avisosDeTipo(projeto) {
   }
   if ('marcaDeAtalho' in projeto && !require('./atalhos.js').ehMarca(projeto.marcaDeAtalho)) {
     avisos.push('marcaDeAtalho tem de ser uma palavra (letras, numeros, - ou _)');
+  }
+  if ('provaDeCoerencia' in projeto && !ehTexto(projeto.provaDeCoerencia)) {
+    avisos.push('provaDeCoerencia tem de ser texto nao vazio (o comando do grupo de coerencia)');
   }
   const deQualidade = require('./qualidade.js').avisoDeTipo(projeto);
   if (deQualidade) avisos.push(deQualidade);
@@ -259,6 +264,12 @@ function validar(obj) {
   if ('marcaDeAtalho' in obj && !require('./atalhos.js').ehMarca(obj.marcaDeAtalho)) {
     erros.push('marcaDeAtalho tem de ser uma palavra (letras, numeros, - ou _)');
   }
+  if ('provaDeCoerencia' in obj && !ehTexto(obj.provaDeCoerencia)) {
+    erros.push('provaDeCoerencia tem de ser texto nao vazio (o comando do grupo de coerencia)');
+  }
+
+  // C7 (D816): o resultado do teste de admissao, com a forma que o scripts/admissao.js grava.
+  if ('admissao' in obj) erros.push.apply(erros, require('./admissao.js').errosDaAdmissao(obj.admissao));
 
   // D732: so fonte canonica sai do peso; o item fora delas ficaria inerte calado (D104, D503).
   if ('fontesDeConsulta' in obj) {

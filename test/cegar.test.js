@@ -7,6 +7,10 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const cegar = require('../scripts/lib/cegar.js');
 
+// D824: o preparar le a frente da sessao (CLAUDE_CODE_SESSION_ID). Todo filho deste arquivo herda o ambiente, entao
+// ele sai daqui: nenhum teste le o estado real de quem roda a suite; o que precisa de sessao a declara no env.
+delete process.env.CLAUDE_CODE_SESSION_ID;
+
 const ITENS = [
   { nome: 'antes', conteudo: 'versao um' },
   { nome: 'depois', conteudo: 'versao dois' }
@@ -79,9 +83,10 @@ function repoDeEnsaio() {
   return dir;
 }
 
-function rodarCli(cwd, rel) {
+// `env` (opcional): o ambiente do processo, para o teste que liga a sessao numa frente (D824)
+function rodarCli(cwd, rel, env) {
   return spawnSync(process.execPath, [CLI, '--arquivo', rel, '--semente', 'fixa'], {
-    cwd: cwd, encoding: 'utf8', shell: false
+    cwd: cwd, encoding: 'utf8', shell: false, env: env
   });
 }
 
@@ -1274,10 +1279,14 @@ test('RV-04: mapa.json do formato antigo com BOM ainda diz o id da revisao antig
 });
 
 // D485 (s106): a revisao e proporcional ao diff. O preparar-revisao.js mede as linhas mudadas contra o HEAD e diz a
-// faixa (uma, duas, texto, completa) e as lentes dela; na completa, `lentes` e null e vale a tabela de familias.
+// faixa (uma, duas, texto, completa) e as lentes dela; na completa, as lentes pelo risco (veredito.lentesDaCompleta).
 function linhas(n, prefixo) {
   return Array.from({ length: n }, (_, i) => prefixo + ' ' + (i + 1)).join('\n') + '\n';
 }
+// F2d (c): as lentes da faixa completa num arquivo so de logica, com e sem a seguranca
+const TODAS_DE_LOGICA = ['correcao', 'escopo', 'estados', 'borda', 'seguranca', 'manutencao', 'microcopy', 'enxuto'];
+const SEM_SEGURANCA = TODAS_DE_LOGICA.filter((l) => l !== 'seguranca');
+
 function trocar(texto, quantas, de) {
   const l = texto.split('\n');
   for (let i = de; i < de + quantas; i++) l[i] = l[i] + ' mudada';
@@ -1314,7 +1323,9 @@ test('D485: preparar-revisao diz a faixa e as lentes pelo tamanho do diff', () =
     assert.deepStrictEqual(faixaDe(dir, 'logica.js'), { faixa: 'duas', lentes: ['correcao', 'borda'], linhasMudadas: 12 });
     // linhas acrescentadas sem tirar nenhuma contam pelo lado maior
     fs.writeFileSync(path.join(dir, 'logica.js'), js + linhas(45, 'const y ='), 'utf8');
-    assert.deepStrictEqual(faixaDe(dir, 'logica.js'), { faixa: 'completa', lentes: null, linhasMudadas: 45 });
+    // F2d (c): na completa, as lentes pelo risco; sem nada de risco nas linhas mudadas sai a seguranca, e a mudanca grande
+    // (45 linhas) leva a enxuto
+    assert.deepStrictEqual(faixaDe(dir, 'logica.js'), { faixa: 'completa', lentes: SEM_SEGURANCA, linhasMudadas: 45 });
     const md = fs.readFileSync(path.join(dir, 'texto.md'), 'utf8');
     fs.writeFileSync(path.join(dir, 'texto.md'), trocar(md, 60, 10), 'utf8');
     assert.deepStrictEqual(faixaDe(dir, 'texto.md'), { faixa: 'texto', lentes: ['correcao', 'microcopy'], linhasMudadas: 60 });
@@ -1323,15 +1334,36 @@ test('D485: preparar-revisao diz a faixa e as lentes pelo tamanho do diff', () =
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('D485: arquivo novo, de estilo ou igual ao HEAD vai a completa, com lentes null', () => {
+test('D485: arquivo novo, de estilo ou igual ao HEAD vai a completa, com as lentes pelo risco (F2d)', () => {
   const dir = repoDeFaixas();
   try {
     fs.writeFileSync(path.join(dir, 'novo.js'), 'const z = 1;\n', 'utf8');
-    assert.strictEqual(faixaDe(dir, 'novo.js').faixa, 'completa');
+    // arquivo novo conta como mudanca grande (fica a enxuto) e, sem nada de risco, sai a seguranca
+    assert.deepStrictEqual(faixaDe(dir, 'novo.js'), { faixa: 'completa', lentes: SEM_SEGURANCA, linhasMudadas: null });
+    // com risco numa linha (ler um arquivo do disco), a seguranca fica; a lista vai no mapa.json, que o apurar confere
+    fs.writeFileSync(path.join(dir, 'arrisca.js'), "const fs = require('node:fs');\nconst t = fs.readFileSync(process.argv[2]);\n", 'utf8');
+    const r = rodarCli(dir, 'arrisca.js');
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const s = JSON.parse(r.stdout);
+    assert.deepStrictEqual(s.lentes, TODAS_DE_LOGICA);
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(path.dirname(s.a), 'mapa.json'), 'utf8')).lentes, TODAS_DE_LOGICA);
+    // o risco tambem vale na linha que SAI: tirar a leitura do disco por uma linha comum mantem a seguranca
+    fs.writeFileSync(path.join(dir, 'tira.js'), "const a = 1;\nconst t = fs.readFileSync(p);\nconst b = 2;\n", 'utf8');
+    spawnSync('git', ['add', 'tira.js'], { cwd: dir });
+    spawnSync('git', ['commit', '-qm', 'tira'], { cwd: dir });
+    fs.writeFileSync(path.join(dir, 'tira.js'), 'const a = 1;\nconst t = null;\nconst b = 2;\n', 'utf8');
+    const t = spawnSync(process.execPath, [CLI, '--arquivo', 'tira.js', '--completa', '--semente', 'fixa'],
+      { cwd: dir, encoding: 'utf8', shell: false });
+    assert.strictEqual(t.status, 0, t.stdout + t.stderr);
+    assert.deepStrictEqual(JSON.parse(t.stdout).lentes, TODAS_DE_LOGICA.filter((l) => l !== 'enxuto'),
+      'linha de risco que sai: fica a seguranca; mudanca de uma linha: sai a enxuto');
     const css = fs.readFileSync(path.join(dir, 'estilo.css'), 'utf8');
     fs.writeFileSync(path.join(dir, 'estilo.css'), trocar(css, 1, 3), 'utf8');
-    assert.deepStrictEqual(faixaDe(dir, 'estilo.css'), { faixa: 'completa', lentes: null, linhasMudadas: 1 });
-    assert.deepStrictEqual(faixaDe(dir, 'logica.js'), { faixa: 'completa', lentes: null, linhasMudadas: 0 });
+    // estilo: entram design e medidor; uma linha so e sem risco: saem seguranca e enxuto
+    assert.deepStrictEqual(faixaDe(dir, 'estilo.css'), { faixa: 'completa',
+      lentes: ['correcao', 'escopo', 'estados', 'borda', 'manutencao', 'microcopy', 'medidor', 'design'], linhasMudadas: 1 });
+    // igual ao HEAD: sem medida, o nao sei deixa todas as de logica
+    assert.deepStrictEqual(faixaDe(dir, 'logica.js'), { faixa: 'completa', lentes: TODAS_DE_LOGICA, linhasMudadas: 0 });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -1422,7 +1454,8 @@ test('L3 A3-04: --completa entrega o arquivo inteiro na faixa completa; o mapa.j
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     s = JSON.parse(r.stdout);
     assert.strictEqual(s.faixa, 'completa');
-    assert.strictEqual(s.lentes, null);
+    // pedida a completa numa mudanca de uma linha, sem risco: saem seguranca e enxuto
+    assert.deepStrictEqual(s.lentes, ['correcao', 'escopo', 'estados', 'borda', 'manutencao', 'microcopy']);
     assert.strictEqual(s.linhasMudadas, 1, 'a medida segue a do diff');
     assert.strictEqual(s.trecho, undefined);
     assert.deepStrictEqual([fs.readFileSync(s.a, 'utf8'), fs.readFileSync(s.b, 'utf8')].sort(), [js, mudado].sort());
@@ -1432,6 +1465,37 @@ test('L3 A3-04: --completa entrega o arquivo inteiro na faixa completa; o mapa.j
     r = spawnSync(process.execPath, [CLI, '--arquivo', '--completa'], { cwd: dir, encoding: 'utf8', shell: false });
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /--arquivo pede um valor/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// B2 (s369, R-impeccable): --degradado "<motivo>" (inspetor sem isolamento, lente de tela sem navegador) vai no
+// mapa.json, que o apurar-ronda.js le, e na saida; sem valor e erro de uso.
+test('B2: --degradado grava o motivo no mapa.json e na saida; sem valor e erro de uso', () => {
+  const dir = repoDeFaixas();
+  try {
+    const js = fs.readFileSync(path.join(dir, 'logica.js'), 'utf8');
+    fs.writeFileSync(path.join(dir, 'logica.js'), trocar(js, 1, 99), 'utf8');
+    let r = spawnSync(process.execPath, [CLI, '--arquivo', 'logica.js', '--degradado', 'sem navegador', '--semente', 'f'],
+      { cwd: dir, encoding: 'utf8', shell: false });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const s = JSON.parse(r.stdout);
+    assert.strictEqual(s.degradado, 'sem navegador');
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(path.dirname(s.a), 'mapa.json'), 'utf8')).degradado,
+      'sem navegador');
+    assert.match(s.aviso, /DEGRADADO: sem navegador/);
+    r = spawnSync(process.execPath, [CLI, '--arquivo', 'logica.js', '--degradado'], { cwd: dir, encoding: 'utf8', shell: false });
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.match(r.stdout, /--degradado pede um valor/);
+    r = spawnSync(process.execPath, [CLI, '--arquivo', 'logica.js', '--degradado', '   '], { cwd: dir, encoding: 'utf8', shell: false });
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.match(r.stdout, /--degradado pede um motivo/, 'so espaco nao e motivo');
+    r = spawnSync(process.execPath, [CLI, '--arquivo', '--degradado', 'x'], { cwd: dir, encoding: 'utf8', shell: false });
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.match(r.stdout, /--arquivo pede um valor/, '--degradado nao vira o arquivo');
+    // sem a flag, nada no mapa
+    fs.rmSync(path.join(dir, '.claude', 'sworn', 'revisao'), { recursive: true, force: true });
+    const sem = JSON.parse(rodarCli(dir, 'logica.js').stdout);
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(path.dirname(sem.a), 'mapa.json'), 'utf8')).degradado, undefined);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -1452,7 +1516,8 @@ test('D485: git diff que falha nao inventa faixa pequena - completa, linhasMudad
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const s = JSON.parse(r.stdout);
     assert.strictEqual(s.faixa, 'completa');
-    assert.strictEqual(s.lentes, null);
+    // sem a medida do diff, o nao sei deixa todas as de logica
+    assert.deepStrictEqual(s.lentes, TODAS_DE_LOGICA);
     assert.strictEqual(s.linhasMudadas, null);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -1549,8 +1614,9 @@ test('D503: sem referencia para o tipo do arquivo, o pacote e o de hoje (regress
       // L3 (s104, A3-03): o mapa.json leva a faixa desde o L3; o resto do pacote sem referencia segue o de antes.
       assert.deepStrictEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(pasta, 'mapa.json'), 'utf8'))),
         ['arquivo', 'mapa', 'faixa'], nome);
-      assert.deepStrictEqual(Object.keys(s), ['ronda', 'arquivo', 'base', 'a', 'b', 'regua', 'vereditos', 'faixa',
-        'lentes', 'linhasMudadas', 'aviso', 'trecho', 'semRegua'], nome);
+      // D824: o pacote diz o pedido da tarefa (null e semPedido sem escopo declarado)
+      assert.deepStrictEqual(Object.keys(s), ['ronda', 'arquivo', 'base', 'a', 'b', 'regua', 'pedido', 'vereditos', 'faixa',
+        'lentes', 'linhasMudadas', 'aviso', 'trecho', 'semPedido', 'semRegua'], nome);
       // Plano 082, Tarefa 5 (p1-27): so de outro tipo, o pacote e o de hoje, mas o aviso diz que a referencia ficou de fora.
       if (nome === 'so de outro tipo') assert.match(s.aviso, /"codigo"/, nome);
       assert.doesNotMatch(s.aviso, nome === 'so de outro tipo' ? /R\.txt|invertida/ : /R\.txt|invertida|referencia/, nome);
@@ -1814,4 +1880,157 @@ test('082 T6 (p1-31): a causa de cada referencia que falta vai ao mapa.json e a 
       assert.strictEqual('referenciaQueFalta' in s2, false);
     } finally { fs.rmSync(dir2, { recursive: true, force: true }); }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---------------------------------------------------------------- D3 (D824): o pedido da tarefa vai ao pacote
+
+function escopoEm(dir, rel, objetivo, dentro) {
+  fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+  fs.writeFileSync(path.join(dir, rel), '# Escopo\n\n**Objetivo:** ' + objetivo + '\n\n## Dentro\n' +
+    dentro.map((d) => '- ' + d).join('\n') + '\n\n## Fora\n- segredo.txt\n', 'utf8');
+}
+
+test('D824: o objetivo e o Dentro do escopo em vigor vao para o pedido.md do pacote', () => {
+  const dir = repoDeEnsaio();
+  try {
+    escopoEm(dir, '.claude/sworn/escopo.md', 'o raiz.txt diz a versao nova', ['raiz.txt', 'sub/**']);
+    const r = rodarCli(dir, 'raiz.txt');
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const saida = JSON.parse(r.stdout);
+    assert.ok(saida.pedido, 'a saida da o caminho do pedido: ' + r.stdout);
+    const pedido = fs.readFileSync(saida.pedido, 'utf8');
+    assert.match(pedido, /o raiz\.txt diz a versao nova/);
+    // os itens do Dentro, cada um na sua linha (o objetivo tambem cita raiz.txt: so a linha "- " prova o Dentro)
+    assert.match(pedido, /^- raiz\.txt$/m);
+    assert.match(pedido, /^- sub\/\*\*$/m);
+    assert.doesNotMatch(pedido, /segredo\.txt/, 'o Fora nao e o pedido');
+    assert.strictEqual(saida.semPedido, undefined);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('D824: o objetivo longo e o Dentro longo saem cortados, com a marca e o arquivo de onde vieram', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const dentro = Array.from({ length: 205 }, (_, i) => 'pasta' + i + '/**');
+    escopoEm(dir, '.claude/sworn/escopo.md', 'x'.repeat(4100), dentro);
+    const r = rodarCli(dir, 'raiz.txt');
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const pedido = fs.readFileSync(JSON.parse(r.stdout).pedido, 'utf8');
+    assert.match(pedido, /x{4000} \[\.\.\.cortado: o objetivo inteiro esta em \.claude\/sworn\/escopo\.md\]/);
+    assert.doesNotMatch(pedido, /x{4001}/);
+    assert.match(pedido, /- pasta199\/\*\*\n- \[\.\.\.mais 5 em \.claude\/sworn\/escopo\.md\]/);
+    assert.doesNotMatch(pedido, /pasta200/);
+    // no limite exato (4000 caracteres, 200 itens) nada se corta; o emoji conta como um caractere so
+    escopoEm(dir, '.claude/sworn/escopo.md', '\u{1F600}'.repeat(4000), dentro.slice(0, 200));
+    const noLimite = fs.readFileSync(JSON.parse(rodarCli(dir, 'raiz.txt').stdout).pedido, 'utf8');
+    assert.ok(noLimite.includes('\u{1F600}'.repeat(4000)), 'os 4000 emojis inteiros');
+    assert.doesNotMatch(noLimite, /cortado|\[\.\.\.mais/);
+    assert.match(noLimite, /- pasta199\/\*\*\n$/);
+    // um acima do limite (4001 caracteres, 201 itens) ja se corta
+    escopoEm(dir, '.claude/sworn/escopo.md', 'y'.repeat(4001), dentro.slice(0, 201));
+    const umAcima = fs.readFileSync(JSON.parse(rodarCli(dir, 'raiz.txt').stdout).pedido, 'utf8');
+    assert.match(umAcima, /y{4000} \[\.\.\.cortado/);
+    assert.match(umAcima, /- \[\.\.\.mais 1 em /);
+    // o emoji composto (familia, com ZWJ) conta como um so e nao se parte; o item longo do Dentro se corta com marca
+    const familia = '\u{1F468}‍\u{1F469}‍\u{1F467}';
+    escopoEm(dir, '.claude/sworn/escopo.md', 'a'.repeat(3999) + familia + 'fim', ['p/' + 'q'.repeat(400), 'r/' + 's'.repeat(298)]);
+    const composto = fs.readFileSync(JSON.parse(rodarCli(dir, 'raiz.txt').stdout).pedido, 'utf8');
+    assert.ok(composto.includes('a'.repeat(3999) + familia + ' [...cortado'), 'o emoji inteiro antes da marca');
+    assert.match(composto, /^- p\/q{298} \[\.\.\.cortado\]$/m);
+    // o item de exatamente 300 caracteres fica inteiro
+    assert.match(composto, /^- r\/s{298}$/m);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('D824: sem escopo declarado, nada de pedido.md, e a saida diz por que', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const r = rodarCli(dir, 'raiz.txt');
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const saida = JSON.parse(r.stdout);
+    assert.strictEqual(saida.pedido, null);
+    // diz o motivo e o passo: declarar o objetivo e o Dentro no arquivo do escopo
+    assert.match(saida.semPedido, /^sem escopo declarado em \.claude\/sworn\/escopo\.md: a lente escopo julga so o que mudou alem do necessario; /);
+    assert.match(saida.semPedido, /declare o \*\*Objetivo:\*\* e a lista "## Dentro" em \.claude\/sworn\/escopo\.md$/);
+    assert.ok(!fs.existsSync(path.join(path.dirname(saida.a), 'pedido.md')));
+    assert.match(saida.aviso, / Sem pedido\.md: o escopo em vigor, \.claude\/sworn\/escopo\.md \(sem CLAUDE_CODE_SESSION_ID, nao sei a frente da sessao\), nao declara objetivo nem Dentro \(veja semPedido\)\./);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('D824: o escopo que existe e declara pouco: so o Dentro, so o objetivo, ou nada', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const rodar = (objetivo, dentro) => {
+      escopoEm(dir, '.claude/sworn/escopo.md', objetivo, dentro);
+      const r = rodarCli(dir, 'raiz.txt');
+      assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+      return JSON.parse(r.stdout);
+    };
+    const soDentro = fs.readFileSync(rodar('', ['raiz.txt']).pedido, 'utf8');
+    assert.match(soDentro, /^\*\*Objetivo:\*\* \(sem objetivo\)$/m);
+    assert.match(soDentro, /^- raiz\.txt$/m);
+    const soObjetivo = fs.readFileSync(rodar('so o objetivo', []).pedido, 'utf8');
+    assert.match(soObjetivo, /^\*\*Objetivo:\*\* so o objetivo$/m);
+    assert.match(soObjetivo, /^## Dentro\n- \(nada declarado\)$/m);
+    const nada = rodar('', []);
+    assert.strictEqual(nada.pedido, null);
+    assert.ok(!fs.existsSync(path.join(path.dirname(nada.a), 'pedido.md')));
+    assert.match(nada.semPedido, /^sem escopo declarado em \.claude\/sworn\/escopo\.md: /);
+    assert.match(nada.aviso, / Sem pedido\.md: o escopo em vigor, \.claude\/sworn\/escopo\.md /);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('D824: com a sessao numa frente, o pedido vem do escopo da frente', () => {
+  const dir = repoDeEnsaio();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-prep-sessao-'));
+  try {
+    escopoEm(dir, '.claude/sworn/escopo.md', 'o escopo geral', ['raiz.txt']);
+    escopoEm(dir, '.claude/sworn/escopos/minha-frente.md', 'o objetivo da frente', ['raiz.txt', 'so-da-frente/**']);
+    fs.mkdirSync(path.join(tmp, 'sworn'), { recursive: true });
+    let aviso = null;
+    const comFrente = (frente) => {
+      fs.writeFileSync(path.join(tmp, 'sworn', 'sessao-d824.json'), JSON.stringify({ frente: frente }), 'utf8');
+      const r = rodarCli(dir, 'raiz.txt', Object.assign({}, process.env, { SWORN_TMP: tmp, CLAUDE_CODE_SESSION_ID: 'sessao-d824' }));
+      assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+      aviso = JSON.parse(r.stdout).aviso;
+      return fs.readFileSync(JSON.parse(r.stdout).pedido, 'utf8');
+    };
+    const daFrente = comFrente('minha-frente');
+    assert.match(daFrente, /o objetivo da frente/);
+    assert.match(daFrente, /^- so-da-frente\/\*\*$/m); // o Dentro tambem vem da frente, nao so o objetivo
+    assert.doesNotMatch(daFrente, /o escopo geral/);
+    assert.match(aviso, / pedido\.md vai a lente escopo, com o pedido de \.claude\/sworn\/escopos\/minha-frente\.md \(frente minha-frente\)\./);
+    // a frente sem arquivo no disco cai no escopo geral, como a trava de escopo faz, e o aviso diz que caiu
+    assert.match(comFrente('frente-que-nao-existe'), /o escopo geral/);
+    assert.match(aviso, /com o pedido de \.claude\/sworn\/escopo\.md \(a frente frente-que-nao-existe nao tem arquivo de escopo valido\)\./);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('D824: sem sessao, ou com o estado ilegivel, o aviso diz que o pedido caiu no escopo geral', () => {
+  const dir = repoDeEnsaio();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-prep-sessao-'));
+  try {
+    escopoEm(dir, '.claude/sworn/escopo.md', 'o escopo geral', ['raiz.txt']);
+    escopoEm(dir, '.claude/sworn/escopos/minha-frente.md', 'o objetivo da frente', ['raiz.txt']);
+    const semSessao = Object.assign({}, process.env, { SWORN_TMP: tmp }); // o topo do arquivo ja tirou a sessao
+    const rodar = (env) => {
+      const r = rodarCli(dir, 'raiz.txt', env);
+      assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+      const saida = JSON.parse(r.stdout);
+      assert.match(fs.readFileSync(saida.pedido, 'utf8'), /o escopo geral/);
+      return saida.aviso;
+    };
+    assert.match(rodar(semSessao),
+      /com o pedido de \.claude\/sworn\/escopo\.md \(sem CLAUDE_CODE_SESSION_ID, nao sei a frente da sessao\)\./);
+    // o arquivo da sessao e uma pasta: o estado nao se le, e isso nao some calado
+    fs.mkdirSync(path.join(tmp, 'sworn', 'sessao-torta.json'), { recursive: true });
+    assert.match(rodar(Object.assign({}, semSessao, { CLAUDE_CODE_SESSION_ID: 'sessao-torta' })),
+      /com o pedido de \.claude\/sworn\/escopo\.md \(o estado da sessao nao tem frente \(ou nao se leu\)\)\./);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

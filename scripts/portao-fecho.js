@@ -7,6 +7,7 @@ const config = require('./lib/config.js');
 const projetoLib = require('./lib/projeto.js');
 const saude = require('./lib/saude.js');
 const escaladaLib = require('./lib/escalada.js');
+const provaNoFecho = require('./lib/prova-no-fecho.js');
 
 function avisoDeAmpliacao(contadores) {
   const n = (contadores && contadores.escopo_ampliado) || 0;
@@ -40,11 +41,65 @@ function cobrancaDaOrdem(e, s) {
 const AVISO_DA_ORDEM = 'sworn: a ordem do handoff dada na compactacao ainda nao foi cumprida; o modelo foi ' +
   'lembrado de cumpri-la antes de parar.';
 
+// B3 (s369, R-dsh): os baldes do estado tipado do fecho e das perguntas ao dono por classe. So contam (nunca barram):
+// escritos por extenso, um por nome, para o leitor de baldes (test/auxiliar-baldes.js) achar cada um.
+const CONTAR_ESTADO = {
+  pronto: function (contadores) { contadores.fecho_pronto = (contadores.fecho_pronto || 0) + 1; },
+  esperando: function (contadores) { contadores.fecho_esperando = (contadores.fecho_esperando || 0) + 1; },
+  bloqueado: function (contadores) { contadores.fecho_bloqueado = (contadores.fecho_bloqueado || 0) + 1; },
+  falhou: function (contadores) { contadores.fecho_falhou = (contadores.fecho_falhou || 0) + 1; }
+};
+const CONTAR_PERGUNTA = {
+  regra_de_negocio: function (contadores) {
+    contadores.pergunta_regra_de_negocio = (contadores.pergunta_regra_de_negocio || 0) + 1;
+  },
+  aparencia: function (contadores) { contadores.pergunta_aparencia = (contadores.pergunta_aparencia || 0) + 1; },
+  externo: function (contadores) { contadores.pergunta_externo = (contadores.pergunta_externo || 0) + 1; },
+  credencial: function (contadores) { contadores.pergunta_credencial = (contadores.pergunta_credencial || 0) + 1; },
+  // a pergunta fora das 4 classes da D785 e a falha medida: o laco devia ter decidido sozinho
+  fora: function (contadores) {
+    contadores.pergunta_fora_da_classe = (contadores.pergunta_fora_da_classe || 0) + 1;
+  }
+};
+const PEDE_DONO = /^[ \t>*_-]*(?:preciso do dono|need the owner)[ \t]*:(.*)$/gim;
+const ESPERA_DECLARADA = /^[ \t>*_-]*(?:espero|waiting on)[ \t]*:/im;
+
+/** B3: conta, no turno que encerra, o estado do fecho (continuo.estadoDoFecho) e cada pedido ao dono pela classe. O
+ *  transcript so e lido quando ha alegacao de pronto (a mesma conta da trava 3). Subagente nao conta. */
+function contarFecho(e, s, projeto, cwd) {
+  if (e.agent_id) return;
+  const continuo = require('./lib/continuo.js');
+  const msg = String(e.last_assistant_message || '');
+  // o pedido de verdade e o do texto corrido (o colado num bloco de codigo ou citado nao conta) e tem texto
+  const pedidos = Array.from(continuo.textoCorrido(msg).matchAll(PEDE_DONO), function (m) { return m[1].trim(); })
+    .filter(Boolean);
+  const alega = evidencia.analisar(msg).alegaSucesso;
+  const prova = provaDe(projeto);
+  // D794: a mesma leitura do transcript do resto do fecho, vista com a prova que o gancho rodou
+  const teste = alega && prova ? comProvaDoGancho(e, s, lerTranscript(e, prova, projeto), prova) : null;
+  const estadoDoFecho = continuo.estadoDoFecho({ pedeDono: pedidos.length > 0, espera: ESPERA_DECLARADA.test(msg),
+    alegaSucesso: alega, comEvidencia: alega && !evidencia.deveBloquear(msg),
+    mostraFalha: evidencia.deveBloquearPorFalha(msg), teste: teste });
+  s.contadores = s.contadores || {};
+  if (estadoDoFecho) CONTAR_ESTADO[estadoDoFecho](s.contadores);
+  for (const p of pedidos) CONTAR_PERGUNTA[continuo.classeDaPergunta(p) || 'fora'](s.contadores);
+  // B4 (s369, R-superpowers): cada decisao autonoma registrada; a sem o "custo se errado" e a falha medida
+  for (const completa of continuo.decisoesDaResposta(msg)) {
+    s.contadores.decisao_autonoma = (s.contadores.decisao_autonoma || 0) + 1;
+    if (!completa) s.contadores.decisao_sem_custo = (s.contadores.decisao_sem_custo || 0) + 1;
+  }
+}
+
 function encerrarTurno(e, s, avisoExtra) {
-  const contadores = s.contadores || {};
   const cwd = config.raizDoProjeto(e.cwd);
-  estado.descarregar(cwd, contadores);
   const projeto = config.carregarProjeto(cwd);
+  // D420: o balde e acessorio e nunca impede o fecho; a falha deixa uma linha no stderr, nao some calada
+  try { contarFecho(e, s, projeto, cwd); } catch (err) {
+    process.stderr.write('sworn: o estado do fecho deste turno nao foi contado (' +
+      require('./lib/escopo.js').ascii(require('./lib/texto.js').causaDoErro(err)).slice(0, 120) + ').\n');
+  }
+  const contadores = s.contadores || {};
+  estado.descarregar(cwd, contadores);
 
   // D123: dois baldes. `contadores` e do TURNO - descarregado e depois ZERADO, senao o
   // ledger da D14 conta o mesmo disparo de novo a cada turno (medido: 1 -> 2 -> 3).
@@ -95,10 +150,12 @@ function encerrarTurno(e, s, avisoExtra) {
     // D786 passo 3: a ordem do handoff que sai agora torna velho o gravado antes (a compactacao mandaria reler esse);
     // fica so o gravado neste turno, o que a ordem ja encontra pronto (o jaColado abaixo). O ultimo handoff do turno
     // (arquivoDoHandoff, campo do turno) tem de ser o da marca: o de um subagente tambem o grava, sem trocar a marca.
+    // s369 (P1 do dono): a continuacao que esta ordem abre segue o trabalho depois do handoff (paradaNoHandoff).
     sessao({ avisouSaude: true, avisouAlarme: avisouAlarme, avisouEspera: avisouEspera,
       turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [],
       arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, tokensDeContexto: tokensDeContexto,
-      handoffDaSessao: s.handoffDaSessao === s.arquivoDoHandoff ? s.handoffDaSessao || null : null });
+      handoffDaSessao: s.handoffDaSessao === s.arquivoDoHandoff ? s.handoffDaSessao || null : null,
+      handoffDoGatilho: true });
   } else {
     sessao({ turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [],
       arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, avisouSaude: s.avisouSaude || false,
@@ -188,6 +245,114 @@ function handoffSemPrompt(e, s, projeto) {
   return espacoNormal(e.last_assistant_message).indexOf(espacoNormal(prompt)) === -1;
 }
 
+/** s369 (P1 do dono, pedido 70 / D786): o gatilho pediu o handoff, ele foi gravado nesta continuacao e o modelo parou
+ *  sem mais nenhuma ferramenta fora do proprio handoff. A conversa segue sozinha (a compactacao vem quando encher):
+ *  barra, com a ordem de seguir; uma vez, pela guarda do turno que ja barrou (bloqueouNesteTurno, no Stop abaixo).
+ *  Desliga com o mesmo `"portaoHandoff": false` do prompt no chat. */
+function paradaNoHandoff(s, projeto) {
+  if (s.handoffDoGatilho !== true || s.gravouHandoff !== true) return false;
+  if (s.trabalhoDepoisDoHandoff === true) return false;
+  return !(projeto && projeto.portaoHandoff === false);
+}
+
+// s369 (A6, P1 do dono: "entenda pq nao continuou, isso nao pode acontecer"; vale em todo projeto e harness): o turno
+// com trabalho que para com trabalho por fazer - caixa aberta no plano da sessao, ou a resposta anunciando o proximo
+// passo em vez de faze-lo - e nada nele precisa do dono. So a linha declarada libera (palavra solta como "publicar" no
+// meio do texto nao libera: os fechos a citam de passagem), menos a que so pede chat novo, que barra (linhaDeclarada,
+// abaixo); teto contado por turno (D785: laco com teto). Vale tambem
+// no Stop que ja barrou (o teto e que segura o laco) e com `travas.fecho: false`: chave propria, como o portaoHandoff
+// (D415) - so `"modoContinuo": false` desliga.
+const LIBERA_PARADA = /^[ \t>*_-]*(?:preciso do dono|espero|need the owner|waiting on)[ \t]*:/im;
+const ANUNCIA_PASSO = new RegExp('\\b(?:pr[oó]xim[oa]s? (?:passos?|etapas?)|em seguida,? (?:vou|sigo|fa[cç]o)|' +
+  'depois (?:sigo|vou|fa[cç]o)|sigo (?:com|pel[oa]|para)|vou seguir|next steps?|i(?:\'ll| will) (?:now )?' +
+  '(?:continue|proceed|start|move on))\\b', 'i');
+const TETO_DA_PARADA = 3;
+// O anuncio so conta no texto corrido: bloco de codigo (cercado, ate indentado), codigo em linha e citacao (`>`)
+// saem; a frase que nega o passo ("nao ha proximo passo") e a que entrega o passo ao dono ou ao usuario ("o proximo
+// passo e do dono", "proximo passo: voce aprova o PR") nao sao anuncio de fazer. A frase se corta em . ! ? ; e na
+// quebra de linha, nunca no ":" - o "proximo passo:" e o dono que vem depois dele sao a mesma frase.
+// Bordas por letra Unicode, nao \b: sem a flag u o \b do JS nao ve o "e" acentuado de "voce" como letra.
+const PASSO_DE_OUTRO = new RegExp('(?<![\\p{L}\\p{N}_])(?:d[oa] dono|da dona|d[oa] usu[aá]ri[oa]|de voc[eê]|' +
+  'com voc[eê]|para voc[eê]|voc[eê] (?:aprova|decide|escolhe|revisa|confirma|publica|testa|roda|abre|cola|responde)|' +
+  '[eé] (?:seu|sua)(?=\\s*(?:[.!?;:,]|$))|seu (?:ok|sim|aceite)|sua (?:aprova[cç][aã]o|decis[aã]o|escolha|resposta)|' +
+  'the owner|owner\'s|yours|for you|your (?:call|approval|decision|review|ok)|' +
+  'you (?:approve|decide|choose|review|confirm|publish|run|open))(?![\\p{L}\\p{N}_])', 'iu');
+// "no" so no ingles: o "no proximo passo, vou..." do portugues e anuncio
+const NEGA_PASSO = new RegExp('\\b(?:(?:n[aã]o (?:h[aá]|tem|resta|sobra)|nenhum[a]?|sem)\\s+(?:mais\\s+|outr[oa]s?\\s+)?' +
+  'pr[oó]xim|(?:no|there(?:\'s| is) no|without)\\s+(?:more\\s+|other\\s+|further\\s+)?next)', 'i');
+function anunciaOProximoPasso(msg) {
+  const corrido = require('./lib/continuo.js').textoCorrido(msg);
+  return corrido.split(/(?<=[.!?;])\s+|\n+/).some(function (frase) {
+    return ANUNCIA_PASSO.test(frase) && !PASSO_DE_OUTRO.test(frase) && !NEGA_PASSO.test(frase);
+  });
+}
+
+// s369 (3a vez, dono: "corrija isso de uma vez por todas"): "Preciso do dono: abrir o chat novo e colar o prompt" nao
+// libera - a conversa segue sozinha e a compactacao rele o handoff (skill do handoff). A regra e por sobra, nao por
+// lista de palavras do dono (essa nunca fecha): a linha declarada, com as linhas nao vazias logo abaixo, e so-chat
+// quando pede o chat novo ou colar o prompt e, tiradas essas frases e o para-que-serve, nao sobra nada. Sobrou
+// qualquer outra coisa (um pedido de verdade, "a versao nova do sworn so carrega la"), libera: o lado seguro, como era.
+const CHAT_NOVO = '(?:(?:chat|conversa|sess[aã]o)\\s+nov[ao]|nov[ao]\\s+(?:chat|conversa|sess[aã]o)|' +
+  'new\\s+(?:chat|conversation|session))';
+const FRASES_DO_CHAT = [
+  new RegExp('\\b(?:abr(?:ir|a|e|o)|inici(?:ar|e|a|o)|come[cç](?:ar|e|a|o)|usar|use|open|start)\\s+' +
+    '(?:(?:um|uma|o|a|outro|outra|the|an?)\\s+)?' + CHAT_NOVO + '\\b', 'gi'),
+  new RegExp('\\b(?:col(?:ar|e|o)|paste)\\s+(?:(?:o|a|the)\\s+)?prompt\\b(?:\\s+(?:acima|abaixo|above|below|' +
+    'do\\s+handoff|of\\s+the\\s+handoff|n[oa]\\s+' + CHAT_NOVO + '|n[oa]\\s+chat|l[aá]|(?:in|into)\\s+(?:it|the\\s+' +
+    '(?:new\\s+)?chat)))*', 'gi'),
+  new RegExp('\\b(?:com|with)\\s+(?:o|the)\\s+prompt(?:\\s+(?:do\\s+handoff|of\\s+the\\s+handoff|acima|above))?', 'gi')
+];
+// O para-que-serve sai, mas nao e pedido de chat ("Espero: pra seguir" libera). So sai quando fecha a linha, com no
+// maximo artigo e uma palavra ("para comecar a A5e."), e so por espaco e tab: o que vem depois dele, ou na linha de
+// baixo, fica e libera (uma lista de conectores nunca fecha).
+const PARA_QUE_SERVE = new RegExp('\\b(?:para|pra|to)[ \\t]+(?:come[cç]ar|seguir|continuar|retomar|start|continue|' +
+  'resume)(?:[ \\t]+(?:a|o|the))?(?:[ \\t]+[^\\s.;,!?]+)?(?=[ \\t]*(?:[.!][ \\t]*)?(?:\\r?\\n|$))', 'gi');
+const SOBRA_VAZIA = /^(?:\s|[.,;:!?()\-–—*_]|\b(?:e|and|ent[aã]o|then|depois)\b)*$/i;
+/** A decisao sobre as linhas "Preciso do dono:"/"Espero:" da resposta, cada uma com as linhas nao vazias logo abaixo:
+ *  `libera` se alguma pede outra coisa; `pedeChat` se ha alguma e todas so pedem chat novo. Sem linha declarada, os
+ *  dois sao false (a parada segue para a caixa e o anuncio). */
+function linhaDeclarada(msg) {
+  const todas = String(msg).split(/\r?\n/);
+  const linhas = [];
+  for (let i = 0; i < todas.length; i++) {
+    if (!LIBERA_PARADA.test(todas[i])) continue;
+    let l = todas[i];
+    while (i + 1 < todas.length && todas[i + 1].trim() !== '') l += '\n' + todas[++i];
+    linhas.push(l);
+  }
+  const soChat = function (l) {
+    let resto = l.replace(LIBERA_PARADA, '');
+    let pediuChat = false;
+    for (const re of FRASES_DO_CHAT) resto = resto.replace(re, function () { pediuChat = true; return ' '; });
+    resto = resto.replace(PARA_QUE_SERVE, ' ');
+    return pediuChat && SOBRA_VAZIA.test(resto);
+  };
+  return { libera: linhas.some(function (l) { return !soChat(l); }), pedeChat: linhas.length > 0 && linhas.every(soChat) };
+}
+
+function paradaSemDono(e, s, projeto, cwd) {
+  if (!s.trabalhoReal || e.agent_id) return null;
+  if (!require('./lib/continuo.js').ativo(projeto)) return null;
+  const msg = String(e.last_assistant_message || '');
+  const declarada = linhaDeclarada(msg);
+  if (declarada.libera || (s.paradaSemDono || 0) >= TETO_DA_PARADA) return null;
+  let caixa = null;
+  try { caixa = require('./lib/plano.js').caixaAberta(cwd, s.frente); } catch (err) { caixa = null; }
+  const anuncia = anunciaOProximoPasso(msg);
+  if (!caixa && !anuncia && !declarada.pedeChat) return null;
+  s.paradaSemDono = (s.paradaSemDono || 0) + 1;
+  s.contadores = s.contadores || {};
+  s.contadores.parada_sem_dono = (s.contadores.parada_sem_dono || 0) + 1;
+  return saude.motivoParadaSemDono(caixa, anuncia, declarada.pedeChat);
+}
+
+/** Encerra o turno, menos quando ele para com trabalho por fazer (paradaSemDono): ai barra. */
+function encerrarOuSeguir(e, s, projeto, avisoExtra) {
+  const m = paradaSemDono(e, s, projeto, config.raizDoProjeto(e.cwd));
+  /* o aviso que ia ao encerrar (o do plano ilegivel) vai junto na barrada, nao se perde */
+  return m ? barrar(e, s, avisoExtra ? [m, avisoExtra] : [m], false) : encerrarTurno(e, s, avisoExtra);
+}
+
 const espacoNormal = (t) => String(t).replace(/\s+/g, ' ').trim();
 
 /** O conteudo do ultimo bloco de codigo do arquivo (cerca no comeco da linha), ou null. */
@@ -215,7 +380,8 @@ function semRevisaoDeReferencia(e, s, projeto, cwd) {
   if (!arquivos.length) return null;
   // Plano 082, Tarefa 5 (mock S10; p7-18, p7-29, p7-30): o que falta em palavras do dono, um caminho por linha entre
   // aspas (com espaco ficava ambiguo na lista por virgula; fora de ASCII vira "?", R5), e a saida quando nao fecha.
-  // "aprovado" e o que o apurar-ronda.js escreve no fecho ("duas rondas secas seguidas: aprovado").
+  // "aprovado" e o que o apurar-ronda.js escreve no fecho ("duas rondas secas seguidas: aprovado", ou, desde a F2b,
+  // "ronda 1 completa sem achado nenhum: aprovado").
   const ascii = require('./lib/escopo.js').ascii;
   const citados = arquivos.slice(0, MAX_CITADOS).map(function (a) { return '  - "' + ascii(a) + '"'; });
   if (arquivos.length > MAX_CITADOS) citados.push('  - e mais ' + (arquivos.length - MAX_CITADOS));
@@ -229,43 +395,45 @@ function semRevisaoDeReferencia(e, s, projeto, cwd) {
     '',
     'Faca uma destas:',
     '  1. rode /sworn:review "<arquivo>" para cada um, ate sair "aprovado";',
-    '  2. se chegar a 3 rondas sem fechar, pare e leve ao usuario 3 opcoes para',
-    '     escolher: corrigir e comparar mais uma vez, entregar sem a comparacao',
-    '     dizendo o motivo, ou comecar uma comparacao nova do zero;',
+    '  2. se chegar a 3 rondas sem fechar, conserte o que e erro, cada conserto com um',
+    '     teste que reprova quando o codigo e estragado de proposito, rode a suite inteira',
+    '     e entregue sem a comparacao dizendo o que ficou atras, sem perguntar;',
     '  3. ou diga ao usuario por que esta entrega fica sem a comparacao.',
     '',
     'So o dono desliga neste projeto: "portaoReferencia": false em .claude/sworn/projeto.json.'
   ]).join('\n');
 }
 
-/** D655 (plano pedidos-aaa-idioma-readme, T1): o motivo quando a resposta alega entrega e um arquivo mudado na sessao
- *  resolve para `aaa` sem revisao aprovada (`marcha.aaaSemRevisao`, o que o portao do commit aceita), com ou sem
- *  referencia. `jaCobrados` sao os que o motivo da referencia ja cita no turno: nao saem duas vezes. Declarar a
+/** D655 (plano pedidos-aaa-idioma-readme, T1); C3 (D808, D812): o motivo quando a resposta alega entrega e um arquivo
+ *  de codigo mudado na sessao nao tem revisao aprovada - da marcha aaa por padrao, de qualquer marcha (o conjunto que
+ *  o portao do commit cobra) com "revisaoTodoCodigo": true - com ou sem referencia. `jaCobrados` sao os que o motivo da referencia ja cita no turno: nao saem duas vezes. Declarar a
  *  entrega sem revisao (`evidencia.declaraSemRevisao`) libera. So `"portaoRevisao": false` desliga, como o
  *  portaoReferencia. Texto ao modelo em ingles (D656), ASCII (R5). */
 function semRevisaoAprovada(e, s, projeto, cwd, jaCobrados) {
   if (!projeto || projeto.portaoRevisao === false) return null;
   const msg = e.last_assistant_message;
   if (!evidencia.analisar(msg).alegaSucesso || evidencia.declaraSemRevisao(msg)) return null;
-  const arquivos = require('./lib/marcha.js').aaaSemRevisao(s.arquivosTocados, s.revisadosAprovados, projeto, cwd)
+  // C3 (D808, D812): a marcha aaa por padrao; todo arquivo de codigo (o conjunto do commit) so com
+  // "revisaoTodoCodigo": true - a bateria do C3 mediu o custo do Opus 2,44 vezes com a cobranca ampla, sem ganho
+  const marcha = projeto.revisaoTodoCodigo === true ? null : 'aaa';
+  const arquivos = require('./lib/marcha.js').semRevisao(s.arquivosTocados, s.revisadosAprovados, projeto, cwd, marcha)
     .filter(function (a) { return jaCobrados.indexOf(a) === -1; });
   if (!arquivos.length) return null;
   const ascii = require('./lib/escopo.js').ascii;
   const citados = arquivos.slice(0, MAX_CITADOS).map(function (a) { return '  - "' + ascii(a) + '"'; });
   if (arquivos.length > MAX_CITADOS) citados.push('  - and ' + (arquivos.length - MAX_CITADOS) + ' more');
   return [
-    'sworn - the review is missing on a strictest-rigor file.',
+    'sworn - the review is missing on a changed code file.',
     '',
-    'You said the work is done, and you changed files that this project puts in the',
-    'strictest rigor level (list "marchas.aaa" in .claude/sworn/projeto.json) with no',
-    'approved review in this session:'
+    'You said the work is done, and you changed code files with no approved review',
+    'in this session:'
   ].concat(citados, [
     '',
     'Do one of these:',
     '  1. run /sworn:review "<file>" for each one, until it says "aprovado";',
-    '  2. if 3 rounds pass without approval, stop and ask the user to pick one of',
-    '     3 options: fix and recheck once, deliver "without review" with the',
-    '     reason, or run a new full review;',
+    '  2. if 3 rounds pass without approval, fix what is an error, each fix with a',
+    '     test that fails when the code is broken on purpose, run the whole suite and',
+    '     deliver "without review" naming what stays open, without asking;',
     '  3. or tell the user why this delivery goes "without review" (those words',
     '     in your answer release this check).',
     '',
@@ -273,41 +441,194 @@ function semRevisaoAprovada(e, s, projeto, cwd, jaCobrados) {
   ]).join('\n');
 }
 
+/** B2 (s369, R-impeccable): o pronto com arquivo aprovado por revisao degradada (sem isolamento, sem navegador) tem
+ *  de dizer isso numa linha "DEGRADADO: <motivo>". So vale a marca do arquivo ainda aprovado e tocado na sessao (o
+ *  editado de novo perde a aprovacao, e quem cobra e a revisao que falta). ASCII (R5). */
+function semAvisoDeDegradada(e, s, projeto) {
+  const marcadas = s.revisoesDegradadas;
+  if (!marcadas || typeof marcadas !== 'object' || Array.isArray(marcadas)) return null;
+  if (projeto && projeto.portaoRevisao === false) return null;
+  const motivoDe = function (abs) {
+    const m = marcadas[abs];
+    return typeof m === 'string' && m.trim() ? m.trim() : 'motivo nao gravado';
+  };
+  const msg = e.last_assistant_message;
+  if (!evidencia.analisar(msg).alegaSucesso || /^\s*DEGRADADO: \S/m.test(String(msg || ''))) return null;
+  const commit = require('./lib/commit.js');
+  const cwd = config.raizDoProjeto(e.cwd);
+  const ascii = require('./lib/escopo.js').ascii;
+  const relativo = require('./lib/caminho.js').relativoAoProjeto;
+  const casos = Object.keys(marcadas).filter(function (abs) {
+    return commit.aprovado(s.revisadosAprovados, abs) && commit.aprovado(s.arquivosTocados, abs);
+  });
+  if (!casos.length) return null;
+  const linhas = casos.slice(0, MAX_CITADOS).map(function (abs) {
+    return '  - "' + ascii(relativo(abs, cwd) || abs) + '": ' + ascii(motivoDe(abs));
+  });
+  if (casos.length > MAX_CITADOS) linhas.push('  - e mais ' + (casos.length - MAX_CITADOS));
+  return ['sworn - portao de fecho: revisao degradada sem o aviso.', '',
+    'Voce afirmou que esta pronto, e a revisao que aprovou estes arquivos foi degradada:'].concat(linhas, ['',
+    'Abra a resposta com a linha "DEGRADADO: <motivo>", uma por motivo (aqui:',
+    '"DEGRADADO: ' + ascii(motivoDe(casos[0])) + '"), para o dono saber o que a revisao nao viu.',
+    'Ou rode /sworn:review "<arquivo>" de novo, com os inspetores isolados, preparando sem --degradado.']).join('\n');
+}
+
 /** D634: o motivo quando a prova existe mas o resultado dela nao sustenta a alegacao - o bloco colado mostra falha
  *  (7a), o ultimo teste rodado na sessao falhou (7b) ou a provaDePronto nao rodou depois da ultima edicao de codigo
  *  (8). Declarar o que nao rodou, ou que a falha segue, libera. O transcript so e lido quando ha alegacao. D785: com
- *  provaDePronto e codigo editado no turno, quem cobra antes e o laco da prova (motivoDoLaco), sem a ressalva. */
-function motivoDoResultado(e, projeto) {
+ *  provaDePronto e codigo editado no turno, quem cobra antes e o laco da prova (cobrarOuRodarProva), sem a ressalva. */
+function motivoDoResultado(e, projeto, s) {
   const msg = e.last_assistant_message;
   if (evidencia.deveBloquearPorFalha(msg)) return evidencia.MOTIVO_FALHA;
   if (!evidencia.analisar(msg).alegaSucesso || evidencia.declaraRessalva(msg)) return null;
-  const t = saude.testesDoTranscript(e.transcript_path,
-    saude.provasEquivalentes(projeto && projeto.provaDePronto, config.raizDoProjeto(e.cwd)));
+  const prova = provaDe(projeto);
+  const t = comProvaDoGancho(e, s, lerTranscript(e, prova, projeto), prova);
   if (!t) return null;
   if (t.ultimoTeste && t.ultimoTeste.falhou) return evidencia.motivoTesteVermelho(t.ultimoTeste.comando);
+  if (t.provaRodando) return evidencia.motivoProvaRodando(projeto.provaDePronto);
   if (t.provaPendente) return evidencia.motivoProvaNaoRodou(projeto.provaDePronto);
   return null;
+}
+
+/** D794: o teto da prova rodada pelo gancho; SWORN_PROVA_TETO_MS (inteiro positivo) so para os testes. */
+function tetoDaProva() {
+  const v = Number(process.env.SWORN_PROVA_TETO_MS);
+  return Number.isInteger(v) && v > 0 ? v : provaNoFecho.TETO_MS;
+}
+
+/** A provaDePronto declarada, sem espacos nas pontas; '' sem ela. */
+function provaDe(projeto) {
+  return projeto && typeof projeto.provaDePronto === 'string' ? projeto.provaDePronto.trim() : '';
+}
+
+// D794: o transcript lido com as posicoes uma vez por fim de turno (o gancho e um processo por Stop): o laco, o
+// resultado e a evidencia olham a mesma leitura, nao tres.
+// F1d (D828.4): com `"provaPorArquivoTocado": true` no projeto.json, a prova do turno e a focada - os testes que
+// cobrem cada arquivo de codigo editado, depois da ultima edicao dele (saude.testesDoTranscript, provaFocada); ela
+// tira a pendencia da suite inteira, que o portao de commit passa a cobrar antes do commit.
+const lidos = new Map();
+/** F1c (D828): o comando do grupo de coerencia do disco (`provaDeCoerencia`), so com a prova por arquivo tocado. */
+function coerenciaDe(projeto) {
+  if (!projeto || projeto.provaPorArquivoTocado !== true || typeof projeto.provaDeCoerencia !== 'string') return '';
+  return projeto.provaDeCoerencia.trim();
+}
+
+/** F1d/F1c: a linha que diz o caminho curto da prova por arquivo tocado (ASCII, R5); sem a chave, ''. */
+function caminhoDaProvaFocada(projeto) {
+  if (!projeto || projeto.provaPorArquivoTocado !== true) return '';
+  const coerencia = coerenciaDe(projeto);
+  return '\n\nCom a prova por arquivo tocado, basta o teste de cada arquivo de codigo mexido (o que o cita pelo ' +
+    'caminho, ou o proprio arquivo de teste), depois da ultima edicao e verde' +
+    (coerencia ? ', e o grupo de coerencia do disco verde depois dela:\n  ' + require('./lib/escopo.js').ascii(coerencia)
+      : '.');
+}
+
+function lerTranscript(e, prova, projeto) {
+  const chave = String(e.transcript_path) + '\0' + prova;
+  if (!lidos.has(chave)) {
+    const raiz = config.raizDoProjeto(e.cwd);
+    const coerencia = coerenciaDe(projeto);
+    const t = saude.testesDoTranscript(e.transcript_path, saude.provasEquivalentes(prova, raiz), true,
+      { raiz: raiz, coerencia: coerencia || null });
+    // A suite inteira vermelha antes das edicoes de agora nao se apaga com a prova focada delas. F1c: com o grupo de
+    // coerencia declarado, ele tambem tem de ter rodado verde depois da ultima edicao.
+    const focada = Boolean(t && projeto && projeto.provaPorArquivoTocado === true && t.provaPendente && t.provaFocada &&
+      !t.provaVermelha && (!coerencia || t.coerenciaVerde === true));
+    lidos.set(chave, focada ? Object.assign({}, t, { provaPendente: false }) : t);
+  }
+  return lidos.get(chave);
+}
+
+/** D794: a prova que o gancho rodou ainda vale - o mesmo transcript, a mesma prova declarada e nenhuma edicao de
+ *  codigo depois dela. */
+function provaDoGanchoValeEm(e, s, t, prova) {
+  const g = s && s.provaDoGancho;
+  return Boolean(t && g && g.transcript === e.transcript_path && g.prova === prova && typeof g.pos === 'number' &&
+    typeof t.ultimaEdicao === 'number' && t.ultimaEdicao < g.pos);
+}
+
+/** D794: o transcript visto com a prova que o gancho rodou (ela nao entra no transcript): valendo, nada fica pendente
+ *  e o teste de antes dela ja nao e o ultimo; nao valendo, o transcript como veio. */
+function comProvaDoGancho(e, s, t, prova) {
+  if (!provaDoGanchoValeEm(e, s, t, prova)) return t;
+  const g = s.provaDoGancho;
+  const ultimoTeste = t.ultimoTeste && t.ultimoTeste.pos < g.pos
+    ? { comando: g.prova, falhou: false, pos: g.pos } : t.ultimoTeste;
+  return Object.assign({}, t, { provaPendente: false, ultimoTeste: ultimoTeste });
+}
+
+/** D794: a alegacao sem bloco tem a prova do gancho por tras. So le o transcript quando ha a marca. */
+function provaDoGanchoVale(e, s, projeto) {
+  const prova = provaDe(projeto);
+  return Boolean(s.provaDoGancho && prova) && provaDoGanchoValeEm(e, s, lerTranscript(e, prova, projeto), prova);
+}
+
+/** D794: RODA a prova pendente pelo gancho, so no projeto que o dono ligou na maquina dele e so o comando que ele
+ *  ligou (o projeto.json que declara outro, num commit novo por exemplo, nao roda). Devolve null (nada pendente,
+ *  desligado, ou ja passou do limite nesta sessao), { passou: true }, { cauda } (falhou) ou { aviso } (comando trocado,
+ *  ou passou do limite). Grava em `s` a marca `provaDoGancho` (passou: vale ate a proxima edicao) ou
+ *  `provaDoGanchoEstourou` (passou do limite: nao roda de novo na sessao, cada volta gastaria o limite inteiro). */
+function rodarProvaNoGancho(e, s, prova, t) {
+  if (!t.provaPendente || t.provaRodando) return null;
+  const raiz = config.raizDoProjeto(e.cwd);
+  const ligada = provaNoFecho.provaLigada(raiz);
+  const ascii = require('./lib/escopo.js').ascii;
+  if (ligada !== null && ligada !== prova) {
+    // o caminho com acento viraria "?" no ascii() e o comando copiado nao rodaria: entao so o nome do script
+    const caminho = require('node:path').join(__dirname, 'prova-no-fecho.js');
+    const script = /^[\x20-\x7E]*$/.test(caminho) ? caminho : '<pasta do sworn>/scripts/prova-no-fecho.js';
+    return { aviso: 'O sworn nao rodou a prova sozinho: o dono ligou "' + ascii(ligada) + '", e o projeto.json ' +
+      'declara agora "' + ascii(prova) + '". Rode a prova neste turno, como sempre, e avise o dono da troca. Voce nao ' +
+      'roda o comando de ligar: so o dono, depois de conferir o comando novo, roda na pasta do projeto: node "' +
+      script + '" ligar' };
+  }
+  if (ligada === null || s.provaDoGanchoEstourou === prova) return null;
+  const r = provaNoFecho.rodar(prova, raiz, tetoDaProva());
+  if (r.ok) {
+    s.provaDoGancho = { transcript: e.transcript_path, pos: t.fim, prova: prova };
+    return { passou: true };
+  }
+  if (!r.estourou) return { cauda: r.cauda };
+  s.provaDoGanchoEstourou = prova;
+  return { aviso: 'O sworn tentou rodar a prova no fim do turno, e ela passou do limite de tempo de ' +
+    Math.round(tetoDaProva() / 1000) + ' s. Rode voce a prova neste turno (' + ascii(prova) + '); nesta sessao o ' +
+    'sworn nao tenta de novo.' };
 }
 
 /** D785 (2.1): o laco da prova. Com provaDePronto declarada, o turno que editou codigo (marca do marcar-trabalho.js)
  *  barra enquanto o ultimo teste estiver vermelho ou a prova pendente, com ou sem alegacao e com ou sem ressalva, e
  *  tambem em laco: o contador e o do turno (`lacoDaProva`), nao o stop_hook_active. A volta TETO_DO_LACO + 1 manda
  *  escalar; dali em diante libera (teto contado). Conta a volta em `s` e no balde do fecho sem evidencia; sem barrar,
- *  null. O transcript so e lido no turno que editou codigo. */
-function motivoDoLaco(e, s, projeto) {
+ *  null. O transcript so e lido no turno que editou codigo.
+ *  D794: antes de cobrar, roda a prova pendente pelo gancho no projeto que o dono ligou (rodarProvaNoGancho): passou,
+ *  libera; falhou, barra com a cauda da saida; nos outros casos cobra como sempre, com o aviso do gancho. */
+function cobrarOuRodarProva(e, s, projeto) {
   if (!s.editouCodigo || projetoLib.travasDe(projeto).fecho === false) return null;
-  const prova = projeto && typeof projeto.provaDePronto === 'string' ? projeto.provaDePronto.trim() : '';
+  const prova = provaDe(projeto);
   const n = (s.lacoDaProva || 0) + 1;
   if (!prova || n > evidencia.TETO_DO_LACO + 1) return null;
-  const t = saude.testesDoTranscript(e.transcript_path, saude.provasEquivalentes(prova, config.raizDoProjeto(e.cwd)));
+  const t = comProvaDoGancho(e, s, lerTranscript(e, prova, projeto), prova);
   if (!t) return null;
+  const g = rodarProvaNoGancho(e, s, prova, t);
+  if (g && g.passou) return null;
+  if (g && typeof g.cauda === 'string') {
+    s.lacoDaProva = n;
+    s.contadores = s.contadores || {};
+    s.contadores.fecho_sem_evidencia = (s.contadores.fecho_sem_evidencia || 0) + 1;
+    // a cerca de tres crases da propria saida fecharia o bloco antes da hora
+    return evidencia.motivoDoLaco('vermelho', prova, n, false) + '\n\nA prova rodou no fim do turno, pelo sworn, ' +
+      'e falhou. As ultimas linhas da saida:\n```\n' + g.cauda.replace(/```/g, "'''") + '\n```';
+  }
+  const aviso = g && g.aviso ? '\n\n' + g.aviso : '';
   const vermelho = t.ultimoTeste !== null && t.ultimoTeste.falhou;
-  if (!vermelho && !t.provaPendente) return null;
+  // A4 (s369): a prova lancada em segundo plano depois da edicao ainda roda; o aviso de fim acorda o modelo, e a volta
+  // nao conta, nem com um vermelho de antes dela. O pronto sem o resultado quem barra e o motivoDoResultado.
+  if (t.provaRodando || (!vermelho && !t.provaPendente)) return null;
   s.lacoDaProva = n;
   s.contadores = s.contadores || {};
   s.contadores.fecho_sem_evidencia = (s.contadores.fecho_sem_evidencia || 0) + 1;
   return evidencia.motivoDoLaco(vermelho ? 'vermelho' : 'pendente', vermelho ? t.ultimoTeste.comando : prova, n,
-    vermelho && t.ultimoTeste.barradoPeloSandbox === true);
+    vermelho && t.ultimoTeste.barradoPeloSandbox === true) + (vermelho ? '' : caminhoDaProvaFocada(projeto)) + aviso;
 }
 
 /** Um bloqueio por turno, com os motivos que o turno juntou - o do subitem aberto OU o da
@@ -330,8 +651,10 @@ io.blindar(function () {
     // Ja bloqueou neste turno, ou o harness avisa que estamos em laco: encerra. D785 (2.1): menos o laco da prova, que
     // barra de novo pelo contador dele; o resto do turno ja foi cobrado.
     if (s.bloqueouNesteTurno || e.stop_hook_active === true) {
-      const doLaco = s.editouCodigo ? motivoDoLaco(e, s, config.carregarProjeto(config.raizDoProjeto(e.cwd))) : null;
-      return doLaco ? barrar(e, s, [doLaco], false) : encerrarTurno(e, s);
+      const doLaco = s.editouCodigo
+        ? cobrarOuRodarProva(e, s, config.carregarProjeto(config.raizDoProjeto(e.cwd))) : null;
+      return doLaco ? barrar(e, s, [doLaco], false)
+        : encerrarOuSeguir(e, s, config.carregarProjeto(config.raizDoProjeto(e.cwd)));
     }
 
     // D694 (T3 da escada): o pedido de escalada sem despacho entra no bloqueio do turno com ou sem trabalho e com a
@@ -374,7 +697,15 @@ io.blindar(function () {
       semReferencia ? require('./lib/marcha.js').aaaComReferencia(s.arquivosTocados, projeto, cwd) : []);
     // Plano 082 (p7-25) e D655: os motivos de revisao que faltam (o da referencia e, depois dele, o da revisao aprovada)
     // entram so por aqui, e sempre depois dos outros do turno (o do handoff, o barrar soma no fim).
-    const daRevisao = (semReferencia ? [semReferencia] : []).concat(semRevisao ? [semRevisao] : []);
+    // B2: a revisao degradada sem a linha DEGRADADO, no mesmo grupo e no mesmo balde da revisao que falta.
+    const degradadaSemAviso = semAvisoDeDegradada(e, s, projeto);
+    const daRevisao = (semReferencia ? [semReferencia] : []).concat(semRevisao ? [semRevisao] : [],
+      degradadaSemAviso ? [degradadaSemAviso] : []);
+    // um Stop, um ponto no balde: com a revisao que falta, ela ja contou
+    if (degradadaSemAviso && !semRevisao) {
+      s.contadores = s.contadores || {};
+      s.contadores.fecho_sem_revisao = (s.contadores.fecho_sem_revisao || 0) + 1;
+    }
     if (semReferencia) {
       s.contadores = s.contadores || {};
       s.contadores.fecho_sem_referencia = (s.contadores.fecho_sem_referencia || 0) + 1;
@@ -383,9 +714,17 @@ io.blindar(function () {
       s.contadores = s.contadores || {};
       s.contadores.fecho_sem_revisao = (s.contadores.fecho_sem_revisao || 0) + 1;
     }
+    // s369 (P1 do dono): a parada logo depois do handoff do gatilho; vale com a trava 3 desligada, como o prompt.
+    const parouNoHandoff = paradaNoHandoff(s, projeto);
+    if (parouNoHandoff) {
+      s.contadores = s.contadores || {};
+      s.contadores.parada_no_handoff = (s.contadores.parada_no_handoff || 0) + 1;
+    }
     // A escalada antes dos da revisao, que seguem depois dos outros motivos do turno.
-    const doTurno = motivosDaEscalada.concat(daRevisao);
-    if (travas.fecho === false) return doTurno.length || semPrompt ? barrar(e, s, doTurno, semPrompt) : encerrarTurno(e, s);
+    const doTurno = motivosDaEscalada.concat(parouNoHandoff ? [saude.MOTIVO_PARADA_NO_HANDOFF] : [], daRevisao);
+    if (travas.fecho === false) {
+      return doTurno.length || semPrompt ? barrar(e, s, doTurno, semPrompt) : encerrarOuSeguir(e, s, projeto);
+    }
 
     const planoLib = require('./lib/plano.js');
     const ativo = planoLib.lerAtivo(cwd);
@@ -413,20 +752,23 @@ io.blindar(function () {
     }
 
     // D785 (2.1): o laco da prova cobra antes, e no lugar, da falta de bloco e do resultado (conta o balde ele mesmo).
-    const doLaco = motivoDoLaco(e, s, projeto);
-    const semEvidencia = !doLaco && evidencia.deveBloquear(e.last_assistant_message);
+    const doLaco = cobrarOuRodarProva(e, s, projeto);
+    // D794: a alegacao sem bloco tem a prova que o gancho rodou (sem edicao depois dela): nao falta evidencia.
+    const semEvidencia = !doLaco && evidencia.deveBloquear(e.last_assistant_message) && !provaDoGanchoVale(e, s, projeto);
+    // P04 (C1): a causa dada por achada sem o defeito reproduzido; mesmo balde da falta de bloco.
+    const semReproducao = !doLaco && !semEvidencia && evidencia.deveBloquearPorCausa(e.last_assistant_message);
     // D634: se a falta de bloco nao barrou, o resultado da prova; conta no mesmo balde (a evidencia nao sustenta a alegacao).
-    const semResultado = doLaco || semEvidencia ? null : motivoDoResultado(e, projeto);
-    const nada = !doLaco && !semEvidencia && !semResultado && !semPrompt && !doTurno.length;
-    if (nada) return encerrarTurno(e, s, planoIlegivel);
+    const semResultado = doLaco || semEvidencia || semReproducao ? null : motivoDoResultado(e, projeto, s);
+    const nada = !doLaco && !semEvidencia && !semReproducao && !semResultado && !semPrompt && !doTurno.length;
+    if (nada) return encerrarOuSeguir(e, s, projeto, planoIlegivel);
 
     const motivos = [];
     if (planoIlegivel) motivos.push(planoIlegivel);
     if (doLaco) motivos.push(doLaco);
-    else if (semEvidencia || semResultado) {
+    else if (semEvidencia || semReproducao || semResultado) {
       s.contadores = s.contadores || {};
       s.contadores.fecho_sem_evidencia = (s.contadores.fecho_sem_evidencia || 0) + 1;
-      motivos.push(semEvidencia ? evidencia.MOTIVO : semResultado);
+      motivos.push(semEvidencia ? evidencia.MOTIVO : semReproducao ? evidencia.MOTIVO_CAUSA : semResultado);
     }
     barrar(e, s, motivos.concat(doTurno), semPrompt);
   });

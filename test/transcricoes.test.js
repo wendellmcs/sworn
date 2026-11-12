@@ -103,7 +103,7 @@ for (const c of CASOS) {
     if (c.modelo) assert.strictEqual(chamada.modelo, c.modelo);
     assert.strictEqual(saude.contextoDoTranscript(caminho), c.contexto);
     const ultimoTeste = Object.assign({ comando: c.teste, falhou: !c.passou }, c.sandbox ? { barradoPeloSandbox: true } : {});
-    assert.deepStrictEqual(saude.testesDoTranscript(caminho, PROVA), { ultimoTeste: ultimoTeste, provaPendente: false });
+    assert.deepStrictEqual(saude.testesDoTranscript(caminho, PROVA), { ultimoTeste: ultimoTeste, provaPendente: false, provaRodando: false });
   });
 
   test('transcricoes ' + c.formato + ': cortada depois da edicao, o teste falhou e a prova ficou pendente', () => {
@@ -178,7 +178,7 @@ test('transcricoes opencode: a edicao pelo apply_patch deixa a prova pendente; a
   assert.deepStrictEqual(transcricoes.ler(codigo).eventos.filter((e) => e.tipo === 'chamada')
     .map((e) => [e.nome, e.entrada.file_path]), [['Bash', undefined], ['Edit', 'C:\\dev\\proj\\src\\a.js']]);
   assert.deepStrictEqual(saude.testesDoTranscript(codigo, PROVA),
-    { ultimoTeste: { comando: 'node --test', falhou: false }, provaPendente: true });
+    { ultimoTeste: { comando: 'node --test', falhou: false }, provaPendente: true, provaRodando: false });
   assert.strictEqual(saude.testesDoTranscript(patch('docs\\notas.md'), PROVA).provaPendente, false);
 });
 
@@ -210,7 +210,7 @@ test('transcricoes: a do Claude Code segue no caminho de hoje', () => {
   assert.deepStrictEqual(saude.ultimaChamadaDoTranscript(caminho),
     { contexto: 16, horario: Date.parse('2026-11-02T10:00:00Z'), modelo: 'claude-x' });
   assert.deepStrictEqual(saude.testesDoTranscript(caminho, PROVA),
-    { ultimoTeste: { comando: 'node --test', falhou: true }, provaPendente: false });
+    { ultimoTeste: { comando: 'node --test', falhou: true }, provaPendente: false, provaRodando: false });
 });
 
 test('transcricoes: sem leitura (sem caminho, arquivo ausente, banco ausente, sessao sem linha) da null', () => {

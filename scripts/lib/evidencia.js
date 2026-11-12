@@ -207,6 +207,19 @@ function motivoProvaNaoRodou(prova) {
   ].join('\n');
 }
 
+/** A4 (s369): a prova lancada em segundo plano depois da ultima edicao, sem o aviso de fim. ASCII (R5). */
+function motivoProvaRodando(prova) {
+  return [
+    'sworn - portao de fecho (trava 3).',
+    '',
+    'Voce afirmou sucesso, mas a prova de pronto do projeto ainda roda em segundo plano,',
+    'sem resultado:',
+    '  ' + citado(prova),
+    '',
+    'Espere o aviso de fim dela e cole a saida, ou declare que ela ainda nao terminou.'
+  ].join('\n');
+}
+
 // D785 (2.1): as voltas do laco da prova que mandam consertar; a seguinte manda escalar, e dali em diante o portao
 // libera.
 const TETO_DO_LACO = 3;
@@ -238,14 +251,106 @@ function motivoDoLaco(tipo, comando, n, sandbox) {
   }
   const titulo = 'sworn - portao de fecho (trava 3), laco da prova: ' + TETO_DO_LACO + ' voltas sem passar.';
   return [titulo, ''].concat(oQue, [
-    'Sem perguntar ao usuario: escale. Despache o agente acima na escada',
-    '(agentes.escada em .claude/sworn/projeto.json; sem escada, o modelo mais forte',
-    'que houver) com esforco alto, com a tarefa, a saida da prova e o que ja tentou.',
+    'Sem perguntar ao usuario: escale. Despache o agente que vem na escada logo depois do',
+    'que fez o trabalho ate aqui (agentes.escada em .claude/sworn/projeto.json, do mais',
+    'barato ao mais caro; sem escada, o modelo mais forte que houver) com esforco alto,',
+    'com a tarefa, a saida da prova e o que ja tentou.',
     'Depois rode a prova de novo.',
     'Se mesmo assim ela segue falhando, feche dizendo o que segue falhando, com a',
     'saida da prova num bloco ``` . Nao pergunte ao usuario o que fazer.'
   ]).join('\n');
 }
+
+// P04 (R-mattpocock, C1 do plano unico): "achei a causa" so com o defeito reproduzido. A alegacao de causa achada,
+// testada fora dos blocos e sem as frases negadas, como a de sucesso. Sem a flag u, o \b nao fecha depois de letra
+// acentuada ("a causa é"): o fim de palavra e o lookahead FIM.
+const FIM = '(?![A-Za-zÀ-ÿ])';
+// O verbo de achar negado ate 2 palavras antes ("ainda nao descobri", "nem achei", "have not yet found", "haven't
+// yet found") nao alega.
+const CAUSA = [
+  /(?<!\b(?:n[aã]o|nem|nunca)\s+(?:\S+\s+){0,2})\b(?:achei|encontrei|descobri|identifiquei|localizei) (?:a )?causa\b/i,
+  /\bcausa (?:raiz )?(?:encontrada|identificada|descoberta|achada|localizada)\b/i,
+  new RegExp('\\ba causa (?:raiz |real )?(?:d[oa] [^.,;:\\n]{1,40} )?(?:[eé]|era|foi|est[aá]|estava)' + FIM, 'i'),
+  /\bo (?:bug|erro|defeito|problema) (?:estava|est[aá]|era|vinha|vem) (?:n[oa]s?|em|d[oa]s?)\b/i,
+  new RegExp('(?<!(?:\\bnot|\\bnever|n[\'’]t)\\s+(?:\\S+\\s+){0,2})\\b' +
+    '(?:found|identified|located|pinpointed|tracked down) the (?:root )?cause\\b', 'i'),
+  /\broot cause (?:found|identified|located)\b/i,
+  // "what the cause is" pergunta, nao alega
+  /(?<!\bwhat )\bthe (?:root )?cause(?: of [^.,;:\n]{1,40})? (?:is|was)\b/i,
+  /\bthe (?:bug|issue|problem|error) (?:is|was) (?:in|caused by|due to)\b/i
+];
+// A incerteza vaga so vale na propria frase que alega a causa: um "might" em outra frase nao a torna hipotese.
+const INCERTEZA = [
+  /\bhip[oó]tese/i, /\bsuspeit/i, /\bprovavelmente\b/i, /\btalvez\b/i, /\bpossivelmente\b/i, /\bdesconhecid/i,
+  /\bincert[oa]\b/i, /\bhypothes[ie]s\b/i, /\bsuspect/i, /\bprobably\b/i, /\bpossibly\b/i, /\bmight\b/i, /\bmaybe\b/i,
+  /\bunknown\b/i, /\bunclear\b/i
+];
+// A declaracao de que o defeito nao foi reproduzido vale em qualquer ponto da prosa: e especifica, nao fala de outra
+// coisa. A ressalva generica do NAO_RODOU ("nao rodei o lint") so vale na frase da causa, como a incerteza.
+const NAO_REPRODUZIDO = [
+  /\bfalta reproduzir\b/i, /\bn[aã]o reproduzi\b/i, /\bn[aã]o consegui reproduzir\b/i, /\bnot (?:yet )?reproduced\b/i,
+  /\b(?:could not|couldn['’]t|unable to|was not able to) reproduce\b/i
+];
+// O bloco que reproduz mostra o defeito: falha de teste (textoMostraFalha), a linha de erro (com os dois-pontos: o nome
+// de um teste que passou nao tem) ou o esperado contra o obtido na mesma linha.
+const DEFEITO_NA_SAIDA = [
+  /(?:^|\s)[A-Za-z]*(?:Error|Exception)(?::|\s+at\b)/m, /^\s*Traceback\b/m, /\bpanic:/, /\berror(?:\[\w+\])?:/i,
+  /\bexpected\b[^\n]*\b(?:got|received|but|actual)\b/i, /\besperad[oa]\b[^\n]*\b(?:obtid|recebid|veio)/i
+];
+
+// As frases da prosa: a quebra de linha simples (texto quebrado a mao) junta; corta no fim de frase, mesmo seguido de
+// fecho (negrito, parentese, aspas), na linha em branco e no item de lista.
+function frases(prosa) {
+  return prosa.replace(/\r\n?/g, '\n').replace(/\n(?![ \t]*(?:\n|[-*+•][ \t]|\d+[.)][ \t]))/g, ' ')
+    .split(/(?<=[.!?][)*_"”'’\]]*)\s+|\n+/);
+}
+
+function frasesQueAlegam(prosa) {
+  return frases(prosa).filter(function (f) { return CAUSA.some(function (r) { return r.test(f); }); });
+}
+
+/** P04: a prosa diz que achou a causa do defeito (fora dos blocos, sem as frases negadas). */
+function alegaCausa(texto) {
+  return frasesQueAlegam(semNegadas(semBlocos(texto))).length > 0;
+}
+
+/**
+ * P04: barra a causa dada por achada (numa frase sem incerteza) quando a prosa nao diz que o defeito nao foi
+ * reproduzido e nenhum bloco de saida mostra o defeito acontecendo.
+ */
+function deveBloquearPorCausa(texto) {
+  const bruto = comoTexto(texto);
+  const prosa = semNegadas(semBlocos(bruto));
+  const firmes = frasesQueAlegam(prosa).filter(function (f) {
+    return !INCERTEZA.concat(NAO_RODOU).some(function (r) { return r.test(f); });
+  });
+  if (!firmes.length) return false;
+  if (NAO_REPRODUZIDO.some(function (r) { return r.test(prosa); })) return false;
+  return !blocosDeSaida(bruto).some(mostraDefeito);
+}
+
+// O bloco mostra o defeito: falha de teste, ou a linha de erro fora das linhas de teste que passou (o nome do teste
+// verde pode ter "error:" ou "expected ... but"); o resumo que zera as falhas ("fail 0") anula o erro solto.
+const TESTE_QUE_PASSOU = /^[ \t]*(?:ok\b|[✔✓]|PASS\b).*$/gm;
+function mostraDefeito(bloco) {
+  if (textoMostraFalha(bloco)) return true;
+  if (RESUMO_SEM_FALHA.some(function (r) { return r.test(bloco); })) return false;
+  const resto = bloco.replace(TESTE_QUE_PASSOU, '');
+  return DEFEITO_NA_SAIDA.some(function (r) { return r.test(resto); });
+}
+
+const MOTIVO_CAUSA = [
+  'sworn - portao de fecho (trava 3): causa sem o defeito reproduzido.',
+  '',
+  'Voce disse que achou a causa e nao mostrou o defeito acontecendo.',
+  'Antes de dar a causa por achada, faca uma destas duas coisas e responda de novo:',
+  '',
+  '  1. rode o comando que reproduz o defeito (o teste que falha, a chamada que da o erro)',
+  '     e cole a saida literal num bloco ``` , com o comando; ou',
+  '  2. diga que a causa e hipotese, ainda nao reproduzida.',
+  '',
+  'Nao reescreva a frase para escapar do portao. Reproduza, ou declare.'
+].join('\n');
 
 // R5: ASCII puro. Este texto chega ao Claude, e e o ponto de reinjecao da regra (falha A1).
 const MOTIVO = [
@@ -266,4 +371,5 @@ const MOTIVO = [
 
 module.exports = { ALEGACOES, NAO_RODOU, semBlocos, analisar, deveBloquear, MOTIVO, blocosDeSaida,
   textoMostraFalha, deveBloquearPorFalha, declaraRessalva, declaraSemRevisao, MOTIVO_FALHA, motivoTesteVermelho,
-  motivoProvaNaoRodou, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox };
+  motivoProvaNaoRodou, motivoProvaRodando, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox, alegaCausa,
+  deveBloquearPorCausa, MOTIVO_CAUSA };

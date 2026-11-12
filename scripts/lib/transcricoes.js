@@ -12,7 +12,8 @@ const { nomeDaFerramenta, camposDaFerramenta, arquivosDoPatch, TEXTO_DO_PATCH } 
  *
  * `ler` devolve { formato, ultimaChamada: {contexto, horario, modelo} | null, eventos, ultimaMensagem } ou null sem
  * leitura. Evento: { pos, tipo: 'chamada', id, nome, entrada } com o nome e os campos do Claude Code, ou
- * { pos, tipo: 'resultado', id, falhou, saida }. `pos` e a linha (ou a mensagem) de origem: chamadas da mesma resposta
+ * { pos, tipo: 'resultado', id, falhou, saida }, ou (so no Claude Code) { pos, tipo: 'fim_em_segundo_plano', id,
+ * status, codigo, arquivo }. `pos` e a linha (ou a mensagem) de origem: chamadas da mesma resposta
  * tem a mesma, como na regra de hoje do Claude Code.
  */
 
@@ -95,6 +96,24 @@ function resultado(r, pos, id, falhou, saida) {
   r.eventos.push({ pos: pos, tipo: 'resultado', id: id, falhou: falhou, saida: saida });
 }
 
+// A4 (s369): o aviso de fim de um comando em segundo plano, como o Claude Code o grava (medido no transcript da s369):
+// mensagem do usuario cujo texto e so o bloco <task-notification>, com o tool-use-id do comando, o status, o codigo de
+// saida no summary ("completed (exit code 0)") e o arquivo da saida. O mesmo bloco dentro de um tool_result (um grep,
+// um cat) nao passa por aqui.
+const AVISO_DE_FIM = /^<task-notification>([\s\S]*)<\/task-notification>$/;
+function campoDoAviso(corpo, nome) {
+  const m = new RegExp('<' + nome + '>([^<]*)</' + nome + '>').exec(corpo);
+  return m ? m[1].trim() : null;
+}
+function fimEmSegundoPlano(r, pos, texto) {
+  const m = typeof texto === 'string' ? AVISO_DE_FIM.exec(texto.trim()) : null;
+  const id = m ? campoDoAviso(m[1], 'tool-use-id') : null;
+  if (!id) return;
+  const codigo = /\bexit code (-?\d+)\b/i.exec(campoDoAviso(m[1], 'summary') || '');
+  r.eventos.push({ pos: pos, tipo: 'fim_em_segundo_plano', id: id, status: campoDoAviso(m[1], 'status'),
+    codigo: codigo ? Number(codigo[1]) : null, arquivo: campoDoAviso(m[1], 'output-file') });
+}
+
 function textos(lista) {
   return lista.filter(function (t) { return typeof t === 'string' && t; }).join('\n') || null;
 }
@@ -113,6 +132,7 @@ const LEITORES = {
       uso(r, (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0),
         o.timestamp, o.message.model);
     }
+    if (o.type === 'user' && typeof o.message.content === 'string') fimEmSegundoPlano(r, i, o.message.content);
     if (!Array.isArray(o.message.content)) return;
     for (const b of o.message.content) {
       if (b && b.type === 'tool_use') chamada(r, i, null, b.id, b.name, b.input);

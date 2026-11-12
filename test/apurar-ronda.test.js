@@ -91,7 +91,7 @@ test('D475: pelo CLI, A.txt da ronda que existe e nao se le para com a causa; o 
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-ilegivel-'));
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [{ lente: 'microcopy', melhor: 'B',
-      achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P2', arquivo: 'A.txt', linha: 1, descricao: 'x' }] }]);
+      achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P2', tipo: 'erro', arquivo: 'A.txt', linha: 1, descricao: 'x' }] }]);
     const r0 = rodar(['--sessao', 'falta'], cwd, tmp);
     assert.strictEqual(r0.status, 0, 'A.txt que falta tem de seguir a conta de antes: ' + r0.stdout);
     fs.mkdirSync(path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'A.txt'));
@@ -148,6 +148,55 @@ function aprovadosDe(tmp, sessionId) {
   try { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', sessionId + '.json'), 'utf8')).revisadosAprovados; }
   catch (e) { return undefined; }
 }
+
+// B2 (s369, R-impeccable): a revisao degradada (o preparar-revisao.js grava `degradado` no mapa.json) aprova com o
+// motivo abrindo com "DEGRADADO:" e grava o arquivo em revisoesDegradadas; a aprovacao seguinte, sem degradar, o tira.
+test('B2: revisao degradada aprova com DEGRADADO no motivo e fica gravada na sessao; a nao degradada a tira', () => {
+  comTmp((tmp) => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
+    const degradadasDe = () => {
+      try { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'dg1.json'), 'utf8')).revisoesDegradadas; }
+      catch (e) { return undefined; }
+    };
+    try {
+      for (const n of [1, 2]) {
+        const dir = path.join(cwd, '.claude', 'sworn', 'revisao', String(n));
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify({ arquivo: 'src/a.js',
+          mapa: { A: 'trabalho', B: 'HEAD' }, degradado: 'sem navegador' }), 'utf8');
+        gravarRonda(cwd, n, [{ lente: 'correcao', melhor: 'A', achados: [] }]);
+      }
+      const r = rodar(['--sessao', 'dg1'], cwd, tmp);
+      assert.strictEqual(r.status, 0, r.stdout);
+      assert.match(String(r.json.motivo), /^DEGRADADO: sem navegador\. .*aprovado/, r.stdout);
+      assert.strictEqual(r.json.degradado, 'sem navegador');
+      assert.deepStrictEqual(aprovadosDe(tmp, 'dg1'), [path.resolve(cwd, 'src/a.js')], 'aprova como sempre');
+      assert.deepStrictEqual(degradadasDe(), { [path.resolve(cwd, 'src/a.js')]: 'sem navegador' });
+      // revisao nova do mesmo arquivo, sem degradar: sai da lista
+      fs.rmSync(path.join(cwd, '.claude', 'sworn', 'revisao'), { recursive: true, force: true });
+      gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
+      gravarRonda(cwd, 1, [{ lente: 'correcao', melhor: 'A', achados: [] }]);
+      gravarMapa(cwd, 2, { A: 'trabalho', B: 'HEAD' });
+      gravarRonda(cwd, 2, [{ lente: 'correcao', melhor: 'A', achados: [] }]);
+      const r2 = rodar(['--sessao', 'dg1'], cwd, tmp);
+      assert.ok(!/DEGRADADO/.test(String(r2.json.motivo)) && r2.json.degradado === null, r2.stdout);
+      assert.deepStrictEqual(degradadasDe(), {}, 'a aprovacao sem degradar tira o arquivo');
+      // o motivo e texto livre: com a palavra "aprovado", o teto segue sem aprovar
+      fs.rmSync(path.join(cwd, '.claude', 'sworn', 'revisao'), { recursive: true, force: true });
+      for (const n of [1, 2, 3]) {
+        const dir = path.join(cwd, '.claude', 'sworn', 'revisao', String(n));
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify({ arquivo: 'src/b.js',
+          mapa: { A: 'trabalho', B: 'HEAD' }, degradado: 'nao aprovado pelo navegador' }), 'utf8');
+        gravarRonda(cwd, n, [{ lente: 'correcao', melhor: 'B',
+          achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: n * 10, descricao: 'q' + n }] }]);
+      }
+      const r3 = rodar(['--sessao', 'dg1'], cwd, tmp);
+      assert.strictEqual(r3.json.encerrar, true, r3.stdout);
+      assert.ok(!aprovadosDe(tmp, 'dg1').some(function (a) { return /b\.js$/.test(a); }), 'o teto nao aprova: ' + r3.stdout);
+    } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+  });
+});
 
 test('091 #1: revisao aprovada grava o arquivo em revisadosAprovados; o teto nao grava', () => {
   comTmp((tmp) => {
@@ -430,13 +479,61 @@ test('T2/item 11: o refutados.json e lido da base escolhida', () => {
     gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [P1_NOVO]);
     gravarNaBase(cwd, 'src__b.js', 'src/b.js', 1, [SECO]);
     fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'refutados.json'),
-      JSON.stringify([{ ronda: 1, lente: 'correcao', arquivo: 'A.txt', linha: 3, severidade: 'P1', prova: 'x.js:9' }]), 'utf8');
+      JSON.stringify([{ ronda: 1, lente: 'correcao', arquivo: 'A.txt', linha: 3, severidade: 'P1', prova: 'a suite passa',
+        comando: 'node --test' }]), 'utf8');
     const r = rodar(['--sessao', 'rf', '--arquivo', 'src/a.js'], cwd, tmp);
     assert.strictEqual(r.status, 0, r.stdout);
     assert.strictEqual(r.json.refutados.length, 1, 'refutacao da base dele: ' + r.stdout);
     assert.deepStrictEqual(r.json.achadosNovosP0P1, [], 'o P1 refutado nao molha a ronda');
     const r2 = rodar(['--sessao', 'rf', '--arquivo', 'src/b.js'], cwd, tmp);
     assert.deepStrictEqual(r2.json.refutados, [], 'a refutacao de a.js nao vaza para b.js');
+  });
+});
+
+// D821 (D2): pelo CLI, a prova da refutacao e conferida no repositorio, a partir da pasta onde o comando roda
+test('D821: pelo CLI, a refutacao vale com o simbolo na linha citada do repositorio; fora dele ou sem o simbolo, para', () => {
+  comRepo((cwd, tmp) => {
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [P1_NOVO]);
+    fs.mkdirSync(path.join(cwd, 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'lib', 'guarda.js'), 'um\ndois\nif (!nome) return null;\nquatro\n', 'utf8');
+    const refutar = (extra) => fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'refutados.json'),
+      JSON.stringify([Object.assign({ ronda: 1, lente: 'correcao', arquivo: 'A.txt', linha: 3, severidade: 'P1' }, extra)]),
+      'utf8');
+    // o arquivo dentro da raiz cujo nome comeca com ".." nao e "fora dela"
+    fs.writeFileSync(path.join(cwd, '..notas.md'), 'a guarda e if (!nome)\n', 'utf8');
+    // oito linhas, o simbolo na 8: a citacao vale ate 2 linhas longe dele, nao 3
+    fs.writeFileSync(path.join(cwd, 'lib', 'longo.js'), '1\n2\n3\n4\n5\n6\n7\nalvo();\n', 'utf8');
+    // fora da raiz do teste: uma pasta de nome unico ao lado dela (nao colide com outro teste) e um link para ela
+    const fora = cwd + '-fora';
+    fs.mkdirSync(fora, { recursive: true });
+    fs.writeFileSync(path.join(fora, 'x.js'), 'segredo\n', 'utf8');
+    fs.symlinkSync(fora, path.join(cwd, 'lib', 'link'), 'junction');
+    const foraRel = '../' + path.basename(fora) + '/x.js:1';
+    try {
+      // o simbolo na linha 3, citada como a 2 e como a 1 (ate 2 vizinhas valem), o caminho com a barra do Windows
+      for (const [prova, simbolo] of [['ja tem guarda: lib/guarda.js:2', 'if (!nome)'], ['lib/guarda.js:1', 'if (!nome)'],
+        ['lib\\guarda.js:3', 'if (!nome)'], ['..notas.md:1', 'if (!nome)'], ['lib/longo.js:6', 'alvo();']]) {
+        refutar({ prova: prova, simbolo: simbolo });
+        const ok = rodar(['--sessao', 'pr', '--arquivo', 'src/a.js'], cwd, tmp);
+        assert.strictEqual(ok.status, 0, prova + ': ' + ok.stdout);
+        assert.deepStrictEqual(ok.json.achadosNovosP0P1, [], prova + ': ' + ok.stdout);
+      }
+      for (const extra of [{ prova: 'lib/guarda.js:3', simbolo: 'return true' }, { prova: 'lib/guarda.js:40', simbolo: 'if (!nome)' },
+        { prova: 'lib/nao-existe.js:3', simbolo: 'if (!nome)' }, { prova: 'lib/guarda.js:3' },
+        { prova: foraRel, simbolo: 'segredo' }, { prova: 'lib/link/x.js:1', simbolo: 'segredo' },
+        { prova: 'lib:3', simbolo: 'if (!nome)' }, { prova: 'lib/longo.js:5', simbolo: 'alvo();' },
+        // o arquivo termina em quebra de linha: ele tem 4 linhas, e a 5 nao existe (nem com o simbolo na 4)
+        { prova: 'lib/guarda.js:5', simbolo: 'quatro' }]) {
+        refutar(extra);
+        const r = rodar(['--sessao', 'pr', '--arquivo', 'src/a.js'], cwd, tmp);
+        assert.strictEqual(r.status, 1, JSON.stringify(extra) + ': ' + r.stdout);
+        assert.match(r.stdout, /ERRO: refutacao com prova que nao confere/, r.stdout);
+        assert.match(r.stdout, /refutados\.json/, 'diz onde corrigir: ' + r.stdout);
+      }
+    } finally {
+      // a pasta fora da raiz do teste sai mesmo quando um assert falha
+      fs.rmSync(fora, { recursive: true, force: true });
+    }
   });
 });
 
@@ -1167,7 +1264,7 @@ const K_VELHO = 'P2|trabalho|3|correcao';
 /** Ronda 1: um P2 em A.txt:3. Ronda 2: um P1 novo em A.txt:5 (2 linhas de distancia: um par candidato). */
 function baseComPar(cwd) {
   gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [{ lente: 'correcao', melhor: 'A',
-    achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P2', arquivo: 'A.txt', linha: 3, descricao: 'raiz' }] }]);
+    achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P2', tipo: 'erro', arquivo: 'A.txt', linha: 3, descricao: 'raiz' }] }]);
   gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [{ lente: 'borda', melhor: 'A',
     achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: 5, descricao: 'repete a raiz' }] }]);
   return path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js');
@@ -1182,6 +1279,8 @@ test('D387/mesmos.json: ausente deixa a saida de hoje e acrescenta paresCandidat
     assert.strictEqual(r.json.rondasSecas, 0);
     assert.strictEqual(r.json.achadosNovosP0P1.length, 1);
     assert.deepStrictEqual(r.json.paresCandidatos.map((p) => [p.novo.chave, p.outro.chave, p.distancia]), [[K_NOVO, K_VELHO, 2]]);
+    // F2d parte b: a 2 linhas, o par e candidato, mas nao vai ao juiz
+    assert.deepStrictEqual(r.json.paresFortes, []);
     assert.deepStrictEqual(r.json.provaveisMesmos, []);
   });
 });
@@ -1192,6 +1291,7 @@ test('D387/mesmos.json: sem par candidato, os dois campos saem como lista vazia'
     const r = rodar(['--sessao', 'mz-vazio'], cwd, tmp);
     assert.strictEqual(r.status, 0, r.stdout);
     assert.deepStrictEqual(r.json.paresCandidatos, []);
+    assert.deepStrictEqual(r.json.paresFortes, []);
     assert.deepStrictEqual(r.json.provaveisMesmos, []);
   });
 });
@@ -1307,7 +1407,10 @@ test('RV-04: refutados.json com BOM le normalmente e a refutacao vale', () => {
   comRepo((cwd, tmp) => {
     const base = baseComPar(cwd);
     fs.writeFileSync(path.join(base, 'refutados.json'), JSON.stringify([{ ronda: 2, lente: 'borda', arquivo: 'A.txt',
-      linha: 5, severidade: 'P1', prova: 'src/a.js:5 ja trata' }]), 'utf8');
+      linha: 5, severidade: 'P1', prova: 'src/a.js:5 ja trata', simbolo: 'trata' }]), 'utf8');
+    // D821: a prova citada existe no repositorio, com o simbolo na linha
+    fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'src', 'a.js'), '1\n2\n3\n4\nif (x) trata(x);\n', 'utf8');
     comBom(path.join(base, 'refutados.json'));
     const r = rodar(['--sessao', 'rv04-ref'], cwd, tmp);
     assert.strictEqual(r.status, 0, r.stdout);
@@ -1681,5 +1784,292 @@ test('lote 3/4a: pelo CLI, o trecho e conferido no A.txt da ronda e o pendente s
     assert.strictEqual(r.json.pendentes.length, 1);
     assert.strictEqual(r.json.pendentes[0].falta, 'o que ler() devolve com arquivo vazio');
     assert.ok(r.json.vereditosDescartados.some((e) => /trecho/.test(e) && /A\.txt:9/.test(e)), JSON.stringify(r.json.vereditosDescartados));
+  });
+});
+
+// ---------------------------------------------------------------- F2a (D828.2/.3/.5): registros, a mudanca e o teto
+
+const comum = require('./lib/comum.js');
+
+/** Grava o texto de um lado da ronda n (revisao/<n>/<rotulo>.txt), uma linha por item. */
+function gravarLado(cwd, n, rotulo, linhas) {
+  const dir = path.join(cwd, '.claude', 'sworn', 'revisao', String(n));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, rotulo + '.txt'), linhas.join('\n') + '\n', 'utf8');
+}
+const QUARENTA = Array.from({ length: 40 }, (_, i) => 'linha ' + (i + 1));
+const p1Em = (lente, arquivo, linha, trecho) => ({ lente: lente, melhor: 'B', achados: [{ estado: 'confirmado',
+  severidade: 'P1', arquivo: arquivo, linha: linha, trecho: trecho, descricao: 'quebra na linha ' + linha }] });
+const SUFIXO_DO_REGISTRO = (n) => '; ha ' + n + ' achado(s) em "registros" (melhoria ou linha nova): copie-os para o ' +
+  'registro do plano';
+const estadoDe = (tmp, sessao) => JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', sessao + '.json'), 'utf8'));
+
+test('F2a (D828.2): pelo CLI, o P2 de melhoria sai em registros, nao molha, e o motivo do fecho diz quantos sao', () => {
+  comRepo((cwd, tmp) => {
+    const melhoria = { lente: 'correcao', melhor: 'B', achados: [{ estado: 'confirmado', severidade: 'P2', tipo: 'melhoria',
+      arquivo: 'A.txt', linha: 3, trecho: 'linha 3', descricao: 'nome melhor' }] };
+    gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
+    gravarLado(cwd, 1, 'A', QUARENTA);
+    gravarRonda(cwd, 1, [melhoria]);
+    const r1 = rodar(['--sessao', 'reg'], cwd, tmp);
+    assert.strictEqual(r1.status, 0, r1.stdout);
+    assert.deepStrictEqual([r1.json.encerrar, r1.json.rondasSecas, r1.json.achadosNovosP0P1.length], [false, 1, 0], r1.stdout);
+    assert.deepStrictEqual(r1.json.registros.map((a) => [a.ronda, a.lente, a.arquivo, a.linha, a.registro]),
+      [[1, 'correcao', 'A.txt', 3, 'melhoria']]);
+    assert.ok(r1.json.motivo.indexOf('"registros"') === -1, 'antes do fecho o motivo nao manda copiar: ' + r1.json.motivo);
+    gravarMapa(cwd, 2, { A: 'trabalho', B: 'HEAD' });
+    gravarLado(cwd, 2, 'A', QUARENTA);
+    gravarRonda(cwd, 2, [SECO]);
+    const r2 = rodar(['--sessao', 'reg'], cwd, tmp);
+    assert.strictEqual(r2.status, 0, r2.stdout);
+    assert.strictEqual(r2.json.motivo, 'duas rondas secas seguidas: aprovado' + SUFIXO_DO_REGISTRO(1));
+    assert.strictEqual(r2.json.registros.length, 1);
+    assert.deepStrictEqual(estadoDe(tmp, 'reg').revisadosAprovados, [path.resolve(cwd, 'src/a.js')]);
+  });
+  // sem registro nenhum, a lista sai vazia e o motivo e o de sempre
+  comRepo((cwd, tmp) => {
+    for (const n of [1, 2]) { gravarMapa(cwd, n, { A: 'trabalho', B: 'HEAD' }); gravarRonda(cwd, n, [SECO]); }
+    const r = rodar(['--sessao', 'reg0'], cwd, tmp);
+    assert.deepStrictEqual([r.json.motivo, r.json.registros], ['duas rondas secas seguidas: aprovado', []], r.stdout);
+  });
+});
+
+test('F2a (D828.5): pelo CLI, a mudanca se mede no lado novo de cada ronda: longe dela e registro, perto segura', () => {
+  // na ronda 2 o lado novo e o B: a linha 10 foi consertada e 2 linhas entraram depois dela (tocadas: 10, 11 e 12)
+  const depois = QUARENTA.slice(0, 9).concat(['linha 10 consertada', 'nova a', 'nova b'], QUARENTA.slice(10));
+  const montar = function (cwd, linha, semOLadoDaRonda1) {
+    gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
+    if (!semOLadoDaRonda1) gravarLado(cwd, 1, 'A', QUARENTA);
+    gravarRonda(cwd, 1, [p1Em('correcao', 'A.txt', 10, semOLadoDaRonda1 ? 'x' : 'linha 10')]);
+    gravarMapa(cwd, 2, { A: 'HEAD', B: 'trabalho' });
+    // o A da ronda 2 e o lado antigo, igual ao lado novo da ronda 1: quem medisse por ele nao veria mudanca
+    gravarLado(cwd, 2, 'A', QUARENTA);
+    gravarLado(cwd, 2, 'B', depois);
+    gravarRonda(cwd, 2, [p1Em('borda', 'B.txt', linha, depois[linha - 1])]);
+  };
+  const resultado = function (linha, semOLadoDaRonda1) {
+    let saida = null;
+    comRepo((cwd, tmp) => {
+      montar(cwd, linha, semOLadoDaRonda1);
+      const r = rodar(['--sessao', 'mud'], cwd, tmp);
+      assert.strictEqual(r.status, 0, r.stdout);
+      assert.deepStrictEqual(r.json.trechoNaoConfere, [], r.stdout);
+      const registros = r.json.registros.filter((a) => a.ronda === 2).map((a) => a.registro);
+      assert.strictEqual(r.json.achadosNovosP0P1.length + registros.length, 1, 'linha ' + linha + ': ' + r.stdout);
+      saida = r.json.achadosNovosP0P1.length ? 'segura' : registros[0];
+    });
+    return saida;
+  };
+  assert.deepStrictEqual([7, 8, 14, 15, 32].map((l) => resultado(l)),
+    ['linha nova', 'segura', 'segura', 'linha nova', 'linha nova']);
+  // sem o texto do lado novo da ronda 1 nao ha como medir: tudo molha, como antes
+  assert.strictEqual(resultado(32, true), 'segura');
+});
+
+test('F2a (D828.5): pelo CLI, a mudanca da ronda 3 se mede contra a ronda 2, nao contra a 1', () => {
+  // ronda 2: a linha 10 consertada e 2 linhas novas depois dela; ronda 3: so a linha 30 muda (a que era a 28 na
+  // ronda 1, e por isso o texto dela e 'linha 28 consertada'). As linhas que a ronda 3
+  // verifica sao a 30 e as que ja se verificavam (10, 11 e 12), com 2 de vizinhanca. Quem medisse a ronda 3 contra a
+  // ronda 1 levaria a 11 e a 12 duas linhas para baixo, e a 15 e a 16 passariam a segurar.
+  const segunda = QUARENTA.slice(0, 9).concat(['linha 10 consertada', 'nova a', 'nova b'], QUARENTA.slice(10));
+  const terceira = segunda.slice(0, 29).concat(['linha 28 consertada'], segunda.slice(30));
+  const resultado = function (linha) {
+    let saida = null;
+    comRepo((cwd, tmp) => {
+      gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
+      gravarLado(cwd, 1, 'A', QUARENTA);
+      gravarRonda(cwd, 1, [p1Em('correcao', 'A.txt', 10, 'linha 10')]);
+      gravarMapa(cwd, 2, { A: 'HEAD', B: 'trabalho' });
+      gravarLado(cwd, 2, 'B', segunda);
+      gravarRonda(cwd, 2, [p1Em('correcao', 'B.txt', 11, 'nova a')]);
+      gravarMapa(cwd, 3, { A: 'trabalho', B: 'HEAD' });
+      gravarLado(cwd, 3, 'A', terceira);
+      gravarRonda(cwd, 3, [p1Em('correcao', 'A.txt', linha, terceira[linha - 1])]);
+      const r = rodar(['--sessao', 'mud3'], cwd, tmp);
+      assert.strictEqual(r.status, 0, r.stdout);
+      assert.deepStrictEqual(r.json.trechoNaoConfere, [], r.stdout);
+      const registros = r.json.registros.filter((a) => a.ronda === 3).map((a) => a.registro);
+      assert.strictEqual(r.json.achadosNovosP0P1.length + registros.length, 1, 'linha ' + linha + ': ' + r.stdout);
+      saida = r.json.achadosNovosP0P1.length ? 'segura' : registros[0];
+    });
+    return saida;
+  };
+  assert.deepStrictEqual([14, 15, 16, 30, 33].map((l) => resultado(l)),
+    ['segura', 'linha nova', 'linha nova', 'segura', 'linha nova']);
+});
+
+test('F2a (D828.5): pelo CLI, com referencia a mudanca e a da 1a passada, e o achado da 2a em linha nova e registro', () => {
+  comRepo((cwd, tmp) => {
+    const depois = QUARENTA.slice(0, 9).concat(['linha 10 consertada'], QUARENTA.slice(10));
+    const ok = (achados) => vdRef('correcao', 'empata', 'empata', achados);
+    const p1 = (arquivo, linha, trecho) => ({ estado: 'confirmado', severidade: 'P1', arquivo: arquivo, linha: linha,
+      trecho: trecho, descricao: 'quebra na linha ' + linha });
+    gravarRondaRef(cwd, 1, { A: 'trabalho', B: 'HEAD' }, [ok([p1('A.txt', 10, 'linha 10')])], [ok([])],
+      { A: QUARENTA.join('\n'), B: 'velho\n', invA: 'velho\n', invB: QUARENTA.join('\n') });
+    // na 2a passada o lado novo e o B.txt de invertida/
+    gravarRondaRef(cwd, 2, { A: 'trabalho', B: 'HEAD' }, [ok([])],
+      [ok([p1('B.txt', 30, 'linha 30'), p1('B.txt', 11, 'linha 11')])],
+      { A: depois.join('\n'), B: 'velho\n', invA: 'velho\n', invB: depois.join('\n') });
+    const r = rodar(['--sessao', 'mudref'], cwd, tmp);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.deepStrictEqual(r.json.registros.map((a) => [a.ronda, a.passada, a.linha, a.registro]), [[2, 2, 30, 'linha nova']]);
+    assert.deepStrictEqual(r.json.achadosNovosP0P1.map((a) => [a.passada, a.linha]), [[2, 11]]);
+  });
+});
+
+test('F2a (D828.3): pelo CLI, o fecho no teto marca o arquivo com o blob do HEAD e manda o commit com a marca; a aprovacao tira a marca', () => {
+  comTmp((tmp) => {
+    const cwd = comum.repo(comum.pasta('apurar-teto'), { 'src/a.js': 'um\n', 'LEIA.md': 'texto\n' });
+    fs.writeFileSync(path.join(cwd, 'src', 'novo.js'), 'x\n');
+    const noTeto = function (id, arquivo) {
+      for (const n of [1, 2, 3]) {
+        gravarNaBase(cwd, id, arquivo, n, [{ lente: 'correcao', melhor: 'B', achados: [{ estado: 'confirmado', trecho: 'x',
+          severidade: 'P1', arquivo: 'A.txt', linha: n * 10, descricao: 'quebra ' + n }] }]);
+      }
+      return rodar(['--sessao', 'teto', '--arquivo', arquivo], cwd, tmp);
+    };
+    const a = path.resolve(cwd, 'src/a.js');
+    const novo = path.resolve(cwd, 'src/novo.js');
+    const blob = comum.git(cwd, ['rev-parse', 'HEAD:src/a.js']);
+    assert.match(blob, /^[0-9a-f]{40,64}$/);
+    // o a.js de trabalho ja nao e o do HEAD: a marca tem de ser o blob do HEAD, nao o do arquivo no disco
+    fs.writeFileSync(a, 'um\nmudado sem commit\n');
+    assert.notStrictEqual(comum.git(cwd, ['hash-object', 'src/a.js']), blob);
+    const r = noTeto('src__a.js', 'src/a.js');
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.strictEqual(r.json.encerrar, true, r.stdout);
+    assert.match(r.json.motivo, /^teto de 3 rondas com 3 achado\(s\) aberto\(s\) \(P0, P1 ou P2 de erro\): conserte o que e erro/);
+    assert.match(r.json.motivo, /o commit sai com "# sworn: sem-revisao" no fim do comando, sem perguntar/);
+    assert.doesNotMatch(r.json.motivo, /aprovado|"registros"/);
+    assert.deepStrictEqual(estadoDe(tmp, 'teto').revisadosNoTeto, { [a]: blob });
+    assert.strictEqual(estadoDe(tmp, 'teto').revisadosAprovados, undefined, 'o teto nao aprova');
+    // o arquivo novo, que o HEAD nao tem, fica marcado com o blob vazio
+    assert.strictEqual(noTeto('src__novo.js', 'src/novo.js').json.encerrar, true);
+    assert.deepStrictEqual(estadoDe(tmp, 'teto').revisadosNoTeto, { [a]: blob, [novo]: '' });
+    // apurar de novo o fecho ja contado nao mexe na marca
+    const denovo = rodar(['--sessao', 'teto', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(denovo.status, 0, denovo.stdout);
+    assert.strictEqual(denovo.json.revisaoFechadaContada.jaContada, true, denovo.stdout);
+    assert.deepStrictEqual(estadoDe(tmp, 'teto').revisadosNoTeto, { [a]: blob, [novo]: '' });
+    // a revisao nova do a.js (a base antiga sai, como o preparar-revisao.js faz ao arquivar) aprova: a marca dele sai
+    fs.renameSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js'), path.join(cwd, '.claude', 'sworn', 'arquivada'));
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]);
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [SECO]);
+    const ap = rodar(['--sessao', 'teto', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(ap.json.motivo, 'duas rondas secas seguidas: aprovado', ap.stdout);
+    assert.deepStrictEqual(estadoDe(tmp, 'teto').revisadosNoTeto, { [novo]: '' });
+    assert.deepStrictEqual(estadoDe(tmp, 'teto').revisadosAprovados, [a]);
+  });
+});
+
+test('F2a (D828.3): pelo CLI, no teto com achado em registros o motivo tambem manda copia-los, sem a palavra aprovado', () => {
+  comRepo((cwd, tmp) => {
+    for (const n of [1, 2, 3]) {
+      gravarMapa(cwd, n, { A: 'trabalho', B: 'HEAD' });
+      gravarRonda(cwd, n, [{ lente: 'correcao', melhor: 'B', achados: [
+        { estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: n * 10, descricao: 'quebra ' + n },
+        { estado: 'confirmado', trecho: 'x', severidade: 'P2', tipo: 'melhoria', arquivo: 'A.txt', linha: n * 10 + 5,
+          descricao: 'nome melhor ' + n }] }]);
+    }
+    const r = rodar(['--sessao', 'tetoreg'], cwd, tmp);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.strictEqual(r.json.registros.length, 3, r.stdout);
+    assert.ok(r.json.motivo.endsWith('o que sobrar vira registro no plano' + SUFIXO_DO_REGISTRO(3)), r.json.motivo);
+    assert.doesNotMatch(r.json.motivo, /aprovado/);
+    assert.strictEqual(estadoDe(tmp, 'tetoreg').revisadosAprovados, undefined);
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'fechada.json'), 'utf8')).motivo,
+      r.json.motivo, 'o fechada.json guarda o motivo inteiro');
+  });
+});
+
+// F2b (D828, programa da Fase O): pelo CLI, a ronda 1 com todas as lentes da faixa e sem achado nenhum fecha a revisao
+// em 1 ronda; o `tipo` do P2 e obrigatorio, e o veredito sem ele para a apuracao.
+const UMA_RONDA = 'ronda 1 completa sem achado nenhum: aprovado';
+function gravarNaBaseComFaixa(cwd, n, faixa, vereditos) {
+  gravarNaBase(cwd, 'src__a.js', 'src/a.js', n, vereditos);
+  fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', String(n), 'mapa.json'),
+    JSON.stringify({ arquivo: 'src/a.js', mapa: { A: 'trabalho', B: 'HEAD' }, faixa: faixa }), 'utf8');
+}
+const SECO_DA_BORDA = { lente: 'borda', melhor: 'empate', achados: [] };
+
+test('F2b: pelo CLI, a ronda 1 da faixa sem achado nenhum aprova em 1 ronda, marca o arquivo e conta o fecho uma vez', () => {
+  comRepo((cwd, tmp) => {
+    gravarNaBaseComFaixa(cwd, 1, 'duas', [SECO, SECO_DA_BORDA]);
+    const r = rodar(['--sessao', 'uma', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.deepStrictEqual([r.json.encerrar, r.json.motivo, r.json.rondasSecas], [true, UMA_RONDA, 1], r.stdout);
+    assert.deepStrictEqual(estadoDe(tmp, 'uma').revisadosAprovados, [path.resolve(cwd, 'src/a.js')]);
+    assert.strictEqual(contadorDe(tmp, 'uma'), 1);
+    const fechada = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+    assert.deepStrictEqual([fechada.ronda, fechada.motivo], [1, UMA_RONDA]);
+    const denovo = rodar(['--sessao', 'uma', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(denovo.json.revisaoFechadaContada.jaContada, true, denovo.stdout);
+    assert.strictEqual(contadorDe(tmp, 'uma'), 1, 'apurar de novo nao conta outra vez');
+  });
+});
+
+test('F2b: pelo CLI, sem a faixa no mapa, com uma melhoria ou com um pendente a ronda 1 nao aprova sozinha', () => {
+  const naoFecha = function (montar, conferir) {
+    comRepo((cwd, tmp) => {
+      montar(cwd);
+      const r = rodar(['--sessao', 'nao', '--arquivo', 'src/a.js'], cwd, tmp);
+      assert.strictEqual(r.status, 0, r.stdout);
+      assert.deepStrictEqual([r.json.encerrar, r.json.rondasSecas], [false, 1], r.stdout);
+      assert.match(r.json.motivo, /^ronda 2 chama/, r.stdout);
+      assert.strictEqual(aprovadosDe(tmp, 'nao'), undefined);
+      assert.strictEqual(contadorDe(tmp, 'nao'), 0);
+      if (conferir) conferir(r.json);
+    });
+  };
+  // a base de antes, sem a faixa: ninguem conferiu quais lentes votaram
+  naoFecha((cwd) => gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]));
+  const melhoria = { lente: 'correcao', melhor: 'B', achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P2',
+    tipo: 'melhoria', arquivo: 'A.txt', linha: 3, descricao: 'nome melhor' }] };
+  naoFecha((cwd) => gravarNaBaseComFaixa(cwd, 1, 'uma', [melhoria]), (json) => assert.strictEqual(json.registros.length, 1));
+  const pendente = { lente: 'correcao', melhor: 'B', achados: [{ estado: 'pendente', arquivo: 'A.txt', linha: 3,
+    descricao: 'pode devolver null', falta: 'o que a funcao chamada devolve' }] };
+  naoFecha((cwd) => gravarNaBaseComFaixa(cwd, 1, 'uma', [pendente]), (json) => assert.strictEqual(json.pendentes.length, 1));
+});
+
+test('F2b: pelo CLI, o veredito com P2 sem tipo para a apuracao e diz como regravar', () => {
+  comRepo((cwd, tmp) => {
+    gravarNaBaseComFaixa(cwd, 1, 'uma', [{ lente: 'correcao', melhor: 'B', achados: [{ estado: 'confirmado', trecho: 'x',
+      severidade: 'P2', arquivo: 'A.txt', linha: 3, descricao: 'nome que confunde' }] }]);
+    const r = rodar(['--sessao', 'semtipo', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.strictEqual(r.json, null, r.stdout);
+    assert.match(r.stdout, /^ERRO: veredito invalido em .*1\/vereditos\/correcao\.json: 1 achado\(s\) P2 sem "tipo"/, r.stdout);
+    assert.match(r.stdout, /complete com "erro"; "melhoria" so o inspetor marca; regrave o veredito/, r.stdout);
+    assert.strictEqual(contadorDe(tmp, 'semtipo'), 0);
+    assert.strictEqual(aprovadosDe(tmp, 'semtipo'), undefined, 'o veredito invalido nao aprova o arquivo');
+    assert.strictEqual(fs.existsSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json')), false);
+  });
+});
+
+// F2d parte c: pelo CLI, a lista de lentes que o preparar gravou no mapa.json da faixa completa chega ao apurar
+test('F2d: pelo CLI, na faixa completa a ronda 1 confere as lentes do mapa.json, e so elas', () => {
+  const seis = ['correcao', 'escopo', 'estados', 'borda', 'manutencao', 'microcopy'];
+  const secos = (lentes) => lentes.map((l) => ({ lente: l, melhor: 'empate', achados: [] }));
+  const comLista = (cwd, lentes, votos) => {
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, secos(votos));
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', '1', 'mapa.json'),
+      JSON.stringify({ arquivo: 'src/a.js', mapa: { A: 'trabalho', B: 'HEAD' }, faixa: 'completa', lentes: lentes }), 'utf8');
+  };
+  comRepo((cwd, tmp) => {
+    // as seis da lista votaram: aprova na ronda 1, abaixo do minimo de oito de quando nao havia lista
+    comLista(cwd, seis, seis);
+    const r = rodar(['--sessao', 'lst', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.deepStrictEqual([r.json.encerrar, r.json.motivo], [true, UMA_RONDA], r.stdout);
+  });
+  comRepo((cwd, tmp) => {
+    // falta a borda da lista: para com o nome dela, sem aprovar
+    comLista(cwd, seis, seis.filter((l) => l !== 'borda'));
+    const r = rodar(['--sessao', 'lst2', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(r.status, 1, r.stdout);
+    // a mensagem e a da lista (so a borda falta), nao a do minimo de oito de quando nao havia lista
+    assert.match(r.stdout, /sem o voto da\(s\) lente\(s\) borda:/);
+    assert.doesNotMatch(r.stdout, /o minimo e 8/);
+    assert.strictEqual(aprovadosDe(tmp, 'lst2'), undefined);
   });
 });

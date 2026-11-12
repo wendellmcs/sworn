@@ -36,6 +36,12 @@ const SO_CONTAM = new Set(['agentes_despachados', 'revisao_fechada', 'escopo_amp
   // D294: tabela do PowerShell que nao se le avisa e deixa passar: conta, nunca bloqueia.
   'shell_tabela_quebrada',
   // D503 (0.8.1): o fecho de revisao contra a referencia de topo, que o portao de fecho le.
-  'revisao_referencia_fechada']);
+  'revisao_referencia_fechada',
+  // B3 (s369, R-dsh): o estado tipado do fecho e as perguntas ao dono por classe da D785 (a fora e a falha medida).
+  'fecho_pronto', 'fecho_esperando', 'fecho_bloqueado', 'fecho_falhou',
+  'pergunta_regra_de_negocio', 'pergunta_aparencia', 'pergunta_externo', 'pergunta_credencial',
+  'pergunta_fora_da_classe',
+  // B4 (s369, R-superpowers): a decisao autonoma registrada no fecho, e a registrada sem o custo se errado.
+  'decisao_autonoma', 'decisao_sem_custo']);
 
 module.exports = { baldesNoCodigo, SO_CONTAM };

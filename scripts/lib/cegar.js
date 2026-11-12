@@ -90,19 +90,15 @@ const TRECHO_MARGEM = 20;
  * inspetor nao ler o vao como defeito. O \r de cada linha fica (CRLF segue CRLF). Sem bloco, o texto como veio.
  * Ronda 1 da s108 (borda): bloco ou margem que nao e inteiro >= 0 tambem devolve o texto como veio - o NaN nao
  * marcava linha nenhuma e o inspetor recebia um recorte vazio, calado. Na duvida, o arquivo inteiro.
+ * F2c (D828): `extras` (opcional) = [{ ini, fim }], linhas de 1 a total que tambem ficam, sem margem: o contrato do
+ * que o trecho usa e esta definido fora dele (scripts/lib/contrato.js). Extra que nao e inteiro >= 1, ou com fim antes
+ * do ini, tambem devolve o texto como veio.
  */
-function recortarTrecho(texto, blocos, margem) {
-  if (!Array.isArray(blocos) || blocos.length === 0) return texto;
-  const inteiro = function (n) { return Number.isInteger(n) && n >= 0; };
-  if (!inteiro(margem) || !blocos.every(function (b) { return b && inteiro(b.ini) && inteiro(b.qtd); })) return texto;
+function recortarTrecho(texto, blocos, margem, extras) {
   const linhas = String(texto).split('\n');
   const total = linhas[linhas.length - 1] === '' ? linhas.length - 1 : linhas.length;
-  const fica = new Array(total).fill(false);
-  blocos.forEach(function (b) {
-    const de = Math.max(1, b.ini - margem);
-    const ate = Math.min(total, b.ini + Math.max(b.qtd, 1) - 1 + margem);
-    for (let i = de; i <= ate; i++) fica[i - 1] = true;
-  });
+  const fica = linhasDoTrecho(total, blocos, margem, extras);
+  if (!fica) return texto;
   const fimDe = function (l) { return l.endsWith('\r') ? '\r' : ''; };
   for (let i = 0; i < total; i++) {
     if (fica[i]) continue;
@@ -113,6 +109,31 @@ function recortarTrecho(texto, blocos, margem) {
     i = j;
   }
   return linhas.join('\n');
+}
+
+/**
+ * F2c: a marca de cada linha do recorte (true = fica a mostra), de `total` linhas, pelos `blocos` com `margem` e pelos
+ * `extras`; null quando nao ha bloco ou algum valor e invalido (quem chama devolve o texto inteiro). O contrato.js usa a
+ * mesma marca para saber o que o inspetor ja ve.
+ */
+function linhasDoTrecho(total, blocos, margem, extras) {
+  if (!Array.isArray(blocos) || blocos.length === 0) return null;
+  const inteiro = function (n) { return Number.isInteger(n) && n >= 0; };
+  if (!inteiro(margem) || !blocos.every(function (b) { return b && inteiro(b.ini) && inteiro(b.qtd); })) return null;
+  const lista = extras === undefined ? [] : extras;
+  if (!Array.isArray(lista) || !lista.every(function (e) {
+    return e && Number.isInteger(e.ini) && Number.isInteger(e.fim) && e.ini >= 1 && e.fim >= e.ini;
+  })) return null;
+  const fica = new Array(total).fill(false);
+  blocos.forEach(function (b) {
+    const de = Math.max(1, b.ini - margem);
+    const ate = Math.min(total, b.ini + Math.max(b.qtd, 1) - 1 + margem);
+    for (let i = de; i <= ate; i++) fica[i - 1] = true;
+  });
+  lista.forEach(function (e) {
+    for (let i = e.ini; i <= Math.min(total, e.fim); i++) fica[i - 1] = true;
+  });
+  return fica;
 }
 
 /**
@@ -182,4 +203,4 @@ function montarReferencia(entradas, ler) {
 }
 
 module.exports = { semente, rotular, proximaRonda, idDoArquivo, REGRA_DO_ID, baseDoArquivo, temPastaNumeradaSolta,
-  TRECHO_MARGEM, recortarTrecho, tipoDaReferencia, TETO_DA_REFERENCIA, montarReferencia };
+  TRECHO_MARGEM, recortarTrecho, linhasDoTrecho, tipoDaReferencia, TETO_DA_REFERENCIA, montarReferencia };

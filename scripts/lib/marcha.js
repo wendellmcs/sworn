@@ -74,6 +74,14 @@ function aaaComReferencia(arquivos, projeto, raiz) {
  * editado e devolvido ao HEAD e raro. Relativos a raiz, a 1a grafia vista (a caixa como no aaaComReferencia).
  */
 function aaaSemRevisao(arquivos, aprovados, projeto, raiz) {
+  return semRevisao(arquivos, aprovados, projeto, raiz, 'aaa');
+}
+
+/**
+ * C3 (D808): os arquivos de codigo tocados que ainda existem e nao tem revisao aprovada, da `marcha` dada (ou de
+ * qualquer marcha, com `null`): o mesmo conjunto que o portao do commit cobra, fora o texto.
+ */
+function semRevisao(arquivos, aprovados, projeto, raiz, marcha) {
   if (!Array.isArray(arquivos)) return [];
   const fs = require('node:fs');
   const path = require('node:path');
@@ -85,7 +93,9 @@ function aaaSemRevisao(arquivos, aprovados, projeto, raiz) {
   for (const arquivo of arquivos) {
     if (typeof arquivo !== 'string') continue;
     const rel = caminhoLib.relativoAoProjeto(arquivo, raiz);
-    if (!rel || vistos.has(chave(rel)) || commit.ehTexto(rel) || resolverMarcha(rel, projeto) !== 'aaa') continue;
+    if (!rel || vistos.has(chave(rel)) || commit.ehTexto(rel)) continue;
+    // sem a marcha (null ou omitida), qualquer marcha: o omitido nunca vira "nada a cobrar" em silencio
+    if (marcha !== null && marcha !== undefined && resolverMarcha(rel, projeto) !== marcha) continue;
     const abs = path.resolve(raiz, rel);
     if (commit.aprovado(aprovados, abs) || !fs.existsSync(abs)) continue;
     achados.push(rel);
@@ -94,4 +104,4 @@ function aaaSemRevisao(arquivos, aprovados, projeto, raiz) {
   return achados;
 }
 
-module.exports = { NIVEL, resolverMarcha, exigeEscopo, podeSubir, aaaComReferencia, aaaSemRevisao };
+module.exports = { NIVEL, resolverMarcha, exigeEscopo, podeSubir, aaaComReferencia, aaaSemRevisao, semRevisao };

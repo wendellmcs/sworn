@@ -105,6 +105,94 @@ function pedacosDaProva(prova) {
   return sem.length ? sem : pedacos;
 }
 
+// A4 (s369): o resultado do Bash/PowerShell lancado em segundo plano no Claude Code (medido no transcript da s369).
+const LANCADO = /^Command running in background with ID: /;
+
+// F1d (D828.4): o caminho comparavel (absoluto; sem caixa no Windows, onde o disco nao a distingue). O caminho do Git
+// Bash (a letra do disco depois da barra, /c/...) vira o do Windows (c:/...).
+function caminhoComparavel(p, raiz) {
+  let c = String(p);
+  if (process.platform === 'win32' && /^\/[a-zA-Z]\//.test(c)) c = c.charAt(1) + ':' + c.slice(2);
+  const abs = path.resolve(raiz, c);
+  return process.platform === 'win32' ? abs.toLowerCase() : abs;
+}
+
+// F1d: o pedaco do comando lido a procura dos testes (a regex do token solto e quadratica num token enorme) e o maior
+// arquivo de teste lido (o gancho tem prazo).
+const COMANDO_LIDO = 8000;
+const TESTE_LIDO = 2 * 1024 * 1024;
+
+// F1d: os arquivos de teste que o comando nomeia, entre aspas (com espaco no caminho) ou soltos. O relativo e o da raiz
+// do projeto: um `cd` dentro do comando nao e seguido, e o teste que nao se acha so deixa de cobrir. O glob
+// (test/*.test.js) nao e arquivo: nao cobre nada (a suite inteira ja conta como a prova declarada).
+function testesDoComando(comando, raiz) {
+  const r = [];
+  const re = /"([^"]*\.test\.js)"|'([^']*\.test\.js)'|([^\s"'`;&|()]+\.test\.js)/g;
+  const texto = String(comando).slice(0, COMANDO_LIDO);
+  let m;
+  while ((m = re.exec(texto)) !== null) r.push(caminhoComparavel(m[1] || m[2] || m[3], raiz));
+  return r;
+}
+
+// F1d: o teste cobre o arquivo de codigo quando e o proprio arquivo ou quando cita o nome dele inteiro, como o require
+// ou o script que ele roda o citam: depois de barra, aspas ou espaco, e antes de aspas, espaco ou parentese (o a.js nao
+// casa dentro de data.js). Citado com pasta, o caminho tem de ser o dele: o relativo a pasta do teste (`./x.js`,
+// `../scripts/lib/x.js`) e o absoluto levam ao arquivo, e o sem ponto (`scripts/lib/x.js`, `lib/x.js`) e o fim do
+// caminho dele; o `../outra/lib/index.js` nao cobre o `scripts/lib/index.js`. O nome solto, sem pasta
+// (`'portao-commit.js'`), cobre: o teste que monta o caminho com path.join cita assim. O nome vai com a caixa de quem editou (o caminho comparavel e minusculo no
+// Windows). O teste que nao e arquivo comum, que passa de TESTE_LIDO ou que nao abre nao cobre nada.
+// `arquivo`: { caminho, nome }; `leitura` guarda o texto de cada teste lido.
+function testeCobre(teste, arquivo, leitura) {
+  if (teste === arquivo.caminho) return true;
+  if (!(teste in leitura)) {
+    let texto = '';
+    try {
+      const st = fs.statSync(teste);
+      if (st.isFile() && st.size <= TESTE_LIDO) texto = fs.readFileSync(teste, 'utf8');
+    } catch (e) { /* o teste que nao abre nao cobre */ }
+    leitura[teste] = texto;
+  }
+  const lido = leitura[teste];
+  const nome = arquivo.nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(^|[\\\\/"\'`\\s])' + nome + '(?=["\'`\\s)]|$)', 'gm');
+  const partesDoArquivo = arquivo.caminho.split(/[\\/]/);
+  let m;
+  while ((m = re.exec(lido)) !== null) {
+    if (m[1] !== '/' && m[1] !== '\\') return true;
+    const citado = /([^"'`\s]*)$/.exec(lido.slice(0, m.index))[1] + '/' + arquivo.nome;
+    if (/^\.\.?[\\/]/.test(citado) || path.isAbsolute(citado) || /^\/[a-zA-Z]\//.test(citado)) {
+      if (caminhoComparavel(citado, path.dirname(teste)) === arquivo.caminho) return true;
+      continue;
+    }
+    const partes = (process.platform === 'win32' ? citado.toLowerCase() : citado).split(/[\\/]/).filter(Boolean);
+    const fim = partesDoArquivo.slice(-partes.length);
+    if (partes.length <= partesDoArquivo.length && partes.every(function (p, i) { return fim[i] === p; })) return true;
+  }
+  return false;
+}
+
+/**
+ * F1d (D828.4): a prova focada do turno - todo arquivo de codigo editado depois da ultima prova declarada tem, depois
+ * da propria ultima edicao, um teste que o cobre (testeCobre), e a ultima rodada desses testes passou (o verde seguido
+ * de um vermelho, sem edicao no meio, nao vale). O teste em segundo plano conta pela posicao em que foi lancado. Sem
+ * arquivo editado depois da prova, false: so quem tem a prova pendente pergunta pela focada.
+ * `editados`: caminho comparavel -> { pos, caminho, nome }; `corridas`: [{ pos, comando, falhou }], na ordem.
+ */
+function provaFocada(editados, corridas, desde, raiz) {
+  const arquivos = Object.values(editados).filter(function (ed) { return ed.pos > desde; });
+  if (!arquivos.length) return false;
+  const leitura = Object.create(null);
+  return arquivos.every(function (ed) {
+    let ultima = null;
+    corridas.forEach(function (c) {
+      if (c.pos > ed.pos && testesDoComando(c.comando, raiz).some(function (t) { return testeCobre(t, ed, leitura); })) {
+        ultima = c;
+      }
+    });
+    return ultima !== null && !ultima.falhou;
+  });
+}
+
 /**
  * D634 (7b/8): na cauda do transcript, o ultimo teste que rodou (`{ comando, falhou }` ou null) e se a provaDePronto
  * nao rodou depois da ultima edicao de codigo (`provaPendente`; sem prova declarada, false). Falhou = saida diferente
@@ -112,8 +200,13 @@ function pedacosDaProva(prova) {
  * conta. Pula linha de subagente. Sem leitura, null. Limite: edicao feita por comando de shell nao se ve aqui.
  * D785 (2.1b): `prova` tambem pode ser a lista de formas de `provasEquivalentes`; rodar qualquer uma e rodar a prova.
  * D785 (s328): saida com spawn EPERM poe `barradoPeloSandbox: true` no ultimo teste.
+ * F1d (D828.4): com `opcoes.raiz` (a raiz do projeto), o resultado traz tambem `provaFocada` (provaFocada, acima) e
+ * `provaVermelha` (a ultima prova declarada que terminou falhou), para o portao de fecho aceitar a prova por arquivo
+ * tocado e o de commit cobrar a suite inteira; sem ela, os dois campos nao aparecem.
+ * F1c (D828): com `opcoes.raiz` e `opcoes.coerencia` (o comando do grupo de coerencia do disco, ou as formas dele), o
+ * resultado traz `coerenciaVerde`: a ultima rodada do grupo depois da ultima edicao de codigo passou.
  */
-function testesDoTranscript(caminho, prova) {
+function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
   const t = transcricoes.ler(caminho);
   if (t === null) return null;
   // Tardios de proposito: saude.js carrega em quase todo gancho, e estes dois (com o que puxam) so servem ao fecho.
@@ -131,25 +224,92 @@ function testesDoTranscript(caminho, prova) {
         return ps.every(function (p) { return rodouTeste([c], p) && !soEmOutroScript(c, p); });
       });
   };
+  // F1c (D828): o grupo de coerencia do disco (`opcoes.coerencia`, o comando ou a lista de formas dele), casado como a
+  // prova; sem grupo, null.
+  const listasDaCoerencia = [].concat((opcoes && opcoes.coerencia) || [])
+    .filter(function (p) { return typeof p === 'string' && p.trim(); })
+    .map(function (f) { return pedacosDaProva(semIsolamento(f)); })
+    .filter(function (ps) { return ps.length > 0; });
+  const ehCoerencia = listasDaCoerencia.length ? function (comando) {
+    const c = semIsolamento(comando);
+    return listasDaCoerencia.some(function (ps) {
+      return ps.every(function (p) { return rodouTeste([c], p) && !soEmOutroScript(c, p); });
+    });
+  } : null;
   const pendentes = Object.create(null);
+  // A4 (s369): teste lancado em segundo plano, por id: { pos, daProva }. O resultado da chamada so diz que o comando
+  // roda; quem conta e o aviso de fim (lib/transcricoes.js), e a prova vale pela posicao do lancamento.
+  const emFundo = Object.create(null);
   let ultimoTeste = null;
   let ultimaEdicao = -1;
   let ultimaProva = -1;
+  const raiz = opcoes && typeof opcoes.raiz === 'string' ? opcoes.raiz : null;
+  const editados = Object.create(null);   // F1d: caminho comparavel -> { pos da ultima edicao, caminho, nome }
+  const corridas = [];                    // F1d: cada teste com resultado, na ordem
+  let provaVermelha = false;              // F1d: a ultima prova declarada que terminou falhou
+  // `lancado`: a posicao do lancamento do teste em segundo plano (o fim vem depois e nao data a rodada).
+  const anotar = function (comando, falhou, saida, pos, lancado) {
+    ultimoTeste = { comando: comando, falhou: falhou || textoMostraFalha(saida) };
+    if (comPosicoes) ultimoTeste.pos = pos;
+    if (saidaBarradaPeloSandbox(saida)) ultimoTeste.barradoPeloSandbox = true;
+    corridas.push({ pos: lancado === undefined ? pos : lancado, comando: comando, falhou: ultimoTeste.falhou });
+    if (ehProva(comando)) provaVermelha = ultimoTeste.falhou;
+  };
   t.eventos.forEach(function (ev) {
     const entrada = ev.entrada || {};
     if (ev.tipo === 'chamada' && FERRAMENTAS_DE_COMANDO.indexOf(ev.nome) !== -1 && typeof entrada.command === 'string') {
       const daProva = ehProva(entrada.command);
-      if (daProva) ultimaProva = ev.pos;
-      if (ev.id && (daProva || rodouTeste([entrada.command], COMANDOS_DE_TESTE))) pendentes[ev.id] = entrada.command;
+      const fundo = entrada.run_in_background === true;
+      if (daProva && !fundo) ultimaProva = ev.pos;
+      if (ev.id && (daProva || rodouTeste([entrada.command], COMANDOS_DE_TESTE))) {
+        pendentes[ev.id] = entrada.command;
+        if (fundo) emFundo[ev.id] = { pos: ev.pos, daProva: daProva };
+      }
     } else if (ev.tipo === 'chamada' && FERRAMENTAS_DE_EDICAO.indexOf(ev.nome) !== -1) {
       const arquivo = entrada.file_path || entrada.notebook_path;
-      if (ehArquivoDeCodigo(arquivo)) ultimaEdicao = ev.pos;
-    } else if (ev.tipo === 'resultado' && ev.id in pendentes) {
-      ultimoTeste = { comando: pendentes[ev.id], falhou: ev.falhou === true || textoMostraFalha(ev.saida) };
-      if (saidaBarradaPeloSandbox(ev.saida)) ultimoTeste.barradoPeloSandbox = true;
+      if (ehArquivoDeCodigo(arquivo)) {
+        ultimaEdicao = ev.pos;
+        if (raiz) {
+          const c = caminhoComparavel(arquivo, raiz);
+          editados[c] = { pos: ev.pos, caminho: c, nome: path.basename(String(arquivo)) };
+        }
+      }
+    } else if (ev.tipo === 'resultado' && ev.id in pendentes && !(ev.id in emFundo && LANCADO.test(ev.saida || ''))) {
+      // O lancamento que nao chegou a rodar (negado, erro na hora) nao tera aviso de fim: vale como o de primeiro plano.
+      delete emFundo[ev.id];
+      anotar(pendentes[ev.id], ev.falhou === true, ev.saida, ev.pos);
+    } else if (ev.tipo === 'fim_em_segundo_plano' && ev.id in emFundo) {
+      const f = emFundo[ev.id];
+      delete emFundo[ev.id];
+      // Sem saida legivel, so o status e o codigo decidem; parado (killed) ou falho nao passou.
+      anotar(pendentes[ev.id], ev.status !== 'completed' || (ev.codigo !== null && ev.codigo !== 0),
+        typeof ev.arquivo === 'string' && ev.arquivo ? transcricoes.caudaDoTranscript(ev.arquivo) : null, ev.pos, f.pos);
+      if (f.daProva && f.pos > ultimaProva) ultimaProva = f.pos;
     }
   });
-  return { ultimoTeste: ultimoTeste, provaPendente: pedacos !== null && ultimaEdicao > ultimaProva };
+  // Roda: prova lancada em segundo plano, sem aviso de fim, depois da ultima edicao e da ultima prova que terminou.
+  const provaRodando = Object.keys(emFundo).some(function (id) {
+    return emFundo[id].daProva && emFundo[id].pos >= ultimaEdicao && emFundo[id].pos > ultimaProva;
+  });
+  const r = { ultimoTeste: ultimoTeste, provaPendente: pedacos !== null && ultimaEdicao > ultimaProva,
+    provaRodando: pedacos !== null && provaRodando };
+  if (raiz) {
+    r.provaFocada = provaFocada(editados, corridas, ultimaProva, raiz);
+    r.provaVermelha = provaVermelha;
+    // F1c: a ultima rodada do grupo de coerencia depois da ultima edicao de codigo passou (sem rodada, false).
+    if (ehCoerencia) {
+      let ultima = null;
+      corridas.forEach(function (c) { if (c.pos > ultimaEdicao && ehCoerencia(c.comando)) ultima = c; });
+      r.coerenciaVerde = ultima !== null && !ultima.falhou;
+    }
+  }
+  // D794: com `comPosicoes`, a posicao da ultima edicao, do ultimo teste e o fim do transcript deixam o fecho comparar
+  // com a prova rodada pelo gancho (que nao entra no transcript).
+  if (comPosicoes) {
+    r.ultimaEdicao = ultimaEdicao;
+    r.fim = t.eventos.reduce(function (m, ev) { return typeof ev.pos === 'number' && ev.pos >= m ? ev.pos + 1 : m; }, 0);
+  }
+  return r;
 }
 
 /**
@@ -166,12 +326,18 @@ const BALDES_DE_BLOQUEIO = [
   'fecho_sem_evidencia', 'subitem_pendente', 'outra_frente', 'intocavel',
   'token_fora_do_sistema', 'agente_caro_em_marcha_rapida',
   'criou_sem_buscar', 'catraca_afrouxada', 'cd_solto', 'sem_manual', 'commit_sem_revisao',
+  // A5e (D793): o shell mudou versionado fora do escopo da abertura do turno e o conferir-depois.js o restaurou.
+  'restaurou_fora_do_escopo',
   // T11-1: estilo escrito por comando de shell (modulo de design, como o token_fora_do_sistema).
   'estilo_por_shell',
   // F6-04: nome de frente invalido e "Fora" declarado tinham o balde fora_do_escopo; agora cada um tem o seu.
   'frente_invalida', 'fora_declarado',
   // D412: handoff gravado no turno sem o prompt no chat.
   'handoff_sem_prompt',
+  // s369 (P1 do dono): parada logo depois do handoff que o gatilho pediu.
+  'parada_no_handoff',
+  // s369 (A6): o turno que para com trabalho por fazer, sem precisar do dono.
+  'parada_sem_dono',
   // D786 passo 5: edicao antes de cumprir a ordem do compact (reler ou gravar o handoff).
   'ordem_do_compact',
   // D503 (0.8.1): entrega AAA sem revisao contra a referencia de topo na sessao.
@@ -437,7 +603,7 @@ function avisoDeSaude(gatilhos, alarme, rodando) {
 function esperaAoModelo(rodando, porque) {
   return linhasDosAgentes(rodando).concat([
     'Faca agora, nesta mesma resposta:',
-    '1. Diga ao usuario numa linha que o handoff sai quando o ultimo agente acima terminar e que o trabalho',
+    '1. Diga ao usuario numa linha que o handoff sai quando o ultimo agente da lista acima terminar e que o trabalho',
     '   segue nesta conversa, sem chat novo; ' + porque + '.',
     '2. Nao rode /sworn:handoff agora, nao dispare agente novo e nao pare nenhum dos que rodam;',
     '   siga no que nao depende deles.'
@@ -805,7 +971,46 @@ const MOTIVO_HANDOFF_SEM_PROMPT = [
   'So o dono desliga neste projeto: "portaoHandoff": false em .claude/sworn/projeto.json.'
 ].join('\n');
 
+// s369 (P1 do dono, pedido 70 / D786): o handoff do gatilho e uma ponte, nao uma parada.
+const MOTIVO_PARADA_NO_HANDOFF = [
+  'sworn - o trabalho para depois do handoff, e ele tem de seguir.',
+  '',
+  'O handoff foi gravado porque um gatilho de saude pediu, e a resposta parou logo depois, sem mais trabalho.',
+  'A conversa continua sozinha: quando ela encher, a compactacao vem e o sworn manda reler o handoff.',
+  'Nao peca chat novo nem diga que comeca depois.',
+  '',
+  'Faca assim: siga agora com o proximo passo do handoff, nesta resposta, sem perguntar.',
+  '',
+  'So o dono desliga neste projeto: "portaoHandoff": false em .claude/sworn/projeto.json.'
+].join('\n');
+
+// s369 (A6, P1 do dono): o turno parou com trabalho por fazer e nada nele precisa do dono.
+function motivoParadaSemDono(caixa, anuncia, pedeChat) {
+  const ascii = require('./escopo.js').ascii;
+  const porque = caixa
+    ? 'O plano "' + ascii(caixa.arquivo) + '" tem caixa aberta: "' + ascii(caixa.caixa) + '".'
+    : (anuncia ? 'A resposta anuncia o proximo passo em vez de faze-lo.' : '');
+  // s369 (3a vez): o "Preciso do dono: abrir o chat novo" nao e pedido ao dono
+  const doChat = pedeChat ? 'E pedir chat novo nao e motivo de parada: a conversa segue sozinha, e quando ela encher ' +
+    'a compactacao vem e o sworn manda reler o handoff. So a versao nova do sworn instalada na sessao pede chat novo.' : '';
+  return [
+    'sworn - o turno parou com trabalho por fazer, e nada nele precisa do dono.',
+    '',
+    [porque + (caixa && anuncia ? ' E a resposta anuncia o proximo passo em vez de faze-lo.' : ''), doChat]
+      .filter(Boolean).join(' '),
+    'O trabalho segue sozinho: parar so serve para o que so o dono decide.',
+    '',
+    'Faca uma destas:',
+    '  1. siga agora com o proximo passo, nesta resposta;',
+    '  2. ou, se ele precisa mesmo do dono, escreva numa linha "Preciso do dono: <regra de negocio, aparencia,',
+    '     publicar/push/envio, ou credencial/permissao/seguranca> - <o que>"; com trabalho rodando em segundo',
+    '     plano, "Espero: <o que roda>".',
+    '',
+    'So o dono desliga neste projeto: "modoContinuo": false em .claude/sworn/projeto.json.'
+  ].join('\n');
+}
+
 module.exports = { LIMIARES_PADRAO, BALDES_DE_BLOQUEIO, contextoDoTranscript, ultimaChamadaDoTranscript, testesDoTranscript, limiaresValidos, medir, acumular, avaliar, avisoDeSaude, instrucaoAoModelo, perguntaSobreSaude,
   INSTRUCAO_DA_PERGUNTA, ONDE_GRAVAR_O_HANDOFF, ehArquivoDeHandoff, handoffGravadoPeloShell,
-  ehArquivoDeCodigo, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT,
+  ehArquivoDeCodigo, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT, MOTIVO_PARADA_NO_HANDOFF, motivoParadaSemDono,
   SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, instrucaoDaPergunta, provasEquivalentes };

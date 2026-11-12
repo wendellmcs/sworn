@@ -64,11 +64,25 @@ io.blindar(function () {
     let oferecer = false;
     let sugerir = false;
     let frenteDoTurno = null;
+    // A5e (D793): os arquivos ja sujos na abertura do turno (o git roda fora da trava do estado). Falhou: sem foto, a
+    // conferencia depois do comando fica desligada neste turno, como sem escopo.
+    let raizDoTurno = null;
+    let sujosDoTurno = null;
+    try {
+      raizDoTurno = config.raizDoProjeto(e.cwd || process.cwd());
+      sujosDoTurno = require('./lib/git.js').modificados(raizDoTurno);
+    } catch (err) { sujosDoTurno = null; }
     // A5-05: o estado que nao grava nao cala a resposta a pergunta sobre o contexto; sem a espera gravada, nada de
     // sugestao (sairia a cada prompt).
     try {
       estado.alterar(e.session_id, function (s) {
         frenteDoTurno = s.frente || null;
+        // A5e (D793): a foto da abertura - o escopo em vigor agora (o que o agente ampliar depois nao vale para a
+        // conferencia) e os sujos. Sem escopo declarado ou sem a lista do git: sem foto.
+        try {
+          const esc = sujosDoTurno ? require('./lib/escopo.js').carregar(raizDoTurno, s.frente) : null;
+          s.aberturaDoTurno = esc ? { dentro: esc.dentro, fora: esc.fora, sujos: sujosDoTurno } : null;
+        } catch (err) { s.aberturaDoTurno = null; }
         delete s.trabalhoReal;
         delete s.bloqueouNesteTurno;
         delete s.buscouNesteTurno;
@@ -77,6 +91,12 @@ io.blindar(function () {
         // interrompido antes do Stop nao deixa a marca para o seguinte.
         delete s.gravouHandoff;
         delete s.arquivoDoHandoff;
+        // s369 (P1 do dono): a parada depois do handoff do gatilho vale so na continuacao que o Stop pediu.
+        delete s.handoffDoGatilho;
+        delete s.trabalhoDepoisDoHandoff;
+        // s369 (A6): o teto das barradas da parada sem dono e por turno.
+        delete s.paradaSemDono;
+        delete s.escopoAmpliadoNoTurno;
         // A1: no maximo 1 sugestao a cada 5 turnos. Todo prompt gasta 1 da espera; ao sugerir, ela volta a 4.
         // Campo da SESSAO (estado.CAMPOS_DA_SESSAO): o fecho o carrega, senao a janela morria a cada turno.
         // PA1-5: ausente = 0 (primeira vez, libera). Valor que nao e numero finito (texto, null, objeto, lista)

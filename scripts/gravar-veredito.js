@@ -221,6 +221,11 @@ io.blindar(function () {
         ' - erro inesperado (' + (erro && erro.message) + '). ' + comoGravar(lente, null);
     }
     if (resultado) process.stderr.write(resultado + '\n');
-    io.permitir(resultado ? { systemMessage: resultado } : undefined);
+    // A4 (s369): no handback (PostToolUse) o aviso vai tambem ao modelo, que orquestra a revisao - so na tela do dono,
+    // o veredito recusado so aparecia quando alguem contava os arquivos. O SubagentStop nao leva contexto ao modelo.
+    const aoModelo = resultado && e && e.hook_event_name === 'PostToolUse'
+      ? { hookEventName: 'PostToolUse', additionalContext: resultado } : undefined;
+    io.permitir(resultado ? Object.assign({ systemMessage: resultado }, aoModelo ? { hookSpecificOutput: aoModelo } : {})
+      : undefined);
   });
 });

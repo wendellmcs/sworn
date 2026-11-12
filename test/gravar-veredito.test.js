@@ -274,9 +274,11 @@ test('gravar-veredito: JSON invalido pela regua do apurar (sem melhor, achados q
 test('gravar-veredito: lente desconhecida nao grava e avisa, sem inventar nome de arquivo', () => {
   const p = projeto();
   try {
-    for (const lente of ['elogio', '../correcao', 'correcao/../x', 42]) {
+    for (const lente of ['elogio', '../correcao', 'correcao/../x']) {
       avisou(rodar(p, stop(p, JSON.stringify(veredito(p, { lente: lente })))), /lente desconhecida/);
     }
+    // D822: a lente que nao e texto ja para no formato do veredito, com o mesmo aviso de nao gravado
+    avisou(rodar(p, stop(p, JSON.stringify(veredito(p, { lente: 42 })))), /veredito sem lente/);
     assert.deepStrictEqual(arquivosEm(p), []);
     assert.ok(!fs.existsSync(path.join(p.ronda, 'x.json')));
   } finally { limpar(p); }
@@ -780,7 +782,17 @@ test('D503: fiacao da referencia - o inspetor devolve vsReferencia e lacunas; a 
   const passo5 = skill.slice(skill.indexOf('## Step 5'), skill.indexOf('## Step 6'));
   assert.match(passo5, /only approve when every lens ties or beats the reference in both orders/,
     'o Passo 5 nao diz a parada com referencia');
-  assert.match(passo5, /\| cap of 3 rounds with P0\/P1 open or the reference not reached \|/, 'o teto nao cita a referencia');
+  // F2a (D828.2/.3/.5): o P2 de melhoria nao tem mais linha no teto (vira registro desde a ronda 1); o teto manda
+  // consertar com teste, rodar a suite e commitar com a marca, sem perguntar e sem revisao nova
+  assert.match(passo5, /\| cap of 3 rounds with P0, P1 or P2 `erro` open, or the reference not reached \| \*\*Do not ask, and do not open a new review\.\*\*[^|]*broken on purpose[^|]*whole suite[^|]*`# sworn: sem-revisao`[^|]*record of the plan \|/,
+    'o teto nao manda consertar com teste e commitar com a marca');
+  assert.doesNotMatch(passo5, /stronger agent|only P2 `melhoria` open|Four possible/, 'o Passo 5 guarda a pratica de antes');
+  assert.match(passo5, /Three possible outcomes:/, 'o Passo 5 nao conta tres saidas');
+  assert.match(passo3, /`registros`[\s\S]*`melhoria`[\s\S]*`linha nova`[\s\S]*record of the plan/,
+    'o Passo 3 nao fala dos registros');
+  const passo4 = skill.slice(skill.indexOf('## Step 4'), skill.indexOf('## Step 5'));
+  assert.match(passo4, /a P2 `melhoria` never does/, 'o Passo 4 nao diz que a melhoria nao segura');
+  assert.match(passo4, /\*\*Rounds 2 and 3 only verify\.\*\*/, 'o Passo 4 nao diz que as rondas 2 e 3 so verificam');
 });
 
 // Plano 082, Tarefa 6 (p4-2, p4-3, p4-4): o inspetor sabe ler cada bloco do R.txt, o que devolver contra a referencia
@@ -881,4 +893,142 @@ test('lote 3/4a: o inspetor devolve estado, trecho e falta; a skill le pendentes
   const passo3 = skill.slice(skill.indexOf('## Step 3'), skill.indexOf('## Step 4'));
   assert.match(passo3, /`pendentes`/, 'o Passo 3 nao fala dos pendentes');
   assert.match(passo3, /`trechoNaoConfere`/, 'o Passo 3 nao fala do trecho que nao confere');
+});
+
+// A4 (s369): o veredito recusado (JSON quebrado do inspetor, achado sem trecho) avisava so na tela do dono
+// (systemMessage); quem orquestra a revisao so descobria contando os arquivos. No handback (PostToolUse) o mesmo aviso
+// vai ao modelo, que grava a mao ou chama o inspetor de novo.
+test('A4: o veredito recusado no handback chega tambem ao modelo, com a causa e o que fazer', () => {
+  const p = projeto();
+  try {
+    // o caso real da s369: a lente microcopy devolveu `"arquivo":"B.txt":"B.txt"`
+    const quebrado = '{"lente":"microcopy","vereditos":' + JSON.stringify(p.vereditos) +
+      ',"melhor":"empate","porQue":"x","achados":[{"estado":"confirmado","severidade":"P2","arquivo":"B.txt":"B.txt",' +
+      '"linha":1,"trecho":"t","descricao":"d","comoFalha":"c"}]}';
+    for (const msg of [quebrado, JSON.stringify(veredito(p, { achados: [{ estado: 'confirmado', severidade: 'P1',
+      arquivo: 'A.txt', linha: 1, trecho: '', descricao: 'd', comoFalha: 'c' }] }))]) {
+      const r = rodar(p, handback(p, msg));
+      avisou(r);
+      const ctx = r.json.hookSpecificOutput && r.json.hookSpecificOutput.additionalContext;
+      assert.strictEqual(r.json.hookSpecificOutput.hookEventName, 'PostToolUse');
+      assert.strictEqual(ctx, r.json.systemMessage, 'o modelo recebe o mesmo aviso: ' + JSON.stringify(r.json));
+    }
+    // o gravado segue calado; o SubagentStop segue so com systemMessage (o evento nao leva contexto ao modelo)
+    calado(rodar(p, handback(p, JSON.stringify(veredito(p)), { agent_id: 'outro-a4' })));
+    const s = rodar(p, stop(p, 'sem json nenhum', { agent_id: 'terceiro-a4' }));
+    avisou(s);
+    assert.strictEqual(s.json.hookSpecificOutput, undefined, 'SubagentStop sem hookSpecificOutput');
+  } finally {
+    fs.rmSync(p.dir, { recursive: true, force: true });
+  }
+});
+
+// D820 (D1): o voto de seguranca com P1 sem a fronteira nao e gravado - o aviso diz o campo, e a lente roda de novo
+test('D820: o voto de seguranca sem a fronteira nao se grava, e o aviso diz o campo; com ela, grava', () => {
+  const p = projeto();
+  try {
+    const sem = veredito(p, { lente: 'seguranca' });
+    const r = rodar(p, handback(p, JSON.stringify(sem)));
+    avisou(r, /fronteira/);
+    assert.deepStrictEqual(arquivosEm(p), [], 'nada gravado');
+    const com = veredito(p, { lente: 'seguranca', achados: [Object.assign({}, sem.achados[0],
+      { fronteira: { entrada: 'o nome vindo do usuario', controle: 'a guarda de caminho', efeito: 'le fora da pasta' } })] });
+    calado(rodar(p, handback(p, JSON.stringify(com), { agent_id: 'outro-d820' })));
+    assert.deepStrictEqual(arquivosEm(p), ['seguranca.json']);
+  } finally {
+    limpar(p);
+  }
+});
+
+// F2b (D828): o P2 confirmado sem `tipo` e veredito invalido. O gancho nao grava e avisa com a causa; com o tipo, grava.
+test('F2b: o veredito com P2 sem tipo nao e gravado e o aviso diz o que falta; com tipo erro ou melhoria, grava', () => {
+  const p2 = (tipo) => Object.assign({ estado: 'confirmado', trecho: 'x', severidade: 'P2', arquivo: 'B.txt', linha: 3,
+    descricao: 'nome que confunde', comoFalha: 'le o valor errado' }, tipo === undefined ? {} : { tipo: tipo });
+  for (const tipo of [undefined, 'outra coisa']) {
+    const p = projeto();
+    try {
+      const r = rodar(p, stop(p, JSON.stringify(veredito(p, { achados: [p2(tipo)] }))));
+      avisou(r, /veredito invalido \(1 achado\(s\) P2 sem "tipo"/);
+      assert.deepStrictEqual(arquivosEm(p), [], String(tipo));
+    } finally {
+      limpar(p);
+    }
+  }
+  for (const tipo of ['erro', 'melhoria']) {
+    const p = projeto();
+    try {
+      calado(rodar(p, stop(p, JSON.stringify(veredito(p, { achados: [p2(tipo)] })))));
+      assert.strictEqual(lerVeredito(p, 'correcao').achados[0].tipo, tipo);
+    } finally {
+      limpar(p);
+    }
+  }
+});
+
+test('F2b: o inspetor e a skill dizem que o P2 sem tipo invalida o veredito e que a ronda 1 sem achado aprova sozinha', () => {
+  const inspetor = fs.readFileSync(path.join(RAIZ, 'agents', 'inspector.md'), 'utf8');
+  assert.match(inspetor, /A `P2` without `tipo` invalidates the whole verdict/);
+  assert.doesNotMatch(inspetor, /counts as `erro`/);
+  const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
+  // sem o titulo, o indexOf da -1 e o recorte sai vazio ou errado: o doesNotMatch passaria sem conferir nada
+  for (const n of [3, 4, 5, 6]) assert.ok(skill.includes('\n## Step ' + n + ' '), 'a skill perdeu o titulo do Passo ' + n);
+  const passo3 = skill.slice(skill.indexOf('## Step 3'), skill.indexOf('## Step 4'));
+  assert.match(passo3, /\*\*Every confirmed P2 says its `tipo`\*\*[\s\S]*complete the field yourself with `"erro"`[\s\S]*Never write `"melhoria"` yourself/);
+  const passo4 = skill.slice(skill.indexOf('## Step 4'), skill.indexOf('## Step 5'));
+  assert.doesNotMatch(passo4, /counts as `erro`/);
+  const passo5 = skill.slice(skill.indexOf('## Step 5'), skill.indexOf('## Step 6'));
+  assert.match(passo5, /\*\*Round 1 approves by itself\*\* when every lens of the band voted and no verdict brings any finding at all/);
+  assert.ok(passo5.includes('`ronda 1 completa sem achado nenhum: aprovado`'), 'o Passo 5 nao cita o motivo que o script escreve');
+  assert.match(passo5, /\| two dry rounds, or round 1 complete with no finding at all \(with a reference: and `referencia\.pronta`\) \| Approved\./);
+});
+
+// F2d (a): o playbook e as referencias dele diziam a regra velha (seca = sem P1 ou acima; P2 nunca segura; o teto
+// levado a quem decide), e a skill nao dizia como e o briefing nem o modelo das rondas 2 e 3.
+test('F2d: o playbook e a skill dizem a regra nova das rondas, do P2 de erro e do teto sem perguntar', () => {
+  // CRLF sai na leitura: no checkout do Windows com autocrlf, a quebra de linha vem com \r
+  const ler = function (rel) { return fs.readFileSync(path.join(RAIZ, rel), 'utf8').replace(/\r\n/g, '\n'); };
+  // a secao do titulo ate o titulo seguinte do mesmo nivel; sem um dos dois, o recorte nao confere nada
+  const secao = function (texto, titulo, proximo) {
+    const ini = texto.indexOf(titulo);
+    const fim = texto.indexOf(proximo, ini + 1);
+    assert.ok(ini !== -1 && fim !== -1, 'perdeu o titulo ' + titulo + ' ou o seguinte');
+    return texto.slice(ini, fim);
+  };
+  const s44 = secao(ler('skills/playbook/SKILL.md'), '### 4.4 Convergence with a cap', '\n## 5. ');
+  const s4 = secao(ler('skills/playbook/references/03-inspecao-cega.md'), '\n## 4. Convergence', '\n## 5');
+  const marchas = ler('skills/playbook/references/01-marchas-e-gates.md');
+  const skill = ler('skills/review/SKILL.md');
+  // a tabela de severidade da 4.4 separa o P2 de erro do de melhoria
+  assert.match(s44, /\| \*\*P2 `erro`\*\* \|[^\n]*\| Holds the round, like a P1: it is fixed \|/);
+  assert.match(s44, /\| \*\*P2 `melhoria`\*\* \|[^\n]*\| Becomes a record, \*\*does not\*\* become a fix \|/);
+  // as frases da regra velha, nas duas secoes (teto da revisao da F2d: so a secao 4 do 03 as proibia)
+  const velhas = /P1 or above|P2 never reopens|take it to `\{\{campo:quemDecide\}\}`|fix only P0 and P1|had a P0\/P1 finding|that is a decision for `\{\{campo:quemDecide\}\}`/;
+  for (const [nome, texto] of [['playbook 4.4', s44], ['03-inspecao-cega secao 4', s4]]) {
+    assert.doesNotMatch(texto, velhas, nome + ': a regra velha');
+    assert.match(texto, /P0, P1 or P2 `erro`/, nome);
+    assert.match(texto, /round 1 (in which no lens points out anything at all|with no finding at all)/, nome);
+    assert.match(texto, /do not ask/, nome);
+    assert.match(texto, /`# sworn: sem-revisao`/, nome);
+    assert.match(texto, /becomes a record/, nome);
+  }
+  assert.doesNotMatch(marchas, /ten for code, eight for screen/);
+  assert.match(marchas, /stop at 2 dry rounds or at a complete round 1 with no finding\n? *at all/);
+  const passo4 = skill.slice(skill.indexOf('## Step 4'), skill.indexOf('## Step 5'));
+  // D829: as rondas 2 e 3 um degrau abaixo da ronda 1, pelo portao do juiz (nao mais o Haiku fixo)
+  assert.match(passo4, /\*\*Rounds 2 and 3 run one step below round 1\*\*/);
+  assert.match(passo4, /`scripts\/portao-juiz\.js`/);
+  assert.doesNotMatch(passo4, /`model: "haiku"`/);
+  assert.match(passo4, /the briefing never asks the inspector to look at the rest/);
+  assert.doesNotMatch(skill, /an improvement left at the cap becomes a record/);
+  // F2d parte b: o juiz so recebe os pares fortes; e so o P2 de erro se conserta dentro do pedido
+  const passo3 = skill.slice(skill.indexOf('## Step 3'), skill.indexOf('## Step 4'));
+  assert.match(passo3, /If `paresFortes` is not empty, dispatch \*\*one\*\*\n *`sworn:dedupe-judge` subagent with that list/);
+  assert.doesNotMatch(passo3, /If the output brings a non-empty `paresCandidatos`, dispatch/);
+  assert.match(skill, /A P2 `erro` is fixed when it is part of what was requested/);
+  // F2d parte c: na completa, a saida traz as lentes escolhidas pelo risco, e a skill manda despachar so elas
+  const passo2 = skill.slice(skill.indexOf('## Step 2'), skill.indexOf('## Step 3'));
+  assert.match(passo2, /\*\*In the `completa` band the output of Step 1 brings `lentes`, chosen by risk\*\*/);
+  assert.match(passo2, /Dispatch every lens in `lentes`/);
+  assert.match(passo2, /You can add a lens the script left out, never drop one/);
+  assert.match(passo2, /`estados` and `borda`\n? *stay apart/);
 });

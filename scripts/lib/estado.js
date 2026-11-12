@@ -49,7 +49,7 @@ function ler(sessionId) {
       const bruto = fs.readFileSync(caminhoSessao(sessionId), 'utf8');
       return sessaoLida(JSON.parse(texto.semBom(bruto)));
     } catch (e) {
-      if ((e && e.code === 'ENOENT') || i >= 40) return {};
+      if ((e && e.code === 'ENOENT') || i >= 200) return {};
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
     }
   }
@@ -74,7 +74,9 @@ function gravarAtomico(destino, dados) {
     try { fs.rmSync(temp, { force: true }); } catch (e2) { /* ja foi */ }
     throw e;
   }
-  for (let i = 0; i < 100; i++) {
+  // s369: sob carga (a suite em paralelo) 100 tentativas (500 ms) acabavam, a escrita direta abaixo - que nao e atomica -
+  // entrava, e o leitor via o estado vazio (389 de 3000 leituras). Ela e o ultimo recurso: 2 s de tentativas antes.
+  for (let i = 0; i < 400; i++) {
     try { fs.renameSync(temp, destino); return; } catch (e) {
       if (e.code !== 'EPERM' && e.code !== 'EBUSY' && e.code !== 'EACCES') break;
       dormir(5);
@@ -209,6 +211,11 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   'manualCarregado',
   // Plano 091 (#1): os arquivos com revisao aprovada (apurar-ronda.js); o portao do commit os deixa passar.
   'revisadosAprovados',
+  // B2 (s369): os aprovados com revisao degradada, { caminho: motivo }; o fecho cobra a linha DEGRADADO.
+  'revisoesDegradadas',
+  // F2a (D828.3): os arquivos com a revisao fechada no teto, { caminho: blob no HEAD daquela hora } (apurar-ronda.js); o
+  // portao do commit manda commita-los com a marca, sem perguntar.
+  'revisadosNoTeto',
   // Plano 091 T6: as ordens dadas e ainda nao cumpridas (lib/ordens.js); a skill que roda depois as cumpre.
   'ordensPendentes',
   // D569 (0.9.1): o aviso inteiro do cd corrigido ja saiu nesta sessao; os seguintes vao curtos.
@@ -219,16 +226,32 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   'notaViva',
   // D694 (T3 da escada): o pedido de escalada chega no fim do subagente e e cobrado num turno seguinte (lib/escalada.js).
   'escalada',
+  // D794: a prova que o gancho do fecho rodou vale nos turnos seguintes ate a proxima edicao (portao-fecho.js); a que
+  // passou do teto nao roda de novo na sessao.
+  'provaDoGancho', 'provaDoGanchoEstourou',
   // D721 (A1-06): o aviso do padrao invalido em comandosBloqueados sai 1 vez por sessao (portao-destrutivo.js).
   'avisouBloqueadoInvalido',
   // D786 passo 3: a compactacao depois de um aviso de saude rearma so o gatilho de tamanho (abertura.js,
   // saude.avaliar).
   'saudeRearmada',
   // D786 passo 5: a ordem do compact cobrada no portao do Write/Edit ate ser cumprida, mesmo atravessando o turno.
-  'ordemDoCompact'];
+  'ordemDoCompact',
+  // A5b/leva 14 (luna r2): a marca do escopo ampliado vale ate a proxima mensagem do dono (o abrir-turno a zera), nao
+  // ate o Stop. O Stop que o proprio sworn barra (gatilho do handoff, laco da prova) abre uma continuacao sem o dono, e
+  // o fecho, que regrava o estado so com estes campos, a perdia ali - o apagar seguinte passou.
+  'escopoAmpliadoNoTurno',
+  // A5e (D793): a foto da abertura do turno (escopo e arquivos ja sujos), que o conferir-depois.js compara depois de
+  // cada comando de shell; vale ate a proxima mensagem do dono, como a marca acima.
+  'aberturaDoTurno'];
 const CAMPOS_DO_TURNO = ['trabalhoReal', 'bloqueouNesteTurno', 'buscouNesteTurno', 'contadores', 'gravouHandoff',
   // D785 (2.1): a edicao de codigo do turno e a volta do laco da prova (portao-fecho.js).
-  'arquivoDoHandoff', 'editouCodigo', 'lacoDaProva'];
+  'arquivoDoHandoff', 'editouCodigo', 'lacoDaProva',
+  // s369 (P1 do dono): o trabalho feito depois do handoff. O `handoffDoGatilho` nao entra: quem o grava e o proprio
+  // fecho, no estado da continuacao que a ordem do handoff abre (portao-fecho.js, ramo `entrega`), e o fecho seguinte
+  // o descarta como a todo campo do turno.
+  'trabalhoDepoisDoHandoff',
+  // s369 (A6): quantas vezes o fecho barrou a parada com trabalho por fazer neste turno (teto TETO_DA_PARADA).
+  'paradaSemDono'];
 
 /** Os campos da sessao que este estado tem, para o fecho carregar adiante. */
 function camposDaSessao(s) {

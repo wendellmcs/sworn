@@ -1,10 +1,10 @@
 {
   "name": "sworn",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "private": true,
   "type": "commonjs",
   "description": "Portoes deterministicos que obrigam o agente a provar em vez de afirmar.",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test --test-skip-pattern=ponta.a.ponta test/*.test.js && node --test --test-concurrency=1 --test-name-pattern=ponta.a.ponta test/captura.test.js test/tela-cega.test.js"
   }
 }
