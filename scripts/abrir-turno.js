@@ -162,6 +162,11 @@ io.blindar(function () {
     if (sugerir) avisos.push(correcao.INSTRUCAO_DA_CORRECAO);
     if (oferecer) avisos.push(radarOferta.INSTRUCAO_DA_OFERTA);
     if (notaAviso) avisos.push(notaAviso);
+    // R3d (D833): o dono escreve num idioma e a ultima resposta saiu em outro (idioma.js). Falha cala: sem a linha.
+    try {
+      const idioma = require('./lib/idioma.js').aviso(e.prompt, e.transcript_path);
+      if (idioma) avisos.push(idioma);
+    } catch (err) { /* sem a linha do idioma; o turno segue */ }
     if (avisos.length) {
       return io.permitir({ hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit', additionalContext: avisos.join('\n\n') } });

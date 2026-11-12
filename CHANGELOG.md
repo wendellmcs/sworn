@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.25.0 — nenhum pedido seu se perde
+
+**Novo**
+
+- **Seu pedido longo fica inteiro.** O sworn anota cada mensagem sua numa lista, para nada do que você pediu depender
+  da memória do Claude. Antes, a mensagem longa ficava cortada em cerca de 600 caracteres, e o resto se perdia. Agora a
+  lista guarda o começo e aponta um arquivo com o texto inteiro, com as quebras de linha (a chave de API que estiver
+  nele sai como "[segredo omitido]").
+- **A retomada de um chat não conta como pedido.** O texto que você cola para retomar o trabalho de outro chat (o
+  prompt do handoff, o resumo que o sworn escreve para continuar o trabalho) entra na lista marcado, sem número, e não
+  aparece como pedido em aberto.
+- **Cada pedido tem estado.** Na lista, o pedido ganha no fim "feito", "recusado" ou "respondido", com a prova (o
+  commit ou a decisão); sem isso, ele está em aberto, e o handoff traz os abertos. Assim, o pedido que muda o plugin
+  entra no plano de trabalho e sai numa versão, sem ficar esquecido.
+- **A resposta volta para o seu idioma.** Quando você escreve em português e a última resposta do Claude saiu em
+  inglês (ou o contrário), o sworn lembra o Claude de responder no seu idioma.
+
 ## 0.24.0 — menos espera em cada comando
 
 **Novo**

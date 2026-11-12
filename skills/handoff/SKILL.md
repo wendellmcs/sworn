@@ -57,9 +57,21 @@ for the write, or refuses it when nobody is there to answer), with **all** of th
    this section the next chat will "discover" it and lose time. **A pending item is not dragged from handoff
    to handoff**: a list that only grows has no owner. Before the prompt, take each new pending item to the owner,
    all of them at once and in 3 options, and write here only what was already decided or what has an owner and place declared.
-   **The owner's requests:** read `.claude/sworn/pedidos/<front>.md` (`sem-frente.md` with no front), the numbered
-   list the hook writes with every message of theirs, and bring each request with its number and state: done (with
-   the evidence), open, or refused (with the decision). An open request is a pending item of this section.
+   **The owner's requests:** the hook writes every message of theirs, numbered, in `.claude/sworn/pedidos/<front>.md`
+   (`sem-frente.md` with no front; a long one is kept whole in `pedidos/<front>/<n>.md`, and a pasted handoff prompt is
+   a marked line without a number, not a request). With no front, leave out `--frente` in both commands below. List
+   the open ones (no state mark yet):
+
+       node "${CLAUDE_PLUGIN_ROOT}/scripts/pedidos.js" --abertos --frente <front>
+
+   Mark each one this session settled, with its evidence, so it stops being open:
+
+       node "${CLAUDE_PLUGIN_ROOT}/scripts/pedidos.js" --marcar <numbers> <feito|recusado|respondido> "<commit, D### or what was answered>" --frente <front>
+
+   `<numbers>` is `3`, `1-4` or `1-4,7`. `feito` carries the commit; `recusado`, the owner's decision that declined
+   it; `respondido`, a question that asked for no change, with what was answered. Bring each request
+   still open with its number: an open request is a pending item of this section, and a request that asks for a
+   change in the plugin becomes a plan item (it ships in a version).
 6. **Method errors that cost time** — so they are not repeated.
 7. **Third-party files left untouched** — from the `git status` of step 1.
 8. **Ready-to-paste prompt**, in a code block.

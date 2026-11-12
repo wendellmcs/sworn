@@ -45,6 +45,12 @@ function limpar(texto) {
   return String(texto).replace(INJETADOS, ' ').replace(COLADO, ' ').replace(COMANDO, ' $2 ').replace(/\s+/g, ' ').trim();
 }
 
+/** R3a (D833): a mesma limpeza, guardando as quebras de linha (o texto inteiro do pedido longo, pedidos.js). */
+function limparLinhas(texto) {
+  return String(texto).replace(INJETADOS, ' ').replace(COLADO, ' ').replace(COMANDO, ' $2 ').replace(/\r\n?/g, '\n')
+    .replace(/[^\S\n]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 /** Texto do dono nesta linha do registro, ou null. Mensagem direta ou digitada na fila com o Claude trabalhando. */
 function pedidoDaLinha(o) {
   if (o.isSidechain === true) return null;
@@ -362,4 +368,4 @@ function soltar(raiz, sessao) {
   return meus.length;
 }
 
-module.exports = { PASTA, lerRegistro, montar, gravar, resumir, limpar, mascarar, cortar, reclamar, soltar };
+module.exports = { PASTA, lerRegistro, montar, gravar, resumir, limpar, limparLinhas, mascarar, cortar, reclamar, soltar };

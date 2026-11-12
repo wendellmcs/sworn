@@ -1454,10 +1454,19 @@ não manda rodar nem colar de novo: só apontar para o bloco acima.
 
 - **A lista dos seus pedidos.** Cada mensagem sua que chega ao Claude vira uma linha numerada, com data e hora, em
   `.claude/sworn/pedidos/<frente>.md` (`sem-frente.md` sem frente vinculada), gravada pelo gancho, sem o Claude: sem
-  os blocos que o Claude Code injeta, cortada em ~600 caracteres, e a chave de API reconhecida sai como "[segredo
-  omitido]". Nada sai da máquina. O handoff traz cada pedido com o estado (feito, aberto, recusado). A mensagem parada
-  pelo aviso de volta não entra: ela volta a ser mandada. Só grava em projeto que já tem `.claude/sworn/`; desliga com
-  `"pedidos": false`.
+  os blocos que o Claude Code injeta, e a chave de API reconhecida sai como "[segredo omitido]". Nada sai da máquina.
+  Desde a 0.25.0, o pedido maior que a linha (~600 caracteres) fica inteiro, com as quebras de linha, em
+  `pedidos/<frente>/<número>.md`, e a linha aponta o arquivo; o prompt de handoff colado (a mensagem longa que cita um
+  arquivo de handoff, a retomada de um chat) entra numa linha marcada, sem número, e não conta como pedido. Cada pedido
+  ganha o estado no fim da linha, `[feito: <evidência>]`, `[recusado: <decisão>]` ou `[respondido: <o quê>]` (a
+  pergunta que não pedia mudança); sem marca, está aberto. Quem marca é o Claude, ao fechar o pedido, com
+  `node scripts/pedidos.js --marcar 1-4,7 feito "<commit>"` (e `--abertos` lista os que faltam); o handoff traz os
+  abertos. A mensagem parada pelo aviso de volta não
+  entra: ela volta a ser mandada. Só grava em projeto que já tem `.claude/sworn/`; desliga com `"pedidos": false`.
+- **O idioma da resposta** (desde a 0.25.0). Quando você escreve num idioma e a última resposta do Claude saiu em
+  outro (português e inglês, pelas palavras mais comuns da mensagem), o gancho de entrada lembra o Claude numa linha
+  de responder no seu idioma. Mensagem curta, ou misturada, não deixa saber o idioma e não gera o aviso. O aviso não
+  tem chave para desligar: ele só sai quando os dois idiomas diferem.
 - **O resumo da frente na abertura.** Frente que acumula notas de sessão no Objetivo aparece pelo começo do Objetivo,
   pela última nota `(sessao N, ...)`, pelo plano e pelo caminho do arquivo da frente, onde está o resto.
 - **O dono do handoff.** O chat que lê um arquivo de handoff vira o dono dele (`.claude/sworn/handoff-donos.json`).
