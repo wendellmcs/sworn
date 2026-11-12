@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.27.0 — a conversa se resume sozinha logo depois do handoff
+
+**Corrigido**
+
+- **A compactação automática vem logo depois do handoff, sem você configurar nada.** Quando a conversa fica longa, o
+  sworn grava o handoff (o texto de continuação), e o Claude Code deveria resumir a conversa logo em seguida, para o
+  trabalho seguir no mesmo chat sem pesar. Esse ponto do resumo só era gravado pelo `/sworn:init` e pelo
+  `/sworn:calibrate`. Num projeto configurado antes disso, ou em que você nunca rodou esses comandos, o Claude Code só resumia perto do limite da
+  janela: com 1 milhão de tokens, centenas de milhares depois do handoff, e cada mensagem nesse meio custava várias
+  vezes mais. Agora, ao abrir a sessão, o sworn grava o ponto uma vez por projeto, 50 mil tokens depois do gatilho do
+  handoff, na variável `CLAUDE_CODE_AUTO_COMPACT_WINDOW` do `.claude/settings.local.json` (o seu arquivo pessoal do
+  projeto). Vale para o Claude Code aberto na pasta principal de um repositório git, ou de um projeto com o
+  `/sworn:init`; numa subpasta, ou numa pasta sem git, nada é gravado. O arquivo fica fora do git: se o projeto ainda
+  não o ignora, o sworn põe uma linha no `.git/info/exclude`, que nunca vai em commit. O que você já decidiu fica como
+  está: um valor seu no arquivo ou a variável no seu ambiente. Para desfazer, apague a chave
+  `CLAUDE_CODE_AUTO_COMPACT_WINDOW` do arquivo: o sworn não a grava de novo. Vale a partir da sessão seguinte, e a
+  abertura diz o valor gravado.
+
 ## 0.26.0 — seu nome não vai para o commit público
 
 **Novo**

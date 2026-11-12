@@ -222,6 +222,17 @@ io.blindar(function () {
     if (curta.ativa(projeto)) process.stdout.write('\n' + curta.RODAPE + '\n');
     const heranca = require('./lib/escopo.js').avisoHeranca(cwd, estado.ler(e.session_id).frente);
     if (heranca) process.stdout.write('\n' + heranca + '\n');
+    // R3g: o ponto da compactacao automatica, uma vez por projeto, em qualquer projeto (scripts/lib/compactacao.js).
+    // Na reabertura da compactacao nao: a conversa ja compactou, e a abertura seguinte grava.
+    if (e.source !== 'compact') {
+      try {
+        const ponto = require('./lib/compactacao.js').gravarNaAbertura(cwd, projeto);
+        if (ponto) process.stdout.write('\n' + ponto + '\n');
+      } catch (erro) {
+        process.stdout.write('\nsworn: o ponto da compactacao automatica nao foi conferido (' +
+          escopoLib.ascii(textoLib.causaDoErro(erro)).slice(0, 120) + '). O resto da abertura segue igual.\n');
+      }
+    }
 
     // O buraco que a D104 mediu e deixou aberto: `intocaveis` com typo fica
     // INERTE em silencio - nao e erro de tipo nem de sintaxe, entao nenhum

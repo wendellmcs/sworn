@@ -229,4 +229,5 @@ function marcar(raiz, frente, lista, estado, evidencia) {
   return { marcados: ns.filter(function (n) { return achados.has(n); }), faltaram: ns.filter(function (n) { return !achados.has(n); }) };
 }
 
-module.exports = { CHAVE, PASTA, ESTADOS, ligada, registrar, ler, ehPromptDeHandoff, numeros, abertos, marcar };
+module.exports = { CHAVE, PASTA, ESTADOS, ligada, registrar, ler, ehPromptDeHandoff, numeros, abertos, marcar,
+  travar, soltar };

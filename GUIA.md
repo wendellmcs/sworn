@@ -1567,6 +1567,16 @@ do git); no Codex, com os ganchos do sworn instalados, na chave `model_auto_comp
 `.codex/config.toml`. O `/sworn:init` grava o mesmo ponto (com `--ponto`, que não mexe no `projeto.json`). Vale a
 partir da próxima sessão; para desfazer, apague a linha nesses arquivos.
 
+Desde a 0.27.0, a abertura da sessão também grava esse ponto, uma vez por projeto, mesmo sem o `/sworn:init`: basta
+o Claude Code aberto na raiz de um repositório git (ou de um projeto com `projeto.json`). Se o projeto ainda não
+ignora o `.claude/settings.local.json`, o sworn põe uma linha no `.git/info/exclude`, que é local e não vai em
+commit; a abertura diz a linha, e o `calibrar.js` a mostra no campo `exclude`. Ele não mexe no que você já decidiu:
+um valor seu no arquivo, a variável no seu ambiente ou a chave `CLAUDE_CODE_AUTO_COMPACT_WINDOW` que você apagou
+depois da primeira vez. A lista dos projetos já gravados fica em `sworn/compactacao-gravada.json`, dentro da pasta de
+configuração do Claude Code (`~/.claude`, ou a que a variável `CLAUDE_CONFIG_DIR` apontar). Um projeto aberto numa
+subpasta do repositório, ou numa pasta sem git e sem `projeto.json`, não ganha o ponto: abra o Claude Code na pasta
+principal do projeto, ou rode `/sworn:init`.
+
 ### `playbook` — o manual que o agente carrega
 
 O procedimento que amarra tudo: a marcha de rigor (Rápida, Padrão, AAA) classificada **antes** de
