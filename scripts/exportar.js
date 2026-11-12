@@ -183,9 +183,17 @@ function main() {
   }
   console.log('`git init` e `git add` feitos. NENHUM commit - isso e o ato irreversivel.');
   console.log('');
-  console.log('Confira ANTES de commitar:');
+  // R3f: a sanitacao confere a identidade que vai assinar o commit (sem nada configurado, o git inventa uma com o
+  // nome completo da conta do sistema). Por isso a identidade publica vem PRIMEIRO, e a sanitacao roda de novo depois
+  // do commit, quando ve tambem quem assinou de fato: o push so vem com as duas rodadas limpas.
+  console.log('1. Ponha a identidade publica (o apelido e o e-mail noreply do GitHub, nunca o seu nome):');
+  console.log('  git -C "' + destinoPedido + '" config user.name "<apelido>"');
+  console.log('  git -C "' + destinoPedido + '" config user.email "<numero>+<apelido>@users.noreply.github.com"');
+  console.log('  (as variaveis GIT_AUTHOR_* e GIT_COMMITTER_* do ambiente vencem esta config: tire-as antes)');
+  console.log('2. Confira ANTES de commitar:');
   console.log('  node "' + path.join(destinoPedido, 'scripts', 'sanitar.js') + '" --raiz "' + destinoPedido + '"');
   console.log('  npm --prefix "' + destinoPedido + '" test');
+  console.log('3. Depois do commit e ANTES do push, rode a sanitacao de novo.');
   process.exit(0);
 }
 

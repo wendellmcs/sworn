@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.0 — seu nome não vai para o commit público
+
+**Novo**
+
+- **A sanitação confere quem vai assinar o commit.** Antes, ela lia só os commits que já existiam. A pasta
+  recém-exportada, ainda sem commit nenhum, passava limpa mesmo com o seu nome configurado como autor, e o nome ia
+  para o repositório público no primeiro commit. Agora o nome e o e-mail que o git usaria no próximo commit passam
+  pelas mesmas conferências, inclusive pelos nomes que você listou como proibidos. Na pasta exportada, ponha o seu
+  apelido público e o e-mail de privacidade que o GitHub dá a cada conta (o que termina em
+  `@users.noreply.github.com`, em Settings → Emails), nunca o seu e-mail pessoal. Os dois comandos aparecem no fim
+  da exportação. Depois do commit, e antes de enviar ao GitHub, rode a sanitação de novo.
+
 ## 0.25.0 — nenhum pedido seu se perde
 
 **Novo**

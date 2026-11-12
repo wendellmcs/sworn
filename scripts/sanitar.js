@@ -65,7 +65,8 @@ function main() {
 
   const r = sanit.auditar(raiz);
   if (r === null) {
-    console.error('NAO DEU PARA MEDIR: o git nao respondeu em ' + pedida + '.');
+    console.error('NAO DEU PARA MEDIR: o git nao respondeu em ' + pedida + ' (a lista de arquivos, o historico ou a');
+    console.error('identidade que vai assinar o proximo commit: `git var GIT_AUTHOR_IDENT`).');
     console.error('Sem a lista de arquivos e sem o historico nao ha veredito - e');
     console.error('veredito e que este comando existe para dar. Saida 2, nao 0.');
     process.exit(2);

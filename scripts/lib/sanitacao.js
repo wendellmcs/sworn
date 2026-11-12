@@ -466,6 +466,37 @@ function autoresDoHistorico(raiz) {
   return Object.keys(vistos);
 }
 
+/**
+ * R3f (pedido do dono): a identidade que assinaria o proximo commit em `raiz`, como `nome <email>` (autor e
+ * committer, sem repetir). O export e auditado ANTES do primeiro commit, e o historico nao mostra quem vai assinar:
+ * foi assim que a 0.24.0 saiu com o nome do dono. `git var` resolve como o commit resolve (variavel de ambiente,
+ * config local, global). Sem nada configurado o git NAO falha: inventa a identidade com o nome completo da conta do
+ * sistema e o nome da maquina (medido no Windows, git 2.53), e ela passa pela conferencia como qualquer outra.
+ * Devolve null (NAO SEI, saida 2) quando o git nao responde ou responde fora do formato; [] so quando o git recusa
+ * por identidade desconhecida (`user.useConfigOnly`), caso em que o commit tambem nao sai.
+ */
+function identidadeDoProximoCommit(raiz) {
+  const vistos = Object.create(null);
+  for (const v of ['GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT']) {
+    let r;
+    try {
+      // LC_ALL=C: a recusa por identidade desconhecida e reconhecida pelo texto, e o git traduzido (pt_BR) a mudaria
+      r = spawnSync('git', ['var', v], { cwd: raiz, encoding: 'utf8', shell: false, timeout: 20000, windowsHide: true,
+        env: Object.assign({}, process.env, { LC_ALL: 'C', LANGUAGE: '' }) });
+    } catch (e) { return null; }
+    if (!r || r.error || typeof r.stdout !== 'string') return null;
+    if (r.status !== 0) {
+      if (/identity unknown|no (email|name) was given|empty ident name/i.test(String(r.stderr || ''))) continue;
+      return null;
+    }
+    // "Nome <email> 1731400000 -0300": tira a data e o fuso do fim
+    const m = r.stdout.trim().match(/^(.*>)\s+\d+\s+[+-]\d{4}$/);
+    if (!m) return null;
+    vistos[m[1]] = true;
+  }
+  return Object.keys(vistos);
+}
+
 const SEP = '\u0001SWORN\u0001';
 
 function mensagensDoHistorico(raiz) {
@@ -561,11 +592,16 @@ function auditar(raiz) {
   if (autores === null) return null;
   const mensagens = mensagensDoHistorico(raiz);
   if (mensagens === null) return null;
+  const identidade = identidadeDoProximoCommit(raiz);
+  if (identidade === null) return null;
 
   const ilegiveis = [];
   const naoConferidos = [];
   const achados = varrerArquivos(raiz, arquivos, lista, ilegiveis, naoConferidos)
     .concat(varrerAutores(autores, lista))
+    .concat(varrerAutores(identidade, lista).map(function (a) {
+      return Object.assign(a, { arquivo: '(identidade do proximo commit)' });
+    }))
     .concat(varrerMensagens(mensagens, lista));
 
   const porClasse = Object.create(null);
@@ -595,5 +631,6 @@ function auditar(raiz) {
 module.exports = {
   CLASSES_GENERICAS, DOMINIOS_RESERVADOS, FORA_DO_PUBLICO, ARQUIVO_LOCAL,
   termosLocais, lerVocabularioLocal, sessoesLocais, classes, varrerTexto, varrerArquivos, varrerAutores, varrerMensagens,
-  superficiePublicavel, semCommits, autoresDoHistorico, mensagensDoHistorico, auditar, autoteste
+  superficiePublicavel, semCommits, autoresDoHistorico, identidadeDoProximoCommit, mensagensDoHistorico, auditar,
+  autoteste
 };

@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 const sanit = require('../scripts/lib/sanitacao.js');
+// R3f: os repositorios temporarios assinam com um autor de ensaio, nao com a identidade global da maquina
+require('./lib/comum.js').identidadeDeEnsaio();
 
 const RAIZ = path.join(__dirname, '..');
 const LOCAIS = sanit.classes(RAIZ);
@@ -535,6 +537,79 @@ test('sanitar: pasta que nao e repositorio segue sendo NAO SEI, nao vazio', () =
     'sem isto, qualquer pasta do disco passaria por repositorio limpo');
   assert.strictEqual(sanit.autoresDoHistorico(dir), null);
 });
+
+/**
+ * R3f (pedido do dono, 2026-11-12: "isso nao pode acontecer mais de ir com meu nome"): a 0.24.0 saiu com o nome do
+ * dono no autor porque a superficie 2 so lia o historico, e o export e auditado ANTES do primeiro commit. A
+ * identidade que vai assinar o proximo commit (`git var GIT_AUTHOR_IDENT` e `GIT_COMMITTER_IDENT`: a variavel de
+ * ambiente, a config local ou a global) passa pelas mesmas classes, inclusive o vocabulario local.
+ */
+test('sanitar: a identidade que vai assinar o proximo commit passa pela superficie 2 (R3f)', () => {
+  const dir = repo();
+  const g = (args) => {
+    const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
+    assert.strictEqual(r.status, 0, 'git ' + args.join(' ') + ': ' + r.stderr);
+  };
+  const rodar = (env) => spawnSync(process.execPath, [SCRIPT, '--raiz', dir],
+    { encoding: 'utf8', timeout: 60000, env: Object.assign({}, process.env, env) });
+  const daIdentidade = (r) => /SUPERFICIE 2 autoria\s+\S+\s+-> [1-9]/.test(r.stdout) &&
+    r.stdout.indexOf('(identidade do proximo commit)') !== -1;
+  const LIMPO = { GIT_AUTHOR_NAME: 'outro', GIT_AUTHOR_EMAIL: 'o' + '@exemplo.com' };
+  const LIMPO_C = { GIT_COMMITTER_NAME: 'outro', GIT_COMMITTER_EMAIL: 'o' + '@exemplo.com' };
+  fs.writeFileSync(path.join(dir, '.gitignore'), sanit.ARQUIVO_LOCAL + '\n', 'utf8');
+  fs.writeFileSync(path.join(dir, sanit.ARQUIVO_LOCAL), JSON.stringify({
+    termos: [{ chave: 'dono', nome: 'nome do dono', padrao: 'Fulano Sicrano',
+               isca: 'x Fulano Sicrano y', controle: 'outra coisa' }]
+  }), 'utf8');
+  // o nome do vocabulario com o e-mail noreply: o historico esta limpo, a identidade do proximo commit nao
+  g(['config', 'user.name', 'Fulano Sicrano']);
+  g(['config', 'user.email', '1234+fulano' + '@users.noreply.github.com']);
+  const r = rodar({});
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.ok(daIdentidade(r), r.stdout);
+  // o trecho vazado nao e impresso, nem na saida nem no erro
+  for (const vazado of ['Fulano Sicrano', '1234+fulano']) {
+    assert.strictEqual((r.stdout + r.stderr).indexOf(vazado), -1, vazado);
+  }
+  // o e-mail pessoal tambem, mesmo com o nome limpo, e pela identidade (nao por outra superficie)
+  g(['config', 'user.name', 'fulano']);
+  g(['config', 'user.email', 'fulano' + '@gmail.com']);
+  const email = rodar({});
+  assert.strictEqual(email.status, 1, email.stdout);
+  assert.ok(daIdentidade(email), email.stdout);
+  assert.strictEqual((email.stdout + email.stderr).indexOf('fulano' + '@gmail'), -1);
+  const ident = sanit.identidadeDoProximoCommit(dir);
+  assert.ok(ident.length >= 1 && ident.every((l) => /^fulano <fulano@gmail\.com>$/.test(l)), JSON.stringify(ident));
+  // a variavel de ambiente vence a config, como no commit de verdade: o autor e o committer, cada um por si
+  const soAutor = rodar(LIMPO);
+  assert.ok(daIdentidade(soAutor) && soAutor.status === 1, 'o committer da config segue sujo: ' + soAutor.stdout);
+  const soCommitter = rodar(LIMPO_C);
+  assert.ok(daIdentidade(soCommitter) && soCommitter.status === 1, 'o autor da config segue sujo: ' + soCommitter.stdout);
+  assert.strictEqual(rodar(Object.assign({}, LIMPO, LIMPO_C)).status, 0, 'os dois pelo ambiente: a config suja nao assina');
+  // o git que nao responde no formato e NAO SEI (saida 2), nunca limpo
+  const torto = rodar({ GIT_AUTHOR_DATE: 'data que nao existe' });
+  assert.strictEqual(torto.status, 2, torto.stdout + torto.stderr);
+  // a recusa por identidade desconhecida (`user.useConfigOnly` sem nada configurado) nao assina nada: o commit tambem
+  // nao sai, e a sanitacao segue (nem achado, nem NAO SEI). Aqui faltam o nome e o e-mail; nao ha caso "so sem o nome":
+  // com o e-mail posto, o git desta maquina tirou o nome da conta do sistema mesmo com `useConfigOnly` e nao recusou.
+  // As GIT_AUTHOR_* e GIT_COMMITTER_* do ambiente ja sairam (identidadeDeEnsaio), entao nada da identidade por fora.
+  const vazio = path.join(dir, 'gitconfig-vazio');
+  fs.writeFileSync(vazio, '', 'utf8');
+  const semNada = { GIT_CONFIG_GLOBAL: vazio, GIT_CONFIG_NOSYSTEM: '1' };
+  g(['config', 'user.useConfigOnly', 'true']);
+  g(['config', '--unset', 'user.name']);
+  g(['config', '--unset', 'user.email']);
+  const recusa = rodar(semNada);
+  assert.strictEqual(recusa.status, 0, 'sem e-mail nem nome: ' + recusa.stdout + recusa.stderr);
+  g(['config', '--unset', 'user.useConfigOnly']);
+  g(['config', 'user.name', 'fulano']);
+  // controle: o apelido publico com o noreply passa limpo
+  g(['config', 'user.email', '1234+fulano' + '@users.noreply.github.com']);
+  const limpo = rodar({});
+  assert.strictEqual(limpo.status, 0, limpo.stdout);
+  assert.deepStrictEqual(sanit.identidadeDoProximoCommit(dir), ['fulano <1234+fulano' + '@users.noreply.github.com>']);
+});
+
 
 // == D419/D420: defeitos do detector, achados IN-01 a IN-05 ====================
 // Cada isca abaixo e montada por concatenacao: o detector varre este arquivo.

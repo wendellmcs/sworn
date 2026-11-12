@@ -1724,6 +1724,15 @@ saem com 2. Arquivo com acento no nome, UTF-16 com BOM e pasta pessoal do macOS 
 entram na conferência; binário sai como "não conferido", com o motivo. O `cicatriz.js` aceita um arquivo, e não só
 uma pasta, em `--manual` e em `--corpus`.
 
+Desde a 0.26.0, a autoria confere também quem **vai** assinar o próximo commit: o nome e o e-mail que o git usaria
+(pela variável de ambiente ou pela configuração) passam pelo que a sanitação já procura (e-mail pessoal, caminho da
+sua máquina, chave) e pelos nomes do seu vocabulário local (`.sanitacao-local.json`). Antes, a pasta recém-exportada,
+ainda sem commit, saía limpa mesmo com o seu nome configurado como autor. Sem nada configurado, o git inventa um autor
+com o nome completo da sua conta do computador, e a sanitação também o barra. Antes do commit, na pasta exportada:
+`git -C <pasta> config user.name "<apelido>"` e `git -C <pasta> config user.email
+"<número>+<apelido>@users.noreply.github.com"` (o `exportar.js` imprime os dois); depois do commit, e antes de
+enviar ao GitHub, rode o `sanitar.js` de novo.
+
 ---
 
 ## O que o `sworn` NÃO promete

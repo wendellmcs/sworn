@@ -11,6 +11,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const sanit = require('../scripts/lib/sanitacao.js');
+// R3f: os repositorios temporarios assinam com um autor de ensaio, nao com a identidade global da maquina
+require('./lib/comum.js').identidadeDeEnsaio();
 
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'exportar.js');

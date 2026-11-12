@@ -111,4 +111,31 @@ function repo(dir, arquivos) {
   return dir;
 }
 
-module.exports = { RAIZ, PRAZO, pasta, apagar, ambiente, rodar, git, repo };
+let identidadePosta = false;
+
+/**
+ * R3f: a sanitacao confere a identidade que vai assinar o proximo commit (`git var GIT_AUTHOR_IDENT`). Sem isto, um
+ * repositorio temporario de teste herda a identidade global da maquina (na do dono, o e-mail pessoal) e o teste
+ * depende de quem roda. Aponta GIT_CONFIG_GLOBAL, neste processo e nos filhos, para um arquivo temporario que inclui
+ * a config global de verdade (fim de linha, ferramentas; a de ~/.gitconfig e a do XDG, ~/.config/git/config) e so troca
+ * `user` por um autor de ensaio; tira do ambiente as GIT_AUTHOR_* e GIT_COMMITTER_*, que venceriam a config.
+ * Idempotente; erro de escrita lanca (o teste nao segue com a identidade da maquina).
+ */
+function identidadeDeEnsaio() {
+  if (identidadePosta) return;
+  const reais = process.env.GIT_CONFIG_GLOBAL ? [path.resolve(process.env.GIT_CONFIG_GLOBAL)]
+    : [path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'git', 'config'),
+      path.join(os.homedir(), '.gitconfig')];
+  const arq = path.join(pasta('gitconfig-ensaio'), 'gitconfig');
+  // o caminho vai entre aspas: `#` ou `;` sem aspas comecariam um comentario na config do git
+  const incluir = reais.filter(function (r) { return fs.existsSync(r); })
+    .map(function (r) { return '[include]\n\tpath = "' + r.replace(/\\/g, '/').replace(/"/g, '\\"') + '"\n'; }).join('');
+  fs.writeFileSync(arq, incluir + '[user]\n\tname = ensaio\n\temail = ensaio' + '@exemplo.com\n');
+  process.env.GIT_CONFIG_GLOBAL = arq;
+  ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'].forEach(function (v) {
+    delete process.env[v];
+  });
+  identidadePosta = true;
+}
+
+module.exports = { RAIZ, PRAZO, pasta, apagar, ambiente, rodar, git, repo, identidadeDeEnsaio };
