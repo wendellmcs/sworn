@@ -1,6 +1,7 @@
 'use strict';
 // C3 (D808, D769 (b)): o inspetor um degrau acima do executor. O modelo da sessao sai da transcricao; o gancho troca o
-// `model` do despacho do sworn:inspector pelo updatedInput, e so dele.
+// `model` do despacho do sworn:inspector pelo updatedInput, e so dele. F4e: o mesmo gancho reescreve o `prompt` de todo
+// agente do sworn, com o guia do modelo que vai roda-lo no fim; agente de fora do sworn passa como veio.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -69,25 +70,39 @@ test('C3 juiz: o gancho sobe o inspetor um degrau, so o inspetor, e respeita o p
       tool_input: { subagent_type: 'sworn:inspector', prompt: 'lente', description: 'x' } };
     const r = gancho(dir, inspetor);
     assert.strictEqual(r.hookSpecificOutput.updatedInput.model, 'sonnet');
-    assert.strictEqual(r.hookSpecificOutput.updatedInput.prompt, 'lente', 'o resto do pedido segue igual');
+    // F4e: o pedido segue, com o guia do modelo que vai rodar no fim
+    assert.ok(r.hookSpecificOutput.updatedInput.prompt.startsWith('lente\n\nGuidance for claude-sonnet-5-5 '),
+      r.hookSpecificOutput.updatedInput.prompt);
+    assert.strictEqual(r.hookSpecificOutput.updatedInput.description, 'x', 'o resto do pedido segue igual');
     assert.strictEqual(r.hookSpecificOutput.permissionDecision, undefined, 'o gancho nao decide permissao');
     // fora do Claude Code o inspetor se chama sworn-inspector
     const fora = gancho(dir, Object.assign({}, inspetor, { tool_input: { subagent_type: 'sworn-inspector' } }));
     assert.strictEqual(fora.hookSpecificOutput.updatedInput.model, 'sonnet');
+    assert.match(fora.hookSpecificOutput.updatedInput.prompt, /^Guidance for claude-sonnet-5-5 /, 'sem prompt, so o guia, sem "undefined"');
+    assert.ok(!/undefined/.test(fora.hookSpecificOutput.updatedInput.prompt));
     // outro agente passa como veio
     assert.strictEqual(gancho(dir, Object.assign({}, inspetor, { tool_input: { subagent_type: 'general-purpose' } })),
       null);
-    // o pedido que ja e mais forte fica
-    assert.strictEqual(gancho(dir, Object.assign({}, inspetor,
-      { tool_input: { subagent_type: 'sworn:inspector', model: 'opus' } })), null);
+    // o pedido que ja e mais forte fica (e leva o guia dele, F4e)
+    const forte = gancho(dir, Object.assign({}, inspetor,
+      { tool_input: { subagent_type: 'sworn:inspector', model: 'opus', prompt: 'lente' } }));
+    assert.strictEqual(forte.hookSpecificOutput.updatedInput.model, 'opus');
+    assert.match(forte.hookSpecificOutput.updatedInput.prompt, /^lente\n\nGuidance for claude-opus-5-5 /);
     // a sessao no Sonnet sobe o juiz para o Opus
     const sonnet = gancho(dir, Object.assign({}, inspetor, { transcript_path: transcricao(dir, ['claude-sonnet-5-5']) }));
     assert.strictEqual(sonnet.hookSpecificOutput.updatedInput.model, 'opus');
-    // sem saber o modelo da sessao, passa como veio
-    assert.strictEqual(gancho(dir, Object.assign({}, inspetor, { transcript_path: path.join(dir, 'x.jsonl') })), null);
-    // a chave desliga
+    // sem saber o modelo da sessao, o modelo fica como veio (o Sonnet do agents/inspector.md, que leva o guia dele)
+    const semSessao = gancho(dir, Object.assign({}, inspetor, { transcript_path: path.join(dir, 'x.jsonl') }));
+    assert.strictEqual(semSessao.hookSpecificOutput.updatedInput.model, undefined);
+    assert.match(semSessao.hookSpecificOutput.updatedInput.prompt, /Guidance for claude-sonnet-5-5 /);
+    // a chave desliga o juiz; o guia do modelo que vai rodar segue
     fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ juizAcima: false }));
+    const semJuiz = gancho(dir, Object.assign({}, inspetor, { transcript_path: haiku }));
+    assert.strictEqual(semJuiz.hookSpecificOutput.updatedInput.model, undefined);
+    assert.match(semJuiz.hookSpecificOutput.updatedInput.prompt, /Guidance for claude-sonnet-5-5 /);
+    // as duas chaves desligadas: passa como veio
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ juizAcima: false, guiaDoModelo: false }));
     assert.strictEqual(gancho(dir, Object.assign({}, inspetor, { transcript_path: haiku })), null);
   });
 });
@@ -136,6 +151,51 @@ test('D829 juiz: o gancho poe o inspetor da ronda 2 um degrau abaixo do juiz', (
     const r2 = despacho('Verdicts folder: `' + dir + '/.claude/sworn/revisao/a.js/2/vereditos`', 'opus');
     assert.strictEqual(r2.hookSpecificOutput.updatedInput.model, 'sonnet');
     assert.strictEqual(r2.hookSpecificOutput.permissionDecision, undefined, 'o gancho nao decide permissao');
-    assert.strictEqual(despacho(dir + '/.claude/sworn/revisao/a.js/3/vereditos', 'sonnet'), null, 'ja no alvo');
+    const noAlvo = despacho(dir + '/.claude/sworn/revisao/a.js/3/vereditos', 'sonnet');
+    assert.strictEqual(noAlvo.hookSpecificOutput.updatedInput.model, 'sonnet', 'ja no alvo, o modelo fica');
+    assert.match(noAlvo.hookSpecificOutput.updatedInput.prompt, /\n\nGuidance for claude-sonnet-5-5 /);
+  });
+});
+
+// F4e: todo agente do sworn leva no fim do pedido o guia oficial do modelo que vai roda-lo
+test('F4e juiz: o gancho poe no pedido de cada agente do sworn o guia do modelo que vai rodar', () => {
+  pasta(function (dir) {
+    const opus = transcricao(dir, ['claude-opus-5-5']);
+    const ag = function (tipo, model) {
+      const entrada = { tool_name: 'Agent', transcript_path: opus,
+        tool_input: { subagent_type: tipo, prompt: 'tarefa', description: 'x' } };
+      if (model) entrada.tool_input.model = model;
+      return gancho(dir, entrada);
+    };
+    const saida = function (r) { return r.hookSpecificOutput.updatedInput; };
+    // o inspetor sobe ao juiz (Opus, numa sessao Opus) e leva o guia do Opus
+    const i = ag('sworn:inspector');
+    assert.strictEqual(saida(i).model, 'opus');
+    assert.ok(saida(i).prompt.startsWith('tarefa\n\nGuidance for claude-opus-5-5 '), saida(i).prompt);
+    assert.strictEqual(i.hookSpecificOutput.permissionDecision, undefined, 'o gancho nao decide permissao');
+    // o leitor pedido no Haiku leva o guia do Haiku, e o modelo fica
+    const leitorHaiku = saida(ag('sworn:reader', 'haiku'));
+    assert.strictEqual(leitorHaiku.model, 'haiku');
+    assert.match(leitorHaiku.prompt, /Guidance for claude-haiku-5-5 /);
+    // sem pedido: o modelo do agents/<nome>.md (dedupe-judge: haiku); o reader nao declara, herda a sessao
+    const juizDeMesmos = saida(ag('sworn:dedupe-judge'));
+    assert.match(juizDeMesmos.prompt, /Guidance for claude-haiku-5-5 /);
+    assert.strictEqual(juizDeMesmos.model, undefined, 'o gancho nao poe model onde o pedido nao tinha: o do agents/<nome>.md vale');
+    assert.match(saida(ag('sworn:reader')).prompt, /Guidance for claude-opus-5-5 /);
+    assert.match(saida(ag('sworn:reader', 'inherit')).prompt, /Guidance for claude-opus-5-5 /);
+    // fora do Claude Code o agente se chama sworn-<nome>
+    assert.match(saida(ag('sworn-reader', 'sonnet')).prompt, /Guidance for claude-sonnet-5-5 /);
+    // agente de fora do sworn, modelo de fora ou nome torto: passa como veio
+    assert.strictEqual(ag('general-purpose', 'opus'), null);
+    assert.strictEqual(ag('sworn:reader', 'gpt-5'), null);
+    assert.strictEqual(ag('sworn:../../x', 'opus'), null);
+    // o pedido reenviado como o gancho o reescreveu passa como veio: o guia nao entra duas vezes
+    assert.strictEqual(gancho(dir, { tool_name: 'Agent', transcript_path: opus, tool_input: saida(i) }), null);
+    // "guiaDoModelo": false desliga o guia; o juiz segue
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({ guiaDoModelo: false }));
+    assert.deepStrictEqual(saida(ag('sworn:inspector')), { subagent_type: 'sworn:inspector', prompt: 'tarefa',
+      description: 'x', model: 'opus' });
+    assert.strictEqual(ag('sworn:reader', 'haiku'), null);
   });
 });

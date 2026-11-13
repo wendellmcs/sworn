@@ -18,10 +18,17 @@ const METODO_POR_ORIGEM = {
 // em `erro`, e o contar a leva a `naoLidos` - antes contava 0 e o peso saia menor sem dizer.
 function contarArquivo(arquivo) {
   try {
-    return { n: fs.readFileSync(arquivo, 'utf8').split(/\r?\n/).filter(function (l) { return RE_ITEM.test(l); }).length };
+    const conteudo = fs.readFileSync(arquivo, 'utf8');
+    return { n: conteudo.split(/\r?\n/).filter(function (l) { return RE_ITEM.test(l); }).length, caracteres: conteudo.length };
   } catch (e) {
-    return { n: 0, erro: e && e.code === 'ENOENT' ? null : texto.causaDoErro(e) };
+    return { n: 0, caracteres: 0, erro: e && e.code === 'ENOENT' ? null : texto.causaDoErro(e) };
   }
+}
+
+// F4b: o peso em tokens e estimado, nao contado: o tokenizador do modelo nao roda aqui. A mesma conta do varrer.js.
+const METODO_TOKENS = 'tokens estimados = caracteres / 4, arredondado para cima (estimativa: o tokenizador do modelo da outro numero)';
+function tokensEstimados(caracteres) {
+  return Math.ceil(caracteres / 4);
 }
 
 // Ronda 1 do 8c.5: o `||` engolia o zero, o defeito que a D98 corrigiu na varredura.js.
@@ -64,6 +71,8 @@ function contar(cwd, projeto, candidatos) {
   // leitura saem do mesmo `resolve`: com `join`, fonte em caminho absoluto lia `cwd/C:/...` e contava 0.
   const vistos = new Set();
   const porArquivo = [];
+  // Em tokens entra todo arquivo lido, com ou sem item de lista: a prosa tambem vai para a conversa.
+  const tokensPorArquivo = [];
   const naoLidos = [];
   let total = 0;
   for (let i = 0; i < alvos.length; i++) {
@@ -82,8 +91,10 @@ function contar(cwd, projeto, candidatos) {
       continue;
     }
     if (c.n > 0) { porArquivo.push({ arquivo: rel.replace(/\\/g, '/'), n: c.n }); total += c.n; }
+    if (c.caracteres > 0) tokensPorArquivo.push({ arquivo: rel.replace(/\\/g, '/'), tokens: tokensEstimados(c.caracteres) });
   }
   porArquivo.sort(function (a, b) { return b.n - a.n; });
+  tokensPorArquivo.sort(function (a, b) { return b.tokens - a.tokens; });
 
   const teto = limite(ambiente.LIMITES.tetoDeInstrucoes, 200);
   return {
@@ -96,8 +107,10 @@ function contar(cwd, projeto, candidatos) {
     metodo: METODO_POR_ORIGEM[fontes.origem] + (foraDoPeso.length ? '; fora as fontes de consulta declaradas em ' +
       'fontesDeConsulta, contadas a parte em foraDoPeso' : ''),
     naoLidos: naoLidos,
-    foraDoPeso: foraDoPeso
+    foraDoPeso: foraDoPeso,
+    tokens: tokensPorArquivo.reduce(function (s, p) { return s + p.tokens; }, 0),
+    tokensPorArquivo: tokensPorArquivo
   };
 }
 
-module.exports = { RE_ITEM, METODO, contar };
+module.exports = { RE_ITEM, METODO, METODO_TOKENS, tokensEstimados, contar };

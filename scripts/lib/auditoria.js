@@ -95,6 +95,26 @@ function lerSkillsDoPlugin() {
   return saida;
 }
 
+// F4b: o que pesa na conversa, em tokens: os arquivos de instrucao do projeto, a linha de cada skill do plugin que a
+// sessao lista desde o comeco (nome e descricao; o corpo so carrega quando a skill e chamada) e o texto que os ganchos
+// injetaram. Injetado nao medido nunca vira zero: fica null e o total diz que esta incompleto.
+function pesoEmTokens(peso, plugin, inj) {
+  const skillsDoPlugin = plugin.reduce(function (s, p) {
+    return s + instrucoes.tokensEstimados((p.nome + ': ' + p.descricao).length);
+  }, 0);
+  const injetadoTokens = inj && inj.medido ? instrucoes.tokensEstimados(inj.total.caracteres) : null;
+  const r = {
+    projeto: peso.tokens,
+    skillsDoPlugin: skillsDoPlugin,
+    injetado: injetadoTokens,
+    total: peso.tokens + skillsDoPlugin + (injetadoTokens || 0),
+    completo: injetadoTokens !== null,
+    metodo: instrucoes.METODO_TOKENS
+  };
+  if (!r.completo) r.falta = 'o injetado pelos ganchos (' + (inj && inj.motivo ? inj.motivo : 'nao medido') + ')';
+  return r;
+}
+
 /** Os pares projeto x plugin (a = do projeto, b = do plugin); par entre duas do mesmo lado fica de fora. */
 function cruzarComPlugin(doProjeto, doPlugin) {
   const doLado = new Set(doPlugin.map(function (s) { return s.nome; }));
@@ -315,14 +335,16 @@ function auditar(cwd, projeto, opcoes) {
     candidatos = varredura.inferir(r.arquivos, cwd, r).candidatosCanonicos;
   }
 
+  const peso = instrucoes.contar(cwd, projeto || {}, candidatos);
+  const plugin = lerSkillsDoPlugin();
+  // plano 0.9.1 (D568): o injetado pelos ganchos, a parte do peso como a memoria; quem acha a transcricao e o auditar.js
+  const inj = injetado.medir(opcoes ? opcoes.transcricao : null);
   return {
-    peso: instrucoes.contar(cwd, projeto || {}, candidatos),
+    peso: peso,
+    pesoEmTokens: pesoEmTokens(peso, plugin, inj),
     skills: skills.map(function (s) { return s.nome; }),
     sobreposicoes: sobreposicoes(skills),
-    doPlugin: (function () {
-      const plugin = lerSkillsDoPlugin();
-      return { skills: plugin.map(function (s) { return s.nome; }), sobreposicoes: cruzarComPlugin(skills, plugin) };
-    })(),
+    doPlugin: { skills: plugin.map(function (s) { return s.nome; }), sobreposicoes: cruzarComPlugin(skills, plugin) },
     contradicoes: contradicoes(regras),
     regras: lidas.estado,
     idadeDasRegras: idadeDasRegras(cwd, regras, agora),
@@ -333,8 +355,7 @@ function auditar(cwd, projeto, opcoes) {
     memorias: memoria.medida === false
       ? naoMedida(memoria.causa, memoria.motivo.replace(/^nao medida:/, 'nao medidas:'), memoria.caminho)
       : idadeDasMemorias(path.resolve(cwd, pedida), agora),
-    // plano 0.9.1 (D568): o injetado pelos ganchos, a parte do peso como a memoria; quem acha a transcricao e o auditar.js
-    injetado: injetado.medir(opcoes ? opcoes.transcricao : null),
+    injetado: inj,
     // D678 T5: o modelo e o esforco que responderam, da pasta da mesma transcricao, contra agentes.degraus. So com
     // `opcoes.efetivo` (o auditar.js): le todas as transcricoes de subagente da janela (23,4 s em 4.732 arquivos num
     // projeto real), e a rodada automatica roda no SessionStart, que tem 15 s (D706).

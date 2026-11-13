@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.32.0 — o que vale entre as decisões, quanto as instruções pesam, o handoff curto e o guia de cada modelo
+
+**Novo**
+
+- **A lista do que vale entre as decisões sai por script.** `node "<plugin>/scripts/vigentes.js" --gravar` lê o
+  registro de decisões (`docs/decisoes.md`, cada decisão num cabeçalho `### D<n> · <título>`) e grava o
+  `docs/vigentes.md`: as decisões revogadas, com a que revogou; as revogadas ou alteradas em parte; e as que valem,
+  da mais nova para a mais antiga. Ele lê o que o registro escreve ("revoga a D…", "revoga em parte", "**Revoga:**",
+  "a D… fica revogada", "altera a D…", "corrige a D…" e "emenda a D…", estas três sempre como mudança em parte) e
+  deixa de fora o que foi recusado ou só cogitado.
+- **A conferência avisa quando a lista envelhece.** Com `--conferir`, o script termina com o código 1 (falha) em dois
+  casos. A lista ficou velha: rode `--gravar` de novo. Ou alguma decisão voltou a trazer o rodapé "Continua valendo",
+  que era copiado de uma decisão para a seguinte e acabava citando decisões já revogadas: apague esse rodapé à mão no
+  registro, porque o `--gravar` não o tira. Quem lê as regras do projeto vai à lista curta, e o registro fica como
+  histórico, com o porquê de cada decisão.
+- **O `/sworn:audit` mostra o peso em tokens.** Além de contar os itens de lista das instruções do projeto,
+  ele estima quantos tokens entram na conversa: os arquivos de instrução do projeto (a prosa também conta), a
+  linha de cada skill do plugin que a sessão lista desde o começo e o texto que os ganchos dos plugins injetaram
+  na sessão. A conta é uma estimativa (caracteres divididos por 4), e o relatório diz quando falta uma parte,
+  em vez de mostrá-la como zero. É só uma medida, para você ver o que pesa mais: não tem limite nem aviso, e o
+  limite de 200 itens continua contando só os itens.
+- **O handoff sai curto, montado por script.** O `/sworn:handoff` agora roda
+  `node "<plugin>/scripts/handoff-curto.js" --slug <tema>` (o tema em minúsculas sem acento, números e `-`, até 60
+  caracteres, sem a palavra `retomar`). O script só imprime o rascunho, com o que se lê do disco: a ordem de leitura,
+  os repositórios com o commit e o `git status`, o próximo item não marcado do plano copiado do arquivo, as
+  pendências e os pedidos em aberto, e o prompt de retomada. O modelo só preenche as marcas `<<...>>` do que pede
+  juízo (onde o trabalho está, as decisões, os erros, os arquivos de terceiros) e grava o arquivo. Depois,
+  `--conferir <arquivo>` diz se sobrou marca, se falta seção, se o prompt está fora do lugar ou se o arquivo passou de
+  4 KB; quando não passa, termina com o código 1: corrija o que ele aponta e rode de novo.
+- **As pendências moram num arquivo só, com dono e data.** `node "<plugin>/scripts/pendencias.js"` grava em
+  `.sworn/PENDENCIAS.md` (`--adicionar --dono <quem> --texto <o que>`, `--fechar <n> --como <o que fechou>`,
+  `--listar`). Cada item tem um número que não se reusa, e o handoff traz as abertas desse arquivo, em vez de
+  copiar a lista de um handoff para o seguinte.
+- **Cada modelo Claude trabalha com o guia oficial dele.** O plugin traz um guia curto por família (Haiku, Sonnet,
+  Opus e Fable, em `modelos/claude/`), resumido dos guias oficiais da Anthropic ("Prompting Claude <modelo>" e
+  "What's new in <modelo>"): para que serve, o esforço recomendado, o que pedir, como pedir e o que evitar. Cada guia
+  diz de onde veio (o endereço da página, o dia da leitura e a impressão digital dela, que mostra quando a página
+  mudou), e cada item cita, entre aspas, o trecho da página que o sustenta. Todo agente do sworn que é despachado (o
+  inspetor, o leitor, o juiz de duplicatas) recebe no fim do pedido a parte "How to ask" do guia do modelo que vai
+  rodá-lo, e a abertura traz a do modelo da própria sessão. A tarefa vale mais que o guia quando os dois discordam.
+  `"guiaDoModelo": false` em `.claude/sworn/projeto.json` desliga as duas coisas. Com `"aberturaEnxuta": true`, a
+  abertura sai sem o guia, para caber em modelo de contexto curto, e os agentes continuam recebendo o deles.
+
 ## 0.31.0 — a tela medida contra a referência, largura por largura
 
 **Novo**

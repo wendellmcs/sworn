@@ -704,3 +704,129 @@ test('item 15: pasta das memorias que nao se lista diz o que conferir', () => {
   assert.strictEqual(m.medida, false);
   assert.match(m.motivo, /confira/);
 });
+
+// ---------------------------------------------------------------- F4b: o peso em tokens, com as skills e o injetado
+// Estimativa por caracteres (o tokenizador do modelo nao roda aqui): tokens = caracteres / 4, para cima.
+// A soma esperada le a descricao numa linha so; o teste "descricao de uma linha" garante que e assim que as skills
+// do plugin a escrevem (sem bloco YAML '>' ou '|', sem aspas), senao as duas contas errariam juntas.
+function tokensDasSkillsDoPlugin() {
+  const raiz = path.join(__dirname, '..', 'skills');
+  let soma = 0;
+  for (const nome of fs.readdirSync(raiz)) {
+    let t;
+    try { t = fs.readFileSync(path.join(raiz, nome, 'SKILL.md'), 'utf8'); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
+    const m = t.match(/^description:[ \t]*(.+?)\r?$/im);
+    soma += Math.ceil(('sworn:' + nome + ': ' + (m ? m[1] : '')).length / 4);
+  }
+  return soma;
+}
+
+test('F4b: a descricao de cada skill do plugin esta numa linha so, sem bloco YAML e sem aspas', () => {
+  const raiz = path.join(__dirname, '..', 'skills');
+  for (const nome of fs.readdirSync(raiz)) {
+    const f = path.join(raiz, nome, 'SKILL.md');
+    if (!fs.existsSync(f)) continue;
+    const linhas = fs.readFileSync(f, 'utf8').split(/\r?\n/);
+    const i = linhas.findIndex(function (l) { return /^description:/i.test(l); });
+    assert.ok(i >= 0, nome + ': sem description');
+    const valor = linhas[i].replace(/^description:[ \t]*/i, '');
+    assert.ok(valor, nome + ': description vazia na linha');
+    assert.doesNotMatch(valor, /^[>|'"]/, nome + ': description em bloco ou entre aspas');
+    assert.doesNotMatch(linhas[i + 1] || '', /^[ \t]+\S/, nome + ': description continua na linha de baixo');
+  }
+});
+
+test('F4b: o peso em tokens soma o projeto (todo arquivo lido, com ou sem lista), as skills do plugin e o injetado', () => {
+  const dir = pasta('tokens');
+  try {
+    const claude = '# Regras\n\n- primeira regra\n- segunda regra\n';
+    const prosa = 'Texto corrido, sem lista nenhuma, mas que entra na conversa do mesmo jeito.\n';
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), claude);
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), prosa);
+    const transcricao = path.join(dir, 'conversa.jsonl');
+    // 400 no content e 401 no stdout: 100 tokens so se a conta le o content (o stdout daria 101).
+    const injetado = 'x'.repeat(400);
+    fs.writeFileSync(transcricao, JSON.stringify({ type: 'attachment', attachment: { type: 'hook_success',
+      hookEvent: 'SessionStart', hookName: 'SessionStart:startup', toolUseID: 'a', command: 'node x.js',
+      stdout: injetado + '\n', content: injetado } }) + '\n');
+    const r = aud.auditar(dir, { fontesCanonicas: ['CLAUDE.md', 'AGENTS.md'] }, { transcricao: { caminho: transcricao, plugins: [] } });
+    // AGENTS.md tem 76 caracteres (19 tokens) e CLAUDE.md 43 (11): o mais pesado vem primeiro.
+    assert.deepStrictEqual(r.peso.tokensPorArquivo, [
+      { arquivo: 'AGENTS.md', tokens: 19 },
+      { arquivo: 'CLAUDE.md', tokens: 11 }
+    ], 'o arquivo so de prosa pesa em tokens, mesmo sem item de lista');
+    assert.strictEqual(r.peso.total, 2, 'a conta de itens nao muda');
+    const t = r.pesoEmTokens;
+    assert.strictEqual(t.projeto, 30);
+    assert.strictEqual(t.skillsDoPlugin, tokensDasSkillsDoPlugin());
+    assert.ok(t.skillsDoPlugin > 0);
+    assert.strictEqual(t.injetado, 100, '400 caracteres injetados: 100 tokens');
+    assert.strictEqual(t.total, t.projeto + t.skillsDoPlugin + t.injetado);
+    assert.strictEqual(t.completo, true);
+    assert.ok(!('falta' in t), 'total completo nao diz que falta nada');
+    assert.match(t.metodo, /caracteres \/ 4/);
+    assert.match(t.metodo, /estimativa/, 'o metodo diz que e estimativa, nao o tokenizador');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('F4b: transcricao lida sem nada injetado da zero medido, nao "nao medido"', () => {
+  const dir = pasta('tokens-zero');
+  try {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '- uma regra\n');
+    const transcricao = path.join(dir, 'conversa.jsonl');
+    fs.writeFileSync(transcricao, JSON.stringify({ type: 'user', message: { content: 'oi' } }) + '\n');
+    const t = aud.auditar(dir, { fontesCanonicas: ['CLAUDE.md'] }, { transcricao: { caminho: transcricao, plugins: [] } }).pesoEmTokens;
+    assert.strictEqual(t.injetado, 0);
+    assert.strictEqual(t.completo, true);
+    assert.ok(!('falta' in t));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('F4b: arquivo vazio e arquivo repetido nao entram nos tokens', () => {
+  const dir = pasta('tokens-vazio');
+  try {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '- uma regra\n');
+    fs.writeFileSync(path.join(dir, 'VAZIO.md'), '');
+    const r = aud.auditar(dir, { fontesCanonicas: ['CLAUDE.md', './CLAUDE.md', 'VAZIO.md'] });
+    assert.deepStrictEqual(r.peso.tokensPorArquivo, [{ arquivo: 'CLAUDE.md', tokens: 3 }]);
+    assert.strictEqual(r.pesoEmTokens.projeto, 3, '12 caracteres, lidos uma vez so');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('F4b: a fonte que nao se le vai a naoLidos e fica fora dos tokens', () => {
+  const dir = pasta('tokens-ilegivel');
+  try {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '- uma regra\n');
+    fs.mkdirSync(path.join(dir, 'PASTA.md'));
+    const r = aud.auditar(dir, { fontesCanonicas: ['CLAUDE.md', 'PASTA.md'] });
+    assert.strictEqual(r.peso.naoLidos.length, 1, 'a pasta no lugar do arquivo nao se le');
+    assert.match(r.peso.naoLidos[0], /^PASTA\.md /);
+    assert.deepStrictEqual(r.peso.tokensPorArquivo, [{ arquivo: 'CLAUDE.md', tokens: 3 }]);
+    assert.strictEqual(r.pesoEmTokens.projeto, 3);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('F4b: sem a transcricao, o injetado fica fora do total e o total diz que esta incompleto', () => {
+  const dir = pasta('tokens-sem');
+  try {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '- uma regra\n');
+    const t = aud.auditar(dir, { fontesCanonicas: ['CLAUDE.md'] }).pesoEmTokens;
+    assert.strictEqual(t.injetado, null, 'nao medido nunca vira zero');
+    assert.strictEqual(t.completo, false);
+    assert.strictEqual(t.total, t.projeto + t.skillsDoPlugin);
+    assert.match(t.falta, /injetado/);
+    assert.match(t.falta, /nenhuma transcricao foi passada/, 'a falta traz o motivo do injetado nao medido');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('F4b: a fonte de consulta fica fora dos tokens do peso, como fica fora dos itens', () => {
+  const dir = pasta('tokens-consulta');
+  try {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '- uma regra.\n');
+    fs.writeFileSync(path.join(dir, 'decisoes.md'), '- '.repeat(500) + '\n');
+    const r = aud.auditar(dir, { fontesCanonicas: ['CLAUDE.md', 'decisoes.md'], fontesDeConsulta: ['decisoes.md'] });
+    assert.deepStrictEqual(r.peso.tokensPorArquivo.map(function (p) { return p.arquivo; }), ['CLAUDE.md']);
+    // 13 caracteres: a quebra de linha final conta (4 tokens; 3 sem ela).
+    assert.strictEqual(r.pesoEmTokens.projeto, 4);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

@@ -115,6 +115,16 @@ serves which role, and how much they are willing to pay. With the facts in hand,
    If `peso.foraDoPeso` is not empty, name each file with its count, out of the weight by the project's own
    declaration (`fontesDeConsulta` in `projeto.json`): it still rules, but it is consulted, not loaded as
    instruction.
+   Then the weight in tokens, from `pesoEmTokens`, as its own line, not as the item count converted: it covers more
+   than the items. Show each part apart: the project's files (`projeto`: the same files as the item count, prose
+   included, so the `foraDoPeso` ones stay out here too; the heaviest ones in `peso.tokensPorArquivo`), the
+   plugin's skills as the session lists them from the start (`skillsDoPlugin`: name and description; the body
+   loads only when a skill is called) and the text the hooks injected so far in this session (`injetado`, the same
+   text as 1c, here in tokens), then the `total`, with the `metodo` next to it: it is an estimate, not the model's
+   tokenizer. If `completo` is `false`, say the total leaves out what `falta` names; never show the missing part as
+   zero. This total is what the project, the plugin's skills and the hooks put into the conversation, not all of it
+   (the loaded memory of 1b is not in it), and not the weight against the cap: the cap counts only the project's
+   list items, and 1b and 1c stay out of it. There is no cap in tokens: it is a measure, not a gate.
 
    1b. **Loaded memory.** The `memoria` key, **separate from the weight** — it doesn't add to the cap. Show
    lines, bytes, the longest line (number and bytes) and **what is left out of the load**: only the first

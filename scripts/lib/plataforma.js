@@ -163,7 +163,7 @@ const PONTOS = [
     titulo: 'Caminho relativo remontado pelo separador do sistema',
     arquivos: ['scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/drift.js', 'scripts/lib/cicatriz.js',
                'scripts/lib/busca.js', 'scripts/lib/citacao.js', 'scripts/lib/contrato.js', 'scripts/medir-qualidade.js',
-               'scripts/medir-travas.js'],
+               'scripts/medir-travas.js', 'scripts/vigentes.js'],
     comoSeProva: 'rodando a suite naquele sistema: o separador e o do proprio Node',
     ressalva: 'no Windows a troca vira barra normal; fora dele e identidade. ' +
               'A suite so exercita o lado do Windows.'
@@ -173,10 +173,11 @@ const PONTOS = [
     classe: INJETAVEL,
     titulo: 'Caminho do Windows normalizado para barra normal',
     arquivos: [
-      'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
-      'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
+      'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/handoff-curto.js',
+      'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
+      'scripts/lib/guias-modelo.js', 'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
       'scripts/lib/projeto.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',
-      'scripts/lib/veredito.js', 'scripts/preparar-revisao.js'
+      'scripts/lib/veredito.js', 'scripts/modelos.js', 'scripts/preparar-revisao.js'
     ],
     comoSeProva: 'e trabalho de string puro: a entrada com barra invertida se passa de qualquer maquina',
     ressalva: 'no Linux e no macOS a barra invertida e caractere LEGAL em nome de arquivo, ' +

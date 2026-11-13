@@ -42,7 +42,26 @@ Then run, and paste the output:
 ## Step 2 — write the file
 
 In `.sworn/handoff/AAAA-MM-DD-<slug>.md` (outside `.claude/`, a folder where Claude Code stops to ask permission
-for the write, or refuses it when nobody is there to answer), with **all** of these sections:
+for the write, or refuses it when nobody is there to answer). **A script drafts it**; you fill in only what takes
+judgment. The script copies what is on disk when it runs, so **first** bring the pending file and the owner's
+requests up to date (section 5 below has the commands: `pendencias.js --adicionar`/`--fechar` and
+`pedidos.js --marcar`). Then, from the project root:
+
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-curto.js" --slug <slug>
+
+`<slug>` is the theme: lowercase ASCII letters, digits and `-`, starting with a letter or digit, up to 60 characters,
+and never containing `retomar` (that word names the summary of a stopped chat). The script only prints, it writes
+nothing. The output says `arquivo: <path>` and brings the text: the reading order, the topology and `git status`, the
+plan's next unticked item copied from the file, the open pending items and requests, and the prompt. Replace each `<<...>>`
+mark with what it asks, keep the rest as it came, and write the file with **Write** at that path: the hooks only
+recognize this session's handoff by a Write or an Edit. Then check it:
+
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-curto.js" --conferir <path>
+
+With `"ok": false` (exit 1), fix what `problemas` points to (a mark left, a missing section, the prompt out of place,
+the file above the 4 KB cap) with Edit and run it again; exit 2 means the file was not read at that path, not that the check failed: take the path from the `arquivo:` line,
+run from the project root and run `--conferir` again. If the script does not run, write the file by hand with the same sections.
+The sections, in this order:
 
 1. **Reading order** — absolute path of the plan, the ledger and the previous handoff, in order.
 2. **Topology** — each repository involved, with branch and **HEAD SHA**, pasted from step 1.
@@ -57,6 +76,15 @@ for the write, or refuses it when nobody is there to answer), with **all** of th
    this section the next chat will "discover" it and lose time. **A pending item is not dragged from handoff
    to handoff**: a list that only grows has no owner. Before the prompt, take each new pending item to the owner,
    all of them at once and in 3 options, and write here only what was already decided or what has an owner and place declared.
+   **The pending list lives in one file**, `.sworn/PENDENCIAS.md`, numbered, each item with its owner and date; the
+   handoff brings its open items from there instead of copying them from the previous handoff. Before running the
+   script above, add each pending item that has an owner, and close the ones this session settled (`--listar` shows
+   the numbers, in JSON):
+
+       node "${CLAUDE_PLUGIN_ROOT}/scripts/pendencias.js" --listar
+       node "${CLAUDE_PLUGIN_ROOT}/scripts/pendencias.js" --adicionar --dono <who> --texto "<what is missing>"
+       node "${CLAUDE_PLUGIN_ROOT}/scripts/pendencias.js" --fechar <n> --como "<commit, decision or why no action>"
+
    **The owner's requests:** the hook writes every message of theirs, numbered, in `.claude/sworn/pedidos/<front>.md`
    (`sem-frente.md` with no front; a long one is kept whole in `pedidos/<front>/<n>.md`, and a pasted handoff prompt is
    a marked line without a number, not a request). With no front, leave out `--frente` in both commands below. List

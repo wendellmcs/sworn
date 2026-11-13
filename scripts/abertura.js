@@ -220,6 +220,27 @@ io.blindar(function () {
     const enxuto = curta.bloco('enxuto', require('./lib/enxuto.js').bloco(projeto), projeto);
     if (enxuto) process.stdout.write('\n' + enxuto);
     if (curta.ativa(projeto)) process.stdout.write('\n' + curta.RODAPE + '\n');
+    // F4e: o guia oficial do modelo da propria sessao (o campo model do SessionStart; sem ele, a ultima resposta da
+    // transcricao), depois dos blocos fixos; fica fora na abertura enxuta e com "guiaDoModelo": false.
+    if (!curta.ativa(projeto) && !(projeto && projeto.guiaDoModelo === false)) {
+      const guiasLib = require('./lib/guias-modelo.js');
+      const modelo = typeof e.model === 'string' && e.model.trim() ? e.model : '';
+      const familia = guiasLib.familiaDoDespacho(modelo, null, modelo ? '' : require('./lib/juiz.js').modeloDaSessao(e.transcript_path));
+      const guia = familia ? guiasLib.pronto(path.join(__dirname, '..'), familia) : null;
+      if (guia && guia.bloco) {
+        process.stdout.write('\n# sworn - guia do modelo da sessao (' + guia.modelo +
+          '): o guia oficial da Anthropic para este modelo, resumido; vale onde nao contrariar o dono nem as regras acima.\n' +
+          guia.bloco + '\n');
+      }
+    }
+    // F4e3: no repositorio do proprio plugin, o lembrete de conferir os guias quando a ultima conferencia passa de 30 dias
+    if (require('./lib/vigia-local.js').ehRepoDoPlugin(cwd)) {
+      const guiasLib = require('./lib/guias-modelo.js');
+      let estadoDosGuias = null;
+      try { estadoDosGuias = JSON.parse(fs.readFileSync(guiasLib.arquivoDoEstado(process.env), 'utf8')); } catch (erro) { /* nunca conferiu */ }
+      const lembrete = guiasLib.avisoDeRenovacao(config.raizDoProjeto(cwd), estadoDosGuias, guiasLib.diaLocal(new Date()));
+      if (lembrete) process.stdout.write('\n' + lembrete + '\n');
+    }
     const heranca = require('./lib/escopo.js').avisoHeranca(cwd, estado.ler(e.session_id).frente);
     if (heranca) process.stdout.write('\n' + heranca + '\n');
     // R3g: o ponto da compactacao automatica, uma vez por projeto, em qualquer projeto (scripts/lib/compactacao.js).
