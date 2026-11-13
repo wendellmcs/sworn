@@ -7,7 +7,10 @@
 // hash da imagem.
 //
 //   node scripts/capturar-tela.js --url <endereco> --saida <pasta> [--largura 1280] [--altura 800]
-//                                 [--esperar <seletor CSS>] [--tempo-max 30000]
+//                                 [--esperar <seletor CSS>] [--tempo-max 30000] [--arquivo <arquivo que desenha a tela>]
+//
+// E3 item 2: a evidencia leva o estilo calculado do que se ve (`estilo`) e, com .claude/sworn/design.json na pasta
+// onde roda, o que dele ficou fora do sistema (`estiloForaDoSistema`, os desvios do --arquivo valendo).
 //
 // Saida 0 com o JSON; saida 1 com uma linha "ERRO: <o que houve e o que fazer>".
 const fs = require('node:fs');
@@ -17,6 +20,8 @@ const crypto = require('node:crypto');
 const { setTimeout: dormir } = require('node:timers/promises');
 const { spawn, spawnSync } = require('node:child_process');
 const captura = require('./lib/captura.js');
+const config = require('./lib/config.js');
+const design = require('./lib/design.js');
 
 const PRAZO_DA_PORTA = 15000;
 const PRAZO_DO_FECHO = 5000;
@@ -25,6 +30,8 @@ const PRAZO_DO_COMANDO = 60000;
 const PASSO = 100;
 const TENTE_DE_NOVO = 'Rode de novo; se repetir, feche outras janelas do navegador ou aponte SWORN_NAVEGADOR para ' +
   'outro Chrome ou Edge.';
+// O fim de todo erro do enviar: a leitura do estilo o tira (ali a foto ja esta tirada, e rodar de novo nao e o passo).
+const DE_NOVO = '. ' + TENTE_DE_NOVO;
 
 function comPrazo(promessa, ms, mensagem) {
   let relogio;
@@ -71,7 +78,7 @@ function conectar(endereco) {
           ws.send(JSON.stringify(msg));
         });
         return comPrazo(resposta, PRAZO_DO_COMANDO, 'o navegador nao respondeu ao ' + oQue + ' em ' +
-          PRAZO_DO_COMANDO / 1000 + ' s. ' + TENTE_DE_NOVO).finally(function () { pendentes.delete(id); });
+          PRAZO_DO_COMANDO / 1000 + ' s' + DE_NOVO).finally(function () { pendentes.delete(id); });
       },
       ouvir: function (fn) { ouvintes.push(fn); },
       fechar: function () { try { ws.close(); } catch (e) { /* ja fechado */ } },
@@ -79,7 +86,7 @@ function conectar(endereco) {
     ws.addEventListener('open', function () { pronto(cliente); });
     ws.addEventListener('error', function () { falha(new Error('nao deu para falar com o navegador. ' + TENTE_DE_NOVO)); });
     ws.addEventListener('close', function () {
-      for (const p of pendentes.values()) p.f(new Error('o navegador fechou no meio de ' + p.passo + '. ' + TENTE_DE_NOVO));
+      for (const p of pendentes.values()) p.f(new Error('o navegador fechou no meio de ' + p.passo + DE_NOVO));
       pendentes.clear();
     });
     ws.addEventListener('message', function (ev) {
@@ -90,7 +97,7 @@ function conectar(endereco) {
       if (m.id && pendentes.has(m.id)) {
         const p = pendentes.get(m.id);
         pendentes.delete(m.id);
-        if (m.error) p.f(new Error('o navegador recusou ' + p.passo + ' (' + m.error.message + '). ' + TENTE_DE_NOVO));
+        if (m.error) p.f(new Error('o navegador recusou ' + p.passo + ' (' + m.error.message + ')' + DE_NOVO));
         else p.r(m.result || {});
       } else if (m.method) {
         for (const fn of ouvintes) fn(m);
@@ -165,20 +172,111 @@ async function fotografar(cdp, o) {
   const foto = captura.alturaDaFoto(tamanho.height, o.altura);
   const imagem = await cdp.enviar('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true,
     clip: { x: 0, y: 0, width: o.largura, height: foto.altura, scale: 1 } }, s, 'tirar a foto');
-  const arvore = await cdp.enviar('Accessibility.getFullAXTree', {}, s, 'ler a arvore de acessibilidade');
-  const local = await cdp.enviar('Runtime.evaluate', { expression: 'location.href', returnByValue: true }, s, 'ler o endereco final');
-  const versao = await cdp.enviar('Browser.getVersion', {}, null, 'ler a versao do navegador');
+  // Sem foto, a captura para aqui, sem esperar as leituras seguintes.
   if (!imagem || typeof imagem.data !== 'string' || !imagem.data) {
     throw new Error('o navegador nao devolveu a foto: a pagina pode ser grande demais; diminua --largura, ou ' +
       TENTE_DE_NOVO.charAt(0).toLowerCase() + TENTE_DE_NOVO.slice(1));
   }
+  const arvore = await cdp.enviar('Accessibility.getFullAXTree', {}, s, 'ler a arvore de acessibilidade');
+  // O endereco final e a versao vem antes da leitura do estilo: se ela prender a pagina ate o prazo, o resto ja foi lido.
+  const local = await cdp.enviar('Runtime.evaluate', { expression: 'location.href', returnByValue: true }, s, 'ler o endereco final');
+  const versao = await cdp.enviar('Browser.getVersion', {}, null, 'ler a versao do navegador');
+  const estilo = await lerEstilo(cdp, s);
   return { bytes: Buffer.from(imagem.data, 'base64'), foto, alturaDaPagina: Math.ceil(Number(tamanho.height) || 0),
-    console: consoleLista, erros, acessibilidade: captura.resumirAcessibilidade(arvore.nodes),
+    console: consoleLista, erros, acessibilidade: captura.resumirAcessibilidade(arvore.nodes), estilo,
     urlFinal: local.result && local.result.value, navegador: versao.product, duracaoMs: Date.now() - inicio, status };
 }
 
-// Grava tela.png e evidencia.json na pasta de saida e devolve a linha que o script imprime.
-function gravarEvidencia(dados, o, saida) {
+// E3 item 2: o estilo calculado do que se ve (a camada 2 da conferencia de design). Uma pagina que derruba a leitura
+// nao derruba a foto: o estilo sai vazio, com o motivo em `erro` (a pagina lancou um erro, o navegador recusou o
+// pedido ou nao respondeu no prazo, a resposta veio sem resultado ou num formato que a captura nao entende, ou o
+// documento nao tem corpo HTML).
+async function lerEstilo(cdp, s) {
+  let motivo = null;
+  let estilo = null;
+  try {
+    // O enviar sempre resolve com um objeto (o `result` do protocolo, ou {}).
+    const lido = await cdp.enviar('Runtime.evaluate', { expression: captura.EXPRESSAO_DO_ESTILO, returnByValue: true },
+      s, 'ler o estilo calculado');
+    if (lido.exceptionDetails) {
+      const d = lido.exceptionDetails;
+      const texto = String((d.exception && d.exception.description) || d.text || '').split('\n')[0];
+      motivo = 'a pagina lancou um erro durante a leitura' + (texto ? ' (' + captura.textoParaODisco(texto) + ')' : '');
+    } else if (!lido.result) {
+      motivo = 'o navegador respondeu sem o resultado da leitura';
+    } else {
+      estilo = captura.resumirEstilo(lido.result.value);
+      if (estilo.semCorpo) motivo = 'a pagina nao e um documento HTML com corpo (um arquivo SVG aberto direto, por exemplo)';
+      else if (estilo.ilegivel) motivo = 'o navegador devolveu a leitura num formato que a captura nao entende';
+    }
+  } catch (e) {
+    // Sem o "rode de novo" (DE_NOVO) que o enviar poe no fim de todo erro dele: ele vale para a captura inteira, e aqui
+    // a foto ja esta tirada.
+    motivo = captura.textoParaODisco(String(e.message).replace(DE_NOVO, ''));
+  }
+  if (!motivo) return estilo;
+  return { ...(estilo || captura.resumirEstilo(null)), erro: 'nao deu para ler as cores, fontes, tamanhos e cantos ' +
+    'arredondados da tela: ' + motivo + '. A foto e o resto da evidencia foram gravados, mas a conferencia desses ' +
+    'valores nao aconteceu: confira-os na foto, a olho' };
+}
+
+// Com .claude/sworn/design.json no projeto (a pasta onde a captura roda), a conferencia do estilo calculado contra o
+// sistema, que vai para a evidencia no campo `estiloForaDoSistema` (o nome que o GUIA documenta): { ok, fora,
+// naoLidos, conferidos, feita, arquivo }; sem o design.json, null. `fora` e a lista do que ficou fora do sistema e
+// `conferidos` quantos valores foram comparados. Com o estilo sem ler, `feita: false` e `ok: false` (a lista vazia nao
+// quer dizer "tudo dentro do sistema").
+// `arquivoDado` (o --arquivo) diz qual arquivo desenha a tela, para os desvios dele valerem; sem ele, ou com a propria
+// pasta do projeto, nenhum desvio se aplica (arquivo: null). Relativo ou absoluto, com barra normal ou invertida, ele
+// vira o caminho a partir da pasta do projeto, com barras normais, que e como o desvio casa. Um caminho fora do
+// projeto (acima dele, em outro disco, ou com letra de disco fora do Windows) nao casa desvio nenhum e nao vai para a
+// evidencia: so `arquivoForaDoProjeto: true`, para o caminho pessoal (a pasta do usuario) nao ir para o disco.
+function conferenciaDoEstilo(estilo, arquivoDado) {
+  const raiz = process.cwd();
+  const sistema = config.carregarDesign(raiz);
+  if (!sistema) return null;
+  let arquivo = null;
+  let foraDoProjeto = false;
+  if (arquivoDado) {
+    const dado = arquivoDado.replace(/\\/g, '/');
+    if (path.sep === '/' && /^[A-Za-z]:/.test(dado)) {
+      foraDoProjeto = true;
+    } else {
+      const relativo = path.relative(raiz, path.resolve(raiz, dado));
+      const sobe = relativo === '..' || relativo.startsWith('..' + path.sep);
+      if (sobe || path.isAbsolute(relativo)) foraDoProjeto = true;
+      else if (relativo) arquivo = relativo.split(path.sep).join('/');
+    }
+  }
+  const r = { ...design.conferirComputado(estilo, sistema, arquivo), feita: !estilo.erro, arquivo };
+  if (!r.feita) r.ok = false;
+  if (foraDoProjeto) r.arquivoForaDoProjeto = true;
+  return r;
+}
+
+// O aviso da saida sobre a conferencia do estilo: onde esta a lista e o que fazer com ela, e o --arquivo que nao valeu.
+function avisoDoEstilo(conferencia, arquivoDado) {
+  const avisos = [];
+  if (!conferencia) {
+    return 'sem .claude/sworn/design.json na pasta onde a captura roda, o estilo foi gravado sem conferir' +
+      (arquivoDado ? ' e o --arquivo nao foi usado' : '') + ': rode a captura da raiz do projeto (a pasta do ' +
+      '.claude/sworn/design.json), ou crie o sistema de design com o /sworn:init';
+  }
+  if (conferencia.arquivoForaDoProjeto) {
+    avisos.push('o --arquivo fica fora da pasta do projeto, e os desvios dele nao valeram: se o arquivo e do projeto, ' +
+      'rode a captura da raiz do projeto e passe o caminho a partir dela; um arquivo fora do projeto nao tem desvio');
+  }
+  if (conferencia.feita && conferencia.fora.length) {
+    avisos.push(conferencia.fora.length + ' valor(es) fora do sistema de design, listados em estiloForaDoSistema.fora ' +
+      'do evidencia.json: troque cada um por um valor do .claude/sworn/design.json, ou peca ao dono que declare um ' +
+      'desvio para esta tela em "desvios" do design.json' +
+      (arquivoDado ? '' : ' e rode de novo com --arquivo <o arquivo que desenha a tela>: sem ele, so o sistema vale'));
+  }
+  return avisos.join('; ');
+}
+
+// Grava tela.png e evidencia.json na pasta de saida e devolve a linha que o script imprime. A evidencia leva sempre o
+// estilo lido e, se veio, a `conferencia` (a conferenciaDoEstilo, feita antes por quem chama).
+function gravarEvidencia(dados, o, saida, conferencia) {
   const caminhoDaImagem = path.join(saida, 'tela.png');
   fs.writeFileSync(caminhoDaImagem, dados.bytes);
   const sha256 = crypto.createHash('sha256').update(dados.bytes).digest('hex');
@@ -193,12 +291,19 @@ function gravarEvidencia(dados, o, saida) {
     status: dados.status, hora: new Date().toISOString(), navegador: dados.navegador,
     largura: o.largura, altura: dados.foto.altura, alturaDaPagina: dados.alturaDaPagina, cortada: dados.foto.cortada,
     imagem: 'tela.png', sha256, console: limpos.console, erros: limpos.erros, acessibilidade,
-    duracaoMs: dados.duracaoMs,
+    duracaoMs: dados.duracaoMs, estilo: dados.estilo,
   };
+  if (conferencia) evidencia.estiloForaDoSistema = conferencia;
   const caminhoDaEvidencia = path.join(saida, 'evidencia.json');
   fs.writeFileSync(caminhoDaEvidencia, JSON.stringify(evidencia, null, 2) + '\n');
   const fim = { ok: true, imagem: caminhoDaImagem, evidencia: caminhoDaEvidencia, sha256, status: dados.status,
     console: dados.console.length, erros: dados.erros.length, cortada: dados.foto.cortada };
+  // So a contagem: a lista inteira esta em evidencia.estiloForaDoSistema.fora. Com o estilo sem ler, o zero diria
+  // "tudo dentro do sistema": a saida leva o motivo no lugar dele.
+  if (dados.estilo.erro) fim.estiloNaoLido = dados.estilo.erro;
+  else if (conferencia) fim.valoresForaDoSistema = conferencia.fora.length;
+  const aviso = avisoDoEstilo(conferencia, o.arquivo);
+  if (aviso) fim.avisoDoEstilo = aviso;
   if (dados.status >= 400) {
     fim.aviso = 'o servidor respondeu ' + dados.status + ': a foto e da pagina de erro; confira o endereco (ou o login, ' +
       'se a pagina pede um) e capture de novo';
@@ -351,7 +456,8 @@ async function main() {
     const endereco = await esperarEndereco(perfil, function () { return saiu; });
     cdp = await comPrazo(conectar(endereco), PRAZO_DA_PORTA, 'nao deu para falar com o navegador em ' +
       PRAZO_DA_PORTA / 1000 + ' s. ' + TENTE_DE_NOVO);
-    resultado = gravarEvidencia(await fotografar(cdp, o), o, saida);
+    const dados = await fotografar(cdp, o);
+    resultado = gravarEvidencia(dados, o, saida, conferenciaDoEstilo(dados.estilo, o.arquivo));
   } catch (e) {
     resultado = { erro: erroAoAbrir ? 'o navegador nao abriu (' + navegador + '): ' + erroAoAbrir.message + '. Confira se ' +
       'ele abre a mao, ou aponte SWORN_NAVEGADOR para outro Chrome ou Edge' : e.message };
@@ -369,11 +475,16 @@ async function main() {
   return resultado;
 }
 
-main().then(function (r) {
-  const saida = captura.saidaDoScript(r);
-  process.stdout.write(saida.texto);
-  process.exitCode = saida.codigo;
-}, function (e) {
-  process.stdout.write('ERRO: ' + (e && e.message ? e.message : String(e)) + '\n');
-  process.exitCode = 1;
-});
+// O teste carrega o arquivo para ler o aviso sem abrir o navegador: so a linha de comando roda o main.
+if (require.main === module) {
+  main().then(function (r) {
+    const saida = captura.saidaDoScript(r);
+    process.stdout.write(saida.texto);
+    process.exitCode = saida.codigo;
+  }, function (e) {
+    process.stdout.write('ERRO: ' + (e && e.message ? e.message : String(e)) + '\n');
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { avisoDoEstilo, conferenciaDoEstilo };

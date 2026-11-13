@@ -1,8 +1,9 @@
 'use strict';
 // E1 (D827): a captura de tela do proprio sworn, pelo protocolo de depuracao do Chrome (CDP), sem pacote de terceiro.
 // Esta lib e a parte pura: argumentos, onde achar o navegador, a porta do arquivo DevToolsActivePort, o resumo do
-// console, dos erros e da arvore de acessibilidade, e a limpeza de segredo do que vai para o disco. O processo, o
-// socket e o disco ficam em scripts/capturar-tela.js.
+// console, dos erros e da arvore de acessibilidade, a leitura do estilo calculado (a funcao que roda na pagina e o
+// resumo do que ela devolve, E3 item 2) e a limpeza de segredo do que vai para o disco. O processo, o socket e o
+// disco ficam em scripts/capturar-tela.js.
 
 // Acima de ~16 mil px de altura o Chrome nao grava a imagem (limite de textura, medido no Windows em 2026-09-28).
 const ALTURA_MAXIMA = 16000;
@@ -25,7 +26,209 @@ const PAPEIS_VAZIOS = new Set(['generic', 'none', 'presentation', 'InlineTextBox
   'RootWebArea', 'GenericContainer']);
 
 const USO = 'uso: node capturar-tela.js --url <http(s)://... ou file:///...> --saida <pasta> ' +
-  '[--largura 1280] [--altura 800] [--esperar <seletor CSS>] [--tempo-max 30000]';
+  '[--largura 1280] [--altura 800] [--esperar <seletor CSS>] [--tempo-max 30000] ' +
+  '[--arquivo <caminho a partir da raiz do projeto, ex.: src/checkout/tela.css>]';
+
+// E3 item 2 (camada 2): o estilo calculado dos elementos visiveis, lido na propria pagina. A pagina devolve cada par
+// (propriedade, valor) uma vez, com quantos elementos o usam e um exemplo (tag#id.classe); os tetos seguram pagina
+// grande (ELEMENTOS_DO_ESTILO elementos, VALORES_DO_ESTILO pares). Cor e fonte so contam no elemento com texto
+// proprio (a cor herdada de um bloco vazio nao e o que se ve); borda so com largura e estilo; fundo transparente e
+// raio 0 ficam fora. As quatro bordas e os quatro cantos viram uma propriedade so, e cada par conta o elemento uma
+// vez. O body entra (o fundo e a cor base da pagina costumam morar nele). Shadow DOM e iframe ficam fora (limite
+// declarado: a leitura e do documento principal).
+// Os tetos da leitura moram aqui. Dependem deles, mais abaixo: de ELEMENTOS_DO_ESTILO, a `contagem` (o teto de cada
+// contagem e da soma no resumo); de VALORES_DO_ESTILO, LIDOS_DO_ESTILO (a folga de leitura); de EXEMPLO_MAXIMO, o
+// corte do exemplo no resumo. TEXTO_DO_ESTILO (o maior texto de um valor ou exemplo) e fixo.
+const ELEMENTOS_DO_ESTILO = 3000;
+const VALORES_DO_ESTILO = 400;
+const EXEMPLO_MAXIMO = 80;
+// Quantos elementos a varredura olha, vistos ou nao: o oculto tambem custa, e milhoes de nos ocultos prenderiam a
+// leitura. Vinte por visivel cobre a pagina comum (menus, modais e listas escondidos) sem prender a grande.
+const VARRIDOS_POR_VISIVEL = 20;
+const VARREDURA_DO_ESTILO = ELEMENTOS_DO_ESTILO * VARRIDOS_POR_VISIVEL;
+// Roda na pagina, por Runtime.evaluate: nao usa nada deste modulo (so os quatro numeros que recebe). Cada par sai como
+// [propriedade, valor, quantos, exemplo].
+function estiloDaPagina(maxVisiveis, maxPares, maxExemplo, maxVarridos) {
+  const FILHOS_OLHADOS = 1000;   // os nos filhos olhados a procura do texto de um elemento
+  const SUBIDA_MAXIMA = 1000;    // os ancestrais display: contents subidos a procura do que tem caixa
+  const LADOS = ['top', 'right', 'bottom', 'left'];
+  const CANTOS = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
+  const pares = new Map();
+  let vistos = 0;
+  let cortado = false;
+  // Um <form> deixa o campo de name="tagName" (ou "id", "firstChild", "getBoundingClientRect"...) tampar a propriedade
+  // de mesmo nome, e o documento deixa um <img name="body"> tampar o document.body. Por isso o que se le do documento
+  // e do elemento vem do prototipo, que o nome nao tampa.
+  const ler = function (proto, nome) {
+    const g = Object.getOwnPropertyDescriptor(proto, nome).get;
+    return function (o) { return g.call(o); };
+  };
+  const corpo = ler(Document.prototype, 'body')(document);
+  // Sem body (um documento SVG, por exemplo), a leitura nao aconteceu: `semCorpo` diz isso, para nao parecer pagina
+  // sem estilo.
+  if (!corpo) return { valores: [], vistos: 0, cortado: false, semCorpo: true };
+  const tagDe = ler(Element.prototype, 'tagName');
+  const idDe = ler(Element.prototype, 'id');
+  const classeDe = ler(Element.prototype, 'className');
+  const paiDe = ler(Node.prototype, 'parentElement');
+  const primeiroDe = ler(Node.prototype, 'firstChild');
+  const proximoDe = ler(Node.prototype, 'nextSibling');
+  const tipoDe = ler(Node.prototype, 'nodeType');
+  const espacoDe = ler(Element.prototype, 'namespaceURI');
+  const textoDe = ler(Node.prototype, 'nodeValue');
+  const caixaDe = Element.prototype.getBoundingClientRect;
+  const verVisibilidade = Element.prototype.checkVisibility;   // o Chrome tem desde o 105 (2022)
+  // A varredura tem teto tambem para o que nao se ve (maxVarridos).
+  const todos = Element.prototype.getElementsByTagName.call(corpo, '*');
+  const els = [corpo];
+  for (let i = 0; i < todos.length && els.length < maxVarridos; i++) els.push(todos[i]);
+  if (todos.length + 1 > maxVarridos) cortado = true;
+  // As cores contadas: so as funcoes de cor, que e como o navegador devolve a cor calculada.
+  const COR_FUNCAO = /^(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/;
+  // O ancestral com caixa de cada display: contents, lembrado. O pai vem antes do filho na varredura, entao a subida do
+  // filho para no pai ja resolvido, e a leitura inteira olha cada ancestral uma vez: sem isso, milhares de contents
+  // numa corrente custariam milhoes de leituras. `contents` conta os display: contents do elemento ate o alvo, ele
+  // incluido; com mais de SUBIDA_MAXIMA ancestrais contents, o alvo e ALEM_DO_TETO.
+  const ALEM_DO_TETO = {};
+  const subida = new Map();
+  const subir = function (e) {
+    let acima = 0;   // os ancestrais display: contents ja passados
+    let pai = paiDe(e);
+    let alvo = null;
+    while (pai) {
+      const ja = subida.get(pai);
+      if (ja) { acima += ja.contents; alvo = ja.alvo; break; }
+      if (getComputedStyle(pai).display !== 'contents') { alvo = pai; break; }
+      if (++acima > SUBIDA_MAXIMA) break;
+      pai = paiDe(pai);
+    }
+    if (acima > SUBIDA_MAXIMA) alvo = ALEM_DO_TETO;
+    subida.set(e, { alvo: alvo, contents: acima + 1 });
+    return alvo;
+  };
+  // A cor que nao se ve: vazia, transparent ou com alfa 0, na forma antiga (rgba(255, 255, 255, 0)) ou na do CSS Color 4
+  // que o Chrome mantem (oklch(0.7 0.1 200 / 0), color(srgb 1 1 1 / none)).
+  const transparente = function (cor) {
+    // O alfa e o 4o numero do rgba() ou o que vem depois da barra: o rgb(255, 0, 0) termina em 0 e e vermelho.
+    return !cor || cor === 'transparent' || /^rgba\((?:[^,]*,){3}\s*0(\.0+)?\)$|\/\s*(0(\.0+)?|none)\)$/.test(cor);
+  };
+  const SEM_TEXTO = /^(checkbox|radio|color|range|file|hidden|image)$/i;
+  const TEXTO_SEMPRE = /^(date|time|month|week|datetime-local)$/i;
+  const BOTAO = /^(submit|reset|button)$/i;
+  const preenchido = function (v) { return typeof v === 'string' && v.trim() !== ''; };
+  const temAtributo = Element.prototype.hasAttribute;
+  // De onde vem o texto que se ve: 'proprio', 'placeholder' (a cor e a do ::placeholder) ou null.
+  // O campo de formulario mostra o valor ou o placeholder sem no de texto proprio: tambem conta como texto. O select
+  // mostra o rotulo da opcao escolhida; o textarea, o value atual (o no de texto dele e so o valor inicial); a caixa de
+  // marcar, o radio, a cor, a faixa e o arquivo nao mostram o value como texto. O submit e o reset sem o atributo value
+  // mostram o rotulo padrao do navegador (com value="" ficam vazios), e os campos de data e hora mostram a mascara. O
+  // value de um <button> vai com o formulario e nunca aparece (o texto dele sao os filhos). A tag e comparada sem
+  // diferenca de maiuscula: numa pagina XHTML ela vem como foi escrita (`input`). Os filhos olhados tem teto: um
+  // elemento com milhoes de nos de espaco nao prende a leitura, e o teto atingido marca `cortado`.
+  const textoMostrado = function (e) {
+    const tag = tagDe(e).toUpperCase();
+    if (tag !== 'TEXTAREA') {
+      let n = primeiroDe(e);
+      for (let i = 0; n && i < FILHOS_OLHADOS; i++, n = proximoDe(n)) if (tipoDe(n) === 3 && textoDe(n).trim()) return 'proprio';
+      if (n) cortado = true;
+    }
+    if (tag === 'SELECT') {
+      const opcao = e.options && e.options[e.selectedIndex];
+      return opcao && preenchido(opcao.text) ? 'proprio' : null;
+    }
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA') return null;
+    const tipo = tag === 'INPUT' ? String(e.type) : '';
+    if (SEM_TEXTO.test(tipo)) return null;
+    if (preenchido(e.value)) return 'proprio';
+    // O botao nunca mostra o placeholder. O submit e o reset com o atributo value (mesmo vazio) mostram o value, ja
+    // olhado acima; sem ele, o rotulo padrao. O button so mostra o value.
+    if (BOTAO.test(tipo)) return !/^button$/i.test(tipo) && !temAtributo.call(e, 'value') ? 'proprio' : null;
+    if (TEXTO_SEMPRE.test(tipo)) return 'proprio';
+    return preenchido(e.placeholder) ? 'placeholder' : null;
+  };
+  const exemplo = function (e) {
+    const c = classeDe(e).trim();
+    const id = idDe(e);
+    const t = tagDe(e).toLowerCase() + (id ? '#' + id : '') + (c ? '.' + c.split(/\s+/).slice(0, 2).join('.') : '');
+    return Array.from(t).slice(0, maxExemplo).join('');   // por ponto de codigo: o emoji nao parte ao meio
+  };
+  // Visivel: o elemento tem caixa, nem ele nem um ancestral esta transparente ou fora (display: none) e, se
+  // `olharVisibility`, a visibility dele (que herda do pai e o filho pode trocar) e visible (hidden e collapse
+  // escondem). As opcoes vao com os dois nomes: checkOpacity e checkVisibilityCSS do Chrome 105 ao 120,
+  // opacityProperty e visibilityProperty do 121 em diante (o nome que o navegador nao conhece e ignorado). No navegador
+  // sem checkVisibility, so o proprio elemento.
+  const visivel = function (e, cs, olharVisibility) {
+    if (typeof verVisibilidade === 'function') {
+      return verVisibilidade.call(e, { checkOpacity: true, opacityProperty: true,
+        checkVisibilityCSS: olharVisibility, visibilityProperty: olharVisibility });
+    }
+    return (!olharVisibility || cs.visibility === 'visible') && cs.display !== 'none' && cs.opacity !== '0';
+  };
+  for (const e of els) {
+    const cs = getComputedStyle(e);
+    // `display: contents` nao tem caixa (nem o checkVisibility dele vale), mas o texto dele aparece com a cor e a
+    // fonte dele: le so o texto. Ele aparece se a visibility dele nao e hidden e o ancestral com caixa mais perto (o pai
+    // tambem pode ser display: contents) aparece, sem olhar a visibility desse ancestral (a do filho ja a herdou).
+    const semCaixa = cs.display === 'contents';
+    if (semCaixa) {
+      const alvo = subir(e);
+      // A subida tem teto: uma corrente enorme de display: contents aninhados nao prende a leitura (e marca `cortado`).
+      if (alvo === ALEM_DO_TETO) { cortado = true; continue; }
+      if (cs.visibility !== 'visible' || !alvo || !visivel(alvo, getComputedStyle(alvo), false)) continue;
+    } else {
+      // O body entra mesmo sem altura (com tudo dentro posicionado): o fundo dele pinta a tela inteira.
+      const r = caixaDe.call(e);
+      if ((e !== corpo && (!r.width || !r.height)) || !visivel(e, cs, true)) continue;
+    }
+    // O visivel alem do teto encerra a leitura (o `cortado` tambem marca o teto da varredura e o de pares).
+    if (vistos >= maxVisiveis) { cortado = true; break; }
+    vistos++;
+    const doElemento = new Set();                  // o par conta este elemento uma vez (4 lados, 4 cantos)
+    // Toda propriedade contada aqui tem de estar em PROPRIEDADES_DO_ESTILO: o resumo descarta as outras.
+    const contar = function (p, v) {
+      if (!v) return;
+      const k = p + '\n' + v;
+      if (doElemento.has(k)) return;
+      doElemento.add(k);
+      const x = pares.get(k);
+      if (x) { x[2]++; return; }
+      if (pares.size >= maxPares) { cortado = true; return; }
+      pares.set(k, [p, v, 1, exemplo(e)]);
+    };
+    const texto = textoMostrado(e);
+    if (texto) {
+      // A cor pintada: a do -webkit-text-fill-color (que por padrao e a propria color; o texto de gradiente a deixa
+      // transparente), a do fill no texto de SVG, e a do ::placeholder quando o que se ve e o placeholder. A cor que nao
+      // se ve fica fora; a fonte, nao.
+      const de = texto === 'placeholder' ? getComputedStyle(e, '::placeholder') : cs;
+      const corDoTexto = espacoDe(e) === 'http://www.w3.org/2000/svg' ? de.fill : (de.webkitTextFillColor || de.color);
+      // So a cor: o fill de SVG tambem pode ser um gradiente ou padrao (url(...)), que nao e cor nenhuma.
+      if (!transparente(corDoTexto) && COR_FUNCAO.test(corDoTexto)) contar('color', corDoTexto);
+      contar('font-family', cs.fontFamily);
+      contar('font-size', cs.fontSize);
+    }
+    if (semCaixa) continue;                        // sem caixa: sem fundo, borda nem canto que se veja
+    const fundo = cs.backgroundColor;
+    if (!transparente(fundo)) contar('background-color', fundo);
+    for (let j = 0; j < 4; j++) {
+      const l = LADOS[j];
+      if (parseFloat(cs.getPropertyValue('border-' + l + '-width')) > 0 && cs.getPropertyValue('border-' + l + '-style') !== 'none') {
+        const borda = cs.getPropertyValue('border-' + l + '-color');
+        if (!transparente(borda)) contar('border-color', borda);   // a borda transparente so guarda o espaco
+      }
+      const raio = cs.getPropertyValue('border-' + CANTOS[j] + '-radius');
+      // O canto e reto quando qualquer um dos dois raios e zero (0px, 0%, ou 0px 20px no canto eliptico).
+      if (raio && !/(^|\s)0(px|%)?(\s|$)/.test(raio)) contar('border-radius', raio);
+    }
+  }
+  return { valores: Array.from(pares.values()), vistos: vistos, cortado: cortado };
+}
+const EXPRESSAO_DO_ESTILO = '(' + estiloDaPagina.toString() + ')(' + ELEMENTOS_DO_ESTILO + ', ' + VALORES_DO_ESTILO +
+  ', ' + EXEMPLO_MAXIMO + ', ' + VARREDURA_DO_ESTILO + ')';
+// As propriedades que a estiloDaPagina conta (os `contar(...)` dela): o resumo descarta as outras. Uma propriedade nova
+// la entra aqui tambem, senao cada par dela vai para `descartados`.
+const PROPRIEDADES_DO_ESTILO = new Set(['color', 'background-color', 'border-color', 'border-radius', 'font-family',
+  'font-size']);
 
 function inteiroNoIntervalo(flag, v, teto, unidade) {
   if (!/^\d+$/.test(v) || Number(v) < 1 || Number(v) > teto) {
@@ -36,9 +239,9 @@ function inteiroNoIntervalo(flag, v, teto, unidade) {
 
 // Le os argumentos. Devolve { erro } com o que consertar na chamada, ou { opcoes }.
 function lerArgs(argv) {
-  const opcoes = Object.assign({ url: null, saida: null, esperar: null }, PADRAO);
+  const opcoes = Object.assign({ url: null, saida: null, esperar: null, arquivo: null }, PADRAO);
   const nomes = { '--url': 'url', '--saida': 'saida', '--esperar': 'esperar', '--largura': 'largura',
-    '--altura': 'altura', '--tempo-max': 'tempoMax' };
+    '--altura': 'altura', '--tempo-max': 'tempoMax', '--arquivo': 'arquivo' };
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i];
     const chave = Object.hasOwn(nomes, flag) ? nomes[flag] : null; // "constructor" nao e argumento
@@ -53,6 +256,13 @@ function lerArgs(argv) {
         return { erro: n.erro + (nota[chave] || '') };
       }
       opcoes[chave] = n.valor;
+    } else if (chave === 'arquivo') {
+      const arquivo = v.trim();   // o espaco nas pontas nao casaria o caminho do desvio
+      if (!arquivo) {
+        return { erro: '--arquivo veio vazio: diga o caminho do arquivo que desenha a tela, a partir da raiz do projeto ' +
+          '(exemplo: src/checkout/tela.css), ou tire a opcao' };
+      }
+      opcoes.arquivo = arquivo;
     } else {
       opcoes[chave] = v;
     }
@@ -106,13 +316,16 @@ function enderecoDoArquivo(texto) {
   return 'ws://127.0.0.1:' + porta + caminho;
 }
 
+// O que o corte poe no fim do texto cortado.
+const RETICENCIAS = '...';
+
 // Corta no teto sem partir um caractere de dois pedacos (emoji): se o corte cai entre os dois, recua um.
 function cortar(s, teto) {
   const t = String(s);
   if (t.length <= teto) return t;
   const ultimo = t.charCodeAt(teto - 1);
   const fim = ultimo >= 0xd800 && ultimo <= 0xdbff ? teto - 1 : teto;
-  return t.slice(0, fim) + '...';
+  return t.slice(0, fim) + RETICENCIAS;
 }
 
 // O texto que vai para o disco: primeiro a limpeza de segredo, depois o corte em TEXTO_MAXIMO. Na ordem contraria, um
@@ -164,6 +377,78 @@ function resumirAcessibilidade(nos) {
     itens.push({ papel, nome: cortar(nome, TEXTO_BRUTO) });
   }
   return { itens, cortada };
+}
+
+// O maior texto de um valor ou de um exemplo do estilo: uma pilha de fontes longa tem centenas de caracteres.
+const TEXTO_DO_ESTILO = 4096;
+
+// Os itens lidos do que a pagina devolveu: a pagina honesta manda no maximo VALORES_DO_ESTILO pares; a folga (quatro
+// vezes) e para os tortos e os que ficam iguais depois da limpeza. Alem dela, a pagina pode mandar milhoes de itens.
+const LIDOS_POR_VALOR = 4;
+const LIDOS_DO_ESTILO = VALORES_DO_ESTILO * LIDOS_POR_VALOR;
+
+// O exemplo (tag#id.classe) limpo de segredo e com ate EXEMPLO_MAXIMO caracteres: o que cabe vai inteiro; o maior e
+// cortado com as reticencias dentro do teto.
+function exemploParaODisco(t) {
+  const limpo = semSegredo(t);
+  return limpo.length <= EXEMPLO_MAXIMO ? limpo : cortar(limpo, EXEMPLO_MAXIMO - RETICENCIAS.length);
+}
+
+// Uma contagem da pagina: inteiro de 0 a ELEMENTOS_DO_ESTILO (um par conta cada elemento visivel uma vez), ou null.
+// Sem o teto, uma pagina hostil soma 1e308 + 1e308, o JSON grava null e a evidencia sai corrompida.
+function contagem(n) {
+  return Number.isInteger(n) && n >= 0 ? Math.min(n, ELEMENTOS_DO_ESTILO) : null;
+}
+
+// O que a EXPRESSAO_DO_ESTILO devolveu -> { valores: [{ propriedade, valor, quantos, exemplo }], vistos, cortado,
+// descartados }, mais `semCorpo` (documento sem body) e `ilegivel` (o que voltou nao tem a forma esperada), que so
+// aparecem quando verdadeiros.
+// A pagina e de terceiro: so passa a forma esperada (propriedade conhecida, valor texto curto, contagem de 1 para
+// cima), com os mesmos tetos; o valor e o exemplo saem limpos de segredo, como o resto da evidencia (uma pagina hostil
+// pode devolver texto livre no lugar do estilo). O que nao tem a forma esperada conta em `descartados` (a evidencia
+// diz que houve descarte), e o par que fica igual a outro depois da limpeza soma no mesmo item.
+function resumirEstilo(bruto) {
+  const valores = [];
+  const porChave = new Map();
+  let descartados = 0;
+  let cortado = !!(bruto && bruto.cortado === true);
+  const temForma = !!bruto && Array.isArray(bruto.valores);
+  const lista = temForma ? bruto.valores : [];
+  if (lista.length > LIDOS_DO_ESTILO) cortado = true;
+  for (const v of lista.slice(0, LIDOS_DO_ESTILO)) {
+    const quantos = Array.isArray(v) ? contagem(v[2]) : null;
+    // A forma esperada: propriedade lida, valor texto nao vazio de ate TEXTO_DO_ESTILO, contagem de 1 para cima e
+    // exemplo texto de ate TEXTO_DO_ESTILO (ou nenhum). O texto maior nao e estilo calculado nem tag#id.classe, e sai
+    // antes da limpeza de segredo, que custaria caro em texto grande.
+    if (!Array.isArray(v) || !PROPRIEDADES_DO_ESTILO.has(v[0]) || typeof v[1] !== 'string' || !v[1].trim() ||
+      v[1].length > TEXTO_DO_ESTILO || !quantos ||
+      (v[3] !== undefined && (typeof v[3] !== 'string' || v[3].length > TEXTO_DO_ESTILO))) {
+      descartados++;
+      continue;
+    }
+    // O valor ja cabe em TEXTO_DO_ESTILO: so a limpeza de segredo, sem o corte de TEXTO_MAXIMO, que deixaria a pilha de
+    // fontes longa diferente da declarada (e juntaria duas pilhas com o mesmo comeco).
+    const valor = semSegredo(v[1].trim());
+    const k = v[0] + '\n' + valor;
+    const igual = porChave.get(k);
+    if (igual) {
+      igual.quantos = Math.min(igual.quantos + quantos, ELEMENTOS_DO_ESTILO);
+      continue;
+    }
+    // Lista cheia: o par novo fica de fora, mas a leitura segue, para o repetido ainda somar e o torto ainda contar.
+    if (valores.length === VALORES_DO_ESTILO) { cortado = true; continue; }
+    const item = { propriedade: v[0], valor, quantos,
+      exemplo: typeof v[3] === 'string' ? exemploParaODisco(v[3]) : '' };
+    porChave.set(k, item);
+    valores.push(item);
+  }
+  // `vistos` fora da forma (texto, negativo) vira 0: a contagem de cada par segue valendo, e o total so informa.
+  const vistos = (bruto && contagem(bruto.vistos)) || 0;
+  const r = { valores, vistos, cortado, descartados };
+  if (bruto && bruto.semCorpo === true) r.semCorpo = true;
+  // A leitura que nao voltou com a forma esperada (nulo, texto, objeto sem `valores`) nao e "pagina sem estilo".
+  if (!temForma) r.ilegivel = true;
+  return r;
 }
 
 // Limpeza de segredo do que vai para o disco (a evidencia pode ser mostrada). Um parametro e secreto pelo nome: o nome
@@ -254,4 +539,5 @@ module.exports = {
   ALTURA_MAXIMA, TETO_DA_LARGURA, TETO_DO_TEMPO, ITENS_MAXIMOS, TEXTO_MAXIMO, PADRAO, USO,
   lerArgs, candidatosDoNavegador, acharNavegador, enderecoDoArquivo, entradaDeConsole, erroDaPagina, erroDoLog,
   resumirAcessibilidade, alturaDaFoto, semSegredo, textoParaODisco, consoleEErrosSemSegredo, TEXTO_BRUTO,
+  EXPRESSAO_DO_ESTILO, resumirEstilo, ELEMENTOS_DO_ESTILO, VALORES_DO_ESTILO,
 };

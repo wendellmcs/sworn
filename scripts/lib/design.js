@@ -672,6 +672,82 @@ function validar(sistema, hoje) {
   return { ok: erros.length === 0, erros: erros };
 }
 
+// Os valores aceitos num arquivo: o sistema e os desvios declarados para ele (`caminho`, relativo a raiz do projeto).
+// Dois conjuntos: o dos valores (a cor convertida, a medida) e o das fontes (o nome). Num so, uma fonte chamada
+// "8px" liberaria a medida 8px. Serve a conferencia do texto escrito e a do estilo calculado da tela.
+function valoresAceitos(sistema, caminho, hoje) {
+  const origens = [sistema].concat(desviosDoArquivo(sistema, caminho, hoje));
+  const permitidos = new Set();
+  const fontesPermitidas = new Set();
+  for (const f of origens) {
+    for (const chave of CHAVES_DE_VALOR) {
+      if (chave === 'fontes') fontesDeclaradas(f).forEach(function (v) { familiasDoItem(v).forEach(function (c) { fontesPermitidas.add(c); }); });
+      else comoLista(f[chave]).forEach(function (v) { permitidos.add(chaveDoValor(v)); });
+    }
+  }
+  return { permitidos, fontesPermitidas, origens };
+}
+
+// E3 item 2 (camada 2): o estilo calculado da tela (captura.resumirEstilo, lido pela capturar-tela.js) contra o
+// sistema, pela mesma chave e com os mesmos desvios do texto escrito. O navegador ja resolveu var(), calc() e a
+// cascata: o que sobra e o valor que se ve. Cor (texto, fundo, borda) sempre; raio so com "raios" no sistema,
+// tamanho de fonte so com "tamanhos", familia so com "fontes" (sem a chave, o sistema nao disse o que vale). A medida
+// do sistema em rem vale 16 px (o tamanho padrao); em `em`, tambem 16 px, uma aproximacao (o em real depende do pai);
+// o navegador sempre devolve px. A cor que o navegador devolve noutro espaco (oklch, color()) nao se converte: entra
+// em `naoLidos`, e nao em `fora`.
+function medidaEmPx(v) {
+  const m = /^(-?\d+(?:\.\d+)?|-?\.\d+)(px|rem|em)$/.exec(String(v).trim().toLowerCase());
+  if (!m) return null;
+  return Math.round(parseFloat(m[1]) * (m[2] === 'px' ? 1 : 16) * 100) / 100;
+}
+function conferirComputado(estilo, sistema, caminho, hoje) {
+  const valores = estilo && Array.isArray(estilo.valores) ? estilo.valores : [];
+  if (!sistema) return { ok: true, fora: [], naoLidos: 0, conferidos: 0 };
+  // As mesmas origens (o sistema e os desvios do arquivo, lidos uma vez so) dos valores aceitos.
+  const { permitidos, fontesPermitidas, origens } = valoresAceitos(sistema, caminho, hoje);
+  // As medidas aceitas em px por propriedade. A chave so liga a conferencia quando o proprio sistema declara ao menos
+  // uma medida que vira px: `raios: ["50%"]` nao compara com o px do navegador e deixa o raio sem conferir.
+  const pxDe = function (chave) {
+    if (!comoLista(sistema[chave]).some(function (v) { return medidaEmPx(v) !== null; })) return null;
+    const s = new Set();
+    for (const f of origens) comoLista(f[chave]).forEach(function (v) { const px = medidaEmPx(v); if (px !== null) s.add(px); });
+    return s;
+  };
+  const MEDIDAS = { 'border-radius': pxDe('raios'), 'font-size': pxDe('tamanhos') };
+  const comFontes = fontesDeclaradas(sistema).length > 0;
+  // O tipo do achado vem por ultimo: um item que ja traga `tipo` nao troca o da conferencia.
+  const achado = function (v, tipo) { return Object.assign({}, v, { tipo: tipo }); };
+  const fora = [];
+  let naoLidos = 0;
+  let conferidos = 0;
+  for (const v of valores) {
+    if (!v || typeof v.valor !== 'string') continue;
+    const p = v.propriedade;
+    if (p === 'color' || p === 'background-color' || p === 'border-color') {
+      const chave = chaveDoValor(v.valor);
+      // So a chave convertida (`rgba(r,g,b,a)` de numeros) e cor lida; a de reserva (`rgba(255 0 0/calc(.5))`) nao.
+      if (!/^rgba\(\d+,\d+,\d+,[\d.]+\)$/.test(chave)) { naoLidos++; continue; }
+      if (/,0\)$/.test(chave)) continue;                 // transparente: nao se ve
+      conferidos++;
+      if (!permitidos.has(chave)) fora.push(achado(v, 'cor'));
+    } else if (Object.hasOwn(MEDIDAS, p) && MEDIDAS[p]) {
+      // O canto eliptico (`8px 4px`) e a porcentagem nao se comparam a uma lista de px.
+      const px = medidaEmPx(v.valor);
+      if (px === null) { naoLidos++; continue; }
+      conferidos++;
+      if (!MEDIDAS[p].has(px)) fora.push(achado(v, 'medida'));
+    } else if (p === 'font-family' && comFontes) {
+      // A primeira familia da pilha e a que o navegador tenta: as outras sao reserva.
+      const primeira = familiasDoItem(v.valor)[0];
+      if (!primeira) { naoLidos++; continue; }
+      if (FONTES_GENERICAS.has(primeira)) continue;
+      conferidos++;
+      if (!fontesPermitidas.has(primeira)) fora.push(achado(v, 'fonte'));
+    }
+  }
+  return { ok: fora.length === 0, fora, naoLidos, conferidos };
+}
+
 // `caminho` (opcional, relativo a raiz do projeto): o arquivo escrito; os desvios declarados para ele somam ao sistema.
 function conferir(texto, sistema, antes, caminho, hoje) {
   if (!sistema) return { ok: true, fora: [] };
@@ -683,18 +759,7 @@ function conferir(texto, sistema, antes, caminho, hoje) {
       jaTinha.set(k, (jaTinha.get(k) || 0) + 1);
     }
   }
-  // As origens dos valores aceitos: o sistema e os desvios declarados para este arquivo.
-  const origens = [sistema].concat(desviosDoArquivo(sistema, caminho, hoje));
-  // Dois conjuntos: o dos valores (a cor convertida, a medida) e o das fontes (o nome). Num so, uma fonte
-  // chamada "8px" liberaria a medida 8px.
-  const permitidos = new Set();
-  const fontesPermitidas = new Set();
-  for (const f of origens) {
-    for (const chave of CHAVES_DE_VALOR) {
-      if (chave === 'fontes') fontesDeclaradas(f).forEach(function (v) { familiasDoItem(v).forEach(function (c) { fontesPermitidas.add(c); }); });
-      else comoLista(f[chave]).forEach(function (v) { permitidos.add(chaveDoValor(v)); });
-    }
-  }
+  const { permitidos, fontesPermitidas } = valoresAceitos(sistema, caminho, hoje);
   const fora = [];
 
   // A comparacao e pela chave (a cor convertida); o achado guarda o valor como foi escrito, para o aviso.
@@ -1427,4 +1492,4 @@ function motivoShell(alvos) {
 }
 
 module.exports = { EXTENSOES_ESTILO, UNIDADES, ehArquivoDeEstilo, valoresCrus, conferir, motivo, alvosDeEstiloNoShell, motivoShell, validar,
-  desviosDoArquivo, problemaDoDesvio, paraARevisao };
+  desviosDoArquivo, problemaDoDesvio, paraARevisao, conferirComputado };

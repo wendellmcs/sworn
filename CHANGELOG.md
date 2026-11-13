@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.30.0 — a foto da tela traz o estilo que ela mostra, conferido contra o sistema de design
+
+**Novo**
+
+- **A foto da tela traz o estilo que ela mostra, conferido contra o sistema de design.** Além da imagem, o
+  arquivo de evidência da captura guarda a cor, o arredondamento dos cantos, a fonte e o tamanho que aparecem na
+  tela, e, com o `design.json` no projeto, a lista do que disso está fora do sistema. Assim a conferência pega também
+  o valor que veio de uma biblioteca, que o texto escrito do projeto não mostra. Cada item fora é um valor a trocar ou
+  a pedir ao dono; o GUIA, em "A parte visual", explica.
+
+## 0.29.0 — a ficha diz quanto leu, e a dúvida resolvida mostra a prova
+
+**Novo**
+
+- **A ficha do `/sworn:reference` e a do `/sworn:radar` dizem quanto de cada camada se leu.** Uma seção nova,
+  `## Cobertura`, tem uma linha por camada estudada: `completa` (leu tudo), `parcial` (leu uma parte, e diz quantos de
+  quantos, como "3 de 10 arquivos", e o que ficou de fora) ou `desconhecida` (não deu para medir, e diz por quê). A camada que não aparece conta
+  como desconhecida, nunca como completa: um "não achei" só vale sobre o que se leu. O conferidor
+  (`node scripts/referencia.js <ficha>`) recusa a ficha sem a seção, e a resposta dele mostra, no campo `naoCompleta`, quantas
+  camadas não foram lidas por inteiro: é onde um "não achei" ainda pode estar errado.
+- **A pergunta marcada como resolvida mostra a prova.** Na tabela do que ficou sem saber, a linha `resolvido` precisa
+  citar a evidência: um `arquivo:linha`, um endereço, uma foto da tela (`.png` ou `.jpg`), um arquivo
+  `.json`, ou "achado da linha N" (o achado da ficha que
+  resolveu a dúvida). Sem ela, o conferidor recusa a ficha na hora de escrever. O "achado da linha N" também se
+  confere: se a linha N não é um achado da ficha (porque a ficha cresceu e as linhas andaram, por exemplo), o
+  conferidor recusa e diz qual número não serve.
+
+**Atenção**
+
+- Uma ficha escrita antes desta versão não tem a seção `## Cobertura` e não passa mais no conferidor. Para ela
+  voltar a passar, acrescente a seção com uma linha por camada que você leu.
+
 ## 0.28.0 — a referência estudada pelo código inteiro, e o sworn limpa o que sobra
 
 **Novo**

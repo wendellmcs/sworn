@@ -43,7 +43,8 @@ try { conteudo = texto.semBom(fs.readFileSync(absoluto, 'utf8')); } catch (e) {
 }
 const r = referencia.conferir(conteudo, { tipo: tipo });
 if (!tipo) r.problemas.unshift('a ficha mora em .claude/sworn/referencias/<tipo>-<assunto>.md (tipo: tela, codigo ou texto); veio ' + rel);
-const relatorio = { ficha: rel, tipo: tipo, achados: r.achados, semSaber: r.semSaber, abertos: r.abertos, bytes: r.bytes };
+const relatorio = { ficha: rel, tipo: tipo, achados: r.achados, semSaber: r.semSaber, abertos: r.abertos,
+  cobertura: r.cobertura, naoCompleta: r.naoCompleta, bytes: r.bytes };
 if (tipo === 'radar') Object.assign(relatorio, { candidatos: r.candidatos, adotar: r.adotar });
 if (r.problemas.length) sair(1, Object.assign({ ok: false, gravou: false, problemas: r.problemas }, relatorio));
 if (!gravar) sair(0, Object.assign({ ok: true, problemas: [] }, relatorio));

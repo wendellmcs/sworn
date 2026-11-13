@@ -113,6 +113,7 @@ test('radar: licenca - ELv2, AGPL, fechada ou sem licenca = so a ideia', () => {
 test('radar: a ficha - cabecalhos, valores, conferencia pelo script com --tipo radar', () => {
   const s = secao(lerSkill(), 'Step 5');
   for (const c of ['| Repo | Licença | Como entra | Como melhora | Esforço | Valor | Veredito |',
+    '| Camada | Cobertura | O que se leu |',
     '| Camada | Achado | Origem | Grau | Quem agiu |', '| Pergunta | Estado | O que mediria |']) {
     assert.ok(s.includes(c), 'cabecalho: ' + c);
   }

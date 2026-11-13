@@ -16,11 +16,11 @@ const SCRIPT = path.join(__dirname, '..', 'scripts', 'capturar-tela.js');
 
 test('lerArgs: o basico e os valores padrao', function () {
   const r = captura.lerArgs(['--url', 'https://exemplo.com/a', '--saida', 'out']);
-  assert.deepStrictEqual(r.opcoes, { url: 'https://exemplo.com/a', saida: 'out', esperar: null, largura: 1280,
+  assert.deepStrictEqual(r.opcoes, { url: 'https://exemplo.com/a', saida: 'out', esperar: null, arquivo: null, largura: 1280,
     altura: 800, tempoMax: 30000 });
   const r2 = captura.lerArgs(['--url', 'file:///C:/x/p.html', '--saida', 'o', '--largura', '390', '--altura', '844',
     '--esperar', '#app .pronto', '--tempo-max', '5000']);
-  assert.deepStrictEqual(r2.opcoes, { url: 'file:///C:/x/p.html', saida: 'o', esperar: '#app .pronto', largura: 390,
+  assert.deepStrictEqual(r2.opcoes, { url: 'file:///C:/x/p.html', saida: 'o', esperar: '#app .pronto', arquivo: null, largura: 390,
     altura: 844, tempoMax: 5000 });
 });
 
@@ -234,16 +234,170 @@ test('alturaDaFoto: a pagina inteira, nunca menos que a janela, ate o limite', f
   assert.deepStrictEqual(captura.alturaDaFoto(40000, 800), { altura: captura.ALTURA_MAXIMA, cortada: true });
 });
 
-// ---------------------------------------------------------------- ponta a ponta, com o navegador de verdade
-
-const NAVEGADOR = captura.acharNavegador(captura.candidatosDoNavegador(process.platform, process.env),
-  function (p) { try { return fs.statSync(p).isFile(); } catch (e) { return false; } });
-
 function pastaTemporaria(t) {
   const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'sworn-teste-captura-'));
   t.after(function () { fs.rmSync(dir, { recursive: true, force: true }); });
   return dir;
 }
+
+test('E3 item 2: resumirEstilo passa so a forma esperada, com os tetos, e o exemplo limpo de segredo', function () {
+  const r = captura.resumirEstilo({ vistos: 7, cortado: false, valores: [
+    ['color', ' rgb(255, 0, 0) ', 3, 'p.aviso'],
+    ['background-color', 'rgb(0, 0, 0)', 0, 'div#k?token=abc'],
+    ['margin', '8px', 1, 'p'],            // propriedade que a captura nao le
+    ['color', '', 1, 'p'],                // valor vazio
+    ['font-size', 13, 1, 'p'],            // valor que nao e texto
+    'torto',
+  ] });
+  assert.deepStrictEqual(r.valores.map(function (v) { return [v.propriedade, v.valor, v.quantos]; }),
+    [['color', 'rgb(255, 0, 0)', 3]]);
+  assert.strictEqual(r.vistos, 7);
+  assert.strictEqual(r.cortado, false);
+  // Os itens tortos contam em descartados (a contagem 0 tambem, que a pagina honesta nunca manda); o par
+  // que fica igual depois da limpeza soma no mesmo item; o exemplo cabe nos 80; o semCorpo passa adiante; o --arquivo
+  // perde o espaco das pontas.
+  assert.strictEqual(r.descartados, 5);
+  const segredo = captura.resumirEstilo({ valores: [['background-color', 'rgb(0, 0, 0)', 1, 'div#k?token=abc']] });
+  assert.strictEqual(segredo.valores.length, 1);
+  assert.ok(!JSON.stringify(segredo).includes('abc'), 'o segredo do exemplo foi para a evidencia');
+  // Contagem que nao e inteiro de 1 para cima e texto enorme (valor ou exemplo) sao descartados.
+  const tortos = captura.resumirEstilo({ valores: [['color', 'red', -5, 'p'], ['color', 'red', 'abc', 'p'],
+    ['color', 'red', 1.5, 'p'], ['color', 'x'.repeat(65537), 1, 'p'], ['color', 'blue', 1, 'p'.repeat(65537)],
+    ['color', 'green', 1, 'p']] });
+  assert.deepStrictEqual(tortos.valores.map(function (v) { return v.valor; }), ['green']);
+  assert.strictEqual(tortos.descartados, 5);
+  // O exemplo que nao e texto e o valor acima de 4096 caracteres tambem; o exemplo ausente nao.
+  const r3 = captura.resumirEstilo({ valores: [['color', 'red', 1, { x: 1 }], ['color', 'x'.repeat(4097), 1, 'p'],
+    ['color', 'x'.repeat(4096), 1, 'p'], ['color', 'blue', 1]] });
+  assert.deepStrictEqual(r3.valores.map(function (v) { return v.valor.length; }), [4096, 4]);   // cabe em 4096: vai inteiro, so limpo de segredo
+  assert.strictEqual(r3.descartados, 2);
+  const iguais = captura.resumirEstilo({ valores: [['font-family', 'token=aaa', 2, 'p'], ['font-family', 'token=bbb', 3, 'p']] });
+  assert.deepStrictEqual(iguais.valores.map(function (x) { return x.quantos; }), [5]);
+  assert.strictEqual(captura.resumirEstilo({ valores: [], semCorpo: true }).semCorpo, true);
+  // Sem nada, ou com a forma torta: vazio, sem lancar.
+  assert.deepStrictEqual(captura.resumirEstilo(null), { valores: [], vistos: 0, cortado: false, descartados: 0, ilegivel: true });
+  assert.deepStrictEqual(captura.resumirEstilo({ valores: 'x', vistos: -1 }), { valores: [], vistos: 0, cortado: false, descartados: 0, ilegivel: true });
+  // Acima do teto de pares, corta e diz que cortou.
+  const muitos = [];
+  for (let i = 0; i < captura.VALORES_DO_ESTILO + 5; i++) muitos.push(['color', 'rgb(' + i + ', 0, 0)', 1, 'p']);
+  const c = captura.resumirEstilo({ valores: muitos, vistos: 1 });
+  assert.strictEqual(c.valores.length, captura.VALORES_DO_ESTILO);
+  assert.strictEqual(c.cortado, true);
+  // Com a lista cheia, a leitura segue: o repetido ainda soma e o torto ainda conta.
+  const depois = captura.resumirEstilo({ valores: muitos.concat([['color', 'rgb(0, 0, 0)', 7, 'p'], 'torto']), vistos: 1 });
+  assert.strictEqual(depois.valores[0].quantos, 8);
+  assert.strictEqual(depois.descartados, 1);
+  // As contagens da pagina tem teto: 1e308 somado nao vira Infinity (o JSON gravaria null).
+  const enorme = captura.resumirEstilo({ vistos: 1e308, valores: [['color', 'red', 1e308, 'p'], ['color', 'red', 1e308, 'p']] });
+  assert.strictEqual(enorme.valores[0].quantos, captura.ELEMENTOS_DO_ESTILO);
+  assert.strictEqual(enorme.vistos, captura.ELEMENTOS_DO_ESTILO);
+  assert.strictEqual(captura.resumirEstilo({ vistos: 5000, valores: [['color', 'red', 5000, 'p']] }).valores[0].quantos,
+    captura.ELEMENTOS_DO_ESTILO);
+  // A expressao que roda na pagina e uma expressao so, que o motor aceita.
+  assert.doesNotThrow(function () { new Function('return ' + captura.EXPRESSAO_DO_ESTILO); });
+  // O valor da pagina tambem sai limpo de segredo; o corte do exemplo nao parte um emoji. O emoji comeca no
+  // caractere 77 (indice 76), o ultimo antes das reticencias: o corte em 77 o partiria ao meio.
+  const hostil = captura.resumirEstilo({ valores: [['font-family', 'api_key=abc123', 1, 'x'.repeat(76) + '\u{1F600}' + 'y'.repeat(5)]] });
+  assert.ok(!JSON.stringify(hostil).includes('abc123'), 'o segredo do valor foi para a evidencia');
+  assert.strictEqual(hostil.valores[0].exemplo, 'x'.repeat(76) + '...', 'o exemplo partiu um emoji');
+  // O emoji que termina no caractere 77 cabe inteiro antes das reticencias.
+  const noLimite = captura.resumirEstilo({ valores: [['color', 'red', 1, 'x'.repeat(75) + '\u{1F600}' + 'y'.repeat(5)]] });
+  assert.strictEqual(noLimite.valores[0].exemplo, 'x'.repeat(75) + '\u{1F600}...', 'o emoji que cabia foi cortado');
+  // O segredo que cruza o corte dos 80 sai inteiro: a limpeza vem antes do corte, e nem o comeco dele fica.
+  const cruza = captura.resumirEstilo({ valores: [['color', 'red', 1, 'a#b' + 'x'.repeat(66) + '?token=k9q7w2x5z8']] });
+  assert.doesNotMatch(cruza.valores[0].exemplo, /token=k/, 'o comeco do segredo ficou no exemplo');
+  assert.strictEqual(cruza.valores[0].exemplo.length, 80);
+});
+
+test('E3 item 2: lerArgs aceita o --arquivo aparado e diz o que fazer quando ele vem vazio ou sem valor', function () {
+  assert.strictEqual(captura.lerArgs(['--url', 'http://x', '--saida', 's', '--arquivo', ' src/a.css ']).opcoes.arquivo, 'src/a.css');
+  assert.strictEqual(captura.lerArgs(['--url', 'http://x', '--saida', 's', '--arquivo', ' ']).erro, '--arquivo veio vazio: diga o ' +
+    'caminho do arquivo que desenha a tela, a partir da raiz do projeto (exemplo: src/checkout/tela.css), ou tire a opcao');
+  assert.match(captura.lerArgs(['--url', 'http://x', '--saida', 's', '--arquivo']).erro, /^--arquivo veio sem valor\. uso: .*\[--arquivo <caminho a partir da raiz do projeto, ex\.: src\/checkout\/tela\.css>\]$/);
+});
+
+test('E3 item 2: o aviso do estilo diz o que fazer, e o desvio so vale com --arquivo', function () {
+  const { avisoDoEstilo } = require('../scripts/capturar-tela.js');
+  // Sem design.json, o estilo nao foi conferido: o aviso diz de onde rodar, ou como criar o sistema; o --arquivo dado
+  // tambem nao serviu.
+  assert.strictEqual(avisoDoEstilo(null, null), 'sem .claude/sworn/design.json na pasta onde a captura roda, o estilo ' +
+    'foi gravado sem conferir: rode a captura da raiz do projeto (a pasta do .claude/sworn/design.json), ou crie o ' +
+    'sistema de design com o /sworn:init');
+  assert.match(avisoDoEstilo(null, 'src/a.css'), /o estilo foi gravado sem conferir e o --arquivo nao foi usado: rode a captura da raiz do projeto \(a pasta do \.claude\/sworn\/design\.json\), ou crie o sistema de design com o \/sworn:init$/);
+  // O --arquivo fora do projeto: rodar da raiz e passar o caminho a partir dela.
+  assert.strictEqual(avisoDoEstilo({ feita: true, fora: [], arquivoForaDoProjeto: true }, '../x.css'), 'o --arquivo fica ' +
+    'fora da pasta do projeto, e os desvios dele nao valeram: se o arquivo e do projeto, rode a captura da raiz do ' +
+    'projeto e passe o caminho a partir dela; um arquivo fora do projeto nao tem desvio');
+  // Conferido e tudo dentro do sistema: nada a dizer.
+  assert.strictEqual(avisoDoEstilo({ feita: true, fora: [] }, null), '');
+  // Sem --arquivo, o desvio da tela nao vale: o aviso diz que e o --arquivo que o faz valer.
+  const semArquivo = avisoDoEstilo({ feita: true, fora: [1, 2] }, null);
+  assert.match(semArquivo, /^2 valor\(es\) fora do sistema de design, listados em estiloForaDoSistema\.fora do evidencia\.json: troque cada um por um valor do \.claude\/sworn\/design\.json, ou peca ao dono que declare um desvio para esta tela em "desvios" do design\.json e rode de novo com --arquivo <o arquivo que desenha a tela>: sem ele, so o sistema vale$/);
+  // Com --arquivo, o desvio ja foi aplicado: nada de mandar passar o --arquivo de novo.
+  const comArquivo = avisoDoEstilo({ feita: true, fora: [1] }, 'src/a.css');
+  assert.match(comArquivo, /^1 valor\(es\) fora .*ou peca ao dono que declare um desvio para esta tela em "desvios" do design\.json$/);
+  assert.doesNotMatch(comArquivo, /rode de novo com --arquivo/);
+  // A conferencia que nao rodou (feita: false) nao fala de valores fora.
+  assert.strictEqual(avisoDoEstilo({ feita: false, fora: [1] }, null), '');
+});
+
+test('E3 item 2: a conferencia le o design.json da pasta onde roda, e o --arquivo vira o caminho a partir dela', function (t) {
+  const { conferenciaDoEstilo } = require('../scripts/capturar-tela.js');
+  const dir = pastaTemporaria(t);
+  const antes = process.cwd();
+  const estilo = captura.resumirEstilo({ valores: [['color', 'rgb(255, 0, 0)', 1, 'p']], vistos: 1 });
+  try {
+    process.chdir(dir);
+    assert.strictEqual(conferenciaDoEstilo(estilo, 'src/promo.css'), null, 'sem design.json, a conferencia tem de ser null');
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'design.json'), JSON.stringify({ cores: ['#000'], raios: [],
+      espacos: [], sombras: [], desvios: [{ arquivos: ['src/promo.css'], motivo: 'campanha', cores: ['#ff0000'] }] }));
+    const valoresFora = function (r) { return r.fora.map(function (x) { return x.valor; }); };
+    const semArquivo = conferenciaDoEstilo(estilo, null);
+    assert.strictEqual(semArquivo.arquivo, null);
+    assert.strictEqual(semArquivo.feita, true);
+    assert.deepStrictEqual(valoresFora(semArquivo), ['rgb(255, 0, 0)'], 'sem --arquivo, o desvio nao pode valer');
+    // Relativo, com barra invertida ou absoluto: o mesmo caminho a partir da pasta, e o desvio vale.
+    for (const dado of ['src/promo.css', 'src\\promo.css', path.join(process.cwd(), 'src', 'promo.css')]) {
+      const r = conferenciaDoEstilo(estilo, dado);
+      assert.strictEqual(r.arquivo, 'src/promo.css', 'o --arquivo ' + dado + ' nao virou o caminho a partir da pasta');
+      assert.deepStrictEqual(valoresFora(r), [], 'com o --arquivo ' + dado + ', o desvio nao valeu');
+      assert.strictEqual(r.arquivoForaDoProjeto, undefined);
+    }
+    // Outro arquivo do projeto: o desvio do promo.css nao vale para ele.
+    assert.deepStrictEqual(valoresFora(conferenciaDoEstilo(estilo, 'src/outra.css')), ['rgb(255, 0, 0)']);
+    // Acima da pasta ou em outro disco: nenhum desvio, so a marca, e o caminho nao vai para a evidencia.
+    const outroDisco = process.platform === 'win32' ? (/^z/i.test(process.cwd()) ? 'Y' : 'Z') + ':/x/fora.css' : 'C:/x/fora.css';
+    for (const dado of ['../fora.css', outroDisco]) {
+      const r = conferenciaDoEstilo(estilo, dado);
+      assert.strictEqual(r.arquivo, null, 'o --arquivo ' + dado + ' casou desvio');
+      assert.strictEqual(r.arquivoForaDoProjeto, true, 'o --arquivo ' + dado + ' nao foi marcado fora do projeto');
+      assert.ok(!JSON.stringify(r).includes('fora.css'), 'o caminho de fora foi para a evidencia: ' + JSON.stringify(r));
+    }
+    // A propria pasta: nenhum desvio e nenhuma marca.
+    const raiz = conferenciaDoEstilo(estilo, '.');
+    assert.strictEqual(raiz.arquivo, null);
+    assert.strictEqual(raiz.arquivoForaDoProjeto, undefined);
+    // O estilo que nao foi lido: a lista vazia nao diz "tudo dentro do sistema".
+    const naoLido = conferenciaDoEstilo({ ...captura.resumirEstilo(null), erro: 'nao deu' }, null);
+    assert.strictEqual(naoLido.feita, false);
+    assert.strictEqual(naoLido.ok, false);
+  } finally {
+    process.chdir(antes);
+  }
+});
+
+test('E3 item 2: o exemplo de 80 caracteres vai inteiro, e o de 81 e cortado em 80 com as reticencias', function () {
+  const exemplo = function (n) { return captura.resumirEstilo({ valores: [['color', 'red', 1, 'p'.repeat(n)]] }).valores[0].exemplo; };
+  assert.strictEqual(exemplo(80), 'p'.repeat(80));
+  assert.strictEqual(exemplo(81), 'p'.repeat(77) + '...');
+});
+
+// ---------------------------------------------------------------- ponta a ponta, com o navegador de verdade
+
+
+const NAVEGADOR = captura.acharNavegador(captura.candidatosDoNavegador(process.platform, process.env),
+  function (p) { try { return fs.statSync(p).isFile(); } catch (e) { return false; } });
 
 // No Windows o nome da variavel nao diferencia maiuscula: a de fora (ProgramFiles) tem de sair antes de a do teste
 // (PROGRAMFILES) entrar, senao o processo filho recebe as duas.
@@ -592,4 +746,197 @@ test('ponta a ponta: a resposta 404 do servidor vai para a evidencia, com aviso'
   // avisa que a limpeza ficou para o segundo plano; quem espera por ela e o assertSemSobras, logo abaixo.
   assert.doesNotMatch(sim.aviso || '', /o servidor respondeu/, 'a resposta 200 nao leva o aviso do servidor');
   assertSemSobras(tmp, dir, JSON.stringify(nao) + JSON.stringify(sim));
+});
+
+test('ponta a ponta (E3 item 2): o estilo calculado vai para a evidencia e e conferido contra o design.json', function (t) {
+  if (!NAVEGADOR) { t.skip('sem Chrome nem Edge nesta maquina'); return; }
+  const dir = pastaTemporaria(t);
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(tmp);
+  // O projeto onde a captura roda: o design.json tem o preto, o branco e o raio de 8px; a tela usa um vermelho por
+  // var() (o navegador resolve), um raio de 3px e um fundo transparente (nao conta).
+  const projeto = path.join(dir, 'projeto');
+  fs.mkdirSync(path.join(projeto, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(projeto, '.claude', 'sworn', 'design.json'), JSON.stringify({
+    cores: ['#000', '#fff'], raios: ['8px'], espacos: [], sombras: [],
+    desvios: [{ arquivos: ['src/promo.css'], motivo: 'campanha', cores: ['#ff0000'] }] }));
+  const pagina = path.join(dir, 'pagina.html');
+  fs.writeFileSync(pagina, '<!doctype html><html><head><meta charset="utf-8"><style>:root { --alerta: #f00; }' +
+    'body { margin: 0; background: #fff; color: #000; } .aviso { color: var(--alerta); border-radius: 3px; ' +
+    'background: transparent; } .ok { border-radius: 8px; } .ph::placeholder { color: rgb(13, 14, 15); }</style></head>' +
+    // Os dois forms vem primeiro, para o exemplo do par ser deles: o fundo preto e do form#f (o campo
+    // name="id" nao tampa o id) e o raio de 8px e do form.tampado (os campos que tampam tagName, firstChild e
+    // getBoundingClientRect nao derrubam a leitura, e o texto roxo antes deles ainda e achado). O texto de um display:contents (sem caixa) entra com a cor dele.
+    '<body><form id="f" style="background:#000"><input name="id" value="Buscar" style="color:#00f;border:none;background:#fff"></form>' +
+    '<form class="tampado" style="border-radius:8px;color:rgb(128, 0, 128)">Nome<input name="tagName" style="border:none;background:#fff">' +
+    '<input name="firstChild" style="border:none;background:#fff"><input name="getBoundingClientRect" ' +
+    'style="border:none;background:#fff"></form>' +
+    '<p class="aviso">Atencao</p><p class="ok">Tudo certo</p><div style="display:none;color:#0f0">x</div><p style="visibility:hidden;color:#0f0">y</p><div style="opacity:0"><p style="color:#0f0">z</p></div>' +
+    // O fundo dele nao se ve (nao tem caixa): nao entra.
+    '<span style="display:contents;color:rgb(0, 128, 0);background:#123456">verde</span>' +
+    // O display:contents dentro de outro (o ancestral com caixa e o body) e o de visibility:visible sob um
+    // pai hidden aparecem; o <img name="body"> nao tampa o document.body da leitura.
+    '<div style="display:contents"><span style="display:contents;color:rgb(0, 0, 128)">aninhado</span></div>' +
+    '<div style="visibility:hidden"><span style="display:contents;visibility:visible;color:rgb(128, 128, 0)">visivel</span></div>' +
+    '<img name="body" width="1" height="1" alt="">' +
+    '<span style="display:contents;visibility:hidden;color:#0f0">oculto</span>' +
+    // A caixa de marcar nao mostra texto (o value "on" nao conta); o fundo branco com alfa 0 e o canto 0% nao
+    // se veem; o select mostra o rotulo da opcao escolhida, mesmo com value vazio.
+    '<input type="checkbox" style="color:rgb(1, 2, 3);border:none;background:#fff">' +
+    '<div style="background:rgba(255, 255, 255, 0);border-radius:0%;width:10px;height:10px"></div>' +
+    '<select style="color:rgb(4, 5, 6);border:none;background:#fff"><option value="">Escolha</option></select>' +
+    // O value do botao nao aparece, e a borda transparente so guarda o espaco; o texto transparente
+    // (gradiente) nao mostra a propria cor; o fundo oklch com alfa 0 e o canto 0 20px (reto) nao se veem; o submit
+    // sem value mostra o rotulo padrao; o campo vazio mostra o placeholder com a cor do ::placeholder.
+    '<button name="acao" value="apagar" style="color:rgb(7, 8, 9);border:1px solid transparent;background:#fff;' +
+    'width:20px;height:20px"></button>' +
+    '<h2 style="color:transparent">gradiente</h2>' +
+    '<div style="background:oklch(0.7 0.1 200 / 0);border-top-left-radius:0 20px;width:10px;height:10px"></div>' +
+    '<input type="submit" style="color:rgb(10, 11, 12);border:none;background:#fff">' +
+    '<input class="ph" placeholder="Email" style="color:#000;border:none;background:#fff">' +
+    '</body></html>');
+  const capturar = function (saida, extra, outra) {
+    const r = spawnSync(process.execPath, [SCRIPT, '--url', pathToFileURL(outra || pagina).href, '--saida', saida, '--largura', '600',
+      '--altura', '400', '--tempo-max', '120000'].concat(extra || []),
+    { encoding: 'utf8', timeout: 180000, env: ambiente({ SWORN_TMP: tmp }), cwd: projeto });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    return { fim: JSON.parse(r.stdout), e: JSON.parse(fs.readFileSync(path.join(saida, 'evidencia.json'), 'utf8')) };
+  };
+  const { fim, e } = capturar(path.join(dir, 'a'));
+  const par = function (p, v) { return e.estilo.valores.some(function (x) { return x.propriedade === p && x.valor === v; }); };
+  assert.ok(par('color', 'rgb(255, 0, 0)') && par('border-radius', '3px') && par('border-radius', '8px'), JSON.stringify(e.estilo));
+  assert.ok(!par('color', 'rgb(0, 255, 0)'), 'o elemento escondido entrou no estilo');
+  // O body entra (o fundo da pagina mora nele), e o raio dos 4 cantos de um elemento conta esse elemento uma vez.
+  assert.ok(par('background-color', 'rgb(255, 255, 255)'), 'o fundo do body ficou fora do estilo');
+  assert.strictEqual(e.estilo.valores.find(function (x) { return x.valor === '3px'; }).quantos, 1);
+  assert.ok(!e.estilo.valores.some(function (x) { return x.propriedade === 'background-color' && /^rgba\(.*,\s*0\)$/.test(x.valor); }),
+    'o fundo transparente entrou no estilo');
+  const fora = e.estiloForaDoSistema.fora.map(function (x) { return x.propriedade + ' ' + x.valor; }).sort();
+  assert.deepStrictEqual(fora, ['border-radius 3px', 'color rgb(0, 0, 128)', 'color rgb(0, 0, 255)', 'color rgb(0, 128, 0)',
+    'color rgb(10, 11, 12)', 'color rgb(128, 0, 128)', 'color rgb(128, 128, 0)', 'color rgb(13, 14, 15)',
+    'color rgb(255, 0, 0)', 'color rgb(4, 5, 6)'].sort());
+  assert.ok(!par('color', 'rgb(7, 8, 9)'), 'o value do botao entrou como texto');
+  assert.ok(!e.estilo.valores.some(function (x) { return /^rgba\((?:[^,]*,){3}\s*0\)$|\/\s*0\)$/.test(x.valor); }),
+    'uma cor transparente (borda, texto ou fundo oklch) entrou: ' + JSON.stringify(e.estilo));
+  assert.ok(!par('border-radius', '0px 20px'), 'o canto reto 0 20px entrou');
+  assert.ok(!par('color', 'rgb(1, 2, 3)'), 'a caixa de marcar entrou como texto');
+  assert.ok(!par('border-radius', '0%'), 'o canto reto em 0% entrou');
+  // O campo de formulario (valor sem no de texto) entra: a cor dele, rgb(0, 0, 255), esta na lista de fora acima. E o
+  // exemplo do form com campo name="id" nao vira objeto.
+  assert.ok(!JSON.stringify(e.estilo).includes('[object'), JSON.stringify(e.estilo));
+  const exemploDe = function (p, v) {
+    const x = e.estilo.valores.find(function (y) { return y.propriedade === p && y.valor === v; });
+    return x && x.exemplo;
+  };
+  assert.strictEqual(exemploDe('background-color', 'rgb(0, 0, 0)'), 'form#f', JSON.stringify(e.estilo));
+  assert.strictEqual(exemploDe('border-radius', '8px'), 'form.tampado', JSON.stringify(e.estilo));
+  assert.strictEqual(e.estilo.erro, undefined);
+  assert.strictEqual(fim.valoresForaDoSistema, 10);
+  assert.strictEqual(e.estiloForaDoSistema.feita, true);
+  assert.match(fim.avisoDoEstilo, /10 valor\(es\) fora do sistema de design, listados em estiloForaDoSistema\.fora/);
+  assert.strictEqual(fim.estiloNaoLido, undefined);
+  // Com --arquivo do desvio, o vermelho da campanha vale nesta tela; o raio de 3px segue fora. O caminho absoluto
+  // vira o caminho a partir do projeto (e assim que o desvio casa, e o caminho pessoal nao vai para a evidencia).
+  const comDesvio = capturar(path.join(dir, 'b'), ['--arquivo', path.join(projeto, 'src', 'promo.css')]).e.estiloForaDoSistema;
+  assert.strictEqual(comDesvio.arquivo, 'src/promo.css');
+  assert.deepStrictEqual(comDesvio.fora.map(function (x) { return x.valor; }).sort(), ['3px', 'rgb(0, 0, 128)', 'rgb(0, 0, 255)',
+    'rgb(0, 128, 0)', 'rgb(10, 11, 12)', 'rgb(128, 0, 128)', 'rgb(128, 128, 0)', 'rgb(13, 14, 15)', 'rgb(4, 5, 6)'].sort());
+  // O --arquivo fora do projeto nao casa desvio e nao vai para a evidencia, so a marca.
+  // O relativo que sobe (..) tambem; o que so comeca com dois pontos no nome (..tema) e do projeto.
+  const subiu = capturar(path.join(dir, 'c'), ['--arquivo', '../fora.css']);
+  const fora1 = subiu.e.estiloForaDoSistema;
+  assert.match(subiu.fim.avisoDoEstilo, /o --arquivo fica fora da pasta do projeto/);
+  assert.strictEqual(fora1.arquivo, null);
+  assert.strictEqual(fora1.arquivoForaDoProjeto, true);
+  assert.ok(!JSON.stringify(fora1).includes('fora.css'), JSON.stringify(fora1));
+  const pontos = capturar(path.join(dir, 'e'), ['--arquivo', path.join(projeto, '..tema', 'x.css')]).e.estiloForaDoSistema;
+  assert.strictEqual(pontos.arquivo, '..tema/x.css');
+  assert.strictEqual(pontos.arquivoForaDoProjeto, undefined);
+  // A propria pasta do projeto nao e caminho fora dele: nenhum desvio, sem a marca.
+  const raiz = capturar(path.join(dir, 'g'), ['--arquivo', '.']).e.estiloForaDoSistema;
+  assert.strictEqual(raiz.arquivo, null);
+  assert.strictEqual(raiz.arquivoForaDoProjeto, undefined);
+  // O documento sem body (um SVG aberto direto) nao derruba a foto: o estilo sai vazio com o motivo, e a
+  // saida leva o motivo no lugar de uma contagem que diria "tudo dentro do sistema".
+  const svg = path.join(dir, 'figura.svg');
+  fs.writeFileSync(svg, '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="red"/></svg>');
+  const semCorpo = capturar(path.join(dir, 'd'), [], svg);
+  assert.match(semCorpo.e.estilo.erro, /nao e um documento HTML com corpo/);
+  assert.match(semCorpo.e.estilo.erro, /confira-os na foto, a olho/);
+  assert.strictEqual(semCorpo.fim.estiloNaoLido, semCorpo.e.estilo.erro);
+  assert.strictEqual(semCorpo.fim.valoresForaDoSistema, undefined);
+  // A evidencia tambem nao diz "tudo dentro do sistema" quando o estilo nao foi lido.
+  assert.strictEqual(semCorpo.e.estiloForaDoSistema.feita, false);
+  assert.strictEqual(semCorpo.e.estiloForaDoSistema.ok, false);
+  // O body sem altura (tudo dentro posicionado) entra: o fundo dele pinta a tela inteira.
+  const corpoZero = path.join(dir, 'corpo.html');
+  fs.writeFileSync(corpoZero, '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;' +
+    'background:#123456"><div style="position:absolute;top:0;color:#000">x</div></body></html>');
+  const zero = capturar(path.join(dir, 'f'), [], corpoZero).e;
+  assert.ok(zero.estilo.valores.some(function (x) { return x.propriedade === 'background-color' && x.valor === 'rgb(18, 52, 86)'; }),
+    JSON.stringify(zero.estilo));
+  assertSemSobras(tmp, dir, JSON.stringify(e.estiloForaDoSistema));
+});
+
+test('ponta a ponta (E3 item 2): textarea pelo value, submit vazio, a cor pintada e a subida com teto', function (t) {
+  if (!NAVEGADOR) { t.skip('sem Chrome nem Edge nesta maquina'); return; }
+  const dir = pastaTemporaria(t);
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(tmp);
+  // Duas correntes de display: contents, montadas por script (o leitor de HTML do Chrome achata o aninhamento alem de
+  // 512 niveis), com um span display: contents no fim. Com 1000 ancestrais contents, o teto da subida, o texto entra;
+  // com 1001, passa do teto: a leitura nao prende e marca `cortado`.
+  const corrente = function (n, cor) {
+    return '<script>(function () { let p = document.body; for (let i = 0; i < ' + n + '; i++) { const d = document.createElement("div"); ' +
+      'd.style.display = "contents"; p.appendChild(d); p = d; } const s = document.createElement("span"); s.style.display = "contents"; ' +
+      's.style.color = "' + cor + '"; s.textContent = "fundo"; p.appendChild(s); })();</script>';
+  };
+  const pagina = path.join(dir, 'pagina.html');
+  fs.writeFileSync(pagina, '<!doctype html><html><head><meta charset="utf-8"><style>body { margin: 0; background: #fff; color: #000; } ' +
+    '.bph::placeholder { color: rgb(51, 52, 53); }</style></head><body>' +
+    // O textarea mostra o value atual, nao o texto inicial: o esvaziado nao mostra texto; o preenchido por script mostra.
+    '<textarea id="vazio" style="color:rgb(21, 22, 23);border:none;background:#fff">inicial</textarea>' +
+    '<textarea id="cheio" style="color:rgb(18, 19, 20);border:none;background:#fff"></textarea>' +
+    // O submit com value="" fica vazio. O botao nao mostra o placeholder: nem o submit vazio nem o button sem value.
+    '<input type="submit" value="" style="color:rgb(24, 25, 26);border:none;background:#fff">' +
+    '<input type="submit" value="" placeholder="Enviar" class="bph" style="color:rgb(57, 58, 59);border:none;background:#fff">' +
+    '<input type="button" placeholder="Ir" class="bph" style="color:rgb(60, 61, 62);border:none;background:#fff;width:20px;height:20px">' +
+    // A cor pintada e a do -webkit-text-fill-color, nao a color.
+    '<p style="color:rgb(27, 28, 29);-webkit-text-fill-color:rgb(30, 31, 32)">pintado</p>' +
+    // No texto de SVG, a cor e a do fill.
+    '<svg width="40" height="20"><text x="0" y="15" fill="rgb(33, 34, 35)" style="color:rgb(36, 37, 38)">s</text></svg>' +
+    // O fill por gradiente (url(...)) nao e cor: nao entra, nem a color de baixo.
+    '<svg width="40" height="20"><defs><linearGradient id="g"><stop offset="0" stop-color="#f00"/></linearGradient></defs>' +
+    '<text x="0" y="15" fill="url(#g)" style="color:rgb(48, 49, 50)">g</text></svg>' +
+    // O segredo no id da pagina nao vai para o disco: o exemplo (tag#id) sai limpo.
+    '<p id="k?token=zzsegredo99" style="color:rgb(63, 64, 65)">k</p>' +
+    // A borda, a fonte e o tamanho de um elemento com caixa entram com o valor calculado.
+    '<p style="border:2px solid rgb(45, 46, 47);font-family:Georgia;font-size:17px;color:#000">borda</p>' +
+    corrente(1000, 'rgb(42, 43, 44)') + corrente(1001, 'rgb(39, 40, 41)') +
+    '<script>document.getElementById("vazio").value = ""; document.getElementById("cheio").value = "novo";</script>' +
+    '</body></html>');
+  const saida = path.join(dir, 'a');
+  const r = spawnSync(process.execPath, [SCRIPT, '--url', pathToFileURL(pagina).href, '--saida', saida, '--largura', '600',
+    '--altura', '400', '--tempo-max', '120000'], { encoding: 'utf8', timeout: 180000, env: ambiente({ SWORN_TMP: tmp }), cwd: dir });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  const e = JSON.parse(fs.readFileSync(path.join(saida, 'evidencia.json'), 'utf8'));
+  const cor = function (v) { return e.estilo.valores.some(function (x) { return x.propriedade === 'color' && x.valor === v; }); };
+  assert.ok(!cor('rgb(21, 22, 23)'), 'o textarea esvaziado entrou pelo texto inicial: ' + JSON.stringify(e.estilo));
+  assert.ok(cor('rgb(18, 19, 20)'), 'o textarea preenchido por script ficou fora: ' + JSON.stringify(e.estilo));
+  assert.ok(!cor('rgb(24, 25, 26)'), 'o submit com value vazio entrou como texto');
+  assert.ok(!cor('rgb(51, 52, 53)') && !cor('rgb(57, 58, 59)') && !cor('rgb(60, 61, 62)'),
+    'o placeholder de um botao entrou como texto: ' + JSON.stringify(e.estilo));
+  assert.ok(cor('rgb(30, 31, 32)') && !cor('rgb(27, 28, 29)'), 'a cor pintada nao e a do -webkit-text-fill-color: ' + JSON.stringify(e.estilo));
+  assert.ok(cor('rgb(33, 34, 35)') && !cor('rgb(36, 37, 38)'), 'o texto de SVG nao entrou pelo fill: ' + JSON.stringify(e.estilo));
+  assert.ok(!e.estilo.valores.some(function (x) { return /url\(/.test(x.valor); }), 'o fill por gradiente entrou como cor: ' + JSON.stringify(e.estilo));
+  assert.ok(!cor('rgb(48, 49, 50)'), 'a color de baixo do fill por gradiente entrou');
+  const par = function (p, v) { return e.estilo.valores.some(function (x) { return x.propriedade === p && x.valor === v; }); };
+  assert.ok(par('border-color', 'rgb(45, 46, 47)') && par('font-family', 'Georgia') && par('font-size', '17px'),
+    'a borda, a fonte ou o tamanho ficaram fora: ' + JSON.stringify(e.estilo));
+  assert.ok(cor('rgb(42, 43, 44)'), 'o texto com 1000 ancestrais contents (o teto) ficou fora: ' + JSON.stringify(e.estilo));
+  assert.ok(!cor('rgb(39, 40, 41)'), 'o texto alem do teto da subida entrou');
+  assert.strictEqual(e.estilo.cortado, true, 'a subida alem do teto nao marcou cortado');
+  assert.ok(cor('rgb(63, 64, 65)'), 'o paragrafo com o segredo no id ficou fora');
+  assert.ok(!fs.readFileSync(path.join(saida, 'evidencia.json'), 'utf8').includes('zzsegredo99'), 'o segredo do id foi para a evidencia');
+  assertSemSobras(tmp, dir, r.stdout);
 });

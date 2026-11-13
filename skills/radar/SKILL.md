@@ -160,6 +160,14 @@ Fonte: https://github.com/trending?since=weekly lida às 12:04 UTC; 15 na págin
 | dono/repo | MIT | <file, skill or step where it fits> | <what gets better than the original> | P | alto | adotar |
 | dono/outro | AGPL-3.0 | <only the idea, rewritten> | <what the project already has and the original doesn't> | M | médio | inspiração |
 
+## Cobertura
+
+| Camada | Cobertura | O que se leu |
+|---|---|---|
+| dono/repo README | completa | |
+| dono/repo código | parcial | <how many files of how many, and which were left out> |
+| triagem | parcial | <how many READMEs of the list were read> |
+
 ## Achados
 
 | Camada | Achado | Origem | Grau | Quem agiu |
@@ -188,7 +196,10 @@ Não li: <what the triage and deepening left out, and the sources that failed>.
 
     | nenhum novo nesta semana | não se aplica | | | P | baixo | descartar |
 
-- **Achados, o que ficou sem saber and `Não li:`** follow the rules of `/sworn:reference`: what
+- **Cobertura, achados, o que ficou sem saber and `Não li:`** follow the rules of `/sworn:reference`: each layer
+  read says if it was `completa` (the last cell may stay empty), `parcial` (it says what was read) or `desconhecida`
+  (it says why it could not be measured), a `resolvido` question
+  cites its evidence, what
   was read is `observado`, the lesson is `inferido` with the origin in the findings it came from, a source that
   didn't open becomes a `bloqueado` question. "I didn't find it" only holds for what was read.
 

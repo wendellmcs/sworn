@@ -22,6 +22,13 @@ const FICHA = [
   'Estudo de 2026-10-20 11:17. Tipo do projeto: plugin do Claude Code. Líderes pela busca pública do GitHub',
   '(14:12 UTC, por estrelas): claude-mem `9e4f313`, planning-with-files `de837a9`. Camadas 1 e 3.',
   '',
+  '## Cobertura',
+  '',
+  '| Camada | Cobertura | O que se leu |',
+  '|---|---|---|',
+  '| 1 o que se vê | parcial | o README dos dois; as páginas de docs não |',
+  '| 3 textos | completa | o README e as mensagens dos dois, no commit lido |',
+  '',
   '## Achados',
   '',
   '| Camada | Achado | Origem | Grau | Quem agiu |',
@@ -37,7 +44,7 @@ const FICHA = [
   '|---|---|---|',
   '| Como a primeira tela aparece de fato no GitHub | aberto | Fotografar as duas páginas a 1366 px |',
   '| Como os dois se comportam instalados | bloqueado | Camada 2: instalar numa pasta de teste, com o sim do dono |',
-  '| Quantas ferramentas o claude-mem tem de fato | resolvido | Lido o servidor MCP no commit 9e4f313 |',
+  '| Quantas ferramentas o claude-mem tem de fato | resolvido | Lido o servidor MCP no commit 9e4f313: claude-mem src/servers/mcp-server.ts:40-88 |',
   '',
   'Não li: as imagens e GIFs, a pasta `docs/` dos dois.',
   ''
@@ -66,6 +73,83 @@ test('conferir: a ficha do mock passa, com a contagem de achados, do que ficou s
   assert.strictEqual(r.semSaber, 3);
   assert.strictEqual(r.abertos, 1);
   assert.strictEqual(r.bytes, Buffer.byteLength(FICHA, 'utf8'));
+  // R2 (D833): a cobertura por camada, e quantas nao estao completas
+  assert.deepStrictEqual(r.cobertura, { completa: 1, parcial: 1, desconhecida: 0 });
+  assert.strictEqual(r.naoCompleta, 1);
+});
+
+test('conferir R2: sem a secao da cobertura, ou com ela vazia, a ficha nao passa (o que nao se declarou e desconhecido)', () => {
+  const semSecao = FICHA.replace('## Cobertura', '## Outra coisa');
+  assert.deepStrictEqual(referencia.conferir(semSecao).problemas,
+    ['falta a secao "## Cobertura" (| camada | cobertura | o que se leu |): o que nao se declarou e desconhecido']);
+  // o radar tambem declara a cobertura
+  assert.match(referencia.conferir(semSecao, { tipo: 'radar' }).problemas.join(' '), /falta a secao "## Cobertura"/);
+  const vazia = FICHA.split('\n').filter((l) => !/\| (parcial|completa) \|/.test(l)).join('\n');
+  assert.match(referencia.conferir(vazia).problemas.join(' '), /nenhuma camada na secao "## Cobertura"/);
+});
+
+test('conferir R2: cobertura fora dos tres, ou parcial e desconhecida sem o que se leu, vira problema com a linha', () => {
+  const linha = '| 1 o que se vê | parcial | o README dos dois; as páginas de docs não |';
+  const casos = [
+    ['| 1 o que se vê | quase | o README |', /cobertura \(completa, parcial, desconhecida\)/],
+    ['| 1 o que se vê | parcial |  |', /o que se leu/],
+    ['| 1 o que se vê | desconhecida | - |', /o que se leu/],
+    ['| 1 o que se vê | parcial |', /colunas/],
+    ['1 o que se vê | parcial | o README |', /barra/]
+  ];
+  for (const [torta, re] of casos) {
+    const p = referencia.conferir(FICHA.replace(linha, torta)).problemas;
+    assert.strictEqual(p.length, 1, torta + ' -> ' + JSON.stringify(p));
+    assert.match(p[0], re);
+    assert.match(p[0], /^linha \d+: /);
+  }
+  // completa nao precisa dizer o que se leu: leu tudo
+  assert.deepStrictEqual(referencia.conferir(FICHA.replace(linha, '| 1 o que se vê | completa |  |')).problemas, []);
+  const r = referencia.conferir(FICHA.replace(linha, '| 1 o que se vê | `desconhecida` | nada: a página pediu login |'));
+  assert.deepStrictEqual(r.problemas, []);
+  assert.deepStrictEqual(r.cobertura, { completa: 1, parcial: 0, desconhecida: 1 });
+  assert.strictEqual(r.naoCompleta, 1);
+});
+
+test('conferir R2: a pergunta resolvida cita a evidencia, conferida na escrita', () => {
+  const linha = '| Quantas ferramentas o claude-mem tem de fato | resolvido | Lido o servidor MCP no commit 9e4f313: claude-mem src/servers/mcp-server.ts:40-88 |';
+  assert.ok(FICHA.includes(linha), 'a linha trocada tem de estar na ficha, ou o replace nao troca nada');
+  const resolvida = function (texto) { return referencia.conferir(FICHA.replace(linha, '| Quantas ferramentas | resolvido | ' + texto + ' |')).problemas; };
+  // sem prova: texto solto, uma hora ou uma versao com dois-pontos nao sao arquivo:linha
+  for (const solto of ['Lido o servidor MCP', 'medido às 10:30', 'conferido na v1:2', 'na versão 1.5:3']) {
+    const sem = resolvida(solto);
+    assert.strictEqual(sem.length, 1, solto + ' -> ' + JSON.stringify(sem));
+    assert.match(sem[0], /^linha \d+: pergunta resolvida sem a evidencia/);
+  }
+  // vazia: o problema e o de sempre (sem o que mediria), uma vez so
+  assert.deepStrictEqual(resolvida('').map(function (x) { return x.replace(/^linha \d+: /, ''); }), ['pergunta sem o que mediria']);
+  const daFicha = FICHA.split('\n');
+  const inicioDosAchados = daFicha.indexOf('## Achados');
+  // o numero da linha comeca em 1, o indice em 0
+  const doAchado = daFicha.findIndex(function (l, k) { return k > inicioDosAchados && /^\| \d /.test(l); }) + 1;
+  assert.ok(doAchado > 0, 'a ficha de teste tem um achado');
+  for (const prova of ['https://github.com/a/b/blob/9e4f313/x.ts#L40', 'print em .claude/sworn/prints/tela.png', 'o evidencia.json da captura', 'achado da linha ' + doAchado]) {
+    assert.deepStrictEqual(resolvida(prova), [], prova);
+  }
+  // o "achado da linha N" aponta para uma linha da tabela dos achados: o titulo, o cabecalho da tabela, uma linha da
+  // cobertura (que tambem comeca com "| 1 "), o zero ou uma linha depois do fim (a ficha cresceu e as linhas andaram)
+  // nao provam nada
+  const daCobertura = daFicha.findIndex(function (l) { return /^\| 1 o que se vê \| parcial/.test(l); }) + 1;
+  assert.ok(daCobertura > 0, 'a ficha de teste tem uma linha de cobertura');
+  for (const n of [0, 1, daCobertura, inicioDosAchados + 3, daFicha.length + 5]) {
+    const p = resolvida('achado da linha ' + n);
+    assert.strictEqual(p.length, 1, n + ' -> ' + JSON.stringify(p));
+    assert.match(p[0], new RegExp('^linha \\d+: a linha ' + n + ' nao e um achado da ficha: cite o numero de uma linha da tabela "## Achados"'));
+  }
+  // o achado torto (colunas a menos) ja tem o problema dele, e nao serve de prova
+  const torta = FICHA.replace(daFicha[doAchado - 1], '| 3 textos | algo lido | a.md:1 |')
+    .replace(linha, '| Quantas ferramentas | resolvido | achado da linha ' + doAchado + ' |');
+  assert.ok(referencia.conferir(torta).problemas.some(function (x) { return /a linha \d+ nao e um achado/.test(x); }));
+  // cada citacao se confere, nao so a primeira
+  const duas = resolvida('achado da linha ' + doAchado + ' e achado da linha 1');
+  assert.deepStrictEqual(duas.map(function (x) { return x.replace(/^linha \d+: /, '').replace(/:.*$/, ''); }), ['a linha 1 nao e um achado da ficha']);
+  // aberto e bloqueado nao pedem evidencia: dizem o que mediria
+  assert.deepStrictEqual(referencia.conferir(FICHA.replace(linha, '| Quantas ferramentas | aberto | Ler o servidor MCP |')).problemas, []);
 });
 
 test('conferir: achado sem origem, com grau fora dos tres ou sem quem agiu vira problema com a linha', () => {
@@ -197,6 +281,8 @@ test('script: confere sem gravar; com --gravar poe a ficha na referencias do pro
     assert.strictEqual(so.json.ok, true, so.saida);
     assert.strictEqual(so.json.tipo, 'texto');
     assert.strictEqual(so.json.achados, 4);
+    assert.deepStrictEqual(so.json.cobertura, { completa: 1, parcial: 1, desconhecida: 0 }, 'R2: a saida diz quanto se leu');
+    assert.strictEqual(so.json.naoCompleta, 1);
     assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, '.claude/sworn/projeto.json'), 'utf8')).referencias,
       undefined, 'sem --gravar nao grava');
     const g = rodar([FICHA_REL, '--gravar'], dir);
@@ -364,6 +450,17 @@ test('skill: a ficha (mock secao 2) - formato que o script confere, origem, grau
   assert.match(s, /100 KB/);
   assert.ok(s.includes('.claude/sworn/referencias/**'), 'o escopo precisa cobrir a pasta da ficha');
   assert.match(s, /scope gate/);
+});
+
+test('skill R2: o modelo da ficha mostrado na skill passa no conferidor, com a cobertura e a regra da evidencia', () => {
+  const s = lerSkill();
+  const bloco = s.split('```markdown\n').slice(1).map(function (b) { return b.split('\n```')[0]; })
+    .find(function (b) { return b.includes('## Achados'); });
+  assert.ok(bloco, 'a skill nao mostra o modelo da ficha num bloco ```markdown');
+  assert.deepStrictEqual(referencia.conferir(bloco).problemas, []);
+  assert.ok(s.includes('| Camada | Cobertura | O que se leu |'), 'cabecalho da cobertura');
+  for (const c of ['completa', 'parcial', 'desconhecida']) assert.ok(s.includes('`' + c + '`'), 'cobertura: ' + c);
+  assert.match(s, /`resolvido`[^.]*evidence/, 'a resolvida cita a evidencia');
 });
 
 test('init: o Passo 4b oferece o /sworn:reference a quem nao tem referencia (Tarefa 4)', () => {

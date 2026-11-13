@@ -552,12 +552,13 @@ test('A2-14: timeout do git e distinguivel de "fora do git" (ambos null; so o ti
     const f2 = {};
     assert.strictEqual(gitLib.ultimasMudancas(dir, '.', { timeout: 1, falha: f2 }), null);
     assert.strictEqual(f2.timeout, true, 'ultimasMudancas escondeu o timeout');
-    // fora do git: null tambem, mas SEM timeout
+    // fora do git: null tambem, mas SEM timeout. O prazo folgado e para a carga da suite inteira: com o padrao de 5 s,
+    // o git que falha pode passar do prazo e virar um timeout de verdade.
     const f3 = {};
-    assert.strictEqual(gitLib.ultimasMudancas(path.join(dir, 'nao-existe'), '.', { falha: f3 }), null);
+    assert.strictEqual(gitLib.ultimasMudancas(path.join(dir, 'nao-existe'), '.', { timeout: 60000, falha: f3 }), null);
     assert.ok(!f3.timeout, 'cwd inexistente foi chamado de timeout');
     const f4 = {};
-    assert.strictEqual(gitLib.correr(dir, ['subcomando-que-nao-existe'], { falha: f4 }), null);
+    assert.strictEqual(gitLib.correr(dir, ['subcomando-que-nao-existe'], { timeout: 60000, falha: f4 }), null);
     assert.ok(!f4.timeout, 'erro do git foi chamado de timeout');
     // sem opcoes tudo segue igual
     assert.strictEqual(typeof gitLib.correr(dir, ['--version']), 'string');

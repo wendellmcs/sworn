@@ -8,6 +8,7 @@ const { TETO_DA_REFERENCIA } = require('./cegar.js');
  * scripts/referencia.js. A skill sozinha nao garante o formato (escada do "menos codigo"): o grau e a origem de cada
  * achado, o estado do que ficou sem saber e o tamanho que cabe no R.txt (cegar.js) se conferem aqui, antes de a ficha
  * entrar na `referencias`. Forma (texto do mock, prints-rea/mock-rea.png, secao 2):
+ *   ## Cobertura                | Camada | Cobertura | O que se leu |   (R2, D833)
  *   ## Achados                  | Camada | Achado | Origem | Grau | Quem agiu |
  *   ## O que ficou sem saber    | Pergunta | Estado | O que mediria |
  *   Não li: <o que ficou de fora da leitura>
@@ -15,6 +16,14 @@ const { TETO_DA_REFERENCIA } = require('./cegar.js');
 const GRAUS = ['observado', 'derivado', 'inferido'];
 const QUEM = ['agente', 'dono'];
 const ESTADOS = ['aberto', 'bloqueado', 'resolvido'];
+// R2 (D833, do craft-anything: crates/evidence/src/lib.rs:121-173): a cobertura de cada camada, e o padrao e
+// desconhecida - o que a ficha nao declara completo nao sustenta um "nao tem".
+const COBERTURAS = ['completa', 'parcial', 'desconhecida'];
+const COBERTURA = '## Cobertura';
+const CAB_COBERTURA = ['camada', 'cobertura', 'o que se leu'];
+// A evidencia de uma pergunta resolvida (unknown.rs:86 do original): arquivo:linha, endereco, print ou json, ou o
+// achado da ficha que a resolveu. O arquivo:linha pede nome com extensao: "as 10:30" nao e evidencia.
+const EVIDENCIA = /[\w-]\.[a-z]\w*:\d|https?:\/\/\S|[\w-]\.(png|jpe?g|json)\b|achado da linha \d/i;
 const ACHADOS = '## Achados';
 const SEM_SABER = '## O que ficou sem saber';
 const CAB_ACHADOS = ['camada', 'achado', 'origem', 'grau', 'quem agiu'];
@@ -114,6 +123,33 @@ function conferir(texto, opcoes) {
     if (s.c.length !== CAB_SEM_SABER.length) { problemas.push(p + 'a pergunta tem ' + s.c.length + ' colunas, e sao ' + CAB_SEM_SABER.length); continue; }
     if (ESTADOS.indexOf(valor(s.c[1])) === -1) problemas.push(p + 'pergunta sem estado (' + ESTADOS.join(', ') + ')');
     if (!temTexto(s.c[2])) problemas.push(p + 'pergunta sem o que mediria');
+    // R2: a resolvida cita a evidencia na hora de escrever (o original so confere depois, por ferramenta a parte)
+    else if (valor(s.c[1]) === 'resolvido' && !EVIDENCIA.test(s.c[2])) {
+      problemas.push(p + 'pergunta resolvida sem a evidencia (arquivo:linha, endereco, print ou json, ou "achado da linha N")');
+    } else if (valor(s.c[1]) === 'resolvido') {
+      // o "achado da linha N" tem de apontar para um achado: a ficha que cresce desloca as linhas
+      const re = /achado da linha (\d+)/gi;
+      for (let m = re.exec(s.c[2]); m; m = re.exec(s.c[2])) {
+        const n = Number(m[1]);
+        if (!(achados || []).some(function (a) { return a.n === n && !!a.c && a.c.length === CAB_ACHADOS.length; })) {
+          problemas.push(p + 'a linha ' + n + ' nao e um achado da ficha: cite o numero de uma linha da tabela "' + ACHADOS +
+            '", ou outra evidencia');
+        }
+      }
+    }
+  }
+  const cobertura = { completa: 0, parcial: 0, desconhecida: 0 };
+  const camadas = linhasDaSecao(linhas, COBERTURA, CAB_COBERTURA);
+  if (!camadas) problemas.push('falta a secao "' + COBERTURA + '" (| ' + CAB_COBERTURA.join(' | ') + ' |): o que nao se declarou e desconhecido');
+  else if (!camadas.length) problemas.push('nenhuma camada na secao "' + COBERTURA + '"');
+  for (const k of camadas || []) {
+    const p = 'linha ' + k.n + ': ';
+    if (!k.c) { problemas.push(p + SEM_BARRA); continue; }
+    if (k.c.length !== CAB_COBERTURA.length) { problemas.push(p + 'a camada tem ' + k.c.length + ' colunas, e sao ' + CAB_COBERTURA.length); continue; }
+    const v = valor(k.c[1]);
+    if (COBERTURAS.indexOf(v) === -1) { problemas.push(p + 'camada sem cobertura (' + COBERTURAS.join(', ') + ')'); continue; }
+    cobertura[v]++;
+    if (v !== 'completa' && !temTexto(k.c[2])) problemas.push(p + 'cobertura ' + v + ' sem o que se leu (quantos de quantos, o que ficou de fora)');
   }
   // REA: falta de cobertura e desconhecido. O "nao achei" so vale sobre o que se leu, e a ficha diz o que nao leu.
   if (!linhas.some(function (l) { const m = l.trim().match(/^N[ãa]o li:(.*)$/); return !!m && temTexto(m[1]); })) {
@@ -128,6 +164,8 @@ function conferir(texto, opcoes) {
     achados: (achados || []).length,
     semSaber: (semSaber || []).length,
     abertos: (semSaber || []).filter(function (s) { return !!s.c && valor(s.c[1] || '') === 'aberto'; }).length,
+    cobertura: cobertura,
+    naoCompleta: cobertura.parcial + cobertura.desconhecida,
     bytes: bytes
   }, radar);
 }
@@ -160,4 +198,4 @@ function naReferencia(antigo, tipo, rel) {
   return { config: config, erros: errosDaReferencia(config) };
 }
 
-module.exports = { GRAUS, QUEM, ESTADOS, ESFORCOS, VALORES, VEREDITOS, conferir, tipoDaFicha, naReferencia };
+module.exports = { GRAUS, QUEM, ESTADOS, COBERTURAS, ESFORCOS, VALORES, VEREDITOS, conferir, tipoDaFicha, naReferencia };

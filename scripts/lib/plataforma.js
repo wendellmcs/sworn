@@ -161,7 +161,7 @@ const PONTOS = [
     chave: 'caminho_especifico',
     classe: SO_NO_SISTEMA,
     titulo: 'Caminho relativo remontado pelo separador do sistema',
-    arquivos: ['scripts/apurar-ronda.js', 'scripts/drift.js', 'scripts/lib/cicatriz.js',
+    arquivos: ['scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/drift.js', 'scripts/lib/cicatriz.js',
                'scripts/lib/busca.js', 'scripts/lib/citacao.js', 'scripts/lib/contrato.js', 'scripts/medir-qualidade.js',
                'scripts/medir-travas.js'],
     comoSeProva: 'rodando a suite naquele sistema: o separador e o do proprio Node',
@@ -173,7 +173,7 @@ const PONTOS = [
     classe: INJETAVEL,
     titulo: 'Caminho do Windows normalizado para barra normal',
     arquivos: [
-      'scripts/apurar-ronda.js', 'scripts/conferir-depois.js', 'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
+      'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
       'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
       'scripts/lib/projeto.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',
       'scripts/lib/veredito.js', 'scripts/preparar-revisao.js'

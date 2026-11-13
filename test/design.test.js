@@ -965,3 +965,57 @@ test('E3: bordas da fonte e da cor - varias linhas, variavel, interpolacao, func
     assert.strictEqual(design.conferir('a { color: #000; }', { cores: ['rgb(' + '9'.repeat(60000) + 'x, 0, 0)'] }).ok, false);
   });
 });
+
+test('E3 item 2: conferirComputado confere o estilo calculado da tela pela mesma chave e com os desvios', () => {
+  const v = (propriedade, valor) => ({ propriedade, valor, quantos: 1, exemplo: 'p' });
+  const estilo = (...valores) => ({ valores, vistos: valores.length, cortado: false });
+  const sistema = { cores: ['#000', '#ffffff'], raios: ['8px', '.5rem'], espacos: [], sombras: [],
+    desvios: [{ arquivos: ['src/promo/**'], motivo: 'campanha', cores: ['#f00'], raios: ['3px'] }] };
+  const fora = (e, s, caminho) => design.conferirComputado(e, s || sistema, caminho).fora.map((f) => f.tipo + ' ' + f.valor);
+  // A cor e comparada pela chave: o rgb() do navegador casa o hex do sistema; o transparente nao conta.
+  const cores = design.conferirComputado(estilo(v('color', 'rgb(0, 0, 0)'), v('background-color', 'rgb(255, 255, 255)'),
+    v('border-color', 'rgba(255, 0, 0, 0)'), v('color', 'rgb(255, 0, 0)')), sistema);
+  assert.deepStrictEqual(cores.fora.map((f) => f.tipo + ' ' + f.valor), ['cor rgb(255, 0, 0)'], 'o rgb() nao casou o hex do sistema');
+  assert.strictEqual(cores.conferidos, 3, 'o transparente nao e conferido; as outras tres cores, sim');
+  // O raio em px casa o raio do sistema em px e em rem (16 px); o canto eliptico e a porcentagem nao se leem. Os dois
+  // 8px sao dois itens: `conferidos` conta itens, nao a soma de `quantos`.
+  const raios = design.conferirComputado(estilo(v('border-radius', '8px'), v('border-radius', '8px'), v('border-radius', '3px'),
+    v('border-radius', '8px 4px'), v('border-radius', '50%')), sistema);
+  assert.deepStrictEqual(raios.fora.map((f) => f.valor), ['3px'], 'o raio fora do sistema nao e so o de 3px');
+  assert.strictEqual(raios.naoLidos, 2, 'o canto eliptico e a porcentagem tem de ir para naoLidos');
+  assert.strictEqual(raios.conferidos, 3);
+  assert.deepStrictEqual(fora(estilo(v('border-radius', '8px')), { cores: [], raios: ['.5rem'] }), [],
+    'o raio de 8px nao casou o .5rem do sistema');
+  // O desvio da tela soma a ela: com o caminho dele, o vermelho e o raio de 3px valem; sem caminho, ou com o de outra
+  // tela, so o sistema vale.
+  const daPromo = estilo(v('color', 'rgb(255, 0, 0)'), v('border-radius', '3px'));
+  assert.deepStrictEqual(fora(daPromo, sistema, 'src/promo/a.css'), [], 'o desvio da tela nao valeu com o caminho dela');
+  for (const outro of [null, 'src/outra/a.css']) {
+    assert.deepStrictEqual(fora(daPromo, sistema, outro), ['cor rgb(255, 0, 0)', 'medida 3px'],
+      'o desvio da promo valeu com o caminho ' + outro);
+  }
+  // A cor noutro espaco (oklch) nao se converte: vai para naoLidos, nao para fora.
+  const oklch = design.conferirComputado(estilo(v('color', 'oklch(0.5 0.1 200)')), sistema);
+  assert.deepStrictEqual([oklch.ok, oklch.naoLidos], [true, 1], 'a cor oklch nao foi para naoLidos');
+  // A chave de reserva que comeca com `rgba(` (calc() dentro) tambem nao e cor lida.
+  const comCalc = design.conferirComputado(estilo(v('color', 'rgba(255 0 0 / calc(.5))')), sistema);
+  assert.deepStrictEqual([comCalc.ok, comCalc.naoLidos, comCalc.conferidos], [true, 1, 0], 'a cor com calc() foi conferida');
+  // Sem "raios" no sistema, o raio nao e conferido; sem "tamanhos", o tamanho de fonte tambem nao; sem "fontes", a fonte nao.
+  const semChaves = { cores: ['#000'] };
+  assert.deepStrictEqual(fora(estilo(v('border-radius', '3px'), v('font-size', '13px'), v('font-family', 'Comic Sans')), semChaves), []);
+  // Com "tamanhos" e "fontes": o tamanho em px (e em rem) e a primeira familia da pilha; a generica sempre vale.
+  const comFonte = { cores: [], tamanhos: ['14px', '1rem'], fontes: ['Inter'] };
+  assert.deepStrictEqual(fora(estilo(v('font-size', '14px'), v('font-size', '16px'), v('font-size', '13.3333px'),
+    v('font-family', 'Inter, sans-serif'), v('font-family', '"Comic Sans", Inter'), v('font-family', 'sans-serif')), comFonte),
+  ['medida 13.3333px', 'fonte "Comic Sans", Inter']);
+  // Raios so com medida que nao vira px nao ligam a conferencia; o `tipo` do item nao troca o da conferencia; a
+  // familia ilegivel conta em naoLidos.
+  assert.deepStrictEqual(fora(estilo(v('border-radius', '8px')), { cores: [], raios: ['50%'] }), []);
+  assert.deepStrictEqual(design.conferirComputado({ valores: [Object.assign(v('color', 'rgb(1, 2, 3)'), { tipo: 'x' })] },
+    sistema).fora.map((f) => f.tipo), ['cor']);
+  assert.strictEqual(design.conferirComputado(estilo(v('font-family', '""')), comFonte).naoLidos, 1);
+  // Sem sistema, ou com o estilo vazio ou torto: nada fora, sem lancar.
+  assert.deepStrictEqual(design.conferirComputado(estilo(v('color', 'rgb(1, 2, 3)')), null).fora, []);
+  assert.deepStrictEqual(design.conferirComputado(null, sistema), { ok: true, fora: [], naoLidos: 0, conferidos: 0 });
+  assert.deepStrictEqual(design.conferirComputado({ valores: [null, { propriedade: 'color' }] }, sistema).fora, []);
+});

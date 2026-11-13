@@ -87,6 +87,13 @@ One sheet per type of deliverable, with the 2-3 products together, in
 Estudo de <data hora>. Tipo do projeto: <tipo>. Líderes pela <busca pública, hora>: <produto> (<endereço do repositório ou do site>, commit <sha>), ...
 Camadas: <quais>.
 
+## Cobertura
+
+| Camada | Cobertura | O que se leu |
+|---|---|---|
+| 3 textos | parcial | <quantos de quantos, o que ficou de fora> |
+| 1 o que se vê | desconhecida | <por que não deu para medir> |
+
 ## Achados
 
 | Camada | Achado | Origem | Grau | Quem agiu |
@@ -110,9 +117,18 @@ Não li: <o que ficou de fora da leitura>.
 - **Who acted (`Quem agiu`):** `agente` (the command opened, navigated, downloaded) or `dono` (they opened the tab, logged in,
   clicked). The agent's action is always declared.
 - **What is still unknown (`O que ficou sem saber`):** `aberto` can be measured; `bloqueado` depends on something outside (install,
-  login, the owner's yes); `resolvido` was measured later, and the row keeps what was measured.
+  login, the owner's yes); `resolvido` was measured later, and the row keeps what was measured and cites the evidence:
+  an `arquivo:linha`, an address, a print or a json, or "achado da linha N" (the finding of the sheet that settled it).
+  The script refuses a `resolvido` without one, and a "achado da linha N" whose line N is not a finding of the sheet
+  (adding rows above a finding moves its line: update the number).
+- **Coverage (`Cobertura`):** one row per layer studied, saying how much of it was read. `completa` read all of it,
+  and "O que se leu" may stay empty;
+  `parcial` read part of it, and "O que se leu" says how much of how much and what was left out; `desconhecida` is
+  the layer nobody could measure, and "O que se leu" says why. A layer missing from the table is unknown, never
+  complete: the script refuses the sheet without the section, and its output counts the layers not `completa`
+  (`naoCompleta`).
 - **"Not found" only holds for what was read.** Not finding it in what was read is not saying it does not exist:
-  without full coverage, the absence becomes a question in "what is still unknown". The `Não li:` line says
+  in a layer that is not `completa` in `## Cobertura`, the absence becomes a question in "what is still unknown". The `Não li:` line says
   what was left out.
 
 With `projeto.json` on disk, the scope gate (lock 4) may deny the Write of the sheet: before
