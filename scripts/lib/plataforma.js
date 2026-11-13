@@ -103,7 +103,7 @@ const PONTOS = [
     classe: SO_NO_SISTEMA,
     titulo: 'Deducao do sistema e do idioma de shell',
     arquivos: ['scripts/autorizar-paralelo.js', 'scripts/capturar-tela.js', 'scripts/lib/admissao.js', 'scripts/lib/glob.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
-               'scripts/lib/plataforma.js', 'scripts/lib/projeto.js', 'scripts/lib/prova-no-fecho.js', 'scripts/lib/saude.js',
+               'scripts/lib/pastas.js', 'scripts/lib/plataforma.js', 'scripts/lib/projeto.js', 'scripts/lib/prova-no-fecho.js', 'scripts/lib/saude.js',
                'scripts/lib/varredura.js', 'scripts/marcar-trabalho.js', 'scripts/medir-qualidade.js'],
     comoSeProva: 'rodando a suite naquele sistema: quem responde e o proprio Node',
     ressalva: 'a CONSEQUENCIA da deducao e injetavel e esta exercitada - ver tabela_de_plataforma ' +
@@ -122,8 +122,10 @@ const PONTOS = [
     chave: 'pasta_temporaria',
     classe: INJETAVEL,
     titulo: 'Onde o estado de sessao e gravado',
-    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/lib/estado.js', 'scripts/preparar-revisao.js'],
-    comoSeProva: 'SWORN_TMP sobrepoe a pasta temporaria do sistema, e a suite inteira usa essa porta',
+    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/lib/estado.js', 'scripts/lib/pastas.js',
+               'scripts/preparar-revisao.js'],
+    comoSeProva: 'SWORN_TMP sobrepoe a pasta temporaria do sistema, e a suite inteira usa essa porta; no pastas.js, ' +
+                 'a do proprio Node, que TEMP no Windows e TMPDIR fora dele sobrepoem',
     ressalva: 'o caminho PADRAO, quando ninguem sobrepoe, e diferente nos tres sistemas ' +
               'e so se ve naquele sistema. O que se prova aqui e que a sobreposicao manda.'
   },
@@ -146,7 +148,7 @@ const PONTOS = [
     classe: SO_NO_SISTEMA,
     titulo: 'Chamada de processo externo sem shell (o git; o navegador da captura de tela)',
     arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/drift.js', 'scripts/exportar.js', 'scripts/lib/busca.js', 'scripts/lib/git.js',
-               'scripts/lib/prova-no-fecho.js',
+               'scripts/lib/pastas.js', 'scripts/lib/prova-no-fecho.js',
                'scripts/lib/sanitacao.js', 'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/ponte.js',
                'scripts/preparar-revisao.js', 'scripts/lib/tela-cega.js', 'scripts/revisar-plano.js', 'scripts/vigia-puxar.js'],
     comoSeProva: 'rodando naquele sistema com git instalado (e o Chrome ou o Edge, para a captura de tela)',
@@ -172,7 +174,7 @@ const PONTOS = [
     titulo: 'Caminho do Windows normalizado para barra normal',
     arquivos: [
       'scripts/apurar-ronda.js', 'scripts/conferir-depois.js', 'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
-      'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
+      'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
       'scripts/lib/projeto.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',
       'scripts/lib/veredito.js', 'scripts/preparar-revisao.js'
     ],

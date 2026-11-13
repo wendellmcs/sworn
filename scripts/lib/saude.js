@@ -332,6 +332,8 @@ const BALDES_DE_BLOQUEIO = [
   'estilo_por_shell',
   // F3d (D828): comando com armadilha do shell (heredoc que come a barra, grep -c antes de &&, grep -P no Git Bash).
   'armadilha_shell',
+  // R1: comando que rodaria codigo do clone de estudo de uma referencia (scripts/lib/pastas.js).
+  'codigo_do_estudo',
   // F6-04: nome de frente invalido e "Fora" declarado tinham o balde fora_do_escopo; agora cada um tem o seu.
   'frente_invalida', 'fora_declarado',
   // D412: handoff gravado no turno sem o prompt no chat.

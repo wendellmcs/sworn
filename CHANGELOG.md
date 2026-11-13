@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.28.0 — a referência estudada pelo código inteiro, e o sworn limpa o que sobra
+
+**Novo**
+
+- **O estudo de uma referência lê o repositório inteiro, não só a página.** Ler pelo site devolve um resumo, uma
+  página por vez. Agora o `/sworn:radar` e o `/sworn:reference` baixam a referência com
+  `node scripts/pastas.js --estudar https://github.com/<dono>/<repo>`: uma cópia rasa (só a versão atual, sem tags
+  nem submódulos), numa pasta nova da pasta temporária do sistema. A busca corre na base inteira, e cada achado cita
+  `arquivo:linha` do commit lido. A cópia é só para ler: o sworn recusa o comando que rodaria código dela (instalar,
+  construir, rodar o teste, chamar um script dela), e o aviso diz o porquê e o que fazer. É uma trava contra o
+  engano, não uma caixa fechada contra quem quer rodar o código.
+- **O sworn apaga sozinho as pastas que ele mesmo criou.** A cópia de estudo, o export e o worktree de uma
+  publicação, a pasta de uma prova: cada uma entra num registro do sworn quando nasce. O export e o worktree de
+  origem saem depois do push publicado. A cópia de estudo e as outras pastas saem no fim da sessão que as criou, ou 7
+  dias depois, se a sessão nunca fechou. Só sai o que está no registro, dentro da pasta temporária do sistema, e
+  ainda é a mesma pasta que se registrou. O que ainda se usa fica: mudança sem commit, commit sem push, ou a pasta
+  em que você está trabalhando. Para ver o registro: `node scripts/pastas.js --listar`.
+- Para quem mantém o plugin: são **46 baldes** de contador: 29 que negam, 17 que só contam (o novo é
+  `codigo_do_estudo`).
+
 ## 0.27.0 — a conversa se resume sozinha logo depois do handoff
 
 **Corrigido**

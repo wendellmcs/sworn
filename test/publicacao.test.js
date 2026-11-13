@@ -393,6 +393,8 @@ const TRAVA_DO_BALDE = {
   fora_do_escopo: 4, sem_escopo: 4, intocavel: 4, frente_invalida: 4, fora_declarado: 4,
   comando_destrutivo: 5, shell_idioma_errado: 5, outra_frente: 5, cd_solto: 5, restaurou_fora_do_escopo: 5,
   armadilha_shell: 5,
+  // R1: o comando que rodaria codigo do clone de estudo, negado pelo portao-destrutivo
+  codigo_do_estudo: 5,
   agente_caro_em_marcha_rapida: 6, criou_sem_buscar: 7, catraca_afrouxada: 8,
   // D678 T2: o mesmo portao-agente da trava 6, quando a chamada foge da tabela dos degraus
   chamada_fora_da_tabela: 6,

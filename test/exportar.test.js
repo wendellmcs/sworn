@@ -45,7 +45,8 @@ function origem() {
 function exportar(raiz, destino, extra) {
   return spawnSync(process.execPath,
     [SCRIPT, '--raiz', raiz, '--destino', destino].concat(extra || []),
-    { encoding: 'utf8', timeout: 60000 });
+    // R1: o registro das pastas do sworn fica na pasta de config isolada, nunca na da maquina
+    { encoding: 'utf8', timeout: 60000, env: require('./lib/comum.js').ambiente() });
 }
 
 function arquivosDe(dir, base, acc) {
@@ -302,4 +303,29 @@ test('A4-exp-2: destino que e arquivo, ou que passa por um, sai 2 com a causa, s
     assert.strictEqual(/\n\s+at /.test(r.stderr), false, 'excecao crua: ' + r.stderr);
     assert.strictEqual(r.stdout.indexOf('Copiados'), -1, r.stdout);
   });
+});
+
+// R1 (pedido do dono, 2026-11-12): o export entra no registro das pastas do sworn e sai sozinho depois do push; a
+// origem que e um worktree ligado entra junto, ligada a ele.
+test('R1: o export e o worktree de origem entram na limpeza do sworn, ligados', () => {
+  const pastas = require('../scripts/lib/pastas.js');
+  const env = require('./lib/comum.js').ambiente();
+  const repo = origem();
+  const wt = path.join(pasta('wt'), 'wt');
+  spawnSync('git', ['worktree', 'add', '-q', '--detach', wt], { cwd: repo, encoding: 'utf8' });
+  const para = path.join(pasta('destino'), 'novo');
+  const r = exportar(wt, para, ['--gravar']);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /entrou na limpeza do sworn: sai sozinho depois do push publicado, e o worktree de origem com ele/);
+  const lista = pastas.listar(env);
+  const exp = lista.find((x) => x.caminho === fs.realpathSync.native(para));
+  const doWt = lista.find((x) => x.caminho === fs.realpathSync.native(wt));
+  assert.ok(exp && exp.tipo === 'export', JSON.stringify(lista));
+  assert.ok(doWt && doWt.tipo === 'worktree' && doWt.repo === fs.realpathSync.native(repo), JSON.stringify(lista));
+  assert.strictEqual(exp.origem, doWt.caminho);
+  // controle: a origem que e o proprio repositorio nao entra como worktree
+  const para2 = path.join(pasta('destino'), 'novo');
+  const r2 = exportar(repo, para2, ['--gravar']);
+  assert.match(r2.stdout, /sai sozinho depois do push publicado\./);
+  assert.ok(!pastas.listar(env).some((x) => x.caminho === fs.realpathSync.native(repo)));
 });

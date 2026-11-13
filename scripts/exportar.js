@@ -113,6 +113,37 @@ function montar(raiz, destino) {
   return { copiados: copiados, faltaram: faltaram, previstos: arquivos.length, falhaGit: falhaGit };
 }
 
+/**
+ * R1 (pedido do dono, 2026-11-12: limpar o que sobra depois do push): o export entra no registro das pastas do sworn
+ * (scripts/lib/pastas.js) e sai sozinho depois de publicado; a origem que e um worktree ligado (o --git-dir difere do
+ * --git-common-dir) entra junto e sai com ele. So pasta da temporaria do sistema entra; a frase diz o que ficou.
+ */
+function registrarNaLimpeza(raiz, destino) {
+  try {
+    const pastas = require('./lib/pastas.js');
+    const sessao = process.env.CLAUDE_CODE_SESSION_ID || '';
+    const dirs = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir'],
+      { cwd: raiz, encoding: 'utf8', timeout: 20000, windowsHide: true });
+    const [gitDir, gitComum] = dirs.status === 0 ? dirs.stdout.trim().split(/\r?\n/) : [];
+    let wt = null;
+    if (gitDir && gitComum && path.resolve(gitDir) !== path.resolve(gitComum)) {
+      // o repositorio de que o worktree saiu: a pasta acima do .git, ou o proprio, quando e um repositorio bare
+      const repo = path.basename(gitComum) === '.git' ? path.dirname(gitComum) : gitComum;
+      wt = pastas.registrar(raiz, 'worktree', { sessao: sessao, repo: repo });
+    }
+    const exp = pastas.registrar(destino, 'export', { sessao: sessao, origem: wt && wt.ok ? raiz : undefined });
+    if (!exp.ok) return 'O export NAO entrou na limpeza do sworn (' + exp.erro + '): apague-o voce depois do push.';
+    return 'O export entrou na limpeza do sworn: sai sozinho depois do push publicado' +
+      (wt !== null ? (wt.ok ? ', e o worktree de origem com ele.' :
+        '; o worktree de origem nao entrou (' + wt.erro + '): tire-o com git worktree remove depois.') :
+        dirs.status === 0 ? '.' : '; o git nao disse se a origem e um worktree (' +
+          String(dirs.stderr || (dirs.error && dirs.error.message) || '').trim().slice(0, 200) + '): se for, tire-o com ' +
+          'git worktree remove depois.');
+  } catch (e) {
+    return 'O export NAO entrou na limpeza do sworn (' + ((e && e.message) || e) + '): apague-o voce depois do push.';
+  }
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const raizPedida = argumento(argv, '--raiz') || '.';
@@ -182,6 +213,7 @@ function main() {
     process.exit(1);
   }
   console.log('`git init` e `git add` feitos. NENHUM commit - isso e o ato irreversivel.');
+  console.log(registrarNaLimpeza(raiz, destino));
   console.log('');
   // R3f: a sanitacao confere a identidade que vai assinar o commit (sem nada configurado, o git inventa uma com o
   // nome completo da conta do sistema). Por isso a identidade publica vem PRIMEIRO, e a sanitacao roda de novo depois

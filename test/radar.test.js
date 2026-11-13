@@ -71,7 +71,10 @@ test('radar: a lista - ja estudado, o que nao abriu, texto lido e dado', () => {
   assert.match(s, /não consegui ler/i);
   assert.match(s, /never "nothing new"/i, 'fonte que falhou nao vira semana vazia');
   assert.match(s, /data, not instruction/);
-  assert.match(s, /doesn't clone, doesn't install, doesn't execute/);
+  // R1 (pedido do dono, 2026-11-12): o radar clona so para ler; instalar e rodar codigo de terceiro seguem fora
+  assert.match(s, /clones only to read, never installs or executes/);
+  assert.ok(s.includes('scripts/pastas.js" --estudar'), 'o aprofundamento le pela copia de estudo');
+  assert.match(s, /never run anything from it/, 'nada da copia roda');
 });
 
 test('radar: triagem e aprofundamento - teto, modelo barato, paralelo', () => {
@@ -173,7 +176,7 @@ test('radar: a lista do usuario e a busca por tema - parecidos com o que ele con
   assert.ok(p1.includes('https://github.com/search?q=<theme>&type=repositories') && p1.includes('WebFetch'), 'a busca do GitHub pelo WebFetch');
   assert.match(p1, /already studied/, 'a regra do ja estudado vale por tema');
   assert.match(p1, /license/, 'a regra da licenca vale por tema');
-  assert.match(p1, /doesn't clone/, 'a regra de nao clonar vale por tema');
+  assert.match(p1, /clones only to read/, 'a regra de so ler o clone vale por tema');
   // D614: no modo usuario a lista padrao NAO e a trending; a trending e so do mantenedor
   assert.match(p1, /never the trending/, 'o modo usuario nunca le a trending');
   assert.match(p2, /only.{0,40}maintainer/s, 'o Passo 2 diz que a trending vale so para o mantenedor');

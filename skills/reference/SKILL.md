@@ -56,7 +56,11 @@ code or art — the sheet keeps the pattern and where it came from.
    product: only with the owner's yes, in a test folder. Without the yes, or with an install that fails, the
    layer goes to "what is still unknown" as `bloqueado`.
 3. **texts** — what the product says: README, messages, help, errors. The origin is `arquivo:linha` of the
-   commit read (state the commit).
+   commit read (state the commit). Read them from a study copy: `node "${CLAUDE_PLUGIN_ROOT}/scripts/pastas.js" --estudar https://github.com/<dono>/<repo>` returns the folder and
+   the commit read. Nothing in it runs (sworn's lock 5 refuses running the copy's code), and sworn deletes it at the
+   end of the session. You clone, before dispatching the reader agents, and pass each one the folder. A clone that
+   is refused or fails (private repository, no public git repository, network, timeout): read the texts from the
+   public pages instead, and the `Não li:` line says the clone failed and why.
 4. **network and performance** — DevTools, observing only. It applies only to products with a web screen; for the
    rest, say it does not apply.
 
@@ -148,6 +152,7 @@ stays as it was, and so does the sheet.
 
 - **Does not copy code or art.** It keeps the pattern and where it came from.
 - **Does not log in or use credentials.** With login, only the tab the owner opened.
+- **Does not run code from the study copy.** It only reads it; sworn deletes the copy.
 - **Does not install a third-party product** without the owner's yes. When the study feeds sworn itself, the
   product installed is only to compare against sworn's own version, never a dependency of the plugin (owner's decision).
 - **Does not swap the reference on its own.** Without the yes, `referencias` stays as it was.

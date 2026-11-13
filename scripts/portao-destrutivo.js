@@ -229,6 +229,16 @@ io.blindar(function () {
       return io.negarFerramenta(armadilhas.motivo(comando, achadas));
     }
 
+    // R1 (pedido do dono, 2026-11-12): o clone de estudo de uma referencia e so para ler; o comando que rodaria codigo
+    // dele (o script, o interprete com o script, o gerenciador de pacote na pasta dele) nao roda. Mesmo lugar e mesma
+    // liberacao das armadilhas, acima. O registro que nao se le nao barra nada (pastas.executaNoEstudo).
+    const pastas = require('./lib/pastas.js');
+    const estudo = pastas.executaNoEstudo(comando, e.cwd || process.cwd());
+    if (estudo) {
+      try { estado.incrementar(e.session_id, 'codigo_do_estudo'); } catch (err) { /* o balde vale menos que a negacao */ }
+      return io.negarFerramenta(pastas.motivoDoEstudo(comando, estudo));
+    }
+
     const r = destrutivo.classificar(comando, projeto);
     // A5b (s369): o escopo ampliado neste turno nao vale para apagar (o da abertura do turno vale); o turno seguinte,
     // aberto pela mensagem do dono, libera.
