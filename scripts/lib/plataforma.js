@@ -147,7 +147,7 @@ const PONTOS = [
     chave: 'processo_externo',
     classe: SO_NO_SISTEMA,
     titulo: 'Chamada de processo externo sem shell (o git; o navegador da captura de tela)',
-    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/drift.js', 'scripts/exportar.js', 'scripts/lib/busca.js', 'scripts/lib/git.js',
+    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/conferir-tela.js', 'scripts/drift.js', 'scripts/exportar.js', 'scripts/lib/busca.js', 'scripts/lib/git.js',
                'scripts/lib/pastas.js', 'scripts/lib/prova-no-fecho.js',
                'scripts/lib/sanitacao.js', 'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/ponte.js',
                'scripts/preparar-revisao.js', 'scripts/lib/tela-cega.js', 'scripts/revisar-plano.js', 'scripts/vigia-puxar.js'],

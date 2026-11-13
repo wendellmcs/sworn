@@ -516,6 +516,8 @@ function motivoDoResultado(e, projeto, s) {
   const prova = provaDe(projeto);
   const t = comProvaDoGancho(e, s, lerTranscript(e, prova, projeto), prova);
   if (!t) return null;
+  // R2b: a conferencia da tela que saiu 1 barra o pronto ate uma que saia 0, mesmo com outro teste verde depois.
+  if (t.ultimaConferencia && t.ultimaConferencia.falhou) return evidencia.motivoConferenciaVermelha(t.ultimaConferencia.comando);
   if (t.ultimoTeste && t.ultimoTeste.falhou) return evidencia.motivoTesteVermelho(t.ultimoTeste.comando);
   if (t.provaRodando) return evidencia.motivoProvaRodando(projeto.provaDePronto);
   if (t.provaPendente) return evidencia.motivoProvaNaoRodou(projeto.provaDePronto);

@@ -142,7 +142,8 @@ test('evidencia D785: saida com spawn EPERM manda a prova sem processo filho, em
 // A3-10 (pedido 12): citado() fazia String(null) e o motivo trazia "null", onde semBlocos e analisar dao ''.
 test('evidencia A3-10: comando ausente nao vira "null" nem "undefined" no motivo', () => {
   for (const v of [null, undefined]) {
-    for (const m of [ev.motivoTesteVermelho(v), ev.motivoProvaNaoRodou(v), ev.motivoDoLaco('pendente', v, 1)]) {
+    for (const m of [ev.motivoTesteVermelho(v), ev.motivoConferenciaVermelha(v), ev.motivoProvaNaoRodou(v),
+      ev.motivoDoLaco('pendente', v, 1)]) {
       assert.ok(!/null|undefined/.test(m), m);
     }
   }
@@ -339,6 +340,7 @@ test('evidencia D656: o motivo ensina tambem a frase em ingles que libera', () =
   assert.strictEqual(ev.deveBloquearPorFalha('Implemented, but the date test still fails.' + bloco), false);
   assert.strictEqual(ev.deveBloquearPorFalha('Implemented. I did not run the full suite.' + bloco), false);
   assert.ok(/"still fails"/.test(ev.motivoTesteVermelho('npm test')), 'o motivo do teste vermelho usa a mesma pergunta');
+  assert.ok(/"still fails"/.test(ev.motivoConferenciaVermelha('node scripts/conferir-tela.js')), 'e o da conferencia da tela tambem');
 });
 
 test('evidencia D634: MOTIVO_FALHA e ASCII (R5), diz o que fazer e traz a regra do teste instavel', () => {

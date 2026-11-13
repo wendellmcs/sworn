@@ -52,6 +52,10 @@ code or art — the sheet keeps the pattern and where it came from.
    goes to "what is still unknown" as `bloqueado`, with what would measure it. The photo is only valid with the
    content on screen, not with the page still loading. If all products are blocked in one
    layer, ask the owner in 3 options: go on with the other layers, try again later or stop.
+   Keep the address of each page photographed in the finding's origin: `/sworn:review` uses it to measure the work
+   against that page width by width (`scripts/conferir-tela.js`). Keep the part of the query string or after `#`
+   that picks the page (`?tab=pricing`, `#/pricing`) and drop each value that carries a secret (a token, a key, a
+   session, a login code), writing `[segredo]` in its place.
 2. **states and flows** — empty, loading, error, the path of use. It requires installing or using the
    product: only with the owner's yes, in a test folder. Without the yes, or with an install that fails, the
    layer goes to "what is still unknown" as `bloqueado`.

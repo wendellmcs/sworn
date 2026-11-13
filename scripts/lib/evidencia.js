@@ -195,6 +195,20 @@ function motivoTesteVermelho(comando) {
   ].concat(PERGUNTA_FINAL).join('\n');
 }
 
+// R2b: a ultima conferencia da tela contra a referencia (scripts/conferir-tela.js) saiu 1 - alguma medida ficou sem
+// comparar, ou a chamada errou. Rodar outro teste depois nao apaga: so a conferencia que sai 0 libera.
+function motivoConferenciaVermelha(comando) {
+  return [
+    'sworn - portao de fecho (trava 3).',
+    '',
+    'Voce afirmou sucesso, mas a ultima conferencia da tela contra a referencia saiu 1:',
+    '  ' + citado(comando),
+    '',
+    'Alguma medida ficou sem comparar (listada em naoComparado do conferencia.json) ou a chamada errou.',
+    'O que nao se comparou nunca conta como igual.'
+  ].concat(PERGUNTA_FINAL).join('\n');
+}
+
 function motivoProvaNaoRodou(prova) {
   return [
     'sworn - portao de fecho (trava 3).',
@@ -371,5 +385,5 @@ const MOTIVO = [
 
 module.exports = { ALEGACOES, NAO_RODOU, semBlocos, analisar, deveBloquear, MOTIVO, blocosDeSaida,
   textoMostraFalha, deveBloquearPorFalha, declaraRessalva, declaraSemRevisao, MOTIVO_FALHA, motivoTesteVermelho,
-  motivoProvaNaoRodou, motivoProvaRodando, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox, alegaCausa,
+  motivoConferenciaVermelha, motivoProvaNaoRodou, motivoProvaRodando, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox, alegaCausa,
   deveBloquearPorCausa, MOTIVO_CAUSA };

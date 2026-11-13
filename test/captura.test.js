@@ -341,6 +341,61 @@ test('E3 item 2: o aviso do estilo diz o que fazer, e o desvio so vale com --arq
   assert.strictEqual(avisoDoEstilo({ feita: false, fora: [1] }, null), '');
 });
 
+test('R2b: sem resposta do navegador ao estilo, o layout nem e pedido e diz a largura', async function () {
+  const { lerEstiloELayout } = require('../scripts/capturar-tela.js');
+  const pedidos = [];
+  const mudo = { enviar: function (m, p, s, passo) {
+    pedidos.push(passo);
+    return Promise.reject(new Error('o navegador nao respondeu ao ' + passo + ' em 60 s. Rode de novo; se repetir, ' +
+      'feche outras janelas do navegador ou aponte SWORN_NAVEGADOR para outro Chrome ou Edge.'));
+  } };
+  const { layout } = await lerEstiloELayout(mudo, 's', 768);
+  assert.deepStrictEqual(pedidos, ['ler o estilo calculado']);
+  assert.match(layout.erro, /^nao deu para medir o layout: o navegador nao respondeu a leitura do estilo, e a medida do layout nem foi pedida\. /);
+  assert.match(layout.erro, /nao compara a largura de 768 px: confira o layout na foto/);
+  // Com outro motivo no estilo (a pagina lancou um erro), o layout e pedido.
+  const lancou = { enviar: function (m, p, s, passo) {
+    pedidos.push(passo);
+    return Promise.resolve({ exceptionDetails: { text: 'boom' } });
+  } };
+  pedidos.length = 0;
+  const comErro = await lerEstiloELayout(lancou, 's', 390);
+  assert.deepStrictEqual(pedidos, ['ler o estilo calculado', 'medir o layout']);
+  assert.match(comErro.layout.erro, /^nao deu para medir o layout: .*nao compara a largura de 390 px/);
+  // O estilo lancou e o layout ficou sem resposta: o layout diz o motivo dele, nao o do estilo.
+  const soOLayoutMudo = { enviar: function (m, p, s, passo) {
+    if (passo === 'ler o estilo calculado') return Promise.resolve({ exceptionDetails: { text: 'boom' } });
+    return Promise.reject(new Error('o navegador nao respondeu ao ' + passo + ' em 60 s. Rode de novo.'));
+  } };
+  const mudoNoLayout = await lerEstiloELayout(soOLayoutMudo, 's', 1440);
+  assert.match(mudoNoLayout.layout.erro, /^nao deu para medir o layout: o navegador nao respondeu ao medir o layout em 60 s/);
+  assert.match(mudoNoLayout.layout.erro, /nao compara a largura de 1440 px/);
+});
+
+test('R2b: depois que o navegador fecha, o comando falha na hora, sem esperar o prazo', async function () {
+  const { conectar } = require('../scripts/capturar-tela.js');
+  const original = globalThis.WebSocket;
+  const enviados = [];
+  let ws = null;
+  globalThis.WebSocket = class {
+    constructor() { ws = this; this.ouvintes = {}; setImmediate(() => this.ouvintes.open()); }
+    addEventListener(nome, fn) { this.ouvintes[nome] = fn; }
+    send(m) { enviados.push(m); }
+    close() {}
+  };
+  try {
+    const cdp = await conectar('ws://127.0.0.1:1/x');
+    const noMeio = cdp.enviar('Runtime.evaluate', {}, 's', 'ler o estilo calculado');
+    ws.ouvintes.close();
+    await assert.rejects(noMeio, /^Error: o navegador fechou no meio de ler o estilo calculado\. Rode de novo/);
+    const inicio = Date.now();
+    await assert.rejects(cdp.enviar('Runtime.evaluate', {}, 's', 'medir o layout'),
+      /^Error: o navegador fechou antes de medir o layout\. Rode de novo/);
+    assert.ok(Date.now() - inicio < 5000, 'o comando depois do fechamento esperou o prazo');
+    assert.strictEqual(enviados.length, 1, 'o comando depois do fechamento foi mandado a um socket fechado');
+  } finally { globalThis.WebSocket = original; }
+});
+
 test('E3 item 2: a conferencia le o design.json da pasta onde roda, e o --arquivo vira o caminho a partir dela', function (t) {
   const { conferenciaDoEstilo } = require('../scripts/capturar-tela.js');
   const dir = pastaTemporaria(t);
@@ -391,6 +446,38 @@ test('E3 item 2: o exemplo de 80 caracteres vai inteiro, e o de 81 e cortado em 
   const exemplo = function (n) { return captura.resumirEstilo({ valores: [['color', 'red', 1, 'p'.repeat(n)]] }).valores[0].exemplo; };
   assert.strictEqual(exemplo(80), 'p'.repeat(80));
   assert.strictEqual(exemplo(81), 'p'.repeat(77) + '...');
+});
+
+test('R2b: resumirLayout passa so a forma esperada das medidas, e o resto vira ilegivel', function () {
+  const bom = { janela: 1440, pagina: 1440, tipos: { h1: 40, h2: null, corpo: 16 }, coluna: 1100,
+    blocos: [['header', 1], ['section', 3]], cortado: false, titulo: 'texto da pagina' };
+  assert.deepStrictEqual(captura.resumirLayout(bom), { janela: 1440, pagina: 1440, rolagemLateral: false,
+    tipos: { h1: 40, h2: null, corpo: 16 }, coluna: 1100,
+    blocos: [{ tag: 'header', porLinha: 1 }, { tag: 'section', porLinha: 3 }], cortado: false },
+  'a forma esperada passa inteira, e o que a pagina mandou a mais (o titulo) fica de fora');
+  const r = captura.resumirLayout(Object.assign({}, bom, { pagina: 1500, coluna: null, blocos: [], cortado: true }));
+  assert.strictEqual(r.rolagemLateral, true, 'a pagina mais larga que a janela rola de lado');
+  assert.strictEqual(r.coluna, null, 'sem coluna de largura maxima, null');
+  assert.strictEqual(r.cortado, true);
+  assert.deepStrictEqual(captura.resumirLayout({ semCorpo: true, janela: 'x' }), { semCorpo: true },
+    'o documento sem body diz so isso');
+  const torto = function (o) { return Object.assign({}, bom, o); };
+  const blocosDoTeto = function (n) { return Array.from({ length: n }, function () { return ['section', 1]; }); };
+  const blocos61 = blocosDoTeto(captura.BLOCOS_DO_LAYOUT + 1);
+  assert.strictEqual(captura.resumirLayout(torto({ blocos: blocosDoTeto(captura.BLOCOS_DO_LAYOUT) })).blocos.length,
+    captura.BLOCOS_DO_LAYOUT, 'exatamente o teto de blocos ainda se le');
+  for (const [nome, entrada] of [['nulo', null], ['texto', 'texto'], ['lista', []],
+    ['janela em texto', torto({ janela: '1440' })], ['janela negativa', torto({ janela: -1 })],
+    ['pagina enorme', torto({ pagina: 1e308 })], ['medida quebrada', torto({ coluna: 1100.5 })],
+    ['sem tipos', torto({ tipos: undefined })], ['tipo em texto', torto({ tipos: { h1: '40px', h2: null, corpo: 16 } })],
+    ['fonte enorme', torto({ tipos: { h1: 1e300, h2: null, corpo: 16 } })], ['sem blocos', torto({ blocos: 'x' })],
+    ['tag desconhecida', torto({ blocos: [['div', 1]] })], ['lado a lado zero', torto({ blocos: [['section', 0]] })],
+    ['bloco em objeto', torto({ blocos: [{ tag: 'section', porLinha: 1 }] })], ['blocos demais', torto({ blocos: blocos61 })],
+    ['cortado em texto', torto({ cortado: 'sim' })]]) {
+    assert.deepStrictEqual(captura.resumirLayout(entrada), { ilegivel: true }, nome + ': fora da forma, ilegivel');
+  }
+  assert.strictEqual(typeof captura.EXPRESSAO_DO_LAYOUT, 'string');
+  assert.match(captura.EXPRESSAO_DO_LAYOUT, /^\(function layoutDaPagina\(/, 'a expressao chama a funcao que roda na pagina');
 });
 
 // ---------------------------------------------------------------- ponta a ponta, com o navegador de verdade
@@ -864,6 +951,9 @@ test('ponta a ponta (E3 item 2): o estilo calculado vai para a evidencia e e con
   assert.match(semCorpo.e.estilo.erro, /nao e um documento HTML com corpo/);
   assert.match(semCorpo.e.estilo.erro, /confira-os na foto, a olho/);
   assert.strictEqual(semCorpo.fim.estiloNaoLido, semCorpo.e.estilo.erro);
+  // O layout tambem: o motivo diz a largura que fica sem comparar e o que fazer.
+  assert.match(semCorpo.e.layout.erro, /nao compara a largura de \d+ px: confira o layout na foto, a olho, ou resolva/);
+  assert.strictEqual(semCorpo.fim.layoutNaoLido, semCorpo.e.layout.erro);
   assert.strictEqual(semCorpo.fim.valoresForaDoSistema, undefined);
   // A evidencia tambem nao diz "tudo dentro do sistema" quando o estilo nao foi lido.
   assert.strictEqual(semCorpo.e.estiloForaDoSistema.feita, false);
@@ -939,4 +1029,145 @@ test('ponta a ponta (E3 item 2): textarea pelo value, submit vazio, a cor pintad
   assert.ok(cor('rgb(63, 64, 65)'), 'o paragrafo com o segredo no id ficou fora');
   assert.ok(!fs.readFileSync(path.join(saida, 'evidencia.json'), 'utf8').includes('zzsegredo99'), 'o segredo do id foi para a evidencia');
   assertSemSobras(tmp, dir, r.stdout);
+});
+
+test('ponta a ponta (R2b): a captura mede o layout - rolagem lateral, tipos, coluna e blocos lado a lado', function (t) {
+  if (!NAVEGADOR) { t.skip('sem Chrome nem Edge nesta maquina'); return; }
+  const dir = pastaTemporaria(t);
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(tmp);
+  const pagina = path.join(dir, 'layout.html');
+  const cartao = '<div style="width:30%;height:50px;background:#eee"></div>';
+  fs.writeFileSync(pagina, '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>L</title></head>' +
+    '<body style="margin:0;font-size:16px"><header style="height:60px;display:flex">' +
+    '<a style="width:20px">a</a><a style="width:20px">b</a></header><nav style="height:10px"></nav>' +
+    '<h1 style="display:none">x</h1>'.repeat(60) + '<main hidden><div style="max-width:200px">vista inativa</div></main>' +
+    '<main><div style="max-width:600px"><h1 style="font-size:32px;margin:0">Titulo zzsegredo77</h1>' +
+    '<h2 style="font-size:24px;margin:0">Sub</h2><p style="font-size:16px">texto</p></div>' +
+    '<section style="display:flex">' + cartao + cartao + cartao + '<div style="width:30%;height:0"></div></section>' +
+    // o titulo vem depois dos cartoes no HTML e aparece em cima deles (order:-1): a linha se acha pela posicao na tela
+    '<section style="display:flex;flex-wrap:wrap">' + cartao + cartao + cartao +
+    '<h2 style="order:-1;width:100%;margin:0;font-size:24px">Cartoes</h2></section>' +
+    '<section style="display:none">' + cartao + cartao + '</section></main>' +
+    '<footer style="height:40px">fim</footer><div style="width:3000px;height:10px"></div></body></html>');
+  const saida = path.join(dir, 'saida');
+  const r = rodar(['--url', pathToFileURL(pagina).href, '--saida', saida, '--largura', '800', '--altura', '600',
+    '--tempo-max', '120000'], { SWORN_TMP: tmp });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  const fim = JSON.parse(r.stdout);
+  assert.strictEqual(fim.layoutNaoLido, undefined, 'o layout nao foi lido: ' + fim.layoutNaoLido);
+  const e = JSON.parse(fs.readFileSync(fim.evidencia, 'utf8'));
+  assert.deepStrictEqual(e.layout, { janela: 800, pagina: 3000, rolagemLateral: true,
+    tipos: { h1: 32, h2: 24, corpo: 16 }, coluna: 600,
+    blocos: [{ tag: 'header', porLinha: 1 }, { tag: 'main', porLinha: 3 }, { tag: 'section', porLinha: 3 },
+      { tag: 'section', porLinha: 3 }, { tag: 'footer', porLinha: 1 }], cortado: false },
+  'o nav baixo, a secao e o <main> escondidos ficam fora; a coluna e a caixa de largura maxima do <main> que se ve; ' +
+  'o h1 que se ve depois de 60 escondidos da o tipo; os 3 cartoes ficam lado a lado, tambem debaixo do titulo de ' +
+  'largura inteira (os links estreitos do topo e o cartao de altura zero nao contam)');
+  assert.ok(!JSON.stringify(e.layout).includes('zzsegredo77'), 'texto da pagina foi para o layout');
+  assertSemSobras(tmp, dir, r.stdout);
+});
+
+// Cada filho medido nos blocos lado a lado conta na varredura. 40 mil filhos num bloco do <main> passam do
+// teto (a coluna, os blocos e os filhos olham cada um), e a leitura sai marcada como cortada, sem prender a captura.
+test('ponta a ponta (R2b): a pagina grande demais para a varredura sai com o layout cortado', function (t) {
+  if (!NAVEGADOR) { t.skip('sem Chrome nem Edge nesta maquina'); return; }
+  const dir = pastaTemporaria(t);
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(tmp);
+  const pagina = path.join(dir, 'grande.html');
+  fs.writeFileSync(pagina, '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>G</title></head>' +
+    '<body><main><div style="height:100px">' + '<i></i>'.repeat(40000) + '</div></main></body></html>');
+  const r = rodar(['--url', pathToFileURL(pagina).href, '--saida', path.join(dir, 'saida'), '--largura', '800',
+    '--tempo-max', '120000'], { SWORN_TMP: tmp });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  const e = JSON.parse(fs.readFileSync(JSON.parse(r.stdout).evidencia, 'utf8'));
+  assert.strictEqual(e.layout.cortado, true, 'a varredura passou do teto sem marcar cortado');
+  assertSemSobras(tmp, dir, r.stdout);
+});
+
+test('ponta a ponta (R2b): a pagina com overflow-x hidden ou clip na janela nao rola de lado', function (t) {
+  if (!NAVEGADOR) { t.skip('sem Chrome nem Edge nesta maquina'); return; }
+  const dir = pastaTemporaria(t);
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(tmp);
+  const largo = '<div style="width:3000px;height:10px"></div>';
+  // No <html>; no body, com o <html> visible (o CSS passa o do body para a janela); e numa caixa de dentro, que nao
+  // muda a janela.
+  for (const [nome, html, body, rola] of [['html', 'overflow-x:hidden', '', false], ['body', '', 'overflow-x:clip', false],
+    ['caixa', '', '', true]]) {
+    const pagina = path.join(dir, nome + '.html');
+    const conteudo = nome === 'caixa' ? '<div style="overflow-x:hidden">' + largo + '</div>' + largo : largo;
+    fs.writeFileSync(pagina, '<!doctype html><html lang="pt-BR" style="' + html + '"><head><meta charset="utf-8">' +
+      '<title>O</title></head><body style="margin:0;' + body + '"><main>' + conteudo + '</main></body></html>');
+    const r = rodar(['--url', pathToFileURL(pagina).href, '--saida', path.join(dir, nome), '--largura', '800',
+      '--tempo-max', '120000'], { SWORN_TMP: tmp });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const e = JSON.parse(fs.readFileSync(JSON.parse(r.stdout).evidencia, 'utf8'));
+    assert.strictEqual(e.layout.rolagemLateral, rola, nome + ': ' + JSON.stringify(e.layout));
+    assert.strictEqual(e.layout.pagina, rola ? 3000 : 800, nome);
+  }
+  assertSemSobras(tmp, dir, '');
+});
+
+const CONFERIR = path.join(__dirname, '..', 'scripts', 'conferir-tela.js');
+
+test('ponta a ponta (R2b): a conferencia mede a tela e a referencia em cada largura e diz o que difere', function (t) {
+  if (!NAVEGADOR) { t.skip('sem Chrome nem Edge nesta maquina'); return; }
+  const dir = pastaTemporaria(t);
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(tmp);
+  const cartao = '<div style="width:30%;height:50px;background:#eee"></div>';
+  const pagina = function (nome, secao) {
+    const p = path.join(dir, nome);
+    fs.writeFileSync(p, '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>C</title></head>' +
+      '<body style="margin:0;font-size:16px"><header style="height:60px">topo</header>' +
+      '<main><h1 style="font-size:32px;margin:0">Titulo</h1><section style="' + secao + '">' + cartao + cartao + cartao +
+      '</section></main></body></html>');
+    return pathToFileURL(p).href;
+  };
+  const tela = pagina('tela.html', 'display:block');
+  const referencia = pagina('referencia.html', 'display:flex');
+  const conferir = function (args) {
+    return spawnSync(process.execPath, [CONFERIR].concat(args), { encoding: 'utf8', timeout: 600000, cwd: dir,
+      env: ambiente({ SWORN_TMP: tmp }) });
+  };
+  const saida = path.join(dir, 'saida');
+  const r = conferir(['--url', tela, '--referencia', referencia, '--saida', saida, '--larguras', '800,400',
+    '--tempo-max', '120000']);
+  assert.strictEqual(r.status, 0, 'a conferencia saiu com ' + r.status + ', algo ficou sem comparar: ' + r.stdout + r.stderr);
+  const fim = JSON.parse(r.stdout);
+  assert.strictEqual(fim.tudoComparado, true);
+  assert.strictEqual(fim.diferencas, 4, 'duas por largura');
+  assert.match(fim.aviso, /^4 diferenca\(s\) com a referencia/);
+  const c = JSON.parse(fs.readFileSync(path.join(saida, 'conferencia.json'), 'utf8'));
+  assert.strictEqual(c.comDesign, false);
+  assert.deepStrictEqual(c.larguras.map(function (l) { return [l.largura, l.comparada, l.diferencas]; }), [800, 400].map(function (w) {
+    return [w, true, [{ medida: 'blocos lado a lado', tag: 'main', ordem: 1, tela: 1, referencia: 3 },
+      { medida: 'blocos lado a lado', tag: 'section', ordem: 1, tela: 1, referencia: 3 }]];
+  }), 'os cartoes empilhados na tela e lado a lado na referencia (o main conta o que tem dentro)');
+  for (const pasta of ['tela-800', 'referencia-800', 'tela-400', 'referencia-400']) {
+    assert.ok(fs.existsSync(path.join(saida, pasta, 'evidencia.json')), 'falta a evidencia da captura de ' + pasta);
+  }
+  // A referencia que nao abre: a largura fica sem comparar, e a conferencia sai 1.
+  const saida2 = path.join(dir, 'saida2');
+  // O endereco leva um token, que nao vai para o disco nem para a saida.
+  const r2 = conferir(['--url', tela, '--referencia', pathToFileURL(path.join(dir, 'nao-existe.html')).href + '?token=zz99', '--saida', saida2,
+    '--larguras', '800', '--tempo-max', '120000']);
+  assert.strictEqual(r2.status, 1, r2.stdout + r2.stderr);
+  const fim2 = JSON.parse(r2.stdout);
+  assert.strictEqual(fim2.tudoComparado, false);
+  assert.strictEqual(fim2.naoComparado, 1);
+  assert.match(fim2.aviso, /^1 motivo\(s\) do que ficou sem comparar/);
+  const c2 = JSON.parse(fs.readFileSync(path.join(saida2, 'conferencia.json'), 'utf8'));
+  assert.match(c2.larguras[0].naoComparado[0], /^a referencia: a captura falhou: /);
+  assert.ok(!fs.readFileSync(path.join(saida2, 'conferencia.json'), 'utf8').includes('zz99'), 'o token ficou no conferencia.json');
+  assert.ok(!r2.stdout.includes('zz99'), 'o token ficou na saida: ' + r2.stdout);
+  // A chamada errada nao abre o navegador nem cria a pasta.
+  const saida3 = path.join(dir, 'saida3');
+  const r3 = conferir(['--url', tela, '--saida', saida3]);
+  assert.strictEqual(r3.status, 1, 'a chamada sem --referencia saiu com ' + r3.status + ': ' + r3.stdout);
+  assert.match(r3.stdout, /^ERRO: falta --referencia/);
+  assert.ok(!fs.existsSync(saida3), 'a chamada errada criou a pasta de --saida');
+  assertSemSobras(tmp, dir, r.stdout + r2.stdout + r3.stdout);
 });

@@ -523,6 +523,87 @@ test('A4: a prova em segundo plano roda ate o aviso de fim, e o fim (status, cod
   } finally { fsT.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('R2b: testesDoTranscript guarda a ultima conferencia da tela pelo codigo de saida, e outro teste depois nao a apaga', () => {
+  const ler = function (linhas) {
+    const t = transcript(linhas);
+    try { return saude.testesDoTranscript(t.f, 'npm test'); } finally { t.fim(); }
+  };
+  const conf = 'node scripts/conferir-tela.js --url http://localhost:3000 --referencia https://exemplo.com --saida s';
+  const comPasta = 'node "C:/Meus Plugins/sworn/scripts/conferir-tela.js" --url http://a --referencia http://b --saida s';
+  const comFlag = 'node --no-warnings scripts\\conferir-tela.js --url http://a --referencia http://b --saida s';
+  let r = ler([cmd('a', conf), res('a', '{"ok":false,"naoComparado":1}', true)]);
+  assert.deepStrictEqual(r.ultimaConferencia, { comando: conf, falhou: true }, 'saiu 1: falhou');
+  assert.strictEqual(r.ultimoTeste, null, 'a conferencia nao conta como o ultimo teste');
+  r = ler([cmd('a', conf), res('a', '{"ok":false}', true), cmd('b', 'npm test'), res('b', '# pass 3\n# fail 0')]);
+  assert.deepStrictEqual(r.ultimaConferencia, { comando: conf, falhou: true }, 'a suite verde depois nao apaga a conferencia');
+  assert.strictEqual(r.ultimoTeste.falhou, false, 'o npm test depois da conferencia passou, e ele e o ultimo teste');
+  r = ler([cmd('a', conf), res('a', '{}', true), cmd('b', comPasta), res('b', '{"ok":true,"diferencas":2}')]);
+  assert.deepStrictEqual(r.ultimaConferencia, { comando: comPasta, falhou: false }, 'a de agora, com pasta e espaco, saiu 0');
+  r = ler([cmd('a', comFlag), res('a', 'ERRO: falta --saida', true)]);
+  assert.strictEqual(r.ultimaConferencia.falhou, true, 'com opcao do node antes e barra invertida');
+  r = ler([cmd('a', conf), res('a', '{"ok":true,"diferencas":1,"aviso":"1 failed"}')]);
+  assert.strictEqual(r.ultimaConferencia.falhou, false, 'decide o codigo de saida, nao o texto da lista');
+  // com um pipe depois, o codigo e o do tail: o resumo da conferencia diz que ela nao passou
+  r = ler([cmd('a', conf + ' 2>&1 | tail -20'), res('a', '{"ok":false,"naoComparado":1,"tudoComparado":false}')]);
+  assert.strictEqual(r.ultimaConferencia.falhou, true, 'pipe depois: o resumo decide');
+  r = ler([cmd('a', conf + ' 2>&1 | tail -20'), res('a', '{"ok":true,"diferencas":0,"tudoComparado":true}')]);
+  assert.strictEqual(r.ultimaConferencia.falhou, false, 'pipe depois com o resumo verde: passou');
+  r = ler([cmd('a', conf + ' || true'), res('a', 'ERRO: falta --saida')]);
+  assert.strictEqual(r.ultimaConferencia.falhou, true, 'com || true, o ERRO da chamada na saida diz que falhou');
+  // o pipe ou o ; depois esconde a saida: sem o resumo verde, nao passou
+  for (const depois of [' | grep -c diferenca', ' > s.json; echo ok', ' | head -3', '; echo ok', ' & echo ok', '\necho ok',
+    ' --y "a" | grep -c "b"', ' --y \'a\' ; echo \'b\'']) {
+    r = ler([cmd('a', conf + depois), res('a', 'ok')]);
+    assert.strictEqual(r.ultimaConferencia.falhou, true, 'o codigo e de outro programa e a saida nao mostra o verde: ' + depois);
+  }
+  // o 2>&1 e o > sem nada depois nao trocam o codigo, nem o que vem antes dela: ele decide
+  for (const [antes, depois] of [['', ' 2>&1'], ['', ' > s.json'], ['', ' &> s.txt'], ['', ' &>> s.txt'],
+    ['', ' --larguras "800" --y \'a;b\' --x "a=1&b=2;c|d"'], ['cd x && ', ''], ['echo x | cat; ', '']]) {
+    r = ler([cmd('a', antes + conf + depois), res('a', '')]);
+    assert.strictEqual(r.ultimaConferencia.falhou, false, 'o codigo ainda e da conferencia: ' + antes + '...' + depois);
+  }
+  // depois de cd, de variavel de ambiente e do & do PowerShell, e o node como programa
+  for (const antes of ['cd x && ', 'SWORN_NAVEGADOR=/x/chrome ', '& ', '(cd x; ', 'echo x\n']) {
+    r = ler([cmd('a', antes + conf), res('a', 'Exit code 1', true)]);
+    assert.strictEqual(r.ultimaConferencia && r.ultimaConferencia.falhou, true, 'a conferencia depois de "' + antes + '" conta');
+  }
+  for (const outro of ['cat scripts/conferir-tela.js', 'grep -n x scripts/conferir-tela.js',
+    'node --test test/conferencia-tela.test.js', 'node scripts/capturar-tela.js --url http://a --saida s',
+    'grep -n "node" scripts/conferir-tela.js', 'node --version\ngrep -n lerArgs scripts/conferir-tela.js',
+    'echo node scripts/conferir-tela.js']) {
+    assert.strictEqual(ler([cmd('a', outro), res('a', 'Exit code 1', true)]).ultimaConferencia, undefined, outro);
+  }
+  assert.strictEqual(ler([cmd('a', conf)]).ultimaConferencia, undefined, 'sem resultado na cauda, nao conta');
+  // em segundo plano: o lancamento nao e o fim; o fim decide pelo status e pelo codigo
+  const ok = 'Background command "c" completed (exit code 0)';
+  r = ler([emFundo('a', conf), lancado('a')]);
+  assert.strictEqual(r.ultimaConferencia, undefined, 'lancada, sem fim');
+  r = ler([emFundo('a', conf), lancado('a'), fimDoFundo('a', 'completed', 'Background command "c" completed (exit code 1)', 'x')]);
+  assert.strictEqual(r.ultimaConferencia.falhou, true, 'fim com codigo 1');
+  const semArquivo = pathT.join(osT.tmpdir(), 'sworn-nao-existe-' + process.pid, 'b.output');
+  r = ler([emFundo('a', conf), lancado('a'), fimDoFundo('a', 'completed', ok, semArquivo)]);
+  assert.strictEqual(r.ultimaConferencia.falhou, false, 'fim com codigo 0');
+  r = ler([emFundo('a', conf), lancado('a'), fimDoFundo('a', 'completed', 'Background command "c" completed', semArquivo)]);
+  assert.strictEqual(r.ultimaConferencia.falhou, false, 'completed sem codigo no aviso: o status decide');
+  r = ler([emFundo('a', conf), lancado('a'), fimDoFundo('a', 'completed', 'Background command "c" completed (exit code -1)', semArquivo)]);
+  assert.strictEqual(r.ultimaConferencia.falhou, true, 'codigo negativo nao passou');
+  r = ler([emFundo('a', conf), lancado('a'), fimDoFundo('a', 'killed', 'Background command "c" was stopped', semArquivo)]);
+  assert.strictEqual(r.ultimaConferencia.falhou, true, 'parada nao passou');
+  r = ler([emFundo('a', conf + ' | tail -5'), lancado('a'), fimDoFundo('a', 'completed', ok, semArquivo)]);
+  assert.strictEqual(r.ultimaConferencia.falhou, true, 'fundo com pipe e sem a saida gravada: nada mostra o verde');
+  // em segundo plano com pipe: o codigo 0 e o do tail, e a saida gravada diz que nao passou
+  const dir = fsT.mkdtempSync(pathT.join(osT.tmpdir(), 'sworn-conf-fundo-'));
+  try {
+    const saida = pathT.join(dir, 'b.output');
+    fsT.writeFileSync(saida, '{"ok":false,"naoComparado":2,"tudoComparado":false}\n');
+    r = ler([emFundo('a', conf + ' | tail -5'), lancado('a'), fimDoFundo('a', 'completed', ok, saida)]);
+    assert.strictEqual(r.ultimaConferencia.falhou, true, 'fundo com pipe: a saida decide');
+    fsT.writeFileSync(saida, '{"ok":true,"diferencas":1,"tudoComparado":true}\n');
+    r = ler([emFundo('a', conf + ' | tail -5'), lancado('a'), fimDoFundo('a', 'completed', ok, saida)]);
+    assert.strictEqual(r.ultimaConferencia.falhou, false, 'fundo com pipe e o resumo verde gravado: passou');
+  } finally { fsT.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // D785 (2.1b, bateria s327): o Opus rodou `npm test` depois de editar, o package.json da fixture diz que o `test` e o
 // `node --test` declarado, e o laco da prova barrou 9 de 12 rodadas a toa (um turno e ~US$ 0,02 cada).
 test('D785 (2.1b): provasEquivalentes - o script test do package.json vale como a provaDePronto, nos dois sentidos', () => {

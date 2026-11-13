@@ -230,6 +230,128 @@ const EXPRESSAO_DO_ESTILO = '(' + estiloDaPagina.toString() + ')(' + ELEMENTOS_D
 const PROPRIEDADES_DO_ESTILO = new Set(['color', 'background-color', 'border-color', 'border-radius', 'font-family',
   'font-size']);
 
+// R2b: as medidas do layout que a conferencia compara com a referencia, largura por largura. A ideia e a do LAYOUT_JS
+// do craft-anything (website_tools.rs:737-785, MIT/Apache), reescrita. BLOCOS_DO_LAYOUT e o teto de marcos lidos;
+// VARREDURA_DO_LAYOUT, o de elementos olhados ao todo (nos tamanhos, no <main>, na coluna, nos marcos e em cada filho
+// medido nos blocos lado a lado): um marco dentro de outro se olha de novo, e cada elemento custa duas leituras.
+const BLOCOS_DO_LAYOUT = 60;
+const VARREDURA_DO_LAYOUT = 100000;
+const MARCOS_DO_LAYOUT = ['header', 'nav', 'main', 'footer', 'section', 'article', 'aside'];
+// Roda na pagina, por Runtime.evaluate: nao usa nada deste modulo (so o que recebe: os dois tetos e o seletor dos
+// marcos, MARCOS_DO_LAYOUT). Nenhum texto da pagina sai daqui, so numeros e o nome da tag do marco. O teto da
+// varredura ou o de marcos atingido marca `cortado`: o que nao se leu nao conta como ausente.
+function layoutDaPagina(maxBlocos, maxVarridos, seletorDosMarcos) {
+  const ler = function (proto, nome) {
+    const g = Object.getOwnPropertyDescriptor(proto, nome).get;
+    return function (o) { return g.call(o); };
+  };
+  // Lido pelo prototipo, como no estilo: um <img name="body"> tampa o document.body, e um campo de formulario tampa a
+  // propriedade de mesmo nome do elemento.
+  const corpo = ler(Document.prototype, 'body')(document);
+  if (!corpo) return { semCorpo: true };
+  const raiz = ler(Document.prototype, 'documentElement')(document);
+  const tagDe = ler(Element.prototype, 'tagName');
+  const filhosDe = ler(Element.prototype, 'children');
+  const larguraVisivel = ler(Element.prototype, 'clientWidth');
+  const larguraTotal = ler(Element.prototype, 'scrollWidth');
+  const caixaDe = Element.prototype.getBoundingClientRect;
+  const buscar = Element.prototype.querySelectorAll;
+  const porTag = Element.prototype.getElementsByTagName;
+  const verVisibilidade = Element.prototype.checkVisibility;
+  let varridos = 0;
+  let cortado = false;
+  const mais = function () {
+    if (varridos >= maxVarridos) { cortado = true; return false; }
+    varridos++;
+    return true;
+  };
+  const px = function (v) { const n = parseFloat(v); return isFinite(n) ? Math.round(n) : null; };
+  // A caixa do elemento que se ve, ou null.
+  const visto = function (e) {
+    const r = caixaDe.call(e);
+    if (r.width < 1 || r.height < 1) return null;
+    if (typeof verVisibilidade === 'function') {
+      return verVisibilidade.call(e, { checkOpacity: true, opacityProperty: true, checkVisibilityCSS: true,
+        visibilityProperty: true }) ? r : null;
+    }
+    const cs = getComputedStyle(e);
+    return cs.visibility === 'visible' && cs.display !== 'none' && cs.opacity !== '0' ? r : null;
+  };
+  // O tamanho da fonte do primeiro do seletor que se ve, ou null (sem nenhum visto, ou com a varredura cortada antes).
+  const tamanho = function (seletor) {
+    const lista = buscar.call(corpo, seletor);
+    for (let i = 0; i < lista.length; i++) {
+      if (!mais()) return null;
+      if (visto(lista[i])) return px(getComputedStyle(lista[i]).fontSize);
+    }
+    return null;
+  };
+  // Os itens lado a lado: o maximo de filhos de uma caixa com o topo na mesma linha (2 px), em qualquer linha da caixa
+  // (o titulo de largura inteira em cima dos cartoes nao esconde os cartoes), contando so os filhos de pelo menos 15% da
+  // largura do bloco, e no minimo 40 px (cartoes e colunas, nao links soltos nem faixa de logos). Cada filho medido
+  // conta na varredura.
+  const porLinha = function (bloco, largura) {
+    let melhor = 1;
+    const todos = porTag.call(bloco, '*');
+    for (let i = -1; i < todos.length; i++) {
+      const c = i < 0 ? bloco : todos[i];
+      if (!mais()) break;
+      const filhos = filhosDe(c);
+      if (filhos.length < 2) continue;
+      const topos = [];
+      for (let j = 0; j < filhos.length; j++) {
+        if (!mais()) break;
+        const r = visto(filhos[j]);
+        if (r && r.width >= Math.max(40, largura * 0.15)) topos.push(r.top);
+      }
+      topos.sort(function (x, y) { return x - y; });
+      for (let a = 0, b = 0; b < topos.length; b++) {
+        while (topos[b] - topos[a] > 2) a++;
+        melhor = Math.max(melhor, b - a + 1);
+      }
+    }
+    return melhor;
+  };
+  // A coluna do conteudo: a largura do primeiro que se ve, no primeiro <main> que se ve (ou no body), com largura
+  // maxima em px. Um <main hidden> antes (a vista inativa de um app de uma pagina so) nao conta.
+  let principal = corpo;
+  const mains = buscar.call(corpo, 'main');
+  for (let i = 0; i < mains.length; i++) {
+    if (!mais()) break;
+    if (visto(mains[i])) { principal = mains[i]; break; }
+  }
+  let coluna = null;
+  const dentro = porTag.call(principal, '*');
+  for (let i = -1; i < dentro.length; i++) {
+    const c = i < 0 ? principal : dentro[i];
+    if (!mais()) break;
+    if (/^(img|svg|video|picture|canvas)$/i.test(tagDe(c))) continue;
+    if (!/px$/.test(getComputedStyle(c).maxWidth)) continue;
+    const r = visto(c);
+    if (r) { coluna = Math.round(r.width); break; }
+  }
+  const tipos = { h1: tamanho('h1'), h2: tamanho('h2'), corpo: tamanho('p') };
+  // Os marcos que se veem, com pelo menos 24 px de altura, na ordem da pagina: [tag, lado a lado].
+  const blocos = [];
+  const marcos = buscar.call(corpo, seletorDosMarcos);
+  for (let i = 0; i < marcos.length; i++) {
+    if (blocos.length >= maxBlocos) { cortado = true; break; }
+    if (!mais()) break;
+    const r = visto(marcos[i]);
+    if (!r || r.height < 24) continue;
+    blocos.push([tagDe(marcos[i]).toLowerCase(), porLinha(marcos[i], r.width)]);
+  }
+  // A janela so rola de lado se o overflow-x dela deixa: o do <html> ou, com ele visible, o do body (o CSS passa o do
+  // body para a janela). Com hidden ou clip, o que passa da largura fica cortado e a pagina conta com a largura da janela.
+  const transbordo = function (e) { return getComputedStyle(e).overflowX; };
+  const daJanela = transbordo(raiz) === 'visible' ? transbordo(corpo) : transbordo(raiz);
+  const rola = daJanela !== 'hidden' && daJanela !== 'clip';
+  return { janela: larguraVisivel(raiz), pagina: rola ? larguraTotal(raiz) : larguraVisivel(raiz), tipos: tipos,
+    coluna: coluna, blocos: blocos, cortado: cortado };
+}
+const EXPRESSAO_DO_LAYOUT = '(' + layoutDaPagina.toString() + ')(' + BLOCOS_DO_LAYOUT + ', ' + VARREDURA_DO_LAYOUT + ', ' +
+  JSON.stringify(MARCOS_DO_LAYOUT.join(',')) + ')';
+
 function inteiroNoIntervalo(flag, v, teto, unidade) {
   if (!/^\d+$/.test(v) || Number(v) < 1 || Number(v) > teto) {
     return { erro: flag + ' precisa ser um inteiro de 1 a ' + teto + ' ' + unidade + ', veio "' + v + '"' };
@@ -451,6 +573,33 @@ function resumirEstilo(bruto) {
   return r;
 }
 
+// O que a EXPRESSAO_DO_LAYOUT devolveu -> { janela, pagina, rolagemLateral, tipos: { h1, h2, corpo }, coluna,
+// blocos: [{ tag, porLinha }], cortado }, ou { semCorpo: true }, ou { ilegivel: true }. A pagina e de terceiro: so
+// passa a forma inteira (medidas inteiras e seguras, de 0 para cima, que o JSON grava sem perda; a tag de um marco
+// conhecido; lado a lado de 1 para cima); qualquer campo torto torna a medicao toda ilegivel, e a conferencia a conta
+// como nao comparada, nunca como igual.
+function resumirLayout(bruto) {
+  const ILEGIVEL = { ilegivel: true };
+  if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return ILEGIVEL;
+  if (bruto.semCorpo === true) return { semCorpo: true };
+  const medida = function (n) { return Number.isSafeInteger(n) && n >= 0; };
+  const ouNada = function (n) { return n === null || medida(n); };
+  const t = bruto.tipos;
+  const b = bruto.blocos;
+  if (!medida(bruto.janela) || !medida(bruto.pagina) || typeof bruto.cortado !== 'boolean' || !ouNada(bruto.coluna) ||
+    !t || typeof t !== 'object' || !ouNada(t.h1) || !ouNada(t.h2) || !ouNada(t.corpo) || !Array.isArray(b) ||
+    b.length > BLOCOS_DO_LAYOUT) return ILEGIVEL;
+  const blocos = [];
+  for (const x of b) {
+    if (!Array.isArray(x) || x.length !== 2 || MARCOS_DO_LAYOUT.indexOf(x[0]) === -1 || !medida(x[1]) || x[1] < 1) {
+      return ILEGIVEL;
+    }
+    blocos.push({ tag: x[0], porLinha: x[1] });
+  }
+  return { janela: bruto.janela, pagina: bruto.pagina, rolagemLateral: bruto.pagina > bruto.janela,
+    tipos: { h1: t.h1, h2: t.h2, corpo: t.corpo }, coluna: bruto.coluna, blocos: blocos, cortado: bruto.cortado };
+}
+
 // Limpeza de segredo do que vai para o disco (a evidencia pode ser mostrada). Um parametro e secreto pelo nome: o nome
 // inteiro, ou um pedaco dele separado por _ - ou ., esta na lista (access_token, api_key, X-Auth), ou o nome termina
 // em token, secret ou password (accesstoken). Por pedaco, e nao por trecho, para nao apagar keyword, design ou encoded.
@@ -540,4 +689,5 @@ module.exports = {
   lerArgs, candidatosDoNavegador, acharNavegador, enderecoDoArquivo, entradaDeConsole, erroDaPagina, erroDoLog,
   resumirAcessibilidade, alturaDaFoto, semSegredo, textoParaODisco, consoleEErrosSemSegredo, TEXTO_BRUTO,
   EXPRESSAO_DO_ESTILO, resumirEstilo, ELEMENTOS_DO_ESTILO, VALORES_DO_ESTILO,
+  EXPRESSAO_DO_LAYOUT, resumirLayout, BLOCOS_DO_LAYOUT,
 };

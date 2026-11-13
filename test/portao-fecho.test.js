@@ -1970,6 +1970,29 @@ test('D634 (7b): o ultimo teste rodado na sessao falhou -> alegacao barra, mesmo
   });
 });
 
+test('R2b: a ultima conferencia da tela que saiu 1 barra o pronto, mesmo com a suite verde depois; a que sai 0 libera', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'fr2b');
+    const conf = 'node scripts/conferir-tela.js --url http://localhost:3000 --referencia https://exemplo.com --saida s';
+    const tr = linhasDoTranscript(tmp, 'fr2b', [usoBash('a', conf), resultado('a', '{"ok":false,"naoComparado":1}', true),
+      usoBash('b', 'npm test'), resultado('b', '# pass 4\n# fail 0')]);
+    gravar(tmp, 'fr2b', dir, 'Edit', 'a.js');
+    const r = fecho(tmp, 'fr2b', dir, PASSA, { transcript_path: tr });
+    assert.ok(r.json && r.json.decision === 'block', r.stdout);
+    assert.ok(/ultima conferencia da tela/.test(r.json.reason) && r.json.reason.indexOf('conferir-tela.js') !== -1, r.json.reason);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(r.json.reason), 'ASCII (R5)');
+    assert.strictEqual(sessaoDe(tmp, 'fr2b').contadores.fecho_sem_evidencia, 1, 'conta no balde do fecho sem evidencia');
+    // dizer o que segue sem comparar libera; a conferencia que sai 0 depois libera
+    gravar(tmp, 'fr2b2', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'fr2b2', dir, 'Pronto. A referencia ainda falha ao abrir: nao rodei a conferencia dela.',
+      { transcript_path: tr }).json, null);
+    const verde = linhasDoTranscript(tmp, 'fr2b3', [usoBash('a', conf), resultado('a', '{}', true), usoBash('b', conf),
+      resultado('b', '{"ok":true,"diferencas":2}')]);
+    gravar(tmp, 'fr2b3', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'fr2b3', dir, PASSA, { transcript_path: verde }).json, null);
+  });
+});
+
 test('D634 (8) e D785: prova que nao rodou depois da ultima edicao de codigo barra; a ressalva so libera sem edicao no turno', () => {
   comTmp((tmp) => {
     const dir = projetoCom(tmp, 'f8', { provaDePronto: 'npm test' });

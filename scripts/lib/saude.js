@@ -105,6 +105,34 @@ function pedacosDaProva(prova) {
   return sem.length ? sem : pedacos;
 }
 
+// R2b: o comando que roda a conferencia da tela contra a referencia: o node como programa (no comeco do comando ou
+// depois de ; & | ( ou de uma quebra de linha, com variaveis de ambiente antes; o & do PowerShell e o mesmo &), chamando o
+// conferir-tela.js, com ou sem pasta e aspas, na mesma linha. Ler o arquivo (cat, grep) ou rodar o teste dele nao e
+// rodar a conferencia.
+const CONFERENCIA_DA_TELA = new RegExp('(?:^|[;&|(\\n])[ \\t]*(?:[A-Za-z_]\\w*=[^\\s;&|]*[ \\t]+)*' +
+  '["\']?(?:[^\\s"\';&|]*[\\\\/])?node(?:\\.exe)?["\']?[ \\t]+(?:[^;&|\\s]+[ \\t]+)*?["\']?[^;&|"\'\\s]*conferir-tela\\.js\\b', 'i');
+// A saida da conferencia que diz que ela nao passou: o resumo com o nao comparado, ou a linha do erro da chamada. Com
+// um pipe depois (| tail), o codigo de saida e o do ultimo programa, nao o dela, e e o texto que diz.
+const CONFERENCIA_VERMELHA = /"tudoComparado":\s*false|^ERRO: /m;
+const CONFERENCIA_VERDE = /"tudoComparado":\s*true/;
+
+// Se o codigo de saida do comando nao e o da conferencia: depois dela vem um pipe, um ; , um || , um & ou outra linha.
+// Nao contam o que esta entre aspas (o & de uma URL) nem os redirecionamentos (2>&1, >&2, &> e &>>). Ai o texto pode
+// ter sumido (| grep -c, ; echo ok), e so o resumo verde na saida diz que passou.
+function codigoNaoEDaConferencia(comando) {
+  const m = CONFERENCIA_DA_TELA.exec(comando);
+  return !!m && /[|;&\n]/.test(comando.slice(m.index + m[0].length).replace(/"[^"]*"|'[^']*'/g, '')
+    .replace(/\d*>&\d*|&>>?/g, ''));
+}
+
+// A conferencia falhou: pelo codigo (quando ele e dela), pelo texto vermelho, ou, com o codigo de outro programa, por
+// nao mostrar o resumo verde.
+function conferenciaFalhou(comando, codigoFalhou, saida) {
+  const texto = saida || '';
+  return codigoFalhou || CONFERENCIA_VERMELHA.test(texto) ||
+    (codigoNaoEDaConferencia(comando) && !CONFERENCIA_VERDE.test(texto));
+}
+
 // A4 (s369): o resultado do Bash/PowerShell lancado em segundo plano no Claude Code (medido no transcript da s369).
 const LANCADO = /^Command running in background with ID: /;
 
@@ -247,6 +275,11 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
   const editados = Object.create(null);   // F1d: caminho comparavel -> { pos da ultima edicao, caminho, nome }
   const corridas = [];                    // F1d: cada teste com resultado, na ordem
   let provaVermelha = false;              // F1d: a ultima prova declarada que terminou falhou
+  // R2b: a conferencia da tela, por id da chamada ({ comando, lido, fundo }), e a ultima que terminou ({ comando,
+  // falhou }). Decide o codigo de saida (0 = tudo comparado) e, da saida, so o resumo (conferenciaFalhou): a lista das
+  // diferencas pode citar qualquer palavra.
+  const conferencias = Object.create(null);
+  let ultimaConferencia = null;
   // `lancado`: a posicao do lancamento do teste em segundo plano (o fim vem depois e nao data a rodada).
   const anotar = function (comando, falhou, saida, pos, lancado) {
     ultimoTeste = { comando: comando, falhou: falhou || textoMostraFalha(saida) };
@@ -257,9 +290,25 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
   };
   t.eventos.forEach(function (ev) {
     const entrada = ev.entrada || {};
+    if (ev.id && ev.id in conferencias) {
+      const c = conferencias[ev.id];
+      if (ev.tipo === 'resultado' && !(c.fundo && LANCADO.test(ev.saida || ''))) {
+        delete conferencias[ev.id];
+        ultimaConferencia = { comando: c.comando, falhou: conferenciaFalhou(c.lido, ev.falhou === true, ev.saida) };
+      } else if (ev.tipo === 'fim_em_segundo_plano') {
+        delete conferencias[ev.id];
+        const cauda = typeof ev.arquivo === 'string' && ev.arquivo ? transcricoes.caudaDoTranscript(ev.arquivo) : null;
+        ultimaConferencia = { comando: c.comando, falhou: conferenciaFalhou(c.lido,
+          ev.status !== 'completed' || (ev.codigo !== null && ev.codigo !== 0), cauda) };
+      }
+    }
     if (ev.tipo === 'chamada' && FERRAMENTAS_DE_COMANDO.indexOf(ev.nome) !== -1 && typeof entrada.command === 'string') {
       const daProva = ehProva(entrada.command);
       const fundo = entrada.run_in_background === true;
+      const lido = String(entrada.command).slice(0, COMANDO_LIDO);
+      if (ev.id && CONFERENCIA_DA_TELA.test(lido)) {
+        conferencias[ev.id] = { comando: entrada.command, lido: lido, fundo: fundo };
+      }
       if (daProva && !fundo) ultimaProva = ev.pos;
       if (ev.id && (daProva || rodouTeste([entrada.command], COMANDOS_DE_TESTE))) {
         pendentes[ev.id] = entrada.command;
@@ -293,6 +342,8 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
   });
   const r = { ultimoTeste: ultimoTeste, provaPendente: pedacos !== null && ultimaEdicao > ultimaProva,
     provaRodando: pedacos !== null && provaRodando };
+  // R2b: so aparece quando alguma conferencia da tela terminou na cauda lida.
+  if (ultimaConferencia) r.ultimaConferencia = ultimaConferencia;
   if (raiz) {
     r.provaFocada = provaFocada(editados, corridas, ultimaProva, raiz);
     r.provaVermelha = provaVermelha;

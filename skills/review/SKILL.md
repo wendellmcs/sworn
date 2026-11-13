@@ -57,6 +57,23 @@ that fails stops Step 1 with `ERRO:` and nothing written: fix what it says (the 
 run again. With `--tela-depois` alone, only the work's side has a photo, so the photo is not blind in that round: say so
 at the close-out. Each round of a screen review takes the photos again, so prepare every round with the same addresses.
 
+**Screen against a reference screen, width by width.** When the work is a screen and there is a page to match (the
+page the `tela` reference sheet photographed, whose address is in its findings' origin, or a page the owner points
+to), run, from the project root:
+
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/conferir-tela.js" --url <the work> --referencia <the reference page> --saida <folder>
+
+It captures both pages at 1440, 768 and 390 px (`--larguras` changes the list) and writes `conferencia.json`: for each
+width, what differs (horizontal scroll, the h1, h2 and body text size beyond 2 px, the main column beyond 8 px, how many
+blocks sit side by side) and what could not be compared. With `.claude/sworn/design.json`, a type difference also names
+the system size closest to the reference's. It exits 0 when everything was compared and 1 otherwise: what was not
+compared never counts as alike, and the stop gate blocks "done" while the last run exited 1. Differences alone do not make it exit
+1: fix each one, or tell the owner why it is on purpose. What was not compared: fix its cause (the address, the server,
+the call) and run again; when it cannot be fixed (a reading cut on a huge page), check it on the photo and tell the
+owner what stays uncompared and why, which releases the gate. Run it with nothing after it (no `| tail`, no `; echo`):
+with a pipe or another command after it, the exit code is not its own, and the gate counts the run as passed only when
+the output shows `"tudoComparado":true`.
+
 ## Step 2 — round 1: the change band, then the lenses of the right family
 
 **First the band: the review is proportional to the diff** (owner's decision, 2026-10-12). The output of Step 1 brings

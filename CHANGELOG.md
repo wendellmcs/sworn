@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.31.0 — a tela medida contra a referência, largura por largura
+
+**Novo**
+
+- **A tela se mede contra uma página de referência, largura por largura.** O comando novo
+  `node "<plugin>/scripts/conferir-tela.js" --url <a tela> --referencia <a página de referência> --saida <pasta>` fotografa as
+  duas páginas em 1440, 768 e 390 px e grava o `conferencia.json` com o que difere em cada largura: a rolagem para o
+  lado, o tamanho do título, do subtítulo e do texto (além de 2 px), a largura da coluna principal (além de 8 px) e
+  quantos blocos ficam lado a lado. Com o `design.json` no projeto, a diferença de tamanho de texto diz também o
+  tamanho do sistema mais perto do da referência. O que não deu para medir de um lado entra como não comparado, nunca
+  como igual, e o comando termina com o código 1 (falha); as diferenças sozinhas só se listam. A foto de cada largura também traz essas medidas no `evidencia.json`, no campo
+  `layout`.
+- **O "pronto" espera a conferência da tela passar.** Enquanto a última conferência falhou, o portão de fecho não
+  aceita que o trabalho está pronto, mesmo com os testes verdes depois: resolva o que ficou sem comparar (a página que
+  não abriu, a chamada errada) e rode a conferência de novo, ou diga o que ficou sem comparar e por quê. Rodada com
+  um pipe ou outro comando depois (`| tail`, `; echo`), ela só conta como passou quando a saída mostra o resumo com
+  tudo comparado. O `/sworn:review` e o GUIA, em "Menos paradas e modo contínuo", explicam.
+
 ## 0.30.0 — a foto da tela traz o estilo que ela mostra, conferido contra o sistema de design
 
 **Novo**
@@ -8,7 +26,7 @@
   arquivo de evidência da captura guarda a cor, o arredondamento dos cantos, a fonte e o tamanho que aparecem na
   tela, e, com o `design.json` no projeto, a lista do que disso está fora do sistema. Assim a conferência pega também
   o valor que veio de uma biblioteca, que o texto escrito do projeto não mostra. Cada item fora é um valor a trocar ou
-  a pedir ao dono; o GUIA, em "A parte visual", explica.
+  a pedir ao dono; o GUIA, em "Menos paradas e modo contínuo", explica.
 
 ## 0.29.0 — a ficha diz quanto leu, e a dúvida resolvida mostra a prova
 

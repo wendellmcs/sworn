@@ -10,7 +10,9 @@
 //                                 [--esperar <seletor CSS>] [--tempo-max 30000] [--arquivo <arquivo que desenha a tela>]
 //
 // E3 item 2: a evidencia leva o estilo calculado do que se ve (`estilo`) e, com .claude/sworn/design.json na pasta
-// onde roda, o que dele ficou fora do sistema (`estiloForaDoSistema`, os desvios do --arquivo valendo).
+// onde roda, o que dele ficou fora do sistema (`estiloForaDoSistema`, os desvios do --arquivo valendo). R2b: leva
+// tambem as medidas do layout (`layout`), que o conferir-tela.js compara com a referencia; a leitura que falha sai
+// com o motivo em `layout.erro`, repetido na saida em `layoutNaoLido`.
 //
 // Saida 0 com o JSON; saida 1 com uma linha "ERRO: <o que houve e o que fazer>".
 const fs = require('node:fs');
@@ -30,7 +32,8 @@ const PRAZO_DO_COMANDO = 60000;
 const PASSO = 100;
 const TENTE_DE_NOVO = 'Rode de novo; se repetir, feche outras janelas do navegador ou aponte SWORN_NAVEGADOR para ' +
   'outro Chrome ou Edge.';
-// O fim de todo erro do enviar: a leitura do estilo o tira (ali a foto ja esta tirada, e rodar de novo nao e o passo).
+// O fim de todo erro do enviar: as leituras do estilo e do layout o tiram (ali a foto ja esta tirada, e rodar de novo
+// nao e o passo).
 const DE_NOVO = '. ' + TENTE_DE_NOVO;
 
 function comPrazo(promessa, ms, mensagem) {
@@ -67,10 +70,13 @@ function conectar(endereco) {
     const pendentes = new Map();
     const ouvintes = [];
     let proximo = 0;
+    // Depois do 'close', o send de um WebSocket descarta o quadro sem lancar: o comando falha na hora, sem o prazo.
+    let fechou = false;
     const cliente = {
       enviar: function (metodo, params, sessao, passo) {
         const id = ++proximo;
         const oQue = passo || 'falar com o navegador';
+        if (fechou) return Promise.reject(new Error('o navegador fechou antes de ' + oQue + DE_NOVO));
         const resposta = new Promise(function (r, f) {
           pendentes.set(id, { r, f, passo: oQue });
           const msg = { id, method: metodo, params: params || {} };
@@ -86,6 +92,7 @@ function conectar(endereco) {
     ws.addEventListener('open', function () { pronto(cliente); });
     ws.addEventListener('error', function () { falha(new Error('nao deu para falar com o navegador. ' + TENTE_DE_NOVO)); });
     ws.addEventListener('close', function () {
+      fechou = true;
       for (const p of pendentes.values()) p.f(new Error('o navegador fechou no meio de ' + p.passo + DE_NOVO));
       pendentes.clear();
     });
@@ -178,46 +185,89 @@ async function fotografar(cdp, o) {
       TENTE_DE_NOVO.charAt(0).toLowerCase() + TENTE_DE_NOVO.slice(1));
   }
   const arvore = await cdp.enviar('Accessibility.getFullAXTree', {}, s, 'ler a arvore de acessibilidade');
-  // O endereco final e a versao vem antes da leitura do estilo: se ela prender a pagina ate o prazo, o resto ja foi lido.
+  // O endereco final e a versao vem antes das leituras do estilo e do layout: se uma delas prender a pagina ate o
+  // prazo, o resto ja foi lido.
   const local = await cdp.enviar('Runtime.evaluate', { expression: 'location.href', returnByValue: true }, s, 'ler o endereco final');
   const versao = await cdp.enviar('Browser.getVersion', {}, null, 'ler a versao do navegador');
-  const estilo = await lerEstilo(cdp, s);
+  const { estilo, layout } = await lerEstiloELayout(cdp, s, o.largura);
   return { bytes: Buffer.from(imagem.data, 'base64'), foto, alturaDaPagina: Math.ceil(Number(tamanho.height) || 0),
-    console: consoleLista, erros, acessibilidade: captura.resumirAcessibilidade(arvore.nodes), estilo,
+    console: consoleLista, erros, acessibilidade: captura.resumirAcessibilidade(arvore.nodes), estilo, layout,
     urlFinal: local.result && local.result.value, navegador: versao.product, duracaoMs: Date.now() - inicio, status };
 }
+
+// Roda uma expressao de leitura na pagina: { valor } (o que ela devolveu), ou { motivo } de nao ter lido.
+async function lerNaPagina(cdp, s, expressao, passo) {
+  try {
+    // O enviar sempre resolve com um objeto (o `result` do protocolo, ou {}).
+    const lido = await cdp.enviar('Runtime.evaluate', { expression: expressao, returnByValue: true }, s, passo);
+    if (lido.exceptionDetails) {
+      const d = lido.exceptionDetails;
+      const texto = String((d.exception && d.exception.description) || d.text || '').split('\n')[0];
+      return { motivo: 'a pagina lancou um erro durante a leitura' + (texto ? ' (' + captura.textoParaODisco(texto) + ')' : '') };
+    }
+    if (!lido.result) return { motivo: 'o navegador respondeu sem o resultado da leitura' };
+    return { valor: lido.result.value };
+  } catch (e) {
+    // Sem o "rode de novo" (DE_NOVO) que o enviar poe no fim de todo erro dele: ele vale para a captura inteira, e aqui
+    // a foto ja esta tirada.
+    return { motivo: captura.textoParaODisco(String(e.message).replace(DE_NOVO, '')) };
+  }
+}
+
+const SEM_CORPO = 'a pagina nao e um documento HTML com corpo (um arquivo SVG aberto direto, por exemplo)';
+const ILEGIVEL = 'o navegador devolveu a leitura num formato que a captura nao entende';
+// O comeco da mensagem do enviar quando o prazo de um comando passa.
+const SEM_RESPOSTA = 'o navegador nao respondeu';
 
 // E3 item 2: o estilo calculado do que se ve (a camada 2 da conferencia de design). Uma pagina que derruba a leitura
 // nao derruba a foto: o estilo sai vazio, com o motivo em `erro` (a pagina lancou um erro, o navegador recusou o
 // pedido ou nao respondeu no prazo, a resposta veio sem resultado ou num formato que a captura nao entende, ou o
 // documento nao tem corpo HTML).
 async function lerEstilo(cdp, s) {
-  let motivo = null;
+  const lido = await lerNaPagina(cdp, s, captura.EXPRESSAO_DO_ESTILO, 'ler o estilo calculado');
+  let motivo = lido.motivo || null;
   let estilo = null;
-  try {
-    // O enviar sempre resolve com um objeto (o `result` do protocolo, ou {}).
-    const lido = await cdp.enviar('Runtime.evaluate', { expression: captura.EXPRESSAO_DO_ESTILO, returnByValue: true },
-      s, 'ler o estilo calculado');
-    if (lido.exceptionDetails) {
-      const d = lido.exceptionDetails;
-      const texto = String((d.exception && d.exception.description) || d.text || '').split('\n')[0];
-      motivo = 'a pagina lancou um erro durante a leitura' + (texto ? ' (' + captura.textoParaODisco(texto) + ')' : '');
-    } else if (!lido.result) {
-      motivo = 'o navegador respondeu sem o resultado da leitura';
-    } else {
-      estilo = captura.resumirEstilo(lido.result.value);
-      if (estilo.semCorpo) motivo = 'a pagina nao e um documento HTML com corpo (um arquivo SVG aberto direto, por exemplo)';
-      else if (estilo.ilegivel) motivo = 'o navegador devolveu a leitura num formato que a captura nao entende';
-    }
-  } catch (e) {
-    // Sem o "rode de novo" (DE_NOVO) que o enviar poe no fim de todo erro dele: ele vale para a captura inteira, e aqui
-    // a foto ja esta tirada.
-    motivo = captura.textoParaODisco(String(e.message).replace(DE_NOVO, ''));
+  if (!motivo) {
+    estilo = captura.resumirEstilo(lido.valor);
+    if (estilo.semCorpo) motivo = SEM_CORPO;
+    else if (estilo.ilegivel) motivo = ILEGIVEL;
   }
   if (!motivo) return estilo;
   return { ...(estilo || captura.resumirEstilo(null)), erro: 'nao deu para ler as cores, fontes, tamanhos e cantos ' +
     'arredondados da tela: ' + motivo + '. A foto e o resto da evidencia foram gravados, mas a conferencia desses ' +
     'valores nao aconteceu: confira-os na foto, a olho' };
+}
+
+// R2b: as medidas do layout (rolagem lateral, tamanho do h1, do h2 e do corpo, a coluna do conteudo, os blocos lado a
+// lado), que a conferencia compara com a referencia largura por largura. Como no estilo, a leitura que falha nao
+// derruba a foto: o layout sai com o motivo em `erro`, e a conferencia conta esta largura como nao comparada. Se o
+// navegador ja nao respondeu a leitura do estilo, a medida nem e pedida: seria mais um prazo inteiro de espera.
+async function lerLayout(cdp, s, largura, estilo) {
+  let motivo = null;
+  let lido = {};
+  if (estilo && typeof estilo.erro === 'string' && estilo.erro.includes(': ' + SEM_RESPOSTA)) {
+    motivo = SEM_RESPOSTA + ' a leitura do estilo, e a medida do layout nem foi pedida';
+  } else {
+    lido = await lerNaPagina(cdp, s, captura.EXPRESSAO_DO_LAYOUT, 'medir o layout');
+    motivo = lido.motivo || null;
+  }
+  let layout = null;
+  if (!motivo) {
+    layout = captura.resumirLayout(lido.valor);
+    if (layout.semCorpo) motivo = SEM_CORPO;
+    else if (layout.ilegivel) motivo = ILEGIVEL;
+  }
+  if (!motivo) return layout;
+  return { ...(layout || { ilegivel: true }), erro: 'nao deu para medir o layout: ' + motivo + '. A foto e o ' +
+    'resto da evidencia foram gravados, mas a conferencia com a referencia nao compara a largura de ' + largura +
+    ' px: confira o layout na foto, a olho, ou resolva o motivo e capture de novo' };
+}
+
+// As duas leituras depois da foto, na ordem: o estilo e, com ele, o layout (que nao e pedido se o estilo ficou sem
+// resposta).
+async function lerEstiloELayout(cdp, s, largura) {
+  const estilo = await lerEstilo(cdp, s);
+  return { estilo, layout: await lerLayout(cdp, s, largura, estilo) };
 }
 
 // Com .claude/sworn/design.json no projeto (a pasta onde a captura roda), a conferencia do estilo calculado contra o
@@ -275,7 +325,7 @@ function avisoDoEstilo(conferencia, arquivoDado) {
 }
 
 // Grava tela.png e evidencia.json na pasta de saida e devolve a linha que o script imprime. A evidencia leva sempre o
-// estilo lido e, se veio, a `conferencia` (a conferenciaDoEstilo, feita antes por quem chama).
+// estilo e o layout lidos e, se veio, a `conferencia` (a conferenciaDoEstilo, feita antes por quem chama).
 function gravarEvidencia(dados, o, saida, conferencia) {
   const caminhoDaImagem = path.join(saida, 'tela.png');
   fs.writeFileSync(caminhoDaImagem, dados.bytes);
@@ -291,7 +341,7 @@ function gravarEvidencia(dados, o, saida, conferencia) {
     status: dados.status, hora: new Date().toISOString(), navegador: dados.navegador,
     largura: o.largura, altura: dados.foto.altura, alturaDaPagina: dados.alturaDaPagina, cortada: dados.foto.cortada,
     imagem: 'tela.png', sha256, console: limpos.console, erros: limpos.erros, acessibilidade,
-    duracaoMs: dados.duracaoMs, estilo: dados.estilo,
+    duracaoMs: dados.duracaoMs, estilo: dados.estilo, layout: dados.layout,
   };
   if (conferencia) evidencia.estiloForaDoSistema = conferencia;
   const caminhoDaEvidencia = path.join(saida, 'evidencia.json');
@@ -302,6 +352,7 @@ function gravarEvidencia(dados, o, saida, conferencia) {
   // "tudo dentro do sistema": a saida leva o motivo no lugar dele.
   if (dados.estilo.erro) fim.estiloNaoLido = dados.estilo.erro;
   else if (conferencia) fim.valoresForaDoSistema = conferencia.fora.length;
+  if (dados.layout.erro) fim.layoutNaoLido = dados.layout.erro;
   const aviso = avisoDoEstilo(conferencia, o.arquivo);
   if (aviso) fim.avisoDoEstilo = aviso;
   if (dados.status >= 400) {
@@ -487,4 +538,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { avisoDoEstilo, conferenciaDoEstilo };
+module.exports = { avisoDoEstilo, conferenciaDoEstilo, lerEstiloELayout, conectar };
