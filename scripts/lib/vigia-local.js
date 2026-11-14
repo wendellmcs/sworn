@@ -111,10 +111,8 @@ function emMs(agora) {
   return typeof agora === 'number' && isFinite(agora) ? agora : Date.now();
 }
 
-/** ASCII em uma linha: acento vira letra sem acento, o resto fora de \x20-\x7E vira '?'. */
-function umaLinha(valor) {
-  return escopoLib.ascii(String(valor == null ? '' : valor).replace(/\s/g, ' ')).trim();
-}
+// ASCII em uma linha: acento vira letra sem acento, o resto fora de \x20-\x7E vira '?' (F5a: a do escopo.js).
+const umaLinha = escopoLib.asciiEmUmaLinha;
 
 /**
  * Le a linha `semana:` de um texto. Devolve { semana, corpo } (corpo = linhas depois da linha da semana)
@@ -179,8 +177,9 @@ function fraseDaBusca(dir) {
     // A7-16 (pedido 12): termina no passo seguinte (ASCII pela R5, como o resto do aviso). A7-51: o campo que falta no
     // registro e dito, no lugar do '?', e o passo diz onde ver a tarefa. A7-77: sem motivo, nao ha causa a corrigir;
     // o passo e rodar a mao o comando da tarefa para ver o erro. s266 (R1): e diz onde achar o comando.
-    const quando = umaLinha(b.quando);
-    const motivo = umaLinha(b.motivo).slice(0, 120);
+    // texto de registro, nao caminho: o espaco das pontas sai aqui (o so-espaco conta como ausente)
+    const quando = umaLinha(b.quando).trim();
+    const motivo = umaLinha(b.motivo).trim().slice(0, 120);
     return ' Ultima busca falhou' + (quando ? ' em ' + quando : ' (sem data registrada)') + ': ' + (motivo
       ? motivo + '. Corrija a causa e rode de novo, no Agendador de Tarefas do Windows, a tarefa que chama o ' +
         'vigia-puxar.js.'
@@ -339,6 +338,6 @@ function avisoDoRadar(projeto, opcoes) {
 }
 
 module.exports = {
-  CHAVE, ARQUIVO, MARCA, BUSCA, MAX_LINHAS, DIAS_VELHO, PASTA_DO_RADAR, pasta, ligado, analisar, semanaDoTexto,
-  lerNovidades, avisoDoVigia, avisoDoRadar, ehRepoDoPlugin
+  CHAVE, ARQUIVO, MARCA, BUSCA, MAX_LINHAS, DIAS_VELHO, pasta, ligado, analisar, semanaDoTexto, avisoDoVigia,
+  avisoDoRadar, ehRepoDoPlugin
 };

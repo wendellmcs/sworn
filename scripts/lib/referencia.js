@@ -198,4 +198,4 @@ function naReferencia(antigo, tipo, rel) {
   return { config: config, erros: errosDaReferencia(config) };
 }
 
-module.exports = { GRAUS, QUEM, ESTADOS, COBERTURAS, ESFORCOS, VALORES, VEREDITOS, conferir, tipoDaFicha, naReferencia };
+module.exports = { QUEM, ESTADOS, ESFORCOS, conferir, tipoDaFicha, naReferencia };

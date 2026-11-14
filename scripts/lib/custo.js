@@ -129,4 +129,4 @@ function chamadaDaTabela(tipo, entrada, projeto, opcoes) {
   };
 }
 
-module.exports = { ESCADA_PADRAO, nivelDoAgente, marchaMaximaDoEscopo, permitido, chamadaDaTabela };
+module.exports = { nivelDoAgente, marchaMaximaDoEscopo, permitido, chamadaDaTabela };

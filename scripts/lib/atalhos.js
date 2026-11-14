@@ -303,5 +303,6 @@ function daPastaEDeDentro(cwd, projeto) {
   return { achados: achados, total: total, marcas: marcas(projeto), falhas: falhas };
 }
 
-module.exports = { MARCA_PADRAO, MARCAS_ACEITAS, ehMarca, marcas, lerLinha, varrer, painel, lerArquivo, doRepositorio,
-  daPastaEDeDentro };
+module.exports = {
+  ehMarca, marcas, lerLinha, varrer, painel, lerArquivo, doRepositorio, daPastaEDeDentro
+};

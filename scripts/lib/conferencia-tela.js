@@ -172,5 +172,6 @@ function avisoDaConferencia(r) {
   return avisos.join('; ');
 }
 
-module.exports = { LARGURAS, FOLGA_DO_TIPO, FOLGA_DA_COLUNA, USO, compararLargura, conferir, tokenDoTamanho, lerArgs,
-  avisoDaConferencia };
+module.exports = {
+  USO, compararLargura, conferir, tokenDoTamanho, lerArgs, avisoDaConferencia
+};

@@ -250,4 +250,4 @@ function medir(alvo) {
   return r;
 }
 
-module.exports = { VOLTA_MAIS_DE, CORTE_DO_TEXTO, localizar, anterior, medir, cabeca, pluginDoComando };
+module.exports = { VOLTA_MAIS_DE, localizar, anterior, medir, cabeca, pluginDoComando };

@@ -280,6 +280,7 @@ function linhasDasOrdens(antes, agora, dias) {
   return semRecusa ? linhas.concat(NOTA_DA_RECUSA) : linhas;
 }
 
-module.exports = { MARCA_CALIBRAR, DIAS_ENTRE_ORDENS_DO_CALIBRAR, ARQUIVO_INIT_RECUSADO, ordemDoCalibrar, ordemDoInit,
-  recusarInit, motivoSemManual, TIPOS_DE_ORDEM, ROTULO, MANUAL, chaveDaOrdem, marcarDada, marcarCumprida, marcarRecusada,
-  totaisDasOrdens, linhasDasOrdens, arquivoDaRecusa };
+module.exports = {
+  ARQUIVO_INIT_RECUSADO, ordemDoCalibrar, ordemDoInit, recusarInit, motivoSemManual, TIPOS_DE_ORDEM, ROTULO, MANUAL,
+  chaveDaOrdem, marcarDada, marcarCumprida, marcarRecusada, totaisDasOrdens, linhasDasOrdens, arquivoDaRecusa
+};

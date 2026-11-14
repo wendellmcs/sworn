@@ -191,4 +191,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { rodarClaude, rodarCodex, gravar };
+module.exports = { rodarCodex, gravar };

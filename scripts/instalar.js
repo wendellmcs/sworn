@@ -562,4 +562,4 @@ if (require.main === module) {
   process.stdout.write(linhas.join('\n') + '\n');
 }
 
-module.exports = { instalar, conferir, ganchosDoHarness, comando, comandoDoInstalar, hashDoCodex };
+module.exports = { instalar, conferir, comando, comandoDoInstalar, hashDoCodex };

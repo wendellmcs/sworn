@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const git = require('./git.js');
-const texto = require('./texto.js');
+const jsonio = require('./jsonio.js');
 
 const IGNORAR = new Set([
   '.git', 'node_modules', 'dist', 'build', 'out', 'coverage', 'vendor',
@@ -71,10 +71,10 @@ function listar(cwd, limite) {
 }
 
 // D98: passa pelo semBom da D96. Um BOM de UTF-8 no package.json fazia o JSON.parse
-// estourar e a prova de pronto sumir calada - a mesma familia do D-A, num quinto leitor.
-function lerJson(cwd, rel) {
-  try { return JSON.parse(texto.semBom(fs.readFileSync(path.join(cwd, rel), 'utf8'))); }
-  catch (e) { return null; }
+// estourar e a prova de pronto sumir calada - a mesma familia do D-A, num quinto leitor. F5a: pelo lib/jsonio.js.
+function lerPacote(cwd) {
+  // cwd vazio nao le o package.json da pasta do processo (path.join('', ...) e relativo), como indiceDoTopo e acharGit.
+  return typeof cwd === 'string' && cwd ? jsonio.ler(path.join(cwd, 'package.json')).valor : null;
 }
 
 /**
@@ -134,7 +134,7 @@ function detectarGerenciador(tem) {
 const STUB_NPM_INIT = /no test specified/i;
 
 function detectarProva(cwd, tem, linguagem, gerenciador) {
-  const pkg = lerJson(cwd, 'package.json');
+  const pkg = lerPacote(cwd);
   const script = pkg && pkg.scripts && typeof pkg.scripts.test === 'string' ? pkg.scripts.test : null;
   if (script && !STUB_NPM_INIT.test(script)) return (gerenciador || 'npm') + ' test';
   if (linguagem === 'python' && (tem('pytest.ini') || tem('pyproject.toml') || tem('tests'))) return 'pytest';

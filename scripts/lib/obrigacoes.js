@@ -496,7 +496,6 @@ function motivo(c) {
 }
 
 module.exports = {
-  RE_ORDINAL, RE_ITEM, RE_SOLTA, MARCADORES, LIMITE_ANUNCIO, MECANISMOS,
-  arquivosDoManual, linhasLogicas, normalizar, chaveDe, inventario, cruzar, linhasDoExperimento,
-  conferirResultado, motivo
+  RE_ITEM, MARCADORES, LIMITE_ANUNCIO, MECANISMOS, linhasLogicas, normalizar, chaveDe, inventario, cruzar,
+  linhasDoExperimento, conferirResultado, motivo
 };

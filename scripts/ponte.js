@@ -474,4 +474,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { rodar, executar, ondeRoda, lerGanchos, scriptDoGancho, scriptsDe };
+module.exports = { rodar, executar, lerGanchos, scriptDoGancho, scriptsDe };

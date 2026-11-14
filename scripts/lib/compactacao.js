@@ -269,4 +269,4 @@ function naLista(arquivo, chave, cwd, projeto) {
     'grava de novo neste projeto.';
 }
 
-module.exports = { FOLGA, RESERVA, limiarEmVigor, gravarNoClaude, gravarNoCodex, gravarPontos, gravarNaAbertura, gravarInteiro };
+module.exports = { FOLGA, limiarEmVigor, gravarNoClaude, gravarNoCodex, gravarPontos, gravarNaAbertura, gravarInteiro };

@@ -1,5 +1,36 @@
 'use strict';
-const { spawnSync } = require('node:child_process');
+const cp = require('node:child_process');
+
+const PRAZO_PADRAO_MS = 20000;
+const SAIDA_PADRAO_BYTES = 64 * 1024 * 1024;
+
+/**
+ * F5a (diagnostico de 2026-11-10, secao F): o UNICO spawn do git no plugin (test/git.test.js barra outro). Sem shell,
+ * sem janela, texto utf8; prazo padrao de 20 s e saida de ate 64 MiB, os dois trocaveis em `opcoes` por outro valor
+ * positivo. O prazo e sempre finito, de proposito (um gancho nunca espera o git para sempre): `timeout` 0 ou ausente
+ * vira o padrao, nunca "sem limite". `opcoes.env` se soma ao do processo. Nunca lanca: o spawn que lanca (argumento invalido) volta como `{ status: null, error }`. O
+ * resultado e o do spawnSync, para quem precisa do status, do stderr ou do sinal; `ok(r)` diz se deu certo.
+ * `cp.spawnSync` e lido na hora da chamada: os testes trocam a funcao por `node --require` antes do script carregar.
+ */
+function rodar(cwd, args, opcoes) {
+  const o = opcoes || {};
+  const config = {
+    encoding: 'utf8', shell: false, windowsHide: true,
+    timeout: o.timeout || PRAZO_PADRAO_MS, maxBuffer: o.maxBuffer || SAIDA_PADRAO_BYTES
+  };
+  if (cwd) config.cwd = cwd;
+  if (o.env) config.env = Object.assign({}, process.env, o.env);
+  try {
+    return cp.spawnSync('git', args, config);
+  } catch (e) {
+    return { status: null, signal: null, stdout: '', stderr: '', error: e };
+  }
+}
+
+/** O git rodou, saiu 0 e devolveu texto. */
+function ok(r) {
+  return !!r && !r.error && r.status === 0 && typeof r.stdout === 'string';
+}
 
 /**
  * Foto do git status na abertura da sessao (D17).
@@ -10,23 +41,16 @@ const { spawnSync } = require('node:child_process');
  * ficaria muda pelo resto do dia sem uma linha ao usuario.
  */
 function correr(cwd, args, opcoes) {
-  let r;
-  try {
-    // maxBuffer opcional: o padrao do spawnSync (1 MiB, mantido) estoura em saida grande e viraria `null`.
-    // timeout opcional (ms; padrao 5000): existe para o teste nao esperar 5 s.
-    r = spawnSync('git', args, {
-      cwd: cwd, encoding: 'utf8', shell: false, windowsHide: true,
-      timeout: opcoes && opcoes.timeout ? opcoes.timeout : 5000,
-      maxBuffer: opcoes && opcoes.maxBuffer ? opcoes.maxBuffer : 1024 * 1024
-    });
-  } catch (e) {
-    return null;
-  }
+  // maxBuffer opcional: o padrao daqui (1 MiB, o do spawnSync, mantido) estoura em saida grande e viraria `null`.
+  // timeout opcional (ms; padrao 5000): existe para o teste nao esperar 5 s.
+  const r = rodar(cwd, args, {
+    timeout: opcoes && opcoes.timeout ? opcoes.timeout : 5000,
+    maxBuffer: opcoes && opcoes.maxBuffer ? opcoes.maxBuffer : 1024 * 1024
+  });
   // A2-14: o retorno segue `null` (mesmo contrato), mas quem quiser saber POR QUE passa `opcoes.falha` (um
   // objeto) e le `falha.timeout === true` depois: git lento nao e o mesmo que "fora do repositorio".
-  if (r && r.error && r.error.code === 'ETIMEDOUT' && opcoes && opcoes.falha) opcoes.falha.timeout = true;
-  if (!r || r.error || r.status !== 0 || typeof r.stdout !== 'string') return null;
-  return r.stdout;
+  if (r.error && r.error.code === 'ETIMEDOUT' && opcoes && opcoes.falha) opcoes.falha.timeout = true;
+  return ok(r) ? r.stdout : null;
 }
 
 /**
@@ -210,4 +234,4 @@ function diffContraHead(cwd, rel) {
   return { removidas: soma('antigoQtd'), acrescentadas: soma('novoQtd'), blocos: blocos };
 }
 
-module.exports = { modificados, rastreadosMudados, mudancasRastreadas, prefixo, rastreados, ultimasMudancas, correr, diffContraHead };
+module.exports = { rodar, ok, SAIDA_PADRAO_BYTES, modificados, rastreadosMudados, mudancasRastreadas, prefixo, rastreados, ultimasMudancas, correr, diffContraHead };

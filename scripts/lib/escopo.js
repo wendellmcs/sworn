@@ -144,6 +144,20 @@ function ascii(valor) {
 }
 
 /**
+ * F5a: o texto de fora em UMA linha ASCII (o motivo do git, um caminho): cada quebra ou tab (as ASCII e as Unicode
+ * U+0085, U+2028, U+2029) vira UM espaco, um por um; os espacos seguidos ficam, para o caminho com dois espacos sair
+ * como esta no disco. O espaco Unicode (U+00A0, U+3000...) nao vira espaco comum, que seria outro nome de arquivo: o
+ * ascii() o marca com '?'. Das pontas sai so a quebra e o tab (o fim da saida do git); o espaco de borda pode ser do
+ * nome e fica.
+ */
+const QUEBRA_OU_TAB = '[\\t\\n\\v\\f\\r\\u0085\\u2028\\u2029]';
+const QUEBRA_NAS_PONTAS = new RegExp('^' + QUEBRA_OU_TAB + '+|' + QUEBRA_OU_TAB + '+$', 'g');
+const QUEBRA_NO_MEIO = new RegExp(QUEBRA_OU_TAB, 'g');
+function asciiEmUmaLinha(valor) {
+  return ascii(String(valor == null ? '' : valor).replace(QUEBRA_NAS_PONTAS, '').replace(QUEBRA_NO_MEIO, ' '));
+}
+
+/**
  * D34: o "depois" de uma escrita, calculado a partir do tool_input, sem tocar no disco.
  * Devolve null quando nao da para saber (e ai o portao conta a ampliacao por precaucao).
  */
@@ -440,7 +454,7 @@ function motivoOutraFrente(alvo, arquivo) {
 }
 
 module.exports = {
-  ARQUIVO, PASTA_FRENTES, parse, carregar, dentro, declaradoFora, ascii, conteudoDepois, ampliou,
+  ARQUIVO, PASTA_FRENTES, parse, carregar, dentro, declaradoFora, ascii, asciiEmUmaLinha, conteudoDepois, ampliou,
   avisoHeranca, frenteDoAlvo, arquivoEmVigor, nomeSeguro,
   motivoSemEscopo, motivoFora, motivoDeclaradoFora, motivoIntocavel, motivoOutraFrente, motivoNomeDeFrente
 };

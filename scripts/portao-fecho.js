@@ -139,6 +139,7 @@ function encerrarTurno(e, s, avisoExtra) {
   const fundo = rodando.length ? rodando : saude.agentesRodando(e.transcript_path, Date.now());
   if (fundo.length && !esperaNova) {
     let doPlano = '';
+    // fail-open: so perde a linha de situacao
     try { doPlano = require('./lib/plano.js').linhaDoPlanoDaSessao(cwd, s.frente); } catch (err) { doPlano = ''; }
     partes.push(saude.linhaDeSituacao(fundo, doPlano));
   }
@@ -358,6 +359,7 @@ function paradaSemDono(e, s, projeto, cwd) {
   const declarada = linhaDeclarada(msg);
   if (declarada.libera || (s.paradaSemDono || 0) >= TETO_DA_PARADA) return null;
   let caixa = null;
+  // fail-open: o plano que nao se le nao prende o turno (o anuncio do proximo passo ainda barra)
   try { caixa = require('./lib/plano.js').caixaAberta(cwd, s.frente); } catch (err) { caixa = null; }
   const anuncia = anunciaOProximoPasso(msg);
   if (!caixa && !anuncia && !declarada.pedeChat) return null;
@@ -390,6 +392,7 @@ function avisoDoPrompt(prompt, arquivo) {
 /** O conteudo do ultimo bloco de codigo do arquivo (cerca no comeco da linha), ou null. */
 function promptDoHandoff(arquivo) {
   let texto;
+  // fail-open: o handoff que nao se le nao cobra o prompt colado (handoffSemPrompt devolve false)
   try { texto = require('node:fs').readFileSync(arquivo, 'utf8'); } catch (e) { return null; }
   let ultimo = null;
   for (const m of texto.matchAll(/^```[^\n]*\r?\n([\s\S]*?)^```[ \t]*\r?$/gm)) ultimo = m[1];
@@ -779,7 +782,7 @@ io.blindar(function () {
       // Plano 082 (p7-5): caminhoDoPlano, como a faixa e o painel - o absoluto do --abrir se le.
       try { tarefas = planoLib.parseTarefas(require('node:fs').readFileSync(planoLib.caminhoDoPlano(cwd, ativo.arquivo), 'utf8')); }
       catch (err) {
-        // S52-fec-1: plano ilegivel nao barra, mas tambem nao passa calado. Pedido 12 (A3): com causa e proximo passo.
+        // fail-open, com aviso. S52-fec-1: plano ilegivel nao barra, mas tambem nao passa calado. Pedido 12 (A3): com causa e proximo passo.
         tarefas = [];
         // A3-25: sem jargao, e o comando de abrir com o caminho real do plano.js (o do painel).
         planoIlegivel = 'sworn: o plano ativo (' + String(ativo.arquivo) + ') nao pode ser lido (' +

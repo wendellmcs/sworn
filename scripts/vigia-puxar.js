@@ -21,7 +21,7 @@
  */
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const gitLib = require('./lib/git.js');
 const vigia = require('./lib/vigia-local.js');
 const escopoLib = require('./lib/escopo.js');
 const textoLib = require('./lib/texto.js');
@@ -44,23 +44,15 @@ function valor(nome) {
   return v;
 }
 
-/** ASCII em uma linha (R5): o texto de erro do git pode trazer acento, caminho do usuario, quebra de linha. */
-function umaLinha(texto) {
-  return escopoLib.ascii(String(texto == null ? '' : texto).replace(/\s+/g, ' ')).trim();
-}
+// ASCII em uma linha (R5): o texto de erro do git pode trazer acento, caminho do usuario, quebra de linha (F5a: a
+// do escopo.js, a mesma do vigia-local).
+const umaLinha = escopoLib.asciiEmUmaLinha;
 
 /** git com shell:false, sem prompt de credencial; { ok, saida, motivo }. */
 function git(repo, args, timeout) {
-  let r;
-  try {
-    r = spawnSync('git', ['-C', repo].concat(args), {
-      encoding: 'utf8', shell: false, windowsHide: true, timeout: timeout,
-      maxBuffer: 5 * 1024 * 1024,
-      env: Object.assign({}, process.env, { GIT_TERMINAL_PROMPT: '0' })
-    });
-  } catch (e) {
-    return { ok: false, motivo: 'git nao rodou: ' + umaLinha(textoLib.causaDoErro(e)) };
-  }
+  // o rodar nunca lanca: o spawn que lancaria volta em r.error, com a mesma frase
+  const r = gitLib.rodar(null, ['-C', repo].concat(args),
+    { timeout: timeout, maxBuffer: 5 * 1024 * 1024, env: { GIT_TERMINAL_PROMPT: '0' } });
   if (r.error) {
     const causa = r.error.code === 'ETIMEDOUT' ? 'git demorou mais de ' + Math.round(timeout / 1000) + 's' : textoLib.causaDoErro(r.error);
     return { ok: false, motivo: 'git nao rodou: ' + umaLinha(causa) };

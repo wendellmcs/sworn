@@ -320,6 +320,8 @@ function avisoDeRenovacao(raiz, estado, hoje) {
     ' (ele diz se saiu modelo novo ou se a pagina oficial de algum guia mudou).';
 }
 
-module.exports = { FAMILIAS, PASTA, TETO_DO_GUIA, TETO_DO_PEDIDO, SECOES, OVERVIEW, DIAS_PARA_CONFERIR, impressao,
-  conferirFormato, blocoDoTexto, citacoesQueNaoConferem, ler, pronto, bloco, familiaDoDespacho, comGuia, modelosNovos,
-  conferir, arquivoDoEstado, diaLocal, ultimaConferencia, avisoDeRenovacao };
+module.exports = {
+  FAMILIAS, PASTA, TETO_DO_GUIA, TETO_DO_PEDIDO, SECOES, OVERVIEW, impressao, conferirFormato, blocoDoTexto,
+  citacoesQueNaoConferem, ler, pronto, bloco, familiaDoDespacho, comGuia, modelosNovos, conferir, arquivoDoEstado,
+  diaLocal, ultimaConferencia, avisoDeRenovacao
+};

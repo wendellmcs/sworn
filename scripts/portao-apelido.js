@@ -38,7 +38,7 @@ function conferirAqui(cwd) {
 // excecao. Agora tem a forma da leitura do --para arquivo: ERRO, o arquivo, a causa, saida 1.
 function gravarOuParar(arquivo, conteudo) {
   try { fs.writeFileSync(arquivo, conteudo, 'utf8'); }
-  catch (e) {
+  catch (e) { // fail-closed: o CLI para com erro, nada gravado
     process.stdout.write('ERRO: nao consegui gravar ' + arquivo + ': ' + e.message + '\n');
     process.exit(1);
   }
@@ -95,7 +95,7 @@ if (tem('corrigir')) {
     const arquivo = agentesLib.caminho(cwd, String((d || de).arquivo).replace(/\.md$/, ''));
     let bruto;
     try { bruto = fs.readFileSync(arquivo, 'utf8'); }
-    catch (e) {
+    catch (e) { // fail-closed: o CLI para com erro, nada gravado
       process.stdout.write('ERRO: nao consegui ler ' + arquivo + ': ' + e.message + '\n');
       process.exit(1);
     }

@@ -247,5 +247,6 @@ function lerResultado(saida, msg) {
   return { evidencia: evidencia, imagem: fim.imagem, aviso: textoOuNulo(fim.aviso) };
 }
 
-module.exports = { conferirTelas, prefixosDoEndereco, evidenciaCega, resumoDoFecho, capturar, NO_LUGAR_DA_PAGINA,
-  PRAZO_DA_CAPTURA, ENTRADAS_DO_INSPETOR };
+module.exports = {
+  conferirTelas, prefixosDoEndereco, evidenciaCega, resumoDoFecho, capturar, ENTRADAS_DO_INSPETOR
+};

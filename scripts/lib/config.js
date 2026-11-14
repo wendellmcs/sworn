@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const texto = require('./texto.js');
+const jsonio = require('./jsonio.js');
 
 /** 0.3.3, item 27: o caminho de um arquivo de <projeto>/.claude/sworn/. Uma montagem so, para quem le e para quem diagnostica. */
 function caminhoEmSworn(cwd, nome) {
@@ -12,28 +12,22 @@ function caminhoEmSworn(cwd, nome) {
  * Le <projeto>/.claude/sworn/<nome>. Ausente ou corrompido -> null. JSON escrito no
  * Windows costuma vir com BOM, e sem semBom o JSON.parse estoura e o modulo se desliga EM
  * SILENCIO. D124. Uma funcao so para os dois arquivos (ronda 1 do 8c.5): duas copias da
- * mesma leitura ja divergiram uma vez.
+ * mesma leitura ja divergiram uma vez. F5a: a leitura e a do lib/jsonio.js.
+ * H-3: lista JSON e valida e `typeof [] === 'object'`, mas nao e o objeto que os dois arquivos sao (objeto: true).
  */
-function lerJson(cwd, nome) {
-  if (!cwd) return null;
-  try {
-    const bruto = fs.readFileSync(caminhoEmSworn(cwd, nome), 'utf8');
-    const obj = JSON.parse(texto.semBom(bruto));
-    // H-3: lista JSON e valida e `typeof [] === 'object'`, mas nao e o objeto que os dois arquivos sao.
-    return obj && typeof obj === 'object' && !Array.isArray(obj) ? obj : null;
-  } catch (e) {
-    return null;
-  }
+function lerObjeto(cwd, nome) {
+  if (typeof cwd !== 'string' || cwd === '') return null;
+  return jsonio.ler(caminhoEmSworn(cwd, nome), { objeto: true }).valor;
 }
 
 /** Le <projeto>/.claude/sworn/projeto.json. */
 function carregarProjeto(cwd) {
-  return lerJson(cwd, 'projeto.json');
+  return lerObjeto(cwd, 'projeto.json');
 }
 
 /** Le <projeto>/.claude/sworn/design.json. */
 function carregarDesign(cwd) {
-  return lerJson(cwd, 'design.json');
+  return lerObjeto(cwd, 'design.json');
 }
 
 /**

@@ -136,7 +136,7 @@ function lerRespostas(arquivo) {
   try { bruto = fs.readFileSync(arquivo, 'utf8'); }
   catch (e) { return { ok: false, erro: 'nao consegui ler ' + arquivo + ': ' + e.message }; }
   let valores;
-  // A4-mol-2 (R2): o BOM (Out-File do PowerShell 5.1) sai antes do parse, como no lerJson do ambiente.js (A4-01).
+  // A4-mol-2 (R2): o BOM (Out-File do PowerShell 5.1) sai antes do parse, como no jsonio.ler (A4-01).
   try { valores = JSON.parse(semBom(bruto)); }
   catch (e) { return { ok: false, erro: arquivo + ' nao e JSON valido: ' + e.message }; }
   if (valores === null || typeof valores !== 'object' || Array.isArray(valores)) {
@@ -146,4 +146,4 @@ function lerRespostas(arquivo) {
   return { ok: true, valores: valores };
 }
 
-module.exports = { RE_SLOT, MARCA, slots, preencher, validar, lerRespostas };
+module.exports = { MARCA, slots, preencher, validar, lerRespostas };

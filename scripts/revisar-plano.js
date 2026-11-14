@@ -4,7 +4,7 @@
 // node revisar-plano.js <plano.md> [--json]. Codigo 0 sem achado, 1 com achado, 2 sem plano legivel.
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const gitLib = require('./lib/git.js');
 const { ascii } = require('./lib/escopo.js');
 const { conferir } = require('./lib/plano-conferir.js');
 
@@ -15,9 +15,8 @@ const CAUSA = { ENOENT: 'o arquivo nao existe', EISDIR: 'e uma pasta, nao um arq
  * repositorio, ou o git falhou). Com -z o nome com acento chega como e, sem aspas nem octal.
  */
 function arquivosDoGit(cwd) {
-  const r = spawnSync('git', ['ls-files', '-z'],
-    { cwd: cwd, encoding: 'utf8', timeout: 20000, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
-  return r.status === 0 ? String(r.stdout).split('\0').filter(Boolean) : null;
+  const r = gitLib.rodar(cwd, ['ls-files', '-z']);
+  return gitLib.ok(r) ? String(r.stdout).split('\0').filter(Boolean) : null;
 }
 
 function main(argv, cwd) {

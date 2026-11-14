@@ -471,6 +471,6 @@ function motivoInerte(inertes) {
 }
 
 module.exports = {
-  MARCHAS, AMEACAS, CHAVES, TRAVAS, LISTAS_LIDAS, CHAVES_LIGA_DESLIGA, CHAVES_OPCIONAIS, TIPOS_REFERENCIA,
-  travasDe, avisosDeTipo, intocaveisInertes, motivoInerte, validar, montar, atualizar, fundir
+  AMEACAS, CHAVES, TRAVAS, CHAVES_LIGA_DESLIGA, CHAVES_OPCIONAIS, TIPOS_REFERENCIA, travasDe, avisosDeTipo,
+  intocaveisInertes, motivoInerte, validar, montar, atualizar, fundir
 };

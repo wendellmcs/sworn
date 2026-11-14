@@ -263,7 +263,11 @@ test('exportar: todo spawnSync dos scripts tem teto de tempo, como os irmaos do 
     }
   };
   visitar(path.join(RAIZ, 'scripts'));
-  assert.ok(com.indexOf('scripts/exportar.js') !== -1, 'o git do exportar.js ficou sem teto');
+  // F5a: o git do exportar.js passa pelo rodar do lib/git.js, que e o spawn com teto (prazo padrao de 20 s)
+  const libGit = fs.readFileSync(path.join(RAIZ, 'scripts', 'lib', 'git.js'), 'utf8');
+  assert.ok(libGit.includes('timeout: o.timeout || PRAZO_PADRAO_MS'), 'o spawn do git ficou sem teto');
+  assert.ok(fs.readFileSync(path.join(RAIZ, 'scripts', 'exportar.js'), 'utf8').includes('gitLib.rodar(dir, args)'),
+    'o git do exportar.js saiu do rodar');
   assert.ok(com.length >= 4, 'o leitor achou so ' + com.length + ' chamadas com teto: ' + com.join(', '));
   assert.deepStrictEqual(sem, [], 'git sem teto de tempo pendura o script sem aviso');
 });

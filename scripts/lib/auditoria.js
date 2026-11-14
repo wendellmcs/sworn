@@ -366,6 +366,5 @@ function auditar(cwd, projeto, opcoes) {
 }
 
 module.exports = {
-  VAZIAS, CARGA_LINHAS, CARGA_BYTES, normalizar, termos, sobreposicoes, contradicoes, medirMemoria, auditar,
-  DIAS_FRIA, idadeDasMemorias, idadeDasRegras
+  VAZIAS, normalizar, termos, sobreposicoes, contradicoes, medirMemoria, auditar, idadeDasMemorias, idadeDasRegras
 };

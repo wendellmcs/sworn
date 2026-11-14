@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const evidencia = require('./evidencia.js');
+const jsonio = require('./jsonio.js');
 
 /**
  * C7 (s369, D769 a, D816): o teste de admissao do modelo, oferecido pelo /sworn:init. Os 4 testes da D766
@@ -172,9 +173,7 @@ function lerResultado(bruto) {
 /** O estado da sessao que os ganchos do sworn gravaram (`<swornTmp>/sworn/<sessao>.json`), ou null. */
 function lerEstado(swornTmp, sessao) {
   if (!sessao) return null;
-  try { return JSON.parse(fs.readFileSync(path.join(swornTmp, 'sworn', sessao + '.json'), 'utf8')); } catch (e) {
-    return null;
-  }
+  return jsonio.ler(path.join(swornTmp, 'sworn', sessao + '.json')).valor;
 }
 
 /** Confere um cenario depois que o harness rodou: `r` = lerResultado (null = nao rodou) com o `estado` da sessao. */

@@ -607,5 +607,7 @@ function avisoCdCorrigido(achado, deNovo) {
   ].map(ascii).join('\n');
 }
 
-module.exports = { TABELA, semLiterais, conferir, problemasDaTabela, avisoTabela, motivoIdioma, cdSolto, motivoCdSolto,
-  envolverEmSubshell, avisoCdCorrigido };
+module.exports = {
+  semLiterais, conferir, problemasDaTabela, avisoTabela, motivoIdioma, cdSolto, motivoCdSolto, envolverEmSubshell,
+  avisoCdCorrigido
+};

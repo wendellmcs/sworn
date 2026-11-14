@@ -3,7 +3,6 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const cegar = require('./lib/cegar.js');
 const git = require('./lib/git.js');
 const caminho = require('./lib/caminho.js');
@@ -75,12 +74,9 @@ function arg(nome) {
 // ls-tree falha, `rev-parse --verify` = 1 e repositorio sem commit (novo), qualquer outro resultado e erro.
 // --full-tree porque o ls-tree resolve o caminho a partir da pasta atual e `relRaiz` vem da raiz do repo.
 // O caminho feliz gasta um processo so.
-// 0.3.3, item 12: maxBuffer explicito; o padrao (1 MiB) estourava em arquivo maior no HEAD.
-const MAX_BUFFER = 64 * 1024 * 1024;
+// 0.3.3, item 12: a saida de ate 64 MiB (o padrao do lib/git.js); a de 1 MiB estourava em arquivo maior no HEAD.
 function rodarGit(cwd, args) {
-  return spawnSync('git', args, {
-    cwd: cwd, encoding: 'utf8', shell: false, timeout: 10000, windowsHide: true, maxBuffer: MAX_BUFFER
-  });
+  return git.rodar(cwd, args, { timeout: 10000 });
 }
 function versaoNoHead(cwd, relRaiz) {
   const r = rodarGit(cwd, ['show', 'HEAD:' + relRaiz]);
@@ -160,7 +156,7 @@ const doHead = versaoNoHead(cwd, pre + rel);
 if (doHead.erro === 'ENOBUFS') {
   // 0.3.3, item 12: rodar de novo nao resolve; o arquivo no HEAD e maior que o limite.
   process.stdout.write('ERRO: ' + rel + ' no HEAD do git passa do limite da revisao cega (' +
-    (MAX_BUFFER / 1024 / 1024) + ' MiB; causa: ENOBUFS). Nada foi gravado. Revise um arquivo menor, ' +
+    (git.SAIDA_PADRAO_BYTES / 1024 / 1024) + ' MiB; causa: ENOBUFS). Nada foi gravado. Revise um arquivo menor, ' +
     'ou divida este.\n');
   process.exit(1);
 }

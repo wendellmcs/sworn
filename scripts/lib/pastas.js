@@ -9,7 +9,8 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn, spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
+const gitLib = require('./git.js');
 
 const TIPOS = ['estudo', 'worktree', 'export', 'carga'];
 const ARQUIVO = 'pastas.json';
@@ -127,8 +128,8 @@ function registrar(caminho, tipo, opcoes, env) {
 
 /** O git na pasta, sem shell e com prazo; a saida, ou null quando ele falha. */
 function git(pasta, args) {
-  const r = spawnSync('git', args, { cwd: pasta, encoding: 'utf8', timeout: PRAZO_GIT_MS, windowsHide: true });
-  return r.status === 0 ? r.stdout : null;
+  const r = gitLib.rodar(pasta, args, { timeout: PRAZO_GIT_MS });
+  return gitLib.ok(r) ? r.stdout : null;
 }
 
 /** Por que a pasta ainda nao se apaga, ou null quando ja pode. `ficaram`: os registros que ficam nesta passada;
@@ -185,8 +186,7 @@ function conferirPasta(reg) {
 function apagar(reg) {
   try {
     if (reg.tipo === 'worktree' && reg.repo && fs.existsSync(reg.repo)) {
-      const r = spawnSync('git', ['-C', reg.repo, 'worktree', 'remove', reg.caminho],
-        { encoding: 'utf8', timeout: PRAZO_GIT_MS, windowsHide: true });
+      const r = gitLib.rodar(null, ['-C', reg.repo, 'worktree', 'remove', reg.caminho], { timeout: PRAZO_GIT_MS });
       if (r.status !== 0) return 'o git nao tirou o worktree: ' + String(r.stderr || (r.error && r.error.message) || '').trim();
     } else {
       fs.rmSync(reg.caminho, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
@@ -405,8 +405,7 @@ function clonar(url, opcoes, env) {
   const args = ['-c', 'protocol.allow=never', '-c', (local ? 'protocol.file.allow' : 'protocol.https.allow') + '=always',
     '-c', 'core.symlinks=false', 'clone', '--depth', '1', '--no-tags', '--single-branch', '--quiet']
     .concat(o.ref ? ['--branch', o.ref] : [], ['--', url, reg.registro.caminho]);
-  const r = spawnSync('git', args, { encoding: 'utf8', timeout: PRAZO_CLONE_MS, windowsHide: true,
-    env: Object.assign({}, process.env, { GIT_LFS_SKIP_SMUDGE: '1', GIT_TERMINAL_PROMPT: '0' }) });
+  const r = gitLib.rodar(null, args, { timeout: PRAZO_CLONE_MS, env: { GIT_LFS_SKIP_SMUDGE: '1', GIT_TERMINAL_PROMPT: '0' } });
   if (r.status !== 0) {
     desfazer(reg.registro, env);
     return falha('o git clone falhou (confira o endereco, o ramo e a rede; repositorio privado nao se clona daqui): ' +
@@ -423,6 +422,5 @@ function clonar(url, opcoes, env) {
 }
 
 module.exports = {
-  TIPOS, DIAS_SEM_DONO, arquivoDoRegistro, listar, registrar, limpar, emSegundoPlano, executaNoEstudo, motivoDoEstudo,
-  clonar
+  TIPOS, arquivoDoRegistro, listar, registrar, limpar, emSegundoPlano, executaNoEstudo, motivoDoEstudo, clonar
 };

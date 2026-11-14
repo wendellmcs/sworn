@@ -1491,5 +1491,7 @@ function motivoShell(alvos) {
   return linhas.join('\n');
 }
 
-module.exports = { EXTENSOES_ESTILO, UNIDADES, ehArquivoDeEstilo, valoresCrus, conferir, motivo, alvosDeEstiloNoShell, motivoShell, validar,
-  desviosDoArquivo, problemaDoDesvio, paraARevisao, conferirComputado, medidaEmPx };
+module.exports = {
+  UNIDADES, ehArquivoDeEstilo, valoresCrus, conferir, motivo, alvosDeEstiloNoShell, motivoShell, validar,
+  desviosDoArquivo, problemaDoDesvio, paraARevisao, conferirComputado, medidaEmPx
+};

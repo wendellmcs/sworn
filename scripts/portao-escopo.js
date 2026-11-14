@@ -17,7 +17,7 @@ const catraca = require('./lib/catraca.js');
 /** C9: o alvo ja existe? Se nao existe, isto e criacao, e criacao exige busca. F3c (D828): no erro (entrada torta), conta
  *  como criacao, o lado que exige a busca; antes contava como "existe" e liberava a trava 7. */
 function existe(cwd, alvo) {
-  try { return fs.existsSync(path.join(cwd, alvo)); } catch (err) { return false; }
+  try { return fs.existsSync(path.join(cwd, alvo)); } catch (err) { return false; } // fail-closed: criacao, exige a busca
 }
 
 /*
@@ -68,6 +68,7 @@ function negar(motivo) {
  * contexto ela diria apenas "existe" - nao reuse sem repetir essa pre-condicao.
  */
 function projetoPresenteEIlegivel(cwd) {
+  // fail-open: so escolhe a mensagem do aviso, nao a decisao
   try { return fs.existsSync(config.caminhoEmSworn(cwd, 'projeto.json')); } catch (err) { return false; }
 }
 
@@ -119,6 +120,7 @@ io.blindar(function () {
     if (alvo.toLowerCase() === escopoLib.ARQUIVO || frenteAlvo) {
       // D34: conta a ampliacao tambem na CRIACAO, e so quando a lista "Dentro" cresce.
       let atual = '';
+      // fail-closed: o escopo que nao se le conta vazio, e todo o Dentro novo conta como ampliacao
       try { atual = fs.readFileSync(path.join(cwd, alvo), 'utf8'); } catch (err) { atual = ''; }
       const depoisTexto = escopoLib.conteudoDepois(atual, entrada);
       const depois = depoisTexto === null ? null : escopoLib.parse(depoisTexto);
@@ -167,7 +169,7 @@ io.blindar(function () {
       const ab = s.aberturaDoTurno;
       const escAb = ab && Array.isArray(ab.dentro) ? { dentro: ab.dentro, fora: Array.isArray(ab.fora) ? ab.fora : [] } : null;
       naAbertura = !!escAb && !!alvo && escopoLib.dentro(alvo, escAb) && !escopoLib.declaradoFora(alvo, escAb);
-    } catch (err) { naAbertura = false; }
+    } catch (err) { naAbertura = false; } // fail-closed: fora da foto da abertura, a A5b nega
     if (entrada.apagar === true && s.escopoAmpliadoNoTurno === true && !naAbertura) {
       try { estado.incrementar(e.session_id, 'fora_do_escopo'); } catch (err) { contadorNaoGravou(); }
       return negar(require('./lib/destrutivo.js').motivo('apagar ' + alvo,
@@ -276,6 +278,7 @@ io.blindar(function () {
       ? catraca.afrouxou(entrada.old_string, entrada.new_string) : [];
     if (!frouxo.length && existe(cwd, alvo)) {
       let atual = null;
+      // fail-open: o arquivo que nao se le nao se compara inteiro; o trecho do Edit ja passou pela catraca acima
       try { atual = fs.readFileSync(path.join(cwd, alvo), 'utf8'); } catch (err) { atual = null; }
       const depoisTexto = atual === null ? null : escopoLib.conteudoDepois(atual, entrada);
       if (depoisTexto !== null) frouxo = catraca.afrouxou(atual, depoisTexto);

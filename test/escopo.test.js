@@ -895,3 +895,27 @@ test('A2-21/22/23: o aviso diz o passo seguinte e onde contar o achado, sem lema
   assert.match(into, /conte ao usuario no fecho do turno/, 'onde registrar no intocavel: ' + into);
   assert.match(into, /3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo/, 'como perguntar: ' + into);
 });
+
+// F5a (diagnostico de 2026-11-10): o vigia-puxar e o vigia-local tinham cada um a sua umaLinha ASCII.
+test('F5a: asciiEmUmaLinha - acento sai, cada quebra ou tab vira um espaco, nulo vira vazio', () => {
+  assert.strictEqual(escopo.asciiEmUmaLinha('\r\n\tfatal: não\r\n\tachou o ramo\n'), 'fatal: nao   achou o ramo');
+  // revisao cega (ronda 3): so a quebra e o tab saem das pontas; o espaco de borda pode ser do nome e fica
+  assert.strictEqual(escopo.asciiEmUmaLinha(' /tmp/pasta /a.js '), ' /tmp/pasta /a.js ', 'espaco de borda fica');
+  assert.strictEqual(escopo.asciiEmUmaLinha('\u2028x\u0085'), 'x', 'quebra Unicode da ponta sai');
+  // revisao cega da F5a: o caminho com dois espacos seguidos sai como esta no disco (o rodape do vigia-local).
+  assert.strictEqual(escopo.asciiEmUmaLinha('C:\\Meus  Docs\\vigia\\novidades.md'), 'C:\\Meus  Docs\\vigia\\novidades.md');
+  assert.strictEqual(escopo.asciiEmUmaLinha(null), '');
+  assert.strictEqual(escopo.asciiEmUmaLinha(undefined), '');
+  assert.strictEqual(escopo.asciiEmUmaLinha('a\u0007b'), 'a?b', 'controle vira ?');
+  assert.strictEqual(escopo.asciiEmUmaLinha(42), '42');
+  // revisao cega (ronda 2): o espaco Unicode nao vira espaco comum (seria outro nome de arquivo); a quebra Unicode vira
+  assert.strictEqual(escopo.asciiEmUmaLinha('a\u00a0b\u3000c'), 'a?b?c', 'espaco Unicode sai marcado');
+  assert.strictEqual(escopo.asciiEmUmaLinha('a\u2028b\u2029c\u0085d'), 'a b c d', 'quebra Unicode vira um espaco');
+});
+
+test('F5a: os dois vigias usam a mesma umaLinha (a do escopo.js)', () => {
+  for (const rel of ['scripts/vigia-puxar.js', 'scripts/lib/vigia-local.js']) {
+    const fonte = fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+    assert.ok(!/function umaLinha\b/.test(fonte), rel + ' ainda tem a sua umaLinha');
+  }
+});

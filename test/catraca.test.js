@@ -313,3 +313,23 @@ test('A5-64: comparacao de igualdade com o nome do piso nao e valor novo dele; a
   assert.strictEqual(catraca.afrouxou('if (piso >= 2) ok();', 'if (piso >= 1) ok();').length, 1,
     '>= num portao e regua');
 });
+
+// F5 (achado da R2b, s369): a regua e identificada pelo NOME INTEIRO, nao pela palavra solta. Uma constante nova de
+// medida maxima num arquivo que ja tinha outra era lida como o teto velho subindo, e o portao negava a criacao.
+test('F5: regua nova com outro nome e criacao; a mesma regua subindo segue acusando, com o nome no aviso', () => {
+  assert.deepStrictEqual(catraca.afrouxou('const LIMITE_X = 5;', 'const LIMITE_X = 5;\nconst LIMITE_Y = 50;'), [],
+    'constante nova');
+  assert.deepStrictEqual(catraca.afrouxou('const MAX_LINHAS = 10;', 'const MAX_LINHAS = 10;\nconst MAX_BYTES = 4096;'), []);
+  assert.deepStrictEqual(catraca.afrouxou('ESLINT_MAX_WARNINGS=0', 'ESLINT_MAX_WARNINGS=0\nOUTRO_MAX_WARNINGS=5'), [],
+    'o prefixo antes do _ faz parte do nome');
+  const r = catraca.afrouxou('LIMITE_X = 5\nLIMITE_Y = 50', 'LIMITE_X = 6\nLIMITE_Y = 50');
+  assert.strictEqual(r.length, 1);
+  assert.strictEqual(r[0].nome, 'limite_x');
+  assert.strictEqual(r[0].palavra, 'limite');
+  assert.ok(catraca.motivo('a.js', r).includes('limite_x: 5 -> 6'), catraca.motivo('a.js', r));
+  // o nome inteiro, nao o trecho: obj.teto e teto sao a mesma regua (o ponto separa), --max-lines e max-lines tambem
+  assert.strictEqual(catraca.afrouxou('cfg.teto = 3', 'cfg.teto = 9').length, 1);
+  assert.strictEqual(catraca.afrouxou('--max-lines 3', '--max-lines 9').length, 1);
+  // pares (a leitura por palavra) nao muda
+  assert.deepStrictEqual(Object.keys(catraca.pares('const a = 1, MIN_COVERAGE = 80;')), ['coverage']);
+});

@@ -100,8 +100,26 @@ function ehRegua(linha, m, orig, palavra, cache) {
  * Acha pares "<palavra de catraca> <numero>" - com ate 12 caracteres de
  * separador entre os dois, o que cobre `teto: 200`, `"teto" = 200`,
  * `tetoDeInstrucoes: 200` e `--max-warnings 0`, sem atravessar a linha.
+ * `pares` agrupa pela palavra; `afrouxou` usa `paresPorNome` (o mesmo achado, agrupado pelo nome inteiro).
  */
 function pares(texto) {
+  const porNome = paresPorNome(texto);
+  const achados = Object.create(null);
+  for (const nome of Object.keys(porNome)) {
+    const p = porNome[nome].palavra;
+    achados[p] = (achados[p] || []).concat(porNome[nome].valores);
+  }
+  return achados;
+}
+
+/**
+ * F5 (achado da R2b, s369): o nome inteiro da regua, em minusculas e sem acento - a palavra, o sufixo e o que vem
+ * antes dela no mesmo identificador (`eslint_max_warnings`, `limite_x`, `tetodeinstrucoes`). Agrupar so pela
+ * palavra lia uma constante NOVA de medida maxima como o teto velho do arquivo subindo. O ponto e o hifen separam:
+ * `cfg.teto` e `teto`, `--max-lines` e `max-lines` sao a mesma regua.
+ * Devolve { <nome>: { palavra, valores: [numeros] } }, na ordem em que os nomes aparecem.
+ */
+function paresPorNome(texto) {
   const achados = Object.create(null);
   const originais = semAcento(texto).split(/\r?\n/);
   const linhas = originais.map(function (l) { return l.toLowerCase(); });
@@ -140,8 +158,11 @@ function pares(texto) {
         const fim = m.index + m[0].length;
         if (tomadas.some(function (t) { return ini < t[1] && t[0] < fim; })) continue;
         tomadas.push([ini, fim]);
-        if (!achados[palavra]) achados[palavra] = [];
-        achados[palavra].push(valor);
+        let comeco = ini;
+        while (comeco > 0 && /[a-z0-9_$]/.test(linha[comeco - 1])) comeco--;
+        const nome = linha.slice(comeco, ini) + palavra + m.groups.sufixo;
+        if (!achados[nome]) achados[nome] = { palavra: palavra, valores: [] };
+        achados[nome].valores.push(valor);
       }
     }
   }
@@ -162,24 +183,25 @@ function extremo(lista, fam) {
 /**
  * Compara o antes e o depois de uma edicao. Devolve os afrouxamentos.
  *
- * Conservador de proposito: so acusa quando a MESMA palavra de catraca aparece
+ * Conservador de proposito: so acusa quando a MESMA regua (o nome inteiro, F5) aparece
  * nos dois lados e o numero andou para o lado que deixa passar mais. Palavra que
  * so existe depois e criacao, nao afrouxamento - e criar catraca nova e o
  * contrario do que esta falha descreve.
  */
 function afrouxou(antes, depois) {
-  const a = pares(antes);
-  const d = pares(depois);
+  const a = paresPorNome(antes);
+  const d = paresPorNome(depois);
   const achados = [];
-  for (const palavra of Object.keys(d)) {
-    if (!a[palavra]) continue;
+  for (const nome of Object.keys(d)) {
+    if (!a[nome]) continue;
+    const palavra = d[nome].palavra;
     const fam = familia(palavra);
     // O extremo de cada lado e o que manda: subir o maior teto e afrouxar,
-    // mesmo que outro teto na mesma edicao tenha descido.
-    const antesV = extremo(a[palavra], fam);
-    const depoisV = extremo(d[palavra], fam);
+    // mesmo que outro teto com o MESMO nome, na mesma edicao, tenha descido.
+    const antesV = extremo(a[nome].valores, fam);
+    const depoisV = extremo(d[nome].valores, fam);
     if (fam === 'teto' ? depoisV > antesV : depoisV < antesV) {
-      achados.push({ palavra: palavra, familia: fam, de: antesV, para: depoisV });
+      achados.push({ nome: nome, palavra: palavra, familia: fam, de: antesV, para: depoisV });
     }
   }
   return achados;
@@ -194,7 +216,7 @@ function motivo(alvo, achados) {
     'Arquivo: ' + alvo
   ];
   for (const a of achados) {
-    linhas.push('  ' + a.palavra + ': ' + a.de + ' -> ' + a.para +
+    linhas.push('  ' + (a.nome || a.palavra) + ': ' + a.de + ' -> ' + a.para +
       (a.familia === 'teto' ? '  (o teto, o maximo permitido, subiu: agora aceita mais que antes)' : '  (o piso, o minimo exigido, desceu: agora exige menos que antes)'));
   }
   linhas.push('');
@@ -208,4 +230,4 @@ function motivo(alvo, achados) {
   return linhas.join('\n');
 }
 
-module.exports = { TETO, PISO, semAcento, pares, familia, extremo, afrouxou, motivo };
+module.exports = { TETO, semAcento, pares, familia, extremo, afrouxou, motivo };

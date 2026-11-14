@@ -147,10 +147,10 @@ const PONTOS = [
     chave: 'processo_externo',
     classe: SO_NO_SISTEMA,
     titulo: 'Chamada de processo externo sem shell (o git; o navegador da captura de tela)',
-    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/conferir-tela.js', 'scripts/drift.js', 'scripts/exportar.js', 'scripts/lib/busca.js', 'scripts/lib/git.js',
+    // F5a: todo git passa pelo scripts/lib/git.js (o rodar); quem so chama o git por ele saiu desta lista
+    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/conferir-tela.js', 'scripts/lib/git.js',
                'scripts/lib/pastas.js', 'scripts/lib/prova-no-fecho.js',
-               'scripts/lib/sanitacao.js', 'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/ponte.js',
-               'scripts/preparar-revisao.js', 'scripts/lib/tela-cega.js', 'scripts/revisar-plano.js', 'scripts/vigia-puxar.js'],
+               'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/ponte.js', 'scripts/lib/tela-cega.js'],
     comoSeProva: 'rodando naquele sistema com git instalado (e o Chrome ou o Edge, para a captura de tela)',
     ressalva: 'com shell:false o Node nao consulta PATHEXT: um git empacotado como .cmd ou .bat ' +
               'nao seria achado no Windows. Aqui ele e .exe e e achado. O navegador da captura e chamado ' +

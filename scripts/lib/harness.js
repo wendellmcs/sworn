@@ -263,7 +263,8 @@ function baseSemPadrao(harness, bruta, evento) {
   return base;
 }
 
-function lerJson(v) {
+/** O JSON de um texto (o que ja veio objeto passa como veio), ou null. Le texto; arquivo JSON e o do lib/jsonio.js. */
+function jsonDoTexto(v) {
   if (typeof v !== 'string') return v;
   try { return JSON.parse(v); } catch (e) { return null; }
 }
@@ -283,7 +284,7 @@ function respostaDaPergunta(harness, resp) {
     if (typeof chave === 'string' && t) answers[chave] = t;
   };
   if (harness === 'codex' || harness === 'dsh') {
-    const j = lerJson(resp);
+    const j = jsonDoTexto(resp);
     const a = j && typeof j === 'object' ? j.answers : null;
     if (harness === 'codex' && a && typeof a === 'object' && !Array.isArray(a)) {
       for (const [k, v] of Object.entries(a)) por(k, v && Array.isArray(v.answers) ? v.answers : []);
@@ -318,7 +319,7 @@ function respostaDoAgy(texto, pendentes) {
   const answers = {};
   const lista = Array.isArray(pendentes) ? pendentes : [];
   for (const linha of String(texto || '').split('\n')) {
-    const o = lerJson(linha);
+    const o = jsonDoTexto(linha);
     const p = o && typeof o.content === 'string' ? lista.find((x) => x && x.passo === o.step_index) : null;
     if (!p) continue;
     for (const m of o.content.matchAll(/^A(\d+): (.*)$/gm)) {
@@ -335,7 +336,7 @@ function respostaDoAgy(texto, pendentes) {
  * Nenhum terminado, ou resposta que nao se le: nenhum.
  */
 function fimDoWaitAgent(base) {
-  const j = lerJson(base.tool_response);
+  const j = jsonDoTexto(base.tool_response);
   const status = j && typeof j === 'object' ? j.status : null;
   if (!status || typeof status !== 'object') return [];
   return Object.keys(status).filter((id) => status[id] && typeof status[id].completed === 'string')

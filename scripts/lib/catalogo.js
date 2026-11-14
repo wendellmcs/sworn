@@ -138,6 +138,6 @@ function motivoDegradado() {
 }
 
 module.exports = {
-  ARQUIVO, JANELA_DIAS, DIA, DESFECHOS, DELIBERADOS,
-  caminho, ler, valido, gravar, registrar, idadeEmDias, deveConsultar, motivoDegradado
+  ARQUIVO, JANELA_DIAS, DIA, DESFECHOS, DELIBERADOS, caminho, ler, valido, gravar, registrar, deveConsultar,
+  motivoDegradado
 };

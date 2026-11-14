@@ -1037,6 +1037,8 @@ function apurar(rondas, opcoes) {
     novos: novosDaUltima, placar: placar }, extra);
 }
 
-module.exports = { LENTES, LENTES_UI, FAMILIAS, LENTE_DO_PEDIDO, lentesSoTela, SAEM_SO_LOGICA, familiasPara, FAIXA_UMA_ATE, FAIXA_DUAS_ATE,
-  faixaDaMudanca, lentesDaFaixa, temRisco, lentesDaCompleta, SEVERIDADES, RESULTADOS_REFERENCIA, TETO, chaveAchado, chaveDaLente, errosDoVeredito,
-  validarVeredito, apurar, conferirMesmos, DISTANCIA_PAR, mapaDoTrabalho };
+module.exports = {
+  LENTES, LENTES_UI, FAMILIAS, LENTE_DO_PEDIDO, lentesSoTela, SAEM_SO_LOGICA, familiasPara, FAIXA_UMA_ATE,
+  FAIXA_DUAS_ATE, faixaDaMudanca, lentesDaFaixa, temRisco, lentesDaCompleta, TETO, chaveDaLente, errosDoVeredito,
+  validarVeredito, apurar, conferirMesmos, DISTANCIA_PAR, mapaDoTrabalho
+};

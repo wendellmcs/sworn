@@ -5,7 +5,7 @@ const degrausLib = require('./degraus.js');
 const agentesLib = require('./agentes.js');
 const apelidosLib = require('./apelidos.js');
 const catalogoLib = require('./catalogo.js');
-const textoLib = require('./texto.js');
+const jsonio = require('./jsonio.js');
 
 /**
  * Entrega F: para ESTE ambiente, o que consigo verificar aqui, o que nao, e por
@@ -26,15 +26,12 @@ function existe(p) {
 }
 
 // A6 (s220, R1 :28): so o ausente e "sem valor"; o que existe e nao se le devolve a causa (o codigo do sistema, ou o
-// erro do JSON), para o portao dizer, em vez de parecer que nunca se gravou.
-function lerJson(p) {
-  let bruto;
-  try { bruto = fs.readFileSync(p, 'utf8'); } catch (e) {
-    return { valor: null, ilegivel: e.code === 'ENOENT' ? null : (e.code || e.message) };
-  }
-  try { return { valor: JSON.parse(textoLib.semBom(bruto)), ilegivel: null }; } catch (e) {
-    return { valor: null, ilegivel: 'JSON invalido: ' + e.message };
-  }
+// erro do JSON), para o portao dizer, em vez de parecer que nunca se gravou. F5a: a leitura e a do lib/jsonio.js.
+function lerProva(p) {
+  const r = jsonio.ler(p);
+  if (r.etapa === 'json') return { valor: null, ilegivel: 'JSON invalido: ' + r.erro.message };
+  if (r.etapa === 'leitura') return { valor: null, ilegivel: r.erro.code || r.erro.message };
+  return { valor: r.valor, ilegivel: null };
 }
 
 /** Os fatos deste ambiente, medidos uma vez e reusados por todos os portoes. */
@@ -43,7 +40,7 @@ function ambiente(cwd, projeto) {
   const escada = (p.agentes && Array.isArray(p.agentes.escada)) ? p.agentes.escada : [];
   const degraus = degrausLib.normalizar((p.agentes || {}).degraus);
   const lidos = agentesLib.listar(cwd);
-  const prova = lerJson(path.join(cwd, '.claude', 'sworn', 'apelidos-vivos.json'));
+  const prova = lerProva(path.join(cwd, '.claude', 'sworn', 'apelidos-vivos.json'));
   return {
     temProjeto: !!projeto,
     temMarchas: !!(p.marchas && Object.keys(p.marchas).length > 0),

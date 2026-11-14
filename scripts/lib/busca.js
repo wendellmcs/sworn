@@ -112,9 +112,9 @@ function parecidos(raiz, alvo, limite) {
   const base = inteiro.replace(/[-_. ]?(?:v?\d+|novo|nova|new|copy|copia|old|velho)$/, '');
   if (!base) return null;
   const casa = function (f) { const n = nome(f); return n === base || n === inteiro; };
-  const r = require('node:child_process').spawnSync('git', ['-C', raiz, 'ls-files', '-z'],
-    { encoding: 'utf8', timeout: 5000, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
-  if (r.error || r.status !== 0 || typeof r.stdout !== 'string') return null;
+  const gitLib = require('./git.js');
+  const r = gitLib.rodar(null, ['-C', raiz, 'ls-files', '-z'], { timeout: 5000 });
+  if (!gitLib.ok(r)) return null;
   const achados = new Set();
   for (const f of r.stdout.split('\0')) if (f && f.toLowerCase() !== rel.toLowerCase() && casa(f)) achados.add(f);
   const pasta = path.posix.dirname(rel);
@@ -166,4 +166,4 @@ function motivo(alvo, achados) {
   ].join('\n');
 }
 
-module.exports = { FERRAMENTAS, COMANDOS, ehBusca, nomeadoNoEscopo, motivo, parecidos };
+module.exports = { FERRAMENTAS, ehBusca, nomeadoNoEscopo, motivo, parecidos };

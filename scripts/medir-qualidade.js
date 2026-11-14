@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const medicao = require('./lib/medicao.js');
+const gitLib = require('./lib/git.js');
 const projetoLib = require('./lib/projeto.js');
 
 /**
@@ -204,8 +205,7 @@ function montarBrinquedo(dir, prompt, condicao) {
 // core.longpaths: o brinquedo mora em pasta funda (a temporaria do sistema, com o nome curto ja expandido),
 // e o caminho de .git/objects passa do limite antigo do Windows - medido no ensaio real: "Filename too long".
 function git(dir, args) {
-  const g = spawnSync('git', ['-c', 'core.longpaths=true'].concat(args),
-    { cwd: dir, encoding: 'utf8', shell: false, timeout: 30000, windowsHide: true });
+  const g = gitLib.rodar(dir, ['-c', 'core.longpaths=true'].concat(args), { timeout: 30000 });
   if (g.error || g.status !== 0) throw new Error('git ' + args.join(' ') + ' falhou em ' + dir + (g.stderr ? ': ' + g.stderr.trim() : ''));
 }
 

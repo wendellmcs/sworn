@@ -34,7 +34,7 @@ function avisarUmaVez(sessao, marca, texto) {
       UMA_VEZ[marca].marcar(s);
       return s;
     });
-  } catch (err) { /* estado fora do ar: avisa mesmo sem poder gravar a marca */ }
+  } catch (err) { /* fail-open (so a marca): estado fora do ar, avisa mesmo sem poder gravar a marca */ }
   if (jaAvisou) return;
   if (UMA_VEZ[marca].contar) {
     try { UMA_VEZ[marca].contar(sessao); } catch (err) { /* idem: o balde vale menos que o aviso */ }
@@ -93,6 +93,7 @@ function apagaSoNoEscopo(e, comando, raiz, projeto) {
     return nomes.every(function (nome) {
       const abs = path.resolve(base, nome);
       let st = null;
+      // fail-closed: o erro que nao e ENOENT sobe e o catch de fora nao libera
       try { st = fs.lstatSync(abs); } catch (err) { if (!err || err.code !== 'ENOENT') throw err; }
       /* o que nao existe (ja apagado) nao tem caminho real e o rm nao leva nada: vale o nome escrito, no mesmo escopo
          (o curinga ja foi recusado no arquivosNomeados). Menos o pedaco com ponto ou espaco no fim: o Node nao o
@@ -108,7 +109,7 @@ function apagaSoNoEscopo(e, comando, raiz, projeto) {
          (para fora do projeto, ou para .claude/) dao um texto escrito que nao e o do arquivo */
       return passa(caminho.relativoAoProjeto(fs.realpathSync.native(abs), raizReal));
     });
-  } catch (err) { return false; }
+  } catch (err) { return false; } // fail-closed: o que nao se conferiu nao se libera
 }
 
 /**
@@ -119,10 +120,12 @@ function apagaSoNoEscopo(e, comando, raiz, projeto) {
  * (texto do REGRAS, comecando por "rm " para o aviso dar a forma que passa) ou null.
  */
 function apagarForaDoEscopo(e, comando, raiz, projeto) {
+  let comEscopo = false;
   try {
     if (!projeto) return null;
     const s = estado.ler(e.session_id);
     if (!require('./lib/escopo.js').carregar(raiz, s.frente)) return null;
+    comEscopo = true;
     // A5d (s369): o apagar por API do sistema nao tem nome que se confira; o motivo diz como apagar pelo nome
     if (destrutivo.apagaPorApi(comando, e.tool_name)) return destrutivo.MOTIVO_APAGA_POR_API;
     if (destrutivo.arquivosNomeados(comando, e.tool_name)) {
@@ -130,7 +133,15 @@ function apagarForaDoEscopo(e, comando, raiz, projeto) {
     }
     return destrutivo.temApagar(comando) ? 'rm dentro de comando composto (apague arquivo por arquivo, num comando so)'
       : null;
-  } catch (err) { return null; }
+  } catch (err) {
+    // fail-open antes de o escopo ser lido: sem escopo, o apagar simples sempre passou (A5a).
+    // fail-closed depois (F5b): com escopo declarado, o apagar que nao se conferiu e negado; o que nao apaga segue.
+    if (!comEscopo) return null;
+    let apaga = true;
+    try { apaga = destrutivo.temApagar(comando); } catch (err2) { apaga = true; } // fail-closed: na duvida, apaga
+    return apaga ? 'rm que nao se conferiu contra o escopo (a conferencia quebrou; apague arquivo por arquivo, ' +
+      'pelo nome, num comando so)' : null;
+  }
 }
 
 /**
@@ -181,7 +192,7 @@ io.blindar(function () {
         try { estado.incrementar(e.session_id, 'ordem_do_compact'); } catch (err) { /* idem: o balde vale menos */ }
         motivoDaOrdem = reinjecao.motivoDaOrdem(ordem, raiz);
       }
-    } catch (err) { motivoDaOrdem = null; }
+    } catch (err) { motivoDaOrdem = null; } // fail-open: sem a cobranca da ordem do compact, os portoes abaixo seguem
     if (motivoDaOrdem) return io.negarFerramenta(motivoDaOrdem);
 
     // X2b: o botao honesto de desligar. Substitui o comandosLiberados:[".*"],
@@ -205,7 +216,7 @@ io.blindar(function () {
       // espaco, que casa quase todo comando. E o mesmo idioma que validar() ja
       // usa em projeto.js:143, e que este laco nunca herdou.
       if (typeof padrao !== 'string') continue;
-      try { if (new RegExp(padrao, 'i').test(comando)) return io.permitir(); } catch (err) { /* ignora padrao ruim */ }
+      try { if (new RegExp(padrao, 'i').test(comando)) return io.permitir(); } catch (err) { /* fail-closed: padrao ruim nao libera */ }
     }
 
     const shell = require('./lib/shell.js');
@@ -250,11 +261,13 @@ io.blindar(function () {
       s = estado.ler(e.session_id);
       ampliadoNoTurno = s.escopoAmpliadoNoTurno === true;
     } catch (err) {
+      // fail-open: sem a marca do turno a A5b nao dispara; apagaSoNoEscopo / apagarForaDoEscopo abaixo leem o estado de
+      // novo (estado.ler nao lanca: o ilegivel vira {}) e conferem o escopo, que fecha depois de lido (F5b)
       ampliadoNoTurno = false;
     }
     // revisao (P1): try proprio - a foto torta que fizesse lancar nao pode zerar a marca acima; falhou, a A5b barra
     try { naAbertura = ampliadoNoTurno && nomeadosNaAbertura(e, comando, raiz, s.aberturaDoTurno); } catch (err) {
-      naAbertura = false;
+      naAbertura = false; // fail-closed: a A5b barra
     }
     if (ampliadoNoTurno && !naAbertura && (destrutivo.arquivosNomeados(comando, e.tool_name) ||
       destrutivo.temApagar(comando) || destrutivo.apagaPorApi(comando, e.tool_name))) {
@@ -291,7 +304,7 @@ io.blindar(function () {
           s.avisouCdCorrigido = true;
           return s;
         });
-      } catch (err) { jaAvisou = false; }
+      } catch (err) { jaAvisou = false; } // fail-open (so o aviso): sai inteiro de novo
       // F3c (D828): depois do 1o aviso da sessao, a reescrita segue calada (a linha curta saiu 838 vezes numa sessao).
       const saida = { hookEventName: 'PreToolUse', updatedInput: Object.assign({}, e.tool_input, { command: envolto }) };
       if (!jaAvisou) saida.additionalContext = shell.avisoCdCorrigido(solto, false);

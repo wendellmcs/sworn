@@ -2,7 +2,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const gitLib = require('./lib/git.js');
 const sanit = require('./lib/sanitacao.js');
 const texto = require('./lib/texto.js');
 
@@ -67,14 +67,8 @@ function naoDeuParaMontar(causa) {
  */
 function git(dir, args) {
   const passo = 'o `git ' + args[0] + '`';
-  let r;
-  try {
-    r = spawnSync('git', args, {
-      cwd: dir, encoding: 'utf8', shell: false, timeout: 20000, windowsHide: true
-    });
-  } catch (e) {
-    return passo + ' nao rodou (' + texto.causaDoErro(e) + ')';
-  }
+  // o rodar nunca lanca: o spawn que lancaria volta em r.error, com a mesma frase
+  const r = gitLib.rodar(dir, args);
   if (r.error) {
     if (r.error.code === 'ETIMEDOUT') return passo + ' passou de 20 s sem responder';
     return passo + ' nao rodou (' + texto.causaDoErro(r.error) + ')';
@@ -122,9 +116,8 @@ function registrarNaLimpeza(raiz, destino) {
   try {
     const pastas = require('./lib/pastas.js');
     const sessao = process.env.CLAUDE_CODE_SESSION_ID || '';
-    const dirs = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir'],
-      { cwd: raiz, encoding: 'utf8', timeout: 20000, windowsHide: true });
-    const [gitDir, gitComum] = dirs.status === 0 ? dirs.stdout.trim().split(/\r?\n/) : [];
+    const dirs = gitLib.rodar(raiz, ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir']);
+    const [gitDir, gitComum] = gitLib.ok(dirs) ? dirs.stdout.trim().split(/\r?\n/) : [];
     let wt = null;
     if (gitDir && gitComum && path.resolve(gitDir) !== path.resolve(gitComum)) {
       // o repositorio de que o worktree saiu: a pasta acima do .git, ou o proprio, quando e um repositorio bare

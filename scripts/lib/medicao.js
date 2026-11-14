@@ -460,7 +460,6 @@ function lerExecucao(linhas, opcoes) {
 }
 
 module.exports = {
-  ACAO_DE_JULGAR, CONDICOES, RIVAIS, ORDENS, LENTE, COMANDO_CAVEMAN, MARCADOR_DO_BLOCO,
-  perguntaDaCondicao, votoDoJuiz, resultadoDoPar, nomeDoPar, apurar, lerExecucao,
-  lerTranscricao, cavemanNaTranscricao, sessionIdDe, eventosDe, blocosDe
+  ACAO_DE_JULGAR, CONDICOES, RIVAIS, ORDENS, LENTE, MARCADOR_DO_BLOCO, perguntaDaCondicao, votoDoJuiz, resultadoDoPar,
+  nomeDoPar, apurar, lerExecucao, lerTranscricao, cavemanNaTranscricao, sessionIdDe, eventosDe, blocosDe
 };

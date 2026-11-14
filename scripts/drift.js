@@ -5,13 +5,12 @@
 // com achado, 2 sem plano, sem repositorio ou sem base.
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const gitLib = require('./lib/git.js');
 const { ascii } = require('./lib/escopo.js');
 const { drift } = require('./lib/drift.js');
 
 function git(args, cwd) {
-  return spawnSync('git', args,
-    { cwd: cwd, encoding: 'utf8', timeout: 20000, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
+  return gitLib.rodar(cwd, args); // 20 s e 64 MiB, os padroes do rodar (a causa() abaixo cita os dois)
 }
 
 /** Por que o git nao respondeu, em palavras: uma falha dele nunca vira "nada mudou". */

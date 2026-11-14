@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const gitLib = require('./git.js');
 const texto = require('./texto.js');
 
 /**
@@ -293,20 +293,11 @@ function varrerTexto(conteudo, arquivo, listaClasses) {
   return achados;
 }
 
+// L1-12: a saida de 1 MiB estourava em historico grande e a auditoria virava null ("o git nao respondeu"); o
+// rodar do lib/git.js aceita ate 64 MiB.
 function correrGit(raiz, args) {
-  let r;
-  try {
-    r = spawnSync('git', args, {
-      cwd: raiz, encoding: 'utf8', shell: false, timeout: 20000, windowsHide: true,
-      // L1-12: o padrao (1 MiB) estoura em historico grande e a auditoria virava
-      // null ("o git nao respondeu"). Mesmo teto do scripts/lib/git.js.
-      maxBuffer: 32 * 1024 * 1024
-    });
-  } catch (e) {
-    return null;
-  }
-  if (!r || r.error || r.status !== 0 || typeof r.stdout !== 'string') return null;
-  return r.stdout;
+  const r = gitLib.rodar(raiz, args);
+  return gitLib.ok(r) ? r.stdout : null;
 }
 
 /**
@@ -478,12 +469,8 @@ function autoresDoHistorico(raiz) {
 function identidadeDoProximoCommit(raiz) {
   const vistos = Object.create(null);
   for (const v of ['GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT']) {
-    let r;
-    try {
-      // LC_ALL=C: a recusa por identidade desconhecida e reconhecida pelo texto, e o git traduzido (pt_BR) a mudaria
-      r = spawnSync('git', ['var', v], { cwd: raiz, encoding: 'utf8', shell: false, timeout: 20000, windowsHide: true,
-        env: Object.assign({}, process.env, { LC_ALL: 'C', LANGUAGE: '' }) });
-    } catch (e) { return null; }
+    // LC_ALL=C: a recusa por identidade desconhecida e reconhecida pelo texto, e o git traduzido (pt_BR) a mudaria
+    const r = gitLib.rodar(raiz, ['var', v], { env: { LC_ALL: 'C', LANGUAGE: '' } });
     if (!r || r.error || typeof r.stdout !== 'string') return null;
     if (r.status !== 0) {
       if (/identity unknown|no (email|name) was given|empty ident name/i.test(String(r.stderr || ''))) continue;
@@ -629,8 +616,7 @@ function auditar(raiz) {
 }
 
 module.exports = {
-  CLASSES_GENERICAS, DOMINIOS_RESERVADOS, FORA_DO_PUBLICO, ARQUIVO_LOCAL,
-  termosLocais, lerVocabularioLocal, sessoesLocais, classes, varrerTexto, varrerArquivos, varrerAutores, varrerMensagens,
-  superficiePublicavel, semCommits, autoresDoHistorico, identidadeDoProximoCommit, mensagensDoHistorico, auditar,
-  autoteste
+  CLASSES_GENERICAS, FORA_DO_PUBLICO, ARQUIVO_LOCAL, termosLocais, lerVocabularioLocal, sessoesLocais, classes,
+  varrerTexto, varrerArquivos, varrerAutores, varrerMensagens, superficiePublicavel, semCommits, autoresDoHistorico,
+  identidadeDoProximoCommit, mensagensDoHistorico, auditar, autoteste
 };

@@ -23,7 +23,7 @@ const DO_SWORN = /^sworn[:-]([a-z0-9][a-z0-9-]*)$/;
 function modeloDoAgente(nome) {
   try {
     return agentes.frontmatter(fs.readFileSync(path.join(RAIZ_DO_PLUGIN, 'agents', nome + '.md'), 'utf8')).campos.model || null;
-  } catch (e) {
+  } catch (e) { // fail-open: sem o arquivo do agente, o juiz so nao reescreve o modelo (ele nunca nega)
     return null;
   }
 }

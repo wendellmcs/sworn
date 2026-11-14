@@ -116,5 +116,7 @@ function decisoesDaResposta(msg) {
   });
 }
 
-module.exports = { CHAVE, TETO, CALADOS, TOKENS_CONTEXTO, ativo, bloco, CLASSES_DA_PERGUNTA, classeDaPergunta,
-  estadoDoFecho, textoCorrido, decisoesDaResposta };
+module.exports = {
+  CHAVE, TETO, CALADOS, TOKENS_CONTEXTO, ativo, bloco, classeDaPergunta, estadoDoFecho, textoCorrido,
+  decisoesDaResposta
+};

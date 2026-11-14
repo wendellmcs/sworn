@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.33.0 — o git com prazo, a leitura de JSON única e o `rm` barrado quando a conferência falha
+
+**Corrigido**
+
+- **O `rm` fora do escopo não passa mais quando a conferência quebra.** A trava de comando destrutivo deixava passar
+  o `rm` simples de um arquivo fora do escopo se a conferência contra o escopo desse erro no meio. Agora, com o escopo
+  já lido, ela barra o `rm` que não conseguiu conferir, e o motivo diz o que fazer: rodar um `rm` sozinho, sem outro
+  comando junto, com cada arquivo pelo nome e sem curinga (`rm a.js b.js`). O comando que não apaga nada segue como
+  antes.
+- **A trava da catraca compara o nome inteiro.** Ao conferir se um limite foi afrouxado, ela juntava os números
+  pela palavra do nome, e `limite_x` podia ser comparado com `eslint_max_warnings`. Agora cada limite é comparado
+  com o de mesmo nome, e o aviso cita esse nome.
+- **Nenhum git do plugin fica preso.** Todo git que os scripts e ganchos rodam passa por um ponto só, com prazo de
+  20 segundos e teto de saída de 64 MiB, sem shell. Um git que trava (um repositório de rede, um pedido de senha)
+  vira erro com a causa, e o gancho segue, em vez de segurar a sessão.
+- **Os arquivos JSON se leem de um jeito só.** As leituras de `projeto.json`, `design.json`, `.claude/settings.json`,
+  `.mcp.json`, `package.json` e da prova da cobertura aceitam o BOM que o PowerShell 5.1 grava e separam o arquivo
+  que não existe do que existe mas não se lê: o que não se lê diz por quê (JSON inválido, não é um objeto). Um
+  arquivo vazio conta como ilegível, nunca como ausente: se o aviso apontar um, apague o arquivo ou escreva `{}` nele.
+- **Os avisos do vigia saem numa linha ASCII sem mudar o caminho.** A quebra de linha e o tab viram espaço, o espaço
+  que é parte do nome fica (dois seguidos, ou na ponta), e o espaço Unicode (o espaço sem quebra, por exemplo) sai
+  marcado com `?`, em vez de virar um espaço comum que aponta para outro arquivo. O `?` no caminho quer dizer que
+  ali há um caractere fora do ASCII: procure o arquivo pelo resto do nome.
+
+**Por dentro**
+
+- 64 nomes exportados que ninguém usava saíram dos módulos. Cada `catch` que decide nos portões diz, num
+  comentário `fail-open:` ou `fail-closed:`, se o erro deixa passar ou barra, e por quê; um teste cobra a marca.
+
 ## 0.32.0 — o que vale entre as decisões, quanto as instruções pesam, o handoff curto e o guia de cada modelo
 
 **Novo**

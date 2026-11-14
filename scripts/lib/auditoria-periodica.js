@@ -352,6 +352,6 @@ function avisoDaAuditoria(cwd, projeto, opcoes) {
 }
 
 module.exports = {
-  CHAVE, MARCA, CHAVE_ATALHOS, MARCA_ATALHOS, PADROES, MAX_POR_CATEGORIA, ligada, dias, lerMarca, vencida, gravarMarca,
-  skillsParadas, avisoDaAuditoria, avisoDosAtalhos, pedeCorte, linhaDoInjetado
+  CHAVE, MARCA, CHAVE_ATALHOS, MARCA_ATALHOS, PADROES, ligada, dias, vencida, skillsParadas, avisoDaAuditoria,
+  avisoDosAtalhos, pedeCorte, linhaDoInjetado
 };

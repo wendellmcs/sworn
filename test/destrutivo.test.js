@@ -3447,3 +3447,39 @@ test('A5b: ampliar o escopo e apagar no mesmo turno barra, pelo shell e pela edi
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// F5b (fail-open/fail-closed explicito): com escopo declarado, a conferencia do apagar simples que quebra por dentro
+// NEGA (fail-closed); antes devolvia "sem motivo" e o `rm` fora do escopo passava. Sem escopo, segue passando.
+test('F5b: o apagar simples cuja conferencia quebra, com escopo declarado, e negado com o motivo', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-f5b-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-f5b-tmp-'));
+  try {
+    const sworn = path.join(dir, '.claude', 'sworn');
+    fs.mkdirSync(sworn, { recursive: true });
+    fs.writeFileSync(path.join(sworn, 'projeto.json'), JSON.stringify({ versaoConfig: 1, marchaPadrao: 'padrao' }));
+    fs.writeFileSync(path.join(dir, 'fora.txt'), 'x');
+    const gancho = path.join(tmp, 'quebra.js');
+    fs.writeFileSync(gancho, 'const d = require(' + JSON.stringify(path.join(RAIZ, 'scripts', 'lib', 'destrutivo.js')) +
+      ');\nd.arquivosNomeados = function () { throw new Error("quebrou de proposito"); };\n');
+    const chamar = (comando) => {
+      const r = spawnSync(process.execPath, ['--require', gancho, path.join(RAIZ, 'scripts', 'portao-destrutivo.js')], {
+        input: JSON.stringify({ session_id: 'sf5b', cwd: dir, tool_name: 'Bash', tool_input: { command: comando } }),
+        encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
+      });
+      // revisao cega: o gancho que quebrou (saida != 0, sem JSON) nao conta como "passa"
+      assert.strictEqual(r.status, 0, 'o portao saiu ' + r.status + ': ' + r.stderr);
+      if (!r.stdout.trim()) return 'passa';
+      const h = JSON.parse(r.stdout).hookSpecificOutput;
+      return h && h.permissionDecision === 'deny' ? h.permissionDecisionReason : 'passa';
+    };
+    assert.strictEqual(chamar('rm fora.txt'), 'passa', 'sem escopo declarado, o rm simples segue como antes');
+    fs.writeFileSync(path.join(sworn, 'escopo.md'), '# Escopo\n**Objetivo:** f5b\n## Dentro\n- src/**\n', 'utf8');
+    const t = chamar('rm fora.txt');
+    assert.notStrictEqual(t, 'passa', 'a conferencia quebrou e o rm passou');
+    assert.match(t, /nao se conferiu/, t);
+    assert.strictEqual(chamar('ls fora.txt'), 'passa', 'o que nao apaga nao e barrado pela quebra');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

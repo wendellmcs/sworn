@@ -383,7 +383,9 @@ const MOTIVO = [
   'Nao reescreva a frase para escapar do portao. Rode, ou declare.'
 ].join('\n');
 
-module.exports = { ALEGACOES, NAO_RODOU, semBlocos, analisar, deveBloquear, MOTIVO, blocosDeSaida,
-  textoMostraFalha, deveBloquearPorFalha, declaraRessalva, declaraSemRevisao, MOTIVO_FALHA, motivoTesteVermelho,
-  motivoConferenciaVermelha, motivoProvaNaoRodou, motivoProvaRodando, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox, alegaCausa,
-  deveBloquearPorCausa, MOTIVO_CAUSA };
+module.exports = {
+  NAO_RODOU, semBlocos, analisar, deveBloquear, MOTIVO, textoMostraFalha, deveBloquearPorFalha, declaraRessalva,
+  declaraSemRevisao, MOTIVO_FALHA, motivoTesteVermelho, motivoConferenciaVermelha, motivoProvaNaoRodou,
+  motivoProvaRodando, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox, alegaCausa, deveBloquearPorCausa,
+  MOTIVO_CAUSA
+};

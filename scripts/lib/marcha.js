@@ -68,18 +68,11 @@ function aaaComReferencia(arquivos, projeto, raiz) {
 }
 
 /**
- * D655 (plano pedidos-aaa-idioma-readme, T1): os arquivos mudados que resolvem para `aaa` sem revisao aprovada - o que
- * o portao do commit aceita (`revisadosAprovados`, `commit.aprovado`). Como no commit, texto e arquivo que nao existe
- * ficam fora; diferente dele, nao pergunta ao git se difere do HEAD: o Stop roda a cada fim de turno, e o arquivo
- * editado e devolvido ao HEAD e raro. Relativos a raiz, a 1a grafia vista (a caixa como no aaaComReferencia).
- */
-function aaaSemRevisao(arquivos, aprovados, projeto, raiz) {
-  return semRevisao(arquivos, aprovados, projeto, raiz, 'aaa');
-}
-
-/**
  * C3 (D808): os arquivos de codigo tocados que ainda existem e nao tem revisao aprovada, da `marcha` dada (ou de
  * qualquer marcha, com `null`): o mesmo conjunto que o portao do commit cobra, fora o texto.
+ * D655: diferente do commit, nao pergunta ao git se difere do HEAD (o Stop roda a cada fim de turno, e o arquivo
+ * editado e devolvido ao HEAD e raro). Relativos a raiz, a 1a grafia vista (a caixa como no aaaComReferencia).
+ * F5b: o `aaaSemRevisao` (esta com 'aaa') saiu; ninguem o chamava.
  */
 function semRevisao(arquivos, aprovados, projeto, raiz, marcha) {
   if (!Array.isArray(arquivos)) return [];
@@ -104,4 +97,4 @@ function semRevisao(arquivos, aprovados, projeto, raiz, marcha) {
   return achados;
 }
 
-module.exports = { NIVEL, resolverMarcha, exigeEscopo, podeSubir, aaaComReferencia, aaaSemRevisao, semRevisao };
+module.exports = { NIVEL, resolverMarcha, exigeEscopo, podeSubir, aaaComReferencia, semRevisao };

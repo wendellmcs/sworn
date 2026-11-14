@@ -67,7 +67,7 @@ function causaDoProjetoIlegivel(cwd) {
   const corrija = 'Corrija o JSON ou rode /sworn:init de novo (o init regrava o projeto.json com as respostas dadas).';
   let obj;
   try { obj = JSON.parse(textoLib.semBom(bruto)); } catch (e) { return { causa: 'JSON quebrado', fazer: corrija }; }
-  // H-3/H-4: concorda com config.lerJson, que tambem recusa lista; senao o config devolve null e o aviso calava.
+  // H-3/H-4: concorda com config.carregarProjeto (jsonio.ler com objeto: true), que tambem recusa lista; senao o config devolve null e o aviso calava.
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return { causa: 'nao e um objeto JSON', fazer: corrija };
   return null;
 }
@@ -454,5 +454,7 @@ function montar(cwd, sessionId, origem) {
   return partes.concat(estadoPartes).join('\n') + '\n';
 }
 
-module.exports = { ORIGENS_COM_ESTADO, contexto, nucleo, ordemDoHandoff, NEGACOES_DA_ORDEM, ordemDoCompact,
-  cruzouSemAviso, cobrarOrdem, comandoCitaHandoff, motivoDaOrdem, montar };
+module.exports = {
+  contexto, nucleo, ordemDoHandoff, NEGACOES_DA_ORDEM, ordemDoCompact, cruzouSemAviso, cobrarOrdem,
+  comandoCitaHandoff, motivoDaOrdem, montar
+};

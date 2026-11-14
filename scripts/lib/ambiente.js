@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const texto = require('./texto.js');
+const jsonio = require('./jsonio.js');
 
 const LIMITES = (function () {
   try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'modelos', 'limites.json'), 'utf8')); }
@@ -11,16 +12,11 @@ const LIMITES = (function () {
 // A4-01: sem o semBom, o settings.json gravado com BOM (PowerShell 5.1) voltava null e o ambiente saia vazio, calado.
 // A4-amb-2 (pedido 12), estados: so ENOENT e ausente; quebrado, ilegivel ou que nao e objeto entra em `naoLidos`
 // (`rel (causa)`) - antes era ausente, calado, e o init dizia "nada" de um projeto que configura.
-function lerJson(cwd, rel, naoLidos) {
-  let o;
-  try { o = JSON.parse(texto.semBom(fs.readFileSync(path.join(cwd, rel), 'utf8'))); }
-  catch (e) {
-    if (!(e && e.code === 'ENOENT')) naoLidos.push(rel + ' (' + texto.causaDoErro(e) + ')');
-    return null;
-  }
-  if (o && typeof o === 'object' && !Array.isArray(o)) return o;
-  naoLidos.push(rel + ' (nao e um objeto JSON)');
-  return null;
+function lerObjeto(cwd, rel, naoLidos) {
+  const r = jsonio.ler(path.join(cwd, rel), { objeto: true });
+  if (r.erro) naoLidos.push(rel + ' (' + texto.causaDoErro(r.erro) + ')');
+  else if (r.etapa === 'forma') naoLidos.push(rel + ' (nao e um objeto JSON)');
+  return r.valor;
 }
 
 function subpastas(dir) {
@@ -46,8 +42,8 @@ function arquivosMd(dir) {
 function detectar(cwd) {
   const base = path.join(cwd, '.claude');
   const naoLidos = [];
-  const settings = lerJson(cwd, '.claude/settings.json', naoLidos) || {};
-  const local = lerJson(cwd, '.claude/settings.local.json', naoLidos) || {};
+  const settings = lerObjeto(cwd, '.claude/settings.json', naoLidos) || {};
+  const local = lerObjeto(cwd, '.claude/settings.local.json', naoLidos) || {};
 
   // A4-amb-1 (pedido 12), borda: `false` e plugin desligado - e o local, que vale por cima do settings, desliga.
   const ligados = Object.assign({}, settings.enabledPlugins || {}, local.enabledPlugins || {});
@@ -57,7 +53,7 @@ function detectar(cwd) {
     Object.assign({}, (settings.hooks || {}), (local.hooks || {}))
   );
 
-  const mcpArquivo = lerJson(cwd, '.mcp.json', naoLidos) || {};
+  const mcpArquivo = lerObjeto(cwd, '.mcp.json', naoLidos) || {};
   const mcp = Object.keys(mcpArquivo.mcpServers || mcpArquivo || {}).filter(function (k) { return k !== 'mcpServers'; });
 
   const delegaveis = [];

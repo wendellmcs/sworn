@@ -92,4 +92,4 @@ function motivo(r, resumo) {
   return linhas.join('\n');
 }
 
-module.exports = { CHAVE, PARADO_MS, CONTEXTO_MINIMO, RECOMECO, ligada, avaliar, motivo, nomeDoModelo, duracao };
+module.exports = { CHAVE, RECOMECO, ligada, avaliar, motivo, nomeDoModelo, duracao };

@@ -277,6 +277,6 @@ function doTrecho(entrada) {
 }
 
 module.exports = {
-  TETO_DEF, TETO_COMENTARIO, TETO_EXTRAS, TETO_ENTRADAS, TETO_BYTES,
-  ehCodigo, limpar, saldo, usados, definicoesDoTopo, requisicoes, faixaDaDefinicao, resolverModulo, doTrecho
+  TETO_DEF, TETO_COMENTARIO, TETO_EXTRAS, TETO_ENTRADAS, TETO_BYTES, ehCodigo, limpar, saldo, usados,
+  faixaDaDefinicao, doTrecho
 };

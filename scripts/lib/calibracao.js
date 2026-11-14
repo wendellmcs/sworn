@@ -354,5 +354,7 @@ function pastaDasTranscricoes(raiz, env, casa) {
   return achada ? path.join(projetos, achada.name) : null;
 }
 
-module.exports = { PRECOS, FAIXAS, CANDIDATOS, AMOSTRA_MINIMA, TROCA_PADRAO, QUEDA_DE_COMPACTACAO, PISO_DA_COMPACTACAO,
-  lerSessao, lerPasta, segmentar, custoDaTroca, simular, escolher, calibrar, nomeDaPasta, pastaDasTranscricoes };
+module.exports = {
+  PRECOS, CANDIDATOS, AMOSTRA_MINIMA, TROCA_PADRAO, QUEDA_DE_COMPACTACAO, PISO_DA_COMPACTACAO, lerSessao, lerPasta,
+  segmentar, custoDaTroca, simular, escolher, calibrar, nomeDaPasta, pastaDasTranscricoes
+};

@@ -122,4 +122,4 @@ function migrarCasa(casa, env, projeto, cwd) {
   return mover(casa || os.homedir(), '~/.claude/', ' (a do vigia)', null);
 }
 
-module.exports = { VELHA, NOVA, MARCA, baseDoProjeto, trocarReferencias, migrarProjeto, migrarCasa };
+module.exports = { NOVA, MARCA, trocarReferencias, migrarProjeto, migrarCasa };
