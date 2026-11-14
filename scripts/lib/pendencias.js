@@ -5,6 +5,7 @@
 // Formato de cada linha (o arquivo e Markdown legivel e editavel a mao):
 //   - [ ] #3 2026-11-13 | dono: Ana | o que falta
 //   - [x] #3 2026-11-13 | dono: Ana | o que falta | fechada 2026-11-14: como fechou
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const textoLib = require('./texto.js');
@@ -47,7 +48,7 @@ function analisar(texto) {
   return r;
 }
 
-/** Le o arquivo: { r, texto }; texto null quando o arquivo nao existe. */
+/** Le o arquivo: { r, texto }; texto null quando o arquivo nao existe ou nao se le (entao `r.erro` diz a causa). */
 function lerComTexto(raiz) {
   let texto;
   try { texto = fs.readFileSync(caminho(raiz), 'utf8'); } catch (e) {
@@ -67,7 +68,8 @@ function ler(raiz) { return lerComTexto(raiz).r; }
 function campo(nome, valor) {
   const v = String(valor ?? '').trim();
   if (!v) throw erroDeUso('sworn: pendencia sem --' + nome + '; passe --' + nome + ' com o texto');
-  if (/[\r\n|]/.test(v)) throw erroDeUso('sworn: --' + nome + ' com quebra de linha ou "|"; escreva numa linha, sem "|"');
+  // U+2028/U+2029 tambem: o `.` do RE_LINHA nao os casa, e o item gravado sumiria na leitura seguinte
+  if (/[\r\n|\u2028\u2029]/.test(v)) throw erroDeUso('sworn: --' + nome + ' com quebra de linha ou "|"; escreva numa linha, sem "|"');
   return v;
 }
 
@@ -80,7 +82,32 @@ function hojeValido(hoje) {
   return h;
 }
 
+/**
+ * Pendencia #1 (seguranca, D841): um repositorio clonado pode trazer a pasta .sworn ou o PENDENCIAS.md como link
+ * simbolico (ou junction); gravar por ele escreveria fora do projeto. Devolve o TEXTO da recusa, ou null quando
+ * pode gravar; sem conseguir conferir (lstat falhou por outro motivo que "nao existe"), recusa tambem.
+ * atalho: confere o link na hora da leitura, nao no instante da escrita. limite: guarda contra o link que veio no
+ * clone, nao contra quem troca o arquivo entre as duas chamadas. trocar quando: o Node tiver O_NOFOLLOW no Windows.
+ */
+function recusaPorLink(raiz) {
+  for (const [rel, nome, deVerdade] of [['.sworn', 'a pasta .sworn', 'uma pasta'], [ARQUIVO, ARQUIVO, 'um arquivo']]) {
+    let st;
+    try { st = fs.lstatSync(path.join(raiz, rel)); } catch (e) {
+      if (e && e.code === 'ENOENT') continue; // nao existe: nada a seguir
+      return 'sworn: nao consegui conferir se ' + nome + ' e um link (' + textoLib.causaDoErro(e) + '); nao gravo sem ' +
+        'conferir. Confira a permissao do caminho e rode de novo';
+    }
+    if (st.isSymbolicLink()) {
+      return 'sworn: ' + nome + ' e um link (atalho) que pode levar para fora do projeto; nao gravo por ele. ' +
+        'Troque o link por ' + deVerdade + ' de verdade e rode de novo';
+    }
+  }
+  return null;
+}
+
 function lerParaGravar(raiz) {
+  const recusa = recusaPorLink(raiz);
+  if (recusa) throw new Error(recusa);
   const lido = lerComTexto(raiz);
   if (lido.r.erro) throw new Error('sworn: nao consegui ler ' + ARQUIVO + ' (' + lido.r.erro + '); confira o arquivo e rode de novo');
   return lido;
@@ -107,9 +134,14 @@ function adicionar(raiz, p) {
 function fechar(raiz, n, como, hoje) {
   const texto = campo('como', como);
   const data = hojeValido(hoje);
+  const num = /^\s*\d+\s*$/.test(String(n ?? '')) ? Number(n) : NaN;
+  if (!(num >= 1)) {
+    throw erroDeUso('sworn: --fechar pede o numero da pendencia (1 ou mais), veio "' + String(n ?? '') + '"; veja os numeros com --listar');
+  }
   const atual = lerParaGravar(raiz);
-  const num = Number(n);
-  if (atual.r.fechadas.some(function (p) { return p.n === num; })) throw erroDeUso('sworn: a pendencia #' + num + ' ja esta fechada');
+  if (atual.r.fechadas.some(function (p) { return p.n === num; })) {
+    throw erroDeUso('sworn: a pendencia #' + num + ' ja esta fechada; nada a fazer (veja com --listar)');
+  }
   const alvo = atual.r.abertas.find(function (p) { return p.n === num; });
   if (!alvo) throw erroDeUso('sworn: nao ha pendencia aberta #' + num + ' em ' + ARQUIVO + '; veja os numeros com --listar');
   const fim = atual.texto.indexOf('\r\n') !== -1 ? '\r\n' : '\n';
@@ -117,7 +149,20 @@ function fechar(raiz, n, como, hoje) {
   const linhas = textoLib.semBom(atual.texto).split(/\r?\n/);
   const i = alvo.linha - 1;
   linhas[i] = linhas[i].replace(/^- \[ \]/, '- [x]').replace(/\s+$/, '') + ' | fechada ' + data + ': ' + texto;
-  fs.writeFileSync(caminho(raiz), bom + linhas.join(fim));
+  // por um temporario na mesma pasta e rename: a falha no meio (disco cheio, processo parado) nao trunca o arquivo.
+  // F5b r2: nome com sorteio e flag 'wx' (cria exclusivo): um link ja plantado nesse nome faz a gravacao falhar,
+  // nunca escreve por ele; e so se apaga o temporario que esta chamada criou
+  const tmp = caminho(raiz) + '.' + process.pid + '.' + crypto.randomBytes(6).toString('hex') + '.tmp';
+  let criado = false;
+  try {
+    const fd = fs.openSync(tmp, 'wx');
+    criado = true;
+    try { fs.writeFileSync(fd, bom + linhas.join(fim)); } finally { fs.closeSync(fd); }
+    fs.renameSync(tmp, caminho(raiz));
+  } catch (e) {
+    if (criado) { try { fs.rmSync(tmp, { force: true }); } catch (e2) { /* o erro que conta e o da gravacao */ } }
+    throw e;
+  }
   return { n: num };
 }
 

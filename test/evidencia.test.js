@@ -143,7 +143,7 @@ test('evidencia D785: saida com spawn EPERM manda a prova sem processo filho, em
 test('evidencia A3-10: comando ausente nao vira "null" nem "undefined" no motivo', () => {
   for (const v of [null, undefined]) {
     for (const m of [ev.motivoTesteVermelho(v), ev.motivoConferenciaVermelha(v), ev.motivoProvaNaoRodou(v),
-      ev.motivoDoLaco('pendente', v, 1)]) {
+      ev.motivoConferenciaRodando(v), ev.motivoDoLaco('pendente', v, 1)]) {
       assert.ok(!/null|undefined/.test(m), m);
     }
   }

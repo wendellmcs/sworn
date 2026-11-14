@@ -576,8 +576,21 @@ test('R2b: testesDoTranscript guarda a ultima conferencia da tela pelo codigo de
   assert.strictEqual(ler([cmd('a', conf)]).ultimaConferencia, undefined, 'sem resultado na cauda, nao conta');
   // em segundo plano: o lancamento nao e o fim; o fim decide pelo status e pelo codigo
   const ok = 'Background command "c" completed (exit code 0)';
+  const semArquivoAntes = pathT.join(osT.tmpdir(), 'sworn-nao-existe-' + process.pid, 'a.output');
   r = ler([emFundo('a', conf), lancado('a')]);
   assert.strictEqual(r.ultimaConferencia, undefined, 'lancada, sem fim');
+  // F5 (achado da R2b): a lancada sem fim roda, e isso se diz; a de antes de uma que terminou ja nao decide
+  assert.strictEqual(r.conferenciaRodando, true, 'lancada, sem fim: roda');
+  assert.strictEqual(ler([cmd('a', conf), res('a', '{"tudoComparado":true}')]).conferenciaRodando, undefined, 'a de primeiro plano terminou');
+  assert.strictEqual(ler([emFundo('a', conf), lancado('a'), cmd('b', conf), res('b', '{"tudoComparado":true}')]).conferenciaRodando,
+    undefined, 'lancada antes de uma que terminou');
+  assert.strictEqual(ler([cmd('b', conf), res('b', '{"tudoComparado":true}'), emFundo('a', conf), lancado('a')]).conferenciaRodando,
+    true, 'lancada depois da que terminou');
+  assert.strictEqual(ler([emFundo('a', conf), res('a', 'Permission to use Bash has been denied.', true)]).conferenciaRodando,
+    undefined, 'lancamento negado nao roda');
+  assert.strictEqual(ler([cmd('a', conf)]).conferenciaRodando, undefined, 'a de primeiro plano sem resultado na cauda nao e fundo');
+  assert.strictEqual(ler([emFundo('a', conf), lancado('a'), emFundo('b', conf), lancado('b'),
+    fimDoFundo('b', 'completed', ok, semArquivoAntes)]).conferenciaRodando, undefined, 'a lancada antes de uma de fundo que terminou');
   r = ler([emFundo('a', conf), lancado('a'), fimDoFundo('a', 'completed', 'Background command "c" completed (exit code 1)', 'x')]);
   assert.strictEqual(r.ultimaConferencia.falhou, true, 'fim com codigo 1');
   const semArquivo = pathT.join(osT.tmpdir(), 'sworn-nao-existe-' + process.pid, 'b.output');
@@ -1288,4 +1301,15 @@ test('F1d: testesDoTranscript ve a prova focada por arquivo tocado e a ultima pr
     transcritos.forEach(function (c) { c.fim(); });
     fsT.rmSync(raiz, { recursive: true, force: true });
   }
+});
+
+// F5b r1 (borda): com duas conferencias rodando, o motivo citava a lancada primeiro, nao a mais recente.
+test('F5b r1: com duas conferencias da tela rodando, o motivo cita a mais recente', () => {
+  const t = transcript([emFundo('a', 'node scripts/conferir-tela.js --url http://a --referencia http://b --saida s1'), lancado('a'),
+    emFundo('b', 'node scripts/conferir-tela.js --url http://a --referencia http://b --saida s2'), lancado('b')]);
+  try {
+    const r = saude.testesDoTranscript(t.f, 'npm test');
+    assert.strictEqual(r.conferenciaRodando, true);
+    assert.match(r.comandoDaConferenciaRodando, /--saida s2$/);
+  } finally { t.fim(); }
 });

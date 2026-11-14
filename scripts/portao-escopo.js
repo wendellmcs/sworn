@@ -73,7 +73,7 @@ function projetoPresenteEIlegivel(cwd) {
 }
 
 // A2-03 (D721): o passo primeiro, com o caminho real do validar.js (ele diz a linha e a coluna do erro).
-// A2-77: o init preserva so o que le do arquivo atual (skills/init/SKILL.md:63-73), dai o "pode perder".
+// A2-77: o init preserva so o que le do arquivo atual (skills/init/references/reinit.md:9-19), dai o "pode perder".
 const AVISO_PROJETO_ILEGIVEL = 'sworn: .claude/sworn/projeto.json existe mas nao se le: ' +
   'os portoes de escopo e de intocaveis estao DESLIGADOS ate corrigir. ' +
   'Para achar o erro: node "' + path.join(__dirname, 'validar.js') + '". ' +

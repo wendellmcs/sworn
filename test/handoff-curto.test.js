@@ -87,6 +87,141 @@ test('F4c pendencias: sem dono, sem texto, com quebra de linha ou com barra vert
   assert.strictEqual(fs.existsSync(path.join(dir, pend.ARQUIVO)), false);
 });
 
+// Pendencia #1 (seguranca, D841): um repositorio clonado pode trazer .sworn ou o PENDENCIAS.md como link; gravar por
+// ele escreveria fora do projeto (num arquivo do usuario). Adicionar e fechar recusam, com a causa e o que fazer.
+test('F4c pendencias: a pasta .sworn como link (junction) nao se segue ao gravar', (t) => {
+  const dir = comum.pasta('pend-link-pasta');
+  const fora = comum.pasta('pend-link-fora');
+  fs.writeFileSync(path.join(fora, 'PENDENCIAS.md'), '- [ ] #1 2026-11-10 | dono: A | de fora\n');
+  try { fs.symlinkSync(fora, path.join(dir, '.sworn'), process.platform === 'win32' ? 'junction' : 'dir'); } catch (e) {
+    t.skip('esta maquina nao cria link (' + e.code + ')');
+    return;
+  }
+  const antes = fs.readFileSync(path.join(fora, 'PENDENCIAS.md'), 'utf8');
+  const erro = (function () {
+    try { pend.adicionar(dir, { dono: 'A', texto: 'nova', hoje: HOJE }); } catch (e) { return e; }
+    assert.fail('adicionar gravou pelo link');
+  })();
+  assert.match(erro.message, /a pasta \.sworn e um link \(atalho\)/);
+  assert.match(erro.message, /nao gravo por ele/);
+  assert.match(erro.message, /Troque o link por uma pasta de verdade e rode de novo/, 'a recusa diz o que fazer');
+  assert.ok(!erro.uso, 'nao e erro de uso');
+  assert.throws(function () { pend.fechar(dir, 1, 'feita', HOJE); },
+    /a pasta \.sworn e um link \(atalho\)[\s\S]*Troque o link por uma pasta de verdade/);
+  assert.strictEqual(fs.readFileSync(path.join(fora, 'PENDENCIAS.md'), 'utf8'), antes, 'o arquivo de fora fica como estava');
+  assert.deepStrictEqual(fs.readdirSync(fora), ['PENDENCIAS.md'], 'nada nasce do outro lado do link');
+});
+
+test('F4c pendencias: o PENDENCIAS.md como link de arquivo nao se segue ao gravar', (t) => {
+  const dir = comum.pasta('pend-link-arq');
+  const fora = comum.pasta('pend-link-arq-fora');
+  const alvo = path.join(fora, 'perfil.txt');
+  fs.writeFileSync(alvo, '- [ ] #1 2026-11-10 | dono: A | de fora\n');
+  fs.mkdirSync(path.join(dir, '.sworn'));
+  const arquivo = path.join(dir, pend.ARQUIVO);
+  let linkDeVerdade = true;
+  try { fs.symlinkSync(alvo, arquivo, 'file'); } catch (e) {
+    // o Windows sem modo de desenvolvedor nao cria link de arquivo (EPERM): o lstat diz "link" so para este caminho, e
+    // o arquivo de verdade no lugar mostra que nada se gravou nele. Outro erro (EEXIST de uma rodada antiga) e falha.
+    if (e.code !== 'EPERM' && e.code !== 'EACCES') throw e;
+    linkDeVerdade = false;
+    t.diagnostic('sem link de arquivo nesta maquina (' + e.code + '): o lstat finge o link');
+    fs.writeFileSync(arquivo, '- [ ] #1 2026-11-10 | dono: A | de fora\n');
+    const original = fs.lstatSync;
+    t.mock.method(fs, 'lstatSync', function (p, o) {
+      const st = original.call(fs, p, o);
+      if (path.resolve(String(p)) === path.resolve(arquivo)) st.isSymbolicLink = function () { return true; };
+      return st;
+    });
+  }
+  const recusa = /\.sworn\/PENDENCIAS\.md e um link \(atalho\)[\s\S]*Troque o link por um arquivo de verdade e rode de novo/;
+  assert.throws(function () { pend.adicionar(dir, { dono: 'A', texto: 'nova', hoje: HOJE }); }, recusa);
+  assert.throws(function () { pend.fechar(dir, 1, 'feita', HOJE); }, recusa);
+  // com o link de verdade, o alvo de fora e o que nao pode mudar; com o lstat fingido, o arquivo no lugar do link
+  assert.strictEqual(fs.readFileSync(linkDeVerdade ? alvo : arquivo, 'utf8'), '- [ ] #1 2026-11-10 | dono: A | de fora\n');
+});
+
+// F5b r1 (estados, microcopy): o lstat que falha por outro motivo que "nao existe" deixava gravar sem conferir o link;
+// e a recusa dizia "pasta ou arquivo" nos dois casos.
+test('F5b r1 pendencias: sem conseguir conferir o link, recusa; a recusa diz pasta para .sworn e arquivo para o PENDENCIAS.md', (t) => {
+  const dir = comum.pasta('pend-lstat');
+  pend.adicionar(dir, { dono: 'A', texto: 'um', hoje: HOJE });
+  const antes = fs.readFileSync(path.join(dir, pend.ARQUIVO), 'utf8');
+  const original = fs.lstatSync;
+  const sworn = path.resolve(dir, '.sworn');
+  const mock = t.mock.method(fs, 'lstatSync', function (p, o) {
+    if (path.resolve(String(p)) === sworn) { const e = new Error('EACCES: negado'); e.code = 'EACCES'; throw e; }
+    return original.call(fs, p, o);
+  });
+  assert.throws(function () { pend.adicionar(dir, { dono: 'A', texto: 'dois', hoje: HOJE }); },
+    (e) => /nao consegui conferir se a pasta \.sworn e um link/.test(e.message) && /EACCES/.test(e.message) && !e.uso);
+  assert.throws(function () { pend.fechar(dir, 1, 'feita', HOJE); }, /nao consegui conferir se a pasta \.sworn e um link/);
+  assert.strictEqual(fs.readFileSync(path.join(dir, pend.ARQUIVO), 'utf8'), antes, 'nada gravado');
+  mock.mock.restore();
+  const comoLink = function (alvoDoLink) {
+    t.mock.method(fs, 'lstatSync', function (p, o) {
+      const st = original.call(fs, p, o);
+      if (path.resolve(String(p)) === path.resolve(dir, alvoDoLink)) st.isSymbolicLink = function () { return true; };
+      return st;
+    });
+  };
+  comoLink('.sworn');
+  assert.throws(function () { pend.adicionar(dir, { dono: 'A', texto: 'x', hoje: HOJE }); },
+    /Troque o link por uma pasta de verdade e rode de novo$/);
+  t.mock.restoreAll();
+  comoLink(pend.ARQUIVO);
+  assert.throws(function () { pend.adicionar(dir, { dono: 'A', texto: 'x', hoje: HOJE }); },
+    /Troque o link por um arquivo de verdade e rode de novo$/);
+});
+
+// F5b r1 (estados, borda, microcopy): o fechar regravava no lugar (a falha no meio truncava o arquivo); numero que nao e
+// numero dava "#NaN"; U+2028 no --como sumia o item; "ja esta fechada" nao dizia o proximo passo.
+test('F5b r1 pendencias: fechar grava por arquivo temporario, recusa numero invalido e separador de linha Unicode', (t) => {
+  const dir = comum.pasta('pend-fechar-atomico');
+  pend.adicionar(dir, { dono: 'A', texto: 'um', hoje: HOJE });
+  const arquivo = path.join(dir, pend.ARQUIVO);
+  const antes = fs.readFileSync(arquivo, 'utf8');
+  const escrever = fs.writeFileSync;
+  t.mock.method(fs, 'writeFileSync', function (p, d, o) {
+    escrever.call(fs, p, String(d).slice(0, 10), o);
+    throw Object.assign(new Error('ENOSPC: disco cheio'), { code: 'ENOSPC' });
+  });
+  assert.throws(function () { pend.fechar(dir, 1, 'feita', HOJE); }, /ENOSPC/);
+  t.mock.restoreAll();
+  assert.strictEqual(fs.readFileSync(arquivo, 'utf8'), antes, 'a falha no meio nao trunca o PENDENCIAS.md');
+  assert.deepStrictEqual(fs.readdirSync(path.join(dir, '.sworn')), ['PENDENCIAS.md'], 'o temporario da falha nao fica');
+  pend.fechar(dir, 1, 'feita', HOJE);
+  assert.deepStrictEqual(fs.readdirSync(path.join(dir, '.sworn')), ['PENDENCIAS.md'], 'sem sobra de temporario');
+  assert.strictEqual(pend.ler(dir).fechadas.length, 1);
+  for (const n of ['abc', '', '0', '-1', '1.5', null]) {
+    assert.throws(function () { pend.fechar(dir, n, 'x', HOJE); },
+      (e) => e.uso && /pede o numero da pendencia \(1 ou mais\)/.test(e.message), JSON.stringify(n));
+  }
+  assert.throws(function () { pend.fechar(dir, 1, 'de novo', HOJE); }, /ja esta fechada; nada a fazer \(veja com --listar\)/);
+  for (const sep of ['\u2028', '\u2029']) {
+    assert.throws(function () { pend.adicionar(dir, { dono: 'A', texto: 'a' + sep + 'b', hoje: HOJE }); }, (e) => e.uso);
+  }
+});
+
+test('F5b r2 pendencias: o temporario do fechar e criado exclusivo; o que ja existe no nome nao e escrito nem apagado', (t) => {
+  const crypto = require('node:crypto');
+  const dir = comum.pasta('pend-fechar-exclusivo');
+  pend.adicionar(dir, { dono: 'A', texto: 'um', hoje: HOJE });
+  const arquivo = path.join(dir, pend.ARQUIVO);
+  const antes = fs.readFileSync(arquivo, 'utf8');
+  // o sorteio fixo deixa o nome previsivel: no lugar do link plantado, um arquivo comum basta para o EEXIST
+  t.mock.method(crypto, 'randomBytes', function (n) { return Buffer.alloc(n); });
+  const plantado = arquivo + '.' + process.pid + '.' + Buffer.alloc(6).toString('hex') + '.tmp';
+  fs.writeFileSync(plantado, 'de outro');
+  assert.throws(function () { pend.fechar(dir, 1, 'feita', HOJE); }, (e) => e.code === 'EEXIST');
+  assert.strictEqual(fs.readFileSync(plantado, 'utf8'), 'de outro', 'nao escreve no que ja estava no nome');
+  assert.strictEqual(fs.readFileSync(arquivo, 'utf8'), antes, 'o PENDENCIAS.md fica como estava');
+  t.mock.restoreAll();
+  pend.fechar(dir, 1, 'feita', HOJE);
+  assert.strictEqual(pend.ler(dir).fechadas.length, 1, 'com outro sorteio o fechar grava');
+  assert.ok(fs.existsSync(plantado), 'o que esta chamada nao criou nao se apaga');
+});
+
 test('F4c pendencias: fechar pede como fechou, marca a data e tira das abertas; fechar de novo recusa', () => {
   const dir = comum.pasta('pend-fechar');
   pend.adicionar(dir, { dono: 'Ana', texto: 'publicar', hoje: HOJE });

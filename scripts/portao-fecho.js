@@ -523,6 +523,7 @@ function motivoDoResultado(e, projeto, s) {
   if (t.ultimaConferencia && t.ultimaConferencia.falhou) return evidencia.motivoConferenciaVermelha(t.ultimaConferencia.comando);
   if (t.ultimoTeste && t.ultimoTeste.falhou) return evidencia.motivoTesteVermelho(t.ultimoTeste.comando);
   if (t.provaRodando) return evidencia.motivoProvaRodando(projeto.provaDePronto);
+  if (t.conferenciaRodando) return evidencia.motivoConferenciaRodando(t.comandoDaConferenciaRodando);
   if (t.provaPendente) return evidencia.motivoProvaNaoRodou(projeto.provaDePronto);
   return null;
 }

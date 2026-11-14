@@ -1516,6 +1516,28 @@ test('D821: a citacao de intervalo (arquivo:a-b) vale pela primeira linha', () =
   assert.deepStrictEqual(vistos.map((x) => x[1]), [433]);
 });
 
+test('F5b r1: a citacao com a letra do disco chega inteira ao disco; sem letra, como antes', () => {
+  const vistos = [];
+  // o disco de mentira so conhece o caminho relativo: a refutacao nao confere, e o que importa e o caminho consultado
+  assert.throws(() => apurarRefutando({ prova: 'ver C:/repo/scripts/instalar.js:433 e docs/x.md:2', simbolo: 'sha256:' },
+    discoD821(vistos)), /prova que nao confere/);
+  assert.deepStrictEqual(vistos.map((x) => x[0]), ['C:/repo/scripts/instalar.js', 'docs/x.md']);
+});
+
+test('F5b r1: severidade invalida diz o que veio, os valores que valem e que o achado (ou a lacuna) saiu', () => {
+  const sem = Object.assign(achado('P1', 'A.txt', 3), { severidade: undefined });
+  const r = v.validarVeredito(veredito('correcao', [sem, achado('alta', 'A.txt', 4)]));
+  assert.strictEqual(r.achadosValidos.length, 0);
+  assert.ok(r.erros.some((e) => e.includes('(sem severidade; vale P0, P1 ou P2), descartado')), JSON.stringify(r.erros));
+  assert.ok(r.erros.some((e) => e.includes('(veio "ALTA"; vale P0, P1 ou P2), descartado')), JSON.stringify(r.erros));
+  assert.ok(r.erros.every((e) => e.indexOf('undefined') === -1), JSON.stringify(r.erros));
+  const vd = Object.assign(veredito('correcao', []), { vsReferencia: { A: 'empata', B: 'empata' },
+    lacunas: [{ arquivo: 'A.txt', linha: 2, descricao: 'falta x' }] });
+  const rl = v.validarVeredito(vd, { comReferencia: true });
+  assert.ok(rl.erros.some((e) => e.includes('lacuna com severidade invalida (sem severidade; vale P0, P1 ou P2), descartada')),
+    JSON.stringify(rl.erros));
+});
+
 test('D821: o comando rodado refuta sem citar arquivo, e o disco nem e consultado', () => {
   const vistos = [];
   assert.strictEqual(apurarRefutando({ prova: 'a suite passa', comando: 'node --test test/a.test.js' },

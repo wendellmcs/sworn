@@ -739,7 +739,7 @@ test('A2-03 (D721): o aviso de projeto.json ilegivel traz o passo antes do init,
   });
 });
 
-// A2-77 (D721): o init preserva so o que le do projeto.json atual (skills/init/SKILL.md:63-73); com o arquivo
+// A2-77 (D721): o init preserva so o que le do projeto.json atual (skills/init/references/reinit.md:9-19); com o arquivo
 // ilegivel, o risco e perder o ajuste a mao, nao refazer tudo.
 test('A2-77 (D721): o aviso diz o que o init pode perder, sem prometer refazer do zero', () => {
   comTmp((tmp) => {

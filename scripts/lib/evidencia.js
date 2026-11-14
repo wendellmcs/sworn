@@ -234,6 +234,19 @@ function motivoProvaRodando(prova) {
   ].join('\n');
 }
 
+/** F5 (achado da R2b): a conferencia da tela lancada em segundo plano, sem o aviso de fim. ASCII (R5). */
+function motivoConferenciaRodando(comando) {
+  return [
+    'sworn - portao de fecho (trava 3).',
+    '',
+    'Voce afirmou sucesso, mas a conferencia da tela contra a referencia ainda roda em segundo plano,',
+    'sem resultado:',
+    '  ' + citado(comando),
+    '',
+    'Espere o aviso de fim dela e cole o resumo, ou declare que ela ainda nao terminou.'
+  ].join('\n');
+}
+
 // D785 (2.1): as voltas do laco da prova que mandam consertar; a seguinte manda escalar, e dali em diante o portao
 // libera.
 const TETO_DO_LACO = 3;
@@ -386,6 +399,6 @@ const MOTIVO = [
 module.exports = {
   NAO_RODOU, semBlocos, analisar, deveBloquear, MOTIVO, textoMostraFalha, deveBloquearPorFalha, declaraRessalva,
   declaraSemRevisao, MOTIVO_FALHA, motivoTesteVermelho, motivoConferenciaVermelha, motivoProvaNaoRodou,
-  motivoProvaRodando, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox, alegaCausa, deveBloquearPorCausa,
+  motivoProvaRodando, motivoConferenciaRodando, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox, alegaCausa, deveBloquearPorCausa,
   MOTIVO_CAUSA
 };

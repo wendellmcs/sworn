@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.34.0 — as pendências não gravam por link e a conferência da tela rodando barra o pronto
+
+**Corrigido**
+
+- **As pendências não gravam por um link.** Um repositório clonado pode trazer a pasta `.sworn` ou o
+  `.sworn/PENDENCIAS.md` como link simbólico (ou junction, no Windows) para um arquivo de fora do projeto. Adicionar
+  ou fechar uma pendência escreveria nesse arquivo. Agora o `pendencias.js` recusa, sai 1 e diz qual dos dois é o
+  link: troque o link por uma pasta ou um arquivo de verdade e rode de novo. Listar segue como antes.
+- **A conferência da tela ainda rodando barra o pronto.** A conferência contra a referência (`conferir-tela.js`)
+  lançada em segundo plano, sem o aviso de fim, contava como nenhuma, e o "pronto" passava com ela rodando; só a
+  vermelha barrava. Agora o portão do fecho barra o pronto até o aviso de fim chegar, e o motivo cita o comando. Para
+  fechar antes disso, o agente diz no próprio fecho que a conferência ainda não terminou: assim o pronto não finge
+  uma prova que não houve. Com duas rodando, o motivo cita a mais recente.
+- **O portão de estilo lê mais formas de gravar arquivo de estilo por shell.** A continuação de linha (`\` no fim),
+  o `env` antes do programa, a atribuição com aspa só no valor (`LC_ALL='C' tee a.css`), o `New-Item -Type`, as
+  aspas e os traços tipográficos do PowerShell e o `pwsh -EncodedCommand` deixavam o arquivo passar sem a
+  conferência do design; agora são lidos.
+- **As pendências não se perdem numa gravação que falha.** O `--fechar` grava por um arquivo temporário e troca no
+  fim: disco cheio no meio não trunca mais o `PENDENCIAS.md`. Sem conseguir conferir se o caminho é link, recusa em
+  vez de gravar; número que não é número e o separador de linha Unicode no texto recusam com a mensagem do erro.
+- **O aviso do design não manda o agente mexer no `design.json`.** O desvio vencido e a anti-referência sem efeito
+  dizem que quem corrige é o dono, como a última linha do aviso; a lista de cores marca o corte em 10 com " ..." e
+  deixa de fora a cor vazia ou que não é texto (um número ou um objeto no lugar dela).
+- **A revisão cega lê a refutação que cita caminho com a letra do disco.** A prova `C:/repo/x.js:10` era lida a partir
+  do `/repo`, e a refutação certa parava como prova que não confere; agora a letra entra no caminho. O achado de
+  severidade inválida diz o que veio, que vale P0, P1 ou P2 e que saiu da conta, em vez de mostrar `undefined`.
+
+**Por dentro**
+
+- O `apurar` da revisão cega caiu de 376 para 197 linhas: a conferência das lentes, a checagem de cada ronda, os
+  ordinais das descrições, a referência, os pares para o juiz, os prováveis mesmos, os eixos e o motivo do fim viraram
+  funções próprias. A conta não mudou.
+- A leitura do comando de shell que grava arquivo de estilo saiu do `design.js` para o `estilo-shell.js`; o
+  `design.js` fica com o sistema de design.
+- A skill `init` lê as regras da reconfiguração (o Passo 0b) de `references/reinit.md`, só quando o projeto já tem
+  um `projeto.json`.
+
 ## 0.33.0 — o git com prazo, a leitura de JSON única e o `rm` barrado quando a conferência falha
 
 **Corrigido**

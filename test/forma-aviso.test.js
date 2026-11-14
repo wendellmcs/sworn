@@ -13,6 +13,7 @@ const { spawnSync } = require('node:child_process');
 const apelidos = require('../scripts/lib/apelidos.js');
 const custo = require('../scripts/lib/custo.js');
 const design = require('../scripts/lib/design.js');
+const estiloShell = require('../scripts/lib/estilo-shell.js');
 const destrutivo = require('../scripts/lib/destrutivo.js');
 const escopo = require('../scripts/lib/escopo.js');
 const saude = require('../scripts/lib/saude.js');
@@ -95,7 +96,7 @@ test('T5: fora do design system na forma unica, com o arquivo entre aspas', () =
   const t = design.motivo('src/a b.css', [{ linha: 3, valor: '#123456', tipo: 'cor' }, { linha: 9, valor: 'gradiente', tipo: 'anti-referencia' }],
     { cores: ['#fff'], raios: ['4px'], espacos: ['8px'] });
   confereForma('design', t, { caminhos: ['src/a b.css'], acao: 'destas' });
-  const shellT = design.motivoShell(['src/a.css', 'src/b.scss']);
+  const shellT = estiloShell.motivoShell(['src/a.css', 'src/b.scss']);
   confereForma('design-shell', shellT, { caminhos: ['src/a.css', 'src/b.scss'], acao: 'destas' });
 });
 

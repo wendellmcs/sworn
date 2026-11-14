@@ -11,6 +11,7 @@ const { spawnSync } = require('node:child_process');
 
 const RAIZ = path.join(__dirname, '..');
 const design = require('../scripts/lib/design.js');
+const estiloShell = require('../scripts/lib/estilo-shell.js');
 
 const SISTEMA = {
   cores: ['#ff6600', '#1a1a1a', '#ffffff'],
@@ -323,7 +324,7 @@ test('D396 n. 3: (Join-Path ...) como argumento do PowerShell e o caminho, nao o
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   // o `)` so se procura numa janela: muitos `(Join-Path` sem fechar nao viram conta quadratica
   const t0 = Date.now();
-  assert.ok(Array.isArray(design.alvosDeEstiloNoShell('x (Join-Path '.repeat(20000), null, { ferramenta: 'PowerShell' })));
+  assert.ok(Array.isArray(estiloShell.alvosDeEstiloNoShell('x (Join-Path '.repeat(20000), null, { ferramenta: 'PowerShell' })));
   assert.ok(Date.now() - t0 < 2000, 'demorou ' + (Date.now() - t0) + ' ms');
 });
 
@@ -336,10 +337,10 @@ test('D396 n. 4: -InputObject leva valor e nao e o alvo', () => {
 });
 
 test('D396 n. 5: New-Item -Name se junta ao -Path (ou a pasta solta)', () => {
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('New-Item -ItemType File -Path src -Name a.css -Value x', null, { ferramenta: 'PowerShell' }),
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('New-Item -ItemType File -Path src -Name a.css -Value x', null, { ferramenta: 'PowerShell' }),
     ['src/a.css']);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('New-Item src -Name a.css', null, { ferramenta: 'PowerShell' }), ['src/a.css']);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('New-Item -Name a.css -ItemType File', null, { ferramenta: 'PowerShell' }), ['a.css']);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('New-Item src -Name a.css', null, { ferramenta: 'PowerShell' }), ['src/a.css']);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('New-Item -Name a.css -ItemType File', null, { ferramenta: 'PowerShell' }), ['a.css']);
   const dir = montar({ extra: { design: { caminhosDeEstilo: ['tokens/*.ts'] } } });
   try {
     todosNegados(dir, [['PowerShell', 'New-Item -Path tokens -Name cores.ts -ItemType File']]);
@@ -347,9 +348,9 @@ test('D396 n. 5: New-Item -Name se junta ao -Path (ou a pasta solta)', () => {
 });
 
 test('D396 n. 6: cp/Copy-Item para pasta sem barra no fim (destino sem extensao) e escrita dentro da pasta', () => {
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('cp novo.css src', null, { ferramenta: 'Bash' }), ['src/novo.css']);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('cp a.css b.scss estilos', null, { ferramenta: 'Bash' }), ['estilos/a.css', 'estilos/b.scss']);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('Copy-Item x.css src', null, { ferramenta: 'PowerShell' }), ['src/x.css']);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('cp novo.css src', null, { ferramenta: 'Bash' }), ['src/novo.css']);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('cp a.css b.scss estilos', null, { ferramenta: 'Bash' }), ['estilos/a.css', 'estilos/b.scss']);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('Copy-Item x.css src', null, { ferramenta: 'PowerShell' }), ['src/x.css']);
   const dir = montar();
   try {
     todosNegados(dir, [['Bash', 'cp novo.css src'], ['Bash', 'mv x.css .'], ['PowerShell', 'Copy-Item x.css src']]);
@@ -371,8 +372,20 @@ test('D396 n. 7: bash/sh sem -c le o heredoc como o roteiro', () => {
 });
 
 test('D396 n. 14: a mensagem do shell diz por que nega (o conteudo do comando nao se le antes de rodar)', () => {
-  const m = design.motivoShell(['src/a.css']);
+  const m = estiloShell.motivoShell(['src/a.css']);
   assert.ok(/Por que:/.test(m) && /conteudo/.test(m), m);
+});
+
+test('F5b: a mensagem do shell lista ate 12 arquivos e conta o resto', () => {
+  const alvos = Array.from({ length: 14 }, function (_, i) { return 'src/a' + i + '.css'; });
+  const m = estiloShell.motivoShell(alvos);
+  assert.ok(m.includes('"src/a11.css"') && !m.includes('"src/a12.css"'), m);
+  assert.ok(m.includes('  - ... e mais 2'), m);
+  // as bordas do corte: 12 cabem sem a linha do resto, 13 contam 1
+  const doze = estiloShell.motivoShell(alvos.slice(0, 12));
+  assert.ok(doze.includes('"src/a11.css"') && !doze.includes('e mais'), doze);
+  const treze = estiloShell.motivoShell(alvos.slice(0, 13));
+  assert.ok(!treze.includes('"src/a12.css"') && treze.includes('  - ... e mais 1'), treze);
 });
 
 // -------------------------------------------------------------- coluna "deve PERMITIR"
@@ -541,7 +554,7 @@ test('T11-1: a mensagem diz que o sworn confere o design.json no Write e no Edit
 });
 
 test('T11-1: nem a mensagem nova nem a do Write/Edit ensinam desvio - sem comando alternativo, sem "outro lugar"', () => {
-  const motivoShell = design.motivoShell(['src/a.css', 'src/b.scss']);
+  const motivoShell = estiloShell.motivoShell(['src/a.css', 'src/b.scss']);
   const r = design.conferir('.a{color:#00ff00;}', SISTEMA);
   const motivoWrite = design.motivo('src/a.css', r.fora, SISTEMA);
   const proibido = /\b(cat|echo|printf|tee|sed|awk|perl|python|node|cp|mv|heredoc|redirecion\w*|Set-Content|Out-File|Add-Content|copiar|copie|outro (lugar|arquivo|caminho|diretorio|pasta)|outra pasta|depois|renomei\w*|mover|mova)\b/i;
@@ -611,28 +624,28 @@ test('T11-1: design.json ou projeto.json quebrados desligam o modulo (sem estour
 
 // ----------------------------------------------------------------------- a funcao da lib
 
-test('design.alvosDeEstiloNoShell: devolve os caminhos de estilo escritos, normalizados, sem repetir e na ordem', () => {
+test('estiloShell.alvosDeEstiloNoShell: devolve os caminhos de estilo escritos, normalizados, sem repetir e na ordem', () => {
   const projeto = { design: { caminhosDeEstilo: ['src/tema/**'] } };
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('echo x > src\\a.css && echo y >> ./src/a.css', projeto, { ferramenta: 'PowerShell' }),
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('echo x > src\\a.css && echo y >> ./src/a.css', projeto, { ferramenta: 'PowerShell' }),
     ['src/a.css']);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('echo x > src/a.css && echo y >> ./src/a.css', projeto, { ferramenta: 'Bash' }),
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('echo x > src/a.css && echo y >> ./src/a.css', projeto, { ferramenta: 'Bash' }),
     ['src/a.css']);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('echo x > a.css; echo y > src/tema/c.ts; echo z > notas.txt', projeto),
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('echo x > a.css; echo y > src/tema/c.ts; echo z > notas.txt', projeto),
     ['a.css', 'src/tema/c.ts']);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('cat a.css', projeto), []);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell('', projeto), []);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell(undefined, null), []);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell(42, null), []);
-  assert.deepStrictEqual(design.alvosDeEstiloNoShell({ x: 1 }, null), []);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('cat a.css', projeto), []);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('', projeto), []);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell(undefined, null), []);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell(42, null), []);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell({ x: 1 }, null), []);
 });
 
-test('design.alvosDeEstiloNoShell: texto absurdo nao estoura nem trava (aspas abertas, aninhamento fundo, muito comprido)', () => {
+test('estiloShell.alvosDeEstiloNoShell: texto absurdo nao estoura nem trava (aspas abertas, aninhamento fundo, muito comprido)', () => {
   const casos = ["echo 'aberta > a.css", 'echo "aberta > a.css', 'cat <<EOF\nsem fim > a.css', '$(' .repeat(300) + 'echo x > a.css' + ')'.repeat(300),
     'echo x > ', '>', '>>', '<<', '<<<', '2>', '&>', 'tee', 'sed -i', 'cp', 'node -e', 'bash -c', 'Set-Content', '@\'', "@'\n",
     'a'.repeat(200000) + ' > b.css', 'echo ' + 'x > a.css; '.repeat(5000)];
   for (const c of casos) {
     const t0 = Date.now();
-    const r = design.alvosDeEstiloNoShell(c, null, { ferramenta: 'Bash' });
+    const r = estiloShell.alvosDeEstiloNoShell(c, null, { ferramenta: 'Bash' });
     assert.ok(Array.isArray(r), 'nao devolveu lista para ' + JSON.stringify(c.slice(0, 40)));
     assert.ok(Date.now() - t0 < 2000, 'demorou ' + (Date.now() - t0) + ' ms para ' + JSON.stringify(c.slice(0, 40)));
   }
@@ -685,4 +698,58 @@ test('D420/SH-02: estado nao gravavel nao libera a escrita de estilo por shell',
     });
     assert.ok(motivoDe(r), 'tinha de negar com o estado fora do ar; stdout ' + JSON.stringify(r.stdout) + ' stderr ' + r.stderr);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// F5b r1 (correcao, borda, seguranca, manutencao): escritores que o leitor do shell deixava passar.
+test('F5b r1: o leitor do shell acha o escritor depois de continuacao, env, atribuicao com aspas, -Type, aspa e traco Unicode e -EncodedCommand', () => {
+  const bash = (c) => estiloShell.alvosDeEstiloNoShell(c, null, {});
+  const ps = (c) => estiloShell.alvosDeEstiloNoShell(c, null, { ferramenta: 'PowerShell' });
+  const alvo = ['src/a.css'];
+  // a continuacao de linha (barra + quebra) nao e palavra: antes virava a palavra vazia e o nome do programa
+  assert.deepStrictEqual(bash("echo 'a{}' | \\\n  tee src/a.css"), alvo, 'continuacao no comeco da palavra');
+  assert.deepStrictEqual(bash('sudo \\\n  tee src/a.css'), alvo, 'continuacao depois do prefixo');
+  assert.deepStrictEqual(bash('sudo \\\r\n  tee src/a.css'), alvo, 'continuacao com CRLF');
+  assert.deepStrictEqual(bash('FOO=1 \\\n tee src/a.css'), alvo, 'continuacao depois da atribuicao');
+  assert.deepStrictEqual(bash('cp x.css \\\n  src/a.css'), alvo, 'a continuacao nao fecha o comando: o destino segue nele');
+  // env roda o programa seguinte, como sudo e nice
+  assert.deepStrictEqual(bash('env cp x.css src/a.css'), alvo, 'env');
+  assert.deepStrictEqual(bash('echo x | env FOO=1 tee src/a.css'), alvo, 'env com atribuicao');
+  // a aspa so no valor ainda e atribuicao; a palavra toda entre aspas e o nome de um programa
+  assert.deepStrictEqual(bash("LC_ALL='C' tee src/a.css"), alvo, 'atribuicao com aspa simples no valor');
+  assert.deepStrictEqual(bash('X="1" sed -i s/a/b/ src/a.css'), alvo, 'atribuicao com aspa dupla no valor');
+  assert.deepStrictEqual(bash("'FOO=1' tee src/a.css"), [], 'a palavra toda entre aspas e programa, nao atribuicao');
+  assert.deepStrictEqual(ps("$out='src/a.css'; Set-Content $out 'x'"), alvo, 'variavel do PowerShell com aspa no valor');
+  // -Type e o apelido de -ItemType: o valor dele nao e o caminho
+  assert.deepStrictEqual(ps("New-Item -Type File src/a.css -Value 'x'"), alvo, '-Type');
+  // o PowerShell aceita o traco e as aspas tipograficas
+  assert.deepStrictEqual(ps('Set-Content \u2013Path src/a.css -Value x'), alvo, 'traco curto no parametro');
+  assert.deepStrictEqual(ps('Set-Content \u2014Path src/a.css -Value x'), alvo, 'traco longo no parametro');
+  assert.deepStrictEqual(ps('Set-Content \u2018src/a.css\u2019 x'), alvo, 'aspas simples tipograficas');
+  assert.deepStrictEqual(ps('Set-Content \u201Csrc/a.css\u201D x'), alvo, 'aspas duplas tipograficas');
+  assert.deepStrictEqual(bash('Set-Content \u2018src/a.css\u2019 x'), [], 'no bash a aspa tipografica e letra');
+  // -EncodedCommand: o roteiro vem em base64 (UTF-16LE)
+  const enc = Buffer.from("Set-Content src/a.css 'x'", 'utf16le').toString('base64');
+  for (const op of ['-EncodedCommand', '-enc', '-e', '-ec', '-EncodedC']) {
+    assert.deepStrictEqual(bash('pwsh ' + op + ' ' + enc), alvo, 'pwsh ' + op);
+  }
+  assert.deepStrictEqual(ps('powershell.exe -NoProfile -EncodedCommand ' + enc), alvo, 'no PowerShell');
+  assert.deepStrictEqual(bash('pwsh -ExecutionPolicy Bypass -File x.ps1'), [], '-ex e outro parametro');
+  assert.deepStrictEqual(bash('pwsh -enc %%%'), [], 'base64 invalido nao lanca');
+});
+
+test('F5b r2: continuacao depois de > e de <<, traco curto e longo no Join-Path e aspa tipografica no [IO.File]', () => {
+  const bash = (c) => estiloShell.alvosDeEstiloNoShell(c, null, {});
+  const ps = (c) => estiloShell.alvosDeEstiloNoShell(c, null, { ferramenta: 'PowerShell' });
+  const alvo = ['src/a.css'];
+  // o alvo da redirecao e a marca do heredoc podem vir na linha de baixo, depois de barra e quebra
+  assert.deepStrictEqual(bash("echo 'a{}' > \\\n  src/a.css"), alvo, 'continuacao depois de >');
+  assert.deepStrictEqual(bash("echo 'a{}' >> \\\r\n  src/a.css"), alvo, 'continuacao com CRLF depois de >>');
+  assert.deepStrictEqual(bash('cat << \\\n  FIM > src/a.css\na{}\nFIM'), alvo, 'continuacao depois de <<');
+  // o parametro com traco curto ou longo sai do caminho, como o com hifen
+  assert.deepStrictEqual(ps('Set-Content (Join-Path src \u2013ChildPath a.css) x'), alvo, 'Join-Path com traco curto');
+  assert.deepStrictEqual(ps('Set-Content (Join-Path src \u2014ChildPath a.css) x'), alvo, 'Join-Path com traco longo');
+  assert.deepStrictEqual(ps('Set-Content (Join-Path src -ChildPath a.css) x'), alvo, 'Join-Path com hifen');
+  // [IO.File] le a aspa tipografica, como o resto do PowerShell
+  assert.deepStrictEqual(ps("[IO.File]::WriteAllText(\u2018src/a.css\u2019, 'x')"), alvo, '[IO.File] com aspa simples tipografica');
+  assert.deepStrictEqual(ps("[IO.File]::WriteAllText(\u201Csrc/a.css\u201D, 'x')"), alvo, '[IO.File] com aspa dupla tipografica');
 });

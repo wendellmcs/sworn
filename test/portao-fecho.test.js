@@ -1993,6 +1993,28 @@ test('R2b: a ultima conferencia da tela que saiu 1 barra o pronto, mesmo com a s
   });
 });
 
+// F5 (achado da R2b): a conferencia da tela lancada em segundo plano, sem o aviso de fim, contava como nenhuma, e o
+// pronto passava com ela rodando (so a vermelha barrava).
+test('F5: a conferencia da tela ainda rodando em segundo plano barra o pronto; dizer que ela nao terminou libera', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'fcr');
+    const conf = 'node scripts/conferir-tela.js --url http://localhost:3000 --referencia https://exemplo.com --saida s';
+    const lanca = { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'a', name: 'Bash',
+      input: { command: conf, run_in_background: true } }] } };
+    const aviso = resultado('a', 'Command running in background with ID: bxc. Output is being written to: x.output.');
+    const tr = linhasDoTranscript(tmp, 'fcr', [lanca, aviso, usoBash('b', 'npm test'), resultado('b', '# pass 4\n# fail 0')]);
+    gravar(tmp, 'fcr', dir, 'Edit', 'a.js');
+    const r = fecho(tmp, 'fcr', dir, PASSA, { transcript_path: tr });
+    assert.ok(r.json && r.json.decision === 'block', r.stdout);
+    assert.ok(/conferencia da tela/.test(r.json.reason) && /segundo plano/.test(r.json.reason) &&
+      r.json.reason.indexOf('conferir-tela.js') !== -1, r.json.reason);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(r.json.reason), 'ASCII (R5)');
+    gravar(tmp, 'fcr2', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'fcr2', dir, 'Pronto. A conferencia da tela ainda nao terminou; nao rodei outra.',
+      { transcript_path: tr }).json, null, 'a ressalva libera');
+  });
+});
+
 test('D634 (8) e D785: prova que nao rodou depois da ultima edicao de codigo barra; a ressalva so libera sem edicao no turno', () => {
   comTmp((tmp) => {
     const dir = projetoCom(tmp, 'f8', { provaDePronto: 'npm test' });

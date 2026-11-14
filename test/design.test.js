@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const design = require('../scripts/lib/design.js');
+const estiloShell = require('../scripts/lib/estilo-shell.js');
 // A leitura linear se prova por prazo: um por entrada, com o nome dela na mensagem. O teto tem folga para a carga
 // da suite; a versao quadratica de cada caso leva segundos ou minutos.
 function dentroDoPrazo(nome, fn) {
@@ -395,7 +396,7 @@ test('083 T6 (p7-5, p7-6): alvo com aspa ou quebra fica numa linha so e escapado
   assert.ok(m.indexOf('  - "a\\"b c.css"') !== -1, m.join('\n'));
   const i = m.indexOf('O que existe no sistema:');
   assert.strictEqual(m[i - 1], '', m.join('\n'));
-  const s = design.motivoShell(['a"b.css', 'x\ny.scss']).split('\n');
+  const s = estiloShell.motivoShell(['a"b.css', 'x\ny.scss']).split('\n');
   assert.ok(s.indexOf('  - "a\\"b.css"') !== -1 && s.indexOf('  - "x y.scss"') !== -1, s.join('\n'));
 });
 
@@ -446,11 +447,14 @@ test('A2-43/45: o aviso do design diz o passo, as 3 opcoes como no intocavel e a
 // A2-44 (P2 do pedido 12): o aviso do shell nao dizia onde registrar o erro do sworn, e o "diga ao usuario" misturava
 // o passo do agente com o que e do usuario.
 test('A2-44: o aviso do shell separa o passo do agente e diz ao usuario onde registrar a leitura errada', () => {
-  const m = design.motivoShell(['src/a.css']);
+  const m = estiloShell.motivoShell(['src/a.css']);
   assert.ok(!/diga ao usuario/.test(m), m);
-  assert.match(m, /\n {2}2\. .*leitura errada do sworn: conte ao usuario no fecho do turno/, m);
+  // F5b r1 (microcopy): "fecho do turno" era jargao, "o issue" ingles solto, e "este arquivo" com a lista no plural.
+  assert.match(m, /\n {2}2\. .*leitura errada do sworn: conte ao usuario na resposta final/, m);
   assert.match(m, /\n\nAo usuario: .*https:\/\/github\.com\/wendellmcs\/sworn\/issues/, m);
-  assert.match(m, /tire dele antes senha, token e caminho interno: o issue e publico/, 'segredo no issue publico: ' + m);
+  assert.match(m, /tire dele antes senha, token e caminho interno: o registro e publico/, 'segredo no registro publico: ' + m);
+  assert.match(m, /\n {2}1\. escreva este arquivo com a ferramenta Write ou Edit;/, m);
+  assert.match(estiloShell.motivoShell(['a.css', 'b.css']), /\n {2}1\. escreva estes arquivos com a ferramenta Write ou Edit;/);
   for (const l of m.split('\n')) assert.ok(l.length <= 100, 'linha com ' + l.length + ': ' + l);
   // A4-66 (microcopy do pedido 12): o "Por que:" vinha colado na lista de arquivos; e o "tokens" era ingles solto.
   assert.match(m, /"\n\nPor que: /, m);
@@ -466,7 +470,8 @@ test('A2-46: o aviso diz quais anti-referencias o portao ignorou, pela posicao n
     return i === -1 ? [] : m.slice(i, i + 2);
   };
   // A4-64 (microcopy do pedido 12): "texto com palavra" nao dizia o que falha; a regra vai na linha de baixo.
-  const fim = ' sem efeito: corrija ou tire do design.json';
+  // F5b r1 (microcopy): o aviso vai ao agente barrado; mudar o design.json e do dono, como diz a ultima linha.
+  const fim = ' sem efeito: o dono corrige ou tira do design.json';
   const regra = '    (so vale texto nao vazio, como "gradiente"; so espacos, numero ou objeto nao valem)';
   assert.deepStrictEqual(linha(['  ', 5, 'gradiente', null]), ['  antiReferencias: itens 1, 2, 4' + fim, regra],
     'tres ignoradas');
@@ -701,14 +706,14 @@ test('E2: o aviso conta o desvio desta tela que o portao ignorou, e o design.md 
   const um = design.motivo('src/velho.css', fora, COM_DESVIO, HOJE);
   // r1 da revisao nova (microcopy): o comando inteiro do validar, pelo caminho real, e "mal formado" no lugar de "torto".
   // r1 da 3a revisao (microcopy): sem parentese partido, e o validador com nome e comando.
-  assert.ok(um.includes('\n  1 desvio desta tela no design.json nao vale: 1 venceu (renove o "ate").\n' +
+  assert.ok(um.includes('\n  1 desvio desta tela no design.json nao vale: 1 venceu (o dono renova o "ate").\n' +
     '    Para ver qual e o que fazer, rode o validador do sworn: node "' +
     path.join(__dirname, '..', 'scripts', 'validar.js') + '"\n'), um);
   assert.ok(!/torto|rode scripts\//.test(um), um);
   const nenhum = design.motivo('src/outro.css', fora, COM_DESVIO, HOJE);
   assert.ok(!nenhum.includes('nao vale'), nenhum);
   const dois = design.motivo('a.css', fora, { desvios: [{ arquivos: ['a.css'] }, { arquivos: ['a.css'], motivo: 'x', ate: '2020-01-01' }] });
-  assert.ok(dois.includes('\n  2 desvios desta tela no design.json nao valem: 1 venceu (renove o "ate") e 1 com erro de forma.\n'), dois);
+  assert.ok(dois.includes('\n  2 desvios desta tela no design.json nao valem: 1 venceu (o dono renova o "ate") e 1 com erro de forma.\n'), dois);
   // O aviso le o mesmo dia do conferir: no dia seguinte ao "ate", o desvio da campanha some e conta como ignorado.
   const depois = design.motivo('src/promo.css', fora, COM_DESVIO, new Date(2027, 0, 2, 12));
   assert.ok(depois.includes('desvios desta tela: nenhum') &&
@@ -1018,4 +1023,14 @@ test('E3 item 2: conferirComputado confere o estilo calculado da tela pela mesma
   assert.deepStrictEqual(design.conferirComputado(estilo(v('color', 'rgb(1, 2, 3)')), null).fora, []);
   assert.deepStrictEqual(design.conferirComputado(null, sistema), { ok: true, fora: [], naoLidos: 0, conferidos: 0 });
   assert.deepStrictEqual(design.conferirComputado({ valores: [null, { propriedade: 'color' }] }, sistema).fora, []);
+});
+
+// F5b r1 (borda): as cores do aviso cortavam em 10 sem marca e sem filtrar item que nao e texto ("[object Object]").
+test('F5b r1: o aviso marca o corte das cores e so lista cor que e texto', () => {
+  const fora = [{ linha: 1, valor: '#999', tipo: 'cor' }];
+  const linhaDasCores = (cores) => design.motivo('a.css', fora, { cores: cores }).split('\n').find((l) => /^ {2}cores:/.test(l));
+  const doze = Array.from({ length: 12 }, (_, i) => '#00000' + (i % 10));
+  assert.strictEqual(linhaDasCores(doze), '  cores:    ' + doze.slice(0, 10).join(' ') + ' ...');
+  assert.strictEqual(linhaDasCores(doze.slice(0, 10)), '  cores:    ' + doze.slice(0, 10).join(' '), 'dez cabem, sem marca');
+  assert.strictEqual(linhaDasCores(['', {}, '#fff', '  ']), '  cores:    #fff', 'so texto nao vazio');
 });

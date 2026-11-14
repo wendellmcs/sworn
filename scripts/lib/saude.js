@@ -280,6 +280,8 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
   // diferencas pode citar qualquer palavra.
   const conferencias = Object.create(null);
   let ultimaConferencia = null;
+  // F5 (achado da R2b): a posicao da chamada da ultima conferencia que terminou; a lancada depois dela, sem fim, roda.
+  let posDaUltimaConferencia = -1;
   // `lancado`: a posicao do lancamento do teste em segundo plano (o fim vem depois e nao data a rodada).
   const anotar = function (comando, falhou, saida, pos, lancado) {
     ultimoTeste = { comando: comando, falhou: falhou || textoMostraFalha(saida) };
@@ -294,9 +296,11 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
       const c = conferencias[ev.id];
       if (ev.tipo === 'resultado' && !(c.fundo && LANCADO.test(ev.saida || ''))) {
         delete conferencias[ev.id];
+        posDaUltimaConferencia = Math.max(posDaUltimaConferencia, c.pos);
         ultimaConferencia = { comando: c.comando, falhou: conferenciaFalhou(c.lido, ev.falhou === true, ev.saida) };
       } else if (ev.tipo === 'fim_em_segundo_plano') {
         delete conferencias[ev.id];
+        posDaUltimaConferencia = Math.max(posDaUltimaConferencia, c.pos);
         const cauda = typeof ev.arquivo === 'string' && ev.arquivo ? transcricoes.caudaDoTranscript(ev.arquivo) : null;
         ultimaConferencia = { comando: c.comando, falhou: conferenciaFalhou(c.lido,
           ev.status !== 'completed' || (ev.codigo !== null && ev.codigo !== 0), cauda) };
@@ -307,7 +311,7 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
       const fundo = entrada.run_in_background === true;
       const lido = String(entrada.command).slice(0, COMANDO_LIDO);
       if (ev.id && CONFERENCIA_DA_TELA.test(lido)) {
-        conferencias[ev.id] = { comando: entrada.command, lido: lido, fundo: fundo };
+        conferencias[ev.id] = { comando: entrada.command, lido: lido, fundo: fundo, pos: ev.pos };
       }
       if (daProva && !fundo) ultimaProva = ev.pos;
       if (ev.id && (daProva || rodouTeste([entrada.command], COMANDOS_DE_TESTE))) {
@@ -340,8 +344,17 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
   const provaRodando = Object.keys(emFundo).some(function (id) {
     return emFundo[id].daProva && emFundo[id].pos >= ultimaEdicao && emFundo[id].pos > ultimaProva;
   });
+  // F5 (achado da R2b): a conferencia lancada em segundo plano, sem fim, depois da ultima que terminou; com mais de
+  // uma, a mais recente (e o comando dela que o motivo cita).
+  let rodandoId;
+  Object.keys(conferencias).forEach(function (id) {
+    const c = conferencias[id];
+    if (c.fundo && c.pos > posDaUltimaConferencia && (rodandoId === undefined || c.pos > conferencias[rodandoId].pos)) rodandoId = id;
+  });
   const r = { ultimoTeste: ultimoTeste, provaPendente: pedacos !== null && ultimaEdicao > ultimaProva,
     provaRodando: pedacos !== null && provaRodando };
+  // so aparece quando ha uma rodando, como a ultimaConferencia
+  if (rodandoId !== undefined) { r.conferenciaRodando = true; r.comandoDaConferenciaRodando = conferencias[rodandoId].comando; }
   // R2b: so aparece quando alguma conferencia da tela terminou na cauda lida.
   if (ultimaConferencia) r.ultimaConferencia = ultimaConferencia;
   if (raiz) {

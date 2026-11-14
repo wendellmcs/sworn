@@ -24,11 +24,20 @@ function secao(texto, prefixo) {
 }
 
 test('init: o re-init manda declarar o escopo antes dos Writes em projeto.json e design.json (IN-08)', () => {
+  // F5b (4): as regras do re-init moram em references/reinit.md; o Passo 0b manda le-lo so com o projeto.json no disco
   const s0b = secao(skill('init'), 'Step 0b');
-  assert.ok(/escopo\.md/.test(s0b), 'Passo 0b nao cita o escopo.md');
-  assert.ok(/Dentro/.test(s0b), 'Passo 0b nao diz que vai em "Dentro"');
-  assert.ok(s0b.includes('.claude/sworn/projeto.json'), 'Passo 0b nao lista o projeto.json no escopo');
-  assert.ok(s0b.includes('.claude/sworn/design.json'), 'Passo 0b nao lista o design.json no escopo');
+  assert.ok(/read \[`references\/reinit\.md`\]\(references\/reinit\.md\) with the `Read` tool/.test(s0b),
+    'Passo 0b nao manda ler o references/reinit.md');
+  assert.ok(/Without `projeto\.json`,\s+this is a first init: do not read that file/.test(s0b), 'Passo 0b sem o caso da 1a init');
+  const reinit = fs.readFileSync(path.join(RAIZ, 'skills', 'init', 'references', 'reinit.md'), 'utf8').replace(/\r\n/g, '\n');
+  for (const [onde, s] of [['o Passo 0b do SKILL.md', s0b], ['o references/reinit.md', reinit]]) {
+    assert.ok(/escopo\.md/.test(s), onde + ' nao cita o escopo.md');
+    assert.ok(/Dentro/.test(s), onde + ' nao diz que vai em "Dentro"');
+    assert.ok(s.includes('.claude/sworn/projeto.json'), onde + ' nao lista o projeto.json no escopo');
+    assert.ok(s.includes('.claude/sworn/design.json'), onde + ' nao lista o design.json no escopo');
+  }
+  assert.ok(/Three rules that apply only in a re-init/.test(reinit) && /In Step 8, before closing, remove again/.test(reinit),
+    'o reinit.md sem as regras ou sem o desfazer do Passo 8');
 });
 
 test('init: Passo 5b e Passo 7 lembram do escopo no ponto do Write (IN-08)', () => {
