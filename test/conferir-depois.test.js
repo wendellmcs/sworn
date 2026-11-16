@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const RAIZ = path.join(__dirname, '..');
 const LICENCAS = 'Licencas de terceiros.\nNao apagar.\n';
@@ -41,13 +42,12 @@ function montar(extraProjeto) {
     '- docs/**\n', 'utf8');
   const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
   const rodar = (script, entrada) => {
-    const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
-      input: JSON.stringify(Object.assign({ session_id: 'sa5e', cwd: dir }, entrada)), encoding: 'utf8', env: env });
+    // F1 (s372): em processo (comum.ganchoComoProcesso)
+    const r = comum.ganchoComoProcesso(path.join('scripts', script), Object.assign({ session_id: 'sa5e', cwd: dir }, entrada),
+      { env: env });
     // o gancho que quebra sai 0 e calado (io.blindar): sem esta conferencia, o crash passaria por "nada a avisar"
     assert.ok(!/portao falhou/.test(r.stderr || ''), script + ' quebrou: ' + r.stderr);
-    let o = null;
-    try { o = JSON.parse(r.stdout); } catch (err) { o = null; }
-    return o;
+    return r.json;
   };
   const depois = (ferramenta) => rodar('conferir-depois.js', { hook_event_name: 'PostToolUse',
     tool_name: ferramenta || 'PowerShell', tool_input: { command: 'qualquer' }, tool_response: {} });

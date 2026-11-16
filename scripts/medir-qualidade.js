@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 const medicao = require('./lib/medicao.js');
 const gitLib = require('./lib/git.js');
 const projetoLib = require('./lib/projeto.js');
+const { apagarPasta } = require('./lib/caminho.js'); // pendencia #10: o rmSync deixava a pasta com acento
 
 /**
  * A MEDICAO A/B DO RECURSO DE QUALIDADE DE RESPOSTA (docs/qualidade-de-resposta.md, secao 6).
@@ -193,13 +194,55 @@ function montarBrinquedo(dir, prompt, condicao) {
     fs.mkdirSync(path.dirname(alvo), { recursive: true });
     fs.writeFileSync(alvo, arquivos[rel], 'utf8');
   });
-  git(dir, ['init', '-q']);
+  iniciarRepo(dir);
+}
+
+/**
+ * O repositorio do brinquedo com um commit de tudo, em 3 processos de git (init, add, commit), e nao 5: a config vai
+ * direto no .git/config, e o commit nao abre o `git maintenance run --auto` (maintenance.auto=false) nem, no git antes
+ * da 2.29, o `git gc --auto` (gc.auto=0), so neste comando. Do 2o brinquedo em diante na mesma pasta-mae, o init sai
+ * do molde (F1i, 0.46.0): 2 processos.
+ * Usado aqui e pelo medir-travas.js.
+ */
+function iniciarRepo(dir) {
+  iniciarPeloMolde(dir);
   // Na config do repositorio, e nao so no -c do helper: vale tambem para o git que o modelo rodar.
-  git(dir, ['config', '--local', 'core.longpaths', 'true']);
+  fs.appendFileSync(path.join(dir, '.git', 'config'), '[core]\n\tlongpaths = true\n', 'utf8');
   // Nasce limpo: arquivo untracked o portao do sworn le como "de outra frente" e barra o Edit do modelo.
   git(dir, ['add', '-A']);
   git(dir, ['-c', 'user.name=medicao', '-c', 'user.email=medicao@exemplo.com', '-c', 'commit.gpgsign=false',
-    'commit', '-q', '--no-verify', '-m', 'brinquedo']);
+    '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'commit', '-q', '--no-verify', '-m', 'brinquedo']);
+}
+
+// F1i (0.46.0): o .git que o `git init` acabou de criar, guardado em memoria (pastas e arquivos) por pasta-mae, para
+// os proximos brinquedos do processo na mesma pasta escreverem o mesmo .git sem abrir outro git. O init nao grava
+// caminho no .git, mas grava o que sondou do disco (core.ignorecase, core.symlinks): irmaos moram no mesmo disco, e um
+// volume montado no meio do caminho nao engana a chave (a raiz do caminho, em POSIX, e sempre '/').
+const moldesDoInit = new Map();
+
+function iniciarPeloMolde(dir) {
+  const destino = path.join(dir, '.git');
+  // .git que ja existe (montarBrinquedo chamado direto, com arquivo em .git/) nao entra no molde nem leva o molde por
+  // cima: o git init de sempre, que reaproveita o que la estiver
+  if (fs.existsSync(destino)) { git(dir, ['init', '-q']); return; }
+  const chave = path.dirname(path.resolve(dir));
+  const molde = moldesDoInit.get(chave);
+  if (molde) {
+    molde.pastas.forEach(function (rel) { fs.mkdirSync(path.join(destino, rel), { recursive: true }); });
+    molde.arquivos.forEach(function (a) { fs.writeFileSync(path.join(destino, a.rel), a.dados, { flag: 'wx' }); });
+    return;
+  }
+  git(dir, ['init', '-q']);
+  const novo = { pastas: [], arquivos: [] };
+  (function ler(rel) {
+    novo.pastas.push(rel);
+    fs.readdirSync(path.join(destino, rel), { withFileTypes: true }).forEach(function (e) {
+      const filho = path.join(rel, e.name);
+      if (e.isDirectory()) ler(filho);
+      else if (e.isFile()) novo.arquivos.push({ rel: filho, dados: fs.readFileSync(path.join(destino, filho)) });
+    });
+  })('');
+  moldesDoInit.set(chave, novo);
 }
 
 // core.longpaths: o brinquedo mora em pasta funda (a temporaria do sistema, com o nome curto ja expandido),
@@ -461,7 +504,7 @@ function tirarMontagensMortas(rodada) {
     // carimbo no futuro nao e velho: vale so o pid
     const velha = Date.now() - Number(m[2]) > IDADE_DA_MONTAGEM_MORTA_MS;
     if (!velha && processoVivo(Number(m[1]))) return;
-    try { fs.rmSync(path.join(rodada, nome), { recursive: true, force: true }); } catch (e) { /* fica para a proxima */ }
+    try { apagarPasta(path.join(rodada, nome)); } catch (e) { /* fica para a proxima */ }
   });
 }
 
@@ -567,7 +610,7 @@ function pares(argv) {
     // nao ser recusada. O desfazer que tambem falha nao engole o erro de origem: diz o que ficou
     const ficou = [];
     nasceu.slice().reverse().forEach(function (alvo) {
-      try { fs.rmSync(alvo, { recursive: true, force: true }); } catch (err) { ficou.push(alvo + ' (' + (err.code || err.message) + ')'); }
+      try { apagarPasta(alvo); } catch (err) { ficou.push(alvo + ' (' + (err.code || err.message) + ')'); }
     });
     if (ficou.length === 0) throw e;
     throw new Error((e && e.message ? e.message : String(e)) + '; e o desfazer falhou, ficou para apagar a mao: ' + ficou.join(', '));
@@ -691,4 +734,4 @@ function principal(argv) {
 
 if (require.main === module) principal(process.argv.slice(2));
 
-module.exports = { resolverClaude, projetoDoBrinquedo, montarBrinquedo, acharTranscricao, git };
+module.exports = { resolverClaude, projetoDoBrinquedo, montarBrinquedo, iniciarRepo, acharTranscricao, git };

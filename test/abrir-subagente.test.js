@@ -10,11 +10,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const enxuto = require('../scripts/lib/enxuto.js');
+const comum = require('./lib/comum.js');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'abrir-subagente.js');
 
 function pasta(projeto) {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'esq-subag-'));
+  const d = comum.temporaria('esq-subag-');
   if (projeto !== undefined) {
     fs.mkdirSync(path.join(d, '.claude', 'sworn'), { recursive: true });
     fs.writeFileSync(path.join(d, '.claude', 'sworn', 'projeto.json'), JSON.stringify(projeto));

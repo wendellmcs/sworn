@@ -216,7 +216,11 @@ io.blindar(function () {
       // espaco, que casa quase todo comando. E o mesmo idioma que validar() ja
       // usa em projeto.js:143, e que este laco nunca herdou.
       if (typeof padrao !== 'string') continue;
-      try { if (new RegExp(padrao, 'i').test(comando)) return io.permitir(); } catch (err) { /* fail-closed: padrao ruim nao libera */ }
+      let casa = false;
+      try { casa = new RegExp(padrao, 'i').test(comando); } catch (err) { /* fail-closed: padrao ruim nao libera */ }
+      // pendencia #6 (0.38.0): a decisao fora do try. No portao-shell.js (io.rodarJuntos) o io.permitir lanca a PARADA,
+      // que o catch acima engolia: o portao seguia e gravava a marca do aviso do cd e o balde do destrutivo.
+      if (casa) return io.permitir();
     }
 
     const shell = require('./lib/shell.js');

@@ -7,9 +7,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 const cicatriz = require('../scripts/lib/cicatriz.js');
 
 const RAIZ = path.join(__dirname, '..');
@@ -17,7 +16,7 @@ const SCRIPT = path.join(RAIZ, 'scripts', 'cicatriz.js');
 const BARRA = String.fromCharCode(92);
 
 /** Foco de revisao 5: caminho com espaco e acento e o caso normal, nao a borda. */
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn cicatriz ação-')); }
+function pasta() { return comum.temporaria('sworn cicatriz ação-'); }
 
 function escrever(dir, rel, conteudo) {
   const alvo = path.join(dir, rel);
@@ -299,13 +298,13 @@ test('cicatriz: o script roda, e o --json sai parseavel', () => {
   try {
     const manual = manualDeTeste(dir);
     const corpus = corpusDeTeste(dir);
-    const txt = spawnSync(process.execPath, [SCRIPT, '--manual', manual, '--corpus', corpus],
-      { encoding: 'utf8' });
+    const txt = comum.scriptComoProcesso(SCRIPT, ['--manual', manual, '--corpus', corpus],
+      { env: Object.assign({}, process.env) });
     assert.strictEqual(txt.status, 0, txt.stderr);
     assert.ok(/auditoria por cicatriz/.test(txt.stdout), txt.stdout);
 
-    const js = spawnSync(process.execPath, [SCRIPT, '--manual', manual, '--corpus', corpus, '--json'],
-      { encoding: 'utf8' });
+    const js = comum.scriptComoProcesso(SCRIPT, ['--manual', manual, '--corpus', corpus, '--json'],
+      { env: Object.assign({}, process.env) });
     assert.strictEqual(js.status, 0, js.stderr);
     const r = JSON.parse(js.stdout);
     assert.strictEqual(r.resumo.total, 2);
@@ -316,8 +315,8 @@ test('cicatriz: o script roda, e o --json sai parseavel', () => {
 test('cicatriz: o script SEM --corpus sai com sucesso e avisa que esta cego', () => {
   const dir = pasta();
   try {
-    const r = spawnSync(process.execPath, [SCRIPT, '--manual', manualDeTeste(dir)],
-      { encoding: 'utf8' });
+    const r = comum.scriptComoProcesso(SCRIPT, ['--manual', manualDeTeste(dir)],
+      { env: Object.assign({}, process.env) });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(/CORPUS NAO LIDO/.test(r.stdout), r.stdout);
     // A5 (R1 de lib/cicatriz.js :241): o aviso diz COMO apontar o corpus, nao so que falta
@@ -346,14 +345,14 @@ test('cicatriz: flag sem valor e numero fora da faixa sao erro de uso que diz a 
       [['--corpus', corpus, '--fracao', 'NaN'], /--fracao fora da faixa/]
     ];
     for (const [args, re] of casos) {
-      const r = spawnSync(process.execPath, [SCRIPT, '--manual', manual].concat(args), { encoding: 'utf8' });
+      const r = comum.scriptComoProcesso(SCRIPT, ['--manual', manual].concat(args), { env: Object.assign({}, process.env) });
       assert.strictEqual(r.status, 1, JSON.stringify(args) + ': ' + r.stdout + r.stderr);
       assert.ok(/^ERRO: /.test(r.stdout) && re.test(r.stdout) && /uso: cicatriz\.js/.test(r.stdout),
         JSON.stringify(args) + ': ' + r.stdout);
     }
     // a borda que vale: minimo 1 e fracao 1 rodam, e o numero chega ao relatorio
-    const ok = spawnSync(process.execPath, [SCRIPT, '--manual', manual, '--corpus', corpus, '--minimo', '1', '--fracao', '1',
-      '--json'], { encoding: 'utf8' });
+    const ok = comum.scriptComoProcesso(SCRIPT, ['--manual', manual, '--corpus', corpus, '--minimo', '1', '--fracao', '1',
+      '--json'], { env: Object.assign({}, process.env) });
     assert.strictEqual(ok.status, 0, ok.stdout + ok.stderr);
     const j = JSON.parse(ok.stdout);
     assert.strictEqual(j.minimo, 1);
@@ -423,7 +422,7 @@ test('cicatriz: o script aceita --corpus apontando um arquivo', () => {
   try {
     const manual = manualDeTeste(dir);
     const arquivo = path.join(corpusDeTeste(dir), 'decisoes.md');
-    const s = spawnSync(process.execPath, [SCRIPT, '--manual', manual, '--corpus', arquivo, '--fracao', '0.5', '--json'], { encoding: 'utf8' });
+    const s = comum.scriptComoProcesso(SCRIPT, ['--manual', manual, '--corpus', arquivo, '--fracao', '0.5', '--json'], { env: Object.assign({}, process.env) });
     assert.strictEqual(s.status, 0, s.stderr);
     const j = JSON.parse(s.stdout);
     assert.strictEqual(j.corpusLido, true);

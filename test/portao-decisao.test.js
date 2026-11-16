@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'portao-decisao.js');
@@ -23,16 +23,14 @@ function comProjeto(projeto, fn) {
   }
 }
 
+// F1g: o portao roda no processo do teste, com o ambiente que o processo herdava (a entrada em texto segue por
+// processo, pelo proprio ganchoComoProcesso)
 function hook(dir, entrada) {
-  const r = spawnSync(process.execPath, [SCRIPT], {
-    cwd: dir, encoding: 'utf8',
-    input: typeof entrada === 'string' ? entrada : JSON.stringify(Object.assign({
-      session_id: 'dec', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion'
-    }, entrada))
-  });
-  let json = null;
-  if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
-  return { status: r.status, json: json, stdout: r.stdout, stderr: r.stderr };
+  const e = typeof entrada === 'string' ? entrada : Object.assign({
+    session_id: 'dec', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion'
+  }, entrada);
+  const r = comum.ganchoComoProcesso(SCRIPT, e, { cwd: dir, env: Object.assign({}, process.env) });
+  return { status: r.status, json: r.json, stdout: r.stdout, stderr: r.stderr };
 }
 
 function negou(r) {

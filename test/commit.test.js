@@ -10,8 +10,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const commit = require('../scripts/lib/commit.js');
-
-const RAIZ = path.join(__dirname, '..');
+const comum = require('./lib/comum.js');
 
 test('commit: ehCommit acha o git commit fora de aspas, com -C, -c e depois de cd', () => {
   for (const c of ['git commit -m "x"', 'git -C "C:/a b/repo" commit -qm x', 'cd x && git commit -m y',
@@ -52,21 +51,17 @@ test('commit: inspetores pela faixa (D485): uma 1, duas 2, completa 10 de codigo
 
 // ------------------------------- o gancho, num repositorio de verdade
 
+// F1g (7a fatia): o repositorio de ensaio pelo comum.repo (o .git vazio copiado, com a config no arquivo, e o commit
+// sem a manutencao automatica): 2 processos de git, e nao 6.
 function repo() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-commit-'));
-  const g = function (args) { return spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false }); };
-  g(['init', '-q', '.']);
-  g(['config', 'user.email', 'ensaio@ensaio']);
-  g(['config', 'user.name', 'ensaio']);
-  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), '{}');
-  fs.mkdirSync(path.join(dir, 'src'));
   const linhas = function (n, p) { return Array.from({ length: n }, function (_, i) { return p + i; }).join('\n') + '\n'; };
-  fs.writeFileSync(path.join(dir, 'src', 'grande.js'), linhas(60, 'a'));
-  fs.writeFileSync(path.join(dir, 'src', 'pequeno.js'), linhas(10, 'b'));
-  fs.writeFileSync(path.join(dir, 'LEIA.md'), 'texto\n');
-  g(['add', '-A']);
-  g(['commit', '-qm', 'base']);
+  comum.repo(dir, {
+    '.claude/sworn/projeto.json': '{}',
+    'src/grande.js': linhas(60, 'a'),
+    'src/pequeno.js': linhas(10, 'b'),
+    'LEIA.md': 'texto\n'
+  });
   fs.writeFileSync(path.join(dir, 'src', 'grande.js'), linhas(60, 'z'));
   fs.writeFileSync(path.join(dir, 'src', 'pequeno.js'), linhas(9, 'b') + 'mudou\n');
   fs.writeFileSync(path.join(dir, 'src', 'novo.js'), 'x\n');
@@ -74,11 +69,12 @@ function repo() {
   return dir;
 }
 
-function hook(script, dir, tmp, entrada) {
-  return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
-    input: JSON.stringify(Object.assign({ session_id: 'c1', cwd: dir }, entrada)),
-    encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
-  });
+// F1g (7a fatia): o gancho no proprio processo do teste (comum.ganchoComoProcesso), com o ambiente isolado (sem a
+// sessao real, pasta de config vazia); devolve { status, stdout, stderr, json, porProcesso }.
+// `extra` (opcional): variaveis a mais no ambiente do gancho.
+function hook(script, dir, tmp, entrada, extra) {
+  return comum.ganchoComoProcesso(path.join('scripts', script), Object.assign({ session_id: 'c1', cwd: dir }, entrada),
+    { cwd: dir, env: comum.ambiente(Object.assign({ SWORN_TMP: tmp }, extra)) });
 }
 
 function tocar(dir, tmp, rel) {
@@ -86,14 +82,25 @@ function tocar(dir, tmp, rel) {
     tool_input: { file_path: path.join(dir, rel) } });
 }
 
-function commitar(dir, tmp, comando, transcrito) {
+function commitar(dir, tmp, comando, transcrito, extra) {
   const entrada = { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: comando } };
   if (transcrito) entrada.transcript_path = transcrito;
-  const r = hook('portao-commit.js', dir, tmp, entrada);
+  const r = hook('portao-commit.js', dir, tmp, entrada, extra);
   let json = null;
   try { json = JSON.parse(r.stdout); } catch (e) { json = null; }
-  return { status: r.status, json: json, stderr: r.stderr };
+  return { status: r.status, json: json, stderr: r.stderr, porProcesso: r.porProcesso };
 }
+
+/** Roda `fn` com a variavel `nome` do process.env em `valor` (undefined = sem ela) e a devolve como estava. */
+function comVariavel(nome, valor, fn) {
+  const anterior = process.env[nome];
+  if (valor === undefined) delete process.env[nome]; else process.env[nome] = valor;
+  try { return fn(); } finally {
+    if (anterior === undefined) delete process.env[nome]; else process.env[nome] = anterior;
+  }
+}
+
+const lerEstado = function (tmp) { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'c1.json'), 'utf8')); };
 
 const negou = function (r) {
   return !!(r.json && r.json.hookSpecificOutput && r.json.hookSpecificOutput.permissionDecision === 'deny');
@@ -126,6 +133,17 @@ function comRepo(fn) {
   }
 }
 
+test('F1g: os ganchos deste arquivo rodam no processo do teste, e o repositorio de ensaio nasce sem manutencao', () => {
+  comRepo(function (dir, tmp) {
+    const r = tocar(dir, tmp, 'src/grande.js');
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.strictEqual(r.porProcesso, false, 'o gancho tinha de rodar no processo do teste');
+    const config = fs.readFileSync(path.join(dir, '.git', 'config'), 'utf8');
+    // a forma que o comum.repo grava (CONFIG_DE_ENSAIO_TEXTO): a secao e a chave numa linha com tab
+    assert.match(config, /\[maintenance\]\r?\n\tauto = false\b/, 'o commit do ensaio abriria o git maintenance: ' + config);
+  });
+});
+
 test('091 #1: commit com codigo mudado sem revisao e negado com a lista, a faixa e os inspetores; texto fica fora', () => {
   comRepo(function (dir, tmp) {
     for (const rel of ['src/grande.js', 'src/pequeno.js', 'src/novo.js', 'LEIA.md']) tocar(dir, tmp, rel);
@@ -153,9 +171,9 @@ test('D575: arquivo tocado fora de qualquer repositorio nao barra o commit, com 
       fs.writeFileSync(path.join(fora, 'mutar.js'), 'x\n');
       hook('marcar-trabalho.js', dir, tmp, { hook_event_name: 'PostToolUse', tool_name: 'Write',
         tool_input: { file_path: path.join(fora, 'mutar.js') } });
-      const comVariavel = commitar(dir, tmp, 'D="' + dir + '"; ( cd "$D" && git commit -m "x" )');
-      assert.strictEqual(comVariavel.status, 0, comVariavel.stderr);
-      assert.ok(!negou(comVariavel), 'cd "$D": o arquivo de fora barrou o commit: ' + JSON.stringify(comVariavel.json));
+      const comCdD = commitar(dir, tmp, 'D="' + dir + '"; ( cd "$D" && git commit -m "x" )');
+      assert.strictEqual(comCdD.status, 0, comCdD.stderr);
+      assert.ok(!negou(comCdD), 'cd "$D": o arquivo de fora barrou o commit: ' + JSON.stringify(comCdD.json));
       const noRepo = commitar(dir, tmp, 'git commit -m "x"');
       assert.ok(!negou(noRepo), 'commit no repositorio: o arquivo de fora barrou: ' + JSON.stringify(noRepo.json));
       assert.deepStrictEqual(commit.pendentes([path.join(fora, 'mutar.js')], [], dir, null, null, []), [],
@@ -242,14 +260,10 @@ test('091 #1: sem projeto.json, sem arquivo tocado ou com o arquivo ja igual ao 
 test('091 #1: revisao aprovada libera o arquivo; editar de novo o devolve a lista', () => {
   comRepo(function (dir, tmp) {
     tocar(dir, tmp, 'src/pequeno.js');
-    const anterior = process.env.SWORN_TMP;
-    process.env.SWORN_TMP = tmp;
-    try {
+    comVariavel('SWORN_TMP', tmp, function () {
       const estado = require('../scripts/lib/estado.js');
       estado.alterar('c1', function (s) { s.revisadosAprovados = [path.join(dir, 'src', 'pequeno.js')]; return s; });
-    } finally {
-      if (anterior === undefined) delete process.env.SWORN_TMP; else process.env.SWORN_TMP = anterior;
-    }
+    });
     assert.ok(!negou(commitar(dir, tmp, 'git commit -m x')), 'aprovado foi negado');
     tocar(dir, tmp, 'src/pequeno.js');
     const r = commitar(dir, tmp, 'git commit -m x');
@@ -358,6 +372,161 @@ test('A2-30 (D721): pastaDoComando acha o mesmo git commit que o ehCommit', () =
   assert.strictEqual(commit.pastaDoComando('cd "x y" && echo "git -C z commit" && git commit'), 'x y');
 });
 
+// F1h (0.45.0): o pendentes pergunta a raiz e o blob do HEAD num git so por arquivo de codigo; o texto nao gasta git.
+// O git combinado e o `rev-parse --show-toplevel HEAD:./<arq>`; a reserva de antes e o `rev-parse --show-toplevel`
+// sozinho (a raiz por pasta) mais o `cat-file -e` do arquivo. O gravador marca o combinado com ' HEAD:' para os dois
+// nao se confundirem na contagem.
+function ehRaizEBlob(args) {
+  return args[0] === 'rev-parse' && args[1] === '--show-toplevel' && typeof args[2] === 'string' && args[2].startsWith('HEAD:');
+}
+const RAIZ_E_BLOB = 'rev-parse --show-toplevel HEAD:';
+const SO_A_RAIZ = 'rev-parse --show-toplevel';
+// `troca(args)`: devolve o resultado falso de um git, ou undefined para o git de verdade.
+function gitsDoPendentes(dir, arquivos, troca, tetos) {
+  const cp = require('node:child_process');
+  const original = cp.spawnSync;
+  const vistos = [];
+  cp.spawnSync = function (cmd, args) {
+    if (cmd === 'git' && Array.isArray(args)) {
+      vistos.push(ehRaizEBlob(args) ? RAIZ_E_BLOB : args.slice(0, 2).join(' '));
+      const falso = troca && troca(args);
+      if (falso) return falso;
+    }
+    return original.apply(this, arguments);
+  };
+  try {
+    return { lista: commit.pendentes(arquivos, [], dir, null, null, [], tetos), vistos: vistos };
+  } finally { cp.spawnSync = original; }
+}
+function quantos(vistos, nome) { return vistos.filter(function (v) { return v === nome; }).length; }
+// O resultado do spawnSync de um git que estourou o prazo.
+const ESTOURO = { status: null, signal: 'SIGTERM', stdout: '', stderr: '',
+  error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }) };
+
+test('F1h: pendentes gasta um rev-parse de raiz e blob por arquivo de codigo, e a lista sai a mesma', () => {
+  comRepo(function (dir) {
+    const arquivos = ['src/grande.js', 'src/pequeno.js', 'src/novo.js', 'LEIA.md'].map(function (r) { return path.join(dir, r); });
+    const r = gitsDoPendentes(dir, arquivos);
+    const lista = r.vistos.join(' | ');
+    assert.deepStrictEqual(r.lista.map(function (p) { return p.rel; }), ['src/grande.js', 'src/pequeno.js', 'src/novo.js']);
+    assert.strictEqual(quantos(r.vistos, RAIZ_E_BLOB), 3, 'um git de raiz e blob por arquivo de codigo (3), o LEIA.md nenhum: ' + lista);
+    assert.strictEqual(quantos(r.vistos, SO_A_RAIZ), 0, 'sem a pergunta da raiz sozinha, que era da reserva: ' + lista);
+    assert.strictEqual(r.vistos.filter(function (v) { return v.startsWith('cat-file'); }).length, 0,
+      'o blob do HEAD ja diz se o arquivo e novo, sem cat-file: ' + lista);
+    // dois arquivos no HEAD medem pelo diff, o novo pelo check-ignore: 3 + 3 gits, o LEIA.md nenhum
+    assert.strictEqual(r.vistos.length, 6, '3 de raiz e blob mais 3 de medida: ' + lista);
+  });
+});
+
+test('F1h: o blob do teto sai do mesmo git (sem um rev-parse HEAD:<arquivo> a mais), e o teto segue valendo', () => {
+  comRepo(function (dir) {
+    const abs = path.join(dir, 'src', 'pequeno.js');
+    const tetos = commit.comTeto({}, abs);
+    const r = gitsDoPendentes(dir, [abs], null, tetos);
+    assert.deepStrictEqual(r.lista.map(function (p) { return [p.rel, p.teto]; }), [['src/pequeno.js', true]]);
+    assert.deepStrictEqual(r.vistos.filter(function (v) { return v.startsWith('rev-parse'); }), [RAIZ_E_BLOB],
+      'um rev-parse so, o de raiz e blob: ' + r.vistos.join(' | '));
+  });
+});
+
+test('F1h: o git de raiz e blob que estoura o prazo cai no caminho de antes, e o arquivo segue na lista', () => {
+  comRepo(function (dir) {
+    const arquivos = ['src/grande.js', 'src/novo.js'].map(function (r) { return path.join(dir, r); });
+    // so o git combinado estoura; o da reserva responde (os dois estourando: os testes D844 abaixo)
+    const estoura = function (args) { return ehRaizEBlob(args) ? ESTOURO : undefined; };
+    const r = gitsDoPendentes(dir, arquivos, estoura);
+    const lista = r.vistos.join(' | ');
+    assert.deepStrictEqual(r.lista.map(function (p) { return p.rel; }), ['src/grande.js', 'src/novo.js'],
+      'o arquivo nao pode sair da lista porque o git demorou: ' + lista);
+    assert.strictEqual(quantos(r.vistos, RAIZ_E_BLOB), 2, 'o git combinado tentado uma vez por arquivo: ' + lista);
+    assert.strictEqual(quantos(r.vistos, SO_A_RAIZ), 1, 'a reserva pergunta a raiz uma vez para a pasta src: ' + lista);
+    assert.strictEqual(quantos(r.vistos, 'cat-file -e'), 2, 'a reserva confere o HEAD de cada arquivo: ' + lista);
+  });
+});
+
+// D844 (pendencia #11): o git que nao responde no prazo nunca vira "fora do repositorio"; o arquivo entra como
+// semResposta e o portao nega com o motivo do git lento, sem contar commit sem revisao nem dar a ordem de revisar.
+const estouraARaiz = function (args) { return args[0] === 'rev-parse' && args[1] === '--show-toplevel' ? ESTOURO : undefined; };
+
+test('D844: o git de raiz e blob e o da reserva estourando o prazo deixam o arquivo como semResposta', () => {
+  comRepo(function (dir) {
+    const arquivos = ['src/grande.js', 'src/novo.js', 'LEIA.md'].map(function (r) { return path.join(dir, r); });
+    const r = gitsDoPendentes(dir, arquivos, estouraARaiz);
+    const lista = r.vistos.join(' | ');
+    assert.deepStrictEqual(r.lista, [{ rel: 'src/grande.js', semResposta: true }, { rel: 'src/novo.js', semResposta: true }],
+      'o arquivo saiu da conta porque o git demorou: ' + lista);
+    assert.strictEqual(quantos(r.vistos, SO_A_RAIZ), 1, 'a reserva pergunta uma vez por pasta, mesmo estourando: ' + lista);
+    assert.strictEqual(r.vistos.filter(function (v) { return v.startsWith('cat-file') || v.startsWith('diff'); }).length, 0,
+      'sem o repositorio, nada se mede: ' + lista);
+  });
+});
+
+test('D844: a reserva que responde "fora do repositorio" (sem prazo estourado) segue deixando o arquivo de fora', () => {
+  comRepo(function (dir) {
+    const abs = path.join(dir, 'src', 'grande.js');
+    const fora = { status: 128, signal: null, stdout: '', stderr: 'fatal: not a git repository' };
+    const r = gitsDoPendentes(dir, [abs], function (args) {
+      if (ehRaizEBlob(args)) return ESTOURO;
+      return args[0] === 'rev-parse' && args[1] === '--show-toplevel' ? fora : undefined;
+    });
+    assert.deepStrictEqual(r.lista, [], 'so o prazo estourado barra; fora do repositorio nunca conta (D575)');
+  });
+});
+
+test('D844: o motivo do git lento cita o prazo, so os arquivos sem resposta e o SWORN_GIT_PRAZO_MS', () => {
+  const lista = [{ rel: 'src/a.js', semResposta: true }, { rel: 'src/b.js', faixa: 'uma', inspetores: 1 }];
+  const comeco = function (valor) {
+    return comVariavel('SWORN_GIT_PRAZO_MS', valor, function () { return commit.motivoSemResposta(lista).split('\n')[0]; });
+  };
+  comVariavel('SWORN_GIT_PRAZO_MS', undefined, function () {
+    assert.strictEqual(commit.motivoSemResposta(lista), [
+      'sworn - commit parado: o git nao respondeu em 5 s ao conferir de que repositorio sao estes arquivos:',
+      '  - "src/a.js"',
+      'Nao e falta de revisao: sem a resposta do git, o portao nao sabe se o arquivo e deste repositorio.',
+      '',
+      'Faca agora:',
+      '  1. repita o commit;',
+      '  2. se ele parar de novo com este aviso, o git esta lento nesta maquina: ponha SWORN_GIT_PRAZO_MS',
+      '     (um prazo maior, em milissegundos, por exemplo "30000") no bloco "env" do settings.json do Claude',
+      '     Code, abra o Claude Code de novo e repita (o export num comando do shell nao chega ao portao).',
+      'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
+    ].join('\n'));
+  });
+  assert.match(comeco('30000'), / em 30 s /);
+  assert.match(comeco('1500'), / em 1500 ms /);
+  // o valor que nao e inteiro positivo fica com os 5 s do git.js, e o texto diz o prazo que valeu
+  for (const torto of ['abc', '0', '-5', '', '2.5']) assert.match(comeco(torto), / em 5 s /, JSON.stringify(torto));
+  // como o motivo da revisao, cita ate 5 e diz "e mais N"; entrada torta nao derruba
+  const seis = Array.from({ length: 6 }, function (_, i) { return { rel: 'src/n' + i + '.js', semResposta: true }; });
+  const linhas = commit.motivoSemResposta(seis).split('\n');
+  assert.strictEqual(linhas.filter(function (l) { return /^ {2}- "src\/n\d\.js"$/.test(l); }).length, 5);
+  assert.ok(linhas.indexOf('  - e mais 1') !== -1, linhas.join('\n'));
+  assert.doesNotThrow(function () { commit.motivoSemResposta(null); });
+});
+
+test('D844: no gancho, o git que estoura o prazo nega o commit com o motivo dele, sem balde nem ordem de revisar', () => {
+  comRepo(function (dir, tmp) {
+    tocar(dir, tmp, 'src/grande.js');
+    // o gancho roda no processo do teste: o spawnSync trocado faz estourar so as perguntas da raiz, sem depender do relogio
+    const cp = require('node:child_process');
+    const original = cp.spawnSync;
+    cp.spawnSync = function (cmd, args) {
+      const falso = cmd === 'git' && Array.isArray(args) ? estouraARaiz(args) : undefined;
+      return falso || original.apply(this, arguments);
+    };
+    let res;
+    try { res = commitar(dir, tmp, 'git commit -m x', null, { SWORN_GIT_PRAZO_MS: '5000' }); } finally { cp.spawnSync = original; }
+    assert.strictEqual(res.porProcesso, false, 'o gancho tinha de rodar no processo do teste, onde o git falso vale');
+    assert.strictEqual(res.status, 0, res.stderr);
+    assert.ok(negou(res), 'o commit passou sem revisao porque o git demorou: ' + JSON.stringify(res.json));
+    assert.match(motivo(res), /^sworn - commit parado: o git nao respondeu em 5 s ao conferir/);
+    assert.match(motivo(res), /\n {2}- "src\/grande\.js"\n/);
+    const s = lerEstado(tmp);
+    assert.strictEqual((s.contadores || {}).commit_sem_revisao, undefined, 'git lento nao e commit sem revisao');
+    assert.strictEqual(s.ordensPendentes, undefined, 'git lento nao da a ordem de revisar');
+  });
+});
+
 // A2-31 (D721): o pendentes usa o aprovado(): item da lista que nao e texto nao aprova nada.
 test('A2-31 (D721): item torto na lista de aprovados nao libera o arquivo', () => {
   comRepo(function (dir) {
@@ -441,15 +610,10 @@ const blobNoHead = function (dir, rel) {
   return spawnSync('git', ['rev-parse', '--verify', '-q', 'HEAD:' + rel], { cwd: dir, encoding: 'utf8', shell: false }).stdout.trim();
 };
 function noEstado(tmp, fn) {
-  const anterior = process.env.SWORN_TMP;
-  process.env.SWORN_TMP = tmp;
-  try {
+  comVariavel('SWORN_TMP', tmp, function () {
     require('../scripts/lib/estado.js').alterar('c1', function (s) { fn(s); return s; });
-  } finally {
-    if (anterior === undefined) delete process.env.SWORN_TMP; else process.env.SWORN_TMP = anterior;
-  }
+  });
 }
-const lerEstado = function (tmp) { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'c1.json'), 'utf8')); };
 /** Marca no estado da sessao c1 a revisao fechada no teto de cada arquivo, com o HEAD de agora. */
 function marcarTeto(dir, tmp, rels) {
   noEstado(tmp, function (s) {

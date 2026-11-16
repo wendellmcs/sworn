@@ -513,31 +513,31 @@ test('F4c conferir: cada defeito do prompt da a sua mensagem', () => {
 // ---------------------------------------------------------------- os comandos
 test('F4c comandos: handoff-curto.js imprime o destino e o texto; --conferir sai 1 com marca sobrando', () => {
   const dir = projeto();
-  const r = comum.rodar('scripts/handoff-curto.js', ['--slug', 'x', '--frente', 'frente-x', '--hoje', HOJE], { cwd: dir });
+  const r = comum.scriptComoProcesso('scripts/handoff-curto.js', ['--slug', 'x', '--frente', 'frente-x', '--hoje', HOJE], { cwd: dir });
   assert.strictEqual(r.status, 0, r.stderr);
   assert.match(r.stdout, /^arquivo: \.sworn\/handoff\/2026-11-13-x\.md\n\n# Handoff/);
   const alvo = path.join(dir, '.sworn', 'handoff', '2026-11-13-x.md');
   fs.mkdirSync(path.dirname(alvo), { recursive: true });
   fs.writeFileSync(alvo, r.stdout.replace(/^arquivo: [^\n]*\n\n/, ''));
-  const c = comum.rodar('scripts/handoff-curto.js', ['--conferir', alvo], { cwd: dir });
+  const c = comum.scriptComoProcesso('scripts/handoff-curto.js', ['--conferir', alvo], { cwd: dir });
   assert.strictEqual(c.status, 1);
   assert.strictEqual(JSON.parse(c.stdout).ok, false);
   fs.writeFileSync(alvo, fs.readFileSync(alvo, 'utf8').replace(/<<[A-Z]+:[^>]*>>/g, 'preenchido'));
-  const passou = comum.rodar('scripts/handoff-curto.js', ['--conferir', alvo], { cwd: dir });
+  const passou = comum.scriptComoProcesso('scripts/handoff-curto.js', ['--conferir', alvo], { cwd: dir });
   assert.strictEqual(passou.status, 0, passou.stdout);
   assert.strictEqual(JSON.parse(passou.stdout).ok, true);
-  const relativo = comum.rodar('scripts/handoff-curto.js', ['--conferir', '.sworn/handoff/2026-11-13-x.md'], { cwd: dir });
+  const relativo = comum.scriptComoProcesso('scripts/handoff-curto.js', ['--conferir', '.sworn/handoff/2026-11-13-x.md'], { cwd: dir });
   assert.strictEqual(relativo.status, 0, relativo.stdout);
-  const ausente = comum.rodar('scripts/handoff-curto.js', ['--conferir', 'nao-existe.md'], { cwd: dir });
+  const ausente = comum.scriptComoProcesso('scripts/handoff-curto.js', ['--conferir', 'nao-existe.md'], { cwd: dir });
   assert.strictEqual(ausente.status, 2);
   assert.match(ausente.stderr, /nao consegui ler .*nao-existe\.md/);
-  const sem = comum.rodar('scripts/handoff-curto.js', [], { cwd: dir });
+  const sem = comum.scriptComoProcesso('scripts/handoff-curto.js', [], { cwd: dir });
   assert.strictEqual(sem.status, 2);
   assert.match(sem.stderr, /--slug/);
   for (const c of [[['--slug', 'X'], /slug do handoff invalido/], [['--slug', 'x', '--hoje'], /--hoje pede a data/],
     [['--slug', 'x', '--hoje', '2026-02-30'], /--hoje fora do formato/], [['--slug', '--frente', 'f'], /passe --slug/],
     [['--slug', 'x', '--frente'], /--frente pede o nome/], [['--slug', 'x', '--sessao', '--frente', 'f'], /--sessao pede o id/]]) {
-    const r2 = comum.rodar('scripts/handoff-curto.js', c[0], { cwd: dir });
+    const r2 = comum.scriptComoProcesso('scripts/handoff-curto.js', c[0], { cwd: dir });
     assert.strictEqual(r2.status, 2, c[0].join(' '));
     assert.match(r2.stderr, c[1], c[0].join(' '));
   }
@@ -545,28 +545,28 @@ test('F4c comandos: handoff-curto.js imprime o destino e o texto; --conferir sai
 
 test('F4c comandos: pendencias.js adiciona, lista e fecha; erro de uso sai 2 com a mensagem', () => {
   const dir = comum.pasta('pend-cli');
-  const a = comum.rodar('scripts/pendencias.js', ['--adicionar', '--dono', 'Ana', '--texto', 'publicar'], { cwd: dir });
+  const a = comum.scriptComoProcesso('scripts/pendencias.js', ['--adicionar', '--dono', 'Ana', '--texto', 'publicar'], { cwd: dir });
   assert.strictEqual(a.status, 0, a.stderr);
   assert.match(a.stdout, /#1/);
-  const l = comum.rodar('scripts/pendencias.js', ['--listar'], { cwd: dir });
+  const l = comum.scriptComoProcesso('scripts/pendencias.js', ['--listar'], { cwd: dir });
   assert.strictEqual(JSON.parse(l.stdout).abertas.length, 1);
-  const f = comum.rodar('scripts/pendencias.js', ['--fechar', '1', '--como', 'publicada'], { cwd: dir });
+  const f = comum.scriptComoProcesso('scripts/pendencias.js', ['--fechar', '1', '--como', 'publicada'], { cwd: dir });
   assert.strictEqual(f.status, 0, f.stderr);
-  assert.strictEqual(JSON.parse(comum.rodar('scripts/pendencias.js', ['--listar'], { cwd: dir }).stdout).abertas.length, 0);
-  const e = comum.rodar('scripts/pendencias.js', ['--adicionar', '--texto', 'sem dono'], { cwd: dir });
+  assert.strictEqual(JSON.parse(comum.scriptComoProcesso('scripts/pendencias.js', ['--listar'], { cwd: dir }).stdout).abertas.length, 0);
+  const e = comum.scriptComoProcesso('scripts/pendencias.js', ['--adicionar', '--texto', 'sem dono'], { cwd: dir });
   assert.strictEqual(e.status, 2);
   assert.match(e.stderr, /sem --dono/);
-  const dois = comum.rodar('scripts/pendencias.js', ['--listar', '--fechar', '1'], { cwd: dir });
+  const dois = comum.scriptComoProcesso('scripts/pendencias.js', ['--listar', '--fechar', '1'], { cwd: dir });
   assert.strictEqual(dois.status, 2);
   assert.match(dois.stderr, /um modo por vez/);
-  const valorFalta = comum.rodar('scripts/pendencias.js', ['--adicionar', '--dono', '--texto', 'x'], { cwd: dir });
+  const valorFalta = comum.scriptComoProcesso('scripts/pendencias.js', ['--adicionar', '--dono', '--texto', 'x'], { cwd: dir });
   assert.strictEqual(valorFalta.status, 2, 'opcao no lugar do valor conta como valor faltando');
-  assert.strictEqual(comum.rodar('scripts/pendencias.js', ['--fechar', '9', '--como', 'x'], { cwd: dir }).status, 2);
+  assert.strictEqual(comum.scriptComoProcesso('scripts/pendencias.js', ['--fechar', '9', '--como', 'x'], { cwd: dir }).status, 2);
   const quebrado = comum.pasta('pend-cli-quebrado');
   fs.mkdirSync(path.join(quebrado, pend.ARQUIVO), { recursive: true });
-  const lq = comum.rodar('scripts/pendencias.js', ['--listar'], { cwd: quebrado });
+  const lq = comum.scriptComoProcesso('scripts/pendencias.js', ['--listar'], { cwd: quebrado });
   assert.strictEqual(lq.status, 1, 'arquivo que nao se le sai 1');
   assert.match(JSON.parse(lq.stdout).erro, /pasta \(EISDIR\)/);
   assert.match(lq.stderr, /nao consegui ler/);
-  assert.strictEqual(comum.rodar('scripts/pendencias.js', ['--adicionar', '--dono', 'A', '--texto', 'x'], { cwd: quebrado }).status, 1);
+  assert.strictEqual(comum.scriptComoProcesso('scripts/pendencias.js', ['--adicionar', '--dono', 'A', '--texto', 'x'], { cwd: quebrado }).status, 1);
 });

@@ -4,12 +4,13 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'propor-regra.js');
 
+// F1g (s372): no processo do teste (comum.scriptComoProcesso), com o ambiente do teste, como o spawnSync herdava
 function rodar(args, cwd) {
-  const r = spawnSync(process.execPath, [SCRIPT].concat(args), { cwd: cwd, encoding: 'utf8' });
+  const r = comum.scriptComoProcesso(SCRIPT, args, { cwd: cwd, env: Object.assign({}, process.env) });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 

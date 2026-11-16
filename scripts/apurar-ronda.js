@@ -9,6 +9,8 @@ const caminho = require('./lib/caminho.js');
 const textoLib = require('./lib/texto.js');
 const citacao = require('./lib/citacao.js');
 const diffLinhas = require('./lib/diff-linhas.js');
+const detectorCego = require('./lib/detector-cego.js');
+const inventarioTela = require('./lib/inventario-tela.js');
 
 // F2-01: so e "valor que falta" quando o proximo argumento e outra flag do USO deste script (como o
 // FLAGS_DO_USO do preparar-revisao.js): um arquivo chamado `--x.js` vale como caminho.
@@ -504,9 +506,54 @@ if (r.encerrar && r.motivo === 'duas rondas secas seguidas: aprovado' && descart
   r.motivo += ', com ' + descartados.length + ' achado(s) descartado(s) por estar fora do formato: leia ' +
     'vereditosDescartados antes de dar por aprovado';
 }
-// B2: a revisao degradada diz isso antes de tudo; o fecho cobra a mesma linha na resposta. O "aprovado" se le no
-// motivo da apuracao, antes do prefixo: o motivo da degradada e texto livre e pode trazer a palavra.
+// O "aprovado" se le no motivo da apuracao, antes de qualquer texto acrescentado depois dela (o do detector, o do
+// inventario, o dos registros, o prefixo da degradada, que e texto livre e pode trazer a palavra).
 const aprovou = r.encerrar && /aprovado/.test(String(r.motivo));
+// E3 itens 3 e 4: os arquivos que o preparar-revisao.js grava na ultima ronda e nenhum inspetor abre. Ausente = nada
+// muda; ilegivel ou fora da forma = ERRO, como o refutados.json: o que ele diz nao some calado.
+const ultimaRonda = pastas[pastas.length - 1];
+function lerDaRonda(arquivo, ehValido, formato, semEle) {
+  const caminho = ultimaRonda ? path.join(base, ultimaRonda.name, arquivo) : null;
+  if (!caminho || !fs.existsSync(caminho)) return null;
+  const nome = [baseRel, ultimaRonda.name, arquivo].join('/');
+  const refazer = ' Ele e gravado pelo preparar-revisao.js e ninguem o edita: prepare uma ronda nova, ou apague-o e ' +
+    'rode este comando de novo (a ronda se apura ' + semEle + ').\n';
+  let lido;
+  try { lido = JSON.parse(textoLib.semBom(fs.readFileSync(caminho, 'utf8'))); } catch (err) {
+    falhar('ERRO: ' + nome + ' ilegivel (' + err.message + ').' + refazer);
+  }
+  if (!lido || typeof lido !== 'object' || Array.isArray(lido) || !ehValido(lido)) {
+    falhar('ERRO: ' + nome + ' nao tem o formato esperado (' + formato + ').' + refazer);
+  }
+  return lido;
+}
+// Item 3 (ordem cega): o detector de design cruza agora com a lente ui-design (scripts/lib/detector-cego.js).
+let detector = null;
+const lidoDetector = lerDaRonda(detectorCego.ARQUIVO, function (o) { return o.rotulo === 'A' || o.rotulo === 'B'; },
+  'um objeto com "rotulo" A ou B', 'sem o cruzamento do detector');
+if (lidoDetector) {
+  detector = detectorCego.cruzar(lidoDetector, rondas[rondas.length - 1]);
+  if (r.encerrar && detector.soDetector.length) {
+    r.motivo += '; o detector de design achou ' + detector.soDetector.length + ' valor(es) que a lente ui-design nao ' +
+      'citou (detector.soDetector): troque cada um por um valor do design.json, ou peca ao dono que declare um desvio ' +
+      'para esta tela em "desvios" do .claude/sworn/design.json';
+  }
+}
+// Item 4: o inventario da tela (scripts/lib/inventario-tela.js). O fecho diz o "mantido N/N" e o que sumiu sem
+// dispensa; ausente = arquivo que nao e de tela, ou novo.
+const inventario = lerDaRonda(inventarioTela.ARQUIVO, function (o) {
+  return Number.isInteger(o.total) && Number.isInteger(o.mantidos) && o.mantidos >= 0 && o.mantidos <= o.total &&
+    Array.isArray(o.sumiram) && o.sumiram.every(function (s) {
+      return !!s && typeof s === 'object' && typeof s.item === 'string';
+    });
+}, 'um objeto com "total" e "mantidos" inteiros, 0 <= mantidos <= total, e a lista "sumiram" de objetos com "item"',
+  'sem o inventario');
+if (inventario) {
+  const frase = inventarioTela.fraseDoFecho(inventario);
+  if (r.encerrar && frase) r.motivo += '; ' + frase;
+}
+// B2: a revisao degradada diz isso antes de tudo; o fecho cobra a mesma linha na resposta (o "aprovou" ja foi lido
+// acima, antes de todo texto acrescentado).
 // F2a (D828.2/.5): o que nao segurou a ronda (melhoria, ou achado em linha nova) nao some no fecho: vai para o plano.
 if (r.encerrar && r.registros.length) {
   r.motivo += '; ha ' + r.registros.length + ' achado(s) em "registros" (melhoria ou linha nova): copie-os para o ' +
@@ -611,6 +658,8 @@ process.stdout.write(JSON.stringify({
   motivo: r.motivo,
   degradado: degradado,
   telas: telas,
+  detector: detector,
+  inventario: inventario,
   placarDaUltimaRonda: r.placar,
   achadosNovosP0P1: r.novos,
   registros: r.registros,

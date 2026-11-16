@@ -7,6 +7,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const destrutivo = require('../scripts/lib/destrutivo.js');
 const git = require('../scripts/lib/git.js');
+const comum = require('./lib/comum.js');
 
 const RAIZ = path.join(__dirname, '..');
 
@@ -103,6 +104,19 @@ const DEVE_PASSAR = [
 // de leitura" e a assercao nao podia falhar. O comportamento real - o comando E
 // barrado, e esse falso positivo e ACEITO - esta no teste D48 no fim deste
 // arquivo, e o limite esta declarado em docs/desenho-v1.md secao 10.
+
+test('F1g: os repositorios de ensaio deste arquivo nascem do comum.repo, sem git init nem git config por teste', () => {
+  // O comum.repo copia o .git vazio com a config de ensaio (sem manutencao automatica por commit). O padrao pega o
+  // argumento do git em qualquer chamada (g, spawnSync, execFileSync), com aspas simples, duplas ou crase e espaco
+  // livre; e montado aos pedacos para esta guarda nao casar com o proprio texto.
+  const fonte = fs.readFileSync(__filename, 'utf8');
+  const aspa = "['\"`]";
+  const init = new RegExp('\\[\\s*' + aspa + 'in' + 'it' + aspa);
+  const config = new RegExp('\\[\\s*' + aspa + 'con' + 'fig' + aspa + '\\s*,\\s*' + aspa + 'user\\.');
+  assert.ok(!init.test(fonte), 'voltou um git init por teste: ' + (fonte.match(init) || [''])[0]);
+  assert.ok(!config.test(fonte), 'voltou um git config de identidade por teste');
+  assert.ok((fonte.match(/\bcomum\.repo\(/g) || []).length >= 10, 'os repositorios de ensaio deixaram o comum.repo');
+});
 
 test('destrutivo: barra o que precisa de decisao humana', () => {
   for (const cmd of DEVE_BARRAR) {
@@ -214,9 +228,7 @@ test('git D49: fora de repo devolve null (nao consegui), nao lista vazia (arvore
     // frente, e nao ha o que refotografar); `null` deixa a proxima abertura
     // tentar de novo (abertura.js:25).
     const g = (args) => spawnSync('git', args, { cwd: limpo, encoding: 'utf8', shell: false });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(limpo);
     fs.writeFileSync(path.join(limpo, 'a.txt'), 'um', 'utf8');
     g(['add', '-A']);
     g(['commit', '-q', '-m', 'inicial']);
@@ -235,9 +247,7 @@ test('git: enxerga arquivo modificado e nao rastreado', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-git-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(dir);
     fs.writeFileSync(path.join(dir, 'a.txt'), 'um', 'utf8');
     g(['add', 'a.txt']);
     g(['commit', '-q', '-m', 'inicial']);
@@ -256,12 +266,16 @@ test('portao-destrutivo: nega rm -rf e libera npm test', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-dest-'));
   try {
     const chamar = (comando) => {
+      // por processo de proposito: e o teste do processo real que os comentarios do chamarPortaoDestrutivo e do s24 citam
       const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-destrutivo.js')], {
         input: JSON.stringify({ session_id: 's1', cwd: tmp, tool_name: 'Bash', tool_input: { command: comando } }),
         encoding: 'utf8',
         env: Object.assign({}, process.env, { SWORN_TMP: tmp })
       });
-      try { return JSON.parse(r.stdout); } catch (e) { return null; }
+      // liberar e o stdout vazio com status 0; o gancho que cai e libera sai 0 com a marca do io.js no stderr
+      assert.strictEqual(r.status, 0, comando + ': o portao saiu com erro: ' + r.stderr);
+      assert.doesNotMatch(r.stderr, /portao falhou e liberou/, comando + ': o portao caiu em vez de decidir');
+      return r.stdout.trim() === '' ? null : JSON.parse(r.stdout);
     };
     const negado = chamar('rm -rf build');
     assert.strictEqual(negado.hookSpecificOutput.permissionDecision, 'deny');
@@ -275,9 +289,7 @@ test('git D41: em subpasta, o caminho volta relativo ao cwd que o portao usa', (
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-git-sub-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(dir);
     fs.mkdirSync(path.join(dir, 'pacote', 'src'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'pacote', 'src', 'a.js'), 'um', 'utf8');
     fs.writeFileSync(path.join(dir, 'raiz.txt'), 'r', 'utf8');
@@ -472,9 +484,7 @@ test('D45: a trava 5b nao se escapa trocando a caixa do caminho', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d45-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(dir);
     fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     // `**/*.md` e marcha RAPIDA: o passo 5 do portao devolve permitir antes de
     // chegar ao escopo, entao a 5b e a UNICA barreira. Sem esta escolha de
@@ -493,48 +503,39 @@ test('D45: a trava 5b nao se escapa trocando a caixa do caminho', () => {
     fs.writeFileSync(path.join(dir, 'guia.md'), 'outra frente', 'utf8');
 
     const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
-    spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-      input: JSON.stringify({ session_id: 'd45', cwd: dir, source: 'startup' }),
-      encoding: 'utf8', env: env
-    });
+    assert.strictEqual(comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+      { session_id: 'd45', cwd: dir, source: 'startup' }, { env: env }).status, 0, 'a abertura tem de rodar');
+    // Uma chamada por arquivo devolve a decisao e o motivo. O status 0 separa "decidiu permitir" de "o portao caiu e
+    // liberou" (no processo do teste, o gancho que falha e libera volta com status 1).
     const escrever = (rel) => {
-      const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-escopo.js')], {
-        input: JSON.stringify({
-          session_id: 'd45', cwd: dir, tool_name: 'Write',
-          tool_input: { file_path: path.join(dir, rel), content: 'x' }
-        }),
-        encoding: 'utf8', env: env
-      });
-      try { return JSON.parse(r.stdout).hookSpecificOutput.permissionDecision; }
-      catch (e) { return 'permitir'; }
-    };
-    const motivoDe = (rel) => {
-      const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-escopo.js')], {
-        input: JSON.stringify({
-          session_id: 'd45', cwd: dir, tool_name: 'Write',
-          tool_input: { file_path: path.join(dir, rel), content: 'x' }
-        }),
-        encoding: 'utf8', env: env
-      });
-      try { return JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason; }
-      catch (e) { return ''; }
+      const r = comum.ganchoComoProcesso(path.join('scripts', 'portao-escopo.js'), {
+        session_id: 'd45', cwd: dir, tool_name: 'Write',
+        tool_input: { file_path: path.join(dir, rel), content: 'x' }
+      }, { env: env });
+      assert.strictEqual(r.status, 0, rel + ': o portao caiu em vez de decidir: ' + r.stderr);
+      const h = r.json && r.json.hookSpecificOutput;
+      return h ? { decisao: h.permissionDecision, motivo: h.permissionDecisionReason || '' }
+        : { decisao: 'permitir', motivo: '' };
     };
     // CONTROLE NEGATIVO: sem ele um portao que negasse tudo passaria neste teste.
-    assert.strictEqual(escrever('notas.md'), 'permitir',
+    assert.strictEqual(escrever('notas.md').decisao, 'permitir',
       'arquivo que NAO estava na foto tem de passar - marcha rapida nao exige escopo');
-    assert.strictEqual(escrever('guia.md'), 'deny', 'a 5b tem de pegar o arquivo de outra frente');
+    const guia = escrever('guia.md');
+    assert.strictEqual(guia.decisao, 'deny', 'a 5b tem de pegar o arquivo de outra frente');
     // E tem de negar POR SER de outra frente, nao por outra via: a D45 so importa
     // aqui porque este caminho e marcha rapida e o passo 5 nem chega a rodar.
-    assert.match(motivoDe('guia.md'), /outra frente/i,
+    assert.match(guia.motivo, /outra frente/i,
       'a negacao tem de vir da trava 5b, e o texto e a prova de qual via negou');
-    assert.strictEqual(escrever('GUIA.md'), 'deny', 'trocar a caixa e o MESMO arquivo no disco');
-    assert.match(motivoDe('GUIA.md'), /outra frente/i, 'e pela 5b tambem com a caixa trocada');
-    assert.strictEqual(escrever('Guia.MD'), 'deny', 'trocar a caixa e o MESMO arquivo no disco');
+    const caixa = escrever('GUIA.md');
+    assert.strictEqual(caixa.decisao, 'deny', 'trocar a caixa e o MESMO arquivo no disco');
+    assert.match(caixa.motivo, /outra frente/i, 'e pela 5b tambem com a caixa trocada');
+    const mista = escrever('Guia.MD');
+    assert.strictEqual(mista.decisao, 'deny', 'trocar a caixa e o MESMO arquivo no disco');
     // Sem conferir o MOTIVO, num CI Linux esta linha passaria verde mesmo com a
     // D45 revertida: la `glob.js:4` compara com caixa, `Guia.MD` nao casaria
     // `**/*.md`, a marcha viraria padrao e o passo 5 negaria por `fora_do_escopo`.
     // Verde pela via errada e a mesma classe de defeito das duas linhas acima.
-    assert.match(motivoDe('Guia.MD'), /outra frente/i,
+    assert.match(mista.motivo, /outra frente/i,
       'a negacao tem de vir da 5b, nao do passo 5 do portao');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -549,9 +550,7 @@ test('TS-04 (lote 3, D423): a 5b dobra a caixa tambem do lado da FOTO - foto com
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ts04-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(dir);
     fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     // marcha RAPIDA para `.md`: o passo 5 devolve permitir, e a 5b e a UNICA barreira (mesma razao do D45)
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({
@@ -566,24 +565,20 @@ test('TS-04 (lote 3, D423): a 5b dobra a caixa tambem do lado da FOTO - foto com
     fs.writeFileSync(path.join(dir, 'Guia.md'), 'outra frente', 'utf8');
 
     const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
-    spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-      input: JSON.stringify({ session_id: 'ts04', cwd: dir, source: 'startup' }),
-      encoding: 'utf8', env: env
-    });
+    assert.strictEqual(comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+      { session_id: 'ts04', cwd: dir, source: 'startup' }, { env: env }).status, 0, 'a abertura tem de rodar');
     const foto = JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'ts04.json'), 'utf8')).gitAbertura;
     assert.deepStrictEqual(foto, ['Guia.md'], 'pre-condicao: a foto tem de guardar a maiuscula do git');
+    // como no D45: o status 0 separa "decidiu permitir" de "o portao caiu e liberou"
     const escrever = (rel) => {
-      const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-escopo.js')], {
-        input: JSON.stringify({
-          session_id: 'ts04', cwd: dir, tool_name: 'Write',
-          tool_input: { file_path: path.join(dir, rel), content: 'x' }
-        }),
-        encoding: 'utf8', env: env
-      });
-      try {
-        const h = JSON.parse(r.stdout).hookSpecificOutput;
-        return { decisao: h.permissionDecision, motivo: h.permissionDecisionReason };
-      } catch (e) { return { decisao: 'permitir', motivo: '' }; }
+      const r = comum.ganchoComoProcesso(path.join('scripts', 'portao-escopo.js'), {
+        session_id: 'ts04', cwd: dir, tool_name: 'Write',
+        tool_input: { file_path: path.join(dir, rel), content: 'x' }
+      }, { env: env });
+      assert.strictEqual(r.status, 0, rel + ': o portao caiu em vez de decidir: ' + r.stderr);
+      const h = r.json && r.json.hookSpecificOutput;
+      return h ? { decisao: h.permissionDecision, motivo: h.permissionDecisionReason || '' }
+        : { decisao: 'permitir', motivo: '' };
     };
     // CONTROLE NEGATIVO: arquivo fora da foto passa (marcha rapida) - um portao que negasse tudo reprovaria aqui
     assert.strictEqual(escrever('notas.md').decisao, 'permitir');
@@ -603,9 +598,7 @@ test('D46: SessionStart em compact nao refaz a foto do git', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d46-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(dir);
     fs.writeFileSync(path.join(dir, 'guia.md'), 'um', 'utf8');
     fs.writeFileSync(path.join(dir, 'notas.md'), 'um', 'utf8');
     g(['add', '-A']);
@@ -613,10 +606,8 @@ test('D46: SessionStart em compact nao refaz a foto do git', () => {
     fs.writeFileSync(path.join(dir, 'guia.md'), 'outra frente', 'utf8');
 
     const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
-    const abrir = (source) => spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-      input: JSON.stringify({ session_id: 'd46', cwd: dir, source: source }),
-      encoding: 'utf8', env: env
-    });
+    const abrir = (source) => comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+      { session_id: 'd46', cwd: dir, source: source }, { env: env });
     const foto = () => JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'd46.json'), 'utf8')).gitAbertura;
 
     // Conferir o exit: sem isto o teste nao distingue "a guarda funcionou" de
@@ -643,10 +634,8 @@ test('D46: SessionStart em compact nao refaz a foto do git', () => {
     // (turnosComTrabalho, gitAbertura, arquivosTocados, contadoresSessao,
     // avisouSaude, e os campos de `estado.CAMPOS_DA_SESSAO`). Com isso a foto
     // sobrevive, e a D46 vale a sessao inteira.
-    const chamarScript = (script, extra) => spawnSync(
-      process.execPath, [path.join(RAIZ, 'scripts', script)],
-      { input: JSON.stringify(Object.assign({ session_id: 'd46', cwd: dir }, extra)),
-        encoding: 'utf8', env: env });
+    const chamarScript = (script, extra) => comum.ganchoComoProcesso(path.join('scripts', script),
+      Object.assign({ session_id: 'd46', cwd: dir }, extra), { env: env });
     const estadoBruto = () => {
       try { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'd46.json'), 'utf8')); }
       catch (e) { return null; }
@@ -727,19 +716,16 @@ test('D49: a foto que falhou nao congela a sessao', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d49-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: repo, encoding: 'utf8', shell: false });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(repo);
     fs.writeFileSync(path.join(repo, 'guia.md'), 'um', 'utf8');
     g(['add', '-A']);
     g(['commit', '-q', '-m', 'inicial']);
     fs.writeFileSync(path.join(repo, 'guia.md'), 'outra frente', 'utf8');
 
     const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
-    const abrir = (cwd, source) => spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-      input: JSON.stringify({ session_id: 'd49', cwd: cwd, source: source }),
-      encoding: 'utf8', env: env
-    });
+    const abrir = (cwd, source) => comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+      { session_id: 'd49', cwd: cwd, source: source },
+      { env: env });
     const estadoDe = () => {
       try { return JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'd49.json'), 'utf8')); }
       catch (e) { return {}; }
@@ -771,9 +757,7 @@ test('D49: a foto guarda o nome como esta no disco, e quem dobra a caixa e o por
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-d49-caixa-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(dir);
     fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'src', 'Componente.js'), 'um', 'utf8');
     g(['add', '-A']);
@@ -1149,9 +1133,7 @@ test('D51/5b: arquivo de outra frente DECLARADO no escopo passa - e so ele', () 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-5b-esc-tmp-'));
   try {
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(dir);
     fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     // `**/*.md` e marcha RAPIDA: o passo 5 do portao devolve permitir antes de
     // olhar escopo, entao a 5b (passo 2) e a UNICA barreira nestes caminhos.
@@ -1174,22 +1156,18 @@ test('D51/5b: arquivo de outra frente DECLARADO no escopo passa - e so ele', () 
     fs.writeFileSync(path.join(dir, 'notas.md'), 'outra frente tambem', 'utf8');
 
     const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
-    const abertura = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-      input: JSON.stringify({ session_id: '5besc', cwd: dir, source: 'startup' }),
-      encoding: 'utf8', env: env
-    });
+    const abertura = comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+      { session_id: '5besc', cwd: dir, source: 'startup' },
+      { env: env });
     assert.strictEqual(abertura.status, 0, 'a abertura tem de rodar');
     const foto = JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', '5besc.json'), 'utf8')).gitAbertura;
     assert.deepStrictEqual(foto.slice().sort(), ['guia.md', 'notas.md'],
       'os DOIS tem de estar na foto, senao o teste nao discrimina: ' + JSON.stringify(foto));
 
-    const escrever = (rel) => spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-escopo.js')], {
-      input: JSON.stringify({
+    const escrever = (rel) => comum.ganchoComoProcesso(path.join('scripts', 'portao-escopo.js'), {
         session_id: '5besc', cwd: dir, tool_name: 'Write',
         tool_input: { file_path: path.join(dir, rel), content: 'x' }
-      }),
-      encoding: 'utf8', env: env
-    });
+      }, { env: env });
 
     // PONTA 1 - a rota de escape: na foto, MAS declarado em `## Dentro`.
     // `portao-escopo.js:58` exige as duas condicoes (`deOutraFrente &&
@@ -2995,7 +2973,8 @@ test('item 18: commit sem gancho ou sem assinatura barra; mensagem, argumento e 
   }
 });
 
-// D420/SH-02 e TS-06: o portao e chamado como processo, como o gancho real.
+// D420/SH-02 e TS-06: o portao roda em processo (F1, s372: comum.ganchoEmProcesso), com a mesma entrada e o mesmo
+// ambiente do gancho real; o processo de verdade fica no teste "portao-destrutivo: nega ... e libera npm test".
 function chamarPortaoDestrutivo(comando, tmpEstado, projetoJson, ferramenta) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-dest-cwd-'));
   try {
@@ -3003,14 +2982,10 @@ function chamarPortaoDestrutivo(comando, tmpEstado, projetoJson, ferramenta) {
       fs.mkdirSync(path.join(cwd, '.claude', 'sworn'), { recursive: true });
       fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'projeto.json'), JSON.stringify(projetoJson));
     }
-    const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-destrutivo.js')], {
-      input: JSON.stringify({ session_id: 's-d420', cwd: cwd, tool_name: ferramenta || 'Bash', tool_input: { command: comando } }),
-      encoding: 'utf8',
-      env: Object.assign({}, process.env, { SWORN_TMP: tmpEstado })
-    });
-    let saida = null;
-    try { saida = JSON.parse(r.stdout); } catch (e) { /* stdout vazio = permitiu */ }
-    return saida;
+    // null = permitiu, como o stdout vazio do processo
+    return comum.ganchoEmProcesso('scripts/portao-destrutivo.js',
+      { session_id: 's-d420', cwd: cwd, tool_name: ferramenta || 'Bash', tool_input: { command: comando } },
+      { env: Object.assign({}, process.env, { SWORN_TMP: tmpEstado }) });
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
@@ -3214,14 +3189,10 @@ test('D785/2.4: portao-destrutivo deixa apagar arquivo nomeado no escopo e barra
       fs.writeFileSync(path.join(dir, f), 'x', 'utf8');
     }
     const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
+    // F1 (s372): em processo, mais de 80 chamadas; o processo de verdade fica no teste "nega ... e libera npm test"
     const chamar = (comando, ferramenta, cwd) => {
-      const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-destrutivo.js')], {
-        input: JSON.stringify({ session_id: 's24', cwd: cwd || dir, tool_name: ferramenta || 'Bash',
-          tool_input: { command: comando } }),
-        encoding: 'utf8', env: env
-      });
-      let o = null;
-      try { o = JSON.parse(r.stdout); } catch (e) { o = null; }
+      const o = comum.ganchoEmProcesso('scripts/portao-destrutivo.js', { session_id: 's24', cwd: cwd || dir,
+        tool_name: ferramenta || 'Bash', tool_input: { command: comando } }, { env: env });
       const h = o && o.hookSpecificOutput;
       return h && h.permissionDecision === 'deny' ? h.permissionDecisionReason : 'passa';
     };
@@ -3325,9 +3296,7 @@ test('D785/2.4: portao-destrutivo deixa apagar arquivo nomeado no escopo e barra
     // arquivo modificado quando a sessao abriu (outra frente) barra mesmo dentro do escopo; a trava desligada solta
     const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
     fs.rmSync(path.join(dir, '.git'), { recursive: true, force: true });
-    g(['init', '-q']);
-    g(['config', 'user.email', 'teste@exemplo.com']);
-    g(['config', 'user.name', 'teste']);
+    comum.repo(dir);
     g(['add', '-A']);
     assert.strictEqual(g(['commit', '-q', '-m', 'inicial']).status, 0, 'commit do fixture');
     fs.writeFileSync(path.join(dir, 'src', 'b.js'), 'outra frente', 'utf8');
@@ -3343,9 +3312,9 @@ test('D785/2.4: portao-destrutivo deixa apagar arquivo nomeado no escopo e barra
       assert.notStrictEqual(g(['status', '--porcelain']).status, 0, 'controle: o indice corrompido quebra o status');
       assert.notStrictEqual(chamar('rm -f src/a.js'), 'passa', 'sem a foto e sem o git status: barra');
     } finally { fs.writeFileSync(indice, indiceBom); }
-    spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-      input: JSON.stringify({ session_id: 's24', cwd: dir, source: 'startup' }), encoding: 'utf8', env: env
-    });
+    comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+      { session_id: 's24', cwd: dir, source: 'startup' },
+      { env: env });
     assert.notStrictEqual(chamar('rm -f src/b.js'), 'passa', 'outra frente');
     assert.strictEqual(chamar('rm -f src/a.js'), 'passa', 'o resto do escopo segue passando depois da abertura');
     fs.writeFileSync(path.join(dir, 'src', 'a.js'), 'trabalho desta sessao', 'utf8');
@@ -3387,11 +3356,11 @@ test('A5b: ampliar o escopo e apagar no mesmo turno barra, pelo shell e pela edi
     }
     const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     const rodar = (script, entrada) => {
-      const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
-        input: JSON.stringify(Object.assign({ session_id: 'sa5b', cwd: dir }, entrada)), encoding: 'utf8', env: env });
-      let o = null;
-      try { o = JSON.parse(r.stdout); } catch (e) { o = null; }
-      const h = o && o.hookSpecificOutput;
+      const r = comum.ganchoComoProcesso(path.join('scripts', script),
+        Object.assign({ session_id: 'sa5b', cwd: dir }, entrada), { env: env });
+      // gancho que caiu e liberou volta com status 1: sem isto viraria 'passa'
+      assert.strictEqual(r.status, 0, script + ' caiu em vez de decidir: ' + r.stderr);
+      const h = r.json && r.json.hookSpecificOutput;
       return h && h.permissionDecision === 'deny' ? h.permissionDecisionReason : 'passa';
     };
     const shell = (c) => rodar('portao-destrutivo.js', { tool_name: 'Bash', tool_input: { command: c } });

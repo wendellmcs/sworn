@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const { spawnSync } = require('node:child_process');
+const caminho = require('../scripts/lib/caminho.js');
 
 const RAIZ = path.join(__dirname, '..');
 const PONTE = path.join(RAIZ, 'scripts', 'ponte.js');
@@ -781,6 +782,26 @@ test('ponte: pipe negado (EPERM, o sandbox do dsh) roda o portao com stdio por a
   assert.strictEqual(ponte.executar(eco, entrada, 10, negaPipe('ENOENT')), '');
   assert.deepStrictEqual(chamadas, ['pipe']);
   assert.strictEqual(ponte.executar(eco, entrada, 10), 'eco:' + JSON.stringify(entrada));
+});
+
+test('ponte: por arquivo, a pasta que nao sai nao troca a saida do portao (o deny ja dado nao se perde)', (t) => {
+  const deny = path.join(TMP, 'deny.js');
+  fs.writeFileSync(deny, "process.stdout.write('{\"decision\":\"block\"}');\n");
+  const negaPipe = (cmd, args, opcoes) => opcoes.input === undefined ? spawnSync(cmd, args, opcoes)
+    : { error: Object.assign(new Error('negado'), { code: 'EPERM' }) };
+  fs.mkdirSync(path.join(TMP, 'sworn'), { recursive: true });
+  const portoes = () => fs.readdirSync(path.join(TMP, 'sworn')).filter((n) => n.startsWith('portao-'));
+  const antes = portoes();
+  // Pendencia #10: o apagar da pasta do portao falha (arquivo preso); a saida ja lida tem de voltar.
+  const preso = t.mock.method(fs, 'rmSync', function () { throw Object.assign(new Error('preso'), { code: 'EBUSY' }); });
+  let saida;
+  try {
+    saida = ponte.executar(deny, { cwd: TMP, hook_event_name: 'PreToolUse' }, 10, negaPipe);
+  } finally {
+    preso.mock.restore();
+    portoes().filter((n) => !antes.includes(n)).forEach((n) => caminho.apagarPasta(path.join(TMP, 'sworn', n)));
+  }
+  assert.strictEqual(saida, '{"decision":"block"}');
 });
 
 test('ponte: portao que nao rodou (timeout, spawn negado) libera e diz no stderr, pelo pipe e por arquivo', () => {

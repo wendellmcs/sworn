@@ -208,11 +208,18 @@ function montarBrinquedo(dir, tarefa, condicao) {
     fs.copyFileSync(ARQUIVO_DE_REGRAS, path.join(sw, 'regras.md'));
     fs.writeFileSync(path.join(sw, 'escopo.md'), '# Escopo\n**Objetivo:** atender o pedido do usuario nesta sessao\n## Dentro\n- **\n', 'utf8');
   }
-  qualidade.git(dir, ['init', '-q']);
-  qualidade.git(dir, ['config', '--local', 'core.longpaths', 'true']);
-  qualidade.git(dir, ['add', '-A']);
-  qualidade.git(dir, ['-c', 'user.name=medicao', '-c', 'user.email=medicao@exemplo.com', '-c', 'commit.gpgsign=false',
-    'commit', '-q', '--no-verify', '-m', 'brinquedo']);
+  qualidade.iniciarRepo(dir);
+}
+
+/**
+ * O brinquedo pronto (arquivos e .git com o commit) copiado para outra pasta, antes de qualquer execucao. A pasta
+ * de destino nao pode existir: nada se reaproveita. O .git do init e do commit nao guarda caminho (sem core.worktree,
+ * gitdir nem alternates): a copia e um repositorio dela, nao um apontador para o molde.
+ */
+function copiarBrinquedo(molde, dir) {
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  fs.mkdirSync(dir); // sem recursive: pasta que ja existe e erro, como no montarBrinquedo
+  fs.cpSync(molde, dir, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true });
 }
 
 /** sha256 do package.json e de cada protegido; o ausente vale null (criado depois tambem e adulteracao). */
@@ -337,7 +344,13 @@ function gerar(argv) {
     }
   });
   // todos os brinquedos antes da 1a execucao paga: o que o disco recusa falha aqui, de graca
-  grade.forEach(function (g) { montarBrinquedo(g.dir, g.tarefa, g.condicao); });
+  // F1i (0.46.0): a repeticao 2 em diante copia o brinquedo da 1a do mesmo (tarefa, condicao), ja commitado, sem git
+  const moldes = new Map();
+  grade.forEach(function (g) {
+    const chave = JSON.stringify([g.tarefa.id, g.condicao]);
+    if (moldes.has(chave)) copiarBrinquedo(moldes.get(chave), g.dir);
+    else { montarBrinquedo(g.dir, g.tarefa, g.condicao); moldes.set(chave, g.dir); }
+  });
 
   const envelope = { versao: 1, modelo: modelo, carimbo: path.basename(rodada), repeticoes: repeticoes, completo: false,
     hipotese: dados.hipotese,
@@ -477,5 +490,5 @@ function principal(argv) {
 if (require.main === module) principal(process.argv.slice(2));
 
 module.exports = {
-  ARMADILHAS, lerTarefas, tarefasRuins, scriptDeTeste, montarBrinquedo, hashes, rodarTeste, argsDoClaude, ambienteDaExecucao
+  ARMADILHAS, lerTarefas, tarefasRuins, scriptDeTeste, montarBrinquedo, copiarBrinquedo, hashes, rodarTeste, argsDoClaude, ambienteDaExecucao
 };

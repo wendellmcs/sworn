@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const RAIZ = path.join(__dirname, '..');
 const design = require('../scripts/lib/design.js');
@@ -34,14 +35,11 @@ function montar(opcoes) {
   return dir;
 }
 
+// F1 (s372): em processo (comum.ganchoComoProcesso); o portao que falha e libera volta com status 1
 function chamar(dir, ferramenta, comando, id) {
-  const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-estilo.js')], {
-    cwd: dir,
-    encoding: 'utf8',
-    input: JSON.stringify({ session_id: id || 'pe1', cwd: dir, hook_event_name: 'PreToolUse', tool_name: ferramenta,
-      tool_input: { command: comando } }),
-    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
-  });
+  const r = comum.ganchoComoProcesso('scripts/portao-estilo.js', { session_id: id || 'pe1', cwd: dir,
+    hook_event_name: 'PreToolUse', tool_name: ferramenta, tool_input: { command: comando } },
+  { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') }) });
   assert.strictEqual(r.status, 0, r.stderr);
   assert.ok(!/portao falhou/.test(r.stderr || ''), 'o portao caiu e liberou por inercia: ' + r.stderr);
   return r;

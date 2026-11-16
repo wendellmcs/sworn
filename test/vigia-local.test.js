@@ -284,7 +284,9 @@ test('ultima-busca com ok:false acrescenta a frase nos tres casos de problema; o
     // A7-51: o passo diz onde ver a tarefa (o Agendador de Tarefas)
     const passo = new RegExp('z\\. Corrija a causa e rode de novo, no Agendador de Tarefas do Windows, a tarefa ' +
       'que chama o vigia-puxar\\.js\\.$');
-    assert.ok(passo.test(ta) && ta.length < 450,
+    // F1g (s372): o corte se mede no motivo, nao no aviso inteiro, que traz o caminho da pasta (TEMP longa reprovava)
+    const cortado = /: (git fetch falhou: .*?)\. Corrija a causa/.exec(ta);
+    assert.ok(passo.test(ta) && cortado && cortado[1].length === 120,
       'motivo nao foi cortado em 120, ou falta o passo: ' + ta);
 
     const b = path.join(base, 'b'); // ilegivel

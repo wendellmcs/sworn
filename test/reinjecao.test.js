@@ -552,12 +552,12 @@ test('H-3/H-4: projeto.json que e LISTA JSON tambem nao se le: o aviso sai com a
 // ------------------------------- Plano 0.9.1 Tarefa 3 (D560, D568): o trabalho da sessao sobrevive ao compact
 
 const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 const SCRIPTS = path.join(__dirname, '..', 'scripts');
 
+// F1 (s372): o gancho roda em processo (comum.ganchoComoProcesso); a abertura.js, que sai por process.exit, por processo.
 function rodarScript(script, entrada, tmp) {
-  return spawnSync(process.execPath, [path.join(SCRIPTS, script)], {
-    input: JSON.stringify(entrada), encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
-  });
+  return comum.ganchoComoProcesso(path.join(SCRIPTS, script), entrada, { env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
 }
 
 /** O bloco "## <titulo>" do texto, ate o proximo "## " ou o fim; null se nao ha. */

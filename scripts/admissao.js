@@ -8,6 +8,7 @@ const { parseArgs } = require('util');
 const adm = require('./lib/admissao.js');
 const codexLib = require('./lib/admissao-codex.js');
 const instalador = require('./instalar.js');
+const { apagarPasta } = require('./lib/caminho.js'); // pendencia #10: o rmSync deixava a pasta com acento
 
 /**
  * C7 (s369, D769 a, D816): o teste de admissao do modelo, que o /sworn:init oferece e so roda com o sim do usuario.
@@ -175,7 +176,7 @@ function main() {
     }
   } finally {
     // no Windows um processo filho ainda pode segurar a pasta: a limpeza que falha avisa, nao derruba o relatorio
-    try { fs.rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (e) {
+    try { apagarPasta(base, { maxRetries: 5, retryDelay: 200 }); } catch (e) {
       process.stderr.write('admissao: a pasta temporaria ' + base + ' ficou (' + ((e && e.code) || e) + '); apague-a ' +
         'depois\n');
     }

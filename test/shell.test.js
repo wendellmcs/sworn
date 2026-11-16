@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const shell = require('../scripts/lib/shell.js');
+const comum = require('./lib/comum.js');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -85,8 +86,8 @@ test('D244/achado 13: corpo de here-string do PowerShell nao e lido como comando
 });
 
 function hookDestrutivo(ferramenta, comando) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-shell-'));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-shell-tmp-'));
+  const dir = comum.temporaria('sworn-shell-');
+  const tmp = comum.temporaria('sworn-shell-tmp-');
   fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
     JSON.stringify({ versaoConfig: 1, plataforma: WIN }), 'utf8');

@@ -19,7 +19,11 @@ file has its own base, and `<n>` is its round. The `<arquivo>` is the file id: e
 becomes `__`, each character outside letters, digits, `.`, `_` and `-` becomes `_`, and an id made only of digits
 gets a `_` in front (rule of the `idDoArquivo` function, in `scripts/lib/cegar.js`). The
 exact path comes in the output (`a`, `b`, `vereditos` and `base`); use what the output says, don't rebuild it.
-**You don't open `mapa.json`, and no inspector receives its path.**
+**You don't open `mapa.json`, and no inspector receives its path.** In a style file with a `design.json`, the round
+also has `detector.json`: what the design detector found, hidden from the inspectors so the `ui-design` lens judges
+without it; the tally crosses the two after the verdicts (`detector` in its output). A screen file that already
+existed in the HEAD gets `inventario.json` (what the HEAD side wired, which would tell the old side apart). The same
+rule holds for both: don't open them, and no inspector receives their path.
 
 When `projeto.json` declares `referencias` for the file's type (text, screen or code), the output also brings
 `referencia` (the path of `R.txt`, the top reference) and `invertida` (`a`, `b` and `vereditos`): the
@@ -160,7 +164,8 @@ Briefing of each one, exactly in this form:
 > Read only these two files: `<caminho de A.txt>` and `<caminho de B.txt>`.
 > Also read `<caminho de regua.md>`: it is the project's ruler. A finding about a value outside the ruler cites the ruler's value.
 > Verdicts folder: `<caminho de vereditos>`. Don't open it: copy the path, untouched, into the `vereditos` field of the JSON, and put the lens key (`<chave>`) in the `lente` field.
-> Don't open the repository. Don't open `mapa.json`. Return only the JSON of your format.
+> Don't open the repository. Don't open `mapa.json`, `detector.json` or `inventario.json`. Return only the JSON of
+> your format.
 
 When the output of Step 1 brings `trecho`, add to the briefing, right after the line with the two files:
 
@@ -269,6 +274,19 @@ is the screen evidence of the close-out, so keep it in the answer that closes th
   before. The script measures the change itself, comparing the new side of the round with the one before; when it
   cannot measure it, the finding holds the round as usual. Neither kind wets the round or counts as open. When the
   review closes with any, the `motivo` says how many: copy each one to the record of the plan in the close-out.
+- **The detector is crossed after the verdicts** (style file with `design.json`). `detector` in the output splits
+  the last round in three: `lenteEDetector` (both saw it), `soDetector` (the detector saw a value outside the
+  system that the `ui-design` lens did not cite) and `soLente`. Each `soDetector` item is a finding to settle: swap
+  the value for one of `design.json`, or ask the owner to declare a deviation for this screen in `desvios` of
+  `design.json`; it does not fail the round, and the `motivo` of the close says how many.
+- **The screen inventory says what the change dropped** (`.html`, `.htm`, `.jsx`, `.tsx`, `.vue`, `.svelte` with a
+  HEAD side). `inventario.json`, in the round and hidden from the inspectors, lists what the HEAD side wired (id,
+  event, link, form field, test hook, script, form action and, when the round has the `--tela-antes` and
+  `--tela-depois` photos, the accessibility names). The `motivo` of the close says "mantido N/N" and how many items
+  were dropped; the list is `inventario.sumiram` in the output. A dropped item does not fail the round, but each one
+  is settled before calling it done: put the element back in the file, or declare in a comment of the file
+  `sworn-dispensa: <item> -- <reason>` with the item exactly as listed and a reason of 12 letters or more (the
+  marker outside a comment waives nothing).
 - **A finding refuted at the primary source** goes in `refutados.json`, in the file's base (the `base` folder
   of the output of Step 1):
   `[{ "ronda": 2, "lente": "design", "arquivo": "B.txt", "linha": 471, "severidade": "P1", "prova": "<why, citing arquivo:linha>", "simbolo": "<text on that line>" }]`.
@@ -301,7 +319,13 @@ Running the script again on an already closed review **does not count again**: t
 base (`fechada.json`) and the output says it was already counted. Preparing again a file whose review has already
 closed starts a **new review**: `preparar-revisao.js` moves the whole base to
 `.claude/sworn/revisao-fechada/<arquivo>/<carimbo>/` (nothing is deleted; the output gives the destination in
-`arquivada`) and the round goes back to 1, with the full cap of 3. The new review's close-out counts again.
+`arquivada`) and the round goes back to 1, with the full cap of 3. The new review's close-out counts again. A review
+left open (no `fechada.json`, for example the cap spent and the commit going ahead) is archived the same way when the
+file in HEAD is no longer the version its last round judged: each round records that version in its `mapa.json`
+(`headDoArquivo`). A review folder written before 0.47.0 has no such record; it is archived when the file's latest
+commit is dated in a later second than the newest file in that review folder. Either way the output adds
+`arquivadaAberta: true` next to `arquivada`. Nothing to do about it: the archived rounds judged an older HEAD, and
+the new review at round 1 judges the current one.
 
 ## Step 4 — following rounds
 

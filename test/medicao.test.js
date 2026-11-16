@@ -8,6 +8,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const comum = require('./lib/comum.js');
 const { spawnSync } = require('node:child_process');
 const medicao = require('../scripts/lib/medicao.js');
 const qualidade = require('../scripts/lib/qualidade.js');
@@ -17,7 +18,7 @@ const RAIZ = path.join(__dirname, '..');
 const CLI = path.join(RAIZ, 'scripts', 'medir-qualidade.js');
 const MARCADOR = qualidade.BLOCO.split('\n')[0];
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn medicao-')); }
+function pasta() { return comum.temporaria('sworn medicao-'); }
 
 // ── apuracao: fixtures de mentira ────────────────────────────────────────
 
@@ -1162,7 +1163,7 @@ test('cli: --pares recusa prompt cujo id nao serve de nome de pasta, id repetido
 });
 
 test('cli: --pares que falha ao gravar desfaz pares/ e mapa.json, e a retentativa monta', () => {
-  const dirFalha = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-falha-'));
+  const dirFalha = comum.temporaria('sworn-falha-');
   const quando = [
     ['a 3a gravacao dentro de pares/', 'writeFileSync', "partes.indexOf('pares') !== -1 && ++n === 3"],
     ['a gravacao do mapa.json', 'writeFileSync', "path.basename(alvo) === 'mapa.json'"],
@@ -1198,7 +1199,7 @@ test('cli: --pares que falha ao gravar desfaz pares/ e mapa.json, e a retentativ
 
 /** Um --require que troca funcoes do fs no processo do CLI; `linhas` vem depois de fs e path. */
 function preloadDeFalha(linhas) {
-  const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-falha-')), 'falha.js');
+  const arquivo = path.join(comum.temporaria('sworn-falha-'), 'falha.js');
   fs.writeFileSync(arquivo, ["const fs = require('fs');", "const path = require('path');"].concat(linhas).join('\n') + '\n', 'utf8');
   // NODE_OPTIONS le a barra invertida como escape dentro das aspas: o caminho vai com barra normal
   return { NODE_OPTIONS: '--require "' + arquivo.split(path.sep).join('/') + '"' };
@@ -1705,6 +1706,59 @@ test('brinquedo: nasce com escopo declarado para src/ e com caminho longo ligado
   assert.deepStrictEqual(e.dentro, ['src/**']);
   assert.strictEqual(git(alvo, ['config', '--local', 'core.longpaths']).trim(), 'true');
   assert.strictEqual(git(alvo, ['status', '--porcelain']), '', 'o escopo tambem nasce commitado');
+});
+
+// F1g (0.37.0): cada brinquedo abria 5 processos de git (init, config, add, commit e o `maintenance run --auto` que o
+// commit abre); a config vai direto no arquivo e o commit sai com maintenance.auto=false.
+// F1i (0.46.0): do 2o brinquedo em diante na mesma pasta-mae, o .git sai do molde do 1o init: so add e commit.
+function comandosDoBrinquedo(alvo, prompt, condicao) {
+  const rastro = path.join(pasta(), 'trace2.json');
+  const antes = process.env.GIT_TRACE2_EVENT;
+  process.env.GIT_TRACE2_EVENT = rastro;
+  try {
+    montarBrinquedo(alvo, prompt, condicao);
+  } finally {
+    if (antes === undefined) delete process.env.GIT_TRACE2_EVENT; else process.env.GIT_TRACE2_EVENT = antes;
+  }
+  assert.ok(fs.existsSync(rastro), 'o git nao gravou o rastro (GIT_TRACE2_EVENT, git 2.22 ou mais novo): ' + rastro);
+  // so os comandos que a montagem pode abrir: um gancho global ou o fsmonitor da maquina abrem outros, e nao contam
+  const DO_BRINQUEDO = ['init', 'config', 'add', 'commit', 'maintenance', 'gc'];
+  return fs.readFileSync(rastro, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+    .filter((e) => e.event === 'cmd_name' && DO_BRINQUEDO.includes(e.name)).map((e) => e.name);
+}
+
+function repositorioPronto(alvo, qual) {
+  assert.strictEqual(git(alvo, ['config', '--local', 'core.longpaths']).trim(), 'true', qual + ': a config no arquivo vale para o git');
+  assert.strictEqual(git(alvo, ['status', '--porcelain']), '', qual + ': tudo commitado');
+  assert.strictEqual(git(alvo, ['rev-list', '--count', 'HEAD']).trim(), '1', qual + ': um commit so');
+  assert.strictEqual(git(alvo, ['fsck', '--no-progress']).trim(), '', qual + ': o repositorio e integro');
+}
+
+test('brinquedo: o 1o repositorio da pasta nasce em 3 processos de git (init, add, commit) e o 2o em 2 (add, commit), sem config nem maintenance', () => {
+  const prompt = PROMPTS.prompts.filter((p) => p.tipo === 'explicar')[0];
+  const base = pasta();
+  const um = path.join(base, 'primeiro');
+  const primeiro = comandosDoBrinquedo(um, prompt, 'padrao');
+  assert.deepStrictEqual(primeiro, ['init', 'add', 'commit'], 'a pasta nova abre o init: ' + primeiro.join(', '));
+  const dois = path.join(base, 'segundo');
+  const segundo = comandosDoBrinquedo(dois, prompt, 'caveman');
+  assert.deepStrictEqual(segundo, ['add', 'commit'], 'o 2o brinquedo da pasta sai do molde, sem init: ' + segundo.join(', '));
+  repositorioPronto(um, 'o do init');
+  repositorioPronto(dois, 'o do molde');
+});
+
+test('brinquedo: o .git que ja existe antes do init nao entra no molde nem passa para o vizinho', () => {
+  const base = pasta();
+  const sujo = path.join(base, 'sujo');
+  // direto pelo montarBrinquedo: o --gerar recusa arquivo em .git/ antes (caiNoQueAMedicaoGrava)
+  const comMarca = { id: 'marca', arquivos: { 'src/a.js': '1\n', '.git/hooks/marca-do-prompt': 'x\n' } };
+  assert.deepStrictEqual(comandosDoBrinquedo(sujo, comMarca, 'padrao'), ['init', 'add', 'commit']);
+  assert.strictEqual(fs.readFileSync(path.join(sujo, '.git', 'hooks', 'marca-do-prompt'), 'utf8'), 'x\n', 'o init mantem o que ja estava');
+  const limpo = path.join(base, 'limpo');
+  const doLimpo = comandosDoBrinquedo(limpo, PROMPTS.prompts.filter((p) => p.tipo === 'explicar')[0], 'padrao');
+  assert.deepStrictEqual(doLimpo, ['init', 'add', 'commit'], 'o .git sujo nao virou molde: ' + doLimpo.join(', '));
+  assert.strictEqual(fs.existsSync(path.join(limpo, '.git', 'hooks', 'marca-do-prompt')), false, 'a marca nao passou para o vizinho');
+  repositorioPronto(limpo, 'o vizinho');
 });
 
 test('cli: --gerar sem transcricao da sessao para na condicao caveman e diz o motivo', () => {

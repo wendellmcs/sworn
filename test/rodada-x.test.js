@@ -21,6 +21,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 const projetoLib = require('../scripts/lib/projeto.js');
 
 const RAIZ = path.join(__dirname, '..');
@@ -74,15 +75,9 @@ function gravarProjeto(dir, mudancas) {
   return gravarCru(dir, comBase(mudancas));
 }
 
+// F1 (s372): em processo (comum.ganchoComoProcesso; a abertura.js, que sai por process.exit, por processo)
 function rodarPortao(script, entrada, tmp) {
-  const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
-    input: JSON.stringify(entrada),
-    encoding: 'utf8',
-    env: Object.assign({}, process.env, { SWORN_TMP: tmp })
-  });
-  let json = null;
-  if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
-  return { status: r.status, stdout: r.stdout, stderr: r.stderr, json: json };
+  return comum.ganchoComoProcesso(path.join('scripts', script), entrada, { env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
 }
 
 function bash(dir, tmp, comando, sessao) {

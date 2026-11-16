@@ -91,6 +91,26 @@ test('R3d: aviso sai so quando o idioma do dono e o da ultima resposta diferem',
   assert.strictEqual(idioma.aviso(PT, transcricao(dir, 'curta', [resposta('ok')])), null, 'resposta curta demais');
   assert.strictEqual(idioma.aviso(PT, null), null, 'sem transcricao');
   assert.ok(/^[\x20-\x7E]*$/.test(idioma.aviso(PT, emIngles)), 'ASCII (R5)');
+  // pendencia #4: o resumo da compactacao chega como a mensagem do turno, em ingles, e nao e o dono escrevendo
+  const resumo = 'This session is being continued from a previous conversation that ran out of context. The summary ' +
+    'below covers the earlier portion of the conversation.\n\n' + EN;
+  assert.strictEqual(idioma.detectar(resumo), 'en', 'sem o pulo, o resumo leria como o dono em ingles');
+  assert.strictEqual(idioma.aviso(resumo, emPortugues), null);
+  assert.strictEqual(idioma.aviso('\n  ' + resumo, emPortugues), null, 'com espaco antes');
+  // a frase citada no meio da mensagem do dono nao e o resumo: o aviso segue
+  assert.match(idioma.aviso(EN + ' This session is being continued from a previous conversation that ran out of context.',
+    emPortugues), /o dono escreve em ingles/);
+  // pendencia #5: o relatorio de subagente e o aviso de tarefa chegam como a mensagem do turno, e nao sao o dono
+  const relatorio = '<agent-message from="a82eb7a2d4ef159aa">\n[Subagent hand-back] The text below is the final report ' +
+    'of a subagent this session delegated to.\n  ' + EN + '\n</agent-message>';
+  assert.strictEqual(idioma.detectar(relatorio), 'en', 'sem o pulo, o relatorio leria como o dono em ingles');
+  assert.strictEqual(idioma.aviso(relatorio, emPortugues), null, 'o relatorio de subagente');
+  assert.strictEqual(idioma.aviso('\n ' + relatorio, emPortugues), null, 'o relatorio com espaco antes');
+  const tarefa = '<task-notification>\n<task-id>boqsghb7n</task-id>\n<summary>' + EN + '</summary>\n</task-notification>';
+  assert.strictEqual(idioma.detectar(tarefa), 'en', 'sem o pulo, o aviso de tarefa leria como o dono em ingles');
+  assert.strictEqual(idioma.aviso(tarefa, emPortugues), null, 'o aviso de tarefa em segundo plano');
+  // a marca citada no meio da mensagem do dono nao e o relatorio: o aviso segue
+  assert.match(idioma.aviso(EN + ' <agent-message from="x">', emPortugues), /o dono escreve em ingles/);
 });
 
 test('R3d: pelo gancho de entrada, a linha do idioma chega ao modelo; no mesmo idioma, nada', () => {

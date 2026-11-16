@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 /**
  * D598 (revisao completa, A11-02): o /sworn:init pergunta e, com o sim, liga a atualizacao automatica do
@@ -28,9 +28,10 @@ function config(arquivos) {
 
 const CONHECIDO = { 'plugins/known_marketplaces.json': { 'sworn-local': { source: SOURCE, installLocation: 'x' } } };
 
+// F1g (s372): no processo do teste (comum.scriptComoProcesso); o script e sincrono e nao le o stdin
 function rodar(dir, args) {
   const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: dir });
-  const r = spawnSync(process.execPath, [SCRIPT].concat(args || []), { env: env, encoding: 'utf8', timeout: 30000 });
+  const r = comum.scriptComoProcesso(SCRIPT, args || [], { env: env });
   return { status: r.status, saida: (r.stdout || '') + (r.stderr || '') };
 }
 

@@ -7,8 +7,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
+const comum = require('./lib/comum.js');
 const { spawnSync } = require('node:child_process');
 const sanit = require('../scripts/lib/sanitacao.js');
 // R3f: os repositorios temporarios assinam com um autor de ensaio, nao com a identidade global da maquina
@@ -17,7 +17,7 @@ require('./lib/comum.js').identidadeDeEnsaio();
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'exportar.js');
 
-function pasta(nome) { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn ' + nome + '-')); }
+function pasta(nome) { return comum.temporaria('sworn ' + nome + '-'); }
 
 function escrever(dir, rel, conteudo) {
   const alvo = path.join(dir, rel);

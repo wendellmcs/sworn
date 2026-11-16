@@ -8,6 +8,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
+// F1g (s372): o plano.js no processo do teste (comum.scriptComoProcesso); sem env, o do teste, como o spawnSync herdava
+function plano(args, cwd, env) {
+  return comum.scriptComoProcesso(path.join(__dirname, '..', 'scripts', 'plano.js'), args,
+    { cwd: cwd, env: env || Object.assign({}, process.env) });
+}
 const planoLib = require('../scripts/lib/plano.js');
 
 // Plano 082 (mock D532, S5): o painel sai com acento (D532) e em Markdown; o que nao pode e caractere de controle.
@@ -97,7 +103,7 @@ test('plano.js --texto: le o plano ativo do projeto e imprime o painel', () => {
   try {
     fs.writeFileSync(path.join(base, 'plano.md'), PLANO);
     planoLib.abrir(base, 'plano.md', 's1');
-    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'plano.js'), '--texto'], { cwd: base, encoding: 'utf8' });
+    const r = plano(['--texto'], base);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.indexOf('**Plano plano — 1 de 3 tarefas**') === 0, r.stdout);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
@@ -106,7 +112,7 @@ test('plano.js --texto: le o plano ativo do projeto e imprime o painel', () => {
 test('plano.js --texto: sem plano ativo, saida 0 e o texto de como abrir', () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-'));
   try {
-    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'plano.js'), '--texto'], { cwd: base, encoding: 'utf8' });
+    const r = plano(['--texto'], base);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(/^Nenhum plano ativo/.test(r.stdout), r.stdout);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
@@ -121,7 +127,7 @@ function painelEm(conteudoDoAtivo, args) {
       fs.mkdirSync(path.join(base, '.claude', 'sworn'), { recursive: true });
       fs.writeFileSync(path.join(base, '.claude', 'sworn', 'plano-ativo.json'), conteudoDoAtivo);
     }
-    return spawnSync(process.execPath, [SCRIPT].concat(args || ['--texto']), { cwd: base, encoding: 'utf8' });
+    return plano(args || ['--texto'], base);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 }
 
@@ -161,7 +167,7 @@ test('D442/9: plano.js (JSON) nao conta tarefa sem caixa como concluida e diz qu
   try {
     fs.writeFileSync(path.join(base, 'plano.md'), '### Tarefa 1: A\n- [x] um\n### Tarefa 2: B\nsem caixas\n');
     planoLib.abrir(base, 'plano.md', 's1');
-    const r = spawnSync(process.execPath, [SCRIPT], { cwd: base, encoding: 'utf8' });
+    const r = plano([], base);
     assert.strictEqual(r.status, 0, r.stderr);
     const j = JSON.parse(r.stdout);
     assert.strictEqual(j.tarefas, 2);
@@ -229,7 +235,7 @@ function projetoComFrentes(opcoes) {
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.CLAUDE_SESSION_ID;
   try {
-    return spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 's-frente'], { cwd: base, encoding: 'utf8', env: env });
+    return plano(['--texto', '--sessao', 's-frente'], base, env);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 }
 
@@ -288,7 +294,7 @@ test('R1 D502: escopo.md da raiz que nao se le e dito; Plano: dele que nao exist
     fs.mkdirSync(path.join(base, '.claude', 'sworn', 'escopos'), { recursive: true });
     fs.writeFileSync(path.join(base, 'plano.md'), PLANO);
     fs.writeFileSync(path.join(base, '.claude', 'sworn', 'escopos', 'so.md'), '**Objetivo:** X. Plano: plano.md\n');
-    const r = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 'nada'], { cwd: base, encoding: 'utf8', env: env });
+    const r = plano(['--texto', '--sessao', 'nada'], base, env);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.indexOf('Não consegui ler o escopo .claude/sworn/escopo.md. Confira se ele é um arquivo') === 0, r.stdout);
     assert.ok(r.stdout.indexOf('frente so') === -1, r.stdout);
@@ -501,7 +507,7 @@ test('R1: arquivo da frente vinculada que nao se le nao vira "nao tem Plano:"', 
     const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
     delete env.CLAUDE_CODE_SESSION_ID;
     delete env.CLAUDE_SESSION_ID;
-    const r = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 's-frente'], { cwd: base, encoding: 'utf8', env: env });
+    const r = plano(['--texto', '--sessao', 's-frente'], base, env);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.indexOf('não declara plano') === -1, r.stdout);
     assert.ok(/^Não consegui ler o arquivo da frente f1 \(\.claude\/sworn\/escopos\/f1\.md\)\. Confira se ele é um arquivo e se abre, e rode \/sworn-plan de novo\.\n$/.test(r.stdout), r.stdout);
@@ -554,10 +560,10 @@ test('R2: sem vinculo, frente cujo arquivo nao se le aparece na lista (e sozinha
   try {
     const escopos = path.join(base, '.claude', 'sworn', 'escopos');
     fs.mkdirSync(path.join(escopos, 'fa.md'), { recursive: true });
-    const so = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 'nada'], { cwd: base, encoding: 'utf8', env: env });
+    const so = plano(['--texto', '--sessao', 'nada'], base, env);
     assert.ok(/^Não consegui ler o arquivo da frente fa/.test(so.stdout), so.stdout);
     fs.writeFileSync(path.join(escopos, 'fb.md'), '**Objetivo:** X. Plano: plano.md\n');
-    const duas = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 'nada'], { cwd: base, encoding: 'utf8', env: env });
+    const duas = plano(['--texto', '--sessao', 'nada'], base, env);
     assert.ok(duas.stdout.indexOf('\n- fa: (o arquivo da frente não se lê)\n- fb: plano.md\n') !== -1, duas.stdout);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
@@ -570,7 +576,7 @@ test('D476: plano.js --texto usa o leitor novo (plano no formato real, achado pe
     fs.writeFileSync(path.join(base, '.claude', 'sworn', 'escopos', 'so.md'), '**Objetivo:** X. Plano: real.md\n');
     const env = Object.assign({}, process.env, { SWORN_TMP: path.join(base, '_tmp') });
     delete env.CLAUDE_CODE_SESSION_ID;
-    const r = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 'nada'], { cwd: base, encoding: 'utf8', env: env });
+    const r = plano(['--texto', '--sessao', 'nada'], base, env);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.indexOf('**Plano real — 3 de 7 itens**') === 0, r.stdout);
     // D532: o acento do plano chega inteiro na saida do script (o mod le em UTF-8)
@@ -727,7 +733,7 @@ test('P2 #6: plano do Objetivo fora da pasta do projeto nao e lido, e o painel d
     fs.mkdirSync(path.join(proj, '.claude', 'sworn'), { recursive: true });
     fs.writeFileSync(path.join(base, 'fora.md'), PLANO);
     fs.writeFileSync(path.join(proj, '.claude', 'sworn', 'escopo.md'), '**Objetivo:** X. Plano: ../fora.md\n');
-    const r = spawnSync(process.execPath, [SCRIPT, '--texto', '--sessao', 'nada'], { cwd: proj, encoding: 'utf8', env: env });
+    const r = plano(['--texto', '--sessao', 'nada'], proj, env);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(LIMPO.test(r.stdout) && semTagSolta(r.stdout), JSON.stringify(r.stdout));
     assert.ok(r.stdout.indexOf('tarefas') === -1, r.stdout);

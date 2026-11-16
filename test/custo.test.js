@@ -212,7 +212,6 @@ test('A2-06: estado nao gravavel nao libera o agente caro em marcha rapida', () 
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
-  const { spawnSync } = require('node:child_process');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-a206-'));
   try {
     fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
@@ -222,10 +221,11 @@ test('A2-06: estado nao gravavel nao libera o agente caro em marcha rapida', () 
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'escopo.md'), '# Escopo\n**Objetivo:** t\n## Dentro\n- docs/**\n');
     const arquivo = path.join(dir, 'e-um-arquivo');
     fs.writeFileSync(arquivo, 'x');
-    const entrada = JSON.stringify({ session_id: 'a206', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Agent',
-      tool_input: { subagent_type: 'esp', prompt: 'p' } });
-    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'portao-agente.js')], {
-      cwd: dir, encoding: 'utf8', input: entrada, env: Object.assign({}, process.env, { SWORN_TMP: arquivo }) });
+    const entrada = { session_id: 'a206', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Agent',
+      tool_input: { subagent_type: 'esp', prompt: 'p' } };
+    // F1g (s372): no processo do teste (comum.ganchoComoProcesso), com o ambiente do teste
+    const r = require('./lib/comum.js').ganchoComoProcesso(path.join('scripts', 'portao-agente.js'), entrada,
+      { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: arquivo }) });
     assert.ok(/"permissionDecision"\s*:\s*"deny"/.test(r.stdout),
       'tinha de negar com o estado fora do ar; stdout ' + JSON.stringify(r.stdout) + ' stderr ' + r.stderr);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -237,17 +237,17 @@ test('A2 (s193): estado nao gravavel nao libera a chamada fora da tabela dos deg
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
-  const { spawnSync } = require('node:child_process');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-a2tab-'));
   try {
     fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify(COM_DEGRAUS));
     const arquivo = path.join(dir, 'e-um-arquivo');
     fs.writeFileSync(arquivo, 'x');
-    const entrada = JSON.stringify({ session_id: 'a2tab', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Agent',
-      tool_input: { subagent_type: 'desenvolvedor', model: 'opus', prompt: 'p' } });
-    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'portao-agente.js')], {
-      cwd: dir, encoding: 'utf8', input: entrada, env: Object.assign({}, process.env, { SWORN_TMP: arquivo }) });
+    const entrada = { session_id: 'a2tab', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Agent',
+      tool_input: { subagent_type: 'desenvolvedor', model: 'opus', prompt: 'p' } };
+    // F1g (s372): no processo do teste (comum.ganchoComoProcesso), com o ambiente do teste
+    const r = require('./lib/comum.js').ganchoComoProcesso(path.join('scripts', 'portao-agente.js'), entrada,
+      { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: arquivo }) });
     assert.ok(/"permissionDecision"\s*:\s*"deny"/.test(r.stdout) && /fora da tabela/.test(r.stdout),
       'tinha de negar com o estado fora do ar; stdout ' + JSON.stringify(r.stdout) + ' stderr ' + r.stderr);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -257,7 +257,6 @@ test('D785 (2.2): portao-agente.js le a marca do re-despacho do topo na sessao',
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
-  const { spawnSync } = require('node:child_process');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-refazer-'));
   try {
     fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
@@ -267,10 +266,11 @@ test('D785 (2.2): portao-agente.js le a marca do re-despacho do topo na sessao',
     const tmp = path.join(dir, '_sessoes');
     fs.mkdirSync(path.join(tmp, 'sworn'), { recursive: true });
     fs.writeFileSync(path.join(tmp, 'sworn', 'refazer.json'), JSON.stringify({ escalada: { refazer: { arquiteto: true } } }));
-    const rodar = (sessao, tipo) => spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'portao-agente.js')], {
-      cwd: dir, encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp }),
-      input: JSON.stringify({ session_id: sessao, cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Agent',
-        tool_input: { subagent_type: tipo, effort: 'max', prompt: 'p' } }) });
+    // F1g (s372): no processo do teste (comum.ganchoComoProcesso), com o ambiente do teste
+    const rodar = (sessao, tipo) => require('./lib/comum.js').ganchoComoProcesso(path.join('scripts', 'portao-agente.js'),
+      { session_id: sessao, cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Agent',
+        tool_input: { subagent_type: tipo, effort: 'max', prompt: 'p' } },
+      { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
     const nega = (r) => /"permissionDecision"\s*:\s*"deny"/.test(r.stdout);
     const com = rodar('refazer', 'arquiteto');
     assert.ok(!nega(com), 'com a marca o re-despacho passa: ' + com.stdout + com.stderr);

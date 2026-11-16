@@ -10,6 +10,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const comum = require('./lib/comum.js');
 const { spawnSync } = require('node:child_process');
 const plataforma = require('../scripts/lib/plataforma.js');
 const glob = require('../scripts/lib/glob.js');
@@ -18,7 +19,7 @@ const estado = require('../scripts/lib/estado.js');
 
 const RAIZ = path.join(__dirname, '..');
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn plataforma-')); }
+function pasta() { return comum.temporaria('sworn plataforma-'); }
 
 function semear(dir, rel, conteudo) {
   const alvo = path.join(dir, rel);

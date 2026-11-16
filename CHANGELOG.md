@@ -1,5 +1,189 @@
 # Changelog
 
+## 0.48.0 — o portão de commit não libera mais quando o git demora
+
+**Corrigido**
+
+- **O commit não passa mais sem revisão porque o git demorou a responder.** Para saber se um arquivo tocado é do
+  repositório do commit, o portão pergunta ao git. Quando o git passava do prazo (5 s, ou o `SWORN_GIT_PRAZO_MS`),
+  a falta de resposta era lida como "fora do repositório" e o arquivo saía da conta: o commit passava sem revisão.
+  Agora o commit para com um aviso próprio: o git não respondeu no prazo, não é falta de revisão, repita o commit; se
+  parar de novo, ponha um prazo maior em `SWORN_GIT_PRAZO_MS`. Esse aviso não conta como commit sem revisão. O
+  arquivo que está de fato fora de qualquer repositório segue sem barrar o commit.
+
+## 0.47.0 — a revisão cega deixada aberta também é arquivada
+
+**Corrigido**
+
+- **Uma revisão cega que ficou aberta não passa mais para a revisão seguinte do mesmo arquivo.** Antes, só a
+  revisão fechada ia para `.claude/sworn/revisao-fechada/`. A que parou sem fechar (o teto de rondas gasto e o
+  commit seguindo) ficava, e a revisão seguinte começava na ronda 4, com o inspetor no modelo barato já na primeira
+  ronda e o voto de lentes antigas cobrado. Agora cada ronda guarda no `mapa.json` a marca do arquivo no HEAD que
+  ela julgou (`headDoArquivo`), e quando o HEAD do arquivo já não é esse a revisão aberta é movida inteira para o
+  mesmo arquivo, sem apagar nada, e a nova começa na ronda 1. O commit de outro arquivo não mexe nela. A revisão
+  aberta de antes desta versão, sem a marca, vai pelo último commit do arquivo, quando ele cai num segundo depois da
+  última coisa gravada nela.
+
+## 0.46.0 — a medição monta os brinquedos com menos chamadas ao git
+
+**Melhorado**
+
+- **Quem mede o plugin (`medir-travas.js` e `medir-qualidade.js`) espera menos antes da primeira execução.** Cada
+  projeto de brinquedo nascia com três chamadas ao git. Agora o primeiro do processo cria o repositório e os seguintes
+  copiam essa base, então são duas chamadas. No `medir-travas.js --gerar`, a segunda repetição em diante de uma mesma
+  tarefa e condição copia o brinquedo pronto da primeira, sem chamar o git. Os brinquedos saem iguais: os mesmos
+  arquivos, o mesmo commit, nada pendente.
+
+## 0.45.0 — o portão de commit chama o git menos vezes por arquivo
+
+**Melhorado**
+
+- **Para cada arquivo de código tocado, o portão de commit agora pergunta numa chamada só ao git de que repositório
+  ele é e como ele está no último commit.** Antes, eram duas ou três chamadas por arquivo. Arquivos de texto (`.md`,
+  `.txt`) e arquivos apagados não chamam mais o git. Os arquivos que pedem revisão antes do commit continuam os mesmos.
+  Se o git demorar demais nessa chamada, o portão volta a perguntar como antes, uma coisa de cada vez. A demora
+  nunca é lida como "fora do repositório", e o arquivo nunca sai da lista por isso.
+
+## 0.44.0 — a revisão cega lê o arquivo no HEAD com uma chamada ao git, não duas
+
+**Melhorado**
+
+- **Para montar o lado antigo da revisão cega, o preparar-revisao agora chama o git uma vez, não duas.** Antes, ele
+  perguntava em que subpasta do repositório estava e só depois lia o arquivo no último commit. Agora lê o arquivo
+  direto a partir da pasta atual. O pacote da revisão continua o mesmo, também rodando de uma subpasta. Quando a
+  leitura falha, a pergunta sobre a subpasta volta a ser feita, e fora de um repositório a mensagem de erro é a de antes.
+
+## 0.43.0 — o portão de commit pergunta ao git uma vez por pasta, não uma vez por arquivo
+
+**Melhorado**
+
+- **Para saber de que repositório é cada arquivo tocado, o portão de commit agora pergunta ao git uma vez por
+  pasta.** Antes, perguntava uma vez por arquivo, mesmo quando vários arquivos estavam na mesma pasta. A lista de
+  arquivos que pedem revisão antes do commit continua a mesma; o git só é chamado menos vezes em cada commit.
+
+## 0.42.0 — nada muda para quem usa: a abertura da sessão termina como os outros ganchos
+
+**Interno**
+
+- **A abertura da sessão termina como os outros ganchos do sworn**, pela saída comum que eles usam, e não por uma
+  saída direta própria. Para quem usa, nada muda: ela escreve o mesmo texto, não bloqueia nada e sai com sucesso. A
+  diferença é para os testes do sworn, que agora rodam a abertura sem abrir um processo novo a cada vez.
+
+## 0.41.0 — a abertura da sessão, o começo de cada turno e o portão de comando destrutivo consultam menos o git
+
+**Melhorado**
+
+- **Menos consultas ao git nos ganchos que rodam o tempo todo.** Com a árvore de trabalho limpa (nenhum arquivo
+  mudado), a lista dos arquivos mudados sai com uma consulta ao git, não duas. Essa lista é feita na abertura da
+  sessão, no começo de cada turno e a cada comando que o portão de comando destrutivo confere.
+- **A abertura da sessão só lista os arquivos do repositório para conferir `intocaveis`** quando o
+  `.claude/sworn/projeto.json` tem algum padrão nessa chave. Sem padrão não há o que conferir, e a consulta saía à
+  toa em toda abertura.
+- **Na abertura em que a auditoria automática e a revisão dos atalhos vencem juntas** (sempre na primeira abertura do
+  projeto; depois, quando os dois prazos, de 7 e de 30 dias, vencem na mesma abertura), o repositório é varrido uma
+  vez só, não uma vez para cada aviso.
+
+Os avisos são os mesmos de antes; nenhuma configuração muda. Medido numa máquina com Windows, a abertura numa pasta
+nova passou de cerca de 290 ms para cerca de 250 ms.
+
+## 0.40.0 — as pastas que o sworn cria são apagadas de verdade no Windows, também com acento no caminho
+
+**Corrigido**
+
+- **As pastas que o sworn cria e apaga não ficam mais para trás quando o caminho tem acento.** No Windows, com o
+  Node 24, a remoção de pasta do Node (`fs.rmSync` com `recursive`) não dá erro, mas a pasta continua no disco
+  quando o caminho tem acento (por exemplo, quando o nome do usuário do Windows tem acento). Isso valia para o
+  navegador temporário da captura de tela, as fotos da revisão de tela, as pastas de estudo, de exportação e de
+  teste de carga que o sworn anota para apagar no fim da sessão, as rodadas da medição de qualidade, o teste de
+  admissão de modelo e os arquivos que os ganchos usam no Codex, no Qwen Code e no dsh. A captura de tela chegava
+  a dizer que tinha apagado o navegador temporário. Agora, quando a pasta fica, ela sai arquivo por arquivo; um link
+  ou junção dentro dela sai sem apagar aquilo para onde ele aponta. Se ainda assim a pasta não sai (um arquivo preso
+  pelo antivírus, por exemplo), vale o de antes: a admissão, a medição e a limpeza do fim da sessão dizem qual pasta
+  ficou, a captura de tela tenta de novo em segundo plano, e as fotos e os arquivos dos ganchos ficam no disco, sem
+  aviso. A pasta que ficou pode ser apagada à mão depois que o arquivo for solto (fechando o programa que o prende).
+- **As sobras de versões anteriores continuam no disco:** são as pastas com nome começando por `sworn-` na pasta
+  temporária do Windows (`%TEMP%`). Com nenhum sworn rodando, dá para apagá-las à mão.
+- **O gancho que roda por arquivo (o sandbox do dsh) não perde mais a decisão do portão** quando a pasta dos
+  arquivos dele não sai: antes, o erro ao apagar trocava a saída, e um bloqueio já dado deixava a ferramenta passar.
+
+## 0.39.0 — o prazo do git dos portões pode ser aumentado com a variável `SWORN_GIT_PRAZO_MS`
+
+**Novo**
+
+- **`SWORN_GIT_PRAZO_MS` aumenta o prazo das consultas ao git que os portões fazem.** Cada consulta tem 5 s. O
+  `git` que passa disso, num repositório grande ou numa máquina carregada, é tratado como "fora do repositório", e o
+  portão de commit deixa o commit passar sem revisão. Isso continua igual sem a variável. Se o `git status` do seu
+  repositório leva mais de 5 s, ponha a variável num inteiro positivo de milissegundos (por exemplo
+  `SWORN_GIT_PRAZO_MS=30000`) e o prazo passa a ser esse; com outro valor, seguem os 5 s.
+
+## 0.38.0 — o comando que o dono liberou não esconde mais o aviso do `cd` solto nem conta como comando destrutivo barrado
+
+**Corrigido**
+
+- **O comando liberado em `comandosLiberados` passa sem deixar rastro na sessão.** Desde a 0.24.0, os portões do
+  shell rodam juntos num processo só (`portao-shell.js`). Nesse modo, o comando que casava com um padrão de
+  `comandosLiberados` rodava, mas a proteção contra comando destrutivo e contra `cd` solto seguia conferindo o
+  comando e gravava na sessão a marca e a contagem que só valem para um comando não liberado. Com o `cd sub && git status` liberado, a sessão ficava
+  marcada como já avisada do `cd` solto. O aviso inteiro, que sai uma vez por sessão, sumia do primeiro `cd` solto
+  de verdade. O `rm -rf ./build` liberado rodava, mas entrava na contagem de comandos destrutivos barrados. Essa
+  contagem dispara o aviso de saúde da sessão. Agora a conferência acaba no comando liberado, como quando cada portão
+  rodava sozinho.
+
+## 0.37.0 — o aviso de idioma ignora o relatório de subagente e a notificação de tarefa, e o repositório de cada medição nasce com menos processos
+
+**Corrigido**
+
+- **O relatório de subagente e a notificação de tarefa não viram a mensagem do dono no aviso de idioma.** Quando um
+  subagente em segundo plano termina, o Claude Code manda o relatório dele (em inglês, escrito por um modelo) como a
+  mensagem do turno; a notificação de que uma tarefa em segundo plano terminou chega do mesmo jeito. O aviso de idioma
+  do sworn lia esse texto como o dono escrevendo em inglês e mandava responder em inglês ao dono que escreve em
+  português. Agora o turno que começa por `<agent-message from=` ou por `<task-notification>` não conta. A marca
+  citada no meio de uma mensagem do dono não muda nada.
+
+**Mudado**
+
+- **O repositório de cada medição nasce em 3 processos de git, e não em 5.** O `medir-qualidade.js` e o
+  `medir-travas.js` montam um projeto de teste por condição. Antes, cada um abria `git init`, `git config`,
+  `git add`, `git commit` e o `git maintenance run --auto` que o commit abre sozinho. Agora a opção `core.longpaths`
+  vai direto no `.git/config` do projeto e o commit sai sem a manutenção automática. O projeto é o mesmo, com o
+  mesmo commit e as mesmas opções.
+
+## 0.36.0 — as rondas 2 e 3 da revisão usam o modelo mais barato mesmo com o briefing num arquivo, e o aviso de idioma ignora o resumo da compactação
+
+**Corrigido**
+
+- **As rondas 2 e 3 da revisão cega usam o modelo mais barato também quando o briefing vai num arquivo.** Desde a
+  0.30.0, com a sessão no Opus, o inspetor da ronda 1 roda no Opus e os das rondas 2 e 3, que só conferem o
+  conserto, no Sonnet (com a sessão no Sonnet: Opus e depois Sonnet; no Haiku: Sonnet e depois Haiku). O gancho que
+  escolhe esse modelo (`portao-juiz.js`) achava a ronda só no caminho da pasta de vereditos escrito no pedido do
+  inspetor. O pedido que só dizia onde estava o briefing ("Your full briefing is in `.../3.txt`") contava como
+  ronda 1, e as rondas 2 e 3 rodavam no Opus. Agora, sem o caminho no pedido, o gancho lê o começo de até 3 arquivos
+  `.txt` ou `.md` que o pedido cita e acha a ronda lá; entre crases, o caminho pode ter espaço. Para conferir, o
+  `model` do despacho da ronda 2 aparece trocado no registro da sessão.
+- **O resumo da compactação não vira a mensagem do dono no aviso de idioma.** Depois da compactação, o Claude Code
+  manda o resumo da conversa, em inglês, como a mensagem do turno. O aviso de idioma o lia como o dono escrevendo
+  em inglês e mandava responder em inglês ao dono que escreve em português. Agora esse resumo não conta.
+
+## 0.35.0 — a lente de tela julga sem ver o detector, e o fecho diz o que a tela perdeu
+
+**Novo**
+
+- **O detector de design não influencia a lente de tela.** Num arquivo de estilo com `.claude/sworn/design.json`, a
+  preparação da ronda roda o detector: o valor fora do sistema no fonte e, com `--tela-depois`, no estilo calculado da
+  página. O resultado fica em `detector.json`, na ronda, e nenhum inspetor o recebe. Só depois dos vereditos o
+  `apurar-ronda.js` o cruza com a lente `ui-design`, e a saída traz `detector` em três listas: os dois viram, só o
+  detector viu, só a lente viu. O que só o detector viu não reprova a ronda, mas o motivo do fecho diz quantos são: troque cada um por
+  um valor do `design.json`, ou peça ao dono que declare um desvio para esta tela em `desvios` do `design.json`.
+- **O fecho diz o que a tela perdeu.** Numa revisão de `.html`, `.htm`, `.jsx`, `.tsx`, `.vue` ou `.svelte` que já
+  existia no HEAD, a preparação grava `inventario.json` com o que o HEAD ligava: id, evento (`onclick`, `onClick`,
+  `@click`, `v-on:`, `on:`), link, campo de formulário, gancho de teste (`data-testid` e afins), script e destino do
+  formulário. Com as fotos de `--tela-antes` e `--tela-depois`, entram também os nomes da árvore de acessibilidade. O
+  fecho diz "inventario da tela: mantido N/N" e o que sumiu (`inventario.sumiram`). O que saiu de propósito se declara num
+  comentário do próprio arquivo, `sworn-dispensa: <item> -- <motivo>`, com o item exato como o fecho o lista e o
+  motivo de 12 letras ou mais (no `.html`, num `<!-- -->`: lá o `//` é texto da página); a dispensa de motivo curto
+  é recusada e aparece no fecho. A tag dentro de comentário não
+  conta como ligada, e o fecho diz quando os nomes da acessibilidade ficaram de fora por falta de foto.
+
 ## 0.34.0 — as pendências não gravam por link e a conferência da tela rodando barra o pronto
 
 **Corrigido**

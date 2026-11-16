@@ -9,6 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ap = require('../scripts/lib/auditoria-periodica.js');
+const comum = require('./lib/comum.js');
 
 const DIA = 24 * 60 * 60 * 1000;
 const AGORA = Date.UTC(2026, 9, 11, 12, 0, 0);
@@ -203,7 +204,7 @@ test('091 #8: atalhos sem gatilho entram na lista do que cortar, com arquivo:lin
 test('091 #8: sem stub, a auditoria varre o repositorio de verdade (rastreado e novo nao ignorado)', () => {
   const dir = temp('atalhos-git');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, '.gitignore', 'fora.js\n');
     escrever(dir, 'a.js', 'x\n// atalho: sem gatilho\n');
     escrever(dir, 'fora.js', '// atalho: ignorado\n');
@@ -317,6 +318,28 @@ function git(dir, args, quando) {
   return r.stdout;
 }
 
+/**
+ * Faz de `dir` um repositorio sem commit pelo comum.repo: o `.git` vazio copiado, sem um `git init` por teste, e com
+ * `maintenance.auto` desligado, sem um `git maintenance run --auto` por commit (F1g, s372).
+ */
+function iniciar(dir) {
+  comum.repo(dir);
+}
+
+test('F1g: o repositorio de ensaio deste arquivo nasce do comum.repo, sem manutencao automatica nem commit', () => {
+  const dir = temp('f1g');
+  try {
+    iniciar(dir);
+    const config = fs.readFileSync(path.join(dir, '.git', 'config'), 'utf8');
+    assert.ok(/\[maintenance\]\r?\n\tauto = false\b/.test(config), config);
+    const repositorio = spawnSync('git', ['rev-parse', '--git-dir'], { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(repositorio.status, 0, 'o git nao reconhece o repositorio de ensaio: ' + repositorio.stderr);
+    // sem commit, o --verify -q de HEAD sai com 1 (nao 128, que e "fora de repositorio")
+    assert.strictEqual(spawnSync('git', ['rev-parse', '--verify', '-q', 'HEAD'], { cwd: dir }).status, 1,
+      'o repositorio de ensaio nasceu com commit');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 function mtime(dir, nome, ms) {
   const s = ms / 1000;
   fs.utimesSync(path.join(dir, '.claude', 'skills', nome, 'SKILL.md'), s, s);
@@ -325,7 +348,7 @@ function mtime(dir, nome, ms) {
 test('A2: skill parada usa a data do ultimo commit, nao o mtime (clone/checkout deixa o mtime em "agora")', () => {
   const dir = temp('git-data');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, '.claude/skills/velha/SKILL.md', '---\nname: velha\n---\n');
     escrever(dir, '.claude/skills/nova/SKILL.md', '---\nname: nova\n---\n');
     git(dir, ['add', '.']);
@@ -347,7 +370,7 @@ test('A2: skill parada usa a data do ultimo commit, nao o mtime (clone/checkout 
 test('A2: skill nao rastreada (sem commit) usa o mtime, mesmo dentro de um repositorio git', () => {
   const dir = temp('git-solta');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, '.claude/skills/velha/SKILL.md', 'x\n');
     git(dir, ['add', '.']);
     git(dir, ['commit', '-q', '-m', 'velha'], AGORA - 200 * DIA);
@@ -366,7 +389,7 @@ test('A2: repositorio sem nenhum commit, ou pasta fora de repositorio, cai no mt
     escrever(dir, '.claude/skills/velha/SKILL.md', 'x\n');
     mtime(dir, 'velha', AGORA - 100 * DIA);
     assert.deepStrictEqual(ap.skillsParadas(dir, ['velha'], AGORA, 90), [{ nome: 'velha', dias: 100 }]);
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     assert.deepStrictEqual(ap.skillsParadas(dir, ['velha'], AGORA, 90), [{ nome: 'velha', dias: 100 }]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -376,7 +399,7 @@ test('A2: git.ultimasMudancas devolve a data do commit mais recente de cada arqu
   const dir = temp('git-lib');
   try {
     assert.strictEqual(gitLib.ultimasMudancas(path.join(dir, 'nao-existe'), '.claude/skills'), null);
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, '.claude/skills/ação/SKILL.md', 'a\n');
     escrever(dir, '.claude/skills/b/SKILL.md', 'b\n');
     git(dir, ['add', '.']);
@@ -413,7 +436,7 @@ test('A2/git: historico grande (saida de git log > 1 MiB) nao vira null', () => 
   const gitLib = require('../scripts/lib/git.js');
   const dir = temp('git-grande');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     // 400 caminhos de ~3000 caracteres direto no indice (sem criar arquivo: o limite de caminho do disco nao vale)
     const blob = gitIn(dir, ['hash-object', '-w', '--stdin'], 'x\n').stdout.trim();
     const linhas = [];
@@ -435,7 +458,7 @@ test('A2/git: arquivo chamado @<digitos> nao e confundido com o cabecalho de dat
   const gitLib = require('../scripts/lib/git.js');
   const dir = temp('git-sentinela');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, '@1700000000', 'a\n');
     escrever(dir, 'normal.md', 'b\n');
     git(dir, ['add', '.']);
@@ -461,7 +484,7 @@ test('A2/git: arquivo apagado nao carrega a data da delecao nem a do commit ante
   const gitLib = require('../scripts/lib/git.js');
   const dir = temp('git-apagado');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, '.claude/skills/x/SKILL.md', 'a\n');
     escrever(dir, '.claude/skills/y/SKILL.md', 'b\n');
     git(dir, ['add', '.']);
@@ -521,7 +544,7 @@ test('A2-13: nome que o git cita entre aspas (aspas, tab) entra no Map com o nom
   const gitLib = require('../scripts/lib/git.js');
   const dir = temp('git-aspas');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     // direto no indice (-z): o disco do Windows nao aceita aspas nem tab em nome de arquivo, e o git do
     // Windows so deixa entrar no indice com protectNTFS desligado (so neste comando)
     const blob = gitIn(dir, ['hash-object', '-w', '--stdin'], 'x\n').stdout.trim();
@@ -541,7 +564,7 @@ test('A2-14: timeout do git e distinguivel de "fora do git" (ambos null; so o ti
   const gitLib = require('../scripts/lib/git.js');
   const dir = temp('git-timeout');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, 'a.md', 'a\n');
     git(dir, ['add', '.']);
     git(dir, ['commit', '-q', '-m', 'um']);
@@ -569,7 +592,7 @@ test('A2-15: vale a data MAIOR do arquivo, nao a primeira que o log mostra (relo
   const gitLib = require('../scripts/lib/git.js');
   const dir = temp('git-ordem');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, '.claude/skills/f/SKILL.md', 'a\n');
     git(dir, ['add', '.']);
     git(dir, ['commit', '-q', '-m', 'pai recente'], AGORA - 5 * DIA);
@@ -585,7 +608,7 @@ test('A2-16: apagado no git e recriado SEM commit usa o mtime (nao a data antiga
   const gitLib = require('../scripts/lib/git.js');
   const dir = temp('git-recriado');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, '.claude/skills/r/SKILL.md', 'a\n');
     escrever(dir, '.claude/skills/ficou/SKILL.md', 'a\n');
     git(dir, ['add', '.']);
@@ -894,7 +917,7 @@ test('revisao 092: repositorio que nao respondeu sai nomeado, com e sem atalho; 
 test('revisao 092: daPastaEDeDentro devolve em `falhas` o repositorio de dentro que o git nao leu', () => {
   const dir = temp('varre-falha');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, 'a.js', '// atalho: na raiz\n');
     fs.mkdirSync(path.join(dir, 'quebrado'));
     fs.writeFileSync(path.join(dir, 'quebrado', '.git'), ''); // gitfile vazio: o git recusa a pasta
@@ -907,11 +930,11 @@ test('revisao 092: daPastaEDeDentro devolve em `falhas` o repositorio de dentro 
 test('D576: a varredura pega a pasta aberta e os repositorios logo abaixo dela, com o caminho a partir da pasta', () => {
   const dir = temp('varre');
   try {
-    git(dir, ['init', '-q']);
+    iniciar(dir);
     escrever(dir, 'a.js', '// atalho: na raiz\n');
     escrever(dir, 'pasta/c.js', '// atalho: pasta comum da raiz\n');
     fs.mkdirSync(path.join(dir, 'sub'));
-    git(path.join(dir, 'sub'), ['init', '-q']);
+    iniciar(path.join(dir, 'sub'));
     escrever(dir, 'sub/b.js', 'x\n// atalho: no repositorio de dentro\n');
     const r = atalhosLib.daPastaEDeDentro(dir, {});
     const onde = r.achados.map(function (a) { return a.arquivo + ':' + a.linha; }).sort();
@@ -930,7 +953,7 @@ test('D576: pasta aberta fora de git com repositorio dentro ainda varre o de den
     const noGit = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: dir, encoding: 'utf8' });
     if (noGit.status === 0) return; // tmpdir dentro de repositorio: o cenario nao se monta aqui
     fs.mkdirSync(path.join(dir, 'sub'));
-    git(path.join(dir, 'sub'), ['init', '-q']);
+    iniciar(path.join(dir, 'sub'));
     escrever(dir, 'sub/b.js', '// atalho: dentro\n');
     const r = atalhosLib.daPastaEDeDentro(dir, {});
     assert.deepStrictEqual(r.achados.map(function (a) { return a.arquivo; }), ['sub/b.js']);

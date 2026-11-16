@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const agentesLib = require('../scripts/lib/agentes.js');
+const comum = require('./lib/comum.js');
 
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'portao-apelido.js');
@@ -42,8 +43,9 @@ function hook(dir, tmp, sessaoId) {
   return { status: r.status, json: json, stderr: r.stderr, stdout: r.stdout };
 }
 
+// F1g (s372): o CLI roda no processo do teste; o modo gancho le o stdin e segue por processo
 function cli(dir, args) {
-  const r = spawnSync(process.execPath, [SCRIPT].concat(args), { cwd: dir, encoding: 'utf8' });
+  const r = comum.scriptComoProcesso(SCRIPT, args, { cwd: dir, env: Object.assign({}, process.env) });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 

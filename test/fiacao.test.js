@@ -20,10 +20,17 @@ function temp(nome) {
 }
 
 /**
- * Roda um script de entrada como processo, com estado de sessao isolado; `env` soma ao ambiente (NODE_OPTIONS).
- * Pelo `comum.rodar` (F1e): sem a sessao real, com pasta de config vazia e com prazo. A entrada vai sempre em JSON.
+ * Roda um script de entrada com estado de sessao isolado, sem a sessao real e com pasta de config vazia. F1g (6a
+ * fatia): com a entrada em objeto e sem `env`, no proprio processo do teste (`comum.ganchoComoProcesso`, que volta a
+ * um processo sozinho quando o script sai por process.exit); devolve { status, stdout, stderr, json, porProcesso }.
+ * Sem entrada, com entrada que nao e objeto, ou com `env` proprio (soma ao ambiente; NODE_OPTIONS so vale num
+ * processo novo): pelo `comum.rodar` (F1e), como processo com prazo, a entrada em JSON, e o resultado do spawnSync.
  */
 function rodar(script, dir, entrada, env) {
+  if (entrada !== null && typeof entrada === 'object' && !Array.isArray(entrada) && env === undefined) {
+    return comum.ganchoComoProcesso(path.join('scripts', script), entrada,
+      { cwd: dir, env: comum.ambiente({ SWORN_TMP: path.join(dir, '_sessoes') }) });
+  }
   return comum.rodar(path.join('scripts', script), [], {
     cwd: dir,
     entrada: entrada === undefined ? undefined : JSON.stringify(entrada),
@@ -44,6 +51,18 @@ function escrever(dir, rel, conteudo) {
   fs.mkdirSync(path.dirname(alvo), { recursive: true });
   fs.writeFileSync(alvo, conteudo, 'utf8');
 }
+
+test('F1g: o rodar deste arquivo leva o gancho ao proprio processo do teste, e o env proprio a um processo novo', () => {
+  const dir = temp('em-processo');
+  const entrada = { session_id: 'ep', cwd: dir, tool_name: 'Bash', tool_input: { command: 'ls' } };
+  const junto = rodar('portao-destrutivo.js', dir, entrada);
+  assert.strictEqual(junto.status, 0, junto.stderr);
+  assert.strictEqual(junto.porProcesso, false, 'o gancho com entrada tinha de rodar no processo do teste');
+  // NODE_OPTIONS so vale num processo novo: o env proprio volta ao comum.rodar (o spawnSync traz o pid)
+  const separado = rodar('portao-destrutivo.js', dir, entrada, { NODE_OPTIONS: '' });
+  assert.strictEqual(separado.status, 0, separado.stderr);
+  assert.strictEqual(typeof separado.pid, 'number', 'com env proprio o gancho tinha de rodar num processo novo');
+});
 
 // ---------------------------------------------------------------- A1: a fiacao
 
@@ -1979,10 +1998,8 @@ function abrirComConversas(dir, id, n, projeto) {
   for (let i = 0; i < n; i++) fs.writeFileSync(path.join(pasta, 'c' + i + '.jsonl'), '{}\n');
   fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify(projeto));
-  return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-    cwd: dir, encoding: 'utf8', input: JSON.stringify({ session_id: id, cwd: dir, source: 'startup' }),
-    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes'), CLAUDE_CONFIG_DIR: cfg })
-  });
+  return comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'), { session_id: id, cwd: dir, source: 'startup' },
+    { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes'), CLAUDE_CONFIG_DIR: cfg }) });
 }
 
 test('091 #4: 30 conversas e nunca calibrado -> a abertura manda rodar o /sworn:calibrate; a 2a abertura fica calada', () => {
@@ -2015,10 +2032,8 @@ test('091 #7: sem projeto.json a abertura manda perguntar o init; a reabertura d
   const dir = temp('ordem-init');
   const cfg = temp('ordem-init-cfg');
   const abrir = function (id, source) {
-    return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-      cwd: dir, encoding: 'utf8', input: JSON.stringify({ session_id: id, cwd: dir, source: source || 'startup' }),
-      env: Object.assign({}, process.env, { SWORN_TMP: path.join(cfg, '_sessoes'), CLAUDE_CONFIG_DIR: cfg })
-    });
+    return comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'), { session_id: id, cwd: dir, source: source || 'startup' },
+      { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: path.join(cfg, '_sessoes'), CLAUDE_CONFIG_DIR: cfg }) });
   };
   try {
     const r1 = abrir('oi1');
@@ -2033,8 +2048,8 @@ test('091 #7: sem projeto.json a abertura manda perguntar o init; a reabertura d
     assert.ok(!fs.existsSync(path.join(dir, '.claude')), 'a ordem nao pode criar nada no projeto');
     assert.strictEqual(abrir('oi1', 'compact').stdout.indexOf('/sworn:init na mesma resposta'), -1, 'repetiu na mesma sessao');
     assert.strictEqual(sessao('oi1').contadores.ordem_init_dada, 1, 'a reabertura contou de novo');
-    const g = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'recusar-init.js'), dir], {
-      encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
+    const g = comum.scriptComoProcesso(path.join('scripts', 'recusar-init.js'), [dir], {
+      env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
     assert.strictEqual(g.status, 0, g.stdout + g.stderr);
     assert.strictEqual(abrir('oi2').stdout.indexOf('/sworn:init na mesma resposta'), -1, 'o nunca nao calou a sessao nova');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(cfg, { recursive: true, force: true }); }
@@ -2043,8 +2058,8 @@ test('091 #7: sem projeto.json a abertura manda perguntar o init; a reabertura d
 test('091 #7: recusar-init.js sem pasta sai 1 e nao grava', () => {
   const cfg = temp('ordem-init-sem');
   try {
-    const g = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'recusar-init.js')], {
-      encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
+    const g = comum.scriptComoProcesso(path.join('scripts', 'recusar-init.js'), [], {
+      env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
     assert.strictEqual(g.status, 1, g.stdout);
     assert.ok(!fs.existsSync(path.join(cfg, 'sworn')), 'gravou sem pasta');
   } finally { fs.rmSync(cfg, { recursive: true, force: true }); }
@@ -2055,8 +2070,8 @@ test('A4-97: recusar-init.js com pasta so de espacos sai 1 com o erro de uso e n
   const cfg = temp('ordem-init-branco');
   try {
     for (const branco of ['   ', '', '\t', ' \t ']) {
-      const g = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'recusar-init.js'), branco], {
-        encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
+      const g = comum.scriptComoProcesso(path.join('scripts', 'recusar-init.js'), [branco], {
+        env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
       assert.strictEqual(g.status, 1, JSON.stringify(branco) + ': ' + g.stdout);
       assert.ok(g.stdout.startsWith('ERRO: falta a pasta do projeto'), g.stdout);
       assert.ok(!fs.existsSync(path.join(cfg, 'sworn')), 'gravou a pasta em branco ' + JSON.stringify(branco));
@@ -2069,8 +2084,8 @@ test('A4-22: recusar-init.js que nao grava diz o arquivo e o que conferir', () =
   const cfg = temp('ordem-init-trava');
   try {
     fs.writeFileSync(path.join(cfg, 'sworn'), 'um arquivo no lugar da pasta', 'utf8');
-    const g = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'recusar-init.js'), cfg], {
-      encoding: 'utf8', env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
+    const g = comum.scriptComoProcesso(path.join('scripts', 'recusar-init.js'), [cfg], {
+      env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
     assert.strictEqual(g.status, 1, g.stdout);
     assert.strictEqual(g.stdout, 'ERRO: nao consegui gravar a recusa em ' +
       path.join(cfg, 'sworn', 'init-recusado.json') + '; a abertura vai perguntar de novo.\n' +
@@ -2215,12 +2230,8 @@ test('S8 A2-4: o aviso de projeto.json ilegivel sai uma vez so, mesmo se a reinj
 
 /** Abertura com a pasta do vigia injetada por SWORN_VIGIA (o `rodar` comum nao passa env extra). */
 function abrirVigia(dir, id, pastaVigia) {
-  return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-    cwd: dir,
-    encoding: 'utf8',
-    input: JSON.stringify({ session_id: id, cwd: dir, source: 'startup' }),
-    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes'), SWORN_VIGIA: pastaVigia })
-  });
+  return comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'), { session_id: id, cwd: dir, source: 'startup' },
+    { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes'), SWORN_VIGIA: pastaVigia }) });
 }
 
 test('V: com "vigia": true a abertura mostra a novidade da semana uma vez, e o resto da abertura segue', () => {

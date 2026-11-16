@@ -928,5 +928,5 @@ function motivo(alvo, fora, sistema, hoje) {
 
 module.exports = {
   UNIDADES, EXTENSOES_ESTILO, ehArquivoDeEstilo, valoresCrus, conferir, motivo, validar,
-  desviosDoArquivo, problemaDoDesvio, paraARevisao, conferirComputado, medidaEmPx
+  desviosDoArquivo, problemaDoDesvio, paraARevisao, conferirComputado, medidaEmPx, chaveDoValor
 };

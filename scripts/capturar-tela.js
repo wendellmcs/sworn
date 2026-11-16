@@ -24,6 +24,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const captura = require('./lib/captura.js');
 const config = require('./lib/config.js');
 const design = require('./lib/design.js');
+const { apagarPasta } = require('./lib/caminho.js'); // pendencia #10: o rmSync deixava a pasta com acento
 
 const PRAZO_DA_PORTA = 15000;
 const PRAZO_DO_FECHO = 5000;
@@ -427,7 +428,7 @@ async function apagarPerfil(perfil, prazo) {
   const fim = Date.now() + prazo;
   let matou = false;
   for (;;) {
-    try { fs.rmSync(perfil, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); return null; } catch (e) {
+    try { apagarPasta(perfil, { maxRetries: 10, retryDelay: 100 }); return null; } catch (e) {
       if (Date.now() >= fim) return e.code || e.message;
     }
     if (!matou) { matarOrfaosDoPerfil(perfil); matou = true; }

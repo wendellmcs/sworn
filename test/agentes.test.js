@@ -195,8 +195,10 @@ function respostasEmArquivo(raiz, nomes) {
   return alvo;
 }
 
+// F1g (s372): no processo do teste (comum.scriptComoProcesso), com o ambiente do teste, como o spawnSync herdava
+const comum = require('./lib/comum.js');
 function rodar(raiz, args) {
-  return spawnSync(process.execPath, [GERADOR].concat(args || []), { cwd: raiz, encoding: 'utf8' });
+  return comum.scriptComoProcesso(GERADOR, args || [], { cwd: raiz, env: Object.assign({}, process.env) });
 }
 
 const DOIS = [{ agente: 'busca', apelido: 'barato' }, { agente: 'arquiteto', apelido: 'caro' }];
@@ -550,6 +552,7 @@ test('A4-age-2: agente ilegivel vai para ilegiveis com a causa, nunca para naoDe
   assert.deepStrictEqual(c.semArquivo, [], 'o arquivo existe: nao e semArquivo');
 });
 
+// Por processo, com prazo: as entradas tortas destes testes nao podem travar a suite se o gerador regredir
 function rodarComTeto(raiz, args) {
   return spawnSync(process.execPath, [GERADOR].concat(args || []), { cwd: raiz, encoding: 'utf8', timeout: 60000 });
 }

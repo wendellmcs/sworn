@@ -237,8 +237,9 @@ function itens(relatorio, paradas, limiteSkill, semGatilho, conversa) {
 
 /**
  * Os atalhos da pasta aberta e dos repositorios logo abaixo dela (D576): { achados (so objetos), falhas (pastas que o
- * git nao leu), erro (null fora de git: sem repositorio nao ha o que varrer) }. `opcoes.atalhos` (cwd, projeto) existe
- * para o teste e devolve a lista ou o mesmo objeto do daPastaEDeDentro.
+ * git nao leu), erro (null fora de git: sem repositorio nao ha o que varrer) }. `opcoes.atalhos` (cwd, projeto) devolve a
+ * lista ou o mesmo objeto do daPastaEDeDentro: o teste troca a busca, e a abertura passa a dela, que lista uma vez so
+ * para a auditoria e a revisao dos atalhos (F1g).
  */
 function varrerAtalhos(cwd, projeto, o) {
   const r = typeof o.atalhos === 'function' ? o.atalhos(cwd, projeto) : require('./atalhos.js').daPastaEDeDentro(cwd, projeto);

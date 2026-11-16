@@ -5,14 +5,19 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const RAIZ = path.join(__dirname, '..');
 
-function rodar(entrada, tmp) {
+// F1 (s372): em processo (comum.ganchoComoProcesso), onde o portao que falha e libera volta com status 1; com
+// `processo`, o processo de verdade, para o teste do R6 conferir o exit 0 depois da falha.
+function rodar(entrada, tmp, processo) {
+  const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
+  if (!processo) return comum.ganchoComoProcesso('scripts/portao-escopo.js', entrada, { env: env });
   const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'portao-escopo.js')], {
     input: JSON.stringify(entrada),
     encoding: 'utf8',
-    env: Object.assign({}, process.env, { SWORN_TMP: tmp })
+    env: env
   });
   let json = null;
   if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
@@ -36,7 +41,7 @@ function liberou(r) {
 }
 
 function montarProjeto(extra) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+  const dir = comum.temporaria('sworn-proj-');
   fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
   const projeto = Object.assign({
     versaoConfig: 1,
@@ -265,7 +270,7 @@ test('portao-escopo D37: entrada hostil faz o portao LIBERAR, nunca travar (R6)'
     const hostil = rodar({
       session_id: 's1', cwd: 42, tool_name: 'Write',
       tool_input: { file_path: 'src/a.js' }
-    }, tmp);
+    }, tmp, true);
     assert.strictEqual(hostil.status, 0, 'R6: portao que falha nao pode travar a sessao');
     assert.strictEqual(negou(hostil), false, 'R6: portao que falha tem de LIBERAR');
     // F7: prova que a entrada REALMENTE estourou (nao so que o resultado parece "liberou").
@@ -304,10 +309,9 @@ test('D244/defeito 7: a abertura avisa que o escopo e herdado, com objetivo e da
   comTmp((tmp) => {
     const dir = montarProjeto();
     escrever(dir, '.claude/sworn/escopo.md', '# Escopo\n**Objetivo:** fechar a tarefa antiga\n## Dentro\n- src/a.js\n');
-    const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-      input: JSON.stringify({ session_id: 'her', cwd: dir, source: 'startup' }),
-      encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
-    });
+    const r = comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+      { session_id: 'her', cwd: dir, source: 'startup' },
+      { env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.match(r.stdout, /escopo herdado/);
     assert.match(r.stdout, /fechar a tarefa antiga/);
@@ -318,10 +322,9 @@ test('D244/defeito 7: a abertura avisa que o escopo e herdado, com objetivo e da
 test('D244/defeito 7: sem escopo.md, a abertura nao fala de heranca', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();
-    const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-      input: JSON.stringify({ session_id: 'her2', cwd: dir, source: 'startup' }),
-      encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
-    });
+    const r = comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+      { session_id: 'her2', cwd: dir, source: 'startup' },
+      { env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.doesNotMatch(r.stdout, /escopo herdado/);
   });
@@ -688,7 +691,7 @@ test('A2-04/05 (D721): o aviso de estado que nao grava diz a pasta e o passo, se
       const motivo = rodar(entrada(dir, 'segredos/k.txt'), tmp).json.hookSpecificOutput.permissionDecisionReason;
       const rastro = motivo.slice(motivo.indexOf('\n\n'));
       assert.ok(rastro.includes(pasta) && /libere a escrita/.test(rastro), motivo);
-      for (const t of [vinculo, rastro]) assert.doesNotMatch(t, /estado da sessao|ocorrencia|portao/, t);
+      for (const t of [vinculo, rastro]) assert.doesNotMatch(t.split(pasta).join(''), /estado da sessao|ocorrencia|portao/, t);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
@@ -758,10 +761,9 @@ test('D420/PT-04: a abertura avisa projeto.json ilegivel mesmo sem regras.md', (
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg3-'));
     try {
       escrever(dir, '.claude/sworn/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
-      const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-        input: JSON.stringify({ session_id: 'ab-ileg', cwd: dir, source: 'startup' }),
-        encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
-      });
+      const r = comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+        { session_id: 'ab-ileg', cwd: dir, source: 'startup' },
+        { env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
       assert.strictEqual(r.status, 0, r.stderr);
       assert.match(r.stdout, /projeto\.json existe mas nao se le/);
       assert.match(r.stdout, /DESLIGADOS/);
@@ -774,10 +776,9 @@ test('D420/PT-04: a abertura sem projeto.json NAO fala de ilegivel; com regras.m
     const vazio = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg4-'));
     const comRegras = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg5-'));
     try {
-      const abrir = (d, id) => spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'abertura.js')], {
-        input: JSON.stringify({ session_id: id, cwd: d, source: 'startup' }),
-        encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
-      });
+      const abrir = (d, id) => comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'),
+        { session_id: id, cwd: d, source: 'startup' },
+        { env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
       assert.doesNotMatch(abrir(vazio, 'ab-aus').stdout, /existe mas nao se le/);
       escrever(comRegras, '.claude/sworn/projeto.json', JSON_COM_VIRGULA_SOBRANDO);
       escrever(comRegras, '.claude/sworn/regras.md', '- ao editar -> rodar git status\n');
@@ -807,10 +808,9 @@ function editar(dir, arquivo, antes, depois, id) {
 
 // O PostToolUse real (marcar-trabalho.js) e quem liga `buscouNesteTurno`: o teste usa o gancho de verdade.
 function registrarBusca(dir, tmp, id, ferramenta) {
-  const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'marcar-trabalho.js')], {
-    input: JSON.stringify({ session_id: id, cwd: dir, tool_name: ferramenta, tool_input: { file_path: path.join(dir, 'src/novo/x.js') } }),
-    encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
-  });
+  const r = comum.ganchoComoProcesso(path.join('scripts', 'marcar-trabalho.js'),
+    { session_id: id, cwd: dir, tool_name: ferramenta, tool_input: { file_path: path.join(dir, 'src/novo/x.js') } },
+    { env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
   assert.strictEqual(r.status, 0, r.stderr);
 }
 
@@ -1006,11 +1006,10 @@ test('E2 (D827): o desvio declarado no design.json libera o valor so na tela del
 // O motivo e o texto do mock aprovado (prints-091); o manual conta pelo PostToolUse da ferramenta Skill
 // (marcar-trabalho.js), com a mesma regra do mod: skill do agente principal com "padrao" no nome.
 function carregarSkill(dir, tmp, skill, extra) {
-  return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'marcar-trabalho.js')], {
-    input: JSON.stringify(Object.assign({ session_id: 's1', cwd: dir, hook_event_name: 'PostToolUse',
-      tool_name: 'Skill', tool_input: { skill: skill } }, extra || {})),
-    encoding: 'utf8', env: Object.assign({}, process.env, { SWORN_TMP: tmp })
-  });
+  return comum.ganchoComoProcesso(path.join('scripts', 'marcar-trabalho.js'),
+    Object.assign({ session_id: 's1', cwd: dir, hook_event_name: 'PostToolUse',
+      tool_name: 'Skill', tool_input: { skill: skill } }, extra || {}),
+    { env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
 }
 
 function projetoAaa(extra) {

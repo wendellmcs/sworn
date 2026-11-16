@@ -6,16 +6,36 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const comum = require('./lib/comum.js');
+
 const RAIZ = path.join(__dirname, '..');
 
-/** D120: o apurador e CLI, nao hook. Ele descobre a sessao por --sessao ou pelo ambiente. */
-function rodar(args, cwd, tmp, extraEnv) {
+const APURADOR = path.join(RAIZ, 'scripts', 'apurar-ronda.js');
+
+/** O ambiente do apurador no teste: o do processo, com SWORN_TMP; a sessao so a que o teste der em `extraEnv`. */
+function ambienteDoApurador(tmp, extraEnv) {
   const env = Object.assign({}, process.env, { SWORN_TMP: tmp }, extraEnv || {});
-  delete env.CLAUDE_CODE_SESSION_ID;
-  if (extraEnv && extraEnv.CLAUDE_CODE_SESSION_ID) env.CLAUDE_CODE_SESSION_ID = extraEnv.CLAUDE_CODE_SESSION_ID;
-  const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'apurar-ronda.js')].concat(args || []), {
-    cwd: cwd, encoding: 'utf8', env: env
-  });
+  if (!(extraEnv && extraEnv.CLAUDE_CODE_SESSION_ID)) delete env.CLAUDE_CODE_SESSION_ID;
+  return env;
+}
+
+/** O apurador num processo de verdade. */
+function apuradorPorProcesso(args, cwd, env) {
+  return spawnSync(process.execPath, [APURADOR].concat(args || []), { cwd: cwd, encoding: 'utf8', env: env });
+}
+
+/**
+ * D120: o apurador e CLI, nao hook. Ele descobre a sessao por --sessao ou pelo ambiente. F1g: roda no proprio processo
+ * de teste (comum.scriptComoProcesso, o mesmo status e stdout do processo); o teste "F1g: o apurador em processo sai
+ * igual ao processo de verdade" confere os dois caminhos. A excecao: com NODE_OPTIONS em `extraEnv` (o --require que
+ * simula o disco ou o fs), o apurador vai por processo, onde o --require carrega; o teste que precisa de processo novo
+ * por outro motivo chama o `apuradorPorProcesso`.
+ */
+function rodar(args, cwd, tmp, extraEnv) {
+  const env = ambienteDoApurador(tmp, extraEnv);
+  const r = extraEnv && extraEnv.NODE_OPTIONS
+    ? apuradorPorProcesso(args, cwd, env)
+    : comum.scriptComoProcesso(APURADOR, args || [], { cwd: cwd, env: env });
   let json = null;
   if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
   return { status: r.status, stdout: r.stdout, json: json };
@@ -45,7 +65,7 @@ function gravarMapa(cwd, n, mapa) {
 // duas secas, e nao pelo teto. Fixture sintetica: os vereditos reais citam o produto.
 test('D244/defeito 3: pelo CLI, P1 so do lado antigo fecha por duas rondas secas', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-lado-'));
+    const cwd = comum.temporaria('sworn-apurar-lado-');
     const vd = (arq, linha) => ({ lente: 'design', melhor: 'A',
       achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: arq, linha: linha, descricao: 'valor cru' }] });
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
@@ -64,7 +84,7 @@ test('D244/defeito 3: pelo CLI, P1 so do lado antigo fecha por duas rondas secas
 // do lado novo foi reescrita entre as rondas, e a mesma lente cita P1 nela de novo: evidencia nova, molha.
 test('D475: pelo CLI, P1 na mesma linha do lado novo com texto reescrito entre rondas molha a ronda', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-reescrita-'));
+    const cwd = comum.temporaria('sworn-apurar-reescrita-');
     const vd = (arq) => ({ lente: 'microcopy', melhor: 'A',
       achados: [{ estado: 'confirmado', trecho: 'dois', severidade: 'P1', arquivo: arq, linha: 3, descricao: 'frase ambigua' }] });
     const texto = (n, rotulo, linha3) => fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', String(n),
@@ -88,7 +108,7 @@ test('D475: pelo CLI, P1 na mesma linha do lado novo com texto reescrito entre r
 // falta". O resto do script so trata ENOENT como ausencia; os outros erros param com a causa (0.3.3, item 1).
 test('D475: pelo CLI, A.txt da ronda que existe e nao se le para com a causa; o que falta segue a conta de antes', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-ilegivel-'));
+    const cwd = comum.temporaria('sworn-apurar-ilegivel-');
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [{ lente: 'microcopy', melhor: 'B',
       achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P2', tipo: 'erro', arquivo: 'A.txt', linha: 1, descricao: 'x' }] }]);
@@ -104,7 +124,7 @@ test('D475: pelo CLI, A.txt da ronda que existe e nao se le para com a causa; o 
 
 test('D244/defeito 3: pelo CLI, refutados.json sem prova para com erro', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-ref-'));
+    const cwd = comum.temporaria('sworn-apurar-ref-');
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     gravarRonda(cwd, 1, [{ lente: 'design', melhor: 'A',
       achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: 3, descricao: 'x' }] }]);
@@ -1767,7 +1787,7 @@ test('D503 T5: revisao sem referencia que fecha nao conta revisao_referencia_fec
 // acima ou abaixo, espacos normalizados); o que nao confere nao conta e entra nos descartados. O pendente sai a parte.
 test('lote 3/4a: pelo CLI, o trecho e conferido no A.txt da ronda e o pendente sai em pendentes', () => {
   comTmp((tmp) => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-apurar-trecho-'));
+    const cwd = comum.temporaria('sworn-apurar-trecho-');
     gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
     const linhas = ['a', 'b', 'c', 'd', '  const   x = ler(arq);', 'f', 'g', 'h', 'i', 'j'];
     fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'A.txt'), linhas.join('\r\n'), 'utf8');
@@ -1788,8 +1808,6 @@ test('lote 3/4a: pelo CLI, o trecho e conferido no A.txt da ronda e o pendente s
 });
 
 // ---------------------------------------------------------------- F2a (D828.2/.3/.5): registros, a mudanca e o teto
-
-const comum = require('./lib/comum.js');
 
 /** Grava o texto de um lado da ronda n (revisao/<n>/<rotulo>.txt), uma linha por item. */
 function gravarLado(cwd, n, rotulo, linhas) {
@@ -2071,5 +2089,49 @@ test('F2d: pelo CLI, na faixa completa a ronda 1 confere as lentes do mapa.json,
     assert.match(r.stdout, /sem o voto da\(s\) lente\(s\) borda:/);
     assert.doesNotMatch(r.stdout, /o minimo e 8/);
     assert.strictEqual(aprovadosDe(tmp, 'lst2'), undefined);
+  });
+});
+
+// F1g: o rodar acima chama o apurador no proprio processo de teste. Aqui o processo de verdade, no cenario aprovado
+// (duas secas) e no que para com erro (veredito ilegivel), sai com o mesmo status e o mesmo stdout. A excecao que
+// escapa do script (status 1, pilha no stderr) o test/comum.test.js confere no scriptComoProcesso.
+test('F1g: o apurador em processo sai igual ao processo de verdade, no aprovado e no erro', () => {
+  comTmp((tmp) => {
+    const cenarios = [
+      ['aprovado por duas secas', 0, function (cwd) {
+        const vd = { lente: 'design', melhor: 'A', achados: [] };
+        gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' }); gravarRonda(cwd, 1, [vd]);
+        gravarMapa(cwd, 2, { A: 'HEAD', B: 'trabalho' }); gravarRonda(cwd, 2, [vd]);
+      }],
+      ['veredito ilegivel', 1, function (cwd) {
+        gravarMapa(cwd, 1, { A: 'trabalho', B: 'HEAD' });
+        const dir = path.join(cwd, '.claude', 'sworn', 'revisao', '1', 'vereditos');
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, 'design.json'), '{ quebrado', 'utf8');
+      }],
+    ];
+    // cada caminho no seu disco, montado igual (a apuracao grava o fecho e o estado da sessao), dentro do tmp que o
+    // comTmp apaga; o stdout sai com as pastas trocadas por marcas, na forma crua e na de dentro de um JSON
+    const disco = function (montar, lado) {
+      const base = path.join(tmp, lado);
+      const cwd = path.join(base, 'projeto');
+      const t = path.join(base, 'tmp');
+      fs.mkdirSync(cwd, { recursive: true });
+      fs.mkdirSync(t);
+      montar(cwd);
+      const trocar = function (s, de, marca) { return s.split(de).join(marca).split(JSON.stringify(de).slice(1, -1)).join(marca); };
+      return { cwd: cwd, tmp: t, limpo: function (s) { return trocar(trocar(s, cwd, '<cwd>'), t, '<tmp>'); } };
+    };
+    cenarios.forEach(function (c, i) {
+      const a = disco(c[2], 'em-processo-' + i);
+      const emProcesso = rodar(['--sessao', 'paridade'], a.cwd, a.tmp);
+      const b = disco(c[2], 'processo-' + i);
+      const p = apuradorPorProcesso(['--sessao', 'paridade'], b.cwd, ambienteDoApurador(b.tmp));
+      const lados = '\nem processo (status ' + emProcesso.status + '):\n' + emProcesso.stdout +
+        '\nprocesso de verdade (status ' + p.status + '):\n' + p.stdout;
+      assert.strictEqual(p.status, c[1], c[0] + ': o processo de verdade sai com ' + c[1] + lados);
+      assert.strictEqual(emProcesso.status, p.status, c[0] + ': o mesmo status nos dois caminhos' + lados);
+      assert.strictEqual(a.limpo(emProcesso.stdout), b.limpo(p.stdout), c[0] + ': o mesmo stdout nos dois caminhos' + lados);
+    });
   });
 });

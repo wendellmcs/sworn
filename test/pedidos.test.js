@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const pedidos = require('../scripts/lib/pedidos.js');
 const retomar = require('../scripts/lib/retomar.js');
@@ -390,7 +391,9 @@ test('R3a (D833): o arquivo ao lado nunca e sobrescrito, e a lista que nao se le
 
 test('R3c (D833): o script pedidos.js lista os abertos e marca, com saida em JSON e codigo de saida', () => {
   const t = pasta(true);
-  const rodar = (args) => spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'pedidos.js')].concat(args), { cwd: t.dir, encoding: 'utf8' });
+  // F1g (s372): no processo do teste (comum.scriptComoProcesso), com o ambiente do teste, como o spawnSync herdava
+  const rodar = (args) => comum.scriptComoProcesso(path.join(RAIZ, 'scripts', 'pedidos.js'), args,
+    { cwd: t.dir, env: Object.assign({}, process.env) });
   try {
     const vazio = rodar(['--marcar', '1', 'feito', 'x', '--frente', 'f']);
     assert.strictEqual(vazio.status, 2);

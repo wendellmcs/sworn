@@ -151,6 +151,35 @@ test('F3a: portao-shell.js da o mesmo que os tres portoes sozinhos, e cada um de
   assert.match(motivoDe(destrutivoEEstilo), /^sworn - comando destrutivo barrado \(trava 5\)/);
 });
 
+// Pendencia #6 (0.38.0): o escape do comandosLiberados decidia dentro de um try; no portao-shell.js o io.permitir lanca
+// a PARADA, o catch a engolia e o portao-destrutivo seguia ate o fim: a decisao saia certa (a 1a vale), mas a marca do
+// aviso do cd solto e o balde do destrutivo eram gravados para um comando que o dono liberou.
+test('pendencia #6: no portao-shell.js o comando liberado para o portao, sem marcar o aviso do cd nem encher balde', () => {
+  const dir = pasta('portao-shell-liberado');
+  const tmp = pasta('portao-shell-liberado-tmp');
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({
+    plataforma: { so: 'linux', shell: 'bash' }, comandosLiberados: ['^cd sub && git status$', '^rm -rf \\./build$'] }));
+  const shell = (comando) => {
+    const r = rodar('scripts/portao-shell.js', [], { cwd: dir, env: { SWORN_TMP: tmp },
+      entrada: { session_id: 'p6', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: comando } } });
+    assert.strictEqual(r.status, 0, r.stderr);
+    return r.stdout.trim() ? JSON.parse(r.stdout) : null;
+  };
+  const sessao = () => {
+    const f = path.join(tmp, 'sworn', 'p6.json');
+    return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null;
+  };
+  assert.strictEqual(shell('cd sub && git status'), null, 'o escape declarado libera calado');
+  assert.strictEqual(shell('rm -rf ./build'), null, 'o escape declarado libera calado');
+  assert.strictEqual(sessao(), null, 'o comando liberado nao grava nada na sessao: ' + JSON.stringify(sessao()));
+  // o efeito que o dono ve: o 1o cd solto de verdade da sessao ainda traz o aviso inteiro
+  const corrigido = shell('cd outra && git status');
+  assert.ok(corrigido && corrigido.hookSpecificOutput, 'o cd solto nao liberado tinha de sair corrigido: ' + JSON.stringify(corrigido));
+  assert.match(corrigido.hookSpecificOutput.updatedInput.command, /^\( cd outra && git status/);
+  assert.match(corrigido.hookSpecificOutput.additionalContext || '', /cd solto/i, JSON.stringify(corrigido));
+});
+
 test('F3a: depois-do-shell.js da o mesmo que o marcar-trabalho e o conferir-depois sozinhos, e os dois rodam', () => {
   const dir = repo(pasta('depois-shell'), { 'src/b.js': 'b\n', 'fora.txt': 'f\n' });
   const tmp = pasta('depois-shell-tmp');

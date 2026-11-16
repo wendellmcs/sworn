@@ -11,6 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const gitLib = require('./git.js');
+const { apagarPasta } = require('./caminho.js'); // pendencia #10: o rmSync deixava a pasta com acento
 
 const TIPOS = ['estudo', 'worktree', 'export', 'carga'];
 const ARQUIVO = 'pastas.json';
@@ -189,7 +190,7 @@ function apagar(reg) {
       const r = gitLib.rodar(null, ['-C', reg.repo, 'worktree', 'remove', reg.caminho], { timeout: PRAZO_GIT_MS });
       if (r.status !== 0) return 'o git nao tirou o worktree: ' + String(r.stderr || (r.error && r.error.message) || '').trim();
     } else {
-      fs.rmSync(reg.caminho, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      apagarPasta(reg.caminho, { maxRetries: 3, retryDelay: 100 });
     }
     return fs.existsSync(reg.caminho) ? 'a pasta continua no disco' : null;
   } catch (e) { return causa(e); }
@@ -367,7 +368,7 @@ const RAMO = /^[A-Za-z0-9._/-]+$/;
 
 /** Apaga a pasta do clone que falhou e tira o registro dela (a pasta acabou de nascer, e e do sworn). */
 function desfazer(registro, env) {
-  try { fs.rmSync(registro.caminho, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch (e) { /* fica para a limpeza */ }
+  try { apagarPasta(registro.caminho, { maxRetries: 3, retryDelay: 100 }); } catch (e) { /* fica para a limpeza */ }
   if (fs.existsSync(registro.caminho)) return;
   try {
     comRegistro(env, function (lista) {
@@ -399,7 +400,7 @@ function clonar(url, opcoes, env) {
   }
   const reg = registrar(pasta, 'estudo', { sessao: o.sessao }, env);
   if (!reg.ok) {
-    try { fs.rmSync(pasta, { recursive: true, force: true }); } catch (e) { /* vazia */ }
+    try { apagarPasta(pasta); } catch (e) { /* vazia */ }
     return reg;
   }
   const args = ['-c', 'protocol.allow=never', '-c', (local ? 'protocol.file.allow' : 'protocol.https.allow') + '=always',

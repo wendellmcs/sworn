@@ -64,6 +64,8 @@ io.blindar(function () {
       function (rel) { return design.ehArquivoDeEstilo(rel, projeto); },
       require('./lib/atalhos.js').marcas(projeto), s.revisadosNoTeto);
     if (!lista.length) return io.permitir();
+    // D844: o git que nao respondeu no prazo nega com o motivo dele; nao e commit sem revisao nem ordem de revisar.
+    if (lista.some(function (p) { return p.semResposta === true; })) return io.negarFerramenta(commit.motivoSemResposta(lista));
     try { estado.incrementar(e.session_id, 'commit_sem_revisao'); } catch (err) { /* nega do mesmo jeito */ }
     // F2a (D828.3): com todos os pendentes fechados no teto, o motivo manda o commit com a marca, e nao ha ordem de
     // revisar a cumprir; com um sem revisao que seja, a ordem conta como sempre.

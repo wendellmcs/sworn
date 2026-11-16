@@ -3,8 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
+const comum = require('./lib/comum.js');
 const zlib = require('node:zlib');
 const transcricoes = require('../scripts/lib/transcricoes.js');
 const saude = require('../scripts/lib/saude.js');
@@ -16,7 +16,7 @@ const PASTA = path.join(__dirname, 'fixtures', 'harness', 'transcricoes');
 const PROVA = 'node --test';
 
 function temp(nome) {
-  return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-transcricoes-')), nome);
+  return path.join(comum.temporaria('sworn-transcricoes-'), nome);
 }
 
 function linhas(nome) {

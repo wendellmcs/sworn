@@ -7,7 +7,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const RAIZ = path.join(__dirname, '..');
 const DIA = 24 * 60 * 60 * 1000;
@@ -289,13 +289,10 @@ test('limpar continua existindo e apagando o arquivo da sessao pedida (o estado.
 
 // ------------------------------------------------------------------ o script e a fiacao
 
+// F1g (s372): no processo do teste (comum.ganchoComoProcesso); a entrada bruta, em texto, segue por processo
 function rodarFim(dir, entrada, bruto) {
-  return spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'fim-sessao.js')], {
-    cwd: dir,
-    encoding: 'utf8',
-    input: bruto !== undefined ? bruto : JSON.stringify(entrada),
-    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
-  });
+  return comum.ganchoComoProcesso(path.join('scripts', 'fim-sessao.js'), bruto !== undefined ? bruto : entrada,
+    { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') }) });
 }
 
 test('fim-sessao.js: roda com a entrada do SessionEnd, sai 0 calado, apaga o velho de outra sessao e poupa o da atual', () => {
@@ -346,10 +343,8 @@ test('fim-sessao.js: pasta de estado impossivel (SWORN_TMP dentro de um arquivo)
   try {
     const arquivo = path.join(dir, 'e-um-arquivo');
     fs.writeFileSync(arquivo, 'x', 'utf8');
-    const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'fim-sessao.js')], {
-      cwd: dir, encoding: 'utf8', input: JSON.stringify({ session_id: 's', cwd: dir }),
-      env: Object.assign({}, process.env, { SWORN_TMP: path.join(arquivo, 'dentro') })
-    });
+    const r = comum.ganchoComoProcesso(path.join('scripts', 'fim-sessao.js'), { session_id: 's', cwd: dir },
+      { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: path.join(arquivo, 'dentro') }) });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(r.stderr, '', 'nao pode nem reclamar: ' + r.stderr);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

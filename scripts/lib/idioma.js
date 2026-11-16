@@ -69,9 +69,18 @@ function ultimaResposta(caminho) {
   return null;
 }
 
+// pendencia #4: depois da compactacao, o Claude Code manda o resumo (em ingles, escrito por ele) como a mensagem do
+// turno; nao e o dono escrevendo, e o aviso dizia "o dono escreve em ingles" com o dono em portugues
+const RESUMO_DA_COMPACTACAO = /^\s*This session is being continued from a previous conversation that ran out of context/;
+// pendencia #5: o relatorio de subagente (e o aviso de tarefa em segundo plano) chega como a mensagem do turno, com o
+// prompt comecando pela marca do Claude Code; e texto de modelo, em ingles, e nao o dono escrevendo
+const DE_OUTRO_AGENTE = /^\s*<(?:agent-message from=|task-notification>)/;
+
 /** A linha ao modelo quando o dono escreve num idioma e a ultima resposta saiu em outro; senao null. Em ASCII, como
  *  todo texto de gancho que chega ao modelo (regra R5 do projeto). */
 function aviso(prompt, caminho) {
+  const texto = String(prompt || '');
+  if (RESUMO_DA_COMPACTACAO.test(texto) || DE_OUTRO_AGENTE.test(texto)) return null;
   const dono = detectar(prompt);
   if (!dono) return null;
   const resposta = detectar(ultimaResposta(caminho));

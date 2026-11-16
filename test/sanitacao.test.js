@@ -4,7 +4,8 @@ const assert = require('node:assert');
 const path = require('node:path');
 const sanit = require('../scripts/lib/sanitacao.js');
 // R3f: os repositorios temporarios assinam com um autor de ensaio, nao com a identidade global da maquina
-require('./lib/comum.js').identidadeDeEnsaio();
+const comum = require('./lib/comum.js');
+comum.identidadeDeEnsaio();
 
 const RAIZ = path.join(__dirname, '..');
 const LOCAIS = sanit.classes(RAIZ);
@@ -99,8 +100,7 @@ test('sanitacao: todo achado cita arquivo e linha - regra anti-teatro', () => {
 // D597 (revisao completa, A10-01): ID de sessao do Claude Code e dado do dono quando a sessao e desta maquina.
 test('sanitacao: sessoesLocais le os IDs das transcricoes em <projects>/<projeto>/<id>.jsonl', () => {
   const fs = require('node:fs');
-  const os = require('node:os');
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sessoes-'));
+  const home = comum.temporaria('sworn sessoes-');
   try {
     const id = '0f0f0f0f-' + '1111-4222-8333-444444444444';
     const projetos = path.join(home, '.claude', 'projects');
@@ -129,8 +129,7 @@ function comConfig(dir, fn) {
 
 test('sanitacao: sessoesLocais separa a pasta que nao existe da que nao abre', () => {
   const fs = require('node:fs');
-  const os = require('node:os');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sessoes-ruim-'));
+  const dir = comum.temporaria('sworn sessoes-ruim-');
   try {
     const arquivo = path.join(dir, 'projects');
     fs.writeFileSync(arquivo, 'nao sou pasta');
@@ -144,8 +143,7 @@ test('sanitacao: sessoesLocais separa a pasta que nao existe da que nao abre', (
 
 test('sanitacao: a classe sessao_local le as transcricoes de CLAUDE_CONFIG_DIR, como o resto do plugin', () => {
   const fs = require('node:fs');
-  const os = require('node:os');
-  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn cfg-'));
+  const cfg = comum.temporaria('sworn cfg-');
   try {
     const id = '0e0e0e0e-' + '1111-4222-8333-555555555555';
     fs.mkdirSync(path.join(cfg, 'projects', 'proj'), { recursive: true });
@@ -158,8 +156,7 @@ test('sanitacao: a classe sessao_local le as transcricoes de CLAUDE_CONFIG_DIR, 
 
 test('sanitacao: pasta de transcricoes que nao abre reprova o autoteste e tira o limpo do auditar', () => {
   const fs = require('node:fs');
-  const os = require('node:os');
-  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn cfg-ruim-'));
+  const cfg = comum.temporaria('sworn cfg-ruim-');
   const dir = repo();
   try {
     fs.writeFileSync(path.join(cfg, 'projects'), 'nao sou pasta');
@@ -270,16 +267,28 @@ test('superficie 2 e 3: o detector das duas ainda se prova, mesmo aqui', () => {
 // O portao das TRES superficies, e o comando que faltava. Ate aqui o modulo
 // tinha mais de trezentas linhas e NADA o executava inteiro: so o autoteste e a
 // superficie 1 eram chamados. Lib sem comando e codigo que ninguem roda.
-const os = require('node:os');
 const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
 const SCRIPT = path.join(RAIZ, 'scripts', 'sanitar.js');
 
+// F1g (8a fatia): o .git de ensaio pelo comum.repo (copiado, com a config no arquivo e sem a manutencao automatica do
+// commit) no lugar do `git init`; o commit segue com a identidade de cada teste, por -c. A config do comum.repo assina
+// ensaio@ensaio, que a superficie 2 acusa como identidade do proximo commit: troca pelo e-mail da identidadeDeEnsaio
+// no proprio arquivo, com um valor so na chave (o `git config user.email X` de um teste abaixo recusa chave com dois).
+function gitDeEnsaio(dir) {
+  comum.repo(dir);
+  const config = path.join(dir, '.git', 'config');
+  const antes = fs.readFileSync(config, 'utf8');
+  const depois = antes.replace('email = ensaio' + '@ensaio\n', 'email = ensaio' + '@exemplo.com\n');
+  assert.notStrictEqual(depois, antes, 'o comum.repo mudou a forma do e-mail de ensaio no .git/config: ' + antes);
+  fs.writeFileSync(config, depois);
+}
+
 function repo(comLeitura) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sanitar-'));
+  const dir = comum.temporaria('sworn sanitar-');
   const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-  g(['init', '-q']);
+  gitDeEnsaio(dir);
   fs.writeFileSync(path.join(dir, 'a.txt'), comLeitura || 'nada aqui\n', 'utf8');
   g(['add', '-A']);
   spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t' + '@exemplo.com',
@@ -288,9 +297,9 @@ function repo(comLeitura) {
 }
 
 function repoComMensagemSuja() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn msg-'));
+  const dir = comum.temporaria('sworn msg-');
   const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-  g(['init', '-q']);
+  gitDeEnsaio(dir);
   fs.writeFileSync(path.join(dir, 'a.txt'), 'nada aqui\n', 'utf8');
   g(['add', '-A']);
   // Suja nas DUAS superficies do historico - o e-mail do autor e a mensagem -
@@ -302,9 +311,21 @@ function repoComMensagemSuja() {
 }
 
 function sanitar(raiz, extra) {
-  return spawnSync(process.execPath, [SCRIPT, '--raiz', raiz].concat(extra || []),
-    { encoding: 'utf8', timeout: 60000 });
+  // F1g (8a fatia): no proprio processo de teste, com o ambiente isolado (comum.scriptComoProcesso)
+  return comum.scriptComoProcesso(SCRIPT, ['--raiz', raiz].concat(extra || []));
 }
+
+test('F1g: o sanitar deste arquivo roda no processo do teste, num repositorio limpo de ensaio', () => {
+  const dir = repo();
+  try {
+    const r = sanitar(dir);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    // o spawnSync traz o pid do processo filho; o scriptComoProcesso nao abre processo
+    assert.strictEqual(r.pid, undefined, 'o sanitar tinha de rodar no processo do teste');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 // ── a correcao que a D133 §7 ja tinha pago, e o codigo nao absorveu ──────
 
@@ -405,7 +426,7 @@ test('sanitar: a raiz sai COMO FOI PEDIDA, nunca resolvida', () => {
 });
 
 test('sanitar: sem git NAO devolve 0 - devolve 2, e diz que nao mediu', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sem git-'));
+  const dir = comum.temporaria('sworn sem git-');
   const r = sanitar(dir);
   assert.strictEqual(r.status, 2, 'dizer "limpo" sobre o que nao leu e o silencio que isto quebra');
   assert.ok(/NAO DEU PARA MEDIR/.test(r.stderr), r.stderr);
@@ -514,7 +535,7 @@ test('sanitacao: o teste acima SABE reconhecer excecao que carrega peso', () => 
  * depois do ato irreversivel.
  */
 test('sanitar: repositorio SEM commit nenhum e medivel - 0 nao e o mesmo que nao sei', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn sem commit-'));
+  const dir = comum.temporaria('sworn sem commit-');
   spawnSync('git', ['init', '-q'], { cwd: dir, encoding: 'utf8', shell: false });
   fs.writeFileSync(path.join(dir, 'a.txt'), 'nada aqui\n', 'utf8');
   spawnSync('git', ['add', '-A'], { cwd: dir, encoding: 'utf8', shell: false });
@@ -532,7 +553,7 @@ test('sanitar: repositorio SEM commit nenhum e medivel - 0 nao e o mesmo que nao
 
 /** Controle: pasta que NAO e repositorio continua sendo 'nao sei', nao 'limpo'. */
 test('sanitar: pasta que nao e repositorio segue sendo NAO SEI, nao vazio', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn nao repo-'));
+  const dir = comum.temporaria('sworn nao repo-');
   assert.strictEqual(sanit.semCommits(dir), false,
     'sem isto, qualquer pasta do disco passaria por repositorio limpo');
   assert.strictEqual(sanit.autoresDoHistorico(dir), null);
@@ -694,7 +715,7 @@ test('IN-01: sanitar com arquivo que nao abre devolve 2, nunca LIMPO', (t) => {
 // ── IN-02: UTF-16 (o que o PowerShell 5.1 grava com `>`) tambem e lido ───
 
 test('IN-02: arquivo UTF-16 com BOM e acusado como o UTF-8', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn utf16-'));
+  const dir = comum.temporaria('sworn utf16-');
   const corpo = 'veja ' + CAMINHO_PESSOAL + '\r\n';
   const le = Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from(corpo, 'utf16le')]);
   const be = Buffer.concat([Buffer.from([0xFE, 0xFF]), Buffer.from(corpo, 'utf16le').swap16()]);
@@ -710,7 +731,7 @@ test('IN-02: arquivo UTF-16 com BOM e acusado como o UTF-8', () => {
 // ── IN-03: flag sem `g` num termo local travava o processo ───────────────
 
 test('IN-03: termo local com flags "i" (sem g) nao pendura a varredura', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn flags-'));
+  const dir = comum.temporaria('sworn flags-');
   lerVocabulario(dir, { termos: [Object.assign({}, TERMO_SINTETICO, { flags: 'i' })] });
   const codigo = 'const s = require(' + JSON.stringify(path.join(RAIZ, 'scripts', 'lib', 'sanitacao.js')) + ');' +
     'const c = s.classes(' + JSON.stringify(dir) + ');' +
@@ -724,14 +745,14 @@ test('IN-03: termo local com flags "i" (sem g) nao pendura a varredura', () => {
 // ── IN-04: vocabulario privado nao some calado ───────────────────────────
 
 test('IN-04: vocabulario local gravado com BOM e lido', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn bom-'));
+  const dir = comum.temporaria('sworn bom-');
   lerVocabulario(dir, { termos: [TERMO_SINTETICO] }, true);
   assert.strictEqual(sanit.termosLocais(dir).length, 1, 'o BOM do PowerShell zerava o vocabulario');
   assert.strictEqual(sanit.lerVocabularioLocal(dir).estado, 'ok');
 });
 
 test('IN-04: ausente, presente e valido, presente e invalido sao tres estados', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn vocab-'));
+  const dir = comum.temporaria('sworn vocab-');
   assert.strictEqual(sanit.lerVocabularioLocal(dir).estado, 'ausente');
   lerVocabulario(dir, { termos: [TERMO_SINTETICO] });
   assert.strictEqual(sanit.lerVocabularioLocal(dir).estado, 'ok');
@@ -835,7 +856,7 @@ test('L1-11: a ancora nao muda o que casa - e-mail no meio, colado e apos falha 
 // ── L1-12: saida grande do git nao pode virar "git mudo" ─────────────────
 
 test('L1-12: indice grande (saida do git > 1 MiB) nao vira null', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn grande-'));
+  const dir = comum.temporaria('sworn grande-');
   const git = (args, entrada) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false, input: entrada });
   git(['init', '-q']);
   const blob = git(['hash-object', '-w', '--stdin'], '').stdout.trim();
@@ -876,7 +897,7 @@ test('L1-14: a caixa solta nao cria falso positivo - rota /users/ e /home de doc
 // ── L1-16: excecaoEm e padrao vazio do vocabulario local ─────────────────
 
 test('L1-16: excecaoEm que nao e lista e rejeitado com mensagem, nao lanca em varrerTexto', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn exc-'));
+  const dir = comum.temporaria('sworn exc-');
   lerVocabulario(dir, { termos: [Object.assign({}, TERMO_SINTETICO, { excecaoEm: 'docs/nota.md' })] });
   const v = sanit.lerVocabularioLocal(dir);
   assert.strictEqual(v.termos.length, 0);
@@ -886,7 +907,7 @@ test('L1-16: excecaoEm que nao e lista e rejeitado com mensagem, nao lanca em va
 });
 
 test('L1-16: excecaoEm com item que nao e texto tambem e rejeitado; lista valida segue valendo', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn exc2-'));
+  const dir = comum.temporaria('sworn exc2-');
   lerVocabulario(dir, { termos: [
     Object.assign({}, TERMO_SINTETICO, { chave: 'ruim', excecaoEm: ['ok.md', 7] }),
     Object.assign({}, TERMO_SINTETICO, { chave: 'boa', excecaoEm: ['ok.md'] })
@@ -897,7 +918,7 @@ test('L1-16: excecaoEm com item que nao e texto tambem e rejeitado; lista valida
 });
 
 test('L1-16: padrao que casa vazio e rejeitado, nao acusa toda linha', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn vazio-'));
+  const dir = comum.temporaria('sworn vazio-');
   lerVocabulario(dir, { termos: [Object.assign({}, TERMO_SINTETICO, { chave: 'casa_vazio', padrao: 'x*' })] });
   const v = sanit.lerVocabularioLocal(dir);
   assert.strictEqual(v.termos.length, 0, 'o padrao x* entrou e casa em toda linha');
@@ -919,7 +940,7 @@ test('L1-16: sanitar com excecaoEm invalido devolve 2, nunca LIMPO nem excecao n
 // travar o sanitizador com saida 2. O que antes ia a `ilegiveis` (L1-17) agora vai
 // a `naoConferidos`; `ilegiveis` fica so para o que nao abriu.
 test('L1-17/D429-2: UTF-16 sem BOM e UTF-32 (NUL) vao a naoConferidos com motivo, nao a ilegiveis', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn nul-'));
+  const dir = comum.temporaria('sworn nul-');
   const corpo = 'veja ' + CAMINHO_PESSOAL + '\r\n';
   fs.writeFileSync(path.join(dir, 'semBom.txt'), Buffer.from(corpo, 'utf16le'));
   const u32 = Buffer.alloc(corpo.length * 4);
@@ -936,7 +957,7 @@ test('L1-17/D429-2: UTF-16 sem BOM e UTF-32 (NUL) vao a naoConferidos com motivo
 });
 
 test('L1-17: UTF-16 com BOM (o que o PowerShell grava) segue lido e nao e declarado ilegivel', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn nul2-'));
+  const dir = comum.temporaria('sworn nul2-');
   fs.writeFileSync(path.join(dir, 'le.txt'),
     Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from('veja ' + CAMINHO_PESSOAL + '\r\n', 'utf16le')]));
   const ilegiveis = [];
@@ -959,7 +980,7 @@ test('L1-17/D429-2: sanitar com UTF-16 sem BOM da LIMPO com o aviso "nao conferi
 // ── D429/2: binario pula com aviso ───────────────────────────────────────
 
 test('D429/2: binario com NUL nao esta em ilegiveis, esta em naoConferidos com o motivo', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn bin-'));
+  const dir = comum.temporaria('sworn bin-');
   fs.writeFileSync(path.join(dir, 'img.bin'), Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x00, 0x00, 0x1A, 0x0A]));
   const ilegiveis = [];
   const naoConferidos = [];
@@ -971,7 +992,7 @@ test('D429/2: binario com NUL nao esta em ilegiveis, esta em naoConferidos com o
 });
 
 test('D429/2: erro de leitura continua em ilegiveis, nao em naoConferidos', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn bin2-'));
+  const dir = comum.temporaria('sworn bin2-');
   const ilegiveis = [];
   const naoConferidos = [];
   sanit.varrerArquivos(dir, ['quebrado\0.txt'], sanit.CLASSES_GENERICAS, ilegiveis, naoConferidos);

@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const cegar = require('../scripts/lib/cegar.js');
+const comum = require('./lib/comum.js');
 
 // D824: o preparar le a frente da sessao (CLAUDE_CODE_SESSION_ID). Todo filho deste arquivo herda o ambiente, entao
 // ele sai daqui: nenhum teste le o estado real de quem roda a suite; o que precisa de sessao a declara no env.
@@ -65,29 +66,22 @@ test('cegar: proximaRonda comeca em 1 e incrementa', () => {
 const RAIZ = path.join(__dirname, '..');
 const CLI = path.join(RAIZ, 'scripts', 'preparar-revisao.js');
 
-function repoDeEnsaio() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-prep-'));
-  const g = function (args) {
-    return spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
-  };
-  g(['init', '-q', '.']);
-  g(['config', 'user.email', 'ensaio@ensaio']);
-  g(['config', 'user.name', 'ensaio']);
-  fs.mkdirSync(path.join(dir, 'sub'));
-  fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz em HEAD\n', 'utf8');
-  fs.writeFileSync(path.join(dir, 'sub', 'aninhado.txt'), 'aninhado em HEAD\n', 'utf8');
-  g(['add', '-A']);
-  g(['commit', '-qm', 'base']);
+// O mesmo repositorio em todo teste: montado uma vez por processo e copiado (comum.doMolde, F1g).
+function montarRepoDeEnsaio(dir) {
+  comum.repo(dir, { 'raiz.txt': 'raiz em HEAD\n', 'sub/aninhado.txt': 'aninhado em HEAD\n' });
   fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz no trabalho\n', 'utf8');
   fs.writeFileSync(path.join(dir, 'sub', 'aninhado.txt'), 'aninhado no trabalho\n', 'utf8');
-  return dir;
+}
+function repoDeEnsaio() {
+  return comum.doMolde('prep', montarRepoDeEnsaio);
 }
 
-// `env` (opcional): o ambiente do processo, para o teste que liga a sessao numa frente (D824)
+// `env` (opcional): o ambiente do processo, para o teste que liga a sessao numa frente (D824); sem ele, o do processo
+// de teste, como o spawn herdaria. F1g: no proprio processo de teste (comum.scriptComoProcesso, o mesmo status e
+// stdout); o teste "F1g: o CLI em processo sai igual" confere contra o processo de verdade.
 function rodarCli(cwd, rel, env) {
-  return spawnSync(process.execPath, [CLI, '--arquivo', rel, '--semente', 'fixa'], {
-    cwd: cwd, encoding: 'utf8', shell: false, env: env
-  });
+  return comum.scriptComoProcesso(CLI, ['--arquivo', rel, '--semente', 'fixa'],
+    { cwd: cwd, env: env || Object.assign({}, process.env) });
 }
 
 test('preparar-revisao: de SUBPASTA, arquivo que esta em HEAD nao pode ser negado (R-T12-01)', () => {
@@ -636,6 +630,263 @@ test('0.3.3/item 2: base sem fechada.json (revisao em andamento) segue como ante
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// Pendencia #8 (0.47.0): o git do teste, com a saida de erro na mensagem; `env` opcional (o do processo sem ele).
+function gitOk(dir, args, env) {
+  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false, env: env || process.env });
+  assert.strictEqual(r.status, 0, 'git ' + args.join(' ') + ': ' + r.stderr);
+}
+// Commit dos `arquivos` com a data de commit `data` (no formato do git, '@<segundos> +0000'). Sem ela, 1 hora no
+// futuro: cai depois da ultima gravacao da base sem depender do relogio no mesmo segundo.
+function commitDatado(dir, arquivos, data) {
+  const env = Object.assign({}, process.env,
+    { GIT_COMMITTER_DATE: data || '@' + (Math.floor(Date.now() / 1000) + 3600) + ' +0000' });
+  gitOk(dir, ['add', '--'].concat(arquivos), env);
+  gitOk(dir, ['commit', '-qm', 'commit datado'], env);
+}
+// A ultima gravacao dentro da base, em ms: copia da conta do ultimaGravacao do preparar-revisao.js (so arquivos, por
+// lstat), que e um CLI e nao a exporta. Os testes do mesmo segundo dependem de as duas contarem igual.
+function ultimaDaBase(pasta) {
+  let maior = 0;
+  (function andar(p) {
+    fs.readdirSync(p, { withFileTypes: true }).forEach(function (e) {
+      const c = path.join(p, e.name);
+      if (e.isDirectory()) andar(c); else maior = Math.max(maior, fs.lstatSync(c).mtimeMs);
+    });
+  })(pasta);
+  return maior;
+}
+function saidaOk(r) {
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  return JSON.parse(r.stdout);
+}
+// le o mapa.json da ronda `n` da base, aplica `mudar` e grava de volta
+function mudarMapa(base, n, mudar) {
+  const arq = path.join(base, String(n), 'mapa.json');
+  const m = JSON.parse(fs.readFileSync(arq, 'utf8'));
+  mudar(m);
+  fs.writeFileSync(arq, JSON.stringify(m, null, 2), 'utf8');
+}
+// a base como as de antes da 0.47.0: o mapa.json das rondas sem a marca do HEAD, para a revisao cair no relogio
+function semMarca(base) {
+  fs.readdirSync(base).filter(function (n) { return /^\d+$/.test(n); }).forEach(function (n) {
+    mudarMapa(base, n, function (m) { delete m.headDoArquivo; });
+  });
+}
+// o git.correr do preparar-revisao.js falha (ETIMEDOUT) so no `git log` que le a data do commit
+const GANCHO_LOG_FALHA = [
+  "const cp = require('node:child_process');",
+  "const orig = cp.spawnSync;",
+  "cp.spawnSync = function (cmd, args) {",
+  "  if (Array.isArray(args) && args.indexOf('log') !== -1) {",
+  "    return { status: null, signal: 'SIGTERM', stdout: '', stderr: '',",
+  "      error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }) };",
+  "  }",
+  "  return orig.apply(this, arguments);",
+  "};"
+].join('\n');
+function marcaDaRonda(base, n) {
+  return JSON.parse(fs.readFileSync(path.join(base, String(n), 'mapa.json'), 'utf8')).headDoArquivo;
+}
+
+test('pendencia #8: base ABERTA cujo arquivo ganhou commit depois dela e arquivada inteira, e a revisao nova comeca na ronda 1', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(fs.existsSync(path.join(s1.base, 'fechada.json')), false, 'a base ficou aberta');
+    // a marca do HEAD que a ronda julgou: o sha-256 do arquivo no HEAD
+    assert.strictEqual(marcaDaRonda(s1.base, 1),
+      require('node:crypto').createHash('sha256').update('raiz em HEAD\n').digest('hex'));
+    const antes = fotoDaPasta(s1.base);
+    commitDatado(dir, ['raiz.txt']);
+    fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz mudada de novo\n', 'utf8');
+    const r = rodarCli(dir, 'raiz.txt');
+    const s2 = saidaOk(r);
+    assert.strictEqual(s2.ronda, 1, 'a revisao nova nao herda as rondas da aberta');
+    assert.strictEqual(s2.arquivadaAberta, true, r.stdout);
+    assert.strictEqual(path.basename(path.dirname(path.dirname(s2.arquivada))), 'revisao-fechada', s2.arquivada);
+    assert.deepStrictEqual(fotoDaPasta(s2.arquivada), antes, 'nada se apaga: a base aberta inteira, igual a de antes');
+    assert.deepStrictEqual(fs.readdirSync(s2.base), ['1'], 'a base nova so tem a ronda 1');
+    assert.match(s2.aviso, /ficou aberta \(sem fechada\.json\) e o arquivo ganhou commit depois dela/, s2.aviso);
+    // o aviso diz para onde as rondas foram e que nada se apagou
+    assert.ok(s2.aviso.includes('sem apagar nada, para ' + path.relative(dir, s2.arquivada).replace(/\\/g, '/')),
+      s2.aviso);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: base aberta segue quando o commit novo e de OUTRO arquivo (a revisao deste continua, ronda 2)', () => {
+  const dir = repoDeEnsaio();
+  try {
+    saidaOk(rodarCli(dir, 'raiz.txt'));
+    commitDatado(dir, ['sub/aninhado.txt']);
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s2.ronda, 2, 'o commit de outro arquivo nao vence a revisao deste');
+    assert.strictEqual('arquivada' in s2, false);
+    assert.strictEqual(fs.existsSync(path.join(dir, '.claude', 'sworn', 'revisao-fechada')), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: o commit no MESMO segundo da ultima gravacao vence a base pela marca do HEAD', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    commitDatado(dir, ['raiz.txt'], '@' + Math.floor(ultimaDaBase(s1.base) / 1000) + ' +0000');
+    fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz mudada de novo\n', 'utf8');
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s2.ronda, 1, JSON.stringify(s2));
+    assert.strictEqual(s2.arquivadaAberta, true, JSON.stringify(s2));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: a marca que conta e a da ULTIMA ronda (a ronda 1 com outra marca nao vence a base)', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    saidaOk(rodarCli(dir, 'raiz.txt'));
+    mudarMapa(s1.base, 1, function (m) { m.headDoArquivo = 'outra'; });
+    const s3 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s3.ronda, 3, JSON.stringify(s3));
+    assert.strictEqual('arquivada' in s3, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: arquivo NOVO (marca "novo") que ganha o 1o commit vence a base aberta dele', () => {
+  const dir = repoDeEnsaio();
+  try {
+    fs.writeFileSync(path.join(dir, 'novo.txt'), 'novo no trabalho\n', 'utf8');
+    const s1 = saidaOk(rodarCli(dir, 'novo.txt'));
+    assert.strictEqual(marcaDaRonda(s1.base, 1), 'novo');
+    commitDatado(dir, ['novo.txt']);
+    fs.writeFileSync(path.join(dir, 'novo.txt'), 'novo mudado depois do commit\n', 'utf8');
+    const s2 = saidaOk(rodarCli(dir, 'novo.txt'));
+    assert.strictEqual(s2.ronda, 1, JSON.stringify(s2));
+    assert.strictEqual(s2.arquivadaAberta, true, JSON.stringify(s2));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: base sem a marca (de antes da 0.47.0) cai no relogio: o commit depois dela a arquiva', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    semMarca(s1.base);
+    commitDatado(dir, ['raiz.txt']);
+    fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz mudada de novo\n', 'utf8');
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s2.ronda, 1, JSON.stringify(s2));
+    assert.strictEqual(s2.arquivadaAberta, true, JSON.stringify(s2));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: falha ao mover a base ABERTA vencida e ERRO, e a base fica como estava (nada gravado)', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    commitDatado(dir, ['raiz.txt']);
+    fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz mudada de novo\n', 'utf8');
+    const antes = fotoDaPasta(s1.base);
+    const r = rodarComGancho(dir, 'raiz.txt', GANCHO_RENAME_FALHA);
+    assert.strictEqual(r.stderr, '', 'stack trace na saida de erro: ' + r.stderr);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.match(r.stdout, /^ERRO: a revisao de raiz\.txt ficou aberta e o arquivo ganhou commit depois dela, mas nao consegui arquivar /, r.stdout);
+    assert.match(r.stdout, /EPERM/, 'a causa vem na mensagem: ' + r.stdout);
+    assert.match(r.stdout, /Nada foi gravado/, r.stdout);
+    assert.deepStrictEqual(fotoDaPasta(s1.base), antes, 'a base aberta segue intacta, sem ronda nova');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: ultima ronda com mapa.json QUEBRADO (sem marca legivel) cai no relogio: o commit depois a arquiva', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    fs.writeFileSync(path.join(s1.base, '1', 'mapa.json'), '{ quebrado', 'utf8');
+    commitDatado(dir, ['raiz.txt']);
+    fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz mudada de novo\n', 'utf8');
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s2.ronda, 1, JSON.stringify(s2));
+    assert.strictEqual(s2.arquivadaAberta, true, JSON.stringify(s2));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: base sem a marca e o git que nao responde a data do commit: a base segue como estava (ronda 2)', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    semMarca(s1.base);
+    commitDatado(dir, ['raiz.txt']);
+    fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz mudada de novo\n', 'utf8');
+    const r = rodarComGancho(dir, 'raiz.txt', GANCHO_LOG_FALHA);
+    assert.strictEqual(r.stderr, '', 'stack trace na saida de erro: ' + r.stderr);
+    const s2 = saidaOk(r);
+    assert.strictEqual(s2.ronda, 2, JSON.stringify(s2));
+    assert.strictEqual('arquivada' in s2, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: base sem a marca com um link QUEBRADO dentro: o relogio conta o link pela data dele e arquiva', (t) => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    semMarca(s1.base);
+    // o link de arquivo pede privilegio no Windows; a juncao (de pasta) nao, e quebra do mesmo jeito sem o alvo
+    const link = path.join(s1.base, '1', 'link-quebrado');
+    try { fs.symlinkSync(path.join(dir, 'nao-existe.txt'), link, 'file'); } catch (e) {
+      try { fs.symlinkSync(path.join(dir, 'nao-existe'), link, 'junction'); } catch (e2) {
+        t.skip('o sistema nao deixou criar link (' + ((e && e.code) || 'erro') + ', ' + ((e2 && e2.code) || 'erro') + ')');
+        return;
+      }
+    }
+    assert.throws(function () { fs.statSync(link); }, /ENOENT/, 'o link tem de estar quebrado');
+    commitDatado(dir, ['raiz.txt']);
+    fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz mudada de novo\n', 'utf8');
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s2.ronda, 1, JSON.stringify(s2));
+    assert.strictEqual(s2.arquivadaAberta, true, JSON.stringify(s2));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: base sem a marca, de SUBPASTA, o commit do arquivo depois dela tambem a arquiva (o pathspec sai do cwd)', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const sub = path.join(dir, 'sub');
+    semMarca(saidaOk(rodarCli(sub, 'aninhado.txt')).base);
+    commitDatado(dir, ['sub/aninhado.txt']);
+    fs.writeFileSync(path.join(sub, 'aninhado.txt'), 'aninhado mudado de novo\n', 'utf8');
+    const s2 = saidaOk(rodarCli(sub, 'aninhado.txt'));
+    assert.strictEqual(s2.ronda, 1, JSON.stringify(s2));
+    assert.strictEqual(s2.arquivadaAberta, true, JSON.stringify(s2));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: base sem a marca, nome com [ ] e o arquivo, nao um padrao: o commit de a1.txt nao vence a base de a[1].txt', () => {
+  const dir = repoDeEnsaio();
+  try {
+    fs.writeFileSync(path.join(dir, 'a[1].txt'), 'colchete em HEAD\n', 'utf8');
+    fs.writeFileSync(path.join(dir, 'a1.txt'), 'vizinho em HEAD\n', 'utf8');
+    gitOk(dir, ['add', '--', ':(literal)a[1].txt', 'a1.txt']);
+    gitOk(dir, ['commit', '-qm', 'colchete']);
+    fs.writeFileSync(path.join(dir, 'a[1].txt'), 'colchete no trabalho\n', 'utf8');
+    semMarca(saidaOk(rodarCli(dir, 'a[1].txt')).base);
+    fs.writeFileSync(path.join(dir, 'a1.txt'), 'vizinho mudado\n', 'utf8');
+    commitDatado(dir, ['a1.txt']);
+    const s2 = saidaOk(rodarCli(dir, 'a[1].txt'));
+    assert.strictEqual(s2.ronda, 2, 'o padrao a[1].txt casou com o commit de a1.txt: ' + JSON.stringify(s2));
+    assert.strictEqual('arquivada' in s2, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pendencia #8: base sem a marca, o commit no MESMO segundo da ultima gravacao nao vence o relogio (pode ser de antes dela)', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    semMarca(s1.base);
+    const segundo = Math.floor(ultimaDaBase(s1.base) / 1000);
+    commitDatado(dir, ['raiz.txt'], '@' + segundo + ' +0000');
+    fs.writeFileSync(path.join(dir, 'raiz.txt'), 'raiz mudada de novo\n', 'utf8');
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s2.ronda, 2, 'o mesmo segundo arquivou a base: ' + JSON.stringify(s2));
+    assert.strictEqual('arquivada' in s2, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('0.3.3/item 2: a skill revisar diz o que acontece com a revisao ja fechada', () => {
   const skill = fs.readFileSync(path.join(RAIZ, 'skills', 'review', 'SKILL.md'), 'utf8');
   assert.match(skill, /revisao-fechada/, 'a skill tem de citar a pasta de arquivo');
@@ -669,16 +920,24 @@ test('0.3.3/item 9: show falha mas o ls-tree LISTA o arquivo no HEAD (objeto que
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('0.3.3/item 9: o ls-tree resolve pela RAIZ do repositorio (--full-tree): de subpasta, o objeto ilegivel segue sendo erro', () => {
+test('0.3.3/item 9: de subpasta, o ls-tree acha o arquivo pela pasta atual: o objeto ilegivel segue sendo erro', () => {
   const dir = repoDeEnsaio();
   try {
-    // So o `show` e trocado (128); o ls-tree e o real. Sem --full-tree ele resolveria "sub/aninhado.txt" a
-    // partir da subpasta (sub/sub/aninhado.txt), nao acharia nada e daria "novo" falso.
-    const r = rodarComGancho(path.join(dir, 'sub'), 'aninhado.txt', ganchoGit({ show: { status: 128 } }));
+    // So o `show` e trocado (128); o ls-tree e o real. O arquivo vai relativo a pasta atual (0.44.0; antes, o
+    // prefixo e o --full-tree): procurado pela raiz, "aninhado.txt" nao se acharia e daria "novo" falso.
+    const sub = path.join(dir, 'sub');
+    const naoLe = ganchoGit({ show: { status: 128 } });
+    const r = rodarComGancho(sub, 'aninhado.txt', naoLe);
     assert.strictEqual(r.stderr, '', r.stderr);
     assert.strictEqual(r.status, 1, 'de subpasta o arquivo em HEAD virou novo. Saida: ' + r.stdout);
-    assert.match(r.stdout, /^ERRO: /, r.stdout);
-    assert.strictEqual(fs.existsSync(path.join(dir, 'sub', '.claude')), false, 'nada gravado');
+    assert.match(r.stdout, /^ERRO: .*o HEAD lista o arquivo mas o git nao consegue ler o objeto/, r.stdout);
+    assert.strictEqual(fs.existsSync(path.join(sub, '.claude')), false, 'nada gravado');
+    // CONTROLE: o arquivo que so existe no disco da subpasta segue arquivo novo
+    fs.writeFileSync(path.join(sub, 'novo.txt'), 'so no disco\n', 'utf8');
+    const novo = rodarComGancho(sub, 'novo.txt', naoLe);
+    assert.strictEqual(novo.status, 0, novo.stdout + novo.stderr);
+    const mapa = path.join(path.dirname(JSON.parse(novo.stdout).a), 'mapa.json');
+    assert.strictEqual(JSON.parse(fs.readFileSync(mapa, 'utf8')).novo, true, novo.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -717,6 +976,8 @@ test('0.3.3/item 9: o caminho feliz gasta um processo so (show); o ls-tree e o r
     assert.strictEqual(chamadas.filter(function (c) { return c === 'show'; }).length, 1, chamadas.join(','));
     assert.strictEqual(chamadas.indexOf('ls-tree'), -1, 'o ls-tree nao roda quando o show leu: ' + chamadas.join(','));
     assert.strictEqual(chamadas.indexOf('rev-parse-verify'), -1, chamadas.join(','));
+    // 0.44.0: nem o `rev-parse --show-prefix`; o `HEAD:./<arquivo>` ja resolve da pasta atual
+    assert.strictEqual(chamadas.indexOf('rev-parse'), -1, 'o prefixo so entra na falha: ' + chamadas.join(','));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(pasta, { recursive: true, force: true });
@@ -1612,8 +1873,9 @@ test('D503: sem referencia para o tipo do arquivo, o pacote e o de hoje (regress
       const pasta = path.dirname(s.a);
       assert.deepStrictEqual(fs.readdirSync(pasta).sort(), ['A.txt', 'B.txt', 'mapa.json', 'vereditos'], nome);
       // L3 (s104, A3-03): o mapa.json leva a faixa desde o L3; o resto do pacote sem referencia segue o de antes.
+      // Pendencia #8 (0.47.0): e a marca do arquivo no HEAD que a ronda julgou.
       assert.deepStrictEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(pasta, 'mapa.json'), 'utf8'))),
-        ['arquivo', 'mapa', 'faixa'], nome);
+        ['arquivo', 'mapa', 'faixa', 'headDoArquivo'], nome);
       // D824: o pacote diz o pedido da tarefa (null e semPedido sem escopo declarado)
       assert.deepStrictEqual(Object.keys(s), ['ronda', 'arquivo', 'base', 'a', 'b', 'regua', 'pedido', 'vereditos', 'faixa',
         'lentes', 'linhasMudadas', 'aviso', 'trecho', 'semPedido', 'semRegua'], nome);
@@ -2033,4 +2295,22 @@ test('D824: sem sessao, ou com o estado ilegivel, o aviso diz que o pedido caiu 
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+// F1g: o rodarCli chama o preparar-revisao no proprio processo de teste. Aqui o processo de verdade, no aceito e no
+// recusado (arquivo fora de HEAD e do trabalho), sai com o mesmo status e o mesmo stdout, a menos das pastas.
+test('F1g: o CLI em processo sai igual ao processo de verdade, no aceito e no recusado', () => {
+  [['sub/aninhado.txt', 0], ['nao-existe.txt', 1]].forEach(function (caso) {
+    const a = repoDeEnsaio();
+    const b = repoDeEnsaio();
+    try {
+      const emProcesso = rodarCli(a, caso[0]);
+      const p = spawnSync(process.execPath, [CLI, '--arquivo', caso[0], '--semente', 'fixa'],
+        { cwd: b, encoding: 'utf8', shell: false });
+      const limpo = function (s, dir) { return s.split(dir).join('<dir>').split(JSON.stringify(dir).slice(1, -1)).join('<dir>'); };
+      assert.strictEqual(emProcesso.status, caso[1], caso[0] + ': ' + emProcesso.stdout);
+      assert.strictEqual(p.status, caso[1], caso[0] + ': ' + p.stdout);
+      assert.strictEqual(limpo(emProcesso.stdout, a), limpo(p.stdout, b), caso[0]);
+    } finally { fs.rmSync(a, { recursive: true, force: true }); fs.rmSync(b, { recursive: true, force: true }); }
+  });
 });

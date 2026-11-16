@@ -145,3 +145,49 @@ test('F1-C12: abertura fora de repositorio, com intocaveis, diz que nao sabe; se
       'sem intocaveis nao ha o que duvidar: ' + sem.stdout);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
+
+// F1g (s372, 0.41.0): a abertura lista o repositorio so o necessario. O `git ls-files` dos intocaveis so roda com padrao
+// para conferir; e na primeira abertura, quando a auditoria e a revisao dos atalhos vencem juntas, a lista dos atalhos
+// (rev-parse, ls-files -z, ls-files --others) sai uma vez e serve as duas. Os avisos seguem iguais.
+test('F1g: abertura num repositorio - ls-files dos intocaveis so com padrao, e a lista dos atalhos uma vez para os dois avisos', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const comum = require('./lib/comum.js');
+  // monta o repositorio, roda a abertura nele e le os git que ela abriu (o rastro do GIT_TRACE2_EVENT)
+  const abrirNoRepositorio = (nome, intocaveis) => {
+    const dir = comum.repo(comum.temporaria('sworn-inertes-' + nome + '-'), {
+      '.claude/sworn/projeto.json': JSON.stringify({ versaoConfig: 1, intocaveis: intocaveis }),
+      'segredos/chave.env': 'x\n',
+      'src/a.js': 'x\n// atalho: sem gatilho\n'
+    });
+    const fora = comum.temporaria('sworn-inertes-fora-');
+    const rastro = path.join(fora, 'git.json');
+    const r = comum.rodar('scripts/abertura.js', [], { cwd: dir,
+      entrada: { session_id: 'f1g-' + nome, cwd: dir, source: 'startup' },
+      env: { SWORN_TMP: path.join(fora, 'sessoes'), GIT_TRACE2_EVENT: rastro } });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(fs.existsSync(rastro), 'a abertura nao abriu git nenhum (ou o git nao gravou o rastro): ' + r.stdout);
+    const git = fs.readFileSync(rastro, 'utf8').split('\n').filter((l) => /"event":"start"/.test(l))
+      .map((l) => JSON.parse(l).argv.slice(1).join(' '));
+    const vezes = (comando) => git.filter((a) => a === comando).length;
+    return { stdout: r.stdout, git: git, vezes: vezes };
+  };
+  const com = abrirNoRepositorio('com', ['segredo/**']);
+  assert.strictEqual(com.vezes('ls-files'), 1, 'com padrao, o ls-files dos intocaveis roda uma vez: ' + com.git.join(' | '));
+  assert.ok(com.stdout.indexOf('nao pegam arquivo nenhum') !== -1, com.stdout);
+  assert.ok(com.stdout.indexOf('segredo/**') !== -1, com.stdout);
+  // as duas vencidas na primeira abertura, com a lista dos atalhos uma vez so
+  assert.strictEqual(com.vezes('ls-files --others --exclude-standard -z'), 1, com.git.join(' | '));
+  assert.strictEqual(com.vezes('ls-files -z'), 1, com.git.join(' | '));
+  assert.match(com.stdout, /atalhos sem "trocar quando" \(1\): src\/a\.js:2/, 'o aviso da auditoria: ' + com.stdout);
+  assert.match(com.stdout, /atalhos registrados .*1 atalho em 1 arquivo/, 'o aviso da revisao dos atalhos: ' + com.stdout);
+  const certo = abrirNoRepositorio('certo', ['segredos/**']);
+  assert.strictEqual(certo.vezes('ls-files'), 1, certo.git.join(' | '));
+  assert.strictEqual(certo.stdout.indexOf('nao pegam arquivo nenhum'), -1, 'o padrao certo nao e acusado: ' + certo.stdout);
+  // e nao foi o git mudo que calou o aviso: a conferencia rodou
+  assert.strictEqual(certo.stdout.indexOf('nao deu para conferir se os padroes de `intocaveis`'), -1, certo.stdout);
+  const sem = abrirNoRepositorio('sem', []);
+  assert.strictEqual(sem.vezes('ls-files'), 0, 'sem padrao nao ha o que conferir, e o git ls-files nao roda: ' + sem.git.join(' | '));
+  assert.strictEqual(sem.stdout.indexOf('padroes de `intocaveis`'), -1, sem.stdout);
+  assert.strictEqual(sem.stdout.indexOf('nao pegam arquivo nenhum'), -1, sem.stdout);
+});

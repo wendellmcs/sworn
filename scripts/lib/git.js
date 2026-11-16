@@ -33,6 +33,18 @@ function ok(r) {
 }
 
 /**
+ * O prazo padrao do `correr`: 5 s, ou o `SWORN_GIT_PRAZO_MS` do ambiente quando e um inteiro positivo (lido na hora
+ * da chamada). F1g (s372, 0.39.0): na suite carregada o git passava de 5 s, o `null` do prazo virava "fora do
+ * repositorio" e o portao de commit liberava; o repositorio grande, onde o `git status` passa de 5 s, cai no mesmo.
+ * Sem teto de proposito: o spawnSync aceita ate o Number.MAX_SAFE_INTEGER, e quem pos o valor escolheu esperar.
+ */
+function prazoDoCorrer() {
+  const texto = process.env.SWORN_GIT_PRAZO_MS;
+  const n = /^\s*\d+\s*$/.test(texto || '') ? Number(texto) : 0;
+  return n > 0 && Number.isSafeInteger(n) ? n : 5000;
+}
+
+/**
  * Foto do git status na abertura da sessao (D17).
  * R3: spawnSync com shell:false. Nada de shell.
  * D49: devolve `null` quando NAO conseguiu fotografar (sem cwd, git ausente, fora
@@ -42,9 +54,9 @@ function ok(r) {
  */
 function correr(cwd, args, opcoes) {
   // maxBuffer opcional: o padrao daqui (1 MiB, o do spawnSync, mantido) estoura em saida grande e viraria `null`.
-  // timeout opcional (ms; padrao 5000): existe para o teste nao esperar 5 s.
+  // timeout opcional (ms; padrao: prazoDoCorrer): existe para o teste nao esperar 5 s.
   const r = rodar(cwd, args, {
-    timeout: opcoes && opcoes.timeout ? opcoes.timeout : 5000,
+    timeout: opcoes && opcoes.timeout ? opcoes.timeout : prazoDoCorrer(),
     maxBuffer: opcoes && opcoes.maxBuffer ? opcoes.maxBuffer : 1024 * 1024
   });
   // A2-14: o retorno segue `null` (mesmo contrato), mas quem quiser saber POR QUE passa `opcoes.falha` (um
@@ -71,6 +83,10 @@ function modificados(cwd) {
   // numa entrada so ("sub/"), e a trava 5b nao protege nada dentro dela.
   const saida = correr(cwd, ['status', '--porcelain', '--untracked-files=all', '-z']);
   if (saida === null) return null;
+  const partes = saida.split('\0').filter(function (p) { return p !== ''; });
+  // F1g (s372): arvore limpa nao tem caminho a converter, e o prefixo era um git a mais em toda abertura, todo turno
+  // e todo comando destrutivo. A lista vazia sai sem ele.
+  if (partes.length === 0) return [];
   const pre = prefixo(cwd);
   if (pre === null) return null;
 
@@ -84,7 +100,6 @@ function modificados(cwd) {
     return caminho.indexOf(pre) === 0 ? caminho.slice(pre.length) : null;
   }
 
-  const partes = saida.split('\0').filter(function (p) { return p !== ''; });
   const arquivos = [];
   for (let i = 0; i < partes.length; i++) {
     const entrada = partes[i];
@@ -234,4 +249,4 @@ function diffContraHead(cwd, rel) {
   return { removidas: soma('antigoQtd'), acrescentadas: soma('novoQtd'), blocos: blocos };
 }
 
-module.exports = { rodar, ok, SAIDA_PADRAO_BYTES, modificados, rastreadosMudados, mudancasRastreadas, prefixo, rastreados, ultimasMudancas, correr, diffContraHead };
+module.exports = { rodar, ok, SAIDA_PADRAO_BYTES, modificados, rastreadosMudados, mudancasRastreadas, prefixo, rastreados, ultimasMudancas, correr, prazoDoCorrer, diffContraHead };

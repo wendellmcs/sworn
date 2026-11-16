@@ -260,11 +260,13 @@ io.blindar(function () {
     // validador ve. Confere-se UMA vez por sessao, aqui, porque exige listar o
     // repositorio e os portoes de custo zero nao podem pagar isso a cada escrita.
     const projetoLib = require('./lib/projeto.js');
-    const rastreados = git.rastreados(cwd);
+    // F1g (s372): sem padrao em `intocaveis` nao ha o que conferir, e o `ls-files` era um git a mais em toda abertura.
+    const temIntocaveis = Boolean(projeto && Array.isArray(projeto.intocaveis) && projeto.intocaveis.length);
+    const rastreados = temIntocaveis ? git.rastreados(cwd) : [];
     const inertes = projetoLib.intocaveisInertes(projeto, rastreados, cwd);
     // F1-C12: `null` e "o git nao respondeu" - e nao e "nenhum inerte". Calar aqui
     // fazia "nao sei" parecer "esta tudo certo". So se diz quando ha o que duvidar.
-    if (rastreados === null && projeto && Array.isArray(projeto.intocaveis) && projeto.intocaveis.length) {
+    if (rastreados === null && temIntocaveis) {
       // A5-02 (D735): sem o jargao "intocavel inerte"; o efeito e o passo, causas do null de git.js:102.
       process.stdout.write('\nsworn: nao deu para conferir se os padroes de `intocaveis` ' +
         '(.claude/sworn/projeto.json)\npegam algum arquivo: o git nao respondeu ' +
@@ -297,9 +299,17 @@ io.blindar(function () {
     // A2 (D426): auditoria periodica. Depois da foto do git (a marca nao entra nela) e antes do plano
     // ativo, que segue por ultimo. A lib ja nao lanca; o try/catch aqui e a segunda rede, para que
     // nada da auditoria derrube o resto da abertura.
+    // F1g (s372): a auditoria e a revisao dos atalhos vencem juntas na primeira abertura do projeto, e cada uma listava
+    // o repositorio inteiro (3 git). A lista sai uma vez por abertura e serve as duas; mora aqui, e nao na lib, que
+    // vive mais que uma abertura. A busca que lanca nao guarda nada, e a segunda tenta de novo, como antes.
+    let atalhosDaAbertura = null;
+    const atalhosUmaVez = function (dirAtalhos, projetoAtalhos) {
+      if (atalhosDaAbertura === null) atalhosDaAbertura = require('./lib/atalhos.js').daPastaEDeDentro(dirAtalhos, projetoAtalhos);
+      return atalhosDaAbertura;
+    };
     try {
       // Plano 092 (D573): a entrada do gancho leva o transcript_path, de onde sai a conversa anterior.
-      const auditoriaTexto = require('./lib/auditoria-periodica.js').avisoDaAuditoria(cwd, projeto, { entrada: e });
+      const auditoriaTexto = require('./lib/auditoria-periodica.js').avisoDaAuditoria(cwd, projeto, { entrada: e, atalhos: atalhosUmaVez });
       if (auditoriaTexto) process.stdout.write('\n' + auditoriaTexto + '\n');
       // Pedido 32 (Tarefa 4 subitem 3): a marca da sessao que acende o botao do /sworn:audit na faixa do mod. Plano
       // 091 T6: so com a ordem de cortar (a retroalimentacao sozinha nao pede nada), e ai conta a ordem dada.
@@ -316,7 +326,7 @@ io.blindar(function () {
     // Plano 092 (D574, mock D576): a revisao dos atalhos, a cada 30 dias, com marca propria, depois da auditoria. A lib
     // nao lanca; aqui so falha do require, e a abertura segue.
     try {
-      const atalhosTexto = require('./lib/auditoria-periodica.js').avisoDosAtalhos(cwd, projeto);
+      const atalhosTexto = require('./lib/auditoria-periodica.js').avisoDosAtalhos(cwd, projeto, { atalhos: atalhosUmaVez });
       if (atalhosTexto) process.stdout.write('\n' + atalhosTexto + '\n');
     } catch (erro) {
       process.stdout.write('\nsworn: revisao dos atalhos nao rodou (' +
@@ -393,6 +403,8 @@ io.blindar(function () {
         ''
       ].join('\n'));
     }
-    process.exit(0);
+    // Sem decisao: sozinho, o io.permitir sai com 0 sem escrever nada, como a saida direta de antes; no modo embutido
+    // (rodarJuntos) so registra "sem opiniao", e o teste roda a abertura sem abrir um processo (F1g).
+    io.permitir();
   });
 });

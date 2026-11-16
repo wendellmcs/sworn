@@ -6,13 +6,21 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const comum = require('./lib/comum.js');
+
 const RAIZ = path.join(__dirname, '..');
 
-function rodar(script, entrada, tmp, envExtra) {
+// F1 (s372): o gancho roda em processo (comum.ganchoComoProcesso, que manda por processo o que sai por process.exit,
+// como o portao-apelido.js), salvo com `processo`: o processo de verdade fica nos testes do R6, que conferem o exit 0
+// depois da falha. Em processo o gancho que falha e libera volta com status 1: a falha que o teste nao provocou
+// reprova o assert do status, em vez de passar como "sem opiniao".
+function rodar(script, entrada, tmp, envExtra, processo) {
+  const env = Object.assign({}, process.env, { SWORN_TMP: tmp }, envExtra || {});
+  if (!processo) return comum.ganchoComoProcesso(path.join('scripts', script), entrada, { env: env });
   const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
     input: JSON.stringify(entrada),
     encoding: 'utf8',
-    env: Object.assign({}, process.env, { SWORN_TMP: tmp }, envExtra || {})
+    env: env
   });
   let json = null;
   if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
@@ -194,7 +202,7 @@ test('fecho D33: descarrega antes de limpar - falha na descarga preserva a marca
     const r = rodar('portao-fecho.js', {
       session_id: 's1', cwd: tmp, hook_event_name: 'Stop',
       last_assistant_message: 'Pronto.'
-    }, tmp);
+    }, tmp, null, true);
     assert.strictEqual(r.status, 0, 'R6: falha na descarga tem de liberar com exit 0');
 
     const estado = require('../scripts/lib/estado.js');
@@ -205,6 +213,21 @@ test('fecho D33: descarrega antes de limpar - falha na descarga preserva a marca
     if (antes === undefined) delete process.env.SWORN_TMP; else process.env.SWORN_TMP = antes;
 
     assert.strictEqual(sessao.bloqueouNesteTurno, true, 'a marca so sobrevive se descarregar rodou antes de limpar');
+  });
+});
+
+test('F1 (s372): em processo, o gancho que falha e libera volta com status 1 e a causa no stderr', () => {
+  comTmp((tmp) => {
+    // a mesma falha do D33: .claude/sworn e um arquivo, e a descarga do fecho lanca
+    fs.mkdirSync(path.join(tmp, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, '.claude', 'sworn'), 'nao e uma pasta', 'utf8');
+    rodar('marcar-trabalho.js', { session_id: 's1', cwd: tmp, tool_name: 'Edit' }, tmp);
+    const entrada = { session_id: 's1', cwd: tmp, hook_event_name: 'Stop', last_assistant_message: 'Pronto.' };
+    rodar('portao-fecho.js', entrada, tmp);
+    const r = rodar('portao-fecho.js', entrada, tmp);
+    assert.strictEqual(r.status, 1, 'a falha em processo tinha de aparecer no status: ' + r.stderr);
+    assert.match(r.stderr, /sworn: portao falhou e liberou por seguranca: /);
+    assert.strictEqual(r.json, null, 'e libera, como o processo');
   });
 });
 
@@ -231,7 +254,7 @@ test('fecho D-A2: contadores.json = 42 nao trava a limpeza da sessao no turno se
     const segundo = rodar('portao-fecho.js', {
       session_id: 's1', cwd: tmp, hook_event_name: 'Stop',
       last_assistant_message: 'Pronto.'
-    }, tmp);
+    }, tmp, null, true);
     assert.strictEqual(segundo.status, 0, 'R6: nunca pode estourar');
 
     const estado = require('../scripts/lib/estado.js');

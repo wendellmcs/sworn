@@ -281,7 +281,9 @@ test('A1-prova-2: o fim do roteiro nomeia onde gravar e o comando seguinte, no p
   // A1-32: o caminho e o que o relatorio de cobertura le (lib/cobertura.js, prova)
   assert.ok(j.ondeGravar.endsWith(path.join('.claude', 'sworn', 'apelidos-vivos.json')), j.ondeGravar);
   assert.ok(fim.includes('Depois confira com: node "' + path.join(RAIZ, 'scripts', 'cobertura.js') + '"\n'), fim);
-  assert.ok(!/reprova|suite|acima/.test(fim), 'no projeto a suite do plugin nao le a prova: ' + fim);
+  // F1g (s372): os dois caminhos saem antes; a pasta que o mkdtemp sorteia (ou a TEMP) pode ter "suite" no nome
+  const semCaminhos = fim.split(j.ondeGravar).join('').split(RAIZ).join('');
+  assert.ok(!/reprova|suite|acima/.test(semCaminhos), 'no projeto a suite do plugin nao le a prova: ' + fim);
   // A1-36 (pedido 12, microcopy): "a linha do H4" era codigo interno; a linha se nomeia pelo rotulo inteiro,
   // como o relatorio o imprime (a R2 da s201: so o pedaco depois do "H4" nao era o que a tela mostra)
   // A6-52 (s235): o rotulo perdeu o "H4 - "; os dois lados seguem iguais. So o rotulo velho (R1 s238, borda): o fim

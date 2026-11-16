@@ -99,6 +99,34 @@ test('F5a: correr segue o contrato antigo (texto ou null) por cima de rodar', ()
   assert.strictEqual(gitLib.correr(path.join(os.tmpdir(), 'sworn-git-sumida-' + process.pid), ['--version']), null);
 });
 
+// F1g (s372, 0.39.0): o prazo padrao do correr (5 s) vem do SWORN_GIT_PRAZO_MS quando e inteiro positivo; o pedido
+// em opcoes ganha dele. Na suite carregada os 5 s estouravam e o portao de commit liberava (falso vermelho).
+test('F1g: o prazo padrao do correr e 5 s, ou o SWORN_GIT_PRAZO_MS inteiro positivo; o timeout pedido ganha', () => {
+  const cp = require('node:child_process');
+  const original = cp.spawnSync;
+  const antes = process.env.SWORN_GIT_PRAZO_MS;
+  const prazos = [];
+  cp.spawnSync = function (cmd, args, config) { prazos.push(config.timeout); return { status: 0, stdout: '', stderr: '' }; };
+  const com = function (valor, opcoes) {
+    if (valor === undefined) delete process.env.SWORN_GIT_PRAZO_MS; else process.env.SWORN_GIT_PRAZO_MS = valor;
+    gitLib.correr(RAIZ, ['status'], opcoes);
+    return prazos[prazos.length - 1];
+  };
+  try {
+    assert.strictEqual(com(undefined), 5000, 'sem a variavel');
+    assert.strictEqual(com('60000'), 60000);
+    assert.strictEqual(com(' 7000 '), 7000, 'espaco nas pontas');
+    assert.strictEqual(com('3000000000'), 3000000000, 'sem teto abaixo do inteiro seguro (o spawnSync aceita)');
+    for (const ruim of ['', '   ', '0', '-5', 'abc', '1.5', '1e4', '30000ms', '99999999999999999999']) {
+      assert.strictEqual(com(ruim), 5000, 'aceitou ' + JSON.stringify(ruim));
+    }
+    assert.strictEqual(com('60000', { timeout: 300 }), 300, 'o timeout pedido ganha da variavel');
+  } finally {
+    cp.spawnSync = original;
+    if (antes === undefined) delete process.env.SWORN_GIT_PRAZO_MS; else process.env.SWORN_GIT_PRAZO_MS = antes;
+  }
+});
+
 // O guarda da duplicacao: um spawn de git fora do lib/git.js volta a espalhar prazo, teto e erro diferentes.
 test('F5a: nenhum script chama o git por spawn direto, so pelo scripts/lib/git.js', () => {
   // O texto inteiro do arquivo, nao linha a linha: `spawnSync(\n  'git', ...)` e `'git.exe'` tambem contam (revisao
@@ -125,4 +153,27 @@ test('F5a: nenhum script chama o git por spawn direto, so pelo scripts/lib/git.j
     'ja trazem o prazo, o teto de saida e o erro no resultado');
   // o proprio padrao pega a chamada partida em duas linhas e o git.exe
   assert.ok('cp.spawnSync(\n  \'git\', [])'.match(CHAMADA) && 'execFile("git.exe")'.match(CHAMADA));
+});
+
+// F1g (s372, 0.41.0): a arvore limpa sai do `modificados` com um git so (o status). O prefixo so serve para converter
+// os caminhos que o status listou; sem caminho, era um processo a mais em toda abertura, turno e comando destrutivo.
+test('F1g: modificados na arvore limpa roda so o status; com arquivo mudado, o prefixo continua', () => {
+  const comum = require('./lib/comum.js');
+  const dir = comum.repo(comum.temporaria('sworn-git-limpo-'), { 'pacote/a.txt': 'um\n' });
+  const sub = path.join(dir, 'pacote');
+  const cp = require('node:child_process');
+  const original = cp.spawnSync;
+  let vistos = [];
+  cp.spawnSync = function (cmd, args) { vistos.push(args.slice(0, 2).join(' ')); return original.apply(this, arguments); };
+  let limpa; let suja; let daLimpa;
+  try {
+    limpa = gitLib.modificados(sub);
+    daLimpa = vistos; vistos = [];
+    fs.writeFileSync(path.join(sub, 'a.txt'), 'dois\n');
+    suja = gitLib.modificados(sub);
+  } finally { cp.spawnSync = original; }
+  assert.deepStrictEqual(limpa, [], 'arvore limpa e lista vazia, nunca null');
+  assert.deepStrictEqual(daLimpa, ['status --porcelain'], 'na arvore limpa so o status: ' + daLimpa.join(' | '));
+  assert.deepStrictEqual(vistos, ['status --porcelain', 'rev-parse --show-prefix'], vistos.join(' | '));
+  assert.deepStrictEqual(suja, ['a.txt'], 'da subpasta, o caminho vem relativo a ela: ' + JSON.stringify(suja));
 });

@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'vigia-puxar.js');
 const IDENT = ['-c', 'user.name=t', '-c', 'user.email=t@t'];
@@ -63,8 +64,9 @@ function cenario(nome, conteudo) {
   return { base: base, bare: bare, dono: dono, dest: path.join(base, 'destino') };
 }
 
+// F1g (s372): no processo do teste, com o ambiente dele, como o spawnSync herdava
 function puxar(args) {
-  return spawnSync(process.execPath, [SCRIPT].concat(args), { encoding: 'utf8', windowsHide: true });
+  return comum.scriptComoProcesso(SCRIPT, args, { env: Object.assign({}, process.env) });
 }
 
 function lerBusca(dest) {
@@ -191,8 +193,8 @@ test('A7: flag presente sem valor e erro de uso que diz qual, exit 2, nada grava
     ];
     for (const [args, flag] of casos) {
       // cwd na pasta temporaria: um conserto quebrado que leia a flag seguinte como pasta grava ali, nao no repositorio
-      const r = spawnSync(process.execPath, [SCRIPT].concat(args), {
-        cwd: base, encoding: 'utf8', windowsHide: true, env: Object.assign({}, process.env, { SWORN_VIGIA: padrao })
+      const r = comum.scriptComoProcesso(SCRIPT, args, {
+        cwd: base, env: Object.assign({}, process.env, { SWORN_VIGIA: padrao })
       });
       assert.ok(!fs.existsSync(path.join(base, '--ramo')), JSON.stringify(args) + ' gravou na pasta "--ramo"');
       assert.strictEqual(r.status, 2, JSON.stringify(args) + ' -> ' + r.stdout + r.stderr);
@@ -209,8 +211,8 @@ test('A7: flag presente sem valor e erro de uso que diz qual, exit 2, nada grava
 test('sem --destino usa SWORN_VIGIA (a mesma pasta que a abertura le)', () => {
   const c = cenario('env', RELATORIO);
   try {
-    const r = spawnSync(process.execPath, [SCRIPT, '--repo', c.dono], {
-      encoding: 'utf8', windowsHide: true, env: Object.assign({}, process.env, { SWORN_VIGIA: c.dest })
+    const r = comum.scriptComoProcesso(SCRIPT, ['--repo', c.dono], {
+      env: Object.assign({}, process.env, { SWORN_VIGIA: c.dest })
     });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(fs.readFileSync(path.join(c.dest, 'novidades.md'), 'utf8'), RELATORIO);

@@ -85,6 +85,40 @@ function rondaDoBriefing(texto) {
   return m ? Number(m[1]) : 0;
 }
 
+// pendencia #2: o briefing que vai por arquivo ("Your full briefing is in `.../3.txt`") so traz o caminho do .txt no
+// pedido; a ronda esta dentro dele. Le-se o comeco dos 3 primeiros arquivos .txt/.md citados, na ordem em que
+// aparecem, com teto de bytes. Entre crases o caminho pode ter espaco (e ser relativo: abre-se da pasta do gancho, a
+// do projeto); solto, e absoluto e vai ate o primeiro espaco. Limite: com 3 outros citados antes do briefing, ele
+// nao se le e o despacho fica no modelo da ronda 1, o de antes desta leitura.
+const ARQUIVO_CITADO = /`([^`\n]+\.(?:txt|md))`|((?:[A-Za-z]:)?[\\/][^\s`'"<>|*?]+\.(?:txt|md))(?!\w|\.\w)/g;
+const MAX_CITADOS = 3;
+const INICIO = 64 * 1024;
+
+function inicio(arquivo) {
+  let fd;
+  try {
+    fd = fs.openSync(arquivo, 'r');
+    const buf = Buffer.alloc(INICIO);
+    return buf.toString('utf8', 0, fs.readSync(fd, buf, 0, INICIO, 0));
+  } catch (e) { // fail-open: o arquivo que nao se le so nao diz a ronda (o despacho conta como ronda 1)
+    return '';
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+/** A ronda pelo pedido: o caminho de vereditos no proprio texto ou, sem ele, no arquivo de briefing que o texto cita. */
+function rondaDoPedido(texto) {
+  const direta = rondaDoBriefing(texto);
+  if (direta) return direta;
+  const citados = Array.from(String(texto || '').matchAll(ARQUIVO_CITADO), (m) => m[1] || m[2]);
+  for (const arquivo of citados.slice(0, MAX_CITADOS)) {
+    const ronda = rondaDoBriefing(inicio(arquivo));
+    if (ronda) return ronda;
+  }
+  return 0;
+}
+
 /**
  * O modelo que o despacho do inspetor deve levar, ou null para deixar como veio. Ronda 1: o juiz (o degrau acima da
  * sessao), salvo pedido igual ou mais forte (jaBasta). Rondas 2 e 3: o degrau abaixo do juiz, mesmo com pedido mais
@@ -94,11 +128,12 @@ function alvoDoDespacho(sessao, pedido) {
   const juiz = juizDe(sessao);
   if (!juiz) return null;
   const p = pedido || {};
-  if (rondaDoBriefing(p.prompt) >= 2) {
+  if (rondaDoPedido(p.prompt) >= 2) {
     const alvo = conferenteDe(juiz);
     return apelidoDoId(String(p.model || '')) === alvo ? null : alvo;
   }
   return jaBasta(p.model, juiz) ? null : juiz;
 }
 
-module.exports = { modeloDaSessao, juizDe, jaBasta, ACIMA, ABAIXO, conferenteDe, rondaDoBriefing, alvoDoDespacho };
+module.exports = { modeloDaSessao, juizDe, jaBasta, ACIMA, ABAIXO, conferenteDe, rondaDoBriefing, rondaDoPedido,
+  alvoDoDespacho };

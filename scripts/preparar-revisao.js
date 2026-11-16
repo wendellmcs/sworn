@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const cegar = require('./lib/cegar.js');
 const git = require('./lib/git.js');
 const caminho = require('./lib/caminho.js');
@@ -10,6 +11,8 @@ const config = require('./lib/config.js');
 const textoLib = require('./lib/texto.js');
 const veredito = require('./lib/veredito.js');
 const design = require('./lib/design.js');
+const detectorCego = require('./lib/detector-cego.js');
+const inventarioTela = require('./lib/inventario-tela.js');
 const estado = require('./lib/estado.js');
 const escopoLib = require('./lib/escopo.js');
 const telaCega = require('./lib/tela-cega.js');
@@ -70,21 +73,21 @@ function arg(nome) {
 //
 // 0.3.3, item 9: o status do `git show` sozinho nao separa "arquivo novo" de "objeto que nao se le" (fora do
 // HEAD = 128, e em repositorio sem commit tambem 128; morto por sinal = null). Status 0 e o texto; o que nao
-// e 0 se classifica: `ls-tree --full-tree` vazio = novo (listado = o objeto existe e nao se le = erro); se o
+// e 0 se classifica: `ls-tree` vazio = novo (listado = o objeto existe e nao se le = erro); se o
 // ls-tree falha, `rev-parse --verify` = 1 e repositorio sem commit (novo), qualquer outro resultado e erro.
-// --full-tree porque o ls-tree resolve o caminho a partir da pasta atual e `relRaiz` vem da raiz do repo.
-// O caminho feliz gasta um processo so.
+// `rel` vem relativo a pasta atual: o `HEAD:./<rel>` do show e o ls-tree sem --full-tree resolvem a partir dela, e o
+// caminho feliz gasta um processo so (0.44.0: antes, um `rev-parse --show-prefix` a mais em toda revisao).
 // 0.3.3, item 12: a saida de ate 64 MiB (o padrao do lib/git.js); a de 1 MiB estourava em arquivo maior no HEAD.
 function rodarGit(cwd, args) {
   return git.rodar(cwd, args, { timeout: 10000 });
 }
-function versaoNoHead(cwd, relRaiz) {
-  const r = rodarGit(cwd, ['show', 'HEAD:' + relRaiz]);
+function versaoNoHead(cwd, rel) {
+  const r = rodarGit(cwd, ['show', 'HEAD:./' + rel]);
   if (!r) return { erro: 'sem resposta do git' };
   if (r.error) return { erro: r.error.code || r.error.message };
   if (r.status === 0) return { texto: r.stdout };
   if (r.status === null) return { erro: 'o git terminou por sinal (' + (r.signal || 'desconhecido') + ')' };
-  const t = rodarGit(cwd, ['ls-tree', '--full-tree', 'HEAD', '--', relRaiz]);
+  const t = rodarGit(cwd, ['ls-tree', 'HEAD', '--', rel]);
   if (t && !t.error && t.status === 0) {
     if (String(t.stdout).trim() === '') return { novo: true };
     return { erro: 'o HEAD lista o arquivo mas o git nao consegue ler o objeto (status ' + r.status + ')' };
@@ -138,21 +141,21 @@ try {
 }
 
 // R-T12-01 (D118): `git show HEAD:<caminho>` resolve pela RAIZ do repositorio, e o
-// --arquivo chega relativo ao cwd. Sem descontar o prefixo, rodar de uma subpasta
+// --arquivo chega relativo ao cwd. Sem descontar a subpasta, rodar de uma subpasta
 // NEGA arquivo que esta em HEAD - falso negativo, e com uma mensagem que mente o
-// motivo. A conversao ja existe no git.js desde a D41; aqui so se consome.
-const pre = git.prefixo(cwd);
-if (pre === null) {
+// motivo. O `HEAD:./<rel>` do versaoNoHead desconta (0.44.0; antes, o prefixo do git.js).
+// D244/defeito 10: arquivo que nao esta em HEAD e arquivo NOVO. Antes ele era recusado, e o
+// CSS novo da onda 7 ficou sem inspecao nenhuma. Agora o lado antigo e vazio e o pacote diz.
+const doHead = versaoNoHead(cwd, rel);
+// So quando o HEAD nao se leu: fora de um repositorio (ou sem git), o show, o ls-tree e o rev-parse falham juntos, e
+// a causa certa e esta. Perguntar antes gastava um git a mais em toda revisao que da certo.
+if (doHead.erro && git.prefixo(cwd) === null) {
   // 0.3.3, item 16: a mensagem diz o que fazer.
   process.stdout.write('ERRO: nao consegui falar com o git. Fora de um repositorio? A revisao compara o arquivo ' +
     'com o HEAD: rode de dentro de um repositorio git e confira se o git responde nesta pasta ' +
     '("git rev-parse --show-prefix"). Nada foi gravado.\n');
   process.exit(1);
 }
-
-// D244/defeito 10: arquivo que nao esta em HEAD e arquivo NOVO. Antes ele era recusado, e o
-// CSS novo da onda 7 ficou sem inspecao nenhuma. Agora o lado antigo e vazio e o pacote diz.
-const doHead = versaoNoHead(cwd, pre + rel);
 if (doHead.erro === 'ENOBUFS') {
   // 0.3.3, item 12: rodar de novo nao resolve; o arquivo no HEAD e maior que o limite.
   process.stdout.write('ERRO: ' + rel + ' no HEAD do git passa do limite da revisao cega (' +
@@ -162,7 +165,7 @@ if (doHead.erro === 'ENOBUFS') {
 }
 if (doHead.erro) {
   process.stdout.write('ERRO: nao consegui ler ' + rel + ' no HEAD do git (causa: ' + doHead.erro + '). ' +
-    'Nada foi gravado. Rode de novo; se repetir, confira se "git show HEAD:' + pre + rel +
+    'Nada foi gravado. Rode de novo; se repetir, confira se "git show HEAD:./' + rel +
     '" responde nesta pasta.\n');
   process.exit(1);
 }
@@ -405,7 +408,7 @@ if (telaDepois) {
     process.exit(1);
   }
   process.on('exit', function () {
-    try { fs.rmSync(pastaDasFotos, { recursive: true, force: true }); } catch (e) { /* o sistema recolhe a temporaria */ }
+    try { caminho.apagarPasta(pastaDasFotos); } catch (e) { /* o sistema recolhe a temporaria */ }
   });
   fotos = { HEAD: null, trabalho: null };
   const pedidas = telaAntes ? [['HEAD', telaAntes], ['trabalho', telaDepois]] : [['trabalho', telaDepois]];
@@ -430,8 +433,56 @@ if (telaDepois) {
 // veria como outra revisao - e a revisao nova comeca na ronda 1. Base sem fechada.json (em andamento) segue
 // como antes; o formato antigo (pastas numeradas soltas) fica fora. renameSync so vale no mesmo volume: a
 // pasta de arquivo mora ao lado de revisao/.
+// Pendencia #8 (0.47.0): a base deixada ABERTA (sem fechada.json: o teto gasto sem o voto da ronda 3, e o commit
+// seguindo) tambem vai para o arquivo quando o arquivo ganhou commit depois da ultima coisa gravada nela: as rondas
+// dela julgaram o diff contra um HEAD que ja nao e o de agora, e herda-las punha a revisao nova na ronda 4.
+// O sinal exato e a marca do arquivo no HEAD que cada ronda julgou (headDoArquivo no mapa.json: o sha-256 do texto
+// que o versaoNoHead ja leu, ou 'novo'), sem git a mais: a marca da ultima ronda diferente da de agora vence a base.
+// A base sem a marca (de antes da 0.47.0, ou a ultima ronda sem mapa.json legivel) cai no relogio, abaixo.
+const marcaDoHead = doHead.novo ? 'novo' : crypto.createHash('sha256').update(doHead.texto).digest('hex');
+function marcaDaUltimaRonda() {
+  try {
+    const m = JSON.parse(textoLib.semBom(fs.readFileSync(
+      path.join(base, String(cegar.proximaRonda(base) - 1), 'mapa.json'), 'utf8')));
+    return m && typeof m.headDoArquivo === 'string' ? m.headDoArquivo : undefined;
+  } catch (e) { return undefined; }
+}
+function ultimaGravacao(pasta) {
+  let maior = 0;
+  (function andar(p) {
+    fs.readdirSync(p, { withFileTypes: true }).forEach(function (e) {
+      const c = path.join(p, e.name);
+      if (e.isDirectory()) andar(c);
+      // lstat: um link quebrado dentro da base conta pela data dele, e nao derruba a conta
+      else maior = Math.max(maior, fs.lstatSync(c).mtimeMs);
+    });
+  })(pasta);
+  return maior;
+}
+function abertaVencida() {
+  if (formatoAntigo || !fs.existsSync(base) || fs.existsSync(path.join(base, 'fechada.json'))) return false;
+  const anterior = marcaDaUltimaRonda();
+  if (anterior !== undefined) return anterior !== marcaDoHead;
+  // Sem a marca, o relogio: o ultimo commit do arquivo contra a ultima gravacao na base.
+  // o git que nao responde nao arquiva nada: a base segue como estava, e a revisao continua dela.
+  // :(literal): o nome com [ ] * ? e o arquivo, nao um padrao que casaria com o commit de outro arquivo. O pathspec
+  // resolve a partir do cwd, como o `rel`.
+  const quando = git.correr(cwd, ['log', '-1', '--format=%ct', '--', ':(literal)' + rel]);
+  const segundos = Number(String(quando || '').trim());
+  if (!Number.isInteger(segundos) || segundos <= 0) return false;
+  let gravou;
+  try { gravou = ultimaGravacao(base); } catch (e) { return false; }
+  // Em segundos inteiros (o %ct nao tem fracao), e so o segundo ESTRITAMENTE depois vence: o commit no mesmo segundo
+  // da ultima gravacao pode ser de antes dela (commitar e preparar em seguida), e arquivar a base viva zeraria o teto
+  // dela. Limites, que deixam a revisao seguir da base como antes da 0.47.0: o commit no mesmo segundo do voto, e o
+  // commit com data de commit mais velha que a base (um pull de commit feito antes).
+  return gravou > 0 && segundos > Math.floor(gravou / 1000);
+}
 let arquivada = null;
-if (!formatoAntigo && fs.existsSync(path.join(base, 'fechada.json'))) {
+let arquivadaAberta = false;
+const fechadaAntes = !formatoAntigo && fs.existsSync(path.join(base, 'fechada.json'));
+if (fechadaAntes || abertaVencida()) {
+  arquivadaAberta = !fechadaAntes;
   const pai = path.join(path.dirname(revisao), 'revisao-fechada', path.basename(base));
   const d = new Date();
   const dois = function (v) { return String(v).padStart(2, '0'); };
@@ -448,11 +499,15 @@ if (!formatoAntigo && fs.existsSync(path.join(base, 'fechada.json'))) {
     // F2-10: ENOENT e a base ja sem fechada.json = outro preparar a arquivou entre a nossa conferencia e o
     // rename. Nao e erro: a revisao fechada esta guardada (por ele) e esta e uma base nova. Qualquer outro
     // erro do rename, ou ENOENT com a fechada.json ainda la, segue no ERRO.
-    if (e && e.code === 'ENOENT' && !fs.existsSync(path.join(base, 'fechada.json'))) {
+    const sumiu = arquivadaAberta ? !fs.existsSync(base) : !fs.existsSync(path.join(base, 'fechada.json'));
+    if (e && e.code === 'ENOENT' && sumiu) {
       // segue como base nova: arquivada fica null, e nada a dizer sobre para onde a anterior foi.
+      arquivadaAberta = false;
     } else {
       desfazerPastasVazias(faltavam);
-      process.stdout.write('ERRO: a revisao de ' + rel + ' ja esta fechada (fechada.json) e nao consegui arquivar ' +
+      process.stdout.write('ERRO: a revisao de ' + rel + (arquivadaAberta
+        ? ' ficou aberta e o arquivo ganhou commit depois dela, mas nao consegui arquivar '
+        : ' ja esta fechada (fechada.json) e nao consegui arquivar ') +
         path.relative(cwd, base).replace(/\\/g, '/') + ' em ' + path.relative(cwd, destino).replace(/\\/g, '/') +
         ' (causa: ' + textoLib.causaDoErro(e) + '). Nada foi gravado. Feche o que estiver usando essa pasta e ' +
         'rode de novo.\n');
@@ -547,6 +602,8 @@ let criada = false;
 let regua = null;
 let pedido = null;
 let designMd = null;
+let detectorJson = null;
+let inventarioJson = null;
 try {
   fs.mkdirSync(dir, { recursive: true });
   criada = true;
@@ -557,7 +614,7 @@ try {
   // F2c: o contrato do que o trecho usa de outro arquivo e o mesmo para os dois lados (e para a 2a passada).
   if (contrato && contrato.texto) fs.writeFileSync(path.join(dir, 'contrato.txt'), contrato.texto, 'utf8');
   // L3 (A3-03): a faixa vai no mapa.json; com a da ronda 1, o apurar-ronda.js confere as lentes que votaram.
-  const mapaJson = { arquivo: rel, mapa: r.mapa, faixa: faixa };
+  const mapaJson = { arquivo: rel, mapa: r.mapa, faixa: faixa, headDoArquivo: marcaDoHead };
   // F2d (c): na completa, a lista das lentes escolhidas pelo risco; o apurar confere que todas votaram
   if (faixa === 'completa') mapaJson.lentes = lentesDaRevisao;
   if (novo) mapaJson.novo = true;
@@ -606,6 +663,26 @@ try {
   if (textoDoDesign) {
     fs.writeFileSync(path.join(dir, 'design.md'), textoDoDesign, 'utf8');
     designMd = path.join(dir, 'design.md');
+    // E3 item 3 (ordem cega): o detector roda aqui e o resultado fica na ronda, fora do que vai ao inspetor; o
+    // apurar-ronda.js o cruza com a lente ui-design so depois dos vereditos (scripts/lib/detector-cego.js).
+    const rotuloDoTrabalho = r.mapa.A === 'trabalho' ? 'A' : 'B';
+    const rotuloDoHead = rotuloDoTrabalho === 'A' ? 'B' : 'A';
+    const daFoto = fotos && fotos.trabalho && fotos.trabalho.evidencia ? fotos.trabalho.evidencia.estilo : null;
+    fs.writeFileSync(path.join(dir, detectorCego.ARQUIVO), JSON.stringify(detectorCego.montar({
+      trabalho: r[rotuloDoTrabalho].conteudo, head: novo ? undefined : r[rotuloDoHead].conteudo,
+      sistema: sistemaDeDesign, caminho: relNaRaiz, rotulo: rotuloDoTrabalho, estilo: daFoto || null
+    }), null, 2) + '\n', 'utf8');
+    detectorJson = path.join(dir, detectorCego.ARQUIVO);
+  }
+  // E3 item 4: o inventario do que a tela liga, o antes (HEAD, o arquivo inteiro) contra o trabalho; o apurar-ronda.js
+  // poe o "mantido N/N" no fecho (scripts/lib/inventario-tela.js). Arquivo novo nao tem antes.
+  if (!novo && inventarioTela.ehArquivoDeTela(rel)) {
+    fs.writeFileSync(path.join(dir, inventarioTela.ARQUIVO), JSON.stringify(inventarioTela.montar({
+      head: anterior, trabalho: atual, caminho: rel,
+      antes: fotos && fotos.HEAD ? fotos.HEAD.evidencia : null,
+      depois: fotos && fotos.trabalho ? fotos.trabalho.evidencia : null
+    }), null, 2) + '\n', 'utf8');
+    inventarioJson = path.join(dir, inventarioTela.ARQUIVO);
   }
 } catch (e) {
   const causa = textoLib.causaDoErro(e);
@@ -642,8 +719,11 @@ aviso += pedido ? ' pedido.md vai a lente escopo, com o pedido de ' + origemDoPe
   : ' Sem pedido.md: o escopo em vigor, ' + origemDoPedido + ', nao declara objetivo nem Dentro (veja semPedido).';
 if (arquivada) {
   // 0.3.3, item 2: a saida diz para onde a revisao fechada foi.
-  aviso += ' A revisao anterior deste arquivo ja estava fechada (fechada.json): foi movida inteira, sem apagar ' +
-    'nada, para ' + path.relative(cwd, arquivada).replace(/\\/g, '/') + '. Esta e a ronda 1 de uma revisao ' +
+  aviso += (arquivadaAberta
+    ? ' A revisao anterior deste arquivo ficou aberta (sem fechada.json) e o arquivo ganhou commit depois dela: ' +
+      'as rondas dela julgaram outro HEAD. Foi movida inteira, sem apagar nada, para '
+    : ' A revisao anterior deste arquivo ja estava fechada (fechada.json): foi movida inteira, sem apagar ' +
+      'nada, para ') + path.relative(cwd, arquivada).replace(/\\/g, '/') + '. Esta e a ronda 1 de uma revisao ' +
     'nova, com o teto de 3 rondas inteiro.';
 }
 if (pediuCompleta && faixaMedida !== 'completa') {
@@ -781,6 +861,7 @@ if (fotos) {
 if (faltasDaReferencia.length) saida.referenciaQueFalta = faltasDaReferencia;
 if (semPedido) saida.semPedido = semPedido;
 if (arquivada) saida.arquivada = arquivada;
+if (arquivada && arquivadaAberta) saida.arquivadaAberta = true;
 if (degradado) {
   saida.degradado = degradado.trim();
   saida.aviso += ' Revisao degradada (--degradado): a aprovacao dela sai com "DEGRADADO: ' + degradado + '", e a ' +
@@ -791,5 +872,15 @@ if (designMd) {
   saida.design = designMd;
   saida.aviso += ' design.md vai a cada lente de tela: o sistema de design do projeto e os desvios declarados para este ' +
     'arquivo; o valor fora dos dois e desvio nao declarado.';
+}
+if (detectorJson) {
+  saida.aviso += ' detector.json guarda o que o detector de design achou, para o apurar-ronda.js cruzar com a lente ' +
+    'ui-design depois dos vereditos: nao o abra e nao o mostre a nenhum inspetor, como o mapa.json.';
+}
+if (inventarioJson) {
+  saida.aviso += ' inventario.json guarda o que a tela ligava no HEAD (id, evento, link, campo, gancho de teste, ' +
+    'script, destino do formulario' + (fotos && fotos.HEAD && fotos.trabalho ? ' e os nomes da acessibilidade das ' +
+    'duas fotos' : '') + ') e o que sumiu no trabalho; o apurar-ronda.js diz o "mantido N/N" no fecho. Nao o mostre a ' +
+    'nenhum inspetor.';
 }
 process.stdout.write(JSON.stringify(saida, null, 2) + '\n');

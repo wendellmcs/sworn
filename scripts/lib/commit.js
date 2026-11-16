@@ -81,21 +81,41 @@ function aprovado(aprovados, arquivo) {
   return (Array.isArray(aprovados) ? aprovados : []).some(function (a) { return typeof a === 'string' && chave(a) === k; });
 }
 
-/** A raiz do repositorio git de `pasta`, ou null fora de repositorio. */
-function topo(pasta) {
-  const s = git.correr(pasta, ['rev-parse', '--show-toplevel']);
+/**
+ * A raiz do repositorio git de `pasta`, ou null fora de repositorio. `falha` (opcional, um objeto) recebe
+ * `timeout: true` quando o null e do git que nao respondeu no prazo (D844), e nao de "fora do repositorio".
+ */
+function topo(pasta, falha) {
+  const s = git.correr(pasta, ['rev-parse', '--show-toplevel'], falha ? { falha: falha } : undefined);
   return s === null ? null : s.trim();
+}
+
+/**
+ * F1h (0.45.0): a raiz do repositorio de `abs` e o blob dele no HEAD num git so, `rev-parse --show-toplevel
+ * HEAD:./<nome>`. { topo, blob }, com blob '' quando o HEAD nao tem o arquivo (o git sai 128 e a raiz ja saiu no
+ * stdout; tambem no repositorio sem commit); null fora de repositorio (128 com o stdout vazio). O git que nao respondeu
+ * (prazo, spawn, sinal) devolve undefined e quem chama pergunta como antes: o prazo nunca vira "fora do repositorio".
+ */
+function raizEBlob(abs) {
+  const r = git.rodar(path.dirname(abs), ['rev-parse', '--show-toplevel', 'HEAD:./' + path.basename(abs)],
+    { timeout: git.prazoDoCorrer(), maxBuffer: 1024 * 1024 });
+  if (!r || r.error || typeof r.status !== 'number' || typeof r.stdout !== 'string') return undefined;
+  const linhas = r.stdout.split(/\r?\n/);
+  const raiz = linhas[0].trim();
+  if (r.status === 0) return raiz && linhas[1] && linhas[1].trim() ? { topo: raiz, blob: linhas[1].trim() } : undefined;
+  return raiz ? { topo: raiz, blob: '' } : null;
 }
 
 /**
  * Um arquivo tocado: { faixa, inspetores } se e codigo, existe e difere do HEAD (ou e novo e o git nao o ignora); senao
  * null. Fora de repositorio ele mediria "novo": quem chama confere o repositorio antes (`pendentes`, D575). `estilo` vem do chamador (regra do design.js, relativa a raiz do projeto).
+ * `blob` (F1h): o do `raizEBlob` ('' = o HEAD nao tem); sem ele, o `cat-file -e` pergunta.
  */
-function medir(abs, estilo) {
+function medir(abs, estilo, blob) {
   if (ehTexto(abs) || !fs.existsSync(abs)) return null;
   const pasta = path.dirname(abs);
   const nome = path.basename(abs);
-  const novo = git.correr(pasta, ['cat-file', '-e', 'HEAD:./' + nome]) === null;
+  const novo = typeof blob === 'string' ? blob === '' : git.correr(pasta, ['cat-file', '-e', 'HEAD:./' + nome]) === null;
   let faixa;
   // Plano 091 #8: as linhas acrescentadas contra o HEAD (null = todas: arquivo novo, ou diff que nao se mediu).
   let novas = null;
@@ -151,11 +171,12 @@ function comTeto(tetos, arquivo) {
  * A revisao de `abs` fechou no teto e o HEAD dele ainda e o daquela hora? Editar o arquivo nao tira a marca (o conserto
  * depois do teto e esperado); o commit feito a vence, porque o blob do HEAD muda. Marca que nao e texto nao vale.
  */
-function noTeto(tetos, abs) {
+function noTeto(tetos, abs, blob) {
   if (!ehMapa(tetos)) return false;
   const k = chave(abs);
   const c = Object.keys(tetos).find(function (x) { return chave(x) === k; });
-  return c !== undefined && tetos[c] === blobNoHead(abs);
+  // F1h: o blob que o pendentes ja leu vale; sem ele, pergunta ao git
+  return c !== undefined && tetos[c] === (typeof blob === 'string' ? blob : blobNoHead(abs));
 }
 
 /**
@@ -163,21 +184,42 @@ function noTeto(tetos, abs) {
  * repositorio do commit (`topoDoCommit`; null = todos) e fora dos `aprovados`. `ehEstilo(rel)` diz se o arquivo e de
  * tela. `marcas` (lista do atalhos.js; sem ela, nenhuma) da as linhas dos atalhos novos sem gatilho em `atalhos`.
  * `tetos` (o `revisadosNoTeto` do estado; sem ele, nenhum) diz em `teto` se a revisao do arquivo fechou no teto.
+ * D844: o arquivo cujo repositorio o git nao disse no prazo (o de raiz e blob e o da reserva estouraram) entra como
+ * { rel, semResposta: true }: sem saber o repositorio, o portao nao libera.
  */
 function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas, tetos) {
   if (!Array.isArray(arquivos)) return [];
   const lista = [];
+  // F1g (s372): no caminho de reserva, um git por pasta; o memo vive so nesta chamada (o repositorio nao muda nela).
+  const topos = new Map();
   for (const a of arquivos) {
     if (typeof a !== 'string' || aprovado(aprovados, a)) continue;
     const abs = path.resolve(raiz, a);
+    // F1h: texto e arquivo que nao existe o medir nunca conta, entao nao gastam git
+    if (ehTexto(abs) || !fs.existsSync(abs)) continue;
     const rel = require('./glob.js').normalizar(path.relative(raiz, abs));
     // D575: fora de qualquer repositorio (instrumento do scratchpad) nunca conta, mesmo com topoDoCommit null (`cd "$D"`).
-    const t = topo(path.dirname(abs));
+    // F1h: a raiz e o blob num git so; o git que nao respondeu cai no caminho de antes (topo, cat-file, blob do teto).
+    const rb = raizEBlob(abs);
+    let t;
+    if (rb === undefined) {
+      const pasta = path.dirname(abs);
+      if (!topos.has(pasta)) {
+        const falha = {};
+        const raizDoGit = topo(pasta, falha);
+        topos.set(pasta, { raiz: raizDoGit, lento: falha.timeout === true });
+      }
+      if (topos.get(pasta).lento) { lista.push({ rel: rel, semResposta: true }); continue; }
+      t = topos.get(pasta).raiz;
+    } else {
+      t = rb && rb.topo;
+    }
     if (!t || (topoDoCommit && chave(t) !== chave(topoDoCommit))) continue;
-    const m = medir(abs, typeof ehEstilo === 'function' && ehEstilo(rel) === true);
+    const blob = rb ? rb.blob : undefined;
+    const m = medir(abs, typeof ehEstilo === 'function' && ehEstilo(rel) === true, blob);
     if (m) lista.push({ rel: rel, faixa: m.faixa, inspetores: m.inspetores,
       atalhos: Array.isArray(marcas) && marcas.length ? atalhosNovos(abs, m.novas, marcas) : [],
-      teto: noTeto(tetos, abs) });
+      teto: noTeto(tetos, abs, blob) });
   }
   return lista;
 }
@@ -259,6 +301,29 @@ function motivo(lista) {
   ]).join('\n');
 }
 
+/**
+ * D844: o motivo da negacao quando o git nao respondeu no prazo ao conferir o repositorio de algum arquivo. Nao e falta
+ * de revisao: o portao nao soube se o arquivo e deste repositorio e nao libera sem saber.
+ */
+function motivoSemResposta(lista) {
+  const ascii = require('./escopo.js').ascii;
+  const ms = git.prazoDoCorrer();
+  const prazo = ms % 1000 === 0 ? (ms / 1000) + ' s' : ms + ' ms';
+  const lentos = (Array.isArray(lista) ? lista : []).filter(function (p) { return p && p.semResposta === true; });
+  return [
+    'sworn - commit parado: o git nao respondeu em ' + prazo + ' ao conferir de que repositorio sao estes arquivos:'
+  ].concat(citar(lentos.map(function (p) { return '"' + ascii(p.rel) + '"'; })), [
+    'Nao e falta de revisao: sem a resposta do git, o portao nao sabe se o arquivo e deste repositorio.',
+    '',
+    'Faca agora:',
+    '  1. repita o commit;',
+    '  2. se ele parar de novo com este aviso, o git esta lento nesta maquina: ponha SWORN_GIT_PRAZO_MS',
+    '     (um prazo maior, em milissegundos, por exemplo "30000") no bloco "env" do settings.json do Claude',
+    '     Code, abra o Claude Code de novo e repita (o export num comando do shell nao chega ao portao).',
+    DESLIGAR
+  ]).join('\n');
+}
+
 /** A lista de aprovados sem `arquivo` (editado de novo: volta a cobrar). Lista torta = vazia. */
 function semAprovado(aprovados, arquivo) {
   const k = chave(arquivo);
@@ -270,5 +335,5 @@ function comAprovado(aprovados, arquivo) {
   return semAprovado(aprovados, arquivo).concat([path.resolve(String(arquivo))]);
 }
 
-module.exports = { MARCA, ehCommit, semRevisao, pastaDoComando, inspetores, topo, pendentes, motivo, semAprovado,
+module.exports = { MARCA, ehCommit, semRevisao, pastaDoComando, inspetores, topo, pendentes, motivo, motivoSemResposta, semAprovado,
   comAprovado, ehTexto, aprovado, comTeto, semTeto, noTeto };

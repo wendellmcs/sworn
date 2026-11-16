@@ -5,8 +5,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
+const comum = require('./lib/comum.js');
 const { spawnSync } = require('node:child_process');
 
 const RAIZ = path.join(__dirname, '..');
@@ -34,7 +34,7 @@ function liberou(r) {
 }
 
 function montarProjeto(extra) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-raiz-'));
+  const dir = comum.temporaria('sworn-raiz-');
   fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
   const projeto = Object.assign({
     versaoConfig: 1,
@@ -50,7 +50,7 @@ function montarProjeto(extra) {
 }
 
 function comTmp(fn) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-raiz-tmp-'));
+  const base = comum.temporaria('sworn-raiz-tmp-');
   try { fn(base); } finally { fs.rmSync(base, { recursive: true, force: true }); }
 }
 
@@ -70,7 +70,7 @@ test('raizDoProjeto: sobe ate a pasta que tem .claude/sworn/projeto.json', () =>
 });
 
 test('raizDoProjeto: sem projeto em lugar nenhum acima, devolve o proprio cwd', () => {
-  const solto = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-solto-'));
+  const solto = comum.temporaria('sworn-solto-');
   assert.strictEqual(config.raizDoProjeto(solto), solto);
 });
 
@@ -115,7 +115,7 @@ test('D244/defeito 1: arquivo fora de qualquer projeto segue liberado com a sess
   comTmp((tmp) => {
     const dir = montarProjeto();
     const sub = path.join(dir, 'src');
-    const solto = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-solto-'));
+    const solto = comum.temporaria('sworn-solto-');
     liberou(rodar('portao-escopo.js', escrita(sub, path.join(solto, 'nota.md')), tmp));
   });
 });

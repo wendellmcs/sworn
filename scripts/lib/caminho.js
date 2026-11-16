@@ -38,4 +38,34 @@ function dentroPeloCaminhoReal(arquivo, cwd) {
   return !(rel === '' || /^\.\.(?:[\\/]|$)/.test(rel) || path.isAbsolute(rel));
 }
 
-module.exports = { relativoAoProjeto, dentroPeloCaminhoReal };
+/**
+ * Pendencia #10 (s372, 0.40.0): apaga a pasta `dir` inteira. No Windows (Node 24) o `fs.rmSync` recursivo volta SEM
+ * erro e deixa a pasta quando o caminho tem acento ("sworn cicatriz ação-" ficava a cada rodada da suite). O
+ * `rmSync` roda como antes, com `recursive` e `force` e o que vier em `opcoes` (maxRetries, retryDelay), e o erro
+ * dele sobe igual (quem chama ja trata o EBUSY). Se ele voltou e a pasta ficou, o resto sai item por item: o link e a
+ * juncao saem sem seguir o alvo, e o item que sumiu no meio (outro processo o apagou) conta como apagado, como no
+ * `force`. O outro erro desse passo tambem sobe. Caminho vazio ou que nao e texto e recusado antes de tocar o disco:
+ * o '' viraria a pasta atual. `fs.rmSync` e lido na hora da chamada: o teste o troca.
+ */
+function apagarPasta(dir, opcoes) {
+  if (typeof dir !== 'string' || dir.trim() === '') throw new TypeError('apagarPasta: caminho vazio ou invalido');
+  fs.rmSync(dir, Object.assign({}, opcoes, { recursive: true, force: true }));
+  if (fs.existsSync(dir)) apagarItemPorItem(dir);
+}
+
+function apagarItemPorItem(alvo) {
+  try {
+    // lstat: o link e a juncao nao contam como pasta, e o unlink tira so o link (no Windows o do node tambem tira a
+    // juncao e o arquivo somente-leitura, medido)
+    if (fs.lstatSync(alvo).isDirectory()) {
+      fs.readdirSync(alvo).forEach(function (nome) { apagarItemPorItem(path.join(alvo, nome)); });
+      fs.rmdirSync(alvo);
+    } else {
+      fs.unlinkSync(alvo);
+    }
+  } catch (e) {
+    if (!e || e.code !== 'ENOENT') throw e;
+  }
+}
+
+module.exports = { relativoAoProjeto, dentroPeloCaminhoReal, apagarPasta };

@@ -13,6 +13,7 @@ const saude = require('./lib/saude.js');
 const calibracao = require('./lib/calibracao.js');
 const config = require('./lib/config.js');
 const reinjecao = require('./lib/reinjecao.js');
+const { apagarPasta } = require('./lib/caminho.js'); // pendencia #10: o rmSync deixava a pasta com acento
 
 /**
  * Pedido 6 (D752): `node ponte.js <harness> <script>` e o gancho que o instalador grava no Codex, no Qwen Code, no
@@ -199,7 +200,9 @@ function porArquivo(gerar, caminho, entrada, opcoes) {
     dizerSeFalhou(caminho, r);
     return fs.readFileSync(arq('out'), 'utf8');
   } finally {
-    fs.rmSync(pasta, { recursive: true, force: true });
+    // a sobra fica na pasta de estado; o erro de apagar nao pode trocar a saida do portao, que ja saiu (um bloqueio
+    // perdido aqui deixaria a ferramenta passar)
+    try { apagarPasta(pasta); } catch (e) { /* fica a sobra */ }
   }
 }
 

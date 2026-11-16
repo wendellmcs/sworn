@@ -2,13 +2,13 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
+const comum = require('./lib/comum.js');
 
 const BOM = String.fromCharCode(65279);
 
 function comTmp(fn) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-teste-'));
+  const base = comum.temporaria('sworn-teste-');
   const antes = process.env.SWORN_TMP;
   process.env.SWORN_TMP = base;
   delete require.cache[require.resolve('../scripts/lib/estado.js')];
@@ -78,7 +78,7 @@ test('estado: incrementar conta por chave', () => {
 
 test('estado: descarregar so grava se .claude/sworn existir (D14)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       assert.strictEqual(estado.descarregar(proj, { a: 1 }), false);
       fs.mkdirSync(path.join(proj, '.claude', 'sworn'), { recursive: true });
@@ -94,7 +94,7 @@ test('estado: descarregar so grava se .claude/sworn existir (D14)', () => {
 
 test('estado: contador corrompido nao apaga historico em silencio (D30)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
@@ -116,7 +116,7 @@ test('estado: contador corrompido nao apaga historico em silencio (D30)', () => 
 
 test('estado: escrita de contadores nao deixa arquivo temporario (D30)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
@@ -134,7 +134,7 @@ test('estado: escrita de contadores nao deixa arquivo temporario (D30)', () => {
 
 test('estado: descarregar escreve em arquivo temporario antes de renomear (D30)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       fs.mkdirSync(path.join(proj, '.claude', 'sworn'), { recursive: true });
       const arquivo = path.join(proj, '.claude', 'sworn', 'contadores.json');
@@ -200,7 +200,7 @@ test('estado: sessao sem BOM continua funcionando (controle)', () => {
 
 test('estado: contadores.json com BOM soma em vez de zerar (D-A)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
@@ -220,7 +220,7 @@ test('estado: contadores.json com BOM soma em vez de zerar (D-A)', () => {
 
 test('estado: contadores.json sem BOM soma normalmente (controle)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
@@ -241,7 +241,7 @@ test('estado: contadores.json sem BOM soma normalmente (controle)', () => {
 
 test('estado: contadores.json = numero (42) vira .corrompido, nao estoura (D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
@@ -262,7 +262,7 @@ test('estado: contadores.json = numero (42) vira .corrompido, nao estoura (D-A2)
 
 test('estado: contadores.json = string ("oi") vira .corrompido, nao estoura (D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
@@ -283,7 +283,7 @@ test('estado: contadores.json = string ("oi") vira .corrompido, nao estoura (D-A
 
 test('estado: contadores.json = booleano (true) vira .corrompido, nao estoura (D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
@@ -304,7 +304,7 @@ test('estado: contadores.json = booleano (true) vira .corrompido, nao estoura (D
 
 test('estado: contadores.json = array ([1,2,3]) vira .corrompido, nao perde o incremento (D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
@@ -325,7 +325,7 @@ test('estado: contadores.json = array ([1,2,3]) vira .corrompido, nao perde o in
 
 test('estado: contadores.json = objeto valido soma e NAO cria .corrompido (controle D-A2)', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });
@@ -368,7 +368,7 @@ test('estado: ultimaFerramenta saiu das listas, e estado antigo com o campo segu
 // [] perdia a conta; valor que nao e numero somava como texto ("2" + 1 = "21").
 test('A2-28 (s205): o temporario do descarregar tem nome proprio, e o .tmp de outro processo nao o derruba', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       const arquivo = path.join(pasta, 'contadores.json');
@@ -399,7 +399,7 @@ test('A2-28 (s205): o temporario do descarregar tem nome proprio, e o .tmp de ou
 
 test('A2-87 (s205): a escrita do temporario que falha no meio nao deixa o .tmp para tras', () => {
   comTmp((estado) => {
-    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-proj-'));
+    const proj = comum.temporaria('sworn-proj-');
     try {
       const pasta = path.join(proj, '.claude', 'sworn');
       fs.mkdirSync(pasta, { recursive: true });

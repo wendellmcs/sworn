@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = path.join(RAIZ, 'scripts', 'gravar-veredito.js');
@@ -33,7 +34,7 @@ const REAL_SUBAGENT_STOP = {
 };
 
 function tmp(nome) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn gravar-' + nome + '-'));
+  return comum.temporaria('sworn gravar-' + nome + '-');
 }
 
 /** Um projeto com uma ronda de verdade: revisao/<id>/<n>/ com A.txt, B.txt e vereditos/. */
@@ -66,16 +67,20 @@ function handback(p, mensagem, extra) {
   }, extra || {});
 }
 
-function opcoes(p, entrada) {
-  return { cwd: p.dir, encoding: 'utf8', input: typeof entrada === 'string' ? entrada : JSON.stringify(entrada),
-    env: Object.assign({}, process.env, { SWORN_TMP: p.estado }) };
+/** O ambiente do gancho: o do processo de teste, com o estado na pasta do projeto de ensaio. */
+function ambienteDe(p) {
+  return Object.assign({}, process.env, { SWORN_TMP: p.estado });
 }
 
+function opcoes(p, entrada) {
+  return { cwd: p.dir, encoding: 'utf8', input: typeof entrada === 'string' ? entrada : JSON.stringify(entrada),
+    env: ambienteDe(p) };
+}
+
+// F1g: o gancho roda no processo do teste (a entrada em texto segue por processo, pelo proprio ganchoComoProcesso)
 function rodar(p, entrada) {
-  const r = spawnSync(process.execPath, [SCRIPT], opcoes(p, entrada));
-  let json = null;
-  if (r.stdout && r.stdout.trim()) { try { json = JSON.parse(r.stdout); } catch (e) { json = null; } }
-  return { status: r.status, json: json, stdout: r.stdout, stderr: r.stderr };
+  const r = comum.ganchoComoProcesso(SCRIPT, entrada, { cwd: p.dir, env: ambienteDe(p) });
+  return { status: r.status, json: r.json, stdout: r.stdout, stderr: r.stderr };
 }
 
 /** O contrato que vale em TODA resposta: sai com 0 e nunca emite decision. */

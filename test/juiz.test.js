@@ -7,7 +7,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const comum = require('./lib/comum.js');
 
 const lib = require('../scripts/lib/juiz.js');
 const GANCHO = path.join(__dirname, '..', 'scripts', 'portao-juiz.js');
@@ -26,11 +26,13 @@ function transcricao(dir, modelos) {
   return arquivo;
 }
 
+// F1g (s372): no processo do teste (comum.ganchoComoProcesso), com o ambiente do teste, como o spawnSync herdava; o
+// gancho que falha e libera volta com status 1, e o assert o pega
 function gancho(dir, entrada) {
-  const r = spawnSync(process.execPath, [GANCHO], { cwd: dir, input: JSON.stringify(Object.assign({ cwd: dir }, entrada)),
-    encoding: 'utf8' });
+  const r = comum.ganchoComoProcesso(GANCHO, Object.assign({ cwd: dir }, entrada),
+    { cwd: dir, env: Object.assign({}, process.env) });
   assert.strictEqual(r.status, 0, r.stderr);
-  return r.stdout ? JSON.parse(r.stdout) : null;
+  return r.json;
 }
 
 test('C3 juiz: o degrau acima do executor; o desconhecido fica com o do agente', () => {
@@ -135,6 +137,68 @@ test('D829 juiz: o modelo do despacho - ronda 1 no juiz, rondas 2 e 3 um degrau 
   // ronda 1 com pedido mais forte fica como veio (C3); sessao desconhecida, nada muda
   assert.strictEqual(lib.alvoDoDespacho('haiku', { model: 'opus', prompt: 'ronda 1' }), null);
   assert.strictEqual(lib.alvoDoDespacho('', r2), null);
+});
+
+// pendencia #2: o briefing por arquivo so traz o caminho do .txt no pedido; a ronda esta dentro do arquivo
+test('pendencia #2 juiz: a ronda sai tambem do arquivo de briefing que o pedido cita', () => {
+  pasta(function (dir) {
+    const vereditos = path.join(dir, '.claude', 'sworn', 'revisao', 'a.js', '3', 'vereditos');
+    const briefing = path.join(dir, 'b 35r3', '1.txt');
+    fs.mkdirSync(path.dirname(briefing), { recursive: true });
+    fs.writeFileSync(briefing, 'Lens: correcao\nVerdicts folder: `' + vereditos + '`\n');
+    const doisMd = path.join(dir, '2.md');
+    fs.writeFileSync(doisMd, 'Verdicts folder: ' + vereditos.replace(/\\/g, '/') + '\n');
+    // entre crases (a pasta temporaria pode ter espaco: o caminho solto so se testa abaixo, numa pasta sem espaco)
+    const c = (f) => '`' + f + '`';
+    assert.strictEqual(lib.rondaDoPedido('Your full briefing is in ' + c(doisMd) + '. Read it first.'), 3);
+    assert.strictEqual(lib.rondaDoPedido('briefing: ' + c(doisMd.replace(/\\/g, '/'))), 3, 'barra normal');
+    // o caminho do proprio pedido manda: o arquivo nem se abre
+    assert.strictEqual(lib.rondaDoPedido('x ' + c(path.join(dir, '.claude', 'sworn', 'revisao', 'a.js', '2', 'vereditos')) +
+      ' ' + c(doisMd)), 2);
+    // arquivo que nao existe, sem o caminho dentro, ou citado depois do teto de 3: ronda 1 (0)
+    const vazio = path.join(dir, 'vazio.txt');
+    fs.writeFileSync(vazio, 'Lens: correcao\n');
+    assert.strictEqual(lib.rondaDoPedido('briefing ' + c(path.join(dir, 'nao-existe.txt'))), 0);
+    assert.strictEqual(lib.rondaDoPedido('briefing ' + c(vazio)), 0);
+    assert.strictEqual(lib.rondaDoPedido([vazio, vazio, vazio, doisMd].map(c).join(' ')), 0, 'so os 3 primeiros citados');
+    assert.strictEqual(lib.rondaDoPedido([vazio, vazio, doisMd].map(c).join(' ')), 3, 'o terceiro ainda se le');
+    assert.strictEqual(lib.rondaDoPedido(undefined), 0);
+    // o despacho: sessao Opus, briefing da ronda 3 por arquivo -> Sonnet
+    assert.strictEqual(lib.alvoDoDespacho('opus', { prompt: 'Your full briefing is in ' + c(doisMd) + '.' }), 'sonnet');
+    // entre crases, o caminho com espaco vale inteiro
+    assert.strictEqual(lib.rondaDoPedido('Your full briefing is in ' + c(briefing) + '.'), 3);
+  });
+  // o caminho solto (absoluto, sem crase) vai ate o primeiro espaco, na ordem em que aparece no pedido; precisa de uma
+  // pasta sem espaco: a temporaria, ou a raiz do disco quando a temporaria tem espaco (sem escrita nela, pula)
+  let semEspaco = null;
+  for (const base of [os.tmpdir(), path.parse(os.tmpdir()).root]) {
+    if (/\s/.test(base)) continue;
+    try { semEspaco = fs.mkdtempSync(path.join(base, 'sworn-juiz-')); break; } catch (e) { /* sem escrita: a proxima */ }
+  }
+  if (!semEspaco) return;
+  try {
+    const vereditos = path.join(semEspaco, 'revisao', 'a.js', '2', 'vereditos');
+    const solto = path.join(semEspaco, '4.txt');
+    fs.writeFileSync(solto, 'Verdicts folder: ' + vereditos + '\n');
+    const vazio = path.join(semEspaco, 'vazio.md');
+    fs.writeFileSync(vazio, 'Lens: borda\n');
+    assert.strictEqual(lib.rondaDoPedido('briefing ' + solto), 2);
+    assert.strictEqual(lib.rondaDoPedido('briefing ' + solto.replace(/\\/g, '/') + '.'), 2, 'barra normal e ponto final');
+    // outro arquivo que so comeca igual nao e o 4.txt: nem 4.txt.bak, nem 4.txtx
+    assert.strictEqual(lib.rondaDoPedido('briefing ' + solto + '.bak'), 0);
+    assert.strictEqual(lib.rondaDoPedido('briefing ' + solto + 'x'), 0);
+    // a ordem e a do pedido: o solto citado antes de dois entre crases se le primeiro
+    assert.strictEqual(lib.rondaDoPedido('briefing em ' + solto + '; veja `' + vazio + '`, `' + vazio + '`, `' + vazio + '`'), 2);
+    // o caminho entre crases nao se le de novo como solto (cada citacao conta uma vez no teto; a repetida conta de
+    // novo, como acima com o mesmo vazio tres vezes)
+    assert.strictEqual(lib.rondaDoPedido('`' + vazio + '` `' + vazio + '` ' + solto), 2, 'crase contada uma vez');
+    const comEspaco = path.join(semEspaco, 'b 1', '5.txt');
+    fs.mkdirSync(path.dirname(comEspaco));
+    fs.writeFileSync(comEspaco, 'Verdicts folder: ' + vereditos + '\n');
+    assert.strictEqual(lib.rondaDoPedido('briefing ' + comEspaco), 0, 'solto, para no espaco e nao se abre');
+  } finally {
+    fs.rmSync(semEspaco, { recursive: true, force: true });
+  }
 });
 
 test('D829 juiz: o gancho poe o inspetor da ronda 2 um degrau abaixo do juiz', () => {

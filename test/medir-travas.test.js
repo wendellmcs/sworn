@@ -8,13 +8,14 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const comum = require('./lib/comum.js');
 const { spawnSync } = require('node:child_process');
 const mt = require('../scripts/medir-travas.js');
 
 const RAIZ = path.join(__dirname, '..');
 const CLI = path.join(RAIZ, 'scripts', 'medir-travas.js');
 
-function pasta() { return fs.mkdtempSync(path.join(os.tmpdir(), 'sworn travas-')); }
+function pasta() { return comum.temporaria('sworn travas-'); }
 
 function escrever(dir, arquivos) {
   Object.keys(arquivos).forEach(function (rel) {
@@ -164,6 +165,19 @@ test('montarBrinquedo: A sem nada do plugin; B com o projeto, a prova de pronto 
   const st = spawnSync('git', ['status', '--porcelain'], { cwd: b, encoding: 'utf8' });
   assert.strictEqual(st.stdout.trim(), '');
   assert.throws(function () { mt.montarBrinquedo(a, t, 'sem'); }, 'pasta que ja existe nao se reaproveita');
+});
+
+test('copiarBrinquedo: cria a pasta-mae que falta, a copia e um repositorio dela, e pasta que ja existe recusa', () => {
+  const t = mt.lerTarefas().tarefas[0];
+  const base = pasta();
+  const molde = path.join(base, 'molde');
+  mt.montarBrinquedo(molde, t, 'com');
+  const copia = path.join(base, 'nova', 'sub', 'copia');
+  mt.copiarBrinquedo(molde, copia);
+  const g = function (args) { return spawnSync('git', args, { cwd: copia, encoding: 'utf8' }).stdout.trim(); };
+  assert.strictEqual(g(['status', '--porcelain']), '', 'a copia nasce limpa');
+  assert.strictEqual(fs.realpathSync.native(g(['rev-parse', '--show-toplevel'])), fs.realpathSync.native(copia), 'o git da copia e o dela');
+  assert.throws(function () { mt.copiarBrinquedo(molde, copia); }, /EEXIST/, 'pasta que ja existe nao se reaproveita');
 });
 
 test('argsDoClaude: A isolado sem plugin; B igual mais o --plugin-dir do repositorio', () => {
@@ -422,6 +436,38 @@ test('--gerar: invalidas acima do teto numa condicao param a rodada (o resto so 
   // 3 planejadas na sem: 1 invalida ja passa de 10%
   assert.strictEqual(env.execucoes.length, 1);
   assert.strictEqual(env.completo, false);
+});
+
+// F1i (0.46.0): a repeticao 2 em diante copia o brinquedo da 1a do mesmo (tarefa, condicao), sem abrir git.
+test('--gerar: a 2a repeticao copia o brinquedo da 1a (o mesmo commit, limpo), sem init nem commit a mais', () => {
+  const a = ambienteFalso();
+  const destino = congelado(a);
+  const rastro = path.join(a.dir, 'trace2.json');
+  const r = cli(['--gerar', '--modelo', 'm', '--destino', destino, '--tarefa', 'control-capitalize', '--repeticoes', '2'],
+    { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log, GIT_TRACE2_EVENT: rastro });
+  assert.strictEqual(r.status, 0, r.stderr + r.stdout);
+  const env = JSON.parse(fs.readFileSync(path.join(rodadaEm(destino), 'execucoes.json'), 'utf8'));
+  assert.deepStrictEqual(env.execucoes.map(function (e) { return e.condicao + e.repeticao; }), ['sem1', 'com1', 'sem2', 'com2']);
+  env.execucoes.forEach(function (e) { assert.strictEqual(e.ok, true, e.motivos.join('; ')); });
+  const DO_BRINQUEDO = ['init', 'commit'];
+  const comandos = fs.readFileSync(rastro, 'utf8').split('\n').filter(Boolean).map(function (l) { return JSON.parse(l); })
+    .filter(function (e) { return e.event === 'cmd_name' && DO_BRINQUEDO.indexOf(e.name) !== -1; }).map(function (e) { return e.name; });
+  // um commit por condicao (2), e nao por brinquedo (4); o init so no 1o (o 2o sai do molde do init)
+  assert.deepStrictEqual(comandos, ['init', 'commit', 'commit'], 'os git de montagem: ' + comandos.join(', '));
+  const brinquedos = path.join(rodadaEm(destino), 'brinquedos');
+  ['sem', 'com'].forEach(function (c) {
+    const um = path.join(brinquedos, 'control-capitalize-' + c + '-1');
+    const dois = path.join(brinquedos, 'control-capitalize-' + c + '-2');
+    const g = function (dir, args) {
+      const s = spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false, timeout: 30000, windowsHide: true });
+      assert.strictEqual(s.status, 0, 'git ' + args.join(' ') + ' em ' + dir + ': ' + s.stderr);
+      return s.stdout.trim();
+    };
+    assert.strictEqual(g(dois, ['rev-parse', 'HEAD^{tree}']), g(um, ['rev-parse', 'HEAD^{tree}']), 'a copia tem o mesmo commit (' + c + ')');
+    assert.strictEqual(g(dois, ['status', '--porcelain']), '', 'a copia nasce limpa (' + c + ')');
+    assert.strictEqual(fs.realpathSync.native(g(dois, ['rev-parse', '--show-toplevel'])), fs.realpathSync.native(dois),
+      'o git da copia e o dela, nao o da 1a (' + c + ')');
+  });
 });
 
 test('--apurar: rodada incompleta nao da veredito, mesmo com a grade equilibrada', () => {
