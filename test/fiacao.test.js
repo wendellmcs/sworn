@@ -819,12 +819,15 @@ function pluginComTabela(conteudo) {
   return base;
 }
 
-function rodarNoPlugin(plugin, script, dir, entrada) {
+// Com o prazo e o ambiente isolado do comum (config vazia, sem a sessao real): a copia trava sem pendurar a suite, e a
+// abertura nao le a configuracao de verdade de quem roda o teste.
+function rodarNoPlugin(plugin, script, dir, entrada, extra) {
   const r = spawnSync(process.execPath, [path.join(plugin, 'scripts', script)], {
-    cwd: dir, encoding: 'utf8', input: JSON.stringify(entrada),
-    env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes') })
+    cwd: dir, encoding: 'utf8', input: JSON.stringify(entrada), timeout: comum.PRAZO,
+    env: comum.ambiente(Object.assign({ SWORN_TMP: path.join(dir, '_sessoes') }, extra))
   });
-  assert.strictEqual(r.status, 0, r.stderr);
+  // a copia morta pelo prazo sai com status null e stderr vazio: o r.error diz que foi o prazo
+  assert.strictEqual(r.status, 0, (r.error ? r.error.message + '\n' : '') + r.stderr);
   return r;
 }
 
@@ -2176,6 +2179,150 @@ test('S8 L2-abe-1: o caminho de plano.js que a abertura entrega ao agente vai en
   }
 });
 
+// P16-abertura-r1-25: com `'` e `$` no caminho, o escape vai pelo shell declarado; no PowerShell a barra do Windows
+// fica e a aspa dobra (o escape do Bash dobrava a barra e quebrava o caminho).
+test('P16-abertura-r1-25: o caminho com aspa simples e $ vai entre as aspas do PowerShell quando ele e o declarado', () => {
+  const misto = pluginCopia("a'b$c");
+  const dir = temp('r125');
+  try {
+    projetoComRegras(dir, { plataforma: { so: 'win32', shell: 'powershell' } });
+    projetoComPlanoDeOutro(dir);
+    const e = rodarNoPlugin(misto, 'abertura.js', dir, { session_id: 'r125', cwd: dir, source: 'startup' });
+    const caminho = path.join(misto, 'scripts', 'plano.js');
+    assert.strictEqual(comandoDoPlano(e.stdout), "'" + caminho.replace(/'/g, "''") + "'", e.stdout);
+  } finally {
+    limparCopia(misto);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// P16-abertura-r1-22: a linha do aviso que falhou diz o passo (o radar e o vigia dependem da chave "vigia").
+test('P16-abertura-r1-22: o radar que lanca diz a causa e o passo, e o resto da abertura sai', () => {
+  const plugin = pluginCopia('plugin');
+  const dir = temp('r122');
+  try {
+    fs.appendFileSync(path.join(plugin, 'scripts', 'lib', 'vigia-local.js'),
+      '\nmodule.exports.avisoDoRadar = function () { throw new Error("radar quebrado"); };\n', 'utf8');
+    projetoComRegras(dir);
+    projetoComPlanoDeOutro(dir);
+    const r = rodarNoPlugin(plugin, 'abertura.js', dir, { session_id: 'r122', cwd: dir, source: 'startup' });
+    const linha = r.stdout.split('\n').filter(function (l) { return l.indexOf('radar nao rodou') !== -1; })[0] || '';
+    assert.ok(linha.includes('radar quebrado') && linha.includes('/sworn:radar') && linha.includes('"vigia": false'), r.stdout);
+    assert.ok(/outra sessao detem o plano ativo/i.test(r.stdout), 'o plano (depois do radar) sumiu: ' + r.stdout);
+  } finally { limparCopia(plugin); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// P16-abertura-r2: o /sworn:radar le so a ficha do radar; a falha do vigia aponta o arquivo da novidade.
+test('P16-abertura-r2: o vigia que lanca aponta o arquivo da novidade, nao o /sworn:radar', () => {
+  const plugin = pluginCopia('plugin');
+  const dir = temp('r2vig');
+  try {
+    fs.appendFileSync(path.join(plugin, 'scripts', 'lib', 'vigia-local.js'),
+      '\nmodule.exports.avisoDoVigia = function () { throw new Error("vigia quebrado"); };\n', 'utf8');
+    projetoComRegras(dir);
+    const r = rodarNoPlugin(plugin, 'abertura.js', dir, { session_id: 'r2vig', cwd: dir, source: 'startup' });
+    const linha = r.stdout.split('\n').filter(function (l) { return l.indexOf('vigia nao rodou') !== -1; })[0] || '';
+    assert.ok(linha.includes('vigia quebrado') && linha.includes('~/.claude/sworn/vigia/novidades.md') &&
+      linha.includes('"vigia": false'), r.stdout);
+    assert.ok(!linha.includes('/sworn:radar'), linha);
+  } finally { limparCopia(plugin); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A5-06: depois do prazo da abertura, o que lista o repositorio inteiro fica para a proxima sessao, com uma linha.
+test('A5-06: abertura que passou do prazo nao confere intocaveis e diz o que ficou para a proxima sessao', () => {
+  const dir = temp('a506');
+  try {
+    projetoComRegras(dir, { intocaveis: ['nao-casa-nada/**'] });
+    const RE_ADIADA = /sworn: a abertura passou de 1 ms; para nao estourar o tempo do gancho, ficou para a proxima sessao o que lista o repositorio inteiro: /;
+    const PRAZO_1MS = { SWORN_ABERTURA_PRAZO_MS: '1' };
+    // o env proprio (mesmo `{}`) faz o `rodar` abrir um processo novo, como o gancho de verdade: o prazo conta do inicio dele
+    const lenta = rodar('abertura.js', dir, { session_id: 'a506a', cwd: dir, source: 'startup' }, PRAZO_1MS);
+    assert.strictEqual(lenta.status, 0, lenta.stderr);
+    assert.match(lenta.stdout, RE_ADIADA, lenta.stdout);
+    assert.match(lenta.stdout, /cada padrao de `intocaveis` pega algum arquivo/, lenta.stdout);
+    assert.ok(!/nao deu para conferir se os padroes de `intocaveis`/.test(lenta.stdout),
+      'a conferencia dos intocaveis rodou depois do prazo: ' + lenta.stdout);
+    // controle: no prazo padrao a linha nao sai, e a conferencia roda (a pasta temporaria fica fora de repositorio,
+    // entao o git nao responde)
+    const normal = rodar('abertura.js', dir, { session_id: 'a506b', cwd: dir, source: 'startup' }, {});
+    assert.doesNotMatch(normal.stdout, RE_ADIADA, normal.stdout);
+    assert.match(normal.stdout, /nao deu para conferir se os padroes de `intocaveis`/, normal.stdout);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// P16-abertura-r2: o ls-files que gasta o resto do prazo tambem adia a auditoria e os atalhos; a conferencia dos
+// intocaveis, que rodou, nao entra na linha.
+test('A5-06: o prazo que passa durante o ls-files adia o resto, sem dizer que os intocaveis ficaram', () => {
+  const plugin = pluginCopia('plugin');
+  const dir = temp('a506d');
+  try {
+    // o ls-files falso so volta 1 s depois do prazo de 5 s (o uptime conta desde antes do inicio da abertura)
+    fs.appendFileSync(path.join(plugin, 'scripts', 'lib', 'git.js'),
+      '\nmodule.exports.rastreados = function () { while (process.uptime() < 6) { /* gasta o prazo */ } return []; };\n', 'utf8');
+    projetoComRegras(dir, { intocaveis: ['nao-casa-nada/**'] });
+    const r = rodarNoPlugin(plugin, 'abertura.js', dir, { session_id: 'a506d', cwd: dir, source: 'startup' },
+      { SWORN_ABERTURA_PRAZO_MS: '5000' });
+    assert.match(r.stdout, /sworn: a abertura passou de 5 s; .*a auditoria e a revisao dos atalhos/, r.stdout);
+    assert.doesNotMatch(r.stdout, /cada padrao de `intocaveis`/, r.stdout);
+  } finally { limparCopia(plugin); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A5-06: sem padrao em `intocaveis`, a linha do prazo nao diz que a conferencia deles ficou para depois', () => {
+  const dir = temp('a506c');
+  try {
+    projetoComRegras(dir);
+    const r = rodar('abertura.js', dir, { session_id: 'a506c', cwd: dir, source: 'startup' }, { SWORN_ABERTURA_PRAZO_MS: '1' });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.match(r.stdout, /a abertura passou de 1 ms;/, r.stdout);
+    assert.doesNotMatch(r.stdout, /cada padrao de `intocaveis`/, r.stdout);
+    assert.match(r.stdout, /rode \/sworn:audit e \/sworn:shortcuts a mao/, r.stdout);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// L5-s107-7: cwd que nao e texto (numero, objeto) cai na pasta do processo, como no abrir-subagente.js.
+test('L5-s107-7: cwd que nao e texto na entrada nao derruba a abertura: vale a pasta do processo', () => {
+  const dir = temp('l5107');
+  try {
+    projetoComRegras(dir);
+    // o env `{}` abre um processo novo: o process.cwd() que vale e o do processo do gancho, nao o da suite
+    for (const cwd of [5, { a: 1 }, true, null, '', ['x']]) {
+      const r = rodar('abertura.js', dir, { session_id: 'l5107', cwd: cwd, source: 'startup' }, {});
+      assert.strictEqual(r.status, 0, JSON.stringify(cwd) + ': ' + r.stderr);
+      assert.ok(r.stdout.includes(REGRA_Q), 'a regra do projeto da pasta do processo: ' + r.stdout);
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A2-19: a abertura e o portao do escopo dizem o mesmo texto do projeto.json ilegivel (o do lib/config.js), e o
+// passo e um comando que roda: node e o caminho do validar.js, que existe, entre aspas.
+test('A2-19: o aviso de projeto.json ilegivel e o do lib/config.js, com o comando do validar.js que existe', () => {
+  const AVISO = require('../scripts/lib/config.js').AVISO_PROJETO_ILEGIVEL;
+  const validar = path.join(RAIZ, 'scripts', 'validar.js');
+  assert.ok(fs.existsSync(validar), validar);
+  assert.ok(AVISO.includes('Para achar o erro: node ' + require('../scripts/lib/texto.js').caminhoParaShell(validar) + '.'), AVISO);
+  const dir = temp('a219');
+  try {
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), '{ quebrado');
+    const r = rodar('abertura.js', dir, { session_id: 'a219', cwd: dir, source: 'startup' });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(r.stdout.includes(AVISO), r.stdout);
+    const fonte = fs.readFileSync(path.join(RAIZ, 'scripts', 'portao-escopo.js'), 'utf8');
+    assert.match(fonte, /const AVISO_PROJETO_ILEGIVEL = config\.AVISO_PROJETO_ILEGIVEL;/, 'o portao do escopo tem texto proprio');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A2-19 (R1 do H1x): o plugin instalado em pasta com `$` - o caminho do validar.js vai entre aspas simples, que o
+// shell nao expande (entre aspas duplas o `$c` sumia e o node nao achava o arquivo).
+test('A2-19: com $ na pasta do plugin, o comando do validar.js vai entre aspas simples', () => {
+  const plugin = pluginCopia('a$c');
+  const dir = temp('a219b');
+  try {
+    escrever(dir, path.join('.claude', 'sworn', 'projeto.json'), '{ quebrado');
+    const r = rodarNoPlugin(plugin, 'abertura.js', dir, { session_id: 'a219b', cwd: dir, source: 'startup' });
+    assert.ok(r.stdout.includes("Para achar o erro: node '" + path.join(plugin, 'scripts', 'validar.js') + "'."), r.stdout);
+  } finally { limparCopia(plugin); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('S8 A2-3: falha do require da auditoria nao calada: 1 linha diz que nao rodou, e o resto da abertura sai', () => {
   const plugin = pluginCopia('plugin');
   const dir = temp('a23');
@@ -2228,7 +2375,7 @@ test('S8 A2-4: o aviso de projeto.json ilegivel sai uma vez so, mesmo se a reinj
 
 // ------------------------------------------------ Bloco V (D426/D437): a novidade do vigia na abertura
 
-/** Abertura com a pasta do vigia injetada por SWORN_VIGIA (o `rodar` comum nao passa env extra). */
+/** Abertura com a pasta do vigia injetada por SWORN_VIGIA, no proprio processo (o `rodar` com env abre um novo). */
 function abrirVigia(dir, id, pastaVigia) {
   return comum.ganchoComoProcesso(path.join('scripts', 'abertura.js'), { session_id: id, cwd: dir, source: 'startup' },
     { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: path.join(dir, '_sessoes'), SWORN_VIGIA: pastaVigia }) });

@@ -565,11 +565,15 @@ test('portao-apelido: caminho de instalacao com $ ou crase vai entre aspas simpl
 
       // A1-29 (pedido 12, seguranca): com `'` E `$` no caminho, o escape era so o do Bash (`\$` entre aspas
       // duplas); no PowerShell, entre aspas duplas, o `$` expande e a `\` nao escapa. Agora vai pelo shell
-      // declarado: no PowerShell, aspas simples com a `'` dobrada; no Bash ou sem declarar, o de antes.
+      // declarado: no PowerShell, aspas simples com a `'` dobrada; no Bash, o de antes. P16-abertura-r2: sem declarar,
+      // a mesma aspa dobrada do PowerShell, que nao roda nada em nenhum dos dois.
       const aspa = pluginEm("a'b$c");
       const alvoAspa = path.join(aspa, 'scripts', 'portao-apelido.js');
       const doBash = 'a) node "' + alvoAspa.replace(/([\\$`"])/g, '\\$1') + '" --corrigir';
-      assert.ok(contexto(aspa, dir, tmp, 'p15').includes(doBash), 'sem shell declarado, o do Bash');
+      const inerte = "node '" + alvoAspa.replace(/'/g, "''") + "' --corrigir";
+      const ctxSem = contexto(aspa, dir, tmp, 'p15');
+      assert.ok(ctxSem.includes('a) ' + inerte), 'sem shell declarado, a aspa dobrada na a): ' + ctxSem);
+      assert.ok(ctxSem.includes('b) ' + inerte), 'sem shell declarado, a aspa dobrada na b): ' + ctxSem);
       const cfg = path.join(dir, '.claude', 'sworn', 'projeto.json');
       const obj = JSON.parse(fs.readFileSync(cfg, 'utf8'));
       obj.plataforma = { so: 'win32', shell: 'powershell' };

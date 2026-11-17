@@ -144,6 +144,46 @@ test('083 T6: entreAspas escapa a aspa e junta as quebras de linha; o resto fica
   assert.strictEqual(texto.entreAspas('a\\"b'), '"a\\\\\\"b"');
 });
 
+// P16-abertura-r1-25 e A1-29: uma fonte so para o caminho que o agente copia ao shell (abertura e portao-apelido).
+test('caminhoParaShell: aspas duplas no caso comum, simples com $ crase ou aspa, e a aspa simples pelo shell declarado', () => {
+  assert.strictEqual(texto.caminhoParaShell('C:\\a b\\x.js'), '"C:\\a b\\x.js"', 'caso comum: a barra do Windows fica');
+  assert.strictEqual(texto.caminhoParaShell('a$b`c"d'), "'a$b`c\"d'");
+  const misto = "C:\\x'$y";
+  assert.strictEqual(texto.caminhoParaShell(misto, 'powershell'), "'C:\\x''$y'", 'no PowerShell a aspa dobra e a barra fica');
+  assert.strictEqual(texto.caminhoParaShell(misto), "'C:\\x''$y'", 'sem declarar: a aspa dobra, nada roda em shell nenhum');
+  assert.strictEqual(texto.caminhoParaShell(misto, 'bash'), '"C:\\\\x\'\\$y"');
+  // o shell declarado vale em qualquer caixa, e o pwsh e o mesmo PowerShell; outro valor cai no Bash
+  assert.strictEqual(texto.caminhoParaShell(misto, 'PowerShell'), "'C:\\x''$y'");
+  assert.strictEqual(texto.caminhoParaShell(misto, 'pwsh'), "'C:\\x''$y'");
+  assert.strictEqual(texto.caminhoParaShell(misto, 'cmd'), '"C:\\\\x\'\\$y"');
+  assert.strictEqual(texto.caminhoParaShell(''), '""');
+});
+
+// R1 do H1x: no Bash, entre aspas duplas, a barra antes da aspa final a escapa e a barra dobrada vira uma; no
+// PowerShell as aspas tipograficas tambem fecham a string. Caminho que nao e texto lanca.
+test('caminhoParaShell: barra no fim, UNC, aspas tipograficas e caminho que nao e texto', () => {
+  assert.strictEqual(texto.caminhoParaShell('C:\\pasta\\'), "'C:\\pasta\\'", 'Bash: barra no fim vai entre aspas simples');
+  assert.strictEqual(texto.caminhoParaShell('\\\\srv\\share\\a b'), "'\\\\srv\\share\\a b'", 'Bash: o UNC fica inteiro');
+  assert.strictEqual(texto.caminhoParaShell("\\\\srv\\a'b", 'bash'), '"\\\\\\\\srv\\\\a\'b"', 'Bash: UNC com aspa simples escapa cada barra');
+  assert.strictEqual(texto.caminhoParaShell("\\\\srv\\a'b"), "'\\\\srv\\a''b'", 'sem declarar: o UNC com aspa vai entre simples');
+  assert.strictEqual(texto.caminhoParaShell('C:\\pasta\\', 'powershell'), '"C:\\pasta\\"', 'PowerShell: a barra nao escapa nada');
+  assert.strictEqual(texto.caminhoParaShell('C:\\Ana\u2019s $x', 'powershell'), "'C:\\Ana\u2019\u2019s $x'", 'a aspa tipografica dobra');
+  assert.strictEqual(texto.caminhoParaShell('C:\\\u201Cp\u201D', 'powershell'), "'C:\\\u201Cp\u201D'", 'a dupla tipografica vai entre simples');
+  for (const torto of [undefined, null, 5, { toString: function () { return '$x'; } }]) {
+    assert.throws(function () { texto.caminhoParaShell(torto); }, TypeError, String(torto));
+  }
+});
+
+// P16-abertura-r2 (seguranca): sem shell declarado (a ordem do init sai sem projeto.json), o escape do Bash entre
+// aspas duplas deixava o `$(...)` rodar no PowerShell; agora a saida nao executa nada em nenhum dos dois.
+test('caminhoParaShell: sem shell declarado, nada do caminho roda no Bash nem no PowerShell', () => {
+  assert.strictEqual(texto.caminhoParaShell("C:\\a'$(calc)"), "'C:\\a''$(calc)'", 'aspa e $: simples, a aspa dobra');
+  assert.strictEqual(texto.caminhoParaShell('C:\\a\u201C;calc;\u201D'), "'C:\\a\u201C;calc;\u201D'", 'dupla tipografica: simples');
+  assert.strictEqual(texto.caminhoParaShell("C:\\O'Brien"), '"C:\\O\'Brien"', 'so a aspa simples: duplas bastam');
+  assert.strictEqual(texto.caminhoParaShell('C:\\Ana\u2019s $x'), "'C:\\Ana\u2019\u2019s $x'", 'tipografica simples com $ dobra');
+  assert.strictEqual(texto.caminhoParaShell('C:\\\u201Cp\u201D', 'bash'), '"C:\\\u201Cp\u201D"', 'declarado bash: a tipografica nao conta');
+});
+
 // A2-16 (P2 do pedido 12): o escalar.js e o gravar-veredito.js tinham cada um a sua copia de mensagemDe, e elas ja
 // divergiam (a do gravar-veredito aceitava PostToolUse sem tool_name). Uma fonte so, na forma estrita: o matcher do
 // hooks.json (SubagentHandback) ja garante o nome da ferramenta.

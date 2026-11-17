@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.79.0 — a abertura da sessão não passa do prazo e o aviso das fichas de referência acerta mais
+
+**Corrigido**
+
+- **A abertura da sessão não estoura o tempo que o Claude Code dá a ela por causa do git.** Quando ela já gastou 8
+  segundos, o que lista o repositório inteiro fica para a próxima sessão: a auditoria, a revisão dos atalhos e, se o
+  projeto tem padrões em `intocaveis`, a conferência deles. Uma linha diz o que ficou de fora, que dá para rodar o
+  `/sworn:audit` e o `/sworn:shortcuts` à mão para não esperar, e sugere `git status` para ver se o git está lento.
+- **O aviso das fichas de referência acerta mais.** Um `"referencias": {}`, a escolha de nunca usar referência, não
+  cobra mais as fichas da pasta, e o `"referencias"` escrito como lista também não. O caminho declarado com barra
+  invertida casa com a ficha fora do Windows. A ficha com uma data de estudo impossível (mês 13, 30 de fevereiro) é avisada, em vez de
+  passar como em dia, e o aviso diz para corrigir a data na ficha. A ficha que entra em `"referencias"` e depois sai de
+  novo volta a ser avisada. O aviso agora se chama "fichas de referência sem uso, velhas ou com data errada".
+- **O caminho que o sworn entrega para colar no terminal vai entre as aspas certas do shell.** Para o PowerShell,
+  declare `"plataforma": { "shell": "powershell" }` (ou `"pwsh"`) no `.claude/sworn/projeto.json`; qualquer outro valor
+  vale como Bash. No PowerShell, a barra invertida do Windows não é mais dobrada quando o caminho tem aspa simples e
+  `$`, e as aspas tipográficas (‘ ’ “ ”) também são tratadas como aspas. No Bash, o caminho que termina em barra
+  invertida e o caminho de rede (`\\servidor\pasta`) não quebram mais o comando. Sem shell declarado (como antes do
+  `/sworn:init`), o caminho vai entre aspas que não executam nada nem no Bash nem no PowerShell; se ele tiver aspa
+  simples, só sai exato depois de declarar o shell. O comando da abertura e o do aviso dos apelidos usam a mesma regra.
+- **O aviso do `projeto.json` ilegível é o mesmo na abertura e na primeira escrita**, com o comando que mostra a linha
+  do erro. Esse comando funciona mesmo quando a pasta do plugin tem `$` no nome.
+- **Quando um aviso da abertura falha, a linha diz o que fazer:** rodar o `/sworn:radar` à mão, ler a novidade do
+  vigia em `~/.claude/sworn/vigia/novidades.md` ou desligar com `"vigia": false`, conferir as fichas à mão, rodar o `/sworn:audit`, o `/sworn:shortcuts`, o `/sworn:calibrate` ou o
+  `/sworn:init`, ou levar à mão o que ainda servir da pasta antiga `~/.claude/esquadro/`.
+- **A abertura não tropeça quando o Claude Code informa a pasta de trabalho num formato inesperado** (um número, uma
+  lista, nada): ela usa a pasta em que está rodando.
+
 ## 0.78.0 — o detector de vazamento lê também o nome dos arquivos, os outros ramos e mais tipos de token
 
 **Corrigido**

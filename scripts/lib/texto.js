@@ -78,4 +78,36 @@ function ehObjeto(v) {
   return !!v && typeof v === 'object' && !Array.isArray(v);
 }
 
-module.exports = { semBom, causaDoErro, veioDeSubagente, entreAspas, mensagemDoSubagente, ehObjeto };
+/**
+ * S8/L2-abe-1 e L2-ape-2: caminho que o AGENTE vai copiar para o shell, entre aspas do shell declarado no projeto
+ * (`plataforma.shell`; A1-29 e P16-abertura-r1-25). Caminho que nao e texto lanca: virar '"undefined"' daria ao
+ * agente um caminho que nao existe.
+ * - 'powershell' (ou 'pwsh', em qualquer caixa): aspas duplas no caso normal; com `$`, crase ou aspa dupla (a reta e
+ *   as tipograficas, que o PowerShell tambem le como aspa) vai entre aspas simples, e cada aspa simples (a reta e as
+ *   tipograficas) dobra. A barra do Windows fica como esta: no PowerShell ela nao escapa nada.
+ * - sem declarar (P16-abertura-r2: a ordem do init sai justo quando nao ha projeto.json), aspas que nao executam
+ *   nada em nenhum dos dois: aspas duplas sem `$`, crase, aspa dupla (reta ou tipografica), barra no fim nem barra
+ *   dobrada; senao aspas simples; com aspa simples tambem, a aspa simples dobra como no PowerShell, e no Bash o
+ *   caminho perde a aspa, mas nada nele roda. Declare o shell para o caminho sair exato.
+ * - qualquer outro valor, o do Bash: aspas duplas so quando nada nelas se reinterpreta, isto e, sem `$`, crase,
+ *   `"`, barra no fim nem barra dobrada (o UNC `\\srv`); senao aspas simples; com `'` tambem, aspas duplas com `\`
+ *   antes de `\`, `$`, crase e `"`.
+ */
+function caminhoParaShell(p, shell) {
+  if (typeof p !== 'string') throw new TypeError('caminhoParaShell: o caminho tem de ser texto, veio ' + typeof p);
+  const declarado = String(shell || '');
+  if (/^(powershell|pwsh)$/i.test(declarado)) {
+    if (!/[$`"\u201C\u201D\u201E]/.test(p)) return '"' + p + '"';
+    return "'" + p.replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&') + "'";
+  }
+  if (!declarado) {
+    if (!/[$`"\u201C\u201D\u201E]|\\\\|\\$/.test(p)) return '"' + p + '"';
+    if (!/['\u2018\u2019\u201A\u201B]/.test(p)) return "'" + p + "'";
+    return "'" + p.replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&') + "'";
+  }
+  if (!/[$`"]|\\\\|\\$/.test(p)) return '"' + p + '"';
+  if (p.indexOf("'") === -1) return "'" + p + "'";
+  return '"' + p.replace(/([\\$`"])/g, '\\$1') + '"';
+}
+
+module.exports = { semBom, causaDoErro, veioDeSubagente, entreAspas, mensagemDoSubagente, ehObjeto, caminhoParaShell };

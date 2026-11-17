@@ -173,7 +173,7 @@ const PONTOS = [
     classe: INJETAVEL,
     titulo: 'Caminho do Windows normalizado para barra normal',
     arquivos: [
-      'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/handoff-curto.js',
+      'scripts/abertura.js', 'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/handoff-curto.js',
       'scripts/lib/alvo-apagar.js',
       'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
       'scripts/lib/guias-modelo.js', 'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',

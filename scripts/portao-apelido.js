@@ -26,21 +26,8 @@ function valorDe(nome) {
   return flags.valor(process.argv, '--' + nome, FLAGS, function (msg) { usoDoCorrigir('ERRO: ' + msg); });
 }
 
-/**
- * S8/L2-ape-2: caminho que o AGENTE vai copiar para o shell. Aspas duplas servem ao caso normal (espaco,
- * acento, `\` do Windows); com `$`, crase ou `"` o shell reinterpretaria o pedaco, entao vai entre aspas
- * simples (vale no Bash e no PowerShell). A1-29: com `'` tambem, cada shell escapa de um jeito, e vale o
- * declarado no projeto (`plataforma.shell`): no 'powershell' a `'` dobra dentro das aspas simples; em qualquer
- * outro valor, ou sem declarar, o do Bash, como no idiomaDoCd do lib/shell.js: `\` antes de `\`, `$`, crase e
- * `"` entre aspas duplas.
- * (O helper de abertura.js ainda e o de antes, sem o ramo do PowerShell.)
- */
-function caminhoParaShell(p, shell) {
-  if (!/[$`"]/.test(p)) return '"' + p + '"';
-  if (p.indexOf("'") === -1) return "'" + p + "'";
-  if (shell === 'powershell') return "'" + p.replace(/'/g, "''") + "'";
-  return '"' + p.replace(/([\\$`"])/g, '\\$1') + '"';
-}
+// S8/L2-ape-2, A1-29: o caminho entre as aspas do shell declarado; mora no lib/texto.js, a mesma fonte da abertura.
+const caminhoParaShell = require('./lib/texto.js').caminhoParaShell;
 
 function conferirAqui(cwd) {
   return apelidos.conferir(config.carregarProjeto(cwd), agentesLib.listar(cwd));

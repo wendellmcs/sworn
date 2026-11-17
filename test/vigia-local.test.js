@@ -130,9 +130,11 @@ test('091 #10: o proprio repositorio do sworn e reconhecido', () => {
 
 test('091 #10: a abertura passa ao vigia o cwd cru da sessao (nao a raiz do projeto.json)', () => {
   const abertura = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'abertura.js'), 'utf8');
-  assert.ok(/avisoDoVigia\(projeto, \{ cwd: e\.cwd \|\| process\.cwd\(\) \}\)/.test(abertura), 'abertura sem o cwd cru');
+  // L5-s107-7: o cwd cru e o da entrada quando ele e texto (senao o da pasta do processo), numa variavel so
+  assert.ok(/const cwdDaEntrada = typeof e\.cwd === 'string' && e\.cwd \? e\.cwd : process\.cwd\(\);/.test(abertura), 'sem o cwd cru');
+  assert.ok(/avisoDoVigia\(projeto, \{ cwd: cwdDaEntrada \}\)/.test(abertura), 'abertura sem o cwd cru');
   // T4: o radar tambem liga sozinho no repositorio do plugin, entao precisa do mesmo cwd (a mutacao dele escapava)
-  assert.ok(/avisoDoRadar\(projeto, \{ cwd: e\.cwd \|\| process\.cwd\(\) \}\)/.test(abertura), 'radar sem o cwd cru');
+  assert.ok(/avisoDoRadar\(projeto, \{ cwd: cwdDaEntrada \}\)/.test(abertura), 'radar sem o cwd cru');
 });
 
 test('pasta(env): SWORN_VIGIA vence; sem ela cai em ~/.claude/sworn/vigia', () => {

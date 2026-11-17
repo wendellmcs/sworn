@@ -50,4 +50,13 @@ function raizDoProjeto(cwd) {
   }
 }
 
-module.exports = { carregarProjeto, carregarDesign, raizDoProjeto, caminhoEmSworn };
+// A2-03 (D721): o passo primeiro, com o caminho real do validar.js (ele diz a linha e a coluna do erro).
+// A2-77: o init preserva so o que le do arquivo atual (skills/init/references/reinit.md:9-19), dai o "pode perder".
+// A2-19: uma fonte so para o portao do escopo e para a abertura, que tinham dois textos. O caminho vai pelo
+// caminhoParaShell sem shell: com o projeto.json ilegivel, o shell declarado nele tambem nao se le.
+const AVISO_PROJETO_ILEGIVEL = 'sworn: .claude/sworn/projeto.json existe mas nao se le: ' +
+  'os portoes de escopo e de intocaveis estao DESLIGADOS ate corrigir. ' +
+  'Para achar o erro: node ' + require('./texto.js').caminhoParaShell(path.join(__dirname, '..', 'validar.js')) + '. ' +
+  'Rodar /sworn:init de novo tambem resolve, mas pode perder o que voce ajustou a mao nesse arquivo.';
+
+module.exports = { carregarProjeto, carregarDesign, raizDoProjeto, caminhoEmSworn, AVISO_PROJETO_ILEGIVEL };
