@@ -18,7 +18,7 @@ const { causaDoErro, entreAspas } = require('./lib/texto.js');
  *   --gerar --modelo <nome> --destino <pasta> [--tarefa <id>]... [--repeticoes <n>]
  *       Exige <destino>/congelado.txt conferindo com o disco, e o leva para dentro da rodada.
  *       Cada tarefa de modelos/travas-tarefas.json x repeticao x condicao, num brinquedo NOVO em
- *       <destino>/<carimbo>/brinquedos/. A e B intercalados (o mesmo minuto para as duas). Depois de cada sessao o
+ *       <destino>/<carimbo>/brinquedos/. sem e com intercalados (o mesmo minuto para as duas). Depois de cada sessao o
  *       instrumento roda o teste ele mesmo e compara o hash dos arquivos protegidos: a verdade vem do disco, nunca
  *       do portao. Grava <destino>/<carimbo>/execucoes.json e o stream bruto. Nada se apaga.
  *   --apurar <pasta da rodada>
@@ -43,6 +43,9 @@ const LIMITE_DA_EXECUCAO_MS = 15 * 60 * 1000;
 const LIMITE_DO_TESTE_MS = 2 * 60 * 1000;
 const REPETICOES_PADRAO = 3;
 const ID_DE_TAREFA = /^[a-z0-9-]{1,48}$/;
+// O argumento do teste que chega igual ao node pelo cmd.exe e pelo sh com as aspas do scriptDeTeste (tarefasRuins).
+// Lista branca: o resto o shell le ($ ` % ! & | ; ' # ~ [ ...), e a barra invertida no meio o sh le diferente.
+const ARG_SEGURO = /^[A-Za-z0-9 _.\/:=@+,*?"-]+$/;
 // O que decide o numero, relativo a raiz do repositorio. A hipotese mora no arquivo de tarefas; o medir-qualidade.js
 // monta o projeto da condicao com. As regras (modelos/regras.md) sao o tratamento: o plugin medido e o do HEAD.
 const CONGELADOS = ['modelos/travas-tarefas.json', 'scripts/lib/medicao-travas.js', 'scripts/lib/medicao.js', 'scripts/medir-travas.js',
@@ -126,6 +129,11 @@ function tarefasRuins(dados) {
     if (ARMADILHAS.indexOf(t.armadilha) === -1) ruins.push(onde + ': armadilha desconhecida ' + JSON.stringify(t.armadilha));
     if (!texto(t.texto)) ruins.push(onde + ': sem o pedido (texto vazio)');
     if (!Array.isArray(t.teste) || t.teste.length === 0 || !t.teste.every(texto)) ruins.push(onde + ': teste tem de ser a lista de argumentos do node');
+    // A6-61 (R1, R2): so o que o scriptDeTeste leva intacto pelos dois shells (ARG_SEGURO)
+    else if (!t.teste.every(function (a) { return ARG_SEGURO.test(a); })) {
+      ruins.push(onde + ': argumento do teste com caractere que nao chega igual pelo cmd.exe e pelo sh; use so letras ' +
+        'e digitos sem acento, espaco e _ . / : = @ + , * ? " -');
+    }
     arquivosRuins(onde, 'arquivos', t.arquivos).concat(arquivosRuins(onde, 'referencia', t.referencia)).forEach(function (r) { ruins.push(r); });
     if (!Array.isArray(t.protegidos) || !t.protegidos.every(function (p) { return texto(p) && dentroDoBrinquedo(p); })) {
       ruins.push(onde + ': protegidos tem de ser uma lista de caminhos dentro do brinquedo');
@@ -135,9 +143,18 @@ function tarefasRuins(dados) {
   return ruins;
 }
 
-/** O "test" do package.json: o mesmo comando que o instrumento roda. Argumento com glob ou espaco vai entre aspas. */
+/**
+ * O "test" do package.json: o mesmo comando que o instrumento roda. Argumento com glob, espaco, aspa ou barra
+ * invertida vai entre aspas (a barra solta e escape no sh). A6-61: a aspa de dentro ganha a barra antes, senao
+ * fecharia o argumento no meio; a barra so dobra quando vem antes de uma aspa ou do fim (a regra do Node no
+ * Windows, onde o npm roda o script no cmd.exe; o sh le igual essas). Limite: barras seguidas no meio o sh junta
+ * (\\ vira \) e o Node no Windows nao; por isso o tarefasRuins so aceita argumento sem barra (ARG_SEGURO).
+ */
 function scriptDeTeste(args) {
-  return 'node ' + args.map(function (a) { return /[\s*?"]/.test(a) ? '"' + a + '"' : a; }).join(' ');
+  return 'node ' + args.map(function (a) {
+    if (!/[\s*?"\\]/.test(a)) return a;
+    return '"' + a.replace(/(\\*)("|$)/g, function (_, barras, aspa) { return barras + barras + (aspa ? '\\"' : ''); }) + '"';
+  }).join(' ');
 }
 
 // ── o pre-registro ───────────────────────────────────────────────────────
@@ -315,6 +332,8 @@ function gerar(argv) {
   if (ruins.length > 0) return recusar('ERRO: modelos/travas-tarefas.json tem tarefa que nao serve; nao gero nada.\n  ' + ruins.join('\n  '));
   let tarefas = dados.tarefas;
   const pedidas = valoresDe(argv, '--tarefa');
+  // A6-62: o --tarefa sem valor virava "tarefa que nao esta ...: null"
+  if (pedidas.indexOf(null) !== -1) return recusar('ERRO: --tarefa sem valor. Passe o id da tarefa: --tarefa <id>.\n' + USO);
   if (pedidas.length > 0) {
     const faltam = pedidas.filter(function (id) { return !tarefas.some(function (t) { return t.id === id; }); });
     if (faltam.length > 0) return recusar('ERRO: tarefa que nao esta em modelos/travas-tarefas.json: ' + faltam.map(String).join(', '));
@@ -415,8 +434,10 @@ function apurarRodada(argv) {
   // A6-64 (R1, borda): null ou lista no lugar do objeto quebrava adiante (env.modelo) com o erro do Node em ingles.
   // A6-89 (D735, borda): o mesmo com o item da lista ({"execucoes":[null]}), que quebrava em e.condicao.
   const ehObjeto = function (v) { return !!v && typeof v === 'object' && !Array.isArray(v); };
-  const lista = ehObjeto(env) && Array.isArray(env.execucoes) ? env.execucoes : [];
-  if (!ehObjeto(env) || !lista.every(ehObjeto)) {
+  // A6-114: {} e {"execucoes":5} caiam numa lista vazia e apuravam; a lista vazia de verdade ([]) segue valendo,
+  // porque o --gerar a grava antes da 1a execucao e a rodada sai incompleta, sem veredito.
+  const lista = ehObjeto(env) && Array.isArray(env.execucoes) ? env.execucoes : null;
+  if (lista === null || !lista.every(ehObjeto)) {
     return recusar('ERRO: ' + path.join(path.resolve(pasta), 'execucoes.json') + ' nao tem a forma que o --gerar ' +
       'grava (um objeto com a lista "execucoes", cada item um objeto). Corrija-o e rode de novo.');
   }
@@ -452,8 +473,14 @@ function apurarRodada(argv) {
   // a regra que decide o numero mudou depois de a rodada existir, ou a rodada parou no meio: o numero nao vale
   const incompleta = env.completo !== true;
   const veredito = problemas.length > 0 || incompleta ? null : a.veredito;
-  const motivo = problemas.length > 0 ? 'o congelado da rodada nao confere com o disco (a regra mudou depois do pre-registro)'
-    : incompleta ? 'rodada incompleta (parou antes do fim da grade)' : a.motivo;
+  // A10-45: a glosa do congelado e o passo, para quem le sem o codigo
+  const motivo = problemas.length > 0 ? 'o congelado da rodada (o sha256 das tarefas, da apuracao e do instrumento, ' +
+      'fixado antes da rodada) nao confere com o disco: a regra mudou depois do pre-registro, ou o congelado.txt da ' +
+      'rodada foi mexido; este numero nao vale. ' +
+      'Proximo passo: rode o --congelar numa pasta nova e o --gerar com ela no --destino'
+    : incompleta ? 'rodada incompleta (parou antes do fim da grade). Proximo passo: rode o --gerar de novo com o ' +
+      'mesmo --destino (ele cria uma rodada nova) e o --apurar na pasta dela'
+    : a.motivo;
   // A10-18 (D741): o "igual" so se le junto da distancia ate a margem que o mudaria (travas.apurar)
   if (veredito !== null) {
     const taxa = function (c) { return c.validas === 0 ? 0 : c.falsa / c.validas; };

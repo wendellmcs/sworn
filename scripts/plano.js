@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const planoLib = require('./lib/plano.js');
 const estado = require('./lib/estado.js');
+const flags = require('./lib/flags.js');
 
 const USO = 'uso: plano.js [--abrir <caminho do plano>] [--proxima-decisao <arquivo de decisoes>] [--texto] ' +
   '[--sessao <id>]\n';
@@ -12,14 +13,10 @@ const FLAGS_DO_USO = ['--abrir', '--proxima-decisao', '--texto', '--sessao'];
 // A7 (pedido 12, R1 :14/:15): flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada no
 // painel ou no JSON. O molde e o arg() do gerar-skill.js.
 function arg(nome) {
-  const i = process.argv.indexOf('--' + nome);
-  if (i === -1) return null;
-  const valor = process.argv[i + 1];
-  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
-    process.stdout.write('ERRO: --' + nome + ' pede um valor.\n' + USO);
+  return flags.valor(process.argv, '--' + nome, FLAGS_DO_USO, function (msg) {
+    process.stderr.write('ERRO: ' + msg + '\n' + USO);
     process.exit(1);
-  }
-  return valor;
+  });
 }
 
 const cwd = process.cwd();

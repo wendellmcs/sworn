@@ -7,6 +7,7 @@ const config = require('./lib/config.js');
 const agentes = require('./lib/agentes.js');
 const degrausLib = require('./lib/degraus.js');
 const texto = require('./lib/texto.js');
+const flags = require('./lib/flags.js');
 
 const USO = 'uso: gerar-agentes.js [--fatias] [--respostas <arquivo.json>] [--gravar]\n';
 const FLAGS_DO_USO = ['--respostas', '--gravar', '--fatias'];
@@ -14,14 +15,10 @@ const FLAGS_DO_USO = ['--respostas', '--gravar', '--fatias'];
 // A4-gag-1 (pedido 12), borda: flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada -
 // `--respostas --gravar` lia um arquivo chamado "--gravar". O molde e o arg() do preparar-revisao.js.
 function arg(nome) {
-  const i = process.argv.indexOf('--' + nome);
-  if (i === -1) return null;
-  const valor = process.argv[i + 1];
-  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
-    process.stdout.write('ERRO: --' + nome + ' pede um valor.\n' + USO);
+  return flags.valor(process.argv, '--' + nome, FLAGS_DO_USO, function (msg) {
+    process.stdout.write('ERRO: ' + msg + '\n' + USO);
     process.exit(1);
-  }
-  return valor;
+  });
 }
 
 const cwd = process.cwd();
@@ -92,12 +89,23 @@ for (let i = 0; i < lista.length; i++) {
       ' minusculas, digitos e hifen\n');
     continue;
   }
+  // A4-49: a resposta do agente tem de ser objeto; um texto ia ao Object.assign e virava { 0: 'a', 1: 'b', ... }, e o
+  // lerRespostas so confere o nivel de cima. O hasOwn fica porque um degrau pode se chamar "constructor", e o
+  // respostas["constructor"] acharia a funcao do Object.
+  const resposta = Object.hasOwn(respostas, degrau.agente) ? respostas[degrau.agente] : undefined;
+  if (resposta !== undefined && !molde.ehObjeto(resposta)) {
+    recusados++;
+    process.stdout.write('RECUSADO ' + degrau.agente + ':\n');
+    process.stdout.write('  - a resposta de "' + degrau.agente + '" em ' + arquivoRespostas + ' tem de ser um objeto JSON' +
+      ' ({ ... }) com uma chave por fatia do molde; veio ' + molde.tipoJson(resposta) + '\n');
+    continue;
+  }
   // nome, apelido e escalaPara vem do projeto.json e NAO do arquivo de respostas:
   // os dois primeiros sao a resposta que a entrevista ja validou; o terceiro e a
   // ordem da escada, e nao se reescreve aqui. O esforco (D678 T1) segue o apelido
   // quando o degrau o tem; sem ele, vale o do arquivo. O normalizar (linha 24) ja
   // tirou o esforco vazio ou nulo, e o validarFatias abaixo recusa o fora da lista.
-  const valores = Object.assign({}, respostas[degrau.agente] || {}, {
+  const valores = Object.assign({}, resposta || {}, {
     nome: degrau.agente,
     apelido: degrau.apelido,
     escalaPara: agentes.escalaPara(lista, i)
@@ -158,7 +166,7 @@ if (!gravar) {
 process.stdout.write('\nGRAVADOS: ' + gravados + '  PULADOS: ' + pulados + '  RECUSADOS: ' + recusados +
   (naoGravados > 0 ? '  NAO GRAVADOS: ' + naoGravados : '') + '\n');
 if (pulados > 0) {
-  process.stdout.write('Agente que ja existia nao foi tocado - o arquivo e trabalho de alguem.\n');
+  process.stdout.write('Agente que ja existia nao foi tocado: o arquivo e trabalho de alguem.\n');
   process.stdout.write('Substituir e decisao do dono, que apaga ou renomeia antes de rodar de novo.\n');
 }
 if (naoGravados > 0) {

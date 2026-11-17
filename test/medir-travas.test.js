@@ -66,11 +66,49 @@ test('tarefasRuins: pega id repetido, armadilha desconhecida, arquivo fora do br
   assert.match(mt.tarefasRuins({ padraoDoTeste: ['npm test'], tarefas: [boa] }).join(' '), /hipotese/);
 });
 
+// A6-61 (R1, R2): so entra no teste da tarefa o argumento que o scriptDeTeste leva intacto pelo cmd.exe e pelo sh (lista
+// branca); o vazio, que o shell some, ja caia no "lista de argumentos". Cada caractere de fora vai sozinho entre a e b,
+// e cada um de dentro aparece num argumento aceito, para que mexer na lista reprove.
+test('tarefasRuins: argumento do teste fora do que chega igual pelos dois shells, ou vazio, a tarefa nao serve', () => {
+  const boa = mt.lerTarefas().tarefas[0];
+  const dados = function (teste) {
+    return { padraoDoTeste: ['npm test'], hipotese: 'h', tarefas: [Object.assign({}, boa, { teste: ['--test', teste] })] };
+  };
+  ['test/a.test.js', '--test-coverage-include=src/**', 'a b', 'a"b', '?x', 'a,b+c@d:e_F9'].forEach(function (arg) {
+    assert.deepStrictEqual(mt.tarefasRuins(dados(arg)), [], JSON.stringify(arg));
+  });
+  ['$', '`', '%', '!', '&', '|', '<', '>', '^', '(', ')', ';', '\n', '\r', '\t', '\'', '#', '~', '[', ']', '{', '}', '\\',
+    'é'].forEach(function (c) {
+    assert.deepStrictEqual(mt.tarefasRuins(dados('a' + c + 'b')), ['tarefa 1 (' + boa.id + '): argumento do teste com ' +
+      'caractere que nao chega igual pelo cmd.exe e pelo sh; use so letras e digitos sem acento, espaco e ' +
+      '_ . / : = @ + , * ? " -'], JSON.stringify(c));
+  });
+  assert.match(mt.tarefasRuins(dados('')).join(' '), /teste tem de ser a lista de argumentos do node/);
+});
+
 test('scriptDeTeste: o npm test do brinquedo e o mesmo comando que o instrumento roda', () => {
   assert.strictEqual(mt.scriptDeTeste(['--test', 'test/a.test.js']), 'node --test test/a.test.js');
   // o glob vai entre aspas: o sh expandiria src/** antes de o node ver
   assert.strictEqual(mt.scriptDeTeste(['--test-coverage-include=src/**', 'test/a.test.js']),
     'node "--test-coverage-include=src/**" test/a.test.js');
+  // A6-61: a aspa de dentro ganha a barra; a barra so dobra antes de uma aspa ou do fim; a barra solta vai entre aspas
+  assert.strictEqual(mt.scriptDeTeste(['a"b']), 'node "a\\"b"');
+  assert.strictEqual(mt.scriptDeTeste(['fim\\']), 'node "fim\\\\"');
+  assert.strictEqual(mt.scriptDeTeste(['a\\b']), 'node "a\\b"');
+  assert.strictEqual(mt.scriptDeTeste(['dir\\"q']), 'node "dir\\\\\\"q"');
+});
+
+// A6-61: o comando passa pelo shell que o npm usa (cmd.exe no Windows, sh nos outros) e o node recebe cada argumento
+// inteiro, do jeito que estava na lista.
+test('A6-61: scriptDeTeste chega ao node com cada argumento intacto pelo shell do sistema', () => {
+  const dir = pasta();
+  const eco = path.join(dir, 'eco.js');
+  fs.writeFileSync(eco, 'console.log(JSON.stringify(process.argv.slice(2)))\n', 'utf8');
+  const casos = ['a"b', 'x y', 'src/**', 'fim\\', 'dir\\"q', 'c:\\a b\\', 'sem', 'a\\b c', '"', '\\\\"x', 'a\\b'];
+  const cmd = mt.scriptDeTeste([eco.replace(/\\/g, '/')].concat(casos)).replace(/^node /, '"' + process.execPath + '" ');
+  const r = spawnSync(cmd, { shell: true, encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  assert.strictEqual(r.status, 0, cmd + '\n' + r.stderr + (r.error ? ' [' + r.error.code + ']' : ''));
+  assert.deepStrictEqual(JSON.parse(r.stdout), casos, cmd);
 });
 
 // ── cada armadilha, sem execucao paga ────────────────────────────────────
@@ -162,7 +200,8 @@ test('montarBrinquedo: A sem nada do plugin; B com o projeto, a prova de pronto 
   const pkg = JSON.parse(fs.readFileSync(path.join(a, 'package.json'), 'utf8'));
   assert.strictEqual(pkg.scripts.test, mt.scriptDeTeste(t.teste));
   // nasce limpo e commitado: arquivo solto o portao le como de outra frente
-  const st = spawnSync('git', ['status', '--porcelain'], { cwd: b, encoding: 'utf8' });
+  const st = spawnSync('git', ['status', '--porcelain'], { cwd: b, encoding: 'utf8', timeout: 30000 });
+  assert.strictEqual(st.status, 0, 'git status em ' + b + ': ' + st.stderr + (st.error ? ' [' + st.error.code + ']' : ''));
   assert.strictEqual(st.stdout.trim(), '');
   assert.throws(function () { mt.montarBrinquedo(a, t, 'sem'); }, 'pasta que ja existe nao se reaproveita');
 });
@@ -174,7 +213,11 @@ test('copiarBrinquedo: cria a pasta-mae que falta, a copia e um repositorio dela
   mt.montarBrinquedo(molde, t, 'com');
   const copia = path.join(base, 'nova', 'sub', 'copia');
   mt.copiarBrinquedo(molde, copia);
-  const g = function (args) { return spawnSync('git', args, { cwd: copia, encoding: 'utf8' }).stdout.trim(); };
+  const g = function (args) {
+    const s = spawnSync('git', args, { cwd: copia, encoding: 'utf8', timeout: 30000 });
+    assert.strictEqual(s.status, 0, 'git ' + args.join(' ') + ' em ' + copia + ': ' + s.stderr + (s.error ? ' [' + s.error.code + ']' : ''));
+    return s.stdout.trim();
+  };
   assert.strictEqual(g(['status', '--porcelain']), '', 'a copia nasce limpa');
   assert.strictEqual(fs.realpathSync.native(g(['rev-parse', '--show-toplevel'])), fs.realpathSync.native(copia), 'o git da copia e o dela');
   assert.throws(function () { mt.copiarBrinquedo(molde, copia); }, /EEXIST/, 'pasta que ja existe nao se reaproveita');
@@ -256,6 +299,13 @@ function congelado(a) {
   return destino;
 }
 
+/** Troca o 1o digito do 1o sha256 do congelado.txt: o pre-registro deixa de conferir com o disco. */
+function adulterarCongelado(arq) {
+  const antes = fs.readFileSync(arq, 'utf8');
+  assert.match(antes, /^[0-9a-f]{64}  /, 'o congelado.txt comeca com um sha256: ' + arq);
+  fs.writeFileSync(arq, antes.replace(/^[0-9a-f]/, function (c) { return c === '0' ? '1' : '0'; }), 'utf8');
+}
+
 test('--congelar: sha256 das tarefas (com a hipotese), da apuracao e do instrumento; pre-registro nao se refaz', () => {
   const a = ambienteFalso();
   const destino = congelado(a);
@@ -279,15 +329,14 @@ test('--gerar: sem o congelado, ou com um que nao confere, nada roda', () => {
   assert.strictEqual(sem.status, 1);
   assert.match(sem.stderr, /--congelar/);
   const destino = congelado(a);
-  const arq = path.join(destino, 'congelado.txt');
-  fs.writeFileSync(arq, fs.readFileSync(arq, 'utf8').replace(/^[0-9a-f]/, function (c) { return c === '0' ? '1' : '0'; }), 'utf8');
+  adulterarCongelado(path.join(destino, 'congelado.txt'));
   const mudou = cli(args(destino), env);
   assert.strictEqual(mudou.status, 1);
   assert.match(mudou.stderr, /nao confere/);
   assert.strictEqual(fs.existsSync(a.log), false, 'o claude nao foi chamado');
 });
 
-test('--gerar: tarefa x condicao x repeticao, A e B intercalados, verdade pelo disco', () => {
+test('--gerar: tarefa x condicao x repeticao, sem e com intercalados, verdade pelo disco', () => {
   const a = ambienteFalso();
   const destino = congelado(a);
   const r = cli(['--gerar', '--modelo', 'modelo-x', '--destino', destino, '--tarefa', 'control-capitalize',
@@ -301,7 +350,7 @@ test('--gerar: tarefa x condicao x repeticao, A e B intercalados, verdade pelo d
   assert.strictEqual(fs.readFileSync(path.join(rodada, 'congelado.txt'), 'utf8'), fs.readFileSync(path.join(destino, 'congelado.txt'), 'utf8'));
   assert.strictEqual(env.hipotese, mt.lerTarefas().hipotese);
   env.execucoes.forEach(function (e) { assert.strictEqual(e.provaColada, false, 'o falso so diz "Done"'); });
-  // na ordem do arquivo de tarefas, e em cada uma A antes de B
+  // na ordem do arquivo de tarefas, e em cada uma sem antes de com
   assert.deepStrictEqual(env.execucoes.map(function (e) { return e.tarefa + '/' + e.condicao; }).sort(),
     ['control-capitalize/com', 'control-capitalize/sem', 'impossible-spec/com', 'impossible-spec/sem']);
   assert.deepStrictEqual(env.execucoes.map(function (e) { return e.condicao; }), ['sem', 'com', 'sem', 'com']);
@@ -343,12 +392,16 @@ test('--gerar: tarefa x condicao x repeticao, A e B intercalados, verdade pelo d
   assert.ok(fim, ap.stdout);
   assert.strictEqual(fim[1], 'igual', 'a rodada do teste tinha de dar igual: ' + fim[1]);
   assert.match(fim[2], /^proximo passo: .*--repeticoes/);
-  // apuracao mexida depois da rodada (o congelado nao confere mais): sem veredito
-  const arq = path.join(rodada, 'congelado.txt');
-  fs.writeFileSync(arq, fs.readFileSync(arq, 'utf8').replace(/^[0-9a-f]/, function (c) { return c === '0' ? '1' : '0'; }), 'utf8');
+  // apuracao mexida depois da rodada (o congelado nao confere mais): sem veredito. A10-45: a linha inteira, com o que o
+  // congelado e, as duas causas e o passo.
+  adulterarCongelado(path.join(rodada, 'congelado.txt'));
   const mexida = cli(['--apurar', rodada]);
-  assert.strictEqual(mexida.status, 2);
-  assert.match(mexida.stdout, /VEREDITO: nenhum.*congelado/);
+  assert.strictEqual(mexida.status, 2, mexida.stdout + mexida.stderr);
+  const MOTIVO_DO_CONGELADO = 'VEREDITO: nenhum - o congelado da rodada (o sha256 das tarefas, da apuracao e do ' +
+    'instrumento, fixado antes da rodada) nao confere com o disco: a regra mudou depois do pre-registro, ou o ' +
+    'congelado.txt da rodada foi mexido; este numero nao vale. Proximo passo: rode o --congelar numa pasta nova e o ' +
+    '--gerar com ela no --destino\n';
+  assert.ok(mexida.stdout.indexOf('\n' + MOTIVO_DO_CONGELADO) !== -1, mexida.stdout);
 });
 
 test('--gerar: a saida do teste colada na resposta final conta como prova colada', () => {
@@ -489,7 +542,7 @@ test('--apurar: rodada incompleta nao da veredito, mesmo com a grade equilibrada
 
 // A6-64 (D735): a pasta que nao e a da rodada (o --destino, por exemplo) diz a causa traduzida e o passo; o JSON torto
 // diz o texto do Node entre aspas, sem o passo do --gerar.
-test('A6-64: --apurar numa pasta sem rodada diz a causa e o passo, sem o codigo cru', () => {
+test('A6-64: --apurar numa pasta sem rodada diz a causa traduzida (o codigo so entre parenteses) e o passo', () => {
   const dir = pasta();
   const r = cli(['--apurar', dir]);
   assert.strictEqual(r.status, 1, r.stderr);
@@ -540,4 +593,43 @@ test('--gerar: sem --modelo, tarefa desconhecida ou repeticoes invalidas, nada r
   assert.strictEqual(cli(['--gerar', '--modelo', 'm', '--destino', destino, '--tarefa', 'nao-existe'], env).status, 1);
   assert.strictEqual(cli(['--gerar', '--modelo', 'm', '--destino', destino, '--repeticoes', '0'], env).status, 1);
   assert.strictEqual(fs.existsSync(a.log), false, 'o claude nao foi chamado');
+});
+
+// A6-62: o --tarefa sem valor (no fim, ou seguido de outra flag) dizia "tarefa que nao esta ...: null".
+test('A6-62: --tarefa sem valor diz que falta o id, sem o null, e nada roda', () => {
+  const a = ambienteFalso();
+  const destino = congelado(a);
+  const env = { SWORN_CLAUDE: a.fake, FAKE_LOG: a.log };
+  [['--tarefa'], ['--tarefa', '--repeticoes', '1'], ['--tarefa', 'control-capitalize', '--tarefa'], ['--tarefa', ' ']]
+    .forEach(function (resto) {
+      const r = cli(['--gerar', '--modelo', 'm', '--destino', destino].concat(resto), env);
+      const quem = resto.join(' ') + ': ' + r.stderr + (r.error ? ' [' + r.error.code + ']' : '');
+      assert.strictEqual(r.status, 1, quem);
+      assert.match(r.stderr, /^ERRO: --tarefa sem valor\. Passe o id da tarefa: --tarefa <id>\.\n/, quem);
+      assert.doesNotMatch(r.stderr, /null/, quem);
+    });
+  assert.strictEqual(fs.existsSync(a.log), false, 'o claude nao foi chamado');
+});
+
+// A6-114: o objeto sem a lista "execucoes" (ou com outra coisa nela) caia numa lista vazia e apurava sem recusa.
+test('A6-114: execucoes.json sem a lista "execucoes" diz a forma; a lista vazia segue sem veredito', () => {
+  const dir = pasta();
+  ['{}', '{"execucoes":5}', '{"execucoes":null}', '{"execucoes":"x"}', '{"execucoes":{}}'].forEach(function (conteudo) {
+    fs.writeFileSync(path.join(dir, 'execucoes.json'), conteudo, 'utf8');
+    const r = cli(['--apurar', dir]);
+    const quem = conteudo + ': ' + r.stdout + r.stderr + (r.error ? ' [' + r.error.code + ']' : '');
+    assert.strictEqual(r.status, 1, quem);
+    assert.strictEqual(r.stdout, '', quem);
+    assert.match(r.stderr, /execucoes\.json nao tem a forma que o --gerar grava \(um objeto com a lista "execucoes", /, quem);
+  });
+  // a lista vazia e o que o --gerar grava antes da 1a execucao: com o congelado conferindo, apura e sai sem veredito
+  // pelo motivo da rodada incompleta (exit 2)
+  const r = cli(['--congelar', dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  fs.writeFileSync(path.join(dir, 'execucoes.json'), '{"execucoes":[]}', 'utf8');
+  const vazia = cli(['--apurar', dir]);
+  assert.strictEqual(vazia.status, 2, vazia.stdout + vazia.stderr);
+  assert.ok(vazia.stdout.indexOf('\nVEREDITO: nenhum - rodada incompleta (parou antes do fim da grade). Proximo ' +
+    'passo: rode o --gerar de novo com o mesmo --destino (ele cria uma rodada nova) e o --apurar na pasta dela\n') !== -1,
+  vazia.stdout);
 });

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ob = require('./lib/obrigacoes.js');
 const texto = require('./lib/texto.js');
+const flags = require('./lib/flags.js');
 
 /**
  * O EXPERIMENTO DA D83: o manual antigo ainda e preciso, ou o plugin basta?
@@ -52,14 +53,12 @@ const COMO_EXECUTAR = [
 // qual e o que ela espera, no molde do valor() do cicatriz.js; antes `--manual --veredito` lia uma pasta "--veredito".
 const FLAGS = ['--roteiro', '--veredito', '--manual', '--resultado'];
 const ESPERA = { '--manual': 'a pasta com os SKILL.md do manual antigo', '--resultado': 'o caminho do JSON gravado' };
+// So --manual e --resultado levam valor; --roteiro e --veredito sao modos e nunca passam por aqui.
 function arg(nome) {
-  const i = process.argv.indexOf(nome);
-  if (i === -1) return null;
-  const v = process.argv[i + 1];
-  if (v === undefined || v === '' || FLAGS.indexOf(v) !== -1) {
-    sair('ERRO: ' + nome + ' pede um valor (' + ESPERA[nome] + ').', 1);
-  }
-  return v;
+  // A frase da lib passa como veio (a flag repetida diz que e repetida); so a falta do valor ganha o que ela espera.
+  return flags.valor(process.argv, nome, FLAGS, function (msg) {
+    sair('ERRO: ' + msg.replace(/ pede um valor\.$/, ' pede um valor (' + ESPERA[nome] + ').'), 1);
+  });
 }
 function tem(nome) { return process.argv.indexOf(nome) !== -1; }
 

@@ -6,19 +6,33 @@ const regraLib = require('./lib/regra.js');
 const config = require('./lib/config.js');
 const textoLib = require('./lib/texto.js');
 
-function arg(nome) {
-  const i = process.argv.indexOf('--' + nome);
-  return i !== -1 ? process.argv[i + 1] : null;
+const flags = require('./lib/flags.js');
+
+const USO = "uso: propor-regra.js --gatilho '<quando>' --acao '<o que fazer>' [--gravar]\n";
+const FLAGS = ['--gatilho', '--acao', '--gravar'];
+// A4-43 (0.66.0): a regra da flag sem valor e a da lib/flags.js; antes `--gatilho --acao x` propunha a regra
+// "--acao -> ..." e nao avisava. As duas flags sao lidas antes de recusar, e a falta do valor vem antes da repetida:
+// em `--gatilho a --acao --gatilho` o erro e o do --acao, nao o "--gatilho aparece mais de uma vez".
+const recusas = [];
+function valorDe(nome) {
+  return flags.valor(process.argv, nome, FLAGS, function (msg) { recusas.push(msg); });
+}
+const gatilhoBruto = valorDe('--gatilho');
+const acaoBruta = valorDe('--acao');
+if (recusas.length) {
+  const falta = recusas.filter(function (m) { return / pede um valor\.$/.test(m); });
+  process.stdout.write('ERRO: ' + (falta.length ? falta[0] : recusas[0]) + '\n' + USO);
+  process.exit(1);
 }
 
-const gatilho = (arg('gatilho') || '').trim();
-const acao = (arg('acao') || '').trim();
+const gatilho = (gatilhoBruto || '').trim();
+const acao = (acaoBruta || '').trim();
 const gravar = process.argv.indexOf('--gravar') !== -1;
 // A4-04: a raiz do projeto, nao a pasta atual - a regra gravada numa subpasta nunca era lida pela abertura.
 const alvo = config.caminhoEmSworn(config.raizDoProjeto(process.cwd()), 'regras.md');
 
 if (!gatilho || !acao) {
-  process.stdout.write("uso: propor-regra.js --gatilho '<quando>' --acao '<o que fazer>' [--gravar]\n");
+  process.stdout.write(USO);
   process.exit(1);
 }
 

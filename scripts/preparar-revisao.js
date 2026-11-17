@@ -17,6 +17,7 @@ const estado = require('./lib/estado.js');
 const escopoLib = require('./lib/escopo.js');
 const telaCega = require('./lib/tela-cega.js');
 const contratoLib = require('./lib/contrato.js');
+const flags = require('./lib/flags.js');
 
 /**
  * D244/defeito 9: a secao "## Regua ..." do regras.md do projeto, do cabecalho ate o proximo
@@ -57,14 +58,10 @@ const USO = 'uso: preparar-revisao.js --arquivo <caminho relativo> [--completa] 
 // chamado `--x.js` vale) ou quando e vazio (`--semente ''` caia no pid, calado).
 const FLAGS_DO_USO = ['--arquivo', '--semente', '--completa', '--degradado', '--tela-antes', '--tela-depois'];
 function arg(nome) {
-  const i = process.argv.indexOf('--' + nome);
-  if (i === -1) return null;
-  const valor = process.argv[i + 1];
-  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
-    process.stdout.write('ERRO: --' + nome + ' pede um valor.\n' + USO);
+  return flags.valor(process.argv, '--' + nome, FLAGS_DO_USO, function (msg) {
+    process.stdout.write('ERRO: ' + msg + '\n' + USO);
     process.exit(1);
-  }
-  return valor;
+  });
 }
 
 // 0.3.2, item 8: "nao esta em HEAD" (git respondeu com status diferente de zero) e arquivo novo; git que
@@ -196,11 +193,8 @@ const faixaMedida = veredito.faixaDaMudanca({
 const pediuCompleta = process.argv.indexOf('--completa') !== -1;
 // B2 (s369, R-impeccable): a revisao que roda sem isolamento (inspetor que ve o repositorio ou o contexto de quem
 // escreveu) ou sem navegador (lente de tela sem captura) diz o motivo; o apurar-ronda.js o leva ao fecho.
+// O motivo so de espaco e valor que falta, pela regra da lib/flags.js (A4-71), como em toda flag.
 const degradado = arg('degradado');
-if (degradado !== null && !degradado.trim()) {
-  process.stdout.write('ERRO: --degradado pede um motivo, e veio so espaco.\n' + USO);
-  process.exit(1);
-}
 // E1 parte 2 (D827): a foto de cada lado da tela, pelo scripts/capturar-tela.js. --tela-depois e o endereco do
 // trabalho; --tela-antes, o da versao do HEAD rodando em outro lugar. O uso errado para aqui, antes de arquivar.
 const telaAntes = arg('tela-antes');

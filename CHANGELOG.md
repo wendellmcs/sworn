@@ -1,5 +1,98 @@
 # Changelog
 
+## 0.70.0 — o aviso de portão que falhou sem conseguir ler o erro fica mais claro
+
+**Corrigido**
+
+- **O aviso de reserva do portão que falhou fala sem jargão.** Quando nem o erro dá para ler, a linha dizia "o valor
+  lançado não vira texto", numa frase longa com "ou ... ou". Agora são duas frases: "o erro não vira texto ou o
+  texto.js do plugin, que o converte, não carregou" e o passo, rodar o `texto.js` e reinstalar o plugin se ele der
+  erro.
+
+## 0.69.0 — a auditoria só põe fora do peso a fonte de consulta que tem item
+
+**Corrigido**
+
+- **A fonte de consulta que não pesa nada não aparece mais em `foraDoPeso`.** Um arquivo de `fontesDeConsulta`
+  ausente, sem item de lista ou que não se lê entrava lá com 0 itens, como se tivesse saído do peso de instrução. Agora
+  só entra a fonte com item; a que não se lê segue em `naoLidos`, com a causa, e o método só cita as fontes de
+  consulta quando alguma saiu do peso.
+
+## 0.68.0 — o relatório de uso diz qual chave desliga cada contador
+
+**Corrigido**
+
+- **O rodapé do relatório de uso não ensina mais a desligar o `escopo`.** O exemplo era
+  `"travas": { "escopo": false }`, mas essa chave não desliga nada: o mesmo portão guarda os arquivos
+  intocáveis. O rodapé agora lista só `fecho`, `destrutivo` e `outraFrente` e diz por que o `escopo` fica.
+- **Cada contador que uma chave desliga diz qual,** entre parênteses (`comando_destrutivo (desliga com
+  "destrutivo")`). Antes, a lista mostrava o nome do contador e o rodapé o nome da trava, sem ligar um ao outro.
+  Um contador com nome como `constructor`, posto à mão no arquivo, sai sem parêntese.
+- **O arquivo de contadores só com contadores de ordem diz onde eles aparecem** (na auditoria automática),
+  em vez de só "nenhum disparo registrado".
+
+## 0.67.0 — o instrumento de medição lê argumento com aspa e recusa a rodada sem lista
+
+**Corrigido**
+
+- **O `npm test` do brinquedo leva cada argumento inteiro até o node,** no cmd.exe e no sh. Antes, um argumento
+  com aspa (`a"b`) era fechado no meio, e uma barra invertida solta virava escape no sh. O arquivo de tarefas
+  com um argumento de teste fora do que chega igual pelos dois shells (letras e dígitos sem acento, espaço e
+  `_ . / : = @ + , * ? " -`) é recusado antes da rodada.
+- **A rodada incompleta diz o passo:** rodar o `--gerar` de novo com o mesmo `--destino` e apurar a rodada nova.
+- **`--tarefa` sem valor diz que falta o id da tarefa.** Antes, `--gerar ... --tarefa` dizia "tarefa que não
+  está em modelos/travas-tarefas.json: null".
+- **O `--apurar` recusa o `execucoes.json` sem a lista "execucoes"** (`{}`, `{"execucoes":5}`) e diz a forma
+  que o `--gerar` grava. Antes, apurava como se a rodada estivesse vazia. A lista vazia de verdade segue
+  apurando, incompleta e sem veredito.
+- **Quando o congelado da rodada não confere, o veredito diz o que ele é e o passo:** o sha256 das tarefas, da
+  apuração e do instrumento, fixado antes da rodada; a causa é a regra que mudou depois do pré-registro ou o
+  próprio `congelado.txt` mexido; o passo é rodar o `--congelar` numa pasta nova e o `--gerar` com ela no
+  `--destino`.
+
+## 0.66.0 — mais cinco scripts recusam a flag sem valor do mesmo jeito
+
+**Corrigido**
+
+- **Uma flag seguida de outra flag do script agora pede um valor** no catálogo de modelos (`--registrar`), no
+  conserto de apelido (`--corrigir`, `--para`), no propor regra (`--gatilho`, `--acao`) e na referência
+  (`--tipo`). Antes, `--corrigir --para arquivo` procurava um agente chamado "--para", `--gatilho --acao x`
+  propunha a regra "--acao -> ..." e `--tipo --gravar` dizia "veio --gravar".
+- **O valor só de espaço também pede um valor nesses quatro e no apurar da revisão.** Antes, `--motivo " "`
+  consultava o motivo " " e `--arquivo " "` procurava a revisão de um arquivo " ".
+- **Na referência, um argumento vazio antes da ficha não a esconde mais.** Antes, `"" ficha.md` dizia "falta o
+  caminho da ficha".
+
+**Mudado**
+
+- **A flag repetida é erro de uso nesses cinco,** com a frase "aparece mais de uma vez". Antes valia a primeira.
+
+## 0.65.0 — o valor de flag só de espaço é erro de uso em todos os scripts
+
+**Corrigido**
+
+- **Um valor só de espaço (`--raiz " "`) agora pede um valor,** como a flag vazia ou seguida de outra flag. Antes,
+  os scripts mediam ou gravavam numa pasta chamada " ". Vale para os scripts de revisão, de gerar agente, skill
+  e AGENTS.md, do plano, do export, da sanitação, da plataforma, da cicatriz e do experimento.
+- **O erro de flag sem valor do `plano.js` sai no stderr,** como os outros erros dele, e o stdout fica vazio.
+
+**Mudado**
+
+- O motivo só de espaço do `--degradado` diz "pede um valor", como as outras flags (antes, "pede um motivo").
+- **A flag repetida (`--raiz a --raiz b`) é erro de uso** nesses mesmos scripts. Antes valia a primeira, calada.
+
+## 0.64.0 — o gerador de agentes recusa a resposta que não é objeto
+
+**Corrigido**
+
+- **No arquivo de respostas do gerador de agentes, a resposta de um agente que não é objeto JSON sai RECUSADA,**
+  com o nome do agente, o arquivo e o tipo que veio (texto, lista, nulo, número). Antes, um texto no lugar do
+  objeto se desmanchava em uma chave por letra e a recusa falava de fatias faltando. Os outros agentes seguem
+  gravados.
+- **Um agente chamado `constructor` sem resposta própria não herda nada do JavaScript:** cai no caso de sempre,
+  o das fatias que faltam.
+- **A frase do agente que já existia usa dois-pontos:** "não foi tocado: o arquivo é trabalho de alguém".
+
 ## 0.63.0 — a lista de atalhos não perde comentário por causa de aspa
 
 **Corrigido**

@@ -89,8 +89,9 @@ function liberarPorFalha(e) {
   try {
     causa = require('./texto.js').causaDoErro(e);
   } catch (x) {
-    causa = 'nao deu para ler o erro: ou o valor lancado nao vira texto, ou o texto.js do plugin, que faz essa ' +
-      'conversao, nao carregou. Se node "' + TEXTO_JS + '" der erro, reinstale o plugin';
+    // A5-82: sem o jargao "valor lancado" e sem o "ou ... ou"; duas frases, a causa e o passo
+    causa = 'nao deu para ler o erro: o erro nao vira texto ou o texto.js do plugin, que o converte, nao carregou. ' +
+      'Se node "' + TEXTO_JS + '" der erro, reinstale o plugin';
   }
   process.stderr.write('sworn: portao falhou e liberou por seguranca: ' + causa + '\n');
   // F3a: no modo embutido, o gancho que falha libera sem opiniao e os outros do mesmo processo seguem rodando.

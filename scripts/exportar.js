@@ -5,6 +5,7 @@ const path = require('node:path');
 const gitLib = require('./lib/git.js');
 const sanit = require('./lib/sanitacao.js');
 const texto = require('./lib/texto.js');
+const flags = require('./lib/flags.js');
 
 /**
  * Monta a pasta que vai para o repositorio publico.
@@ -32,15 +33,11 @@ const FLAGS_DO_USO = ['--raiz', '--destino', '--gravar'];
 // A4-exp-1 (pedido 12), borda: flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada -
 // `--destino --gravar` montava o export na pasta "--gravar". O molde e o argumento() do plataforma.js.
 function argumento(argv, nome) {
-  const i = argv.indexOf(nome);
-  if (i === -1) return null;
-  const valor = argv[i + 1];
-  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
-    console.error('ERRO: ' + nome + ' pede um valor.');
+  return flags.valor(argv, nome, FLAGS_DO_USO, function (msg) {
+    console.error('ERRO: ' + msg);
     console.error(USO);
     process.exit(2);
-  }
-  return valor;
+  });
 }
 
 // A4-exp-2 (pedido 12), estados: so ENOENT e destino vazio. O resto (destino que e arquivo, sem permissao) chegava

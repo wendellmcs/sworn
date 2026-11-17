@@ -201,7 +201,9 @@ test('A7: plano.js com flag sem valor diz qual flag pede valor, mostra o uso e s
   for (const [args, flag, conteudo] of casos) {
     const r = painelEm(conteudo === undefined ? null : conteudo, args);
     assert.strictEqual(r.status, 1, JSON.stringify(args) + ' -> ' + r.stdout + r.stderr);
-    assert.ok(r.stdout.indexOf('ERRO: ' + flag + ' pede um valor.\nuso: plano.js ') === 0, JSON.stringify(args) + ' -> ' + r.stdout);
+    // A7-02: o erro de valor vai ao stderr, como os outros erros do plano.js, e o stdout fica vazio
+    assert.ok(r.stderr.indexOf('ERRO: ' + flag + ' pede um valor.\nuso: plano.js ') === 0, JSON.stringify(args) + ' -> ' + r.stderr);
+    assert.strictEqual(r.stdout, '', JSON.stringify(args) + ' -> ' + r.stdout);
   }
   // o valor que comeca com outra coisa que nao uma flag do uso segue valendo
   const ok = painelEm(null, ['--abrir', 'plano.md', '--sessao', 's1']);

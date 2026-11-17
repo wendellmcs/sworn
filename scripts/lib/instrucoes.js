@@ -87,7 +87,9 @@ function contar(cwd, projeto, candidatos) {
     const c = contarArquivo(caminho);
     if (c.erro) naoLidos.push(rel.replace(/\\/g, '/') + ' (' + c.erro + ')');
     if (i < fontes.lista.length && consulta.has(chave)) {
-      foraDoPeso.push({ arquivo: rel.replace(/\\/g, '/'), n: c.n });
+      // A6-79: so a fonte com item entra; a ausente, a sem item e a que falhou (n 0, e ja em naoLidos) nao pesam nada.
+      // O texto vazio vira o cwd, uma pasta: falha, e fica fora pelo mesmo n 0.
+      if (c.n > 0) foraDoPeso.push({ arquivo: rel.replace(/\\/g, '/'), n: c.n });
       continue;
     }
     if (c.n > 0) { porArquivo.push({ arquivo: rel.replace(/\\/g, '/'), n: c.n }); total += c.n; }

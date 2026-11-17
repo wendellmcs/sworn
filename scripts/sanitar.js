@@ -2,6 +2,7 @@
 'use strict';
 const path = require('node:path');
 const sanit = require('./lib/sanitacao.js');
+const flags = require('./lib/flags.js');
 
 /**
  * H5 - o portao de sanitacao das TRES superficies da D133: conteudo, autoria,
@@ -35,15 +36,11 @@ const FLAGS_DO_USO = ['--raiz', '--so-conteudo'];
 // A4-san-1 (pedido 12), borda: `--raiz` sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia
 // calada em '.' - media a pasta de onde se chamou. O molde e o argumento() do plataforma.js.
 function argumento(argv, nome) {
-  const i = argv.indexOf(nome);
-  if (i === -1) return null;
-  const valor = argv[i + 1];
-  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
-    console.error('ERRO: ' + nome + ' pede um valor.');
+  return flags.valor(argv, nome, FLAGS_DO_USO, function (msg) {
+    console.error('ERRO: ' + msg);
     console.error(USO);
     process.exit(2);
-  }
-  return valor;
+  });
 }
 
 function main() {

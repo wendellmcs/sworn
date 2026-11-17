@@ -345,7 +345,11 @@ test('A4-gsk-3: skill que aparece entre a conferencia e a escrita nao e sobrescr
   const fs = require('node:fs');
   const path = require('node:path');
   const raiz = projetoParaSkill();
-  const alvo = /Destino seria: (.*)\n/.exec(gerarSkill(raiz, ['--respostas', 'respostas.json']).stdout)[1];
+  // sem a linha "Destino seria:", a falha mostra a saida do gerador, e nao um TypeError do [1] sobre o null
+  const proposta = gerarSkill(raiz, ['--respostas', 'respostas.json']);
+  const destino = /Destino seria: (.*)\n/.exec(proposta.stdout);
+  assert.ok(destino, proposta.stdout + proposta.stderr);
+  const alvo = destino[1];
   fs.mkdirSync(path.dirname(alvo), { recursive: true });
   fs.writeFileSync(alvo, 'skill do dono\n', 'utf8');
   const cego = path.join(raiz, 'cego.js');
@@ -359,4 +363,12 @@ test('A4-gsk-3: skill que aparece entre a conferencia e a escrita nao e sobrescr
   assert.ok(/\(ja existe \(EEXIST\)\)/.test(r.stdout), r.stdout);
   assert.strictEqual(fs.readFileSync(alvo, 'utf8'), 'skill do dono\n', 'sobrescreveu');
   fs.rmSync(raiz, { recursive: true, force: true });
+});
+
+// A4-49: o nome do tipo saiu do lerRespostas para o gerar-agentes.js usar o mesmo na resposta de um agente
+test('A4-49: ehObjeto e tipoJson dizem o objeto JSON e o nome de cada tipo em portugues', () => {
+  assert.strictEqual(molde.ehObjeto({}), true);
+  [null, [], 'x', 1, true, undefined].forEach((v) => assert.strictEqual(molde.ehObjeto(v), false, String(v)));
+  assert.deepStrictEqual([{}, [], null, 'x', 1, true, undefined].map((v) => molde.tipoJson(v)),
+    ['objeto', 'lista', 'nulo', 'texto', 'numero', 'verdadeiro ou falso', 'ausente']);
 });

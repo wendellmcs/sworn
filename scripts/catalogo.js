@@ -18,14 +18,22 @@ const catalogo = require('./lib/catalogo.js');
  * principal. Le e grava na pasta atual - quem chama roda de dentro da raiz.
  */
 
-function arg(nome) {
-  const i = process.argv.indexOf('--' + nome);
-  return i !== -1 ? process.argv[i + 1] : null;
-}
+const flags = require('./lib/flags.js');
 
 const cwd = process.cwd();
 const USO = 'uso: catalogo.js --motivo <motivo> | --registrar <' +
   catalogo.DESFECHOS.join('|') + '> [fonte...] | --degradado';
+const FLAGS = ['--motivo', '--registrar', '--degradado'];
+
+// A4-43 (0.66.0): a regra da flag sem valor e a da lib/flags.js (antes `--motivo " "` consultava o motivo " ", e
+// `--registrar --motivo` dizia "desfecho desconhecido"); a falta do valor ganha a frase de cada flag, e a repetida
+// sai com a frase da lib. Erro de uso aqui vai ao stdout com o USO, saida 1, como os outros deste script.
+function valorDe(nome, falta) {
+  return flags.valor(process.argv, nome, FLAGS, function (msg) {
+    process.stdout.write('ERRO: ' + (/ pede um valor\.$/.test(msg) ? falta : msg) + '\n' + USO + '\n');
+    process.exit(1);
+  });
+}
 
 if (process.argv.indexOf('--degradado') !== -1) {
   process.stdout.write(catalogo.motivoDegradado() + '\n');
@@ -33,18 +41,14 @@ if (process.argv.indexOf('--degradado') !== -1) {
 }
 
 if (process.argv.indexOf('--motivo') !== -1) {
-  const motivo = arg('motivo');
-  if (!motivo) {
-    process.stdout.write('ERRO: --motivo sem valor.\n' + USO + '\n');
-    process.exit(1);
-  }
+  const motivo = valorDe('--motivo', '--motivo sem valor.');
   const r = catalogo.deveConsultar(catalogo.ler(cwd), motivo, Date.now());
   process.stdout.write(JSON.stringify(r) + '\n');
   process.exit(0);
 }
 
 if (process.argv.indexOf('--registrar') !== -1) {
-  const desfecho = arg('registrar');
+  const desfecho = valorDe('--registrar', '--registrar sem valor: use ' + catalogo.DESFECHOS.join(', ') + '.');
   // registrar() troca desfecho desconhecido por 'falhou', para o lado seguro.
   // Aqui quem digitou esta presente: recusar e dizer vale mais que trocar calado.
   if (catalogo.DESFECHOS.indexOf(desfecho) === -1) {

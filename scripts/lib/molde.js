@@ -149,14 +149,26 @@ function lerRespostas(arquivo) {
   let valores;
   try { valores = JSON.parse(limpo); }
   catch (e) { return { ok: false, etapa: 'json', erro: arquivo + ' nao e JSON valido: ' + e.message }; }
-  if (valores === null || typeof valores !== 'object' || Array.isArray(valores)) {
-    // o tipo em portugues, como o resto da frase (o typeof daria "number" ou "boolean")
-    const NOMES = { number: 'numero', string: 'texto', boolean: 'verdadeiro ou falso' };
-    const tipo = Array.isArray(valores) ? 'lista' : (valores === null ? 'nulo' : NOMES[typeof valores] || typeof valores);
+  if (!ehObjeto(valores)) {
     return { ok: false, etapa: 'forma',
-      erro: arquivo + ' tem de ser um objeto JSON ({ ... }) com as respostas por nome; veio ' + tipo };
+      erro: arquivo + ' tem de ser um objeto JSON ({ ... }) com as respostas por nome; veio ' + tipoJson(valores) };
   }
   return { ok: true, valores: valores };
 }
 
-module.exports = { MARCA, slots, preencher, validar, lerRespostas };
+/** O objeto JSON ({ ... }): nem nulo, nem lista, nem valor solto. */
+function ehObjeto(v) {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** O tipo de um valor lido de JSON, em portugues, como o resto das frases (o typeof daria "number" ou "boolean").
+ *  O gerar-agentes.js usa o mesmo nome na resposta de um agente que nao e objeto. */
+function tipoJson(v) {
+  // o JSON.parse nunca da undefined; ele entra para quem chama com uma chave que falta nao ler "veio undefined"
+  const NOMES = { number: 'numero', string: 'texto', boolean: 'verdadeiro ou falso', object: 'objeto', undefined: 'ausente' };
+  if (Array.isArray(v)) return 'lista';
+  if (v === null) return 'nulo';
+  return NOMES[typeof v] || typeof v;
+}
+
+module.exports = { MARCA, slots, preencher, validar, lerRespostas, ehObjeto, tipoJson };

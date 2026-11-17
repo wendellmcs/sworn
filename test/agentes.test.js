@@ -229,6 +229,8 @@ test('agentes: agente que ja existe e PULADO, e o gerador diz que pulou', (t) =>
   escrever(raiz, 'busca', '---\nname: busca\nmodel: nao-mexa\n---\ntrabalho de alguem\n');
   const r = rodar(raiz, ['--respostas', respostasEmArquivo(raiz, ['busca', 'arquiteto']), '--gravar']);
   assert.ok(r.stdout.includes('PULADO'), r.stdout);
+  // A4-122: a frase usa dois-pontos, sem o hifen solto entre as duas partes
+  assert.ok(r.stdout.includes('Agente que ja existia nao foi tocado: o arquivo e trabalho de alguem.\n'), r.stdout);
   const lido = fs.readFileSync(agentes.caminho(raiz, 'busca'), 'utf8');
   assert.ok(lido.includes('trabalho de alguem'), 'o arquivo de alguem foi sobrescrito');
 });
@@ -629,4 +631,41 @@ test('A4-gag-5: agente que aparece entre a conferencia e a escrita nao e sobresc
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
   assert.ok(/NAO GRAVADO: .*busca\.md \(ja existe \(EEXIST\)\)/.test(r.stdout), r.stdout);
   assert.strictEqual(fs.readFileSync(alvo, 'utf8'), 'agente do dono\n', 'sobrescreveu');
+});
+
+// A4-49: a resposta de um agente ia direto ao Object.assign; um texto virava { 0: 'a', 1: 'b', ... } e o
+// lerRespostas so confere o nivel de cima. Agora a resposta que nao e objeto e RECUSADA com o nome do agente e o tipo,
+// e o outro degrau segue gravado.
+test('A4-49: resposta de agente que nao e objeto e RECUSADA, dizendo o agente e o tipo', (t) => {
+  [['"so um texto"', 'texto'], ['["a"]', 'lista'], ['null', 'nulo'], ['7', 'numero']].forEach(([json, tipo]) => {
+    const raiz = pastaTemporaria(t);
+    semearProjeto(raiz, DOIS);
+    const alvo = respostasEmArquivo(raiz, ['arquiteto']);
+    const lidas = JSON.parse(fs.readFileSync(alvo, 'utf8'));
+    fs.writeFileSync(alvo, JSON.stringify(Object.assign({ busca: JSON.parse(json) }, lidas)), 'utf8');
+    const r = rodarComTeto(raiz, ['--respostas', alvo, '--gravar']);
+    assert.strictEqual(r.status, 1, tipo + ': ' + r.stdout + r.stderr);
+    assert.ok(r.stdout.includes('RECUSADO busca:\n  - a resposta de "busca" em ' + alvo + ' tem de ser um objeto JSON' +
+      ' ({ ... }) com uma chave por fatia do molde; veio ' + tipo + '\n'), tipo + ': ' + r.stdout);
+    // uma recusa so: a resposta torta nao segue para o validador, que a recusaria de novo pelas fatias faltando
+    assert.strictEqual(r.stdout.split('RECUSADO busca:').length, 2, tipo + ': ' + r.stdout);
+    assert.ok(r.stdout.includes('RECUSADOS: 1'), tipo + ': ' + r.stdout);
+    assert.strictEqual(fs.existsSync(agentes.caminho(raiz, 'busca')), false, tipo + ': gravou a resposta torta');
+    assert.ok(fs.existsSync(agentes.caminho(raiz, 'arquiteto')), tipo + ': o degrau valido segue gravado: ' + r.stdout);
+  });
+});
+
+// A4-49, borda: o degrau "constructor" passa na regra NOME; sem resposta propria, o respostas["constructor"] acharia
+// a funcao do Object e a recusaria como "veio function". Sem resposta, ele cai no caso de sempre: faltam as fatias.
+test('A4-49: degrau chamado constructor sem resposta nao herda a funcao do Object', (t) => {
+  const raiz = pastaTemporaria(t);
+  semearProjeto(raiz, [{ agente: 'constructor', apelido: 'barato' }, { agente: 'arquiteto', apelido: 'caro' }]);
+  const arquivo = respostasEmArquivo(raiz, ['arquiteto']);
+  const r = rodarComTeto(raiz, ['--respostas', arquivo]);
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  // a causa e a do validador (as fatias), que fecha com o "Corrija a chave"; nunca a da forma da resposta
+  assert.ok(r.stdout.includes('RECUSADO constructor:\n'), r.stdout);
+  assert.ok(r.stdout.includes('  Corrija a chave "constructor" de ' + arquivo + ' e rode de novo.\n'), r.stdout);
+  assert.strictEqual(r.stdout.indexOf('tem de ser um objeto JSON'), -1, r.stdout);
+  assert.strictEqual(r.stdout.indexOf('veio function'), -1, r.stdout);
 });

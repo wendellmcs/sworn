@@ -55,8 +55,9 @@ test('io: blindar engole excecao e sai com 0', () => {
 // A5-27/A5-29 (D735): valor lancado que nao e Error (texto, null) saia "undefined" no log; e sem quebra de linha.
 // A5-63: a reserva diz as duas causas (valor sem texto ou texto.js que nao carrega) e o passo. A5-76: curta, sem
 // parenteses com ponto e virgula dentro. s266 (R2): diz o que o texto.js faz e o passo se o comando der erro.
-const semTexto = (texto) => 'nao deu para ler o erro: ou o valor lancado nao vira texto, ou o texto.js do plugin, ' +
-  'que faz essa conversao, nao carregou. Se node "' + texto + '" der erro, reinstale o plugin';
+// A5-82: sem "valor lancado" nem "ou ... ou", em duas frases.
+const semTexto = (texto) => 'nao deu para ler o erro: o erro nao vira texto ou o texto.js do plugin, que o ' +
+  'converte, nao carregou. Se node "' + texto + '" der erro, reinstale o plugin';
 
 test('A5-29: blindar poe no stderr a causa de qualquer valor lancado, com quebra de linha final', () => {
   const io = path.join(__dirname, '..', 'scripts', 'lib', 'io.js');

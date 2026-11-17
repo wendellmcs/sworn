@@ -8,11 +8,23 @@ const config = require('./lib/config.js');
 const agentesLib = require('./lib/agentes.js');
 const apelidos = require('./lib/apelidos.js');
 
-function arg(nome) {
-  const i = process.argv.indexOf('--' + nome);
-  return i !== -1 ? process.argv[i + 1] : null;
-}
+const flags = require('./lib/flags.js');
+
+const FLAGS = ['--mapa', '--corrigir', '--para'];
 function tem(nome) { return process.argv.indexOf('--' + nome) !== -1; }
+
+// O erro de uso do --corrigir: a primeira linha diz o que faltou, as duas seguintes dizem as duas direcoes.
+function usoDoCorrigir(primeira) {
+  process.stdout.write(primeira + '\n');
+  process.stdout.write('  --corrigir <agente> --para arquivo   (o arquivo passa a dizer o que o mapa diz)\n');
+  process.stdout.write('  --corrigir <agente> --para mapa      (o mapa passa a dizer o que o arquivo diz)\n');
+  process.exit(1);
+}
+// A4-43 (0.66.0): a regra da flag sem valor e a da lib/flags.js; antes `--corrigir --para arquivo` procurava um
+// agente chamado "--para". A frase da lib (sem valor, ou repetida) vai na primeira linha do uso.
+function valorDe(nome) {
+  return flags.valor(process.argv, '--' + nome, FLAGS, function (msg) { usoDoCorrigir('ERRO: ' + msg); });
+}
 
 /**
  * S8/L2-ape-2: caminho que o AGENTE vai copiar para o shell. Aspas duplas servem ao caso normal (espaco,
@@ -68,14 +80,9 @@ if (tem('mapa')) {
 // -------------------------------------------------- modo conserto: --corrigir
 if (tem('corrigir')) {
   const cwd = process.cwd();
-  const alvo = arg('corrigir');
-  const destino = arg('para');
-  if (!alvo || (destino !== 'arquivo' && destino !== 'mapa')) {
-    process.stdout.write('ERRO: diga o agente e a direcao.\n');
-    process.stdout.write('  --corrigir <agente> --para arquivo   (o arquivo passa a dizer o que o mapa diz)\n');
-    process.stdout.write('  --corrigir <agente> --para mapa      (o mapa passa a dizer o que o arquivo diz)\n');
-    process.exit(1);
-  }
+  const alvo = valorDe('corrigir');
+  const destino = valorDe('para');
+  if (destino !== 'arquivo' && destino !== 'mapa') usoDoCorrigir('ERRO: diga o agente e a direcao.');
   const r = conferirAqui(cwd);
   const deste = function (x) { return x.agente === alvo; };
   // D678 T1: o modelo e o esforco do mesmo agente se consertam no mesmo ato e na mesma direcao.

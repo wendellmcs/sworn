@@ -11,14 +11,22 @@ const citacao = require('./lib/citacao.js');
 const diffLinhas = require('./lib/diff-linhas.js');
 const detectorCego = require('./lib/detector-cego.js');
 const inventarioTela = require('./lib/inventario-tela.js');
+const flags = require('./lib/flags.js');
 
 // F2-01: so e "valor que falta" quando o proximo argumento e outra flag do USO deste script (como o
 // FLAGS_DO_USO do preparar-revisao.js): um arquivo chamado `--x.js` vale como caminho.
 const FLAGS_DO_USO = ['--sessao', '--arquivo'];
-
-function arg(nome) {
-  const i = process.argv.indexOf('--' + nome);
-  return i !== -1 ? process.argv[i + 1] : null;
+// A4-43 (0.66.0): a regra (a ultima, vazia, so espaco, outra flag do USO, repetida) e a da lib/flags.js; aqui fica
+// so a frase de cada flag para a falta do valor. A repetida sai com a frase da lib.
+const FALTA = {
+  '--sessao': '--sessao sem valor. Passe o id da sessao: --sessao <id>, ou tire a flag para usar ' +
+    'CLAUDE_CODE_SESSION_ID.',
+  '--arquivo': '--arquivo sem caminho. Passe o arquivo revisado: --arquivo <caminho>.'
+};
+function valorDe(nome) {
+  return flags.valor(process.argv, nome, FLAGS_DO_USO, function (msg) {
+    falhar('ERRO: ' + (/ pede um valor\.$/.test(msg) ? FALTA[nome] : msg) + '\n');
+  });
 }
 
 const cwd = process.cwd();
@@ -139,13 +147,8 @@ function validarSessao(valor, origem) {
  * Devolve { valor, origem }; valor null = nenhuma sessao.
  */
 function sessaoDoUso() {
-  const i = process.argv.indexOf('--sessao');
-  if (i !== -1) {
-    const valor = process.argv[i + 1];
-    if (!valor || FLAGS_DO_USO.indexOf(valor) !== -1) {
-      falhar('ERRO: --sessao sem valor. Passe o id da sessao: --sessao <id>, ou tire a flag para usar ' +
-        'CLAUDE_CODE_SESSION_ID.\n');
-    }
+  const valor = valorDe('--sessao');
+  if (valor !== null) {
     validarSessao(valor, '--sessao');
     return { valor: valor, origem: '--sessao' };
   }
@@ -161,10 +164,7 @@ function sessaoDoUso() {
  */
 function escolherBase() {
   const antigo = cegar.temPastaNumeradaSolta(revisao);
-  const alvo = arg('arquivo');
-  if (process.argv.indexOf('--arquivo') !== -1 && (!alvo || FLAGS_DO_USO.indexOf(alvo) !== -1)) {
-    falhar('ERRO: --arquivo sem caminho. Passe o arquivo revisado: --arquivo <caminho>.\n');
-  }
+  const alvo = valorDe('--arquivo');
   if (alvo) {
     const rel = caminho.relativoAoProjeto(alvo.replace(/\\/g, '/'), cwd);
     if (rel === null) {

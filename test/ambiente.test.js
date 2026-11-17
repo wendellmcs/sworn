@@ -135,6 +135,32 @@ test('D732: fonte canonica em fontesDeConsulta sai do peso e aparece em foraDoPe
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// A6-79: a fonte de consulta ausente, sem item ou que nao se le nao entra em foraDoPeso (a que falhou sai em
+// naoLidos); o texto vazio (o cwd, uma pasta) tambem fica fora. A que tem item segue la, com o metodo dizendo.
+test('A6-79: so a fonte de consulta com item entra em foraDoPeso', () => {
+  const dir = montar({
+    'CLAUDE.md': '- a\n- b\n',
+    'docs/decisoes.md': '- d1\n- d2\n',
+    'docs/prosa.md': 'so prosa, sem item de lista\n',
+    'docs/pasta/leia.md': '- x\n'
+  });
+  try {
+    const fontes = ['CLAUDE.md', 'docs/decisoes.md', 'docs/prosa.md', 'docs/sumiu.md', 'docs/pasta', ''];
+    const r = instrucoes.contar(dir, { fontesCanonicas: fontes,
+      fontesDeConsulta: ['', '  ', 'docs/decisoes.md', 'docs/prosa.md', 'docs/sumiu.md', 'docs/pasta'] });
+    assert.deepStrictEqual(r.foraDoPeso, [{ arquivo: 'docs/decisoes.md', n: 2 }]);
+    assert.strictEqual(r.total, 2);
+    // a pasta e o texto vazio (o cwd) nao se leem: saem com a causa
+    assert.deepStrictEqual(r.naoLidos.map((l) => l.split(' (')[0]), ['docs/pasta', '']);
+    assert.match(r.metodo, /; fora as fontes de consulta/, r.metodo);
+    // so as que nao pesam: foraDoPeso vazio e o metodo sem a frase
+    const nada = instrucoes.contar(dir, { fontesCanonicas: ['CLAUDE.md', 'docs/prosa.md', 'docs/sumiu.md'],
+      fontesDeConsulta: ['docs/prosa.md', 'docs/sumiu.md'] });
+    assert.deepStrictEqual([nada.total, nada.foraDoPeso], [2, []]);
+    assert.ok(!nada.metodo.includes('fora as fontes de consulta'), nada.metodo);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // Ronda 1 do 8c.5: `LIMITES.tetoDeInstrucoes || 200` engolia o zero - o defeito que a
 // varredura.js ja corrigiu (`limite || LIMITE_PADRAO`). Zero e teto de verdade.
 test('instrucoes: teto e aviso em zero valem zero; so o ausente cai no padrao', () => {

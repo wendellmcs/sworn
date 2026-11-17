@@ -5,6 +5,7 @@ const path = require('node:path');
 const molde = require('./lib/molde.js');
 const config = require('./lib/config.js');
 const texto = require('./lib/texto.js');
+const flags = require('./lib/flags.js');
 
 const USO = 'uso: gerar-skill.js [--fatias] [--respostas <arquivo.json>] [--gravar]\n';
 const FLAGS_DO_USO = ['--respostas', '--gravar', '--fatias'];
@@ -12,14 +13,10 @@ const FLAGS_DO_USO = ['--respostas', '--gravar', '--fatias'];
 // A4-gsk-1 (pedido 12), borda: flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada no
 // "sem respostas". O molde e o arg() do preparar-revisao.js.
 function arg(nome) {
-  const i = process.argv.indexOf('--' + nome);
-  if (i === -1) return null;
-  const valor = process.argv[i + 1];
-  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
-    process.stdout.write('ERRO: --' + nome + ' pede um valor.\n' + USO);
+  return flags.valor(process.argv, '--' + nome, FLAGS_DO_USO, function (msg) {
+    process.stdout.write('ERRO: ' + msg + '\n' + USO);
     process.exit(1);
-  }
-  return valor;
+  });
 }
 
 const cwd = process.cwd();

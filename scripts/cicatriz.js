@@ -2,6 +2,7 @@
 'use strict';
 const path = require('node:path');
 const cicatriz = require('./lib/cicatriz.js');
+const flags = require('./lib/flags.js');
 
 /**
  * Entrega D. Mede e propoe; NAO poda. Aposentar instrucao e decisao do dono, e a
@@ -24,11 +25,7 @@ function erroDeUso(texto) {
 // no molde do preparar-revisao.js; antes `--corpus --json` lia o corpus de uma pasta chamada "--json".
 const FLAGS_DO_USO = ['--manual', '--corpus', '--minimo', '--fracao', '--json'];
 function valor(nome) {
-  const i = process.argv.indexOf(nome);
-  if (i === -1) return null;
-  const v = process.argv[i + 1];
-  if (v === undefined || v === '' || FLAGS_DO_USO.indexOf(v) !== -1) erroDeUso(nome + ' pede um valor.');
-  return v;
+  return flags.valor(process.argv, nome, FLAGS_DO_USO, erroDeUso);
 }
 
 // A5 (R1 :26): `--minimo abc` virava NaN, que nenhum `<` barra: as regras todas saiam "com cicatriz" e a lista de

@@ -6,6 +6,7 @@ const referencia = require('./lib/referencia.js');
 const caminho = require('./lib/caminho.js');
 const config = require('./lib/config.js');
 const texto = require('./lib/texto.js');
+const flags = require('./lib/flags.js');
 
 /**
  * Plano do REA, Tarefa 3 (skill /sworn:reference, D580): confere a ficha e, com o sim do dono, a poe na referencia.
@@ -26,10 +27,17 @@ function sair(codigo, dados) {
 const args = process.argv.slice(2);
 const gravar = args.indexOf('--gravar') !== -1;
 const iTipo = args.indexOf('--tipo');
-const tipoPedido = iTipo === -1 ? null : args[iTipo + 1];
-const arg = args.filter(function (a, i) { return !a.startsWith('--') && (iTipo === -1 || i !== iTipo + 1); })[0];
+// A4-43 (0.66.0): a regra da flag sem valor e a da lib/flags.js; antes `--tipo --gravar` dizia "veio --gravar", como
+// se --gravar fosse um tipo. Vem antes da ficha: `--tipo` sozinho diz que falta o valor do --tipo.
+const tipoPedido = flags.valor(process.argv, '--tipo', ['--gravar', '--tipo'], function (msg) {
+  sair(1, { gravou: false, erro: msg.replace(/\.$/, '') + ': ' + USO });
+});
+// O argumento vazio (ou so espaco) nao e ficha: antes, `"" ficha.md` dizia "falta o caminho da ficha".
+const arg = args.filter(function (a, i) {
+  return a.trim() !== '' && !a.startsWith('--') && (iTipo === -1 || i !== iTipo + 1);
+})[0];
 if (!arg) sair(1, { gravou: false, erro: 'falta o caminho da ficha: ' + USO });
-if (iTipo !== -1 && tipoPedido !== 'radar') sair(1, { gravou: false, erro: '--tipo so aceita radar; veio ' + (tipoPedido || 'nada') + ': ' + USO });
+if (tipoPedido !== null && tipoPedido !== 'radar') sair(1, { gravou: false, erro: '--tipo so aceita radar; veio ' + tipoPedido + ': ' + USO });
 // O radar so le e propoe: o que entra no sworn sai do chat, com o sim do dono, nao da `referencias`.
 if (tipoPedido && gravar) sair(1, { gravou: false, erro: 'a ficha do radar nao entra na referencias (--gravar): o escolhido entra pelo chat, com o sim do dono' });
 

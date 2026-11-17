@@ -2,6 +2,7 @@
 'use strict';
 const path = require('node:path');
 const plataforma = require('./lib/plataforma.js');
+const flags = require('./lib/flags.js');
 
 /**
  * H6 na tela: em que sistemas este plugin de fato rodou, e o que nele so se
@@ -31,13 +32,7 @@ function recusar(msg) {
 // A1 (pedido 12), borda: flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada no
 // padrao - `--raiz --como linux` media a pasta "--como". O molde e o arg() do preparar-revisao.js.
 function argumento(argv, nome) {
-  const i = argv.indexOf(nome);
-  if (i === -1) return null;
-  const valor = argv[i + 1];
-  if (valor === undefined || valor === '' || FLAGS_DO_USO.indexOf(valor) !== -1) {
-    recusar('ERRO: ' + nome + ' pede um valor.');
-  }
-  return valor;
+  return flags.valor(argv, nome, FLAGS_DO_USO, function (msg) { recusar('ERRO: ' + msg); });
 }
 
 function main() {

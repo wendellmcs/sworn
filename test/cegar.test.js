@@ -1749,7 +1749,8 @@ test('B2: --degradado grava o motivo no mapa.json e na saida; sem valor e erro d
     assert.match(r.stdout, /--degradado pede um valor/);
     r = spawnSync(process.execPath, [CLI, '--arquivo', 'logica.js', '--degradado', '   '], { cwd: dir, encoding: 'utf8', shell: false });
     assert.strictEqual(r.status, 1, r.stdout);
-    assert.match(r.stdout, /--degradado pede um motivo/, 'so espaco nao e motivo');
+    // A4-71: so espaco e valor que falta, pela regra da lib/flags.js, como em toda flag
+    assert.match(r.stdout, /--degradado pede um valor/, 'so espaco nao e motivo');
     r = spawnSync(process.execPath, [CLI, '--arquivo', '--degradado', 'x'], { cwd: dir, encoding: 'utf8', shell: false });
     assert.strictEqual(r.status, 1, r.stdout);
     assert.match(r.stdout, /--arquivo pede um valor/, '--degradado nao vira o arquivo');
