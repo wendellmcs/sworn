@@ -36,6 +36,13 @@ const ACAO_DE_JULGAR = 'Julgue os pares que faltam (as instrucoes do juiz saem d
   'node scripts/medir-qualidade.js --pares <pasta da rodada>; cada veredito vai em pares/<par>/vereditos/' +
   LENTE.chave + '.json) e rode --veredito <pasta da rodada> de novo.';
 
+/**
+ * A6 (s372, microcopy): o passo da rodada INVALIDA, uma vez depois da lista. A geracao que existe guarda o porque nos
+ * motivos dela; a ausente, a repetida e o item quebrado nao tem motivos, e o passo e o mesmo: gerar a rodada de novo.
+ */
+const ACAO_DA_RODADA_INVALIDA = 'Quando a geracao existe, o porque esta nos motivos dela, no geracoes.json da rodada. ' +
+  'Conserte a causa e gere a rodada de novo: node scripts/medir-qualidade.js --gerar --modelo <nome> --destino <pasta>.';
+
 /** O comando que liga o caveman no modo print. Quem julga nunca o ve: `perguntaDaCondicao` so o poe no envio. */
 const COMANDO_CAVEMAN = '/caveman ';
 
@@ -169,8 +176,14 @@ function apurar(entrada) {
 
   // as geracoes: cada prompt x condicao exatamente uma vez, valida
   const porChave = Object.create(null);
-  geracoes.forEach(function (g) {
-    const k = g && g.prompt + '/' + g.condicao;
+  geracoes.forEach(function (g, i) {
+    // A6-26: a geracao que nao e objeto virava a chave 'null' (ou 'undefined/undefined') e sumia calada.
+    // O objeto sem prompt ou sem condicao em texto virava 'undefined/...' e sumia do mesmo jeito.
+    if (!g || typeof g !== 'object' || typeof g.prompt !== 'string' || typeof g.condicao !== 'string') {
+      invalidos.push('item ' + (i + 1) + ' da lista de geracoes: nao e uma geracao com prompt e condicao em texto');
+      return;
+    }
+    const k = g.prompt + '/' + g.condicao;
     (porChave[k] = porChave[k] || []).push(g);
   });
   ids.forEach(function (id) {
@@ -180,10 +193,10 @@ function apurar(entrada) {
       if (achadas.length === 0) { invalidos.push(onde + ': geracao ausente'); return; }
       if (achadas.length > 1) { invalidos.push(onde + ': geracao repetida (' + achadas.length + ')'); return; }
       const g = achadas[0];
-      if (g.ok !== true) invalidos.push(onde + ': a geracao falhou (ok falso)');
+      if (g.ok !== true) invalidos.push(onde + ': a execucao desta geracao falhou');
       if (typeof g.texto !== 'string' || g.texto.trim() === '') invalidos.push(onde + ': texto vazio');
-      if (g.aplicou !== true) invalidos.push(onde + ': a condicao nao se aplicou (aplicou falso)');
-      if (!tokensValidos(g.outputTokens)) invalidos.push(onde + ': output_tokens ausente ou invalido');
+      if (g.aplicou !== true) invalidos.push(onde + ': a condicao nao valeu nesta execucao; os motivos da geracao dizem o que faltou ou sobrou');
+      if (!tokensValidos(g.outputTokens)) invalidos.push(onde + ': falta a contagem de tokens da resposta, ou ela nao e um numero de 0 para cima');
       else tokens[c] += g.outputTokens;
     });
   });
@@ -224,6 +237,7 @@ function apurar(entrada) {
   if (invalidos.length > 0) {
     saida.veredito = 'INVALIDO';
     invalidos.forEach(function (m) { motivos.push(m); });
+    motivos.push(ACAO_DA_RODADA_INVALIDA);
     return saida;
   }
   if (faltam.length > 0) {
@@ -400,6 +414,9 @@ function lerExecucao(linhas, opcoes) {
     motivos.push('o caveman foi acionado na condicao ' + condicao + ': ela tem de rodar sem o caveman. Confira se o ' +
       'plugin caveman liga sozinho no claude que a medicao chama (o de SWORN_CLAUDE, ou o do PATH) e rode de novo.');
   }
+  // A6-27: o aplicou fala so da condicao (a abertura, o bloco e o caveman, acima). Os motivos do fim da execucao e do
+  // texto, abaixo, mudam o ok e nao o aplicou: por isso ele se fixa aqui, antes deles. Motivo novo de condicao entra
+  // acima desta linha.
   const aplicou = motivos.length === 0;
 
   // o texto que o usuario veria
@@ -441,8 +458,9 @@ function lerExecucao(linhas, opcoes) {
     }
     const usage = resultado.usage;
     const bruto = usage && typeof usage === 'object' ? usage.output_tokens : undefined;
-    if (bruto !== undefined && bruto !== null) outputTokens = bruto;
-    if (!tokensValidos(bruto)) {
+    // A6-25: so a contagem valida vai adiante; -5 ou 'x' ficavam no outputTokens, mesmo com o ok falso.
+    if (tokensValidos(bruto)) outputTokens = bruto;
+    else {
       ok = false;
       // A6-30: diz o que e o output_tokens e o passo.
       motivos.push('o evento result nao traz a contagem de tokens da resposta (o campo output_tokens), ou ela ' +
@@ -460,6 +478,6 @@ function lerExecucao(linhas, opcoes) {
 }
 
 module.exports = {
-  ACAO_DE_JULGAR, CONDICOES, RIVAIS, ORDENS, LENTE, MARCADOR_DO_BLOCO, perguntaDaCondicao, votoDoJuiz, resultadoDoPar,
+  ACAO_DE_JULGAR, ACAO_DA_RODADA_INVALIDA, CONDICOES, RIVAIS, ORDENS, LENTE, MARCADOR_DO_BLOCO, perguntaDaCondicao, votoDoJuiz, resultadoDoPar,
   nomeDoPar, apurar, lerExecucao, lerTranscricao, cavemanNaTranscricao, sessionIdDe, eventosDe, blocosDe
 };

@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.73.0 — a medição de qualidade e o gasto do mês não escondem dado ruim
+
+**Corrigido**
+
+- **A contagem de tokens inválida não vai adiante.** Quando o fim da execução trazia a contagem como -5 ou um texto,
+  a geração marcava falha, mas guardava o valor ruim. Agora só um número de 0 para cima é guardado.
+- **Uma geração que não é objeto invalida a rodada da medição.** Um item nulo ou uma lista na rodada sumia sem aviso.
+  Agora a rodada sai inválida, com a posição do item na lista.
+- **A rodada inválida diz o que houve e o passo.** As mensagens citavam nomes de campo ("ok falso", "aplicou falso",
+  "output_tokens"). Agora dizem o que aconteceu com a geração e, uma vez no fim da lista, onde está o porquê de cada
+  uma e como gerar a rodada de novo, com os argumentos do comando. A condição que não valeu aponta os motivos da
+  geração, em vez de listar três causas possíveis. Um item sem o prompt ou a condição em texto também invalida a
+  rodada, em vez de sumir.
+- **O gasto do mês conta a pasta de subagente que existe e não abre.** Uma pasta de subagente ou de workflow sem
+  permissão de leitura saía da soma sem aviso. Agora o relatório de uso diz, numa linha só dela, quantas pastas de
+  conversas salvas não abriram, e a próxima medida tenta de novo; a linha seguinte diz o que fazer se ela voltar
+  (dar ao seu usuário permissão de leitura na pasta projects do Claude Code). A pasta que não existe continua sem aviso (sessão
+  sem subagente é o normal), e a de uma sessão excluída da estimativa também.
+- A previsão das janelas diz "nos últimos 3 chats que deu para medir", e não mais "nos últimos 3 que deu para
+  medir".
+- Limpeza: um comentário diz por que a medição decide se a condição se aplicou antes de olhar o fim da execução.
+
+## 0.72.0 — a auditoria por cicatriz diz o que vai na pasta do corpus
+
+**Corrigido**
+
+- **O aviso de corpus não lido diz o que pôr na pasta.** Ele só dizia "aponte o corpus com `--corpus <pasta>`". Agora
+  diz também que o corpus é a pasta (ou um arquivo) com os `.md` do histórico, como o registro de decisões, os
+  incidentes e os achados, e que as subpastas entram.
+- **O limite da lista de candidatos à poda só aceita inteiro de 0 em diante.** Com -1 a lista mostrava 1 de 2 e dizia
+  "... mais 3"; com 1.5, "... mais 0.5"; com NaN, sumia sem dizer. Agora esses valores caem no padrão, 20.
+- **O mínimo de palavras-chave e a fração da auditoria por cicatriz, chamados por código, seguem o filtro da linha
+  de comando.** Antes um NaN ou um negativo entrava, o relatório dizia "ao menos -1 palavras-chave" ou "NaN%" e a
+  contagem mudava. Agora o mínimo é inteiro de 1 em diante e a fração vai de acima de 0 até 1; fora disso, o padrão.
+- Limpeza: um comentário de atalho que repetia o "trocar quando" ficou com um só.
+
+## 0.71.0 — os geradores de skill, de agentes e do AGENTS.md dizem o passo
+
+**Corrigido**
+
+- **Os geradores de skill, de agentes e do AGENTS.md dizem como substituir o que já existe.** A frase era "isso é
+  decisão do dono, que apaga ou renomeia antes", que diz quem age e não o que fazer. Agora: "apague ou renomeie esse
+  arquivo e rode de novo" (no AGENTS.md, "renomeie o atual e rode de novo").
+- **A gravação que falha diz em qual pasta resolver.** "conserte a pasta e rode de novo" vira "resolva a causa entre
+  parênteses, na pasta `<pasta>` ou numa acima dela, e rode de novo", no gerador de skill e no do AGENTS.md.
+- **A linha depois da skill gravada fica correta.** "para o Claude Code enxergá-la" vira "para o Claude Code carregar
+  a skill nova".
+- Limpeza: um `require` sem uso saiu da sanitação, e o comentário do portão que falha diz que a causa vai para o
+  stderr, em vez de "silencioso".
+
 ## 0.70.0 — o aviso de portão que falhou sem conseguir ler o erro fica mais claro
 
 **Corrigido**

@@ -1,6 +1,5 @@
 'use strict';
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const gitLib = require('./git.js');
 const texto = require('./texto.js');

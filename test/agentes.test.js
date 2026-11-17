@@ -231,6 +231,9 @@ test('agentes: agente que ja existe e PULADO, e o gerador diz que pulou', (t) =>
   assert.ok(r.stdout.includes('PULADO'), r.stdout);
   // A4-122: a frase usa dois-pontos, sem o hifen solto entre as duas partes
   assert.ok(r.stdout.includes('Agente que ja existia nao foi tocado: o arquivo e trabalho de alguem.\n'), r.stdout);
+  // A4-119: o passo para substituir, e nao "decisao do dono, que apaga"
+  assert.ok(r.stdout.includes('Para substituir um deles, apague ou renomeie o arquivo e rode de novo.\n'), r.stdout);
+  assert.strictEqual(r.stdout.indexOf('decisao do dono'), -1, r.stdout);
   const lido = fs.readFileSync(agentes.caminho(raiz, 'busca'), 'utf8');
   assert.ok(lido.includes('trabalho de alguem'), 'o arquivo de alguem foi sobrescrito');
 });

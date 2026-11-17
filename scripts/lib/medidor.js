@@ -7,7 +7,7 @@
 //   medidas     - os gatilhos de saude.medir (troca de chat); avisouSaude - o aviso de troca ja foi dado;
 //   historico   - por sessao, o % de cada janela no 1o e no ultimo momento (gasto.guardarSessao), para a previsao em
 //                 trocas de chat; sessao - o id da sessao atual, que fica fora dessa media;
-//   gasto       - o gasto do mes (gasto.gastoDoMes): { usd, real, estimado, pendentes, semPreco, ilegiveis, desde }.
+//   gasto       - o gasto do mes (gasto.gastoDoMes): { usd, real, estimado, pendentes, semPreco, ilegiveis, pastasIlegiveis, desde }.
 // Devolve a linha de status (curta), a resposta do comando (longa), se a troca de chat ja cruzou e os sinais que
 // dispararam (disparou). Texto de gancho fica ASCII (R5); a barra e a resposta do comando sao excecao, com acento
 // (D532: a sonda da Tarefa 1 do plano 082 viu o acento inteiro nas duas). Campo que o motor nao deu e omitido: numero
@@ -188,7 +188,8 @@ function gastoDoMes(g) {
     desde: typeof gasto.desde === 'string' && gasto.desde.trim() !== '' ? gasto.desde.trim() : null,
     pendentes: contagem(gasto.pendentes),
     // A6-02: o que ficou fora da conta segue ate a tela (o gasto.js os devolve; antes paravam aqui, calados)
-    semPreco: contagem(gasto.semPreco), ilegiveis: contagem(gasto.ilegiveis)
+    semPreco: contagem(gasto.semPreco), ilegiveis: contagem(gasto.ilegiveis),
+    pastasIlegiveis: contagem(gasto.pastasIlegiveis)
   };
 }
 function contagem(v) { return num(v) && v > 0 ? Math.ceil(v) : 0; }
@@ -203,8 +204,8 @@ function trocasAte(j, porSessao) {
   if (n === null) return null;
   // media abaixo de 1% com uma casa: "0%" diria que a sessao nao gasta nada
   const media = m.media >= 1 ? pct(m.media) : m.media.toFixed(1).replace('.', ',') + '%';
-  return vezes(n, 'troca de chat', 'trocas de chat') + ' (média de ' + media + ' por chat, nos últimos ' + m.k +
-    ' que deu para medir)';
+  return vezes(n, 'troca de chat', 'trocas de chat') + ' (média de ' + media + ' por chat, ' +
+    'nos últimos ' + m.k + ' chats que deu para medir)';
 }
 
 // Os sinais que valem (sem os calados pelo modo continuo, D468), do mais perto do limite ao mais longe; no empate,
@@ -291,6 +292,13 @@ function linhasDoGasto(uso, gasto) {
     if (gasto.ilegiveis > 0) {
       gastos.push('- fora da conta: ' + (gasto.ilegiveis === 1 ? '1 conversa salva que não se leu' :
         gasto.ilegiveis + ' conversas salvas que não se leram') + '; a próxima medida tenta de novo');
+    }
+    // A6-38: a pasta de conversas que existe e nao abre tem a linha dela: quantas conversas ha dentro nao se sabe.
+    if (gasto.pastasIlegiveis > 0) {
+      gastos.push('- fora da conta: ' + (gasto.pastasIlegiveis === 1 ? '1 pasta de conversas salvas que não abriu' :
+        gasto.pastasIlegiveis + ' pastas de conversas salvas que não abriram') + '; a próxima medida tenta de novo');
+      // a falta de permissao nao passa sozinha: a linha volta em toda medida, e o passo diz o que fazer
+      gastos.push('- se a linha voltar na próxima medida: dê ao seu usuário permissão de leitura na pasta projects do Claude Code');
     }
     gastos.push('- na assinatura é o valor que a API cobraria, não uma cobrança');
   }

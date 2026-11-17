@@ -56,26 +56,38 @@ function custoDoTexto(texto, desdeMs) {
 /**
  * Os .jsonl de uma pasta de projeto: `<sessao>.jsonl`, `<sessao>/subagents/*.jsonl` e os agentes de workflow
  * (`<sessao>/subagents/workflows/<run>/agent-*.jsonl`; o journal.jsonl do run nao e transcricao), cada um com a sessao
- * dele; `subagente` true nos dois ultimos.
+ * dele; `subagente` true nos dois ultimos. `contagem` (opcional): recebe em `ilegiveis` cada pasta que existe e nao
+ * se le, fora as das sessoes do Set `contagem.fora` (as que a estimativa exclui).
  */
-function arquivosDoProjeto(dir) {
+function arquivosDoProjeto(dir, contagem) {
+  // A6-38: a pasta que existe e nao se le (EACCES, EIO...) conta em contagem.ilegiveis, como a raiz do estimarMes; a
+  // ausente (ENOENT) e o que nao e pasta (ENOTDIR) seguem calados: sessao sem subagente e o normal.
+  function ler(p, opcoes, sessao) {
+    try { return fs.readdirSync(p, opcoes); } catch (e) {
+      const excluida = sessao !== undefined && contagem && contagem.fora instanceof Set && contagem.fora.has(sessao);
+      if (contagem && !excluida && e.code !== 'ENOENT' && e.code !== 'ENOTDIR') {
+        contagem.ilegiveis = (contagem.ilegiveis || 0) + 1;
+      }
+      return null;
+    }
+  }
   const lista = [];
-  let itens;
-  try { itens = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return lista; }
+  const itens = ler(dir, { withFileTypes: true });
+  if (!itens) return lista;
   for (const it of itens) {
     if (it.isFile() && /\.jsonl$/i.test(it.name)) lista.push({ arquivo: path.join(dir, it.name), sessao: it.name.replace(/\.jsonl$/i, '') });
     if (!it.isDirectory()) continue;
     const sub = path.join(dir, it.name, 'subagents');
-    let ags;
-    try { ags = fs.readdirSync(sub); } catch (e) { continue; }
+    const ags = ler(sub, undefined, it.name);
+    if (!ags) continue;
     for (const a of ags) if (/\.jsonl$/i.test(a)) lista.push({ arquivo: path.join(sub, a), sessao: it.name, subagente: true });
     // A6 (pedido 12, lacuna (a) da sonda da s186): o agente de workflow mora um nivel abaixo e ficava fora do gasto do
     // mes e do efetivo.
-    let runs;
-    try { runs = fs.readdirSync(path.join(sub, 'workflows')); } catch (e) { continue; }
+    const runs = ler(path.join(sub, 'workflows'), undefined, it.name);
+    if (!runs) continue;
     for (const run of runs) {
-      let wf;
-      try { wf = fs.readdirSync(path.join(sub, 'workflows', run)); } catch (e) { continue; }
+      const wf = ler(path.join(sub, 'workflows', run), undefined, it.name);
+      if (!wf) continue;
       for (const a of wf) {
         if (/^agent-.+\.jsonl$/i.test(a)) lista.push({ arquivo: path.join(sub, 'workflows', run, a), sessao: it.name, subagente: true });
       }
@@ -87,9 +99,9 @@ function arquivosDoProjeto(dir) {
 /**
  * Estimativa do mes pelas transcricoes de `raiz` (a pasta projects). `cache`: { [arquivo]: { tamanho, data, mes, usd,
  * semPreco } }; vale a entrada do mesmo mes, tamanho e data. Arquivo com data antes do mes nao e lido. Devolve o total,
- * quantos arquivos ficaram para a proxima medida (`pendentes`), quantos nao se leram (`ilegiveis`: fora do cache, a
- * proxima medida tenta de novo), as mensagens de modelo sem preco (`semPreco`, tambem as do cache) e o cache novo (so
- * os arquivos do mes).
+ * quantos arquivos ficaram para a proxima medida (`pendentes`), quantos arquivos nao se leram (`ilegiveis`: fora do
+ * cache, a proxima medida tenta de novo), quantas pastas de conversa existem e nao abriram (`pastasIlegiveis`), as
+ * mensagens de modelo sem preco (`semPreco`, tambem as do cache) e o cache novo (so os arquivos do mes).
  */
 function estimarMes(opcoes) {
   const o = opcoes || {};
@@ -106,9 +118,10 @@ function estimarMes(opcoes) {
     if (e.code !== 'ENOENT') ilegiveis++;
     projetos = [];
   }
+  const pastas = { ilegiveis: 0, fora: fora };
   for (const p of projetos) {
     if (!p.isDirectory()) continue;
-    for (const f of arquivosDoProjeto(path.join(o.raiz, p.name))) {
+    for (const f of arquivosDoProjeto(path.join(o.raiz, p.name), pastas)) {
       if (fora.has(f.sessao)) continue;
       let st;
       // p2-7: o arquivo que some entre o readdir e o stat tambem e "nao se leu" (saia calado).
@@ -132,7 +145,7 @@ function estimarMes(opcoes) {
       usd += r.usd;
     }
   }
-  return { usd: usd, pendentes: pendentes, semPreco: semPreco, ilegiveis: ilegiveis, cache: cache };
+  return { usd: usd, pendentes: pendentes, semPreco: semPreco, ilegiveis: ilegiveis, pastasIlegiveis: pastas.ilegiveis, cache: cache };
 }
 
 function pastaDosProjetos(env, casa) {
@@ -162,7 +175,7 @@ function gastoDoMes(opcoes) {
   }
   // Plano 082 (p6-2, p6-3): ilegiveis e semPreco seguem adiante (o estimarMes devolvia, e paravam aqui).
   return { usd: real + est.usd, real: real, estimado: est.usd, pendentes: est.pendentes, semPreco: est.semPreco,
-    ilegiveis: est.ilegiveis, desde: mes.desde };
+    ilegiveis: est.ilegiveis, pastasIlegiveis: est.pastasIlegiveis, desde: mes.desde };
 }
 
 const MAX_HISTORICO = 40;

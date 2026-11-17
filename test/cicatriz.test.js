@@ -138,6 +138,10 @@ test('cicatriz: um termo em comum NAO basta - o piso absoluto vale', () => {
       'afrouxar so o piso nao pode abrir a porta; a fracao e o segundo botao');
     assert.strictEqual(cicatriz.conferir(item, ind, 1, 0.3).temCicatriz, true,
       'afrouxando os dois, o mesmo item passa - e e assim que se prova que os dois mandam');
+    // A5-42 (R1, borda): piso invalido cai no padrao (2), e nao abre a porta como um piso de 0 ou de -1 abriria;
+    // o NaN tambem, que nenhum `<` barra
+    [0, -1, NaN, 0.5].forEach((m) => assert.strictEqual(cicatriz.conferir(item, ind, m, 0.3).temCicatriz, false,
+      'piso ' + m + ' tem de virar o padrao'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -214,6 +218,64 @@ test('cicatriz: SEM corpus o relatorio se declara cego, em vez de podar tudo', (
     const lido = cicatriz.texto(cicatriz.varrer(manualDeTeste(dir), corpusDeTeste(dir)));
     assert.ok(!/CORPUS NAO LIDO/.test(lido),
       'com o corpus lido, o relatorio nao pode se dizer cego: ' + lido);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A5-78: o passo diz o que e o corpus e o que vai na pasta
+test('A5-78: o aviso de corpus nao lido diz o que vai na pasta do --corpus', () => {
+  const dir = pasta();
+  try {
+    const t = cicatriz.texto(cicatriz.varrer(manualDeTeste(dir), null));
+    assert.ok(t.includes('Aponte o corpus com --corpus <pasta> e rode de novo: a pasta (ou um arquivo) com os .md do\n' +
+      'historico, como o registro de decisoes, os incidentes e os achados; as subpastas entram.\n'), t);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A5-42: o limite que nao e inteiro de 0 em diante cai no padrao (20); antes o -1 listava 1 de 2 com "... mais 3.",
+// o 1.5 dizia "... mais 0.5." e o NaN escondia os dois sem dizer
+test('A5-42: limite NaN, negativo, fracao ou texto vira o padrao; 0 e 1 valem', () => {
+  const dir = pasta();
+  try {
+    const r = cicatriz.varrer(manualDeTeste(dir), null);
+    const itens = (t) => t.split('\n').filter((l) => /^ {2}- "/.test(l)).length;
+    const mais = (t) => (/\n {2}\.\.\. mais (.*)\.\n/.exec(t + '\n') || [null, null])[1];
+    // os dois itens aparecem (2 linhas '  - "arquivo:linha" texto'), sem linha de "... mais"
+    assert.strictEqual(itens(cicatriz.texto(r)), 2, cicatriz.texto(r));
+    [NaN, -1, 1.5, Infinity, '1', '', null, undefined].forEach((v) => {
+      const t = cicatriz.texto(r, v);
+      assert.strictEqual(itens(t), 2, String(v) + ': ' + t);
+      assert.strictEqual(mais(t), null, String(v) + ': ' + t);
+    });
+    assert.strictEqual(itens(cicatriz.texto(r, 0)), 0);
+    assert.strictEqual(itens(cicatriz.texto(r, -0)), 0);
+    assert.strictEqual(mais(cicatriz.texto(r, 0)), '2');
+    assert.strictEqual(itens(cicatriz.texto(r, 1)), 1);
+    assert.strictEqual(mais(cicatriz.texto(r, 1)), '1');
+    // o limite igual ao total lista todos e nao diz "... mais 0."
+    assert.strictEqual(itens(cicatriz.texto(r, 2)), 2);
+    assert.strictEqual(mais(cicatriz.texto(r, 2)), null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A5-42 (R1, borda): minimo e fracao fora do filtro do --minimo e do --fracao caem no padrao, e o texto nao diz
+// "ao menos -1 palavras-chave" nem "NaN%"
+test('A5-42: minimo e fracao invalidos viram o padrao no varrer e no texto', () => {
+  const dir = pasta();
+  try {
+    const manual = manualDeTeste(dir);
+    const corpus = corpusDeTeste(dir);
+    const padrao = cicatriz.varrer(manual, corpus);
+    [[NaN, NaN], [-1, -0.5], [0, 0], [1.5, 1.5], [Infinity, Infinity], ['3', '0.5']].forEach(([m, f]) => {
+      const r = cicatriz.varrer(manual, corpus, { minimo: m, fracao: f });
+      assert.strictEqual(r.minimo, cicatriz.MINIMO_DE_TERMOS, String(m));
+      assert.strictEqual(r.fracao, cicatriz.FRACAO_MINIMA, String(f));
+      assert.deepStrictEqual(r.resumo, padrao.resumo, String(m) + ' / ' + String(f));
+      const t = cicatriz.texto(r);
+      assert.ok(!/NaN|-\d|Infinity/.test(t.split('\n').filter((l) => /palavras-chave/.test(l)).join('\n')), t);
+    });
+    const valido = cicatriz.varrer(manual, corpus, { minimo: 1, fracao: 1 });
+    assert.strictEqual(valido.minimo, 1);
+    assert.strictEqual(valido.fracao, 1);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

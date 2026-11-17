@@ -100,8 +100,8 @@ function liberarPorFalha(e) {
 }
 
 /**
- * R6: portao que falha, libera. Excecao vira exit 0 silencioso.
- * stderr em exit 0 vai so para o log de debug e o Claude nunca ve.
+ * R6: portao que falha, libera. Excecao vira exit 0, com uma linha da causa em stderr (liberarPorFalha).
+ * stderr em exit 0 vai so para o log de debug e o Claude nunca ve. (A5-28)
  * Cobre tanto a excecao sincrona (try/catch em volta de fn()) quanto a
  * excecao lancada dentro de um callback assincrono que fn() registra:
  * por exemplo, dentro do callback de lerEntrada, que roda no evento 'end'

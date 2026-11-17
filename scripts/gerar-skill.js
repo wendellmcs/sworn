@@ -78,7 +78,8 @@ if (!gravar) {
 
 if (fs.existsSync(alvo)) {
   process.stdout.write('ERRO: ' + alvo + ' ja existe. Nao sobrescrevo skill de projeto.\n');
-  process.stdout.write('Se for para substituir, isso e decisao do dono, que apaga ou renomeia antes.\n');
+  // A4-119: o passo, e nao quem age
+  process.stdout.write('Para substituir, apague ou renomeie esse arquivo e rode de novo.\n');
   process.exit(1);
 }
 
@@ -90,9 +91,12 @@ try {
   fs.writeFileSync(alvo, cheio, { encoding: 'utf8', flag: 'wx' });
 } catch (e) {
   process.stdout.write('ERRO: nao consegui gravar ' + alvo + ' (' + texto.causaDoErro(e) + ').\n');
-  process.stdout.write('Nada foi gravado: conserte a pasta e rode de novo.\n');
+  // A4-121 (a mesma frase do gerar-agents-md.js): o passo diz qual pasta
+  process.stdout.write('Nada foi gravado: resolva a causa entre parenteses, na pasta ' + path.dirname(alvo) +
+    ' ou numa acima dela, e rode de novo.\n');
   process.exit(1);
 }
 process.stdout.write('GRAVADA em ' + alvo + '\n');
-process.stdout.write('Rode /reload-plugins ou reabra a sessao para o Claude Code enxerga-la.\n');
+// A4-11/A4-123: sem a regencia errada do "enxerga-la"
+process.stdout.write('Rode /reload-plugins ou reabra a sessao para o Claude Code carregar a skill nova.\n');
 process.exit(0);

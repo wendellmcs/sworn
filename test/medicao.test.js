@@ -262,6 +262,36 @@ test('medicao/apurar: INVALIDO - geracao vazia', () => {
   });
 });
 
+test('medicao/apurar: INVALIDO - item que nao e geracao (sem prompt ou condicao em texto) diz a posicao (A6-26)', () => {
+  [null, undefined, 7, 'p1/padrao', ['p1', 'padrao'], {}, { prompt: 'p1' }, { condicao: 'padrao' },
+    { prompt: 1, condicao: 'padrao' }].forEach((ruim) => {
+    const g = geracoes(null).concat([ruim]);
+    const r = apurarCom(g, julgamentos(() => 'recurso'));
+    assert.strictEqual(r.veredito, 'INVALIDO', JSON.stringify(ruim));
+    assert.ok(r.motivos.indexOf('item ' + g.length + ' da lista de geracoes: nao e uma geracao com prompt e condicao em texto') !== -1,
+      JSON.stringify(r.motivos));
+  });
+});
+
+test('medicao/apurar: INVALIDO - o passo vem uma vez, no fim, e os motivos dizem o que houve sem nome de campo', () => {
+  const dois = apurarCom(geracoes(null, (x) => { if (x.prompt === 'p2' && x.condicao === 'padrao') Object.assign(x, { ok: false, aplicou: false, outputTokens: -1 }); }).concat([null]),
+    julgamentos(() => 'recurso'));
+  assert.strictEqual(dois.motivos[dois.motivos.length - 1], medicao.ACAO_DA_RODADA_INVALIDA);
+  assert.strictEqual(dois.motivos.filter((m) => m === medicao.ACAO_DA_RODADA_INVALIDA).length, 1);
+  assert.ok(/^Quando a geracao existe, o porque esta nos motivos dela, no geracoes\.json da rodada\. /.test(medicao.ACAO_DA_RODADA_INVALIDA) &&
+    /node scripts\/medir-qualidade\.js --gerar --modelo <nome> --destino <pasta>\.$/.test(medicao.ACAO_DA_RODADA_INVALIDA),
+    medicao.ACAO_DA_RODADA_INVALIDA);
+  ['p2/padrao: a execucao desta geracao falhou',
+    'p2/padrao: a condicao nao valeu nesta execucao; os motivos da geracao dizem o que faltou ou sobrou',
+    'p2/padrao: falta a contagem de tokens da resposta, ou ela nao e um numero de 0 para cima'].forEach((m) => {
+    assert.ok(dois.motivos.indexOf(m) !== -1, m + ' | ' + JSON.stringify(dois.motivos));
+  });
+  assert.ok(!dois.motivos.some((m) => /ok falso|aplicou falso|output_tokens|objeto/.test(m)), JSON.stringify(dois.motivos));
+  // a lista inteira valida (GANHA, no teste do placar) segue sem o passo
+  const ok = apurarCom(geracoes(null), julgamentos(() => 'recurso'));
+  assert.ok(ok.motivos.indexOf(medicao.ACAO_DA_RODADA_INVALIDA) === -1, 'o passo da rodada invalida so vem com INVALIDO');
+});
+
 test('medicao/apurar: INVALIDO - a condicao nao se aplicou (aplicou falso)', () => {
   const g = geracoes(null, (x) => { if (x.prompt === 'p3' && x.condicao === 'padrao') x.aplicou = false; });
   const r = apurarCom(g, julgamentos(() => 'recurso'));
@@ -535,10 +565,38 @@ test('medicao/lerExecucao: output_tokens ausente -> outputTokens nao e numero, o
   assert.strictEqual(apurarCom(g, julgamentos(() => 'recurso')).veredito, 'INVALIDO');
 });
 
+test('medicao/lerExecucao: output_tokens invalido nao vai ao outputTokens; o 0 vai (A6-25)', () => {
+  // o stream e JSON: NaN e Infinity chegariam como null, que ja esta na lista.
+  [-5, 'x', null, {}, true, '12'].forEach((ruim) => {
+    const r = ler({ tokens: ruim }, 'padrao');
+    assert.strictEqual(r.outputTokens, null, 'output_tokens ' + String(ruim) + ' passou: ' + r.outputTokens);
+    assert.strictEqual(r.ok, false, String(ruim));
+  });
+  assert.strictEqual(ler({ tokens: 0 }, 'padrao').outputTokens, 0);
+});
+
+test('medicao/lerExecucao: o fim ruim, os tokens ruins e o texto vazio mudam o ok, nao o aplicou (A6-27)', () => {
+  // cada causa sozinha, na condicao que se aplicou (o recurso com o bloco)
+  const casos = {
+    'fim com erro': ler({ erro: true, bloco: true }, 'recurso'),
+    'tokens ruins': ler({ tokens: -1, bloco: true }, 'recurso'),
+    'texto vazio': medicao.lerExecucao(stream({ bloco: true }).filter((l) => JSON.parse(l).type !== 'assistant'),
+      { condicao: 'recurso', marcador: MARCADOR })
+  };
+  Object.keys(casos).forEach((nome) => {
+    assert.strictEqual(casos[nome].ok, false, nome);
+    assert.strictEqual(casos[nome].aplicou, true, nome + ': ' + JSON.stringify(casos[nome].motivos));
+  });
+  assert.strictEqual(casos['texto vazio'].texto, '', 'o filtro tirou todo texto que o usuario veria');
+  // a condicao que nao se aplicou continua falsa com o fim ruim
+  assert.strictEqual(ler({ bloco: true, erro: true }, 'padrao').aplicou, false);
+});
+
 test('medicao/lerExecucao: sem evento result, ou result com erro -> ok falso', () => {
   const semResult = stream({}).filter((l) => JSON.parse(l).type !== 'result');
   const a = medicao.lerExecucao(semResult, { condicao: 'padrao', marcador: MARCADOR });
   assert.strictEqual(a.ok, false);
+  assert.strictEqual(a.aplicou, true, 'sem o result, a condicao ainda se aplicou (A6-27): ' + JSON.stringify(a.motivos));
   assert.notStrictEqual(typeof a.outputTokens, 'number');
   // A6 (s220, microcopy, lerExecucao do medicao.js): o motivo diz o que houve e o passo.
   assert.ok(a.motivos.some((m) => /^o stream nao tem o evento result: a execucao parou antes do fim; o \.stderr\.txt desta geracao na rodada, quando existe, diz por que\. Rode de novo\.$/.test(m)),

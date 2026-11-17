@@ -88,6 +88,49 @@ test('arquivosDoProjeto: o agente de workflow (subagents/workflows/<run>/agent-*
   } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
 });
 
+test('A6-38: a pasta de subagente ou de run que existe e nao se le conta em ilegiveis; a ausente nao', () => {
+  const raiz = arvore();
+  const original = fs.readdirSync;
+  try {
+    const proj = path.join(raiz, 'c--proj');
+    const run = path.join(proj, 's2', 'subagents', 'workflows', 'wf_1');
+    fs.mkdirSync(run, { recursive: true });
+    fs.writeFileSync(path.join(run, 'agent-w.jsonl'), linha('m4', 'claude-opus-5-5', U, OUT));
+    // sessao com pasta e sem subagents (ENOENT) e sessao com subagents e sem workflows: o normal, nao conta
+    fs.mkdirSync(path.join(proj, 's4'));
+    fs.mkdirSync(path.join(proj, 's5', 'subagents'), { recursive: true });
+    const mes = { ms: Date.UTC(2026, 9, 1), chave: '2026-10' };
+    const antes = gasto.estimarMes({ raiz: raiz, mes: mes, cache: {}, excluir: [], prazoMs: 5000 });
+    assert.strictEqual(antes.pastasIlegiveis, 0, 'pastas ausentes (sessao sem subagents ou sem workflows) nao contam');
+    fs.readdirSync = function (p, o) {
+      if (path.resolve(String(p)) === path.resolve(run)) { const e = new Error('negado'); e.code = 'EACCES'; throw e; }
+      return original.call(fs, p, o);
+    };
+    const depois = gasto.estimarMes({ raiz: raiz, mes: mes, cache: {}, excluir: [], prazoMs: 5000 });
+    assert.strictEqual(depois.pastasIlegiveis, 1, JSON.stringify(depois));
+    assert.strictEqual(depois.ilegiveis, 0, 'a pasta tem a conta dela, separada dos arquivos');
+    assert.strictEqual(Math.round(depois.usd), Math.round(antes.usd) - 4, 'so o agente do run negado sai da soma');
+    const contagem = { ilegiveis: 0 };
+    gasto.arquivosDoProjeto(proj, contagem);
+    assert.strictEqual(contagem.ilegiveis, 1);
+    // a sessao excluida da estimativa nao conta a pasta dela que nao se le
+    const semS2 = gasto.estimarMes({ raiz: raiz, mes: mes, cache: {}, excluir: ['s2'], prazoMs: 5000 });
+    assert.strictEqual(semS2.pastasIlegiveis, 0, JSON.stringify(semS2));
+    const fora = { ilegiveis: 0, fora: new Set(['s2']) };
+    gasto.arquivosDoProjeto(proj, fora);
+    assert.strictEqual(fora.ilegiveis, 0);
+    // sem contagem, segue como antes (o efetivo.js chama assim)
+    assert.ok(Array.isArray(gasto.arquivosDoProjeto(proj)));
+    // o gastoDoMes leva a conta das pastas ate o medidor
+    const g = gasto.gastoDoMes({ raiz: raiz, agora: new Date(2026, 9, 10, 12).getTime(), real: {},
+      arquivoDoCache: path.join(raiz, 'cache-do-teste.json'), prazoMs: 5000 });
+    assert.deepStrictEqual([g.pastasIlegiveis, g.ilegiveis], [1, 0], JSON.stringify(g));
+  } finally {
+    fs.readdirSync = original;
+    fs.rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
 test('estimarMes: o cache poupa a releitura; arquivo mudado e relido; prazo estourado deixa pendentes', () => {
   const raiz = arvore();
   try {

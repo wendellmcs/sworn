@@ -159,11 +159,16 @@ function itensDe(raizManual) {
   return itens;
 }
 
+// A5-42 (R1, borda): o mesmo filtro do --minimo e do --fracao do cicatriz.js; NaN, negativo, 0 ou fracao fora de
+// (0, 1] caem no padrao, em vez de sair "ao menos -1 palavras-chave" ou "NaN%" e de mudar a contagem.
+function minimoValido(n) { return Number.isInteger(n) && n >= 1 ? n : MINIMO_DE_TERMOS; }
+function fracaoValida(n) { return Number.isFinite(n) && n > 0 && n <= 1 ? n : FRACAO_MINIMA; }
+
 /** Esta linha tem dor de origem no corpus? Devolve as provas, nao um booleano nu. */
 function conferir(item, indice, minimo, fracao) {
   const alvo = auditoria.termos(item.texto);
-  const piso = typeof minimo === 'number' ? minimo : MINIMO_DE_TERMOS;
-  const frac = typeof fracao === 'number' ? fracao : FRACAO_MINIMA;
+  const piso = minimoValido(minimo);
+  const frac = fracaoValida(fracao);
   const provas = [];
   for (const c of (indice || [])) {
     const comuns = Array.from(alvo).filter(function (x) { return c.termos.has(x); });
@@ -216,8 +221,8 @@ function varrer(raizManual, raizCorpus, opcoes) {
 
   return {
     corpusLido: temCorpus,
-    minimo: typeof o.minimo === 'number' ? o.minimo : MINIMO_DE_TERMOS,
-    fracao: typeof o.fracao === 'number' ? o.fracao : FRACAO_MINIMA,
+    minimo: minimoValido(o.minimo),
+    fracao: fracaoValida(o.fracao),
     passagensComMarca: indice.length,
     itens: avaliados,
     resumo: {
@@ -231,7 +236,8 @@ function varrer(raizManual, raizCorpus, opcoes) {
 
 /** O texto. Quem nao tem cicatriz vem PRIMEIRO: e a lista que motiva a poda. */
 function texto(r, limite) {
-  const teto = typeof limite === 'number' ? limite : 20;
+  // A5-42: so inteiro de 0 em diante; NaN, negativo ou fracao caem no padrao (o slice e o "... mais" sairiam errados)
+  const teto = Number.isInteger(limite) && limite >= 0 ? limite : 20;
   // Plano 082, Tarefa 5 (mock S10): a 1a linha diz o que o relatorio responde; arquivo:linha entre aspas.
   // A5-44 (D735): cicatriz e dor de origem, que o resto do relatorio usa, explicadas logo abaixo.
   const linhas = ['sworn - auditoria por cicatriz: que regra tem dor de origem, e qual pode sair.',
@@ -241,7 +247,9 @@ function texto(r, limite) {
   if (!r.corpusLido) {
     linhas.push('CORPUS NAO LIDO. Sem historico para comparar, nada aqui distingue regra com');
     linhas.push('dor de origem de regra sem - e chamar todas de "sem cicatriz" seria mentir.');
-    linhas.push('Aponte o corpus com --corpus <pasta> e rode de novo.');
+    // A5-78: o passo diz o que e o corpus e o que vai na pasta
+    linhas.push('Aponte o corpus com --corpus <pasta> e rode de novo: a pasta (ou um arquivo) com os .md do');
+    linhas.push('historico, como o registro de decisoes, os incidentes e os achados; as subpastas entram.');
     linhas.push('');
   }
 

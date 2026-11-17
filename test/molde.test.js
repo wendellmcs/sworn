@@ -334,6 +334,10 @@ test('A4-gsk-2: skill que nao se grava sai com a causa e saida 1, sem excecao cr
   const r = gerarSkill(raiz, ['--respostas', 'respostas.json', '--gravar']);
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
   assert.ok(/ERRO: nao consegui gravar .*SKILL\.md \(.*\(E[A-Z]+\)\)/.test(r.stdout), r.stdout);
+  // A4-121: o passo nomeia a pasta da skill, e nao so "conserte a pasta"
+  const pasta = require('node:path').dirname(/ERRO: nao consegui gravar (.*SKILL\.md) \(/.exec(r.stdout)[1]);
+  assert.ok(r.stdout.endsWith('\nNada foi gravado: resolva a causa entre parenteses, na pasta ' + pasta +
+    ' ou numa acima dela, e rode de novo.\n'), r.stdout);
   assert.strictEqual(/\n\s+at /.test(r.stderr), false, 'excecao crua: ' + r.stderr);
   assert.strictEqual(r.stdout.indexOf('GRAVADA'), -1, r.stdout);
   fs.rmSync(raiz, { recursive: true, force: true });
@@ -363,6 +367,26 @@ test('A4-gsk-3: skill que aparece entre a conferencia e a escrita nao e sobrescr
   assert.ok(/\(ja existe \(EEXIST\)\)/.test(r.stdout), r.stdout);
   assert.strictEqual(fs.readFileSync(alvo, 'utf8'), 'skill do dono\n', 'sobrescreveu');
   fs.rmSync(raiz, { recursive: true, force: true });
+});
+
+// A4-11/A4-119/A4-123: a skill gravada diz o passo sem o "enxerga-la"; a que ja existe diz como substituir
+test('A4-119: gerar-skill diz o passo para a skill gravada e para a que ja existe', (t) => {
+  const fs = require('node:fs');
+  const raiz = projetoParaSkill();
+  // a pasta sai mesmo com um assert reprovado no meio
+  t.after(() => fs.rmSync(raiz, { recursive: true, force: true }));
+  const r = gerarSkill(raiz, ['--respostas', 'respostas.json', '--gravar']);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  // sem a linha GRAVADA, a falha mostra a saida do gerador, e nao um TypeError do [0] sobre o null
+  const gravada = /GRAVADA em .*\n/.exec(r.stdout);
+  assert.ok(gravada, r.stdout + r.stderr);
+  assert.ok(r.stdout.endsWith(gravada[0] +
+    'Rode /reload-plugins ou reabra a sessao para o Claude Code carregar a skill nova.\n'), r.stdout);
+  const de = gerarSkill(raiz, ['--respostas', 'respostas.json', '--gravar']);
+  assert.strictEqual(de.status, 1, de.stdout + de.stderr);
+  assert.ok(/ERRO: .*SKILL\.md ja existe\. Nao sobrescrevo skill de projeto\.\n/.test(de.stdout), de.stdout);
+  assert.ok(de.stdout.endsWith('\nPara substituir, apague ou renomeie esse arquivo e rode de novo.\n'), de.stdout);
+  assert.strictEqual(de.stdout.indexOf('decisao do dono'), -1, de.stdout);
 });
 
 // A4-49: o nome do tipo saiu do lerRespostas para o gerar-agentes.js usar o mesmo na resposta de um agente

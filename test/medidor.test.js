@@ -301,8 +301,23 @@ test('A6-02: o que ficou fora da conta do mes (sem preco, ilegivel) aparece na r
   const um = longa({ semPreco: 1, ilegiveis: 1 });
   assert.ok(um.indexOf('- fora da conta: 1 mensagem de um modelo sem preço na tabela do sworn;') !== -1, um);
   assert.ok(um.indexOf('- fora da conta: 1 conversa salva que não se leu;') !== -1, um);
-  for (const nada of [{}, { semPreco: 0, ilegiveis: 0 }, { semPreco: 'x', ilegiveis: -1 }]) {
+  // A6-38: a pasta que nao abriu tem a linha dela, separada das conversas
+  const passoDaPasta = '- se a linha voltar na próxima medida: dê ao seu usuário permissão de leitura na pasta projects do ' +
+    'Claude Code\n';
+  const pastas = longa({ ilegiveis: 2, pastasIlegiveis: 3 });
+  assert.ok(pastas.indexOf('- fora da conta: 2 conversas salvas que não se leram; a próxima medida tenta de novo\n' +
+    '- fora da conta: 3 pastas de conversas salvas que não abriram; a próxima medida tenta de novo\n' + passoDaPasta) !== -1, pastas);
+  const umaPasta = longa({ pastasIlegiveis: 1 });
+  assert.ok(umaPasta.indexOf('- fora da conta: 1 pasta de conversas salvas que não abriu; a próxima medida tenta de novo\n' +
+    passoDaPasta) !== -1, umaPasta);
+  // nenhuma linha de conversa, no singular ou no plural
+  assert.ok(umaPasta.indexOf('que não se le') === -1, umaPasta);
+  // a conversa que nao se leu nao traz o passo da pasta
+  assert.ok(longa({ ilegiveis: 2 }).indexOf('permissão de leitura') === -1, longa({ ilegiveis: 2 }));
+  for (const nada of [{}, { semPreco: 0, ilegiveis: 0, pastasIlegiveis: 0 }, { semPreco: 'x', ilegiveis: -1, pastasIlegiveis: 'x' },
+    { pastasIlegiveis: Infinity }, { pastasIlegiveis: -2 }]) {
     assert.ok(longa(nada).indexOf('fora da conta') === -1, longa(nada));
+    assert.ok(longa(nada).indexOf('permissão de leitura') === -1, longa(nada));
   }
 });
 
@@ -331,7 +346,7 @@ test('pedido 31: previsao em handoffs pela media das sessoes anteriores (a atual
   // semana 92% usada, 2% por sessao -> 4 handoffs; plano 082 (p6-32): so na resposta do comando, nunca na barra
   assert.ok(r.curta.indexOf('semana 92% · ') !== -1 && r.curta.indexOf('handoffs') === -1, r.curta);
   // Plano 082 (mock S4; p6-29): "trocas de chat" no lugar de "handoffs", e a media diz que so conta o chat medido
-  assert.ok(r.longa.indexOf('- a janela da semana acaba em ~4 trocas de chat (média de 2% por chat, nos últimos 3 que deu ' +
+  assert.ok(r.longa.indexOf('- a janela da semana acaba em ~4 trocas de chat (média de 2% por chat, nos últimos 3 chats que deu ' +
     'para medir)\n') !== -1, r.longa);
   assert.ok(r.longa.indexOf('handoffs') === -1, r.longa);
 });
@@ -343,7 +358,7 @@ test('pedido 31: previsao em handoffs - so as ultimas 5, sessao que cruza a reno
   h.curta = { t: 5001, medidas: 1, janelas: { five_hour: { resetIni: 'R5', ini: 0, resetFim: 'R5', fim: 40 } } };
   const r = medidor.linhaDaSessao({ uso: uso(), amostras: [], medidas: [], historico: h, sessao: 'x' });
   // 5h 49% usada, 1% por sessao nas 5 ultimas validas -> 51 handoffs
-  assert.ok(r.longa.indexOf('- a janela de 5 horas acaba em ~51 trocas de chat (média de 1% por chat, nos últimos 5 que ' +
+  assert.ok(r.longa.indexOf('- a janela de 5 horas acaba em ~51 trocas de chat (média de 1% por chat, nos últimos 5 chats que ' +
     'deu para medir)\n') !== -1, r.longa);
   assert.ok(/^contexto 5% · 5h 49% até [0-9:]+ · semana/.test(r.curta), r.curta);
   const uma = medidor.linhaDaSessao({ uso: uso(), amostras: [], medidas: [], historico: hist(1, 'five_hour', 3, 'R5') });
@@ -400,8 +415,8 @@ test('plano 082 (S4): a resposta do comando e a do mock, bloco por bloco', () =>
     '',
     '**Previsão**',
     '- o contexto enche em ~25 respostas',
-    '- a janela de 5 horas acaba em ~96 respostas, ou ~19 trocas de chat (média de 5% por chat, nos últimos 3 que deu para medir)',
-    '- a janela da semana acaba em ~102 trocas de chat (média de 0,8% por chat, nos últimos 5 que deu para medir)',
+    '- a janela de 5 horas acaba em ~96 respostas, ou ~19 trocas de chat (média de 5% por chat, nos últimos 3 chats que deu para medir)',
+    '- a janela da semana acaba em ~102 trocas de chat (média de 0,8% por chat, nos últimos 5 chats que deu para medir)',
     '',
     '**Troca de chat — 0 de 2 sinais dispararam (basta 1)**',
     '- tamanho do contexto: 240.283 de 250.000 tokens ← perto do limite',
@@ -537,6 +552,6 @@ test('plano 082 (p6-21): renovacao desconhecida nas duas pontas fica fora; a jan
   assert.ok(vazio.longa.indexOf('trocas de chat (') === -1, vazio.longa);
   const gasto = uso({ rateLimits: [{ kind: 'spend_limit', percentUsed: 40 }] });
   const r = medidor.linhaDaSessao({ uso: gasto, amostras: [], medidas: [], historico: hist(3, 'spend_limit', 10, 'RG'), sessao: 'x' });
-  assert.ok(r.longa.indexOf('- o limite de gasto acaba em ~6 trocas de chat (média de 10% por chat, nos últimos 3 que deu ' +
+  assert.ok(r.longa.indexOf('- o limite de gasto acaba em ~6 trocas de chat (média de 10% por chat, nos últimos 3 chats que deu ' +
     'para medir)\n') !== -1, r.longa);
 });

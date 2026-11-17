@@ -76,8 +76,8 @@ if (!gravar) {
 // Muitos projetos ja tem um AGENTS.md, e ele costuma ser trabalho de meses.
 if (fs.existsSync(alvo)) {
   process.stdout.write('ERRO: ' + alvo + ' ja existe. Nao sobrescrevo o AGENTS.md deste projeto.\n');
-  process.stdout.write('Ele pode ser trabalho de meses. Se for para substituir, isso e decisao do\n');
-  process.stdout.write('dono, que renomeia o atual antes de rodar de novo.\n');
+  // A4-119 (a mesma frase do gerar-skill.js): o passo, e nao quem age
+  process.stdout.write('Ele pode ser trabalho de meses. Para substituir, renomeie o atual e rode de novo.\n');
   process.exit(1);
 }
 
@@ -85,7 +85,9 @@ if (fs.existsSync(alvo)) {
 // A4-gam-3 (R2): 'wx' fecha a janela entre o existsSync e o write - o AGENTS.md que aparece nela sai EEXIST.
 try { fs.writeFileSync(alvo, cheio, { encoding: 'utf8', flag: 'wx' }); } catch (e) {
   process.stdout.write('ERRO: nao consegui gravar ' + alvo + ' (' + texto.causaDoErro(e) + ').\n');
-  process.stdout.write('Nada foi gravado: conserte a pasta e rode de novo.\n');
+  // A4-121: o passo diz qual pasta, e manda resolver a causa que a linha de cima traz
+  process.stdout.write('Nada foi gravado: resolva a causa entre parenteses, na pasta ' + path.dirname(alvo) +
+    ' ou numa acima dela, e rode de novo.\n');
   process.exit(1);
 }
 process.stdout.write('GRAVADO em ' + alvo + '\n');

@@ -86,7 +86,6 @@ function arquivoDaRecusa(env) {
 }
 
 // atalho: raiz comparada sem maiuscula em todo sistema. limite: pastas que so diferem na caixa (Linux) contam como uma. trocar quando: aparecer projeto no Linux com duas pastas que so diferem na caixa.
-// trocar quando: alguem usar o sworn em Linux com duas pastas assim.
 function chaveDaRaiz(raiz) {
   return path.resolve(String(raiz)).toLowerCase();
 }

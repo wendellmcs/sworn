@@ -103,6 +103,10 @@ test('agents-md: AGENTS.md que ja existe nao e tocado', (t) => {
   const r = rodar(raiz, ['--respostas', respostasEmArquivo(raiz), '--gravar']);
   assert.strictEqual(r.status, 1, r.stdout);
   assert.strictEqual(fs.readFileSync(alvo, 'utf8'), '# o AGENTS.md de alguem\n');
+  // A4-119: o passo para substituir, e nao "decisao do dono, que renomeia"
+  assert.ok(r.stdout.endsWith(' ja existe. Nao sobrescrevo o AGENTS.md deste projeto.\n' +
+    'Ele pode ser trabalho de meses. Para substituir, renomeie o atual e rode de novo.\n'), r.stdout);
+  assert.strictEqual(r.stdout.indexOf('decisao do dono'), -1, r.stdout);
 });
 
 test('agents-md: sem projeto.json para com erro legivel', (t) => {
@@ -167,6 +171,11 @@ test('A4-gam-2: AGENTS.md que nao se grava sai com a causa e saida 1, sem exceca
     { cwd: raiz, encoding: 'utf8', timeout: 60000 });
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
   assert.ok(/ERRO: nao consegui gravar .*AGENTS\.md \(sem permissao \(EACCES\)\)/.test(r.stdout), r.stdout);
+  // A4-121: o passo nomeia a pasta, e nao so "conserte a pasta". A pasta vem do caminho que a linha ERRO imprimiu
+  // (o process.cwd() do filho), e nao do raiz do teste: no macOS o cwd e /private/var e o mkdtemp da /var.
+  const pasta = path.dirname(/ERRO: nao consegui gravar (.*AGENTS\.md) \(/.exec(r.stdout)[1]);
+  assert.ok(r.stdout.endsWith('\nNada foi gravado: resolva a causa entre parenteses, na pasta ' + pasta +
+    ' ou numa acima dela, e rode de novo.\n'), r.stdout);
   assert.strictEqual(/\n\s+at /.test(r.stderr), false, 'excecao crua: ' + r.stderr);
   assert.strictEqual(r.stdout.indexOf('GRAVADO'), -1, r.stdout);
 });
