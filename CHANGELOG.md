@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.78.0 — o detector de vazamento lê também o nome dos arquivos, os outros ramos e mais tipos de token
+
+**Corrigido**
+
+- **O detector de vazamento (`sanitar`) lê o nome dos arquivos e o nome dos ramos e tags.** Antes só o conteúdo,
+  a autoria e as mensagens de commit eram lidos. Um arquivo chamado com o e-mail de alguém, ou um ramo com o nome
+  de um cliente, subia sem aviso. Esse achado sai na linha 0, que quer dizer que o vazamento está no nome, e o
+  conserto é renomear.
+- **O histórico é lido em todos os ramos**, não só no atual. Um commit feito em outro ramo também vai no envio ao
+  GitHub (o push), com o autor e a mensagem dele, e antes ninguém os conferia.
+- **Mais tipos de token são reconhecidos:** os outros tokens do GitHub (`gho_`, `ghs_`, `ghu_`), a chave do Google,
+  o token do npm, o JWT e o cabeçalho `Bearer` com valor. O valor de exemplo da documentação, palavras em
+  maiúsculas ligadas por `_` (`Bearer SEU_TOKEN_AQUI`), não é acusado; o token real em maiúsculas é.
+- **O vocabulário privado do detector, se estiver na parte publicável, vira achado.** Ele fica de fora só pelo
+  `.gitignore`. Num projeto que não o ignora, antes ele entrava sem nenhum aviso específico. Agora o relatório diz
+  que ele está ali e pede para pôr no `.gitignore`.
+- **O vocabulário privado gravado pelo `>` do PowerShell 5.1 é lido.** Esse arquivo sai em UTF-16, e antes era
+  recusado como "JSON inválido" sem dizer o motivo.
+- **Um nome com acento casa nos dois jeitos de escrevê-lo.** O acento pode vir junto da letra ou separado dela,
+  como o macOS grava nome de arquivo. Antes um termo escrito de um jeito não achava o texto escrito do outro.
+- **Um `/home/` dentro de uma rota (`/api/home/...`) não é mais acusado** como pasta pessoal. É a mesma regra que
+  já valia para o `/Users/`. O `/var/home/` do Fedora Silverblue e o `/usr/home/` do FreeBSD seguem acusados.
+- **O ID de uma sessão aberta depois do começo da conferência também é acusado.** Num processo longo, a lista de
+  sessões desta máquina era lida uma vez só, e o ID de uma sessão nova passava como um código qualquer. Agora a lista
+  é relida a cada minuto, e alguns segundos depois de uma leitura que falhou. Só conta o arquivo cujo nome tem a
+  forma de um ID de sessão.
+- **Quando a pasta das sessões não pode ser lida, o resultado diz isso.** Se o detector nem descobre onde ela fica,
+  o resultado não sai LIMPO e diz o motivo, em vez de o detector parar com um erro. Uma leitura que falha no meio da
+  conferência também conta. Um `CLAUDE_CONFIG_DIR` que aponta para uma pasta sem `projects` gera um aviso: corrija a
+  variável se o nome estiver errado; numa instalação que ainda não abriu sessão nenhuma, o aviso pode ser ignorado.
+- **Um vocabulário privado quebrado diz o que está errado:** o JSON inválido e o padrão que não é uma expressão
+  regular válida dizem a causa: a linha onde o JSON quebra, o parêntese sem fechar. A mensagem não copia o trecho
+  do arquivo nem o padrão, então o termo privado não aparece nela.
+- **Mensagens mais claras:** um arquivo que o detector não sabe ler diz que é binário ou texto em UTF-16 ou UTF-32,
+  sem o "NUL", e que um texto salvo de novo em UTF-8 passa a ser conferido. Quando a checagem que o detector faz de si
+  mesmo (o autoteste) falha num tipo de token, a mensagem diz qual dos exemplos daquele tipo deixou de ser reconhecido.
+
 ## 0.77.0 — o painel do plano fica na pasta do projeto e o paralelo vê o mesmo arquivo escrito de outro jeito
 
 **Corrigido**

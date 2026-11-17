@@ -7,14 +7,15 @@ const texto = require('./texto.js');
 /**
  * Detector de sanitacao para repositorio publico (D79, ampliado pelas D132 e D133).
  *
- * A D79 exigiu um detector DETERMINISTICO que rode no `npm test` e REPROVE o
- * repositorio se qualquer classe vazar - com controle negativo obrigatorio,
- * porque "revisao manual no fim" nao garante "nao pode passar nada".
+ * A D79 exigiu um detector por regra fixa (sem modelo de linguagem: o mesmo repositorio da sempre o mesmo
+ * veredito) que rode no `npm test` e REPROVE o repositorio se qualquer classe vazar - com controle negativo
+ * obrigatorio, porque "revisao manual no fim" nao garante "nao pode passar nada". A unica entrada que muda
+ * de maquina para maquina e a lista de IDs de sessao do Claude Code (classe `sessao_local`), lida do disco.
  *
  * TRES superficies, e cada uma foi descoberta depois da anterior:
- *   1. conteudo dos arquivos versionados  (a D79 so olhou esta)
- *   2. autoria do historico               (D132 §3: 12 commits com e-mail pessoal)
- *   3. mensagem de commit                 (D133: o nome de um projeto interno)
+ *   1. conteudo e nome dos arquivos versionados  (a D79 so olhou o conteudo)
+ *   2. autoria do historico                      (D132 §3: 12 commits com e-mail pessoal)
+ *   3. mensagem de commit e nome de ramo ou tag  (D133: o nome de um projeto interno)
  *
  * DUAS REGRAS DE CONSTRUCAO, e as duas nascem do mesmo raciocinio:
  *
@@ -39,10 +40,17 @@ const DOMINIOS_RESERVADOS = [
 
 const ARQUIVO_LOCAL = '.sanitacao-local.json';
 
+// O formato do ID de sessao do Claude Code, escrito uma vez: o leitor do disco e a classe sessao_local usam o mesmo.
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const NOME_DE_SESSAO = new RegExp('^(' + UUID + ')\\.jsonl$', 'i');
+
 /**
  * D597 (revisao completa, A10-01): os IDs de sessao do Claude Code desta maquina - o nome de cada transcricao em
  * <projects>/<projeto>/<id>.jsonl. Tres estados, como o vocabulario local (IN-04): pasta AUSENTE = nada a comparar;
  * pasta que existe e NAO ABRE vai para `naoLidas`, e quem chama nao pode dar limpo sobre ela.
+ * Desce so um nivel abaixo de cada projeto, de proposito: e ali que o Claude Code grava a transcricao da sessao. O
+ * que mora mais fundo (`<id>/subagents/agent-*.jsonl`) e de subagente, com nome que nao e ID de sessao. So conta o
+ * nome com a forma de UUID: `notas.jsonl` ou um log qualquer com essa extensao nao e sessao de ninguem.
  * Devolve { ids: Set, naoLidas: [{ pasta, porQue }] }.
  */
 function sessoesLocais(projetos) {
@@ -61,30 +69,66 @@ function sessoesLocais(projetos) {
       continue;
     }
     for (const n of arquivos) {
-      const m = /^(.+)\.jsonl$/i.exec(n);
+      const m = NOME_DE_SESSAO.exec(n);
       if (m) r.ids.add(m[1].toLowerCase());
     }
   }
   return r;
 }
 
-// A isca da classe `sessao_local` entra na lista lida do disco: e assim que o autoteste prova o filtro sem depender
-// de haver sessao nesta maquina. A leitura do disco se prova a parte: `naoLidas` reprova o autoteste e o limpo.
-// A pasta e a do resto do plugin (CLAUDE_CONFIG_DIR ou ~/.claude); o cache vale enquanto ela for a mesma.
+// Depois de ler o disco, a isca da classe `sessao_local` entra junto na lista de IDs: e assim que o autoteste prova
+// o filtro sem depender de haver sessao nesta maquina. A leitura do disco se prova a parte: `naoLidas` reprova o
+// autoteste e o limpo. A pasta e a do resto do plugin (CLAUDE_CONFIG_DIR ou ~/.claude).
+// O cache poupa reler a pasta a cada trecho com forma de UUID, e so vale enquanto a pasta e a mesma e a leitura tem
+// menos de um minuto (processo longo, como o vigia ou uma suite, ve a sessao aberta depois da primeira leitura). A
+// leitura que falhou (`naoLidas`) vale so 5 segundos: a falha pode ter sido passageira, e reler a cada UUID numa
+// pasta que segue falhando faria a varredura reler o disco centenas de vezes. A pasta que nem se descobre (excecao do
+// pastaDosProjetos) nao entra no cache: cada consulta tenta de novo, porque nao ha pasta para guardar.
+// `auditar` zera o cache ao comecar (cada auditoria parte de uma leitura fresca) e liga `falhasDaAuditoria`: toda
+// leitura que falhar enquanto ele varre entra no veredito, e nao so a primeira.
+// `avisos` nao trava o veredito: e o CLAUDE_CONFIG_DIR que aponta para onde nao ha `projects/`, quase sempre um
+// erro de digitacao que faria a classe procurar no vazio sem ninguem saber.
 const ISCA_SESSAO = '5e55a0d5-' + '9597-4000-8000-00000000d597';
+const VALIDADE_DO_CACHE_MS = 60 * 1000;
+const VALIDADE_DA_FALHA_MS = 5 * 1000;
 let sessoesEmCache = null;
+let falhasDaAuditoria = null;
+function anotarFalhas(naoLidas) {
+  if (falhasDaAuditoria) naoLidas.forEach(function (n) { falhasDaAuditoria.push(n); });
+}
 function sessoesDaMaquina() {
-  const pasta = require('./gasto.js').pastaDosProjetos();
-  if (!sessoesEmCache || sessoesEmCache.pasta !== pasta) {
-    sessoesEmCache = Object.assign({ pasta: pasta }, sessoesLocais(pasta));
+  let pasta;
+  try { pasta = require('./gasto.js').pastaDosProjetos(); } catch (e) {
+    const r = { ids: new Set([ISCA_SESSAO]), avisos: [], naoLidas: [{ pasta: 'a pasta das transcricoes do Claude Code',
+      porQue: 'nao consegui descobrir onde ela fica: ' + texto.causaDoErro(e) + '; confira CLAUDE_CONFIG_DIR e a pasta pessoal' }] };
+    sessoesEmCache = null;
+    anotarFalhas(r.naoLidas);
+    return r;
+  }
+  const agora = Date.now();
+  const limpa = sessoesEmCache && sessoesEmCache.naoLidas.length === 0;
+  const valido = sessoesEmCache && sessoesEmCache.pasta === pasta && agora >= sessoesEmCache.lidoEm &&
+    agora - sessoesEmCache.lidoEm < (limpa ? VALIDADE_DO_CACHE_MS : VALIDADE_DA_FALHA_MS);
+  if (!valido) {
+    const avisos = [];
+    if (process.env.CLAUDE_CONFIG_DIR && !fs.existsSync(pasta)) {
+      // sem o valor da variavel: ele e um caminho desta maquina, e a saida do sanitar e colada como evidencia
+      avisos.push('CLAUDE_CONFIG_DIR aponta para uma pasta onde nao ha a pasta projects: ' +
+        'nenhum ID de sessao desta maquina foi procurado. Corrija a variavel se o nome esta errado; numa instalacao ' +
+        'que ainda nao abriu sessao nenhuma, o aviso pode ser ignorado');
+    }
+    sessoesEmCache = Object.assign({ pasta: pasta, avisos: avisos, lidoEm: agora }, sessoesLocais(pasta));
     sessoesEmCache.ids.add(ISCA_SESSAO);
+    anotarFalhas(sessoesEmCache.naoLidas);
   }
   return sessoesEmCache;
 }
 
 /**
  * Classes genericas: nao carregam vocabulario de ninguem. Valem em qualquer
- * repositorio, e e por isso que podem ser publicadas.
+ * repositorio, e e por isso que podem ser publicadas. A `sessao_local` e a unica
+ * que consulta o disco (os IDs de sessao desta maquina, acima); o padrao dela
+ * segue generico.
  */
 const CLASSES_GENERICAS = [
   {
@@ -100,7 +144,9 @@ const CLASSES_GENERICAS = [
     // c:/users e C:/USERS sao a mesma pasta). As outras seguem sensiveis, senao
     // a rota /users/42 de documentacao viraria falso positivo. D430: a letra de
     // unidade nao vem colada em outra letra (o `p:` de `http://users/42` nao e disco).
-    padrao: /(?:(?<![A-Za-z0-9])[A-Za-z]:[\\/]+[Uu][Ss][Ee][Rr][Ss][\\/]+|\/[a-z]\/Users\/|\/home\/|(?<![A-Za-z0-9_.-])\/Users\/)[A-Za-z0-9._-]+/g,
+    // A4-23: o /home/ tem a mesma borda do /Users/ - `api/home/fulano` de rota nao e pasta pessoal -, menos
+    // depois de /var e /usr, onde ele e a pasta pessoal do Fedora Silverblue e do FreeBSD.
+    padrao: /(?:(?<![A-Za-z0-9])[A-Za-z]:[\\/]+[Uu][Ss][Ee][Rr][Ss][\\/]+|\/[a-z]\/Users\/|(?:(?<![A-Za-z0-9_.-])|(?<=\/(?:var|usr)))\/home\/|(?<![A-Za-z0-9_.-])\/Users\/)[A-Za-z0-9._-]+/g,
     isca: 'C:' + '\\Users\\' + 'fulano\\Desktop',
     controle: 'rm -rf /tmp/build && del C:' + '\\Windows\\temp'
   },
@@ -119,9 +165,21 @@ const CLASSES_GENERICAS = [
     nome: 'segredo, chave ou token',
     // O \b antes de sk- e o que separa uma chave de verdade de "task-completion",
     // o falso positivo que a D79 pegou no proprio instrumento dela.
-    padrao: /\bsk-[A-Za-z0-9_-]{20,}|\bghp_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}|\bAKIA[0-9A-Z]{16}\b|\bxox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
+    // A4-27: tambem os outros tokens do GitHub (gho_, ghs_, ghu_), a chave do Google (AIza), o token do npm, o JWT
+    // (tres partes, as duas primeiras comecando em eyJ, o `{"` em base64) e o cabecalho Bearer com valor. O valor de
+    // exemplo da documentacao (`Bearer SEU_TOKEN_AQUI`: palavras em maiusculas ligadas por _) nao conta; o token real em
+    // hexadecimal maiusculo, sem _, conta. Cada forma tem a propria isca em `iscasExtras`: o autoteste prova todas,
+    // nao so a do sk-.
+    padrao: /\bsk-[A-Za-z0-9_-]{20,}|\bgh[opsu]_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}|\bAKIA[0-9A-Z]{16}\b|\bxox[baprs]-[A-Za-z0-9-]{10,}|\bAIza[0-9A-Za-z_-]{35}|\bnpm_[A-Za-z0-9]{36}\b|\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|\bBearer\s+(?![A-Z0-9]*_[A-Z0-9_]*(?![A-Za-z0-9_]))[A-Za-z0-9._~+/-]{20,}=*|-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
     isca: 'sk-' + 'ant-api03-' + 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4',
-    controle: 'ta' + 'sk-completion e ta' + 'sk-complexity'
+    iscasExtras: [
+      'gh' + 'o_' + 'a1B2c3D4e5a1B2c3D4e5', 'AI' + 'za' + 'a1B2c3D4e5a1B2c3D4e5a1B2c3D4e5f6G7h',
+      'np' + 'm_' + 'a1B2c3D4e5a1B2c3D4e5a1B2c3D4e5f6G7h8',
+      'ey' + 'JhbGciOiJIUzI1NiJ9.' + 'ey' + 'JzdWIiOiIxMjM0In0.' + 'abcdefghijKLMNOP', 'Bea' + 'rer ' + 'abcDEF123456ghiJKL789',
+      'Bea' + 'rer ' + '9F86D081884C7D65' + '9A2FEAE0C55AD015'
+    ],
+    controle: 'ta' + 'sk-completion e ta' + 'sk-complexity',
+    controlesExtras: ['Bea' + 'rer SEU_TOKEN_DE_ACESSO_AQUI_123', 'envie Bea' + 'rer SEU_TOKEN_DE_ACESSO_AQUI_123.', 'Bearer token', 'npm_config_cache=x', 'ghost_town']
   },
   {
     chave: 'impressao_de_maquina',
@@ -163,7 +221,7 @@ const CLASSES_GENERICAS = [
     // sessao com transcricao nesta maquina e do dono - um ficou na fixture publica de 0.3.4 a 0.11.1.
     // D599: sem borda de proposito. O `\b` deixava passar `sessao_<id>` (o `_` e caractere de palavra), e borda nao
     // hexadecimal deixava passar `code<id>`. Quem separa o ID do dono de UUID qualquer e o soSe, nao a borda.
-    padrao: /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+    padrao: new RegExp(UUID, 'gi'),
     soSe: function (trecho) { return sessoesDaMaquina().ids.has(trecho.toLowerCase()); },
     isca: ISCA_SESSAO,
     controle: '1b4e28ba-' + '2fa1-11d2-883f-0016d3cca427'
@@ -186,6 +244,29 @@ function excecaoVale(classe, arquivo) {
   return classe.excecaoEm.some(function (a) { return norm === a || norm.endsWith('/' + a); });
 }
 
+// A causa do erro sem o texto do vocabulario: a mensagem do V8 copia o padrao inteiro (RegExp) ou um pedaco do
+// arquivo (JSON.parse do Node 20 em diante), e o termo do dono nao sai do vocabulario nem no terminal. Do padrao fica
+// o motivo; do JSON, a linha onde ele quebra, achada pela posicao ou pelo pedaco que o V8 citou (sem imprimir o pedaco).
+function causaSemTermo(e, bruto) {
+  if (!(e instanceof SyntaxError)) return texto.causaDoErro(e);
+  const m = typeof e.message === 'string' ? e.message : '';
+  if (m.indexOf('Invalid regular expression: ') === 0) return 'SyntaxError: ' + m.slice(m.lastIndexOf(': ') + 2);
+  const linha = linhaDoErroDeJson(m, typeof bruto === 'string' ? bruto : '');
+  if (linha) return 'SyntaxError: o JSON quebra perto da linha ' + linha + '; corrija essa linha';
+  return 'SyntaxError: o JSON termina antes da hora ou tem um caractere fora do lugar';
+}
+
+// Node 20+: `... in JSON at position N (line L column C)` ou `Unexpected token 'x', ..."<pedaco>..." is not valid JSON`;
+// Node 18: `Unexpected token x in JSON at position N`.
+function linhaDoErroDeJson(m, bruto) {
+  const linhaDe = function (i) { return bruto.slice(0, i).split('\n').length; };
+  const pos = /at position (\d+)/.exec(m);
+  if (pos && Number(pos[1]) <= bruto.length) return linhaDe(Number(pos[1]));
+  const pedaco = /, (?:\.\.\.)?"([\s\S]*?)(?:\.\.\.)?" is not valid JSON$/.exec(m);
+  if (pedaco && pedaco[1] && bruto.indexOf(pedaco[1]) !== -1) return linhaDe(bruto.indexOf(pedaco[1]));
+  return null;
+}
+
 /**
  * Le o vocabulario privado, se existir. Formato:
  *   { "termos": [ { "chave":"...", "nome":"...", "padrao":"...", "flags":"gi",
@@ -202,13 +283,15 @@ function excecaoVale(classe, arquivo) {
 function lerVocabularioLocal(raiz) {
   const vazio = { termos: [], descartados: [] };
   let bruto;
-  try { bruto = fs.readFileSync(path.join(raiz, ARQUIVO_LOCAL), 'utf8'); } catch (e) {
+  // A4-20: decodificado como os arquivos da superficie. O vocabulario gravado pelo `>` do PowerShell 5.1 sai em
+  // UTF-16 com marca de inicio, e lido como utf8 ele virava "JSON invalido" sem dizer por que.
+  try { bruto = decodificar(fs.readFileSync(path.join(raiz, ARQUIVO_LOCAL))); } catch (e) {
     if (e && e.code === 'ENOENT') return Object.assign({ estado: 'ausente', motivo: '' }, vazio);
     return Object.assign({ estado: 'invalido', motivo: 'nao consegui ler: ' + texto.causaDoErro(e) }, vazio);
   }
   let dados;
   try { dados = JSON.parse(texto.semBom(bruto)); } catch (e) {
-    return Object.assign({ estado: 'invalido', motivo: 'JSON invalido' }, vazio);
+    return Object.assign({ estado: 'invalido', motivo: 'o arquivo nao e JSON valido (' + causaSemTermo(e, texto.semBom(bruto)) + ')' }, vazio);
   }
   if (!dados || !Array.isArray(dados.termos)) {
     return Object.assign({ estado: 'invalido', motivo: 'falta a lista "termos"' }, vazio);
@@ -226,8 +309,10 @@ function lerVocabularioLocal(raiz) {
     let flags = typeof t.flags === 'string' && t.flags !== '' ? t.flags : 'gi';
     if (flags.indexOf('g') === -1) flags += 'g';
     let re;
-    try { re = new RegExp(t.padrao, flags); } catch (e) {
-      descartados.push({ chave: chave, porQue: 'regex invalida' });
+    // A4-22: o padrao e o texto varrido passam pela mesma forma Unicode (NFC). Sem isso, "José" escrito com o
+    // acento separado da letra (como o macOS grava nome de arquivo) nao casava com o termo escrito junto.
+    try { re = new RegExp(t.padrao.normalize('NFC'), flags); } catch (e) {
+      descartados.push({ chave: chave, porQue: 'o "padrao" nao e uma expressao regular valida (' + causaSemTermo(e) + ')' });
       return;
     }
     // L1-16: padrao que casa texto vazio acusaria toda linha do repositorio (e
@@ -267,11 +352,16 @@ function classes(raiz) {
 /**
  * Varre UM texto e devolve os achados, com linha. Achado sem `arquivo:linha` nao
  * serve para conferir, e a regra anti-teatro do projeto vale aqui tambem.
+ *
+ * L1-s102-4: o mesmo contrato do `ilegiveis` de `varrerArquivos`. A classe `sessao_local` compara com os IDs
+ * lidos do disco, e quando essa leitura falha esta funcao NAO avisa: devolve so o que achou. Quem garante
+ * veredito sobre a leitura que falhou sao o `auditar` (tira o limpo) e o `autoteste` (reprova), que olham o
+ * `naoLidas`; quem chama esta funcao direto e quer saber disso usa um dos dois.
  */
 function varrerTexto(conteudo, arquivo, listaClasses) {
   const lista = listaClasses || CLASSES_GENERICAS;
   const achados = [];
-  const linhas = String(conteudo == null ? '' : conteudo).split(/\r?\n/);
+  const linhas = String(conteudo == null ? '' : conteudo).normalize('NFC').split(/\r?\n/);
   for (let i = 0; i < linhas.length; i++) {
     for (let c = 0; c < lista.length; c++) {
       const classe = lista[c];
@@ -314,10 +404,10 @@ function correrGit(raiz, args) {
  * privado se acusaria inteiro.
  *
  * A4-03: `fora` omitido = FORA_DO_PUBLICO, que e regra do export do PROPRIO sworn (D132 §1.3). O `auditar` de
- * um projeto qualquer passa [], porque ali `docs/` vai a publico como o resto.
+ * um projeto qualquer passa [], porque ali `docs/` vai a publico como o resto; `null` vale o mesmo que [].
  */
 function superficiePublicavel(raiz, fora) {
-  const tirar = fora === undefined ? FORA_DO_PUBLICO : fora;
+  const tirar = fora === undefined ? FORA_DO_PUBLICO : (fora || []);
   // D420/IN-01: `-z`. Sem ele o git devolve nome com acento entre aspas e com
   // escape octal, o arquivo nao abre e some da varredura sem ninguem saber.
   const bruto = correrGit(raiz, ['ls-files', '-z', '--cached', '--others', '--exclude-standard']);
@@ -374,12 +464,48 @@ function varrerArquivos(raiz, arquivos, listaClasses, ilegiveis, naoConferidos) 
     // D429/2: o dono decidiu que binario PULA com aviso "nao conferido" em vez de
     // travar o veredito (antes ia a `ilegiveis`, saida 2). So pula quem pediu a lista.
     if (naoConferidos && conteudo.indexOf('\0') !== -1) {
-      naoConferidos.push({ arquivo: rel, porQue: 'contem NUL sem decodificar: binario, UTF-16 sem BOM ou UTF-32' });
+      naoConferidos.push({ arquivo: rel, porQue: 'nao e texto que o detector saiba ler (arquivo binario, ou texto em UTF-16 sem marca de inicio ou em UTF-32); ' +
+        'se for texto, salve de novo em UTF-8 para ele ser conferido' });
       return;
     }
     varrerTexto(conteudo, rel, listaClasses).forEach(function (a) {
       a.superficie = 1;
       achados.push(a);
+    });
+  });
+  return achados;
+}
+
+/**
+ * A4-26: o NOME do arquivo tambem vai a publico, e nenhum detector de conteudo o le (`relatorio-<cliente>.md`,
+ * `C:\Users\<nome>` gravado como pasta por engano). Achado da superficie 1, no proprio arquivo, linha 0.
+ */
+function varrerNomes(arquivos, listaClasses) {
+  const achados = [];
+  (arquivos || []).forEach(function (rel) {
+    varrerTexto(rel, rel, listaClasses).forEach(function (a) {
+      achados.push(Object.assign(a, { superficie: 1, linha: 0, nome: a.nome + ' (no nome do arquivo)' }));
+    });
+  });
+  return achados;
+}
+
+/**
+ * A4-26: nome de ramo e de tag sobe no push como a mensagem de commit (`cliente-fulano`, `fix-<projeto interno>`).
+ * Superficie 3, a do historico, linha 0 como o nome de arquivo (o achado esta no nome). Devolve null quando o git
+ * nao responde.
+ */
+function refsDoRepositorio(raiz) {
+  const bruto = correrGit(raiz, ['for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/tags']);
+  if (bruto === null) return null;
+  return bruto.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+}
+
+function varrerRefs(refs, listaClasses) {
+  const achados = [];
+  (refs || []).forEach(function (ref) {
+    varrerTexto(ref, null, listaClasses).forEach(function (a) {
+      achados.push({ superficie: 3, classe: a.classe, nome: a.nome, arquivo: '(nome de ramo ou tag ' + ref + ')', linha: 0, trecho: a.trecho });
     });
   });
   return achados;
@@ -396,8 +522,8 @@ function varrerAutores(linhas, listaClasses) {
   const achados = [];
   (linhas || []).forEach(function (linha, i) {
     const m = String(linha).match(/<([^>]+)>/);
-    const nome = m ? String(linha).slice(0, m.index) : String(linha);
-    varrerTexto(nome, null, listaClasses).forEach(function (a) {
+    const antesDoEmail = m ? String(linha).slice(0, m.index) : String(linha);
+    varrerTexto(antesDoEmail, null, listaClasses).forEach(function (a) {
       achados.push({
         superficie: 2,
         classe: a.classe, nome: a.nome,
@@ -448,8 +574,10 @@ function semCommits(raiz) {
   return bruto !== null && String(bruto).trim() === '';
 }
 
+// A4-25: `--all` nas duas leituras do historico. Sem ele so o ramo atual era lido, e o ramo ou tag que sobe no
+// push junto (ou que o dono troca depois) levava autoria e mensagem que ninguem conferiu.
 function autoresDoHistorico(raiz) {
-  const bruto = correrGit(raiz, ['log', '--format=%an <%ae>%n%cn <%ce>']);
+  const bruto = correrGit(raiz, ['log', '--all', '--format=%an <%ae>%n%cn <%ce>']);
   if (bruto === null) return semCommits(raiz) ? [] : null;
   const vistos = Object.create(null);
   bruto.split(/\r?\n/).forEach(function (l) { if (l.trim()) vistos[l.trim()] = true; });
@@ -486,7 +614,7 @@ function identidadeDoProximoCommit(raiz) {
 const SEP = '\u0001SWORN\u0001';
 
 function mensagensDoHistorico(raiz) {
-  const bruto = correrGit(raiz, ['log', '--format=%H%n%B' + SEP]);
+  const bruto = correrGit(raiz, ['log', '--all', '--format=%H%n%B' + SEP]);
   if (bruto === null) return semCommits(raiz) ? [] : null;
   return bruto.split(SEP).map(function (bloco) {
     const linhas = bloco.replace(/^\r?\n/, '').split(/\r?\n/);
@@ -516,23 +644,30 @@ function autoteste(raiz) {
     falhas.push({ classe: d.chave, tipo: 'termo descartado', porQue: d.porQue + ' em ' + ARQUIVO_LOCAL + ': esse termo NAO esta sendo procurado' });
   });
   sessoesDaMaquina().naoLidas.forEach(function (n) {
-    falhas.push({ classe: 'sessao_local', tipo: 'leitura do disco', porQue: n.pasta + ' nao abriu (' + n.porQue + '): os IDs de sessao dela NAO estao sendo procurados' });
+    falhas.push({ classe: 'sessao_local', tipo: 'leitura do disco', porQue: 'nao consegui ler ' + n.pasta + ' (' + n.porQue + '): os IDs de sessao dela NAO estao sendo procurados' });
   });
   lista.forEach(function (classe) {
     if (!classe.isca || !classe.controle) {
       falhas.push({ classe: classe.chave, tipo: 'estrutura', porQue: 'classe sem isca ou sem controle' });
       return;
     }
-    const pegou = varrerTexto(classe.isca, 'isca.txt', lista)
-      .filter(function (a) { return a.classe === classe.chave; });
-    if (pegou.length === 0) {
-      falhas.push({ classe: classe.chave, tipo: 'controle positivo', porQue: 'a isca plantada NAO foi acusada' });
-    }
-    const fp = varrerTexto(classe.controle, 'controle.txt', lista)
-      .filter(function (a) { return a.classe === classe.chave; });
-    if (fp.length > 0) {
-      falhas.push({ classe: classe.chave, tipo: 'controle negativo', porQue: 'acusou o quase-acerto: ' + fp[0].trecho });
-    }
+    const iscas = [classe.isca].concat(classe.iscasExtras || []);
+    iscas.forEach(function (isca, i) {
+      const pegou = varrerTexto(isca, 'isca.txt', lista)
+        .filter(function (a) { return a.classe === classe.chave; });
+      if (pegou.length === 0) {
+        // a posicao, nao o texto: a isca de um termo local e o proprio termo do dono
+        falhas.push({ classe: classe.chave, tipo: 'controle positivo', porQue: 'a isca plantada NAO foi acusada' +
+          (iscas.length > 1 ? ' (a ' + (i + 1) + 'a das ' + iscas.length + ' iscas da classe)' : '') });
+      }
+    });
+    [classe.controle].concat(classe.controlesExtras || []).forEach(function (controle) {
+      const fp = varrerTexto(controle, 'controle.txt', lista)
+        .filter(function (a) { return a.classe === classe.chave; });
+      if (fp.length > 0) {
+        falhas.push({ classe: classe.chave, tipo: 'controle negativo', porQue: 'acusou o quase-acerto: ' + fp[0].trecho });
+      }
+    });
   });
 
   if (varrerAutores(['Fulano <fulano' + '@gmail.com>']).length === 0) {
@@ -548,19 +683,52 @@ function autoteste(raiz) {
   if (iscaMsg.length === 0) {
     falhas.push({ classe: 'mensagem_de_commit', tipo: 'controle positivo', porQue: 'vazamento na mensagem nao foi acusado' });
   }
+  if (varrerNomes(['relatorio-fulano' + '@empresa.com.br.md'], lista).length === 0) {
+    falhas.push({ classe: 'nome_de_arquivo', tipo: 'controle positivo', porQue: 'vazamento no nome do arquivo nao foi acusado' });
+  }
+  if (varrerNomes(['docs/relatorio-mensal.md'], lista).length > 0) {
+    falhas.push({ classe: 'nome_de_arquivo', tipo: 'controle negativo', porQue: 'acusou um nome de arquivo sem vazamento' });
+  }
+  if (varrerRefs(['cliente-fulano' + '@empresa.com.br'], lista).length === 0) {
+    falhas.push({ classe: 'nome_de_ramo_ou_tag', tipo: 'controle positivo', porQue: 'vazamento no nome do ramo nao foi acusado' });
+  }
+  if (varrerRefs(['main', 'v1.0.0'], lista).length > 0) {
+    falhas.push({ classe: 'nome_de_ramo_ou_tag', tipo: 'controle negativo', porQue: 'acusou um nome de ramo ou tag sem vazamento' });
+  }
+  if (vocabularioNaSuperficie(['README.md', ARQUIVO_LOCAL, 'pacote/' + ARQUIVO_LOCAL]).length !== 2) {
+    falhas.push({ classe: 'vocabulario_local_publico', tipo: 'controle positivo', porQue: ARQUIVO_LOCAL + ' na superficie nao foi acusado' });
+  }
+  if (vocabularioNaSuperficie(['README.md', 'docs/' + ARQUIVO_LOCAL + '.exemplo']).length > 0) {
+    falhas.push({ classe: 'vocabulario_local_publico', tipo: 'controle negativo', porQue: 'acusou um arquivo que nao e o vocabulario local' });
+  }
 
   return {
     ok: falhas.length === 0,
-    // T-1a/#18: `testadas` = as classes (genericas + locais, cada uma com isca e controle) MAIS as duas
-    // superficies fora de classe: a autoria do historico e a mensagem de commit. Por isso o numero
-    // passa de `genericas + locais` em 2 (conferido em `sanitar.js`, que imprime os tres). As
+    // T-1a/#18: `testadas` = as classes (genericas + locais, cada uma com isca e controle) MAIS as quatro
+    // superficies fora de classe: a autoria do historico, a mensagem de commit, o nome de arquivo e o nome de ramo. Por
+    // isso o numero passa de `genericas + locais` em 4 (conferido em `sanitar.js`, que imprime os tres). O controle
+    // do vocabulario na superficie publica e uma guarda do proprio vocabulario e nao entra na conta. As
     // checagens do vocabulario local (arquivo invalido, termo descartado) nao entram na conta: so
     // geram falha, nao tem isca nem controle proprios.
-    testadas: lista.length + 2,
+    testadas: lista.length + 4,
     genericas: CLASSES_GENERICAS.length,
     locais: lista.length - CLASSES_GENERICAS.length,
     falhas: falhas
   };
+}
+
+// A4-30: o vocabulario privado na superficie e o vazamento inteiro de uma vez (ele lista os termos do dono). Fica
+// fora so pelo .gitignore; num projeto que nao o ignora, ele e achado, nunca tirado da lista calado - tirar
+// esconderia justamente o arquivo que mais vaza. Vale em qualquer pasta (a copia num subpacote vaza igual). Linha 0
+// como o nome de arquivo, mas o conserto e o .gitignore.
+function vocabularioNaSuperficie(arquivos) {
+  return arquivos.filter(function (a) { return a === ARQUIVO_LOCAL || a.endsWith('/' + ARQUIVO_LOCAL); })
+    .map(function (a) {
+      return {
+        superficie: 1, classe: 'vocabulario_local_publico', nome: 'vocabulario privado do detector na superficie publica',
+        arquivo: a, linha: 0, trecho: a + ' (ponha no .gitignore)'
+      };
+    });
 }
 
 /** Varredura completa das TRES superficies. Devolve null se o git nao respondeu. */
@@ -569,8 +737,16 @@ function auditar(raiz) {
   // veredito nao pode sair limpo mesmo quando quem chama nao rodou o `autoteste` antes (o `sanitar.js`
   // roda; API e teste direto nao).
   const vocab = lerVocabularioLocal(raiz);
+  // cada auditoria parte de uma leitura fresca da pasta das sessoes: o cache so poupa a releitura dentro dela. Sem
+  // isso, a sessao aberta entre duas auditorias do mesmo processo ficava fora por ate um minuto.
+  sessoesEmCache = null;
+  falhasDaAuditoria = [];
+  try { return auditarComFalhas(raiz, vocab); } finally { falhasDaAuditoria = null; }
+}
+
+function auditarComFalhas(raiz, vocab) {
   const vocabularioOk = vocab.estado !== 'invalido' && vocab.descartados.length === 0;
-  const naoLidas = sessoesDaMaquina().naoLidas;
+  const sessoes = sessoesDaMaquina(); // leitura fresca (o auditar zerou o cache), que anota a propria falha
   const lista = CLASSES_GENERICAS.concat(vocab.termos);
   const arquivos = superficiePublicavel(raiz, []);
   if (arquivos === null) return null;
@@ -580,15 +756,29 @@ function auditar(raiz) {
   if (mensagens === null) return null;
   const identidade = identidadeDoProximoCommit(raiz);
   if (identidade === null) return null;
+  const refs = refsDoRepositorio(raiz);
+  if (refs === null) return null;
 
   const ilegiveis = [];
   const naoConferidos = [];
-  const achados = varrerArquivos(raiz, arquivos, lista, ilegiveis, naoConferidos)
+  const achados = vocabularioNaSuperficie(arquivos)
+    .concat(varrerArquivos(raiz, arquivos, lista, ilegiveis, naoConferidos))
+    .concat(varrerNomes(arquivos, lista))
     .concat(varrerAutores(autores, lista))
     .concat(varrerAutores(identidade, lista).map(function (a) {
       return Object.assign(a, { arquivo: '(identidade do proximo commit)' });
     }))
-    .concat(varrerMensagens(mensagens, lista));
+    .concat(varrerMensagens(mensagens, lista))
+    .concat(varrerRefs(refs, lista));
+
+  // a leitura dos IDs de sessao pode ter sido refeita no meio da varredura: vale toda falha que houve, sem repetir
+  const vistas = Object.create(null);
+  const naoLidas = falhasDaAuditoria.filter(function (n) {
+    const k = n.pasta + '\0' + n.porQue;
+    if (vistas[k]) return false;
+    vistas[k] = true;
+    return true;
+  });
 
   const porClasse = Object.create(null);
   achados.forEach(function (a) { porClasse[a.classe] = (porClasse[a.classe] || 0) + 1; });
@@ -609,13 +799,13 @@ function auditar(raiz) {
     naoConferidos: naoConferidos,
     achados: achados, porClasse: porClasse, porSuperficie: porSuperficie,
     vocabulario: { estado: vocab.estado, motivo: vocab.motivo, descartados: vocab.descartados },
-    sessoes: { naoLidas: naoLidas },
+    sessoes: { naoLidas: naoLidas, avisos: sessoes.avisos },
     limpo: achados.length === 0 && ilegiveis.length === 0 && vocabularioOk && naoLidas.length === 0
   };
 }
 
 module.exports = {
   CLASSES_GENERICAS, FORA_DO_PUBLICO, ARQUIVO_LOCAL, termosLocais, lerVocabularioLocal, sessoesLocais, classes,
-  varrerTexto, varrerArquivos, varrerAutores, varrerMensagens, superficiePublicavel, semCommits, autoresDoHistorico,
-  identidadeDoProximoCommit, mensagensDoHistorico, auditar, autoteste
+  varrerTexto, varrerArquivos, varrerNomes, varrerAutores, varrerMensagens, varrerRefs, superficiePublicavel, semCommits,
+  autoresDoHistorico, identidadeDoProximoCommit, mensagensDoHistorico, refsDoRepositorio, auditar, autoteste
 };

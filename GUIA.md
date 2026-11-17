@@ -1791,7 +1791,7 @@ dois lugares, como na tabela.
 | `node "<plugin>/scripts/cicatriz.js" --manual <pasta ou arquivo do seu manual> --corpus <pasta com o seu histórico em .md>` | para cada regra do seu manual: existe decisão, incidente ou achado atrás dela? Sem `--corpus` o script avisa que não leu histórico e não separa nada; sem `--manual` mede as skills do próprio plugin |
 | `node "<plugin>/scripts/plataforma.js" --raiz "<plugin>"` | em que sistemas cada trecho dependente de plataforma foi de fato exercitado |
 | `node "<plugin>/scripts/medir-travas.js" --congelar <pasta>`, depois `--gerar --modelo <nome> --destino <pasta>` e `--apurar <pasta da rodada>` | a medição de antes/depois das travas: quantas vezes o agente diz "pronto" com o teste vermelho, sem o plugin e com ele, cada tarefa num projeto de brinquedo novo. O `--congelar` grava antes o sha256 das tarefas, da apuração e do instrumento; o `--apurar` só dá veredito (saída 0) com o congelado conferindo e a rodada completa, e sai 2 sem ele. Cada execução é uma sessão paga do `claude` |
-| `node "<plugin>/scripts/sanitar.js"` | se algum dado seu vazou, nas três superfícies: conteúdo, autoria do histórico e mensagem de commit; age sobre a pasta atual, ou sobre outra com `--raiz <pasta>` |
+| `node "<plugin>/scripts/sanitar.js"` | se algum dado seu vazou, nas três superfícies: conteúdo e nome dos arquivos, autoria do histórico (em todos os ramos) e mensagem de commit com o nome de ramo e tag; age sobre a pasta atual, ou sobre outra com `--raiz <pasta>` |
 | `node "<plugin>/scripts/auditar.js" --memoria <caminho do MEMORY.md>` | o relatório do `/sworn:audit`, em JSON (o peso de instrução em itens de lista, contra o teto; o peso em tokens estimados, que soma os arquivos do projeto, a linha de cada skill do plugin e o texto que os ganchos injetaram, sem teto; sobreposições, contradições, itens fora da rubrica, regras sem cicatriz); a skill roda por você. Sem `--memoria`, ou sem valor depois dela, a chave `memoria` diz "nao medida" e a causa. A chave `injetado` lê a transcrição da sessão do ambiente (`CLAUDE_CODE_SESSION_ID`), ou a de `--transcricao <caminho do .jsonl>`; sem as duas, diz "nao medido" e a causa |
 | `node "<plugin>/scripts/auditar.js" --seguranca <pasta>` | a varredura de segurança, sem IA, da pasta de um plugin ou skill baixado, antes de instalar: cada lugar com chamada de rede, `eval`, processo filho, credencial, pasta pessoal ou gancho que escreve fora da pasta do plugin, com `arquivo:linha` e o trecho; diz o que não leu (binário, arquivo grande, pastas ignoradas, corte do teto). Não é atestado de segurança; saída 0, ou 1 sem pasta |
 | `node "<plugin>/scripts/atalhos.js"` | o painel do `/sworn:shortcuts`: os comentários de atalho dos arquivos que o git rastreia e dos novos que ele não ignora, sem mudar nada; saída 0, ou 1 fora de repositório git |
@@ -1825,7 +1825,8 @@ os rodam por você, e rodá-los à mão serve para conferir o que a skill viu.
 
 O `sanitar.js` não diz LIMPO sem ter lido: arquivo que não abre, vocabulário local quebrado e `excecaoEm` inválido
 saem com 2. Arquivo com acento no nome, UTF-16 com BOM e pasta pessoal do macOS e do Windows, em qualquer caixa,
-entram na conferência; binário sai como "não conferido", com o motivo. O `cicatriz.js` aceita um arquivo, e não só
+entram na conferência; binário sai como "não conferido", com o motivo. O próprio `.sanitacao-local.json` fora do
+`.gitignore` é acusado: ele lista exatamente o que não pode vazar. O `cicatriz.js` aceita um arquivo, e não só
 uma pasta, em `--manual` e em `--corpus`.
 
 Desde a 0.26.0, a autoria confere também quem **vai** assinar o próximo commit: o nome e o e-mail que o git usaria

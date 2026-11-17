@@ -392,10 +392,12 @@ test('sanitar: vazamento no conteudo -> saida 1, com arquivo, linha e superficie
   assert.ok(/VAZOU - 1 trecho\(s\) que nao pode\(m\) ir a publico:/.test(r.stdout), r.stdout);
   assert.ok(/S1\s+segredo\s+a\.txt:1/.test(r.stdout), r.stdout);
   // A4-04 (pedido 12, microcopy): o S1 e a palavra do meio explicados na propria saida
-  assert.ok(r.stdout.indexOf('S1, S2 e S3 sao as superficies acima: 1 o conteudo dos arquivos, 2 a autoria') !== -1,
+  assert.ok(r.stdout.indexOf('S1, S2 e S3 sao as superficies acima: 1 o conteudo e o nome dos arquivos, 2 a autoria') !== -1,
     r.stdout);
-  assert.ok(r.stdout.indexOf('Depois do S vem o tipo do que vazou (segredo, email...) e onde ele esta.') !== -1,
+  assert.ok(r.stdout.indexOf('Depois do S vem o tipo do que vazou (segredo, email...) e onde ele esta; linha 0 quer dizer que o vazamento') !== -1,
     r.stdout);
+  assert.ok(r.stdout.indexOf('e o conserto e renomear; o .sanitacao-local.json na linha 0 vai\npara o .gitignore.') !== -1 ||
+    r.stdout.indexOf('e o conserto e renomear; o .sanitacao-local.json na linha 0 vai\r\npara o .gitignore.') !== -1, r.stdout);
   assert.ok(r.stdout.indexOf('achado') === -1, r.stdout);
 });
 
@@ -953,7 +955,8 @@ test('L1-17/D429-2: UTF-16 sem BOM e UTF-32 (NUL) vao a naoConferidos com motivo
   assert.strictEqual(achados.length, 0);
   assert.strictEqual(ilegiveis.length, 0, 'binario nao e mais ilegivel: ' + JSON.stringify(ilegiveis));
   assert.deepStrictEqual(naoConferidos.map((i) => i.arquivo).sort(), ['semBom.txt', 'u32.txt']);
-  assert.ok(naoConferidos.every((i) => /NUL/.test(i.porQue)), JSON.stringify(naoConferidos));
+  assert.ok(naoConferidos.every((i) => /binario/.test(i.porQue) && /UTF-16 sem marca de inicio/.test(i.porQue) &&
+    /salve de novo em UTF-8/.test(i.porQue)), JSON.stringify(naoConferidos));
 });
 
 test('L1-17: UTF-16 com BOM (o que o PowerShell grava) segue lido e nao e declarado ilegivel', () => {
@@ -973,6 +976,7 @@ test('L1-17/D429-2: sanitar com UTF-16 sem BOM da LIMPO com o aviso "nao conferi
   const r = sanitar(dir);
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   assert.ok(/nao conferido/.test(r.stdout), 'o aviso tinha de sair no relatorio: ' + r.stdout);
+  assert.ok(/salve de novo em UTF-8/.test(r.stdout), 'o que fazer tambem chega ao relatorio: ' + r.stdout);
   assert.ok(r.stdout.indexOf('ps.txt') !== -1, 'tinha de nomear o arquivo');
   assert.ok(!/NAO LI/.test(r.stdout + r.stderr), 'binario nao e mais "NAO LI": ' + r.stdout);
 });
@@ -1111,4 +1115,340 @@ test('A4-san-1: --raiz sem valor e erro de uso, nunca a pasta atual calada', () 
     assert.ok(/--raiz pede um valor/.test(r.stderr) && /uso: sanitar\.js/.test(r.stderr), args.join(' ') + ': ' + r.stderr);
     assert.strictEqual(r.stdout.indexOf('Sanitacao de'), -1, 'erro de uso nao mede: ' + r.stdout);
   });
+});
+
+// ── H1w (0.78.0): os achados antigos do detector (triagem-antigos do H1) ──
+
+const GENERICAS = sanit.CLASSES_GENERICAS;
+
+test('A4-20: vocabulario local gravado em UTF-16 com marca de inicio (o > do PowerShell 5.1, e o big-endian) e lido', () => {
+  const dir = repo();
+  try {
+    const json = JSON.stringify({ termos: [TERMO_SINTETICO] });
+    const le = Buffer.from(json, 'utf16le');
+    const be = Buffer.from(le).swap16();
+    [Buffer.concat([Buffer.from([0xFF, 0xFE]), le]), Buffer.concat([Buffer.from([0xFE, 0xFF]), be])].forEach((bytes, i) => {
+      fs.writeFileSync(path.join(dir, sanit.ARQUIVO_LOCAL), bytes);
+      const v = sanit.lerVocabularioLocal(dir);
+      assert.strictEqual(v.estado, 'ok', (i ? 'big-endian: ' : 'little-endian: ') + v.motivo);
+      assert.strictEqual(v.termos.length, 1);
+    });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A4-20: JSON quebrado e padrao que nao compila dizem a causa, nao so que estao errados', () => {
+  const dir = repo();
+  try {
+    lerVocabulario(dir, '{"termos": [');
+    assert.ok(/^o arquivo nao e JSON valido \(SyntaxError: /.test(sanit.lerVocabularioLocal(dir).motivo), sanit.lerVocabularioLocal(dir).motivo);
+    lerVocabulario(dir, { termos: [{ chave: 'q', padrao: '(abc', isca: 'a', controle: 'b' }] });
+    const d = sanit.lerVocabularioLocal(dir).descartados;
+    assert.ok(/^o "padrao" nao e uma expressao regular valida \(SyntaxError: /.test(d[0].porQue), JSON.stringify(d));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A4-20: a causa do erro do vocabulario nao copia o termo do dono (o V8 poe o padrao e o trecho na mensagem)', () => {
+  const dir = repo();
+  const marca = 'Zq' + 'xwv';
+  try {
+    lerVocabulario(dir, '{\n"termos": [\n{"chave": "p", "padrao": ' + marca + '}]}');
+    const m = sanit.lerVocabularioLocal(dir).motivo;
+    assert.strictEqual(m, 'o arquivo nao e JSON valido (SyntaxError: o JSON quebra perto da linha 3; corrija essa linha)', m);
+    assert.strictEqual(m.indexOf(marca), -1, m);
+    assert.strictEqual(m.indexOf("'Z'"), -1, 'nem a letra do token inesperado: ' + m);
+    // o Node 18 escreve a letra sem aspas e a posicao: troca o JSON.parse so durante a leitura
+    const parse = JSON.parse;
+    JSON.parse = () => { throw new SyntaxError('Unexpected token Z in JSON at position 30'); };
+    let antigo;
+    try { antigo = sanit.lerVocabularioLocal(dir).motivo; } finally { JSON.parse = parse; }
+    assert.strictEqual(antigo, 'o arquivo nao e JSON valido (SyntaxError: o JSON quebra perto da linha 3; corrija essa linha)', antigo);
+    // o fim antes da hora nao tem linha: diz o que pode ser
+    lerVocabulario(dir, '{"termos": [');
+    assert.strictEqual(sanit.lerVocabularioLocal(dir).motivo,
+      'o arquivo nao e JSON valido (SyntaxError: o JSON termina antes da hora ou tem um caractere fora do lugar)');
+    lerVocabulario(dir, { termos: [{ chave: 'q', padrao: marca + '(abc: d', isca: 'a', controle: 'b' }] });
+    const d = sanit.lerVocabularioLocal(dir).descartados;
+    assert.ok(/\(SyntaxError: Unterminated group\)$/.test(d[0].porQue), JSON.stringify(d));
+    assert.strictEqual(d[0].porQue.indexOf(marca), -1, JSON.stringify(d));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A4-22: termo local e texto passam pela mesma forma Unicode (acento junto ou separado da letra)', () => {
+  const dir = repo();
+  try {
+    // os dois se escrevem igual na tela; o codigo do caractere deixa a diferenca visivel e a protege de um editor que
+    // normalize o arquivo
+    const junto = 'Jos' + String.fromCharCode(0xE9); // e com acento, uma letra so (NFC)
+    const separado = 'Jose' + String.fromCharCode(0x301); // e + acento solto (NFD)
+    assert.notStrictEqual(junto, separado);
+    lerVocabulario(dir, { termos: [{ chave: 'pessoa', padrao: junto, isca: 'x ' + junto, controle: 'Josefa' }] });
+    const termos = sanit.termosLocais(dir);
+    assert.strictEqual(sanit.varrerTexto('por ' + separado + ' ontem', 'a.md', termos).length, 1, 'texto com o acento separado');
+    lerVocabulario(dir, { termos: [{ chave: 'pessoa', padrao: separado, isca: 'x ' + separado, controle: 'Josefa' }] });
+    const outro = sanit.termosLocais(dir);
+    assert.strictEqual(sanit.varrerTexto('por ' + junto + ' ontem', 'a.md', outro).length, 1, 'padrao com o acento separado');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A4-23: /home/ colado a nome de pasta (rota) nao e pasta pessoal; solto, entre aspas, em /var ou /usr e', () => {
+  const casa = '/ho' + 'me/fulano';
+  const acusa = (t) => sanit.varrerTexto(t, 'a.md', GENERICAS).filter((a) => a.classe === 'caminho_de_maquina').length;
+  assert.strictEqual(acusa('GET /api' + casa + '/fotos'), 0);
+  assert.strictEqual(acusa('GET /v1.2' + casa), 0);
+  assert.strictEqual(acusa('cd ' + casa + '/proj'), 1);
+  assert.strictEqual(acusa('"' + casa + '"'), 1);
+  assert.strictEqual(acusa(casa), 1);
+  assert.strictEqual(acusa('cd /var' + casa), 1, 'pasta pessoal do Fedora Silverblue');
+  assert.strictEqual(acusa('cd /usr' + casa), 1, 'pasta pessoal do FreeBSD');
+});
+
+test('A4-27: os outros tokens (GitHub, Google, npm, JWT, Bearer) acusam; os quase-acertos e o valor de exemplo nao', () => {
+  const acusa = (t) => sanit.varrerTexto(t, 'a.md', GENERICAS).filter((a) => a.classe === 'segredo').length;
+  const base = 'a1B2c3D4e5';
+  ['gh' + 'o_', 'gh' + 's_', 'gh' + 'u_', 'gh' + 'p_'].forEach((p) => assert.strictEqual(acusa('t=' + p + base + base), 1, p));
+  assert.strictEqual(acusa('key=AI' + 'za' + base + base + base + 'f6G7h'), 1, 'chave do Google');
+  assert.strictEqual(acusa('//registry/:_authToken=np' + 'm_' + base + base + base + 'f6G7h8'), 1, 'token do npm');
+  assert.strictEqual(acusa('ey' + 'JhbGciOiJIUzI1NiJ9.' + 'ey' + 'JzdWIiOiIxMjM0In0.' + 'abcdefghijKLMNOP'), 1, 'JWT');
+  assert.strictEqual(acusa('Authorization: Bea' + 'rer ' + 'abcDEF123456ghiJKL789'), 1, 'Bearer');
+  assert.strictEqual(acusa('Authorization: Bea' + 'rer ' + 'ABCDEF123456GHIJKL789.x'), 1, 'Bearer em maiusculas com outro caractere e valor');
+  assert.strictEqual(acusa('Authorization: Bea' + 'rer ' + '9F86D081884C7D65' + '9A2FEAE0C55AD015'), 1, 'token real em hexadecimal maiusculo');
+  assert.strictEqual(acusa('Authorization: Bea' + 'rer ' + 'ABC_DEFghijklmnop123456'), 1, 'maiusculas com _ seguidas de minusculas sao token');
+  // quase-acertos: palavra comum, prefixo sem valor, JWT de uma parte so, o valor de exemplo da documentacao
+  ['Bearer token', 'npm_config_cache=x', 'ghost_town', 'o header Bearer <token>', 'ey' + 'JhbGciOiJIUzI1NiJ9 sozinho',
+    'AIza curta', 'Authorization: Bea' + 'rer SEU_TOKEN_DE_ACESSO_AQUI_123',
+    'Envie Authorization: Bea' + 'rer SEU_TOKEN_DE_ACESSO_AQUI_123. Depois', 'Bea' + 'rer SEU_TOKEN_DE_ACESSO_AQUI_123/x'].forEach((t) => assert.strictEqual(acusa(t), 0, t));
+  // o autoteste prova cada forma, nao so a do sk-
+  const segredo = GENERICAS.filter((c) => c.chave === 'segredo')[0];
+  assert.ok(segredo.iscasExtras.length >= 5 && segredo.controlesExtras.length >= 1);
+});
+
+test('A4-25: commit em outro ramo tambem passa pelas superficies 2 e 3', () => {
+  const dir = repo();
+  try {
+    const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
+    g(['checkout', '-q', '-b', 'outro']);
+    spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=beltrano' + '@empresa.com.br', 'commit', '-q', '--allow-empty',
+      '-m', 'pedido de fulano' + '@empresa.com.br'], { cwd: dir, encoding: 'utf8', shell: false });
+    g(['checkout', '-q', '-']);
+    const msgs = sanit.mensagensDoHistorico(dir);
+    assert.strictEqual(msgs.length, 2, 'o commit do ramo outro ficou de fora: ' + JSON.stringify(msgs));
+    assert.ok(sanit.autoresDoHistorico(dir).some((a) => a.indexOf('beltrano' + '@') !== -1), 'o autor do ramo outro ficou de fora');
+    const r = sanit.auditar(dir);
+    assert.ok(r.achados.some((a) => a.superficie === 3 && a.classe === 'email'), JSON.stringify(r.achados));
+    assert.ok(r.achados.some((a) => a.superficie === 2 && a.classe === 'autoria_do_historico'), JSON.stringify(r.achados));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A4-26: nome de arquivo e nome de ramo ou tag tambem sao varridos, na linha 0', () => {
+  const dir = repo();
+  try {
+    const g = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false });
+    const nome = 'relatorio-fulano' + '@empresa.com.br.md';
+    const ramo = 'pedido-de-fulano' + '@empresa.com.br';
+    fs.writeFileSync(path.join(dir, nome), 'nada aqui\n', 'utf8');
+    assert.strictEqual(g(['branch', ramo]).status, 0);
+    assert.strictEqual(g(['tag', 'v1-' + 'sk-' + 'ant-api03-' + 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4']).status, 0);
+    const r = sanit.auditar(dir);
+    const noNome = r.achados.filter((a) => a.superficie === 1 && a.arquivo === nome);
+    assert.strictEqual(noNome.length, 1, JSON.stringify(r.achados));
+    assert.strictEqual(noNome[0].linha, 0);
+    assert.ok(/no nome do arquivo/.test(noNome[0].nome));
+    const refs = r.achados.filter((a) => a.superficie === 3 && /^\(nome de ramo ou tag /.test(a.arquivo));
+    assert.deepStrictEqual(refs.map((a) => a.classe).sort(), ['email', 'segredo'], JSON.stringify(refs));
+    assert.ok(refs.every((a) => a.linha === 0), JSON.stringify(refs));
+    assert.ok(refs.some((a) => a.arquivo === '(nome de ramo ou tag ' + ramo + ')'), 'o nome curto do ramo, sem refs/heads/');
+    assert.strictEqual(r.limpo, false);
+    // o ramo do repo(), o ramo e a tag criados acima
+    assert.strictEqual(sanit.refsDoRepositorio(dir).length, 3, JSON.stringify(sanit.refsDoRepositorio(dir)));
+    assert.strictEqual(sanit.refsDoRepositorio(path.join(dir, 'nao-existe')), null, 'git que nao responde e NAO SEI');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A4-30: o vocabulario privado dentro da superficie publica e achado, nunca tirado calado', () => {
+  const dir = repo();
+  try {
+    lerVocabulario(dir, { termos: [TERMO_SINTETICO] });
+    const r = sanit.auditar(dir);
+    assert.ok(sanit.superficiePublicavel(dir, []).indexOf(sanit.ARQUIVO_LOCAL) !== -1, 'o vocabulario sem .gitignore entra na superficie');
+    const a = r.achados.filter((x) => x.classe === 'vocabulario_local_publico');
+    assert.strictEqual(a.length, 1, JSON.stringify(r.achados));
+    assert.strictEqual(a[0].arquivo, sanit.ARQUIVO_LOCAL);
+    assert.strictEqual(r.limpo, false);
+    fs.writeFileSync(path.join(dir, '.gitignore'), sanit.ARQUIVO_LOCAL + '\n', 'utf8');
+    assert.strictEqual(sanit.auditar(dir).achados.filter((x) => x.classe === 'vocabulario_local_publico').length, 0);
+    // a copia num subpacote, com o .gitignore que so ignora a da raiz, vaza igual
+    fs.mkdirSync(path.join(dir, 'pacote'));
+    fs.copyFileSync(path.join(dir, sanit.ARQUIVO_LOCAL), path.join(dir, 'pacote', sanit.ARQUIVO_LOCAL));
+    fs.writeFileSync(path.join(dir, '.gitignore'), '/' + sanit.ARQUIVO_LOCAL + '\n', 'utf8');
+    const sub = sanit.auditar(dir).achados.filter((x) => x.classe === 'vocabulario_local_publico');
+    assert.deepStrictEqual(sub.map((x) => x.arquivo), ['pacote/' + sanit.ARQUIVO_LOCAL], JSON.stringify(sub));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('L4-s106-5: superficiePublicavel com fora null vale lista vazia, nao quebra', () => {
+  const dir = repo();
+  try {
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'g.md'), 'x\n', 'utf8');
+    assert.ok(sanit.superficiePublicavel(dir, null).indexOf('docs/g.md') !== -1);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('L1-s101-4: so nome com forma de UUID conta como sessao, em qualquer caixa', () => {
+  const home = comum.temporaria('sworn sessoes-uuid-');
+  try {
+    const id = '0d0d0d0d-' + '1111-4222-8333-666666666666';
+    // outro UUID, em maiusculas: no NTFS um nome que so muda a caixa seria o mesmo arquivo do primeiro
+    const outro = '0b0b0b0b-' + '1111-4222-8333-888888888888';
+    const pasta = path.join(home, 'projects', 'proj');
+    fs.mkdirSync(pasta, { recursive: true });
+    ['notas.jsonl', 'agent-a1b2c3.jsonl', id + '.jsonl', outro.toUpperCase() + '.JSONL'].forEach((n) => fs.writeFileSync(path.join(pasta, n), '{}\n'));
+    assert.deepStrictEqual([...sanit.sessoesLocais(path.join(home, 'projects')).ids].sort(), [outro, id]);
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
+});
+
+test('L1-s102-1 e L4-s106-1: o cache dos IDs de sessao rele depois de uma falha e depois de um minuto', () => {
+  const cfg = comum.temporaria('sworn cfg-cache-');
+  const dir = repo();
+  const relogio = Date.now;
+  try {
+    const projetos = path.join(cfg, 'projects');
+    fs.writeFileSync(projetos, 'nao sou pasta');
+    let agora = relogio();
+    Date.now = () => agora;
+    // o autoteste usa o cache como a varredura (o auditar sempre rele no comeco, testado abaixo)
+    const leituras = () => sanit.autoteste(dir).falhas.filter((f) => f.tipo === 'leitura do disco').length;
+    comConfig(cfg, () => {
+      assert.strictEqual(sanit.auditar(dir).sessoes.naoLidas.length, 1);
+      fs.unlinkSync(projetos);
+      fs.mkdirSync(path.join(projetos, 'proj'), { recursive: true });
+      assert.strictEqual(leituras(), 1, 'a falha vale uns segundos: nao rele a cada UUID');
+      agora += 6 * 1000;
+      assert.strictEqual(leituras(), 0, 'passados os segundos, a pasta que ja abre e relida');
+      const id = '0c0c0c0c-' + '1111-4222-8333-777777777777';
+      const acusa = () => sanit.varrerTexto('id ' + id, 'a.js', GENERICAS).filter((a) => a.classe === 'sessao_local').length;
+      assert.strictEqual(acusa(), 0);
+      fs.writeFileSync(path.join(projetos, 'proj', id + '.jsonl'), '{}\n');
+      assert.strictEqual(acusa(), 0, 'dentro do minuto o cache vale (nao rele a pasta a cada UUID)');
+      agora += 61 * 1000;
+      assert.strictEqual(acusa(), 1, 'passado o minuto, a sessao nova tem de aparecer');
+      agora -= 200 * 1000;
+      fs.unlinkSync(path.join(projetos, 'proj', id + '.jsonl'));
+      assert.strictEqual(acusa(), 0, 'relogio que volta (fuso, ajuste) tambem rele');
+      // a sessao aberta entre duas auditorias do mesmo processo: o cache ainda vale para a varredura, mas a
+      // auditoria seguinte parte de uma leitura fresca e a acusa
+      fs.writeFileSync(path.join(projetos, 'proj', id + '.jsonl'), '{}\n');
+      assert.strictEqual(acusa(), 0);
+      const comId = repo('id ' + id + '\n');
+      try {
+        const r = sanit.auditar(comId);
+        assert.strictEqual(r.limpo, false, 'a auditoria usou o cache velho');
+        assert.ok(r.achados.some((a) => a.classe === 'sessao_local'), JSON.stringify(r.achados));
+      } finally { fs.rmSync(comId, { recursive: true, force: true }); }
+    });
+  } finally {
+    Date.now = relogio;
+    fs.rmSync(cfg, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('L1-s102-1: a leitura que falha no meio da varredura tambem tira o limpo, nao so a primeira', () => {
+  const gasto = require('../scripts/lib/gasto.js');
+  const original = gasto.pastaDosProjetos;
+  const relogio = Date.now;
+  const cfg = comum.temporaria('sworn cfg-meio-');
+  const id = '0a0a0a0a-' + '1111-4222-8333-999999999999';
+  const dir = repo('id ' + id + '\n');
+  try {
+    fs.mkdirSync(path.join(cfg, 'projects'));
+    const arquivo = path.join(cfg, 'nao-sou-pasta');
+    fs.writeFileSync(arquivo, 'x');
+    let agora = relogio() + 3600 * 1000;
+    Date.now = () => { agora += 61 * 1000; return agora; };
+    // a 1a leitura (no comeco do auditar) da certo; a do meio da varredura, com o cache vencido, falha: ou nem
+    // descobre a pasta, ou a pasta nao abre
+    [['nem descobre', () => { throw new Error('sumiu no meio'); }, /sumiu no meio/],
+      ['nao abre', () => arquivo, /ENOTDIR|not a directory/i]].forEach(([caso, depois, motivo]) => {
+      let chamadas = 0;
+      gasto.pastaDosProjetos = () => { chamadas++; return chamadas > 1 ? depois() : path.join(cfg, 'projects'); };
+      const r = sanit.auditar(dir);
+      assert.ok(chamadas > 1, caso + ': o UUID do arquivo tinha de fazer a classe reler a pasta');
+      assert.strictEqual(r.limpo, false, caso + ': a falha da releitura sumia, o limpo usava so a primeira leitura');
+      assert.ok(r.sessoes.naoLidas.some((n) => motivo.test(n.porQue)), caso + ': ' + JSON.stringify(r.sessoes));
+    });
+  } finally {
+    gasto.pastaDosProjetos = original;
+    Date.now = relogio;
+    fs.rmSync(cfg, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('L1-s102-3: pasta das transcricoes que nem se descobre vira naoLidas, nao excecao', () => {
+  const gasto = require('../scripts/lib/gasto.js');
+  const original = gasto.pastaDosProjetos;
+  const dir = repo();
+  try {
+    gasto.pastaDosProjetos = () => { throw new Error('sem casa'); };
+    const prova = sanit.autoteste(dir);
+    assert.strictEqual(prova.ok, false);
+    assert.ok(prova.falhas.some((f) => f.classe === 'sessao_local' && /sem casa/.test(f.porQue) && /^nao consegui ler /.test(f.porQue)),
+      JSON.stringify(prova.falhas));
+    const r = sanit.auditar(dir);
+    assert.strictEqual(r.limpo, false);
+    assert.strictEqual(r.sessoes.naoLidas.length, 1);
+    const classe = GENERICAS.filter((c) => c.chave === 'sessao_local')[0];
+    assert.strictEqual(sanit.varrerTexto('id ' + classe.isca, 'a.js', GENERICAS).filter((a) => a.classe === 'sessao_local').length, 1,
+      'a isca segue no conjunto mesmo sem a pasta');
+    gasto.pastaDosProjetos = original;
+    assert.ok(sanit.autoteste(dir).falhas.every((f) => f.classe !== 'sessao_local'), 'sem a troca, a pasta volta a ser lida');
+  } finally {
+    gasto.pastaDosProjetos = original;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('L1-s102-2: CLAUDE_CONFIG_DIR sem a pasta projects vira aviso que nao trava o veredito', () => {
+  const cfg = comum.temporaria('sworn cfg-sem-projects-');
+  const dir = repo();
+  try {
+    comConfig(cfg, () => {
+      const r = sanit.auditar(dir);
+      assert.strictEqual(r.sessoes.avisos.length, 1, JSON.stringify(r.sessoes));
+      assert.ok(r.sessoes.avisos[0].indexOf('CLAUDE_CONFIG_DIR') !== -1 && r.sessoes.avisos[0].indexOf('Corrija a variavel') !== -1,
+        r.sessoes.avisos[0]);
+      assert.strictEqual(r.limpo, true, 'o aviso nao tira o limpo');
+      // o ambiente isolado do comum troca o CLAUDE_CONFIG_DIR: aqui ele vai explicito, para o caminho poder aparecer
+      const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg, CLAUDE_CODE_SESSION_ID: '' });
+      const s = comum.scriptComoProcesso(SCRIPT, ['--raiz', dir], { env: env });
+      assert.strictEqual(s.status, 0, s.stdout + s.stderr);
+      assert.ok(/AVISO - CLAUDE_CONFIG_DIR aponta para .*Corrija a variavel/.test(s.stdout), s.stdout);
+      assert.strictEqual(s.stdout.indexOf(cfg), -1, 'o aviso nao repete o caminho da variavel: ' + s.stdout);
+    });
+    fs.mkdirSync(path.join(cfg, 'projects'));
+    comConfig(cfg, () => assert.deepStrictEqual(sanit.auditar(dir).sessoes.avisos, [], 'criada a pasta, o aviso some'));
+  } finally {
+    fs.rmSync(cfg, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('A4-27: o autoteste prova cada isca e cada controle extra, nao so os primeiros', () => {
+  const segredo = GENERICAS.filter((c) => c.chave === 'segredo')[0];
+  const dir = repo();
+  try {
+    assert.ok(sanit.autoteste(dir).ok);
+    segredo.iscasExtras.push('nada que pareca segredo');
+    try {
+      const falha = sanit.autoteste(dir).falhas.filter((f) => f.classe === 'segredo' && f.tipo === 'controle positivo');
+      const n = segredo.iscasExtras.length + 1;
+      assert.strictEqual(falha.length, 1, JSON.stringify(falha));
+      assert.ok(falha[0].porQue.indexOf('(a ' + n + 'a das ' + n + ' iscas da classe)') !== -1, 'diz qual isca falhou: ' + falha[0].porQue);
+    } finally { segredo.iscasExtras.pop(); }
+    segredo.controlesExtras.push(segredo.isca);
+    try {
+      assert.ok(sanit.autoteste(dir).falhas.some((f) => f.classe === 'segredo' && f.tipo === 'controle negativo'));
+    } finally { segredo.controlesExtras.pop(); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

@@ -76,7 +76,7 @@ function main() {
   console.log(prova.testadas + ' verificacoes: ' + prova.genericas + ' classes genericas + ' +
               prova.locais + ' do vocabulario local (cada classe com isca e controle negativo) + ' +
               (prova.testadas - prova.genericas - prova.locais) +
-              ' fora das classes (autoria do historico e mensagem de commit).');
+              ' fora das classes (autoria do historico, mensagem de commit, nome de arquivo e nome de ramo ou tag).');
   if (!r.comVocabularioLocal) {
     console.log('SEM ' + sanit.ARQUIVO_LOCAL + ': rodando so com as classes genericas.');
     console.log('Nome de pessoa, de empresa e de projeto interno NAO estao sendo procurados.');
@@ -114,6 +114,12 @@ function main() {
     console.log('');
   }
 
+  // L1-s102-2: a pasta das transcricoes que nao existe nao trava o veredito, mas o dono precisa saber que a
+  // classe dos IDs de sessao procurou no vazio.
+  const avisosSessoes = (r.sessoes && r.sessoes.avisos) || [];
+  avisosSessoes.forEach(function (a) { console.log('AVISO - ' + a); });
+  if (avisosSessoes.length > 0) console.log('');
+
   if (relevantes.length === 0 && ilegiveis.length > 0) {
     console.error('NAO DEU PARA MEDIR: ' + ilegiveis.length + ' arquivo(s) da superficie nao abriram (lista acima).');
     console.error('Sem le-los nao ha veredito. Saida 2, nao 0.');
@@ -134,8 +140,11 @@ function main() {
   relevantes.forEach(function (a) {
     console.log('  S' + a.superficie + '  ' + a.classe + '  ' + a.arquivo + ':' + a.linha);
   });
-  console.log('S1, S2 e S3 sao as superficies acima: 1 o conteudo dos arquivos, 2 a autoria dos commits,');
-  console.log('3 as mensagens de commit. Depois do S vem o tipo do que vazou (segredo, email...) e onde ele esta.');
+  console.log('S1, S2 e S3 sao as superficies acima: 1 o conteudo e o nome dos arquivos, 2 a autoria dos commits,');
+  console.log('3 as mensagens de commit e os nomes de ramo e tag.');
+  console.log('Depois do S vem o tipo do que vazou (segredo, email...) e onde ele esta; linha 0 quer dizer que o vazamento');
+  console.log('esta no nome (do arquivo, do ramo ou da tag), e o conserto e renomear; o ' + sanit.ARQUIVO_LOCAL + ' na linha 0 vai');
+  console.log('para o .gitignore.');
   console.log('');
   console.log('O trecho NAO e impresso de proposito: imprimi-lo poria o vazamento');
   console.log('na saida do terminal, que costuma ser colada em relatorio. Abra o');
