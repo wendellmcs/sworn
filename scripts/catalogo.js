@@ -55,7 +55,16 @@ if (process.argv.indexOf('--registrar') !== -1) {
   // `achados` fica vazio de proposito: o que a consulta trouxe se mostra ao dono
   // na conversa, com a fonte. O arquivo guarda quando, como terminou e de onde.
   const fontes = process.argv.slice(process.argv.indexOf('--registrar') + 2);
-  const alvo = catalogo.gravar(cwd, catalogo.registrar(desfecho, [], fontes, Date.now()));
+  // A6-80: o gravar sem captura saia em stack trace (um `.claude` que e arquivo da ENOTDIR); agora a causa e o passo.
+  let alvo;
+  try {
+    alvo = catalogo.gravar(cwd, catalogo.registrar(desfecho, [], fontes, Date.now()));
+  } catch (e) {
+    process.stdout.write('ERRO: nao consegui gravar o registro da consulta em ' + catalogo.caminho(cwd) + ': ' +
+      require('./lib/texto.js').causaDoErro(e) + '. Confira se .claude e .claude/sworn sao pastas (e nao arquivos)' +
+      ' e se da para escrever nelas, e rode de novo.\n');
+    process.exit(1);
+  }
   process.stdout.write('sworn: consulta registrada (' + desfecho + ', ' + fontes.length +
     ' fonte(s)) em ' + alvo + '\n');
   process.exit(0);

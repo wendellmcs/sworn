@@ -109,10 +109,10 @@ test('busca: FERRAMENTAS so lista o que o hook entrega (Grep, Glob, Read)', () =
 test('A4-bus-1: find que apaga ou executa NAO e passe para criar; find que so lista segue contando', () => {
   [
     'find . -name "*.tmp" -delete',
-    'find . -type f -exec rm {} \;',
-    'find src -execdir touch novo.js \;',
-    'find . -ok rm {} \;',
-    'find . -okdir rm {} \;',
+    'find . -type f -exec rm {} \\;',
+    'find src -execdir touch novo.js \\;',
+    'find . -ok rm {} \\;',
+    'find . -okdir rm {} \\;',
     'ls && find . -delete',
     'fd tmp -x rm',
     'fd tmp -X rm',
@@ -122,6 +122,65 @@ test('A4-bus-1: find que apaga ou executa NAO e passe para criar; find que so li
   assert.strictEqual(busca.ehBusca('PowerShell', { command: 'find . -delete' }), false);
   ['find . -name "*.js"', 'fd busca src', 'find . -name x | grep -c y', 'find . -executable'].forEach((c) =>
     assert.strictEqual(busca.ehBusca('Bash', { command: c }), true, c));
+});
+
+// H1 (A4-56, A4-57, s372): o -fprint/-fprintf/-fls do find grava arquivo; o `;` entre aspas cortava o trecho antes
+// do -delete; o -x do fd dentro de um grupo de flags curtas passava.
+test('H1: find que grava, find com ; entre aspas e fd -Hx NAO sao passe para criar', () => {
+  [
+    'find . -name "a;b" -delete',
+    "find . -name 'x|y' -exec rm {} +",
+    'find . -fprint lista.txt',
+    'find . -fprint0 lista.txt',
+    'find . -fprintf lista.txt %p',
+    'find . -fls lista.txt',
+    'fd -Hx rm',
+    'fd tmp -HX rm',
+    // o shell tira as aspas: a acao entre aspas apaga do mesmo jeito
+    'find . -name x "-delete"',
+    "find . '-exec' rm {} +",
+    // o separador escapado com barra, sem aspas, nao corta o trecho do find
+    'find . -name a\\;b -delete',
+    'find . -name a\\|b -delete',
+    'find . -name a\\&b -fprint saida.txt',
+    // ronda 3: o separador entre aspas e a acao entre aspas no mesmo comando
+    'find . -name "a;b" "-delete"',
+    'find . -name "a;b" -de"le"te',
+    "find . -name 'a|b' '-exec' rm {} +",
+    // a barra que escapa letra some no shell: a acao chega ao find inteira
+    'find . -name x \\-delete',
+    'find . \\-exec rm {} +',
+    'find . -name x -de\\lete',
+    'fd tmp \\-x rm'
+  ].forEach((c) => assert.strictEqual(busca.ehBusca('Bash', { command: c }), false, c));
+  // os controles seguem contando como busca: padrao entre aspas, separador escapado no grep, grupo do fd sem o x,
+  // acao do find que so lista
+  ['grep -rn "a;b" src', "find . -name 'x;y'", 'grep -rn a\\;b src', 'fd -H busca src', 'find . -print'].forEach((c) =>
+    assert.strictEqual(busca.ehBusca('Bash', { command: c }), true, c));
+});
+
+// H1 (A4-28, s372): o `./` da frente e a barra repetida nao tiram o nome do escopo
+test('H1: nomeadoNoEscopo iguala ./, barras repetidas, barra do Windows e caixa nos dois lados', () => {
+  const esc = { dentro: ['./src//novo.js', 'docs\\a.md'] };
+  assert.strictEqual(busca.nomeadoNoEscopo('src/novo.js', esc), true);
+  assert.strictEqual(busca.nomeadoNoEscopo('./src/novo.js', esc), true);
+  assert.strictEqual(busca.nomeadoNoEscopo('SRC\\novo.js', esc), true);
+  assert.strictEqual(busca.nomeadoNoEscopo('.//docs/a.md', esc), true);
+  assert.strictEqual(busca.nomeadoNoEscopo('src/novo2.js', esc), false);
+  assert.strictEqual(busca.nomeadoNoEscopo('novo.js', esc), false);
+  // sem dado: caminho vazio ou nulo, escopo nulo, sem `dentro`, `dentro` vazio ou com item vazio, nunca casa
+  for (const alvo of ['', null, undefined, '  ']) assert.strictEqual(busca.nomeadoNoEscopo(alvo, esc), false, String(alvo));
+  for (const e of [null, undefined, {}, { dentro: [] }, { dentro: 'src/novo.js' }, { dentro: [null, ''] }]) {
+    assert.strictEqual(busca.nomeadoNoEscopo('src/novo.js', e), false, JSON.stringify(e));
+  }
+});
+
+// H1 (A4-118, A4-125, s372): o aviso diz o que sao Grep e Glob e fala do shell, nao so do Bash
+test('H1: o aviso da trava 7 glosa Grep e Glob', () => {
+  for (const m of [busca.motivo('src/novo.js'), busca.motivo('src/novo.js', ['src/novo-velho.js'])]) {
+    assert.ok(/busca de texto Grep/.test(m) && /de nome Glob/.test(m) && /pelo shell/.test(m), m);
+    assert.ok(!/pelo Bash/.test(m), m);
+  }
 });
 
 // s351 (D786 passo 5, ao vivo cx6): no Windows o Codex procura pelo PowerShell (Get-ChildItem, Select-String), e a

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 // Bloco M / M1 (D435): o medidor da sessao, chamado pelo mod (hooks/mods.ts) por $.process.run.
-// Entrada no stdin: { uso, amostras, sessao, historico, gastoReal, resposta, padrao } - uso = $.session.usage() sem
+// Entrada no stdin: { uso, amostras, sessao, historico, gastoReal, resposta, padrao, ultimaVez, modelo } - ultimaVez e
+// modelo sao o fim do ultimo turno do agente principal e o $.session.model() (V2, o cronometro do cache); uso = $.session.usage() sem
 // breakdown (D148); historico e gastoReal sao o que o mod guardou no $.store (pedido 31); resposta e a ultima do
 // agente principal (sem uso desde o plano 091 #5, que tirou o botao do paralelo) e padrao diz se o mod viu a skill
 // do manual carregada (pedido 32, botoes).
-// Saida: JSON { curta, longa, cruzou, disparou, plano, guardar, botoes } e, se a entrada veio torta ou a medida
+// Saida: JSON { curta, longa, cruzou, disparou, plano, guardar, botoes, cache } e, se a entrada veio torta ou a medida
 // falhou, `erro` (A7-19, D735: frase para quem roda o script a mao, que o mod nao mostra). Saida 0 sempre: o medidor
 // nunca derruba a sessao.
 const fs = require('node:fs');
@@ -66,6 +67,9 @@ try {
   });
   resposta.guardar = guardar;
   resposta.plano = linhaDoPlano;
+  // V2 (D847): o cronometro do cache, que o mod desenha na faixa nos ultimos 10 minutos (null quando nao avisa).
+  resposta.cache = require('./lib/cache-faixa.js').doCache({ ultimaVez: entrada.ultimaVez,
+    contexto: conta.tokensDeContexto, modelo: entrada.modelo });
   // Pedido 32 (Tarefa 4 subitem 3): os botoes por comando, na ordem de prioridade; o mod desenha o primeiro.
   resposta.botoes = require('./lib/botoes.js').daSessao({
     cruzou: resposta.cruzou, disparou: resposta.disparou, s: s, projeto: projeto, raiz: raiz,

@@ -128,6 +128,9 @@ io.blindar(function () {
         // compactacao de contexto o agente ficaria barrado nos proprios arquivos.
         // A guarda olha a foto, nao a origem: origem nova no harness nao deixa
         // a trava muda sem avisar.
+        // V3 (D846): a hora da abertura, uma vez por sessao (o compact e o resume mantem a primeira): o arquivo que
+        // outra sessao escreve depois dela e de outra frente (lib/toques.js), como o que ja estava na foto.
+        if (!Number.isFinite(s.inicioMs)) s.inicioMs = Date.now();
         if (Array.isArray(s.gitAbertura)) return s;
         const foto = git.modificados(cwd);
         // D49: `null` e "nao consegui fotografar" (git ausente, fora de repo,
@@ -141,8 +144,8 @@ io.blindar(function () {
       });
     } catch (erro) {
       semEstado = 'sworn: o estado da sessao nao gravou (' + escopoLib.ascii(textoLib.causaDoErro(erro)).slice(0, 120) +
-        '): sem a foto do git da abertura, a trava dos arquivos que ja vinham modificados (outra frente) fica ' +
-        'desligada ate a proxima abertura. O resto da abertura segue igual.\n';
+        '): sem a foto do git e sem a hora da abertura, a trava de outra frente (o que ja vinha modificado e o que ' +
+        'outra sessao escreve depois) fica desligada ate a proxima abertura. O resto da abertura segue igual.\n';
     }
     // A2: stdout de abertura de sessao entra como contexto que o Claude ve.
     // Roda em toda reabertura de proposito: e depois da compactacao que a regra

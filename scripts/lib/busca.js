@@ -30,7 +30,12 @@ const COMANDOS = /(^|[\s|;&(])(grep|rg|ag|ack|find|fd|ls|dir|cat|head|tail|tree|
 
 // A4-bus-1 (pedido 12), seguranca: `find` com -delete/-exec/-execdir/-ok/-okdir, e `fd` com -x/-X/--exec, apagam ou
 // rodam comando por si - pelo mesmo motivo do `sed -i` acima, o comando inteiro deixa de contar como busca.
-const ALTERA = /(^|[\s|;&(])(find\b[^|;&]*\s-(delete|exec|execdir|ok|okdir)|fd\b[^|;&]*\s(-x|-X|--exec|--exec-batch))\b/;
+// H1 (A4-56, A4-57, s372): os -fprint, -fprint0, -fprintf e -fls do find gravam arquivo; o -x do fd tambem vale dentro
+// de um grupo de flags curtas (`fd -Hx rm`). Testado sobre o comando SEM o entre aspas (ehBusca), ou o `;` de
+// `find . -name "a;b" -delete` cortava o trecho antes do -delete. atalho (A4-58): o `fd` casa em qualquer posicao, e
+// `grep -rn fd src -x` deixa de contar como busca. limite: so pede uma busca a mais, nunca libera. trocar quando: um
+// caso real mostrar a busca legitima barrada por isso.
+const ALTERA = /(^|[\s|;&(])(find\b[^|;&]*\s-(delete|exec|execdir|ok|okdir|fprint|fprint0|fprintf|fls)|fd\b[^|;&]*\s(-[a-zA-Z]*[xX]|--exec|--exec-batch))\b/;
 
 // s351 (D786 passo 5, ao vivo cx6): o Codex no Windows procura pelo PowerShell, e o cmdlet nao diferencia caixa. O
 // `gc` (Get-Content) fica de fora: casaria com `git gc`.
@@ -62,8 +67,21 @@ function ehBusca(toolName, toolInput) {
   if (FERRAMENTAS.indexOf(nome) !== -1) return true;
   if (nome === 'bash' || nome === 'powershell') {
     const cmd = (toolInput || {}).command;
-    return typeof cmd === 'string' && (COMANDOS.test(cmd) || COMANDOS_DO_POWERSHELL.test(cmd)) && !ALTERA.test(cmd) &&
-      !ALTERA_POR_COMANDO.test(cmd.replace(ENTRE_ASPAS, '""'));
+    if (typeof cmd !== 'string') return false;
+    const semAspas = cmd.replace(ENTRE_ASPAS, '""');
+    // o ALTERA tambem sobre o comando so sem os sinais de aspas: o shell os tira, e `find . "-delete"` apaga. Na
+    // duvida exclui-se (o comentario do COMANDOS): `grep -rn "find . -delete" src` pede uma busca a mais.
+    // e o `\;`, `\|` e `\&` escapados (sem aspas) tambem nao cortam o trecho do find: `find . -name a\;b -delete`
+    const semEscape = function (s) { return s.replace(/\\[;|&]/g, '_'); };
+    // e a terceira forma, a do shell de fato: o texto entre aspas fica, sem os sinais e com o `;|&` de dentro
+    // neutro, para `find . -name "a;b" "-delete"` (aspas com separador e acao entre aspas juntas; ronda 3 do H1a)
+    // e a barra que escapa letra some como no shell: `\-delete` e `-de\lete` chegam ao find como `-delete` (revisao
+    // dos testes, H1a); a barra antes de `;|&` fica para o semEscape.
+    const comoOShellLe = cmd.replace(ENTRE_ASPAS, function (m) { return m.slice(1, -1).replace(/[;|&]/g, '_'); })
+      .replace(/["']/g, '').replace(/\\([^;|&])/g, '$1');
+    const formas = [semAspas, cmd.replace(/["']/g, ''), comoOShellLe];
+    return (COMANDOS.test(cmd) || COMANDOS_DO_POWERSHELL.test(cmd)) &&
+      formas.every(function (f) { return !ALTERA.test(semEscape(f)); }) && !ALTERA_POR_COMANDO.test(semAspas);
   }
   return false;
 }
@@ -81,9 +99,14 @@ function ehBusca(toolName, toolInput) {
  */
 function nomeadoNoEscopo(alvo, esc) {
   if (!esc || !Array.isArray(esc.dentro)) return false;
-  const a = String(alvo == null ? '' : alvo).toLowerCase().replace(/\\/g, '/');
+  // H1 (A4-28, s372): sem caixa, com a barra do Windows, as barras repetidas e o `./` da frente iguais nos dois lados
+  const normal = function (s) {
+    return String(s == null ? '' : s).toLowerCase().trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/')
+      .replace(/^(?:\.\/)+/, '');
+  };
+  const a = normal(alvo);
   return esc.dentro.some(function (d) {
-    const p = String(d == null ? '' : d).toLowerCase().trim().replace(/\\/g, '/');
+    const p = normal(d);
     if (!p) return false;
     if (p.indexOf('*') !== -1 || p.indexOf('?') !== -1) return false;
     return p === a;
@@ -132,6 +155,10 @@ function parecidos(raiz, alvo, limite) {
   return Array.from(achados).sort().slice(0, teto);
 }
 
+/**
+ * O texto da negacao da trava 7 para `alvo` (o caminho do arquivo novo). Com `achados` (a lista de `parecidos`), diz
+ * o que o sworn achou e manda ler; sem ela, cobra a busca.
+ */
 function motivo(alvo, achados) {
   // F3c: com a lista do que o proprio sworn achou, o aviso diz isso e manda ler; sem ela, o de sempre
   if (Array.isArray(achados) && achados.length) {
@@ -145,8 +172,8 @@ function motivo(alvo, achados) {
       '',
       'Por que: o risco e criar uma copia ao lado do que ja existe.',
       'Leia esses arquivos e diga na resposta o que achou. Se nenhum serve, procure',
-      'mais (Grep, Glob, ou um grep/find pelo Bash) e crie: depois de uma busca neste',
-      'turno, criar arquivo novo fica liberado.'
+      'mais (a busca de texto Grep, a de nome Glob, ou um grep/find pelo shell) e crie:',
+      'depois de uma busca neste turno, criar arquivo novo fica liberado.'
     ]).join('\n');
   }
   return [
@@ -158,9 +185,10 @@ function motivo(alvo, achados) {
     '',
     // A4-30 (pedido 12, microcopy): o motivo e o passo sem "falha de origem" nem "portao".
     'Por que: o risco e criar arquivo novo em vez de entender o que ja existe.',
-    'Antes de criar, procure - Grep, Glob, ou um grep/find pelo Bash - e diga na',
-    'resposta o que a busca devolveu. Se mesmo assim nao houver onde encaixar,',
-    'crie: depois de uma busca neste turno, criar arquivo novo fica liberado.',
+    // H1 (A4-118, A4-125, s372): Grep e Glob glosados; "pelo shell", porque o PowerShell tambem conta
+    'Antes de criar, procure (a busca de texto Grep, a de nome Glob, ou um grep/find',
+    'pelo shell) e diga na resposta o que a busca devolveu. Se mesmo assim nao houver',
+    'onde encaixar, crie: depois de uma busca neste turno, criar arquivo novo fica liberado.',
     '',
     'Editar arquivo que ja existe nunca exige isso: quem edita ja achou.'
   ].join('\n');

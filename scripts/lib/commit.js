@@ -43,22 +43,30 @@ function semRevisao(comando) {
   return typeof comando === 'string' && /#\s*sworn:\s*sem-revisao\b/.test(semAspas(comando));
 }
 
-/** A pasta onde o commit roda: o `git -C <pasta>`, ou o ultimo `cd <pasta>` antes do commit; sem nenhum, null. */
-function pastaDoComando(comando) {
+/**
+ * A pasta onde o commit roda: o `git -C <pasta>`, ou o ultimo `cd <pasta>` antes do commit; sem nenhum, null.
+ * `padrao` (V4) troca o subcomando: o push.js passa o dele, com as opcoes globais no grupo 1 e a flag d.
+ */
+function pastaDoComando(comando, padrao) {
   const c = String(comando || '');
-  const valor = function (m) { return m[2] !== undefined ? m[2] : (m[3] !== undefined ? m[3] : m[4]); };
   // A2-01: o -C que vale e o das opcoes do proprio `git ... commit`; o de um `git -C <outro> status` antes dele media o
   // outro repositorio. Pelo semAspas, `echo "git commit"` nao e o commit e `-c user.name="a b"` e uma opcao so.
-  const gc = GIT_COMMIT.exec(semAspas(c));
+  const limpo = semAspas(c);
+  const gc = (padrao || GIT_COMMIT).exec(limpo);
   const fim = gc ? gc.index : -1;
   const opcoes = gc ? c.slice(gc.indices[1][0], gc.indices[1][1]) : '';
   const comC = gc && /(?:^|\s)-C\s+(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(opcoes);
   if (comC) return comC[1] !== undefined ? comC[1] : (comC[2] !== undefined ? comC[2] : comC[3]);
-  const ate = fim === -1 ? c : c.slice(0, fim);
-  const re = /(?:^|[\s;&|(])cd\s+("([^"]*)"|'([^']*)'|([^\s;&|)]+))/g;
+  // O `cd` tambem se procura fora de aspas (`echo "x; cd /outro"` nao muda a pasta); o semAspas guarda o tamanho, e o
+  // valor sai do comando original na mesma posicao.
+  const ate = fim === -1 ? limpo : limpo.slice(0, fim);
+  const re = /(?:^|[\s;&|(])cd\s+("([^"]*)"|'([^']*)'|([^\s;&|)]+))/gd;
   let m;
   let ultima = null;
-  while ((m = re.exec(ate)) !== null) ultima = valor(m);
+  while ((m = re.exec(ate)) !== null) {
+    const g = m.indices[2] || m.indices[3] || m.indices[4];
+    ultima = c.slice(g[0], g[1]);
+  }
   return ultima;
 }
 
@@ -327,7 +335,7 @@ function motivoSemResposta(lista) {
 /** A lista de aprovados sem `arquivo` (editado de novo: volta a cobrar). Lista torta = vazia. */
 function semAprovado(aprovados, arquivo) {
   const k = chave(arquivo);
-  return (Array.isArray(aprovados) ? aprovados : []).filter(function (a) { return chave(a) !== k; });
+  return (Array.isArray(aprovados) ? aprovados : []).filter(function (a) { return typeof a === 'string' && chave(a) !== k; });
 }
 
 /** A lista de aprovados com `arquivo` (absoluto), sem repetir. */
@@ -336,4 +344,4 @@ function comAprovado(aprovados, arquivo) {
 }
 
 module.exports = { MARCA, ehCommit, semRevisao, pastaDoComando, inspetores, topo, pendentes, motivo, motivoSemResposta, semAprovado,
-  comAprovado, ehTexto, aprovado, comTeto, semTeto, noTeto };
+  comAprovado, ehTexto, aprovado, comTeto, semTeto, noTeto, semAspas };

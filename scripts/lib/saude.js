@@ -432,7 +432,11 @@ function limiaresValidos(limiares) {
 }
 
 function soma(contadores, chaves) {
-  return chaves.reduce(function (t, k) { return t + ((contadores && contadores[k]) || 0); }, 0);
+  // H1 (revisao do A5-80, s372): so numero finito entra; o texto "5" concatenava e o bloqueio virava "0500".
+  return chaves.reduce(function (t, k) {
+    const v = contadores && contadores[k];
+    return t + (typeof v === 'number' && isFinite(v) ? v : 0);
+  }, 0);
 }
 
 /**
@@ -459,8 +463,9 @@ function medirTodos(estado, limiares) {
   const item = function (chave, nome, valor, cruzou, texto) {
     return { chave: chave, nome: nome, valor: valor, limiar: L[chave], cruzou: cruzou, texto: texto };
   };
-  const turnos = e.turnosComTrabalho || 0;
-  const revisoes = c.revisao_fechada || 0;
+  // H1 (A5-80, s372): typeof tambem nos dois primeiros: o texto "999" no estado passava do limiar.
+  const turnos = typeof e.turnosComTrabalho === 'number' ? e.turnosComTrabalho : 0;
+  const revisoes = typeof c.revisao_fechada === 'number' ? c.revisao_fechada : 0;
   const bloqueios = soma(c, BALDES_DE_BLOQUEIO);
   // Array.isArray, como o typeof abaixo: texto ou objeto no estado corrompido nunca vira aviso.
   const arquivos = Array.isArray(e.arquivosTocados) ? e.arquivosTocados.length : 0;
@@ -568,11 +573,34 @@ function agentesRodando(caminho, agora) {
   return lista.concat(agentesDeWorkflow(path.join(pasta, 'workflows'), agora));
 }
 
+// H1 (A5-10, A5-17, s372): o journal se le so ate este teto. Medido em 449 journals: o maior com 69 KB.
+// atalho: o que passa do teto fica de fora. limite: o `started` vem antes do `result`, entao o agente cujo `result`
+// ficou depois do teto parece aberto e o handoff espera ate o silencio (SILENCIO_DO_AGENTE_MS); nunca sai antes.
+// trocar quando: um journal real passar de 1 MB (a quarta parte do teto: a folga para subir o teto antes do corte).
+const TETO_DO_JOURNAL = 4 * 1024 * 1024;
+// H1 (A5-16, s372): o agentId vira nome de arquivo (path.join); medido nos 449, todo id casa isto.
+const RE_ID_DO_AGENTE = /^[A-Za-z0-9_-]+$/;
+
+/** O comeco do arquivo, ate `teto` bytes, ou null sem leitura. */
+function comecoDoArquivo(arquivo, teto) {
+  let fd;
+  try {
+    fd = fs.openSync(arquivo, 'r');
+    const buf = Buffer.alloc(Math.min(fs.fstatSync(fd).size, teto));
+    const lidos = fs.readSync(fd, buf, 0, buf.length, 0);
+    return buf.toString('utf8', 0, lidos);
+  } catch (e) { return null; } finally {
+    // o texto ja foi lido: o erro ao fechar nao muda o resultado
+    if (fd !== undefined) { try { fs.closeSync(fd); } catch (e) { /* ignorado */ } }
+  }
+}
+
 /**
  * A5 (fila a, medida na s215): o agente de workflow mora em subagents/workflows/<run>/, com requestShape "foreground"
- * e sem `finished` mesmo depois de terminar. Quem diz se acabou e o journal.jsonl do run: `started` {agentId, label}
- * abre, qualquer linha posterior do mesmo agentId (o `result`) fecha. O aberto passa pelo mesmo silencio e pela mesma
- * interrupcao do agente de fundo (sem o .jsonl dele ainda, vale a data do journal).
+ * e sem `finished` mesmo depois de terminar. Quem diz se acabou e o journal.jsonl do run (lido ate TETO_DO_JOURNAL):
+ * `started` {agentId, label} abre e so o `result` do mesmo agentId fecha (H1, A5-12); o agentId fora de
+ * RE_ID_DO_AGENTE fica de fora. O aberto passa pelo mesmo silencio e pela mesma interrupcao do agente de fundo (sem o
+ * .jsonl dele ainda, vale a data do journal).
  */
 function agentesDeWorkflow(pasta, agora) {
   let runs;
@@ -580,15 +608,17 @@ function agentesDeWorkflow(pasta, agora) {
   const lista = [];
   for (const run of runs) {
     const journal = path.join(pasta, run, 'journal.jsonl');
-    let texto;
-    try { texto = fs.readFileSync(journal, 'utf8'); } catch (e) { continue; }
+    const texto = comecoDoArquivo(journal, TETO_DO_JOURNAL);
+    if (texto === null) continue;
     const abertos = new Map();
     for (const linha of texto.split('\n')) {
       let o;
       try { o = JSON.parse(linha); } catch (e) { continue; }
-      if (!o || typeof o.agentId !== 'string' || !o.agentId) continue;
+      if (!o || typeof o.agentId !== 'string' || !RE_ID_DO_AGENTE.test(o.agentId)) continue;
       if (o.type === 'started') abertos.set(o.agentId, typeof o.label === 'string' ? o.label : '');
-      else abertos.delete(o.agentId);
+      // H1 (A5-12, s372): so o `result` fecha (os 449 medidos so tem `started` e `result`); linha de outro tipo
+      // nao fecha, e o agente que parou sem `result` sai pelo silencio.
+      else if (o.type === 'result') abertos.delete(o.agentId);
     }
     for (const [id, rotulo] of abertos) {
       const jsonl = path.join(pasta, run, 'agent-' + id + '.jsonl');
@@ -598,13 +628,21 @@ function agentesDeWorkflow(pasta, agora) {
   return lista;
 }
 
+/** H1 (A5-08, s372): o `agora` em ms quando e numero finito; senao, o relogio. */
+function relogio(agora) {
+  return typeof agora === 'number' && isFinite(agora) ? agora : Date.now();
+}
+
 /** O agente escreveu ha menos de SILENCIO_DO_AGENTE_MS e nao foi parado; sem o `jsonl` dele, vale a data de `reserva`. */
 function escreveAinda(jsonl, reserva, agora) {
+  // H1 (A5-08, s372): `agora` que nao e numero finito (NaN, texto) dava `agora - escrito < X` falso, e o agente que
+  // rodava contava como terminado: o handoff saia antes dele. Sem um `agora` valido, vale o relogio.
+  const t = relogio(agora);
   let escrito;
   try { escrito = fs.statSync(jsonl).mtimeMs; } catch (e) {
     try { escrito = fs.statSync(reserva).mtimeMs; } catch (x) { return false; }
   }
-  return agora - escrito < SILENCIO_DO_AGENTE_MS && !foiParado(jsonl);
+  return t - escrito < SILENCIO_DO_AGENTE_MS && !foiParado(jsonl);
 }
 
 /** D704: a ultima linha legivel do .jsonl do agente e a interrupcao do TaskStop (medida na s174). */
@@ -621,6 +659,11 @@ function foiParado(jsonl) {
     return o.type === 'user' && typeof t === 'string' && RE_INTERROMPIDO.test(t);
   }
   return false;
+}
+
+/** H1 (A5-09, s372): os gatilhos um por linha, como saem no aviso e na ordem ao modelo; o que nao e lista, nenhum. */
+function listaDeGatilhos(gatilhos) {
+  return (Array.isArray(gatilhos) ? gatilhos : []).map(function (g) { return '  - ' + g; }).join('\n');
 }
 
 /** D704: quantos agentes seguram o handoff e quais, um por linha, em ASCII (o texto chega ao modelo, R5). */
@@ -662,7 +705,7 @@ function linhaDeSituacao(rodando, linhaDoPlano) {
 function avisoDeSaude(gatilhos, alarme, rodando) {
   // p7-21: sem gatilho nao ha aviso, como no avaliar (a lista nula lancava; a vazia saia um alarme sem motivo).
   if (!Array.isArray(gatilhos) || gatilhos.length === 0) return null;
-  const lista = gatilhos.map(function (g) { return '  - ' + g; }).join('\n');
+  const lista = listaDeGatilhos(gatilhos);
   const espera = Array.isArray(rodando) && rodando.length > 0;
   return (alarme ? [
     'sworn - ALARME: esta conversa ficou cara demais.',
@@ -725,7 +768,7 @@ function instrucaoAoModelo(gatilhos, promptJaColado, rodando) {
   if (Array.isArray(rodando) && rodando.length > 0) {
     return [
       'sworn: gatilho contavel de saude do contexto disparou. E hora do handoff, mas ainda nao de roda-lo.',
-      (gatilhos || []).map(function (g) { return '  - ' + g; }).join('\n')
+      listaDeGatilhos(gatilhos)
     ].concat(esperaAoModelo(rodando, 'cite o gatilho acima que disparou'), [
       'O aviso de termino de cada agente chega sozinho; a ordem do handoff vem no primeiro fim de turno sem agente rodando.'
     ]).join('\n');
@@ -734,7 +777,7 @@ function instrucaoAoModelo(gatilhos, promptJaColado, rodando) {
   if (promptJaColado === true) {
     return [
       'sworn: gatilho contavel de saude do contexto disparou. E hora do handoff, e ele ja foi gravado.',
-      (gatilhos || []).map(function (g) { return '  - ' + g; }).join('\n'),
+      listaDeGatilhos(gatilhos),
       'O prompt do handoff ja esta no bloco de codigo da sua resposta acima: nao rode o handoff de novo e',
       'nao cole o bloco outra vez. Nesta mesma resposta, diga ao usuario numa linha que o handoff esta gravado',
       '(o bloco acima), cite o gatilho acima que disparou e diga que o trabalho segue nesta conversa, sem chat novo.',
@@ -743,7 +786,7 @@ function instrucaoAoModelo(gatilhos, promptJaColado, rodando) {
   }
   return [
     'sworn: gatilho contavel de saude do contexto disparou. E hora do handoff.',
-    (gatilhos || []).map(function (g) { return '  - ' + g; }).join('\n'),
+    listaDeGatilhos(gatilhos),
     'Faca agora, nesta mesma resposta:',
     '1. Rode /sworn:handoff.',
     '   ' + ONDE_GRAVAR_O_HANDOFF,
@@ -938,7 +981,8 @@ function handoffGravadoPeloShell(comando, cwd, agora) {
     const arquivo = path.resolve(base, trecho);
     try {
       const st = fs.statSync(arquivo);
-      if (st.isFile() && agora - st.mtimeMs <= JANELA_DO_SHELL_MS) return arquivo;
+      // H1 (revisao do A5-08, s372): sem `agora` valido, o NaN nunca marcava o handoff gravado pelo shell.
+      if (st.isFile() && relogio(agora) - st.mtimeMs <= JANELA_DO_SHELL_MS) return arquivo;
     } catch (err) { /* nao existe: o comando so citou o nome */ }
   }
   return null;

@@ -287,7 +287,14 @@ io.blindar(function () {
     if (r.destrutivo) {
       // D420/SH-02: idem - o contador nunca impede a negacao.
       try { estado.incrementar(e.session_id, 'comando_destrutivo'); } catch (err) { /* idem */ }
-      return io.negarFerramenta(destrutivo.motivo(comando, r));
+      // V1 (D846): o aviso lista o que o apagar levaria; a lista e acessoria, qualquer falha sai sem ela e nega igual.
+      // O cwd vem do evento, sem cair no do processo: com ele ausente ou torto, a lista resolveria a pasta errada.
+      let comLista = null;
+      try {
+        const nomes = destrutivo.alvosDoApagar(comando, e.tool_name);
+        if (nomes) comLista = destrutivo.motivo(comando, r, require('./lib/alvo-apagar.js').descrever(nomes, e.cwd, raiz));
+      } catch (err) { comLista = null; } // fail-closed: sem a lista, o aviso de sempre, e a negacao abaixo e a mesma
+      return io.negarFerramenta(comLista || destrutivo.motivo(comando, r));
     }
 
     // 0.3.4/item 2 (D286): por ULTIMO, depois do escape e dos dois portoes acima - o que ja era

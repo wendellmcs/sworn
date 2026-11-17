@@ -6,18 +6,43 @@ const texto = require('./texto.js');
 // A4-reg-1 (pedido 12), estados: volateis.json ausente, quebrado ou com regex invalida virava [] calado, e a checagem
 // D10 passava tudo (falha aberta). A causa fica em ERRO_VOLATEIS e o validarRegra acusa; nada lanca no require, que
 // a abertura (abertura.js) faz em toda sessao.
+// A4-70: o valor se fixa no carregamento do modulo: a funcao abaixo roda uma vez, no primeiro require, e o export
+// copia ERRO_VOLATEIS daquele momento. Um volateis.json mudado depois so vale num processo novo.
 let ERRO_VOLATEIS = null;
 const VOLATEIS = (function () {
+  let lista;
   try {
     const bruto = fs.readFileSync(path.join(__dirname, '..', '..', 'modelos', 'volateis.json'), 'utf8');
-    return (JSON.parse(bruto).volateis || []).map(function (v) {
-      // D656 (T3): "sensivel" = maiuscula conta - o evento Stop e PascalCase, "stop" e a palavra inglesa.
-      return { re: new RegExp(v.padrao, v.sensivel === true ? '' : 'i'), tipo: v.tipo };
-    });
+    const json = JSON.parse(bruto);
+    lista = json && typeof json === 'object' ? json.volateis : undefined;
   } catch (e) {
     ERRO_VOLATEIS = texto.causaDoErro(e);
     return [];
   }
+  // a chave ausente (ou com outro nome) tambem acusa: virar [] calado desligaria a checagem sem aviso
+  if (!Array.isArray(lista)) {
+    ERRO_VOLATEIS = lista === undefined ? 'falta a chave "volateis"' : 'a chave "volateis" nao e uma lista';
+    return [];
+  }
+  // A4-69: cada padrao compila sozinho. Um invalido fica fora, com a causa em ERRO_VOLATEIS, e os outros seguem
+  // valendo (antes um so derrubava a lista inteira).
+  const validos = [];
+  const ruins = [];
+  lista.forEach(function (v, i) {
+    // padrao ausente ou vazio viraria /(?:)/, que casa com tudo e recusaria toda regra
+    if (!v || typeof v.padrao !== 'string' || !v.padrao) {
+      ruins.push('padrao ' + (i + 1) + ': sem o campo "padrao" (um texto nao vazio)');
+      return;
+    }
+    try {
+      // D656 (T3): "sensivel" = maiuscula conta - o evento Stop e PascalCase, "stop" e a palavra inglesa.
+      validos.push({ re: new RegExp(v.padrao, v.sensivel === true ? '' : 'i'), tipo: v.tipo });
+    } catch (e) {
+      ruins.push('padrao ' + (i + 1) + ': ' + texto.causaDoErro(e));
+    }
+  });
+  if (ruins.length) ERRO_VOLATEIS = ruins.join('; ');
+  return validos;
 })();
 
 const SETA = /\s(?:->|=>|→)\s/;
@@ -46,11 +71,16 @@ function validarRegra(bruta) {
   }
   // A4-101 (pedido 12, enxuto): os ramos de gatilho e acao vazios sairam; o partir() nunca os deixa vazios.
   // D10: nenhum fato volatil cravado em prosa.
-  if (ERRO_VOLATEIS) {
+  if (ERRO_VOLATEIS && !VOLATEIS.length) {
     erros.push('a lista de fatos volateis (modelos/volateis.json) nao carregou (' + ERRO_VOLATEIS + '): a checagem de' +
       ' fato volatil nao rodou; reinstale o plugin e rode de novo');
+  } else if (ERRO_VOLATEIS) {
+    erros.push('a lista de fatos volateis (modelos/volateis.json) carregou em parte (' + ERRO_VOLATEIS + '): a' +
+      ' checagem de fato volatil rodou so com os padroes validos; reinstale o plugin e rode de novo');
   }
   // A4-25 (pedido 12, microcopy): o trecho que casou e o que reescrever, sem jargao.
+  // A4-24: o teste ve a linha bruta, com o marcador de lista ("- "), e nao o texto do partir(); nenhum padrao de
+  // volateis.json casa com o marcador, entao o resultado e o mesmo, e o trecho citado vem da linha que o dono escreveu.
   for (const v of VOLATEIS) {
     const m = String(bruta).match(v.re);
     if (m) erros.push('valor que muda com o tempo (' + v.tipo + ': "' + m[0].trim() + '"): tire o valor da regra, ou' +

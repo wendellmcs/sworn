@@ -42,6 +42,8 @@ const SO_CONTAM = new Set(['agentes_despachados', 'revisao_fechada', 'escopo_amp
   'pergunta_regra_de_negocio', 'pergunta_aparencia', 'pergunta_externo', 'pergunta_credencial',
   'pergunta_fora_da_classe',
   // B4 (s369, R-superpowers): a decisao autonoma registrada no fecho, e a registrada sem o custo se errado.
-  'decisao_autonoma', 'decisao_sem_custo']);
+  'decisao_autonoma', 'decisao_sem_custo',
+  // Colheita lote 5, item 12 (D846): o aviso de leitura grande avisa e deixa ler; conta, nunca bloqueia.
+  'leitura_grande']);
 
 module.exports = { baldesNoCodigo, SO_CONTAM };

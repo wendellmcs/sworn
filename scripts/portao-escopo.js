@@ -209,6 +209,24 @@ io.blindar(function () {
       try { estado.incrementar(e.session_id, 'outra_frente'); } catch (err) { contadorNaoGravou(); }
       return negar(escopoLib.motivoOutraFrente(alvo, arquivoEmVigor));
     }
+    // V3 (D846): o arquivo que OUTRA sessao do sworn escreveu depois que esta abriu (lib/toques.js) tambem e de outra
+    // frente, enquanto segue sem commit: so com um toque achado o git status roda, e o que ele nao lista (commitado,
+    // revertido) passa; o git que nao responde deixa o toque valer.
+    if (travas.outraFrente !== false && !deOutraFrente && !escopoLib.dentro(alvo, esc)) {
+      let toque = null;
+      try {
+        toque = require('./lib/toques.js').deOutraSessao(cwd, path.resolve(cwd, alvo), e.session_id, s.inicioMs);
+      } catch (err) { toque = null; } // fail-open: o registro que nao se le so tira este aviso; a foto da abertura vale
+      if (toque) {
+        let sujos = null;
+        try { sujos = require('./lib/git.js').modificados(cwd); } catch (err) { sujos = null; } // fail-closed: sem o git status o toque vale
+        const segueSujo = !Array.isArray(sujos) || sujos.some(function (p) { return String(p).toLowerCase() === alvoBaixo; });
+        if (segueSujo) {
+          try { estado.incrementar(e.session_id, 'outra_frente'); } catch (err) { contadorNaoGravou(); }
+          return negar(escopoLib.motivoOutraSessao(alvo, arquivoEmVigor, Date.now() - toque.em));
+        }
+      }
+    }
 
     // 3. Sem projeto.json o portao de escopo nao roda. Avisa uma vez por sessao.
     if (!projeto) {

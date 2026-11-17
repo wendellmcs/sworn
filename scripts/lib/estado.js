@@ -205,6 +205,10 @@ function limparVelhos(sessionIdAtual, agoraMs, opcoes) {
  */
 const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido', 'gatilho3', 'abertoEm',
   'frente', 'avisouTabelaShell', 'decisoesDoDono', 'commitsFeitos', 'esperaAprender', 'auditoriaAvisou', 'avisouVolta',
+  // Colheita lote 5, item 12 (D846): os arquivos grandes ja avisados no Read (aviso-leitura.js), uma vez por sessao.
+  'leiturasAvisadas',
+  // V3 (D846): a hora da abertura (abertura.js); a trava 5b compara com ela o toque de outra sessao (lib/toques.js).
+  'inicioMs',
   // Plano 091 (#7): a ordem do init sai uma vez por sessao; sem isto, o fecho do turno a apagava e o compact repetia.
   'ordemDoInit',
   // Plano 091 (#6): o manual carregado vale a sessao inteira; sem isto, o portao do manual negava de novo a cada turno.

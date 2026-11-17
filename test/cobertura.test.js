@@ -304,3 +304,66 @@ test('cobertura: a linha do gatilho 2 diz que a consulta a pagina e dos gatilhos
   assert.ok(sem.porque.includes('nunca se consultou aqui'), sem.porque);
   fs.rmSync(vazio, { recursive: true, force: true });
 });
+
+
+// H1 (A6-41 a A6-45, s372): a pasta dos agentes se le uma vez por relatorio, e a lista nao vai para o --json
+test('H1: o relatorio le os agentes uma vez e o --json nao leva a lista lida', (t) => {
+  const dir = pasta();
+  try {
+    const p = semear(dir);
+    agente(dir, 'busca', 'barato');
+    const listar = t.mock.method(agentesLib, 'listar');
+    const r = cobertura.relatorio(dir, p);
+    assert.strictEqual(listar.mock.callCount(), 1, 'listar chamado ' + listar.mock.callCount() + ' vezes');
+    assert.strictEqual(r.ambiente.agentes, 1);
+    assert.ok(r.ambiente.agentesLidos && Array.isArray(r.ambiente.agentesLidos.agentes), 'a lista fica com o ambiente');
+    const json = JSON.parse(JSON.stringify(r));
+    assert.ok(!('agentesLidos' in json.ambiente) && !('temPastaDeAgentes' in json.ambiente), Object.keys(json.ambiente).join());
+    // a copia do ambiente perde a lista (a propriedade nao e enumeravel), e o portoes() sem ela le a pasta de novo
+    const semLista = Object.assign({}, cobertura.ambiente(dir, p));
+    assert.ok(!('agentesLidos' in semLista), 'a copia ainda leva a lista');
+    const antes = listar.mock.callCount();
+    const apelido = porChave({ portoes: cobertura.portoes(dir, p, semLista) }, 'apelido');
+    assert.strictEqual(listar.mock.callCount(), antes + 1, 'sem a lista, o portoes() le a pasta uma vez');
+    assert.strictEqual(apelido.verificavel, porChave(r, 'apelido').verificavel);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// H1 (A6-49, s372): so o ausente conta como ausente; um pedaco do caminho que e arquivo (ENOTDIR) tambem
+test('H1: design.json ausente ou atras de um arquivo nao existe; presente existe', (t) => {
+  const dir = pasta();
+  try {
+    const p = semear(dir);
+    assert.strictEqual(cobertura.ambiente(dir, p).temDesign, false);
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'design.json'), '{}', 'utf8');
+    assert.strictEqual(cobertura.ambiente(dir, p).temDesign, true);
+    // o erro do sistema simulado: no Windows o caminho por dentro de um arquivo da ENOENT, nao ENOTDIR
+    const com = function (code) {
+      const stat = t.mock.method(fs, 'statSync', function () { const e = new Error(code); e.code = code; throw e; });
+      try { return cobertura.ambiente(dir, p).temDesign; } finally { stat.mock.restore(); }
+    };
+    assert.strictEqual(com('ENOTDIR'), false, 'ENOTDIR e ausente');
+    assert.strictEqual(com('ENOENT'), false, 'ENOENT e ausente');
+    assert.strictEqual(com('EACCES'), true, 'o que existe e nao se le nao e ausente');
+    assert.strictEqual(com('EPERM'), true, 'EPERM tambem existe');
+    assert.strictEqual(com('ERR_INVALID_ARG_VALUE'), false, 'o caminho invalido nao existe');
+    assert.strictEqual(com('ENAMETOOLONG'), false, 'o nome longo demais nao existe');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// H1 (A6-118, s372): a marcha glosada no titulo nos dois ramos, e a escada glosada tambem quando vale
+test('H1: o portao de custo glosa a marcha nos dois ramos e a escada no ramo que vale', () => {
+  const dir = pasta();
+  const um = pasta();
+  try {
+    const custo = porChave(cobertura.relatorio(dir, semear(dir)), 'custo');
+    assert.strictEqual(custo.titulo, 'Agente caro em marcha rapida (a tarefa simples)');
+    assert.strictEqual(custo.porque, 'escada com 2 nomes (a lista dos agentes, do mais barato ao mais caro)');
+    const desligado = porChave(cobertura.relatorio(um, semear(um, { agentes: { escada: ['unico'], degraus: [{ agente: 'unico', apelido: 'x' }] } })), 'custo');
+    assert.strictEqual(desligado.verificavel, false);
+    assert.strictEqual(desligado.titulo, 'Agente caro em marcha rapida (a tarefa simples)');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(um, { recursive: true, force: true });
+  }
+});

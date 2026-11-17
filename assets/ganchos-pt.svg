@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="720" height="728" viewBox="0 0 720 728" role="img" aria-labelledby="titulo desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="792" viewBox="0 0 720 792" role="img" aria-labelledby="titulo desc">
   <title id="titulo">Onde o sworn se pendura numa sessão</title>
-  <desc id="desc">Oito eventos de gancho, da abertura da sessão ao fim, cada um com os scripts que rodam ali. SessionStart, abertura.js: no início, na retomada, no /clear e na compactação, voltam as suas regras e o escopo, com os blocos de paralelismo, menos paradas, qualidade de resposta e menos código. UserPromptSubmit, abrir-turno.js: a volta cara a um chat parado pausa uma vez, com a conta, e a mensagem seguinte passa; a correção vira proposta de regra. PreToolUse em Write e Edit, portao-escopo.js: nega, com o motivo, a escrita fora do escopo, em arquivo intocável ou de outra sessão, o arquivo novo sem buscar antes, a catraca (régua que só aperta), o arquivo AAA sem o manual (o playbook) carregado e o token de design fora do sistema. PreToolUse em Bash e PowerShell, portao-shell.js, que roda num processo só o portao-destrutivo.js, o portao-estilo.js e o portao-commit.js: comando destrutivo, sintaxe de shell, cd solto, estilo por shell e commit sem revisão. PreToolUse em Task e Agent, portao-agente.js, portao-apelido.js e portao-juiz.js: agente caro em trabalho leve, o apelido do modelo, que só avisa, e o inspetor da revisão cega um degrau acima do modelo da sessão. PreToolUse em AskUserQuestion, portao-decisao.js: exatamente 3 opções, a recomendada primeiro. PostToolUse, SubagentStart e SubagentStop, marcar-trabalho.js, depois-do-shell.js (depois do shell, o marcar-trabalho.js e o conferir-depois.js num processo só), abrir-subagente.js, gravar-veredito.js e escalar.js: contam trabalho, buscas, decisões e commits, levam o bloco menos código aos subagentes, gravam os vereditos da revisão e guardam o pedido do agente da escada que pede o degrau de cima. Stop, portao-fecho.js: prova, subitem aberto, prompt do handoff, revisão e referência, escalada sem despacho, e a hora de trocar de chat. SessionEnd, fim-sessao.js: apaga arquivos de sessão parados há mais de 7 dias. O ponto âmbar cheio marca os momentos que podem negar ou devolver o turno; o anel cinza, os que só injetam, contam ou limpam.</desc>
+  <desc id="desc">Oito eventos de gancho, da abertura da sessão ao fim, cada um com os scripts que rodam ali. SessionStart, abertura.js: no início, na retomada, no /clear e na compactação, voltam as suas regras e o escopo, com os blocos de paralelismo, menos paradas, qualidade de resposta e menos código. UserPromptSubmit, abrir-turno.js: a volta cara a um chat parado pausa uma vez, com a conta, e a mensagem seguinte passa; a correção vira proposta de regra. PreToolUse em Write e Edit, portao-escopo.js: nega, com o motivo, a escrita fora do escopo, em arquivo intocável ou de outra sessão, o arquivo novo sem buscar antes, a catraca (régua que só aperta), o arquivo AAA sem o manual (o playbook) carregado e o token de design fora do sistema. PreToolUse em Read, aviso-leitura.js: avisa, sem negar, a leitura inteira de um arquivo de texto acima de 64 KB, uma vez por arquivo na sessão, com o tamanho e o lembrete de ler só o trecho. PreToolUse em Bash e PowerShell, portao-shell.js, que roda num processo só o portao-destrutivo.js, o portao-estilo.js e o portao-commit.js: comando destrutivo, sintaxe de shell, cd solto, estilo por shell e commit sem revisão. PreToolUse em Task e Agent, portao-agente.js, portao-apelido.js e portao-juiz.js: agente caro em trabalho leve, o apelido do modelo, que só avisa, e o inspetor da revisão cega um degrau acima do modelo da sessão. PreToolUse em AskUserQuestion, portao-decisao.js: exatamente 3 opções, a recomendada primeiro. PostToolUse, SubagentStart e SubagentStop, marcar-trabalho.js, depois-do-shell.js (depois do shell, o marcar-trabalho.js e o conferir-depois.js num processo só), abrir-subagente.js, gravar-veredito.js e escalar.js: contam trabalho, buscas, decisões e commits, levam o bloco menos código aos subagentes, gravam os vereditos da revisão e guardam o pedido do agente da escada que pede o degrau de cima. Stop, portao-fecho.js: prova, subitem aberto, prompt do handoff, revisão e referência, escalada sem despacho, e a hora de trocar de chat. SessionEnd, fim-sessao.js: apaga arquivos de sessão parados há mais de 7 dias. O ponto âmbar cheio marca os momentos que podem negar ou devolver o turno; o anel cinza, os que só injetam, contam ou limpam.</desc>
   <style>
     .fundo { fill: #FBFAF6; }
     .borda { fill: none; stroke: #E5E1D6; }
@@ -19,14 +19,14 @@
       .com { fill: #F59E0B; }
     }
   </style>
-  <rect class="fundo" width="720" height="728" rx="12"/>
-  <rect class="borda" x="0.75" y="0.75" width="718.5" height="726.5" rx="11.25" stroke-width="1.5"/>
+  <rect class="fundo" width="720" height="792" rx="12"/>
+  <rect class="borda" x="0.75" y="0.75" width="718.5" height="790.5" rx="11.25" stroke-width="1.5"/>
 
   <g font-family="'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif">
     <text class="forte" x="40" y="44" font-size="20" font-weight="700">Onde o sworn se pendura numa sessão</text>
     <text class="fraco" x="40" y="68" font-size="14">Oito eventos de gancho, da abertura ao fim; o PreToolUse tem uma linha por ferramenta</text>
 
-    <path class="linha" d="M48 103V615" stroke-width="2"/>
+    <path class="linha" d="M48 103V679" stroke-width="2"/>
 
     <circle class="sem" cx="48" cy="103" r="6"/><circle class="fundo" cx="48" cy="103" r="3"/>
     <text class="forte" x="68" y="108" font-size="14" font-weight="600">SessionStart</text>
@@ -43,39 +43,44 @@
     <text class="fraco" x="68" y="254" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-escopo.js</text>
     <text class="forte" x="68" y="273" font-size="13">Nega: fora do escopo, intocável, de outra sessão, sem busca, catraca, sem manual, token de design.</text>
 
-    <circle class="com" cx="48" cy="295" r="6"/>
-    <text class="forte" x="68" y="300" font-size="14" font-weight="600">PreToolUse · Bash, PowerShell</text>
-    <text class="fraco" x="68" y="318" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-shell.js: destrutivo · estilo · commit</text>
-    <text class="forte" x="68" y="337" font-size="13">Nega comando destrutivo ou do shell errado, CSS via shell, commit sem revisão; corrige o cd solto.</text>
+    <circle class="sem" cx="48" cy="295" r="6"/><circle class="fundo" cx="48" cy="295" r="3"/>
+    <text class="forte" x="68" y="300" font-size="14" font-weight="600">PreToolUse · Read</text>
+    <text class="fraco" x="68" y="318" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">aviso-leitura.js</text>
+    <text class="forte" x="68" y="337" font-size="13">Avisa uma vez por arquivo, sem negar, a leitura inteira de texto acima de 64 KB: leia só o trecho.</text>
 
     <circle class="com" cx="48" cy="359" r="6"/>
-    <text class="forte" x="68" y="364" font-size="14" font-weight="600">PreToolUse · Task, Agent</text>
-    <text class="fraco" x="68" y="382" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-agente.js · portao-apelido.js · portao-juiz.js</text>
-    <text class="forte" x="68" y="401" font-size="13">Nega agente caro em trabalho leve, avisa modelo divergente e sobe o inspetor um degrau.</text>
+    <text class="forte" x="68" y="364" font-size="14" font-weight="600">PreToolUse · Bash, PowerShell</text>
+    <text class="fraco" x="68" y="382" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-shell.js: destrutivo · estilo · commit</text>
+    <text class="forte" x="68" y="401" font-size="13">Nega comando destrutivo ou do shell errado, CSS via shell, commit sem revisão; corrige o cd solto.</text>
 
     <circle class="com" cx="48" cy="423" r="6"/>
-    <text class="forte" x="68" y="428" font-size="14" font-weight="600">PreToolUse · AskUserQuestion</text>
-    <text class="fraco" x="68" y="446" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-decisao.js</text>
-    <text class="forte" x="68" y="465" font-size="13">Pergunta a você: exatamente 3 opções, a recomendada primeiro.</text>
+    <text class="forte" x="68" y="428" font-size="14" font-weight="600">PreToolUse · Task, Agent</text>
+    <text class="fraco" x="68" y="446" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-agente.js · portao-apelido.js · portao-juiz.js</text>
+    <text class="forte" x="68" y="465" font-size="13">Nega agente caro em trabalho leve, avisa modelo divergente e sobe o inspetor um degrau.</text>
 
-    <circle class="sem" cx="48" cy="487" r="6"/><circle class="fundo" cx="48" cy="487" r="3"/>
-    <text class="forte" x="68" y="492" font-size="14" font-weight="600">PostToolUse · SubagentStart · SubagentStop</text>
-    <text class="fraco" x="68" y="510" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">marcar-trabalho.js · depois-do-shell.js · abrir-subagente.js · gravar-veredito.js · escalar.js</text>
-    <text class="forte" x="68" y="529" font-size="13">Conta trabalho, buscas, decisões, commits; menos código aos subagentes; grava vereditos e escaladas.</text>
+    <circle class="com" cx="48" cy="487" r="6"/>
+    <text class="forte" x="68" y="492" font-size="14" font-weight="600">PreToolUse · AskUserQuestion</text>
+    <text class="fraco" x="68" y="510" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-decisao.js</text>
+    <text class="forte" x="68" y="529" font-size="13">Pergunta a você: exatamente 3 opções, a recomendada primeiro.</text>
 
-    <circle class="com" cx="48" cy="551" r="6"/>
-    <text class="forte" x="68" y="556" font-size="14" font-weight="600">Stop</text>
-    <text class="fraco" x="68" y="574" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-fecho.js</text>
-    <text class="forte" x="68" y="593" font-size="13">Devolve o turno: sem prova/revisão/handoff/referência, subitem aberto, escalada parada, chat cheio.</text>
+    <circle class="sem" cx="48" cy="551" r="6"/><circle class="fundo" cx="48" cy="551" r="3"/>
+    <text class="forte" x="68" y="556" font-size="14" font-weight="600">PostToolUse · SubagentStart · SubagentStop</text>
+    <text class="fraco" x="68" y="574" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">marcar-trabalho.js · depois-do-shell.js · abrir-subagente.js · gravar-veredito.js · escalar.js</text>
+    <text class="forte" x="68" y="593" font-size="13">Conta trabalho, buscas, decisões, commits; menos código aos subagentes; grava vereditos e escaladas.</text>
 
-    <circle class="sem" cx="48" cy="615" r="6"/><circle class="fundo" cx="48" cy="615" r="3"/>
-    <text class="forte" x="68" y="620" font-size="14" font-weight="600">SessionEnd</text>
-    <text class="fraco" x="68" y="638" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">fim-sessao.js</text>
-    <text class="forte" x="68" y="657" font-size="13">Apaga arquivos de sessão parados há mais de 7 dias.</text>
+    <circle class="com" cx="48" cy="615" r="6"/>
+    <text class="forte" x="68" y="620" font-size="14" font-weight="600">Stop</text>
+    <text class="fraco" x="68" y="638" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">portao-fecho.js</text>
+    <text class="forte" x="68" y="657" font-size="13">Devolve o turno: sem prova/revisão/handoff/referência, subitem aberto, escalada parada, chat cheio.</text>
 
-    <circle class="com" cx="48" cy="695" r="6"/>
-    <text class="fraco" x="62" y="700" font-size="13">pode negar ou devolver o turno</text>
-    <circle class="sem" cx="282" cy="695" r="6"/><circle class="fundo" cx="282" cy="695" r="3"/>
-    <text class="fraco" x="296" y="700" font-size="13">só injeta, conta ou limpa</text>
+    <circle class="sem" cx="48" cy="679" r="6"/><circle class="fundo" cx="48" cy="679" r="3"/>
+    <text class="forte" x="68" y="684" font-size="14" font-weight="600">SessionEnd</text>
+    <text class="fraco" x="68" y="702" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">fim-sessao.js</text>
+    <text class="forte" x="68" y="721" font-size="13">Apaga arquivos de sessão parados há mais de 7 dias.</text>
+
+    <circle class="com" cx="48" cy="759" r="6"/>
+    <text class="fraco" x="62" y="764" font-size="13">pode negar ou devolver o turno</text>
+    <circle class="sem" cx="282" cy="759" r="6"/><circle class="fundo" cx="282" cy="759" r="3"/>
+    <text class="fraco" x="296" y="764" font-size="13">só injeta, conta ou limpa</text>
   </g>
 </svg>

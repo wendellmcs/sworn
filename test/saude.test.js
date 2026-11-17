@@ -846,6 +846,126 @@ test('A5: agentesRodando ve o agente de workflow aberto no journal do run, com o
   } finally { s.fim(); }
 });
 
+// H1 (A5-08, A5-10, A5-12, A5-16, s372): o journal do workflow. So o `result` fecha; o agentId que sairia da pasta do
+// run fica de fora; o journal se le ate um teto, e o `result` depois dele deixa o agente aberto (espera, nunca sai
+// antes); o `agora` que nao e numero vale o relogio, em vez de dar o agente por terminado.
+test('H1: o journal do workflow fecha so com result, recusa id com barra, tem teto e o agora invalido vale o relogio', () => {
+  const s = sessaoComAgentes([]);
+  const run = pathT.join(s.sub, 'workflows', 'wf_teste-002');
+  fsT.mkdirSync(run, { recursive: true });
+  const jornal = pathT.join(run, 'journal.jsonl');
+  const linhas = function (ls) { return ls.map(function (l) { return JSON.stringify(l) + '\n'; }).join(''); };
+  const agente = function (id) {
+    fsT.writeFileSync(pathT.join(run, 'agent-' + id + '.jsonl'), linhas(TRABALHANDO));
+  };
+  try {
+    agente('w3');
+    agente('w4');
+    const agora = Date.now();
+    // uma linha de outro tipo nao fecha o agente; so o result
+    fsT.writeFileSync(jornal, linhas([{ type: 'started', agentId: 'w3', label: 'aberto' },
+      { type: 'progress', agentId: 'w3' }, { type: 'started', agentId: 'w4', label: 'fechado' },
+      { type: 'result', agentId: 'w4', result: 'ok' }]));
+    assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora), [{ id: 'w3', descricao: 'aberto' }]);
+    // o agentId com barra ou ponto-ponto nao entra (viraria caminho fora da pasta do run)
+    for (const id of ['../w3', 'a/b', 'a\\b', '..', '']) {
+      fsT.writeFileSync(jornal, linhas([{ type: 'started', agentId: id, label: 'fora' }]));
+      assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora), [], JSON.stringify(id));
+    }
+    // o agora que nao e numero finito vale o relogio: o agente que escreveu agora segue rodando
+    fsT.writeFileSync(jornal, linhas([{ type: 'started', agentId: 'w3', label: 'aberto' }]));
+    for (const a of [NaN, Infinity, '123', undefined, null]) {
+      assert.deepStrictEqual(saude.agentesRodando(s.transcricao, a), [{ id: 'w3', descricao: 'aberto' }], String(a));
+    }
+    // controle do relogio: com o agora valido e longe no futuro, o mesmo agente conta como calado
+    assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora + saude.SILENCIO_DO_AGENTE_MS + 60000), []);
+    // e o relogio vale de fato: com o agora invalido, o agente calado ha mais que o silencio nao segue rodando
+    const calado = (agora - saude.SILENCIO_DO_AGENTE_MS - 60000) / 1000;
+    fsT.utimesSync(pathT.join(run, 'agent-w3.jsonl'), calado, calado);
+    for (const a of [NaN, Infinity, '123', undefined, null]) {
+      assert.deepStrictEqual(saude.agentesRodando(s.transcricao, a), [], 'calado ' + String(a));
+    }
+    agente('w3');
+    // o teto: o result dentro dele fecha; depois de mais de 4 MB de linhas, nao e lido e o agente segue aberto
+    // o teto de saude.js (TETO_DO_JOURNAL) e 4 MB; o assert garante que o enchimento passa dele
+    const enchimento = linhas([{ type: 'nota', texto: 'x'.repeat(1000) }]).repeat(4200);
+    assert.ok(enchimento.length > 4 * 1024 * 1024, String(enchimento.length));
+    fsT.writeFileSync(jornal, linhas([{ type: 'started', agentId: 'w3', label: 'aberto' },
+      { type: 'result', agentId: 'w3', result: 'ok' }]) + enchimento);
+    assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora), []);
+    fsT.writeFileSync(jornal, linhas([{ type: 'started', agentId: 'w3', label: 'aberto' }]) + enchimento +
+      linhas([{ type: 'result', agentId: 'w3', result: 'ok' }]));
+    assert.deepStrictEqual(saude.agentesRodando(s.transcricao, agora), [{ id: 'w3', descricao: 'aberto' }]);
+  } finally { s.fim(); }
+});
+
+// H1 (A5-80, s372): o contador que nao e numero (texto, objeto) nunca vira aviso, como os outros do medirTodos
+test('H1: turnos e revisoes que nao sao numero nunca cruzam o limiar', () => {
+  const porChave = function (lista, k) { return lista.find(function (g) { return g.chave === k; }); };
+  for (const v of ['999', { n: 999 }, [999], true]) {
+    const m = saude.medir({ turnosComTrabalho: v, contadores: { revisao_fechada: v } }, { turnosComTrabalho: 1, revisoesFechadas: 1 });
+    const turnos = porChave(m, 'turnosComTrabalho');
+    const revisoes = porChave(m, 'revisoesFechadas');
+    assert.ok(turnos && (turnos.valor === 0 && !turnos.cruzou), JSON.stringify(v) + ' turnos');
+    assert.ok(revisoes && (revisoes.valor === 0 && !revisoes.cruzou), JSON.stringify(v) + ' revisoes');
+  }
+  // controle: o numero cruza, nos dois
+  const m = saude.medir({ turnosComTrabalho: 5, contadores: { revisao_fechada: 5 } }, { turnosComTrabalho: 1, revisoesFechadas: 1 });
+  for (const k of ['turnosComTrabalho', 'revisoesFechadas']) {
+    const g = porChave(m, k);
+    assert.ok(g && g.valor === 5 && g.cruzou, k + ' ' + JSON.stringify(m));
+  }
+});
+
+// H1 (revisao do A5-80, s372): o balde de bloqueio com texto nao soma; antes o "5" virava texto e o total era emendado
+test('H1: os bloqueios so somam os baldes que sao numero', () => {
+  const m = saude.medir({ contadores: { fora_do_escopo: '5', comando_destrutivo: 1, sem_escopo: { n: 9 } } }, { bloqueios: 6 });
+  const b = m.find(function (g) { return g.chave === 'bloqueios'; });
+  assert.ok(b, JSON.stringify(m));
+  assert.strictEqual(b.valor, 1);
+  assert.strictEqual(b.cruzou, false);
+  // so o total; o plural de "1 bloqueios" e outro registro do plano, e este teste nao o trava
+  assert.ok(/^1 bloqueio/.test(b.texto), b.texto);
+});
+
+// H1 (revisao do A5-08, s372): o handoff gravado pelo shell se marca mesmo sem um `agora` valido (vale o relogio)
+test('H1: handoffGravadoPeloShell com agora invalido usa o relogio', () => {
+  const dir = fsT.mkdtempSync(pathT.join(osT.tmpdir(), 'sworn handoff-shell-'));
+  try {
+    fsT.mkdirSync(pathT.join(dir, '.sworn', 'handoff'), { recursive: true });
+    const arq = pathT.join(dir, '.sworn', 'handoff', '2026-11-16-tema.md');
+    fsT.writeFileSync(arq, 'x');
+    const comando = 'echo x > .sworn/handoff/2026-11-16-tema.md';
+    const invalidos = [NaN, undefined, null, '123', Infinity];
+    for (const a of invalidos) {
+      assert.strictEqual(saude.handoffGravadoPeloShell(comando, dir, a), arq, String(a));
+    }
+    // controle: com o agora valido e longe no futuro, o arquivo velho nao conta
+    assert.strictEqual(saude.handoffGravadoPeloShell(comando, dir, Date.now() + 60 * 60 * 1000), null);
+    // e o relogio vale de fato: com o agora invalido, o handoff de uma hora atras nao conta
+    const velho = (Date.now() - 60 * 60 * 1000) / 1000;
+    fsT.utimesSync(arq, velho, velho);
+    for (const a of invalidos) {
+      assert.strictEqual(saude.handoffGravadoPeloShell(comando, dir, a), null, 'velho ' + String(a));
+    }
+  } finally { fsT.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// H1 (A5-09, s372): a lista dos gatilhos sai igual no aviso e nas tres ordens ao modelo, e o que nao e lista, nenhuma
+test('H1: os gatilhos saem na mesma forma no aviso e nas ordens; o que nao e lista nao lanca', () => {
+  const g = ['a (limiar 1)', 'b (limiar 2)'];
+  const lista = '  - a (limiar 1)\n  - b (limiar 2)';
+  const rodando = [{ id: 'x1', descricao: 'leva' }];
+  for (const texto of [saude.avisoDeSaude(g, false), saude.instrucaoAoModelo(g), saude.instrucaoAoModelo(g, true),
+    saude.instrucaoAoModelo(g, false, rodando)]) {
+    assert.ok(texto.indexOf(lista) !== -1, texto);
+  }
+  for (const v of ['texto', 42, { a: 1 }, null, undefined, []]) {
+    // a chamada lancava com o que nao e lista; aqui ela roda e nao traz item nenhum (o [] e a lista vazia, de controle)
+    assert.strictEqual(saude.instrucaoAoModelo(v).indexOf('  - '), -1, JSON.stringify(v));
+  }
+});
+
 test('D704: com agente rodando, os 3 textos do handoff mandam esperar; sem agente, ficam como eram', () => {
   const g = ['3 decisoes do dono respondidas (limiar 3)'];
   // sem agente (lista vazia ou ausente): identico ao de antes da D704

@@ -156,12 +156,17 @@ function lerRegistro(caminho, opcoes) {
 }
 
 function doisDigitos(n) { return String(n).padStart(2, '0'); }
+// So numero dentro da faixa de datas e horario: o isFinite global aceitaria null e '' (viram 0, e 1970 entra no
+// texto), e um numero finito acima de 8,64e15 ms ainda daria Invalid Date. Math.abs(NaN) e Infinity caem fora.
+const MAIOR_DATA_MS = 8.64e15;
+function horarioValido(ms) { return typeof ms === 'number' && Math.abs(ms) <= MAIOR_DATA_MS; }
 function dia(ms) {
+  if (!horarioValido(ms)) return '----------';
   const d = new Date(ms);
   return d.getFullYear() + '-' + doisDigitos(d.getMonth() + 1) + '-' + doisDigitos(d.getDate());
 }
 function hora(ms) {
-  if (!isFinite(ms)) return '--:--';
+  if (!horarioValido(ms)) return '--:--';
   const d = new Date(ms);
   return doisDigitos(d.getHours()) + ':' + doisDigitos(d.getMinutes());
 }
@@ -246,7 +251,9 @@ function juntar(d, arquivos) {
     // A5-22 (D735): o que abrir e como comparar.
     'Antes de agir, confira se isto ainda vale: abra o plano e o ultimo handoff citados em "Onde parou" (se houver)',
     'e compare a lista de modificados com a de agora (git status). Este resumo copia a conversa; ele nao confere nada.',
-    'Se precisar de handoff completo, rode /sworn:handoff.',
+    // A5-79: o que o comando entrega e onde.
+    'Para o handoff completo (plano, decisoes, pendencias e o prompt pronto), rode /sworn:handoff: ele grava o texto',
+    'de continuacao em .sworn/handoff/.',
     ''
   ]).join('\n');
 }
@@ -272,20 +279,30 @@ function montar(d) {
 /** Grava em .sworn/handoff/AAAA-MM-DD-retomar-<8 do id>.md: o mesmo chat no mesmo dia regrava o mesmo arquivo. */
 function gravar(raiz, sessao, agora, texto) {
   const id = String(sessao == null ? '' : sessao).slice(0, 8);
-  if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error('id de sessao invalido para nome de arquivo');
-  const rel = PASTA + '/' + dia(agora) + '-retomar-' + id + '.md';
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error('o identificador deste chat nao serve de nome de arquivo');
+  // A5-18: sem horario valido, o nome leva a data de hoje (nunca "NaN-NaN-NaN" nem "----------")
+  const rel = PASTA + '/' + dia(horarioValido(agora) ? agora : Date.now()) + '-retomar-' + id + '.md';
   fs.mkdirSync(path.join(raiz, PASTA), { recursive: true });
   fs.writeFileSync(path.join(raiz, rel), texto);
   return rel;
 }
 
-function gitDaRaiz(raiz) {
+// A5-19: as tres chamadas dividem um prazo so (antes, 2 s cada, ate 6 s segurando a mensagem do dono). A que fica sem
+// prazo nao roda e vale como falha: sem HEAD nao ha git no resumo; sem ramo ou status, o resumo sai sem eles.
+const PRAZO_DO_GIT_MS = 2000;
+
+function gitDaRaiz(raiz, prazoMs, relogio) {
   const git = require('./git.js');
-  const op = { timeout: 2000 };
-  const head = git.correr(raiz, ['rev-parse', '--short', 'HEAD'], op);
+  const agora = typeof relogio === 'function' ? relogio : Date.now;
+  const fim = agora() + (prazoMs > 0 ? prazoMs : PRAZO_DO_GIT_MS);
+  const correr = function (args) {
+    const resta = Math.floor(fim - agora());
+    return resta >= 1 ? git.correr(raiz, args, { timeout: resta }) : null;
+  };
+  const head = correr(['rev-parse', '--short', 'HEAD']);
   if (head === null) return null;
-  const ramo = git.correr(raiz, ['rev-parse', '--abbrev-ref', 'HEAD'], op);
-  const status = git.correr(raiz, ['status', '--short'], op);
+  const ramo = correr(['rev-parse', '--abbrev-ref', 'HEAD']);
+  const status = correr(['status', '--short']);
   return {
     head: head.trim(), ramo: ramo === null ? '' : ramo.trim(),
     modificados: status === null ? [] : status.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean)
@@ -295,12 +312,15 @@ function gitDaRaiz(raiz) {
 /**
  * Le o registro, monta e grava. `o` = { raiz, sessao, transcript, frente, agora, volta } (volta = o que o
  * volta.avaliar devolveu). Devolve { caminho, chat (8 do id), handoff } (handoff = { caminho, emDia } ou null; em dia = gravado
- * depois do ultimo pedido do dono) ou null quando nao da: registro ilegivel, sem pedido, ou falha ao gravar.
+ * depois do ultimo pedido do dono) ou, quando nao da, { causa } (A5-20): registro ilegivel, sem pedido, ou a falha ao
+ * montar ou gravar, para o aviso dizer por que saiu sem resumo.
  */
 function resumir(o) {
   try {
     const reg = lerRegistro(o.transcript);
-    if (!reg || !reg.pedidos.length) return null;
+    // as causas vao ao dono: palavras simples, sem "registro" nem "sessao" (o passo seguinte vem no proprio aviso)
+    if (!reg) return { causa: 'nao consegui ler do disco a conversa deste chat' };
+    if (!reg.pedidos.length) return { causa: 'nao achei mensagem sua no fim da conversa que li' };
     let objetivo = '';
     if (o.frente) {
       const esc = require('./escopo.js').carregar(o.raiz, o.frente);
@@ -314,7 +334,11 @@ function resumir(o) {
     return { caminho: caminho, chat: String(o.sessao).slice(0, 8),
       handoff: h ? { caminho: relativo(o.raiz, h.caminho), emDia: h.horario > reg.pedidos[0].horario } : null };
   } catch (e) {
-    return null;
+    // o erro do disco sai traduzido ("sem permissao (EACCES)"); o nosso, so a frase, sem o "Error:" do Node. Sem
+    // prefixo: a falha pode ser de leitura, de montagem ou de gravacao, e o aviso da volta ja diz "nao consegui
+    // montar o resumo". Mascara antes de cortar (o segredo partido no corte nao casaria mais) e corta sem partir emoji.
+    const causa = e && e.code ? require('./texto.js').causaDoErro(e) : String(e && e.message ? e.message : e);
+    return { causa: cortar(mascarar(causa).replace(/\s+/g, ' ').trim(), 200) };
   }
 }
 
@@ -368,4 +392,5 @@ function soltar(raiz, sessao) {
   return meus.length;
 }
 
-module.exports = { PASTA, lerRegistro, montar, gravar, resumir, limpar, limparLinhas, mascarar, cortar, reclamar, soltar };
+module.exports = { PASTA, PRAZO_DO_GIT_MS, lerRegistro, montar, gravar, gitDaRaiz, resumir, limpar, limparLinhas, mascarar,
+  cortar, reclamar, soltar };

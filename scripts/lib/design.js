@@ -513,15 +513,26 @@ function antiIgnoradas(sistema) {
   comoLista(sistema.antiReferencias).forEach(function (a, i) { if (!antiValida(a)) posicoes.push(i + 1); });
   return posicoes;
 }
+// A4-61: a frase da anti-referencia ignorada e a regra dela, as mesmas no validar e no aviso do portao (motivo).
+const REGRA_DA_ANTI = 'so vale texto nao vazio, como "gradiente"; so espacos, numero ou objeto nao valem';
+function antiSemEfeito(posicoes) { return 'antiReferencias: ' + textoDasPosicoes(posicoes) + ' sem efeito'; }
 
 // As posicoes numa frase, ate 12 e "e mais N": "item 2", "itens 1, 3" (ou outro par de palavras, como em nasPosicoes).
-function itens(posicoes, umaPalavra, variasPalavras) {
+function textoDasPosicoes(posicoes, umaPalavra, variasPalavras) {
   return (posicoes.length > 1 ? (variasPalavras || 'itens') : (umaPalavra || 'item')) + ' ' +
     posicoes.slice(0, 12).join(', ') + (posicoes.length > 12 ? ' e mais ' + (posicoes.length - 12) : '');
 }
 
 // "tamanhos" (de fonte) e "fontes" sao opcionais (dono, 2026-11-10): sem elas, o sistema le como antes.
 const CHAVES_DE_VALOR = ['cores', 'raios', 'espacos', 'sombras', 'tamanhos', 'fontes'];
+// A4-50: todas as chaves que o sworn le do design.json; outra (um typo como "corres") nao tem efeito nenhum.
+const CHAVES_DO_DESIGN = CHAVES_DE_VALOR.concat(['antiReferencias', 'desvios']);
+// O nome da chave desconhecida no aviso: cada espaco ou quebra vira um espaco, sem aparar (a chave "cores " so e
+// desconhecida pelo espaco, que precisa aparecer entre as aspas), ate 60 pontos de codigo, entre aspas.
+function nomeDaChave(k) {
+  const limpo = Array.from(k.replace(/\s/g, ' '));
+  return JSON.stringify(limpo.length > 60 ? limpo.slice(0, 60).join('') + '...' : limpo.join(''));
+}
 // As familias de um item de "fontes", lidas como o estilo as escreve: o item pode ser a pilha inteira
 // ("Inter, sans-serif") e as aspas sozinhas ('""') nao dao familia nenhuma.
 function familiasDoItem(v) {
@@ -540,10 +551,11 @@ function regraDoItem(chave) {
 }
 // Quantos pontos de codigo dos motivos cabem na linha "desvios desta tela" (100 de largura); o corte poe "...".
 const LARGURA_DOS_MOTIVOS = 70;
-// O valor de uma chave do design.json como lista: texto solto vale como lista de um; vazio e nulo valem nada.
-function comoLista(v) { return [].concat(v || []); }
+// O valor de uma chave do design.json como lista: texto solto vale como lista de um; nulo e texto vazio valem nada.
+// A4-59: 0 e false viram item, como dentro da lista (antes sumiam, e {"cores": 0} passava calado no validar).
+function comoLista(v) { return v == null || v === '' ? [] : [].concat(v); }
 // A posicao do item na frase: "na posicao 2", "nas posicoes 1, 3".
-function nasPosicoes(posicoes) { return itens(posicoes, 'na posicao', 'nas posicoes'); }
+function nasPosicoes(posicoes) { return textoDasPosicoes(posicoes, 'na posicao', 'nas posicoes'); }
 // O padrao sem nenhuma pasta escrita por extenso casa o projeto inteiro ("**", "*", "**/*", e tambem "**/*.css" ou
 // "*.scss", que pegam toda folha de estilo): o desvio e de uma tela, nao do sistema. "src/checkout/**" tem pasta.
 function casaTudo(padrao) {
@@ -638,20 +650,31 @@ function motivoEmUmaLinha(d) { return d.motivo.replace(/\s+/g, ' ').trim(); }
 function validar(sistema, hoje) {
   if (!sistema || typeof sistema !== 'object' || Array.isArray(sistema)) {
     const tipo = Array.isArray(sistema) ? 'lista' : (sistema === null ? 'nulo' : typeof sistema);
-    return { ok: false, erros: ['o design.json tem de ser um objeto JSON ({ ... }), e veio ' + tipo] };
+    return { ok: false, erros: ['o design.json tem de ser um objeto JSON ({ ... }), e veio ' + tipo], avisos: [] };
   }
   const erros = [];
+  // A4-50: a chave desconhecida so avisa: pode ser nota do dono, e o portao a ignora sem risco. Ate 12, como as
+  // posicoes; o nome sai numa linha so, cortado em 60 e entre aspas do JSON (a quebra de linha nao abre linha nova).
+  const desconhecidas = Object.keys(sistema).filter(function (k) { return CHAVES_DO_DESIGN.indexOf(k) === -1; });
+  const avisos = desconhecidas.slice(0, 12).map(function (k) {
+    return 'a chave ' + nomeDaChave(k) + ' nao e lida pelo sworn e nao tem efeito (as que ele le: ' +
+      CHAVES_DO_DESIGN.join(', ') + '): confira o nome ou tire do design.json';
+  });
+  const sobra = desconhecidas.length - 12;
+  if (sobra > 0) {
+    avisos.push('e mais ' + (sobra === 1 ? '1 chave' : sobra + ' chaves') + ' que o sworn nao le: corrija as de cima e ' +
+      'rode de novo para ver ' + (sobra === 1 ? 'a outra' : 'as outras'));
+  }
   for (const chave of CHAVES_DE_VALOR) {
     const ruins = posicoesSemEfeito(sistema[chave], chave);
     if (ruins.length) {
-      erros.push(chave + ': ' + itens(ruins) + ' sem efeito (' + regraDoItem(chave) + '): corrija ou tire' +
+      erros.push(chave + ': ' + textoDasPosicoes(ruins) + ' sem efeito (' + regraDoItem(chave) + '): corrija ou tire' +
         ' do design.json');
     }
   }
   const ignoradas = antiIgnoradas(sistema);
   if (ignoradas.length) {
-    erros.push('antiReferencias: ' + itens(ignoradas) + ' sem efeito (so vale texto nao vazio, como "gradiente"; so' +
-      ' espacos, numero ou objeto nao valem): corrija ou tire do design.json');
+    erros.push(antiSemEfeito(ignoradas) + ' (' + REGRA_DA_ANTI + '): corrija ou tire do design.json');
   }
   // E2: cada desvio torto ou vencido, pela posicao; o portao ignora os dois. Nulo vale como lista vazia, como no portao.
   if (sistema.desvios != null && !Array.isArray(sistema.desvios)) {
@@ -670,7 +693,7 @@ function validar(sistema, hoje) {
       }
     });
   }
-  return { ok: erros.length === 0, erros: erros };
+  return { ok: erros.length === 0, erros: erros, avisos: avisos };
 }
 
 // Os valores aceitos num arquivo: o sistema e os desvios declarados para ele (`caminho`, relativo a raiz do projeto).
@@ -891,8 +914,8 @@ function motivo(alvo, fora, sistema, hoje) {
   // A2-46: o aviso diz tambem as anti-referencias ignoradas; sem valor fora, quem as acusa e o validar (validar.js).
   const ignoradas = antiIgnoradas(sistema);
   if (ignoradas.length) {
-    linhas.push('  antiReferencias: ' + itens(ignoradas) + ' sem efeito: o dono corrige ou tira do design.json');
-    linhas.push('    (so vale texto nao vazio, como "gradiente"; so espacos, numero ou objeto nao valem)');
+    linhas.push('  ' + antiSemEfeito(ignoradas) + ': o dono corrige ou tira do design.json');
+    linhas.push('    (' + REGRA_DA_ANTI + ')');
   }
   const comAnti = fora.some(function (f) { return f.tipo === 'anti-referencia'; });
   linhas.push('');

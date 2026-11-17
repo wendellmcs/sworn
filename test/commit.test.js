@@ -39,6 +39,14 @@ test('commit: pastaDoComando le o -C e o ultimo cd antes do commit; sem nenhum, 
   assert.strictEqual(commit.pastaDoComando("( cd 'p' && git commit )"), 'p');
   assert.strictEqual(commit.pastaDoComando('cd a && cd b && git commit'), 'b');
   assert.strictEqual(commit.pastaDoComando('git commit -m x'), null);
+  // o cd so citado entre aspas nao muda a pasta; o de verdade, depois dele, vale com o valor original
+  assert.strictEqual(commit.pastaDoComando('echo "x; cd /outro" && git commit -m y'), null);
+  assert.strictEqual(commit.pastaDoComando("echo 'cd /outro' && cd \"a b\" && git commit"), 'a b');
+});
+
+test('commit: semAprovado tira o arquivo e as entradas que nao sao texto', () => {
+  assert.deepStrictEqual(commit.semAprovado([null, 5, '/x/a.js', '/x/b.js'], '/x/b.js'), ['/x/a.js']);
+  assert.deepStrictEqual(commit.semAprovado('nao e lista', '/x/b.js'), []);
 });
 
 test('commit: inspetores pela faixa (D485): uma 1, duas 2, completa 10 de codigo e 9 de estilo (D825)', () => {

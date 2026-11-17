@@ -26,19 +26,48 @@ function marcas(projeto) {
   return [propria].concat(MARCAS_ACEITAS.filter(function (m) { return m !== propria; }));
 }
 
-// Aspa de algum tipo aberta antes da posicao: a "marca" esta dentro de uma string (fixture de teste, texto de ajuda).
-function dentroDeString(linha, ate) {
-  return ASPAS.some(function (a) { return linha.slice(0, ate).split(a).length % 2 === 0; });
+const LETRA = /\p{L}/u;
+
+// A6-54: o apostrofo de "it's", "don't" e "users'" (duas letras logo antes) nao abre string; o f'x' do Python abre,
+// porque antes do f nao vem letra.
+// atalho: apostrofo pela vizinhanca de letras. limite: o rb'x' do Python (duas letras antes) passa por apostrofo. trocar quando: um atalho de dentro de string assim aparecer no painel.
+function apostrofo(linha, i) {
+  return linha[i] === "'" && LETRA.test(linha[i - 2] || '') && LETRA.test(linha[i - 1] || '');
 }
 
-/** O comentario que comeca na linha (no inicio ou depois de espaco), ou null. Devolve o texto depois do prefixo. */
+// Onde fecha a string que abre na aspa da posicao `i`, ou -1: so a mesma aspa fecha, e a barra invertida pula o
+// caractere seguinte. O apostrofo entre letras (don't, it's) nao fecha: e palavra, dentro ou fora da string.
+function fechoDaString(linha, i) {
+  for (let j = i + 1; j < linha.length; j++) {
+    if (linha[j] === '\\') j++;
+    else if (linha[j] === linha[i] && !entreLetras(linha, j)) return j;
+  }
+  return -1;
+}
+
+function entreLetras(linha, j) {
+  return linha[j] === "'" && LETRA.test(linha[j - 1] || '') && LETRA.test(linha[j + 1] || '');
+}
+
+/**
+ * O comentario que comeca na linha (no inicio ou depois de espaco), ou null. Devolve o texto depois do prefixo.
+ * A6-54: le a linha uma vez, da esquerda. A string (fixture de teste, texto de ajuda) se pula inteira, com o prefixo
+ * que tiver dentro, e a busca segue depois dela. A aspa que nao fecha mais na linha (o "I'm" de um texto) e texto
+ * comum; o tipo dela fica marcado, porque nenhuma aspa igual depois dela fecha.
+ */
 function comentario(linha) {
+  const semFecho = {};
   for (let i = 0; i < linha.length; i++) {
+    const c = linha[i];
+    if (ASPAS.includes(c) && !semFecho[c] && !apostrofo(linha, i)) {
+      const fim = fechoDaString(linha, i);
+      if (fim === -1) semFecho[c] = true;
+      else i = fim;
+      continue;
+    }
     if (i > 0 && linha[i - 1] !== ' ' && linha[i - 1] !== '\t') continue;
     const prefixo = PREFIXOS.find(function (p) { return linha.startsWith(p, i); });
-    if (!prefixo) continue;
-    if (dentroDeString(linha, i)) return null;
-    return linha.slice(i + prefixo.length);
+    if (prefixo) return linha.slice(i + prefixo.length);
   }
   return null;
 }
@@ -90,12 +119,6 @@ function rotulos(corpo) {
   return { oque: limpo(corpo) || '', limite: lidos.limite, gatilho: lidos.gatilho };
 }
 
-/** { oque, limite, gatilho } da linha com a marca num comentario, ou null. So a linha: a de baixo fica com o `varrer`. */
-function lerLinha(linha, listaDeMarcas) {
-  const marca = linhaDaMarca(linha, listaDeMarcas);
-  return marca && rotulos(marca.corpo);
-}
-
 /**
  * O texto da linha que e so comentario (aparado, sem `*\/` ou `-->` no fim), ou null se ela comeca com codigo. Com
  * `emBloco` (o comentario de cima abriu `/*` ou `<!--` sem fechar), a linha inteira e comentario, com ou sem ` * ` na
@@ -137,14 +160,16 @@ function continuacao(linhas, i, marca, listaDeMarcas) {
 }
 
 /**
- * Os atalhos dos `arquivos`, na ordem em que vieram. `ler(arquivo)` devolve o texto ou null (nao leu, grande demais);
- * texto com byte 0 e binario e fica fora.
+ * { achados, lidos }: os atalhos dos `arquivos`, na ordem em que vieram, e quantos arquivos de texto se leram.
+ * `ler(arquivo)` devolve o texto ou null (nao leu, grande demais); texto com byte 0 e binario e fica fora, sem contar.
  */
-function varrer(arquivos, ler, listaDeMarcas) {
+function varrerContando(arquivos, ler, listaDeMarcas) {
   const achados = [];
+  let lidos = 0;
   for (const arquivo of arquivos) {
     const texto = ler(arquivo);
     if (typeof texto !== 'string' || texto.indexOf('\u0000') !== -1) continue;
+    lidos++;
     // A6 (s220, R1 :148): CR puro tambem quebra linha (antes o arquivo inteiro virava uma).
     const linhas = texto.split(/\r\n|\r|\n/);
     for (let i = 0; i < linhas.length; i++) {
@@ -158,8 +183,11 @@ function varrer(arquivos, ler, listaDeMarcas) {
       achados.push(achado);
     }
   }
-  return achados;
+  return { achados: achados, lidos: lidos };
 }
+
+/** So os achados do `varrerContando` (o portao de commit le um arquivo por vez e nao precisa da conta). */
+function varrer(arquivos, ler, listaDeMarcas) { return varrerContando(arquivos, ler, listaDeMarcas).achados; }
 
 function plural(n, um, varios) { return n + ' ' + (n === 1 ? um : varios); }
 
@@ -172,7 +200,8 @@ function painel(achados, totalDeArquivos, listaDeMarcas) {
   if (achados.length === 0) {
     return ['Nenhum atalho registrado.', '',
       'Procurei comentários com ' + listaFalada(listaDeMarcas.map(function (m) { return m + ':'; })) + ' em ' +
-      plural(totalDeArquivos, 'arquivo', 'arquivos') + ' (os rastreados pelo git e os novos que ele não ignora).'
+      plural(totalDeArquivos, 'arquivo', 'arquivos') + ' de texto, dos rastreados pelo git e dos novos que ele não ' +
+      'ignora (binário, link e arquivo acima de 1 MB ficam fora).'
     ].join('\n');
   }
   const ordem = achados.slice().sort(function (a, b) {
@@ -213,11 +242,15 @@ const MAIOR_ARQUIVO = 1024 * 1024; // texto acima disso nao e codigo escrito a m
 // de dentro saia da contagem (medido na suite inteira da s129).
 const OPCOES_GIT = { maxBuffer: 64 * 1024 * 1024, timeout: 60000 };
 
-/** O texto de `abs`, ou null (nao e arquivo, passa de 1 MB, apagado sem commit, link quebrado, submodulo). */
+/**
+ * O texto de `abs`, ou null (nao e arquivo, passa de 1 MB, apagado sem commit, submodulo, link simbolico). A6-56: o
+ * link nao se segue: o git guarda so o caminho dele, o alvo dentro do repositorio ja entra pelo proprio nome, e o de
+ * fora nao e do repositorio.
+ */
 function lerArquivo(abs) {
   const fs = require('node:fs');
   try {
-    const st = fs.statSync(abs);
+    const st = fs.lstatSync(abs);
     if (!st.isFile() || st.size > MAIOR_ARQUIVO) return null;
     return fs.readFileSync(abs, 'utf8');
   } catch (e) {
@@ -248,9 +281,11 @@ function doRepositorio(cwd, projeto) {
   }
   const arquivos = Array.from(new Set((rastreados + novos).split('\0').filter(function (a) { return a !== ''; })));
   const lista = marcas(projeto);
+  // A6-53: o total e o de arquivos de texto que se leram, nao o da lista do git (binario, link e o que nao abriu ficam fora)
+  const v = varrerContando(arquivos, function (rel) { return lerArquivo(path.join(raiz, rel)); }, lista);
   return {
-    achados: varrer(arquivos, function (rel) { return lerArquivo(path.join(raiz, rel)); }, lista),
-    total: arquivos.length,
+    achados: v.achados,
+    total: v.lidos,
     marcas: lista,
     raiz: raiz
   };
@@ -304,5 +339,5 @@ function daPastaEDeDentro(cwd, projeto) {
 }
 
 module.exports = {
-  ehMarca, marcas, lerLinha, varrer, painel, lerArquivo, doRepositorio, daPastaEDeDentro
+  ehMarca, marcas, varrer, painel, lerArquivo, doRepositorio, daPastaEDeDentro
 };

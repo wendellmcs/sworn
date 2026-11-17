@@ -698,6 +698,13 @@ test('A4-des-2: a CLI valida o design.json quando ele existe', () => {
   r = roda();
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   assert.ok(r.stdout.includes('OK: design.json valido'), r.stdout);
+  assert.strictEqual(r.stdout.indexOf('AVISO'), -1, r.stdout);
+
+  // A4-50: a chave que o sworn nao le avisa, e a validacao segue OK
+  fs.writeFileSync(arq, JSON.stringify({ cores: ['#fff'], corres: ['#000'] }), 'utf8');
+  r = roda();
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.ok(/OK: design\.json valido\nAVISO: design\.json: a chave "corres" nao e lida pelo sworn/.test(r.stdout), r.stdout);
 
   fs.writeFileSync(arq, JSON.stringify({ cores: ['#fff', 5], antiReferencias: [''] }), 'utf8');
   r = roda();

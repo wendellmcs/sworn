@@ -322,6 +322,56 @@ test('A4-reg-1: volateis.json que nao carrega faz o validarRegra acusar, sem lan
   assert.strictEqual(limpo.validarRegra('ao editar -> rode os testes').ok, true);
 });
 
+// A4-69: um padrao invalido nao derruba a lista inteira: os validos seguem valendo e o validarRegra diz que a lista
+// carregou em parte. A chave "volateis" que nao e lista tambem tem causa propria.
+test('A4-69: padrao invalido fica fora sozinho e os outros seguem valendo', () => {
+  const caminho = require.resolve('../scripts/lib/regra.js');
+  const ler = fs.readFileSync;
+  const com = function (conteudo) {
+    fs.readFileSync = function (p) {
+      if (/volateis\.json$/.test(String(p))) return conteudo;
+      return ler.apply(fs, arguments);
+    };
+    delete require.cache[caminho];
+    return require(caminho);
+  };
+  try {
+    const r = com('{"volateis": [{"padrao": "(", "tipo": "t"}, null, {"padrao": "\\\\bv\\\\d+\\\\b", "tipo": "versao"}]}');
+    assert.strictEqual(r.VOLATEIS.length, 1);
+    assert.strictEqual(r.VOLATEIS[0].tipo, 'versao');
+    assert.match(r.ERRO_VOLATEIS, /^padrao 1: SyntaxError: .*; padrao 2: sem o campo "padrao" \(um texto nao vazio\)$/);
+    const v = r.validarRegra('ao instalar -> usar a v2');
+    assert.strictEqual(v.ok, false);
+    assert.ok(v.erros.some((e) => /modelos\/volateis\.json\) carregou em parte \(padrao 1: /.test(e)), v.erros.join(' | '));
+    assert.ok(v.erros.some((e) => e.startsWith('valor que muda com o tempo (versao: "v2")')), v.erros.join(' | '));
+    assert.ok(!v.erros.some((e) => /nao carregou/.test(e)), v.erros.join(' | '));
+    const naoLista = com('{"volateis": {"padrao": "x"}}');
+    assert.deepStrictEqual(naoLista.VOLATEIS, []);
+    assert.strictEqual(naoLista.ERRO_VOLATEIS, 'a chave "volateis" nao e uma lista');
+    assert.ok(naoLista.validarRegra('ao editar -> rode os testes').erros.some((e) => /nao carregou \(a chave/.test(e)));
+    // a chave ausente (ou com outro nome) acusa, em vez de virar [] calado
+    for (const conteudo of ['{}', '{"lista": []}', 'null']) {
+      const semChave = com(conteudo);
+      assert.deepStrictEqual(semChave.VOLATEIS, [], conteudo);
+      assert.strictEqual(semChave.ERRO_VOLATEIS, 'falta a chave "volateis"', conteudo);
+      assert.strictEqual(semChave.validarRegra('ao editar -> rode os testes').ok, false, conteudo);
+    }
+    // padrao ausente ou vazio fica fora: como /(?:)/ casaria com tudo e recusaria toda regra
+    const vazio = com('{"volateis": [{"tipo": "data"}, {"padrao": "", "tipo": "data"}]}');
+    assert.deepStrictEqual(vazio.VOLATEIS, []);
+    assert.strictEqual(vazio.ERRO_VOLATEIS, 'padrao 1: sem o campo "padrao" (um texto nao vazio); ' +
+      'padrao 2: sem o campo "padrao" (um texto nao vazio)');
+    // todos invalidos: nada carregou, e o aviso diz "nao carregou" (nao "em parte")
+    const v2 = vazio.validarRegra('ao editar -> rode os testes');
+    assert.ok(v2.erros.some((e) => /\) nao carregou \(padrao 1: /.test(e)), v2.erros.join(' | '));
+    assert.ok(!v2.erros.some((e) => /valor que muda com o tempo/.test(e)), v2.erros.join(' | '));
+  } finally {
+    fs.readFileSync = ler;
+    delete require.cache[caminho];
+  }
+  assert.strictEqual(require(caminho).ERRO_VOLATEIS, null);
+});
+
 // A4-25 (pedido 12, microcopy): o erro do valor que muda com o tempo diz o trecho e o que reescrever, sem jargao.
 test('A4-25: valor que muda com o tempo diz o trecho e o que reescrever', () => {
   const e = regra.validarRegra('ao instalar -> usar a versao 2.1.220').erros.join(' | ');

@@ -184,3 +184,36 @@ test('catalogo: consultadoEm mais de 1 dia no futuro e invalido; ate 1 dia e tol
   catalogo.gravar(dir, futuro);
   assert.strictEqual(catalogo.ler(dir), null);
 });
+
+// ------------------------------------------------- H1f: a pasta e o instante validados
+
+test('catalogo A6-73: a pasta do projeto que nao e texto lanca com a frase; ler() segue devolvendo null', () => {
+  const casos = [[undefined, 'nada'], [null, 'nulo'], ['', 'texto vazio'], ['  \t', 'texto vazio'], [5, '5'],
+    [{}, 'um valor do tipo object']];
+  for (const [cwd, veio] of casos) {
+    assert.throws(function () { catalogo.caminho(cwd); },
+      { message: 'catalogo: a pasta do projeto tem de ser um texto nao vazio; veio ' + veio }, JSON.stringify(cwd));
+    // o gravar passa pelo caminho(): lanca antes de criar pasta nenhuma
+    assert.throws(function () { catalogo.gravar(cwd, catalogo.registrar('ok', [], [], T0)); }, /pasta do projeto/);
+    assert.strictEqual(catalogo.ler(cwd), null, JSON.stringify(cwd));
+  }
+});
+
+test('catalogo A6-74/75/82: o instante que nao e numero finito lanca, nos tres usos', () => {
+  const bom = catalogo.registrar('ok', [], [], T0);
+  const casos = [[NaN, 'NaN'], [Infinity, 'Infinity'], [-Infinity, '-Infinity'], ['5', 'o texto "5"'], [null, 'nulo']];
+  for (const [agora, veio] of casos) {
+    const frase = { message: 'catalogo: o instante tem de ser um numero de milissegundos (como o Date.now()); veio ' + veio };
+    assert.throws(function () { catalogo.registrar('ok', [], [], agora); }, frase, 'registrar ' + String(agora));
+    assert.throws(function () { catalogo.valido(bom, agora); }, frase, 'valido ' + String(agora));
+    // o deveConsultar passa pelo valido e pelo idadeEmDias
+    assert.throws(function () { catalogo.deveConsultar(bom, 'detector', agora); }, frase, 'deveConsultar ' + String(agora));
+  }
+  // sem instante, vale o relogio de agora (o que o ler() usa)
+  const antes = Date.now();
+  const c = catalogo.registrar('ok', [], [], undefined);
+  assert.ok(c.consultadoEm >= antes && c.consultadoEm <= Date.now(), String(c.consultadoEm));
+  assert.strictEqual(catalogo.valido(bom), true);
+  // a consulta deliberada nao olha o instante: segue respondendo sim
+  assert.strictEqual(catalogo.deveConsultar(bom, 'pedido', NaN).sim, true);
+});

@@ -19,7 +19,8 @@ function slots(texto) {
 function existeCampo(projeto, nome) {
   let atual = projeto;
   for (const parte of String(nome).split('.')) {
-    if (!atual || typeof atual !== 'object' || !(parte in atual)) return false;
+    // A4-13: so a chave propria do projeto.json conta; o `in` aceitaria as herdadas (toString, constructor)
+    if (!atual || typeof atual !== 'object' || !Object.prototype.hasOwnProperty.call(atual, parte)) return false;
     atual = atual[parte];
   }
   return true;
@@ -90,7 +91,9 @@ function citar(valor) {
 function fimDoFrontmatter(molde) {
   const abre = /^---[ \t]*\r?\n/.exec(molde);
   if (!abre) return 0;
-  const fecha = /\r?\n---[ \t]*(?:\r?\n|$)/.exec(molde.slice(abre[0].length));
+  // A4-12: o resto ja comeca depois da quebra da cerca de abertura, entao a de fecho pode vir logo no inicio dele
+  // (frontmatter vazio, '---\n---\ncorpo'); sem o `^`, o molde inteiro virava cabecalho.
+  const fecha = /(?:^|\r?\n)---[ \t]*(?:\r?\n|$)/.exec(molde.slice(abre[0].length));
   return fecha ? abre[0].length + fecha.index : molde.length;
 }
 
@@ -129,19 +132,29 @@ function validar(resultado) {
 /**
  * A4-mol-1 (pedido 12): o arquivo de respostas dos tres geradores (agentes, AGENTS.md, skill). Ler e interpretar
  * falham por motivos diferentes (a regra do validar.js:12-13), e respostas que nao e objeto - `null` - estourava o
- * gerar-agentes em TypeError cru. Devolve { ok: true, valores } ou { ok: false, erro } com a frase pronta.
+ * gerar-agentes em TypeError cru. Devolve { ok: true, valores } ou { ok: false, etapa, erro } com a frase pronta;
+ * a etapa (A4-67) diz onde falhou, para o chamador ramificar sem ler a frase: 'ler', 'json' ou 'forma'.
  */
 function lerRespostas(arquivo) {
   let bruto;
   try { bruto = fs.readFileSync(arquivo, 'utf8'); }
-  catch (e) { return { ok: false, erro: 'nao consegui ler ' + arquivo + ': ' + e.message }; }
-  let valores;
+  catch (e) { return { ok: false, etapa: 'ler', erro: 'nao consegui ler ' + arquivo + ': ' + e.message }; }
   // A4-mol-2 (R2): o BOM (Out-File do PowerShell 5.1) sai antes do parse, como no jsonio.ler (A4-01).
-  try { valores = JSON.parse(semBom(bruto)); }
-  catch (e) { return { ok: false, erro: arquivo + ' nao e JSON valido: ' + e.message }; }
+  const limpo = semBom(bruto);
+  // A4-68: o arquivo vazio tem frase propria; antes saia "Unexpected end of JSON input" dentro da frase generica
+  if (!limpo.trim()) {
+    return { ok: false, etapa: 'json', erro: arquivo + ' esta vazio: escreva nele as respostas como um objeto JSON ' +
+      '({ ... }), com uma chave para cada fatia {{texto:<nome>}} do molde' };
+  }
+  let valores;
+  try { valores = JSON.parse(limpo); }
+  catch (e) { return { ok: false, etapa: 'json', erro: arquivo + ' nao e JSON valido: ' + e.message }; }
   if (valores === null || typeof valores !== 'object' || Array.isArray(valores)) {
-    const tipo = Array.isArray(valores) ? 'lista' : (valores === null ? 'nulo' : typeof valores);
-    return { ok: false, erro: arquivo + ' tem de ser um objeto JSON ({ ... }) com as respostas por nome; veio ' + tipo };
+    // o tipo em portugues, como o resto da frase (o typeof daria "number" ou "boolean")
+    const NOMES = { number: 'numero', string: 'texto', boolean: 'verdadeiro ou falso' };
+    const tipo = Array.isArray(valores) ? 'lista' : (valores === null ? 'nulo' : NOMES[typeof valores] || typeof valores);
+    return { ok: false, etapa: 'forma',
+      erro: arquivo + ' tem de ser um objeto JSON ({ ... }) com as respostas por nome; veio ' + tipo };
   }
   return { ok: true, valores: valores };
 }

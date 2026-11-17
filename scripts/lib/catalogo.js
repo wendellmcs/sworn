@@ -32,8 +32,30 @@ const DESFECHOS = ['ok', 'semRede', 'falhou'];
  *  pede, ou quando o plugin acabou de mudar, esperar dias seria absurdo. */
 const DELIBERADOS = ['pedido', 'instalacao'];
 
+// A6-73: o String(cwd) fazia de undefined uma pasta chamada 'undefined'; a pasta do projeto vem como texto ou o
+// erro diz o que veio. O ler() segue devolvendo null (o catch dele cobre isto); quem grava ve a frase.
 function caminho(cwd) {
-  return path.join(String(cwd), ARQUIVO[0], ARQUIVO[1], ARQUIVO[2]);
+  if (typeof cwd !== 'string' || cwd.trim() === '') {
+    throw new Error('catalogo: a pasta do projeto tem de ser um texto nao vazio; veio ' + descrever(cwd));
+  }
+  return path.join(cwd, ARQUIVO[0], ARQUIVO[1], ARQUIVO[2]);
+}
+
+// A6-74/75/82: o instante (agora) dos tres usos - valido, registrar e idadeEmDias - passa pela mesma regra. Sem
+// ele vale o relogio de agora; um numero finito vale como veio; o resto (NaN, texto, null) era Number() calado, que
+// gravava consultadoEm null no JSON e fazia o cache sair invalido, e agora lanca com a frase.
+function instante(agora) {
+  if (agora === undefined) return Date.now();
+  if (typeof agora === 'number' && isFinite(agora)) return agora;
+  throw new Error('catalogo: o instante tem de ser um numero de milissegundos (como o Date.now()); veio ' +
+    descrever(agora));
+}
+
+function descrever(v) {
+  if (v === null) return 'nulo';
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'string') return v.trim() === '' ? 'texto vazio' : 'o texto "' + v.slice(0, 40) + '"';
+  return typeof v === 'undefined' ? 'nada' : 'um valor do tipo ' + typeof v;
 }
 
 function ler(cwd) {
@@ -55,7 +77,7 @@ function valido(c, agora) {
   if (typeof c.consultadoEm !== 'number' || !isFinite(c.consultadoEm)) return false;
   // F1-C02: data no futuro daria idade negativa e seguraria a janela para sempre. Ate 1 dia
   // de folga cobre relogio desencontrado; alem disso o cache nao merece confianca.
-  const ref = agora === undefined ? Date.now() : Number(agora);
+  const ref = instante(agora);
   if (c.consultadoEm > ref + DIA) return false;
   if (DESFECHOS.indexOf(c.desfecho) === -1) return false;
   if (!Array.isArray(c.fontes)) return false;
@@ -78,7 +100,7 @@ function gravar(cwd, cache) {
  */
 function registrar(desfecho, achados, fontes, agora) {
   return {
-    consultadoEm: Number(agora),
+    consultadoEm: instante(agora),
     desfecho: DESFECHOS.indexOf(desfecho) === -1 ? 'falhou' : desfecho,
     fontes: Array.isArray(fontes) ? fontes.slice() : [],
     achados: Array.isArray(achados) ? achados.slice() : []
@@ -87,7 +109,7 @@ function registrar(desfecho, achados, fontes, agora) {
 
 function idadeEmDias(cache, agora) {
   if (!valido(cache, agora)) return null;
-  return (Number(agora) - cache.consultadoEm) / DIA;
+  return (instante(agora) - cache.consultadoEm) / DIA;
 }
 
 /**

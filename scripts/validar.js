@@ -71,8 +71,13 @@ if (r.ok) {
       falhar(arquivoDesign + ' nao e JSON valido: ' + e.message);
     }
     const vd = designLib.validar(sistema);
-    if (!vd.ok) falhar('design.json invalido (' + arquivoDesign + ')', vd.erros);
+    // A4-50: a chave que o sworn nao le so avisa, nos dois casos (valido ou nao)
+    const avisosDoDesign = function () {
+      for (const a of vd.avisos || []) process.stdout.write('AVISO: design.json: ' + a + '\n');
+    };
+    if (!vd.ok) { avisosDoDesign(); falhar('design.json invalido (' + arquivoDesign + ')', vd.erros); }
     process.stdout.write('OK: design.json valido\n');
+    avisosDoDesign();
   }
   process.exit(0);
 }

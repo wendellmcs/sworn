@@ -198,8 +198,9 @@ test('0.11.0: abrir-turno para a 1a mensagem da pausa na forma curta e deixa pas
     assert.strictEqual(um.decision, undefined, 'a forma curta nao usa decision: block');
     assert.match(um.stopReason, /^sworn - este chat ficou 3 h 0[78] min parado/);
     assert.match(um.stopReason, /Desligar neste projeto: "avisoDeVolta": false/);
-    // o registro so tem a chamada, sem pedido do dono: sem resumo, e o aviso diz isso
-    assert.match(um.stopReason, /^Sem resumo: nao consegui montar o resumo deste chat\.$/m);
+    // o registro so tem a chamada, sem pedido do dono: sem resumo, e o aviso diz isso e o porque (A5-20)
+    assert.match(um.stopReason,
+      /^Sem resumo: nao consegui montar o resumo deste chat \(nao achei mensagem sua no fim da conversa que li\)\.$/m);
     assert.strictEqual(fs.existsSync(path.join(t.dir, '.sworn', 'handoff')), false);
     const dois = abrir(t.dir, sessoes, 'v1', t.f);
     assert.ok(!parou(dois), 'a 2a mensagem tinha de passar: ' + JSON.stringify(dois));

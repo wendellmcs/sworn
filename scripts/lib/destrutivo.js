@@ -1149,10 +1149,9 @@ const REMOVE_DOIS_PONTOS = /^(?:[^:]*|[A-Za-z]:[\\/][^:]*)$/;
 // Grupos: 1 = entre aspas duplas, 2 = entre aspas simples, 3 = sem aspas. Separador: so espaco e tab.
 const REMOVE_TOKEN = /[ \t]*(?:"([^"]*)"|'([^']*)'|([^ \t"']+))(?=[ \t]|$)/y;
 
-/** Os nomes de um apagar simples - `rm`, `Remove-Item`/`ri`, `del`/`erase` (com `/q` e `/f` so dentro de `cmd /c|/r`)
- *  - ou null. `ferramenta`: o `tool_name` (a barra invertida so e caminho no PowerShell; no bash ela escapa). So le os
- *  nomes: quem chama confere que cada um e arquivo (o `del` de pasta apaga o que tem dentro; portao-destrutivo.js). */
-function arquivosNomeados(comando, ferramenta) {
+/** Os tokens de um comando simples e literal - { tokens: [{ texto, citado }], viaCmd } - ou null. O leitor de
+ *  arquivosNomeados e de alvosDoApagar: um so, para os dois nunca lerem o mesmo comando de jeitos diferentes. */
+function tokensDoApagar(comando, ferramenta) {
   /* so espaco e tab nas pontas: o trim() do JS tiraria o U+00A0 antes da guarda ver (o shell o le como letra) */
   const cmd = String(comando == null ? '' : comando).replace(/^[ \t]+|[ \t]+$/g, '');
   if (!cmd || REMOVE_PROIBIDO.test(cmd) || REMOVE_FORA_DA_LISTA.test(cmd)) return null;
@@ -1170,7 +1169,18 @@ function arquivosNomeados(comando, ferramenta) {
     !tokens[1].citado && tokens[1].texto[0] === '/' && INTRODUTOR.test(tokens[1].texto) &&
     !/k$/i.test(tokens[1].texto); /* o /k deixa o cmd aberto depois do comando: so o /c (e o /r, que e o mesmo) */
   if (viaCmd) tokens.splice(0, 2);
-  if (!tokens.length || tokens[0].citado || !REMOVE_NOME.test(tokens[0].texto)) return null;
+  if (!tokens.length || tokens[0].citado) return null;
+  return { tokens: tokens, viaCmd: viaCmd };
+}
+
+/** Os nomes de um apagar simples - `rm`, `Remove-Item`/`ri`, `del`/`erase` (com `/q` e `/f` so dentro de `cmd /c|/r`)
+ *  - ou null. `ferramenta`: o `tool_name` (a barra invertida so e caminho no PowerShell; no bash ela escapa). So le os
+ *  nomes: quem chama confere que cada um e arquivo (o `del` de pasta apaga o que tem dentro; portao-destrutivo.js). */
+function arquivosNomeados(comando, ferramenta) {
+  const lido = tokensDoApagar(comando, ferramenta);
+  if (!lido || !REMOVE_NOME.test(lido.tokens[0].texto)) return null;
+  const tokens = lido.tokens;
+  const viaCmd = lido.viaCmd;
   const ehDel = DEL_NOME.test(tokens[0].texto);
   const arquivos = [];
   let fimDasOpcoes = false;
@@ -1186,11 +1196,76 @@ function arquivosNomeados(comando, ferramenta) {
       if (tok.texto === '--') fimDasOpcoes = true;
       continue;
     }
-    if (tok.texto === '' || tok.texto[0] === '-' || tok.texto[0] === '~') return null;
-    if (!REMOVE_DOIS_PONTOS.test(tok.texto)) return null;
+    if (!alvoValido(tok.texto, false)) return null; /* aqui o traco barra ate depois do `--` */
     arquivos.push(tok.texto);
   }
   return arquivos.length ? arquivos : null;
+}
+
+// Colheita lote 5, V1 (D846): o alvo de um apagar barrado (recursivo, forcado ou de pasta), para o aviso listar o que
+// ele apagaria e o dono decidir vendo o alvo. Mesmo leitor do arquivosNomeados (um comando simples, sem nada que o
+// shell separe, expanda ou redirecione). O mesmo verbo muda de sentido em cada shell, entao a leitura e a do shell que
+// roda, e cada um tem a LISTA do que pode - flag desconhecida devolve null, porque pode levar valor (o -ErrorAction do
+// PowerShell faria do valor um alvo) ou trocar o que sai (o filtro, o /s do del):
+// - cmd (so dentro de `cmd /c`): rd/rmdir com /s e /q; del/erase com /q e /f. O /s do del apaga o nome em toda
+//   subpasta, e qualquer outra palavra com `/` o cmd le como chave: null.
+// - PowerShell: todos os verbos sao o Remove-Item, e o `/s` e caminho. So -Recurse e -Force (pelo comeco unico do nome,
+//   como o PowerShell aceita) e -Path/-LiteralPath; o segundo nome solto seria o -Filter (posicao 1): um alvo so.
+// - bash (o resto): rm com -r -R -f -d -v -i -I (juntas ou nao) e --recursive --force --dir --verbose; rmdir com -v,
+//   --verbose e --ignore-fail-on-non-empty. Del, rd e Remove-Item fora do cmd e do PowerShell nao existem: null.
+// O que nao for exatamente uma destas formas devolve null e o aviso sai sem a lista, como antes.
+const ALVO_TETO = 20;
+const ALVO_CHAVE_RD = /^\/[sq]$/i;
+const ALVO_PS_SWITCH = /^-(?:r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?|fo(?:r(?:c(?:e)?)?)?)$/i;
+// -p e ambiguo (PipelineVariable, ProgressAction): o Path so a partir de -pa; -lp e -PSPath sao apelidos do LiteralPath
+const ALVO_PS_CAMINHO = /^-(?:pa(?:t(?:h)?)?|l(?:i(?:t(?:e(?:r(?:a(?:l(?:p(?:a(?:t(?:h)?)?)?)?)?)?)?)?)?)?|lp|pspath)$/i;
+const ALVO_RM_FLAG = /^(?:-[rRfdviI]+|--(?:recursive|force|dir|verbose))$/;
+const ALVO_RMDIR_FLAG = /^(?:-v|--verbose|--ignore-fail-on-non-empty)$/;
+
+/** Um nome de alvo aceitavel: sem til, sem traco no comeco (fora do `--`) e sem `:` que nao seja de drive. */
+function alvoValido(texto, depoisDoFim) {
+  return texto !== '' && texto[0] !== '~' && (depoisDoFim || texto[0] !== '-') && REMOVE_DOIS_PONTOS.test(texto);
+}
+
+/** Os caminhos que um apagar simples nomeia (`rm -rf a b`, `Remove-Item -Recurse -Force a`, `cmd /c rd /s /q a`), na
+ *  ordem, ou null. `ferramenta`: o `tool_name` (PowerShell le como PowerShell; o resto, como bash). */
+function alvosDoApagar(comando, ferramenta) {
+  const lido = tokensDoApagar(comando, ferramenta);
+  if (!lido) return null;
+  const verbo = lido.tokens[0].texto;
+  const resto = lido.tokens.slice(1);
+  const alvos = [];
+  if (lido.viaCmd) {
+    const ehRd = /^(?:rd|rmdir)$/i.test(verbo);
+    if (!ehRd && !DEL_NOME.test(verbo)) return null;
+    for (const tok of resto) {
+      if (!tok.citado && (ehRd ? ALVO_CHAVE_RD : DEL_CHAVE).test(tok.texto)) continue;
+      if (tok.texto.indexOf('/') !== -1 || !alvoValido(tok.texto, false)) return null;
+      alvos.push(tok.texto);
+    }
+  } else if (ferramenta === 'PowerShell') {
+    if (!VERBO_DE_APAGAR.test(verbo) || /\.exe$/i.test(verbo)) return null; /* com .exe e um programa, nao o apelido */
+    let esperaCaminho = false;
+    for (const tok of resto) {
+      if (!esperaCaminho && !tok.citado && ALVO_PS_SWITCH.test(tok.texto)) continue;
+      if (!esperaCaminho && !tok.citado && ALVO_PS_CAMINHO.test(tok.texto)) { esperaCaminho = true; continue; }
+      if (!alvoValido(tok.texto, false)) return null;
+      esperaCaminho = false;
+      alvos.push(tok.texto);
+    }
+    if (esperaCaminho || alvos.length !== 1) return null;
+  } else {
+    const ehRm = /^rm(?:\.exe)?$/i.test(verbo);
+    if (!ehRm && !/^rmdir(?:\.exe)?$/i.test(verbo)) return null;
+    let fimDasOpcoes = false;
+    for (const tok of resto) {
+      if (!fimDasOpcoes && !tok.citado && tok.texto === '--') { fimDasOpcoes = true; continue; }
+      if (!fimDasOpcoes && !tok.citado && (ehRm ? ALVO_RM_FLAG : ALVO_RMDIR_FLAG).test(tok.texto)) continue;
+      if (!alvoValido(tok.texto, fimDasOpcoes)) return null;
+      alvos.push(tok.texto);
+    }
+  }
+  return alvos.length && alvos.length <= ALVO_TETO ? alvos : null;
 }
 
 const VERBO_DE_APAGAR = /^(?:rm|del|erase|ri|remove-item|rmdir|rd)(?:\.exe)?$/i;
@@ -1339,8 +1414,20 @@ const MOTIVO_APAGAR_DEPOIS_DE_AMPLIAR = 'o escopo foi ampliado neste turno, e ap
 // Os motivos das regras de apagar arquivo (REGRAS acima): so neles o aviso fala do arquivo nomeado que passa.
 const MOTIVO_DE_APAGAR = /^(?:rm |Remove-Item |apelido do PowerShell para Remove-Item)/;
 
-function motivo(comando, r) {
+function motivo(comando, r, alvo) {
   // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos. A liberacao fica por ultimo, como acao do dono.
+  // V1 (D846): `alvo` sao as linhas do que o comando apagaria (scripts/lib/alvo-apagar.js); sem elas, nada muda.
+  const linhasDoAlvo = Array.isArray(alvo) && alvo.length
+    ? ['', 'O que ele apagaria:'].concat(alvo.map(function (l) {
+      const s = String(l);
+      /* o nome fora do ASCII sai pelo codigo (`ç`), nunca dobrado: "acao" seria outra pasta, que pode existir */
+      const exato = (s.length > 300 ? s.slice(0, 297) + '...' : s).replace(/[^\x00-\x7e]/gu, function (c) {
+        const n = c.codePointAt(0);
+        return n > 0xffff ? '\\u{' + n.toString(16) + '}' : '\\u' + ('000' + n.toString(16)).slice(-4);
+      });
+      return '  ' + escopo.ascii(exato); /* o corte se ve: nao e outro caminho */
+    }))
+    : [];
   // D785 item 4 (s369, 2.4): erro e falha se resolvem sem perguntar; a trava manda seguir por outro caminho, e o que
   // so o dono roda fica dito a ele na resposta final, sem parar o trabalho.
   const apagar = MOTIVO_DE_APAGAR.test(String(r.motivo));
@@ -1354,7 +1441,8 @@ function motivo(comando, r) {
     // e `a-til` para o texto do hook, violando a R5. Acento em portugues e o
     // caso normal, nao o exotico, e os dois testes de ASCII que ja existiam
     // eram cegos a este caminho porque so exercitavam motivo built-in.
-    'Por que barrou: ' + escopo.ascii(String(r.motivo).slice(0, 400)) + '.',
+    'Por que barrou: ' + escopo.ascii(String(r.motivo).slice(0, 400)) + '.'
+  ].concat(linhasDoAlvo, [
     '',
     /* a 1a opcao depende da regra: so as de apagar arquivo tem a forma que passa */
     apagar ? 'Apagar arquivo pelo nome (sem -r e sem curinga), dentro do escopo e fora dos intocaveis, passa.' : null,
@@ -1366,9 +1454,9 @@ function motivo(comando, r) {
     '  2. ou termine o resto e diga ao dono, na resposta final, que este comando ficou para ele rodar.',
     '',
     'So o dono libera: ele mesmo roda o comando, ou acrescenta o padrao em "comandosLiberados" de .claude/sworn/projeto.json.'
-  ].filter(function (l) { return l !== null; }).join('\n');
+  ]).filter(function (l) { return l !== null; }).join('\n');
 }
 
-module.exports = { REGRAS, classificar, motivo, lerComando, regrasRecusadas, avisoRecusadas, arquivosNomeados,
+module.exports = { REGRAS, classificar, motivo, lerComando, regrasRecusadas, avisoRecusadas, arquivosNomeados, alvosDoApagar,
   temApagar, MOTIVO_APAGAR_DEPOIS_DE_AMPLIAR, apagaPorApi, MOTIVO_APAGA_POR_API,
   bloqueadoPeloProjeto };

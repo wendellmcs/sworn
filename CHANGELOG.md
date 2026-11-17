@@ -1,5 +1,231 @@
 # Changelog
 
+## 0.63.0 — a lista de atalhos não perde comentário por causa de aspa
+
+**Corrigido**
+
+- **`/sworn:shortcuts` acha o atalho numa linha com aspa escapada (`"a \" b"`), apóstrofo (`it's`, `don't`,
+  `I'm`) ou um `#` dentro de string antes do comentário.** Antes, a contagem das aspas tomava o comentário por
+  texto de string e ele sumia da lista. A linha agora se lê uma vez só, e uma linha muito longa não trava a busca.
+- **O "Procurei em N arquivos" conta só os arquivos de texto lidos, e diz o que fica fora** (binário, link e
+  arquivo acima de 1 MB). Antes, entravam no número os binários, os acima de 1 MB e os que não abriram.
+- **Link simbólico não é seguido:** o atalho de um arquivo de fora do repositório não entra mais na lista, e o
+  alvo de dentro já entra pelo próprio nome.
+
+## 0.62.0 — a calibração da troca de chat fica mais fácil de ler
+
+**Por dentro**
+
+- **A leitura das conversas na calibração** (`/sworn:calibrate`) ganhou nomes para o que eram números soltos e
+  regras repetidas, e os comentários dizem o motivo, sem códigos internos.
+
+**Corrigido**
+
+- **Mensagem sem identificador na conversa** conta como chamada própria na calibração. Antes, todas as que vinham
+  sem ele se juntavam numa só, e a sessão podia sair da amostra por parecer curta demais.
+
+## 0.61.0 — registrar a consulta ao catálogo numa pasta que não dá diz por quê
+
+**Corrigido**
+
+- **`catalogo.js --registrar` com `.claude` que é arquivo, ou numa pasta sem escrita,** sai com a causa e o
+  que conferir, em vez de um stack trace.
+- **O instante da consulta é conferido:** um valor que não é número (NaN, texto, nulo) lança com a frase, em
+  vez de gravar `consultadoEm: null` e deixar o cache inválido sem aviso.
+- **A pasta do projeto que não é texto, ou que é vazia ou só espaços,** lança com a frase, em vez de virar uma pasta chamada `undefined`.
+
+## 0.60.0 — um padrão quebrado não desliga a checagem de valor que muda
+
+**Corrigido**
+
+- **Um padrão inválido em `modelos/volateis.json` não derruba os outros.** Antes, um só desligava a checagem
+  inteira de valor que muda com o tempo; agora os padrões válidos seguem valendo e o aviso diz que a lista
+  carregou em parte, com o número do padrão quebrado.
+- **`volateis.json` sem a chave `volateis`, ou com um padrão vazio, também avisa.** Antes, a chave ausente
+  desligava a checagem calada, e o padrão vazio casava com qualquer regra e recusava todas.
+- **Molde com frontmatter vazio** (`---` seguido de `---`): o resto do arquivo é corpo, e não mais cabeçalho.
+- **Campo herdado não conta como existente:** `{{campo:toString}}` sai como campo por preencher.
+- **Arquivo de respostas vazio** diz que está vazio e o que escrever nele, em vez de um erro de JSON em inglês.
+- **O tipo errado no arquivo de respostas sai em português:** "veio numero", não "veio number".
+
+## 0.59.0 — o aviso de volta diz por que saiu sem resumo
+
+**Corrigido**
+
+- **O aviso de chat parado diz por que não há resumo.** Antes dizia só "não consegui montar o resumo"; agora diz
+  a causa em palavras simples: a conversa não se leu do disco, não há mensagem sua no fim dela, ou o erro que
+  impediu o resumo (já mascarado, em uma linha).
+- **O git do resumo tem um prazo só.** As três consultas ao git dividem 2 segundos; antes eram 2 segundos cada, e
+  a mensagem podia ficar segurada até 6 segundos.
+- **Sem um horário válido, vale o relógio.** O resumo não grava mais um arquivo com `NaN-NaN-NaN` no nome, e a
+  lista de pedidos não grava `NaN` na data (nem com `null`, texto vazio ou um número fora da faixa de datas).
+- **A lista de pedidos que existe vazia ganha o título** antes do primeiro pedido.
+- **O resumo diz o que o `/sworn:handoff` entrega:** o plano, as decisões, as pendências e o prompt pronto, gravados
+  em `.sworn/handoff/`.
+
+## 0.58.0 — o design.json avisa a chave que o sworn não lê
+
+**Corrigido**
+
+- **Chave desconhecida no `design.json` vira aviso.** Um typo como `corres` no lugar de `cores` não tinha efeito
+  nenhum e passava calado. Agora a validação avisa cada chave que o sworn não lê, com o nome entre aspas e a lista
+  das que valem, sem tornar o arquivo inválido. Um espaço a mais no nome (`"cores "`) aparece entre as aspas. São
+  até 12 avisos; o resto vira uma linha só, que diz para corrigir as de cima e rodar de novo.
+- **`0` e `false` numa chave do `design.json` são item sem efeito.** Antes valiam como lista vazia e passavam
+  calados; agora a validação aponta o item, como já fazia dentro de uma lista. `null` e texto vazio seguem valendo
+  nada.
+- **O `validar.js` mostra os avisos do `design.json`**, numa linha `AVISO: design.json: ...` cada, com o arquivo
+  válido ou inválido.
+
+## 0.57.0 — o aviso de saúde não dá mais agente por terminado antes da hora
+
+**Corrigido**
+
+- **Um agente de workflow só conta como terminado quando entrega o resultado.** Antes, qualquer linha nova do
+  registro do workflow depois do início (um progresso, por exemplo) já o dava por encerrado, e o handoff podia sair
+  com o agente ainda trabalhando. Agora só a linha de resultado fecha.
+- **O registro do workflow é lido até 4 MB.** Um registro maior não trava mais a leitura; o que vier depois do teto
+  não é lido, e o agente segue contado como rodando (o handoff espera, nunca sai antes).
+- **Um identificador de agente com `../` ou barra é ignorado**, em vez de virar um caminho fora da pasta do
+  workflow.
+- **Sem um horário válido, vale o relógio.** Quando quem chama não passa um horário numérico, o sworn usa a hora
+  atual: o agente que acabou de escrever segue rodando, e o handoff gravado pelo shell continua reconhecido.
+- **Contador que não é número não dispara aviso.** Um total de turnos, de revisões ou de bloqueios gravado como
+  texto ou objeto conta como zero; antes o texto podia cruzar o limite ou ser emendado na soma.
+- **A lista do que disparou o aviso sai igual** no aviso e nas três instruções ao modelo.
+
+## 0.56.0 — buracos da trava de criar sem procurar
+
+**Corrigido**
+
+- **Um `find` que apaga ou grava não conta mais como busca.** A trava que pede uma busca antes de criar arquivo
+  novo aceitava como busca um `find` com `-fprint`, `-fprintf` ou `-fls` (que gravam a lista num arquivo), um
+  `fd -Hx` (com a opção de rodar comando agrupada), e um `find` cuja ação vinha entre aspas (`"-delete"`), depois de
+  um `;` entre aspas ou escapado com barra (`a\;b`), ou com a ação escapada com barra (`\-delete`, que o shell lê
+  como `-delete`). Todos esses agora pedem uma busca de verdade antes.
+- **O caminho do escopo com `./` ou barras repetidas.** `./src//a.js` e `src/a.js` agora valem pelo mesmo arquivo
+  dos dois lados da comparação.
+- **O aviso da trava diz quais são as buscas:** a de texto (Grep), a de nome (Glob), ou um grep/find pelo shell.
+- **No relatório de cobertura, um arquivo que existe mas não pode ser lido conta como presente**, e um caminho
+  inválido conta como ausente; a lista dos agentes é lida uma vez só; o título do portão de custo diz que é o agente
+  caro numa tarefa simples.
+
+## 0.55.0 — o antes e o depois das edições do turno
+
+**Novo**
+
+- **`/sworn-replay`, com hífen, mostra no chat o que o último turno que editou arquivos mudou em cada um.** Até
+  aqui, para ver o que o Claude tinha mudado num turno era preciso abrir cada arquivo ou pedir a comparação ao Git,
+  que mistura o turno com tudo o que veio antes. Agora o comando lista os arquivos do turno, quantas linhas entraram
+  e saíram de cada um e os trechos mudados, as linhas de antes com `-` e as de depois com `+`; linha com mais de 160
+  caracteres sai cortada. Entram as edições das ferramentas de edição do Claude (Edit, Write, MultiEdit e
+  NotebookEdit), também as dos subagentes; o que um comando de shell mudou fica de fora. Como os outros comandos
+  do painel, ele aparece numa sessão aberta depois de atualizar o sworn.
+- **O antes e o depois ficam só nesta máquina.** O sworn copia cada arquivo antes da primeira edição dele no turno e
+  depois de cada edição que deu certo, para a pasta temporária do sistema (`sworn/replay/<sessão>`), que só o seu
+  usuário lê. A edição recusada ou que deu erro não deixa cópia. Um turno novo com edição apaga as cópias do
+  anterior, e as pastas de sessões paradas há mais de 7 dias
+  saem sozinhas. Ficam de fora o arquivo com mais de 1 MB, o binário e o que passar de 200 arquivos num turno, e o
+  comando diz quando foi o caso. Se uma cópia falhar, a edição segue igual e o `/sworn-replay` abre com um aviso de
+  que pode faltar arquivo ou linha; se o comando todo parar, ele diz a frase para pedir ao Claude a causa.
+
+**Medido**
+
+- **A 0.55.0 contra a 0.21.1, na bateria de 8 tarefas** (cada tarefa com e sem o sworn, 3 vezes, 48 rodadas por
+  modelo). Com o Haiku, os defeitos com o sworn caíram de 17 para 3: o fecho que diz "pronto" sem estar foi de
+  11 para 0, e o pedido não entregue de 3 para 0. Saíram 21 de 24 rodadas sem defeito com o sworn, contra 12 de
+  24 sem ele. Com o Opus, os defeitos com o sworn foram de 3 para 0 (24 de 24 sem defeito, contra 21 de 24 sem ele).
+  O braço sem o sworn ficou parecido entre as duas versões, o que mostra que a régua não mudou.
+- **O que não rendeu.** A duplicação (código novo que não usa o que o projeto já tinha) seguiu em 3 rodadas do Haiku,
+  igual a antes. Com só 8 tarefas, a bateria ainda não dá a melhora como provada: 4 tarefas a favor e nenhuma contra
+  no Haiku, 1 a favor no Opus; o teste pede 7 de 8.
+- **O custo.** Com o sworn, cada rodada custou 38% a mais no Haiku (US$ 0,0065 contra 0,0047) e 46% a mais no Opus
+  (US$ 0,21 contra 0,14), com mais turnos. A leva do Codex fica para dezembro, quando a cota da conta volta.
+
+## 0.54.0 — o andamento da revisão cega na faixa
+
+**Novo**
+
+- **A faixa acima do prompt mostra o andamento da revisão cega enquanto a ronda roda.** Até aqui só se sabia quanto
+  uma ronda tinha custado quando ela acabava, e nada dizia quantos inspetores ainda faltavam. Agora, a cada inspetor
+  que o `/sworn:review` despacha ou que termina, a faixa diz a ronda, quantos inspetores terminaram de quantos, o
+  modelo deles e o custo até agora (`revisão cega, ronda 2: 5 de 8 inspetores prontos (sonnet), US$ 0,42 até
+  agora`); a linha some quando o último responde. O custo é o que cada inspetor gastou, pelo preço do modelo dele
+  na tabela do `/sworn:calibrate`. Um inspetor sem resposta há 30 minutos sai da conta de quem roda: a linha avisa
+  quantos pararam e aponta o `/sworn-review`, que diz o que fazer (pedir ao Claude que o despache de novo).
+- **`/sworn-review`, com hífen, é um comando novo do painel e só mostra o detalhe:** o que roda agora, cada arquivo
+  e ronda da sessão com os inspetores prontos e o custo, e o total. Ele não começa revisão nenhuma; quem começa é o
+  `/sworn:review`, com dois-pontos. Como os outros comandos do painel, ele aparece numa sessão aberta depois de
+  atualizar o sworn.
+
+## 0.53.0 — o aviso antes de o cache do chat esfriar
+
+**Novo**
+
+- **A faixa acima do prompt avisa antes de o cache do chat esfriar.** O cache dura 1 hora depois do fim da última
+  resposta; vencido, a próxima mensagem regrava a conversa inteira no cache, bem mais caro que reaproveitá-la. Nos
+  últimos 10 minutos, com a conversa em 50 mil tokens ou mais e nenhum turno rodando, a faixa mostra quanto falta e
+  quanto custaria regravar a conversa depois disso (pelo preço do modelo da sessão), de minuto em minuto, e some
+  quando o cache vence. Mandar uma mensagem antes disso evita a regravação.
+
+**Consertado**
+
+- Só para quem roda os testes do sworn: um teste da faixa voltou a passar no Claude Code 2.1.323, que mudou o kit
+  de testes. A faixa em si não mudou; nada a fazer.
+
+## 0.52.0 — o cartão antes do push
+
+**Novo**
+
+- **Antes do `git push`, o sworn mostra o que ele publicaria.** Até aqui o push saía como qualquer comando, e o
+  dono só via o que tinha ido depois. Agora o portão de commit nega todo push sem a marca com um cartão: o destino
+  (o endereço sai sem usuário nem senha), os commits que o remoto ainda não tem pelo que este repositório sabe dele
+  (um `git fetch` antes atualiza a conta), os arquivos e os autores. A sanitação (a busca de dado privado, como
+  e-mail pessoal, termo do vocabulário local ou segredo) passa pelos autores, pelas mensagens dos commits e pelo
+  conteúdo dos arquivos, e o cartão diz a classe e o lugar de cada achado, nunca o texto achado. Também avisa quando
+  o push força, apaga ou leva todos os ramos. Com o sim do dono, o mesmo push com `# sworn: push-visto` no fim do
+  comando passa. `portaoCommit: false` desliga o cartão junto com o portão.
+
+## 0.51.0 — a trava de outra frente vê o que outra sessão muda depois da abertura
+
+**Novo**
+
+- **O arquivo que outra sessão do sworn mudou depois que esta abriu também é de outra frente.** A trava 5 (arquivo
+  de outra frente) olhava só a foto do `git status` tirada na abertura. Por isso, o que um chat concorrente
+  mudasse depois dela passava, e uma sessão escrevia por cima da outra. Agora cada sessão anota os arquivos que
+  escreve. Antes de um `Write` ou `Edit`, a trava confere se outra sessão mexeu no arquivo depois que esta abriu.
+  Se mexeu e a mudança segue sem commit, nega, diz há quantos minutos foi a mudança e diz o que fazer, como no
+  arquivo da foto. Quando a outra sessão faz o commit, o arquivo volta a passar; o listado no `## Dentro` do escopo também passa. A edição que o
+  dono faz à mão, fora do chat, não entra. `travas.outraFrente: false` desliga as duas partes juntas.
+
+## 0.50.0 — a trava 5 mostra o que o apagar levaria
+
+**Novo**
+
+- **Quando a trava 5 barra um apagar, o aviso mostra o que ele apagaria.** Antes, o aviso dizia só o padrão do
+  comando (`rm recursivo ou forcado`), e o dono decidia sem ver o alvo. Agora, quando o comando é um apagar simples
+  com o nome escrito por inteiro (`rm -rf build`, `Remove-Item -Recurse build`, `cmd /c rd /s /q build`), o aviso
+  ganha a seção `O que ele apagaria:`. Cada alvo aparece com a contagem de arquivos e pastas e o tamanho, e os dez
+  primeiros arquivos saem pelo nome. O que não existe, o atalho (só o atalho sai) e a pasta sem leitura (não
+  conferida) também aparecem. O caminho de rede não é conferido. A contagem para em 2000 itens e diz até onde
+  chegou. O comando é lido como o shell que o roda lê (bash, PowerShell ou o `cmd /c`), e cada um só com as flags
+  que o sworn conhece: com flag desconhecida, filtro, curinga, variável ou mais de um comando na linha, o alvo
+  fica incerto, e o aviso sai como antes. A lista só lê o disco e nunca muda a decisão: o comando segue negado, e
+  qualquer falha ao listar deixa o aviso sem ela.
+
+## 0.49.0 — o aviso antes de ler um arquivo grande inteiro
+
+**Novo**
+
+- **Antes de ler inteiro um arquivo de texto grande, o Claude é avisado de que pode ler só o trecho.** Um Read sem
+  `offset` nem `limit` de um arquivo acima de 64 KB põe o arquivo inteiro no contexto de uma vez. Agora o gancho
+  novo `scripts/aviso-leitura.js`, no `PreToolUse` do `Read`, diz ao Claude o tamanho do arquivo, quantos mil
+  tokens ele custa, e que dá para achar a linha com o Grep e ler só o trecho com `offset` e `limit`. A leitura
+  segue: o aviso nunca nega. Sai uma vez por arquivo em cada sessão. Imagem, PDF e notebook ficam de fora, e sem
+  `.claude/sworn/projeto.json` o gancho fica calado. Desliga com `"avisoDeLeitura": false` no `projeto.json`.
+- Para quem mantém o plugin: são **47 baldes** de contador: 29 que negam, 18 que só contam (o novo é
+  `leitura_grande`).
+
 ## 0.48.0 — o portão de commit não libera mais quando o git demora
 
 **Corrigido**

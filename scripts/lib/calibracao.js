@@ -41,6 +41,13 @@ const NAO_E_DO_DONO = /^\s*(<system-reminder>|<command-|<local-command|Caveat:|\
 const PROMPT_DE_HANDOFF = /handoff|prompt (pronto|de continua)|continua(r|ção)? (exatamente|de onde)/i;
 const COMMIT = /git\b[^\n|;]*\bcommit\b/;
 const ARQUIVO_DE_RASCUNHO = /Temp|scratchpad|\.claude[\\/]projects/i;
+// A6-31: as ferramentas que gravam arquivo; a edicao e a gravacao do handoff contam so por elas.
+const GRAVA_ARQUIVO = /^(Edit|Write|NotebookEdit)$/;
+// A6-33: o indice da chamada de cada mensagem paga. Os dois negativos nao sao chamada: SEM_CHAMADA e a mensagem
+// sem uso, sem modelo, sintetica ou de modelo sem preco (nada conta nela); AINDA_NAO_VISTA e o id que o mapa ainda
+// nao tem, e vira chamada nova ou SEM_CHAMADA logo abaixo.
+const SEM_CHAMADA = -1;
+const AINDA_NAO_VISTA = -2;
 
 // paradas.mjs da s90: a ultima fala do agente antes de o dono responder. A primeira classe que casa vence.
 const CLASSES_DE_PARADA = [
@@ -101,18 +108,22 @@ function lerSessao(texto) {
   for (const linha of String(texto).split('\n')) {
     if (!linha.trim()) continue;
     let o;
+    // A6-32: a linha que nao e JSON fica fora, de proposito: a ultima de uma conversa ainda aberta pode vir cortada no
+    // meio da gravacao, e uma linha a menos nao muda a conta de uma sessao inteira.
     try { o = JSON.parse(linha); } catch (e) { continue; }
     if (!o || o.isSidechain === true) continue;
     const m = o.message || {};
     const t = Date.parse(o.timestamp);
     if (o.type === 'assistant') {
-      let k = -1;
+      let k = SEM_CHAMADA;
       if (m.usage && m.model && m.model !== '<synthetic>') {
-        k = porId.has(m.id) ? porId.get(m.id) : -2;
-        if (k === -2) {
+        k = porId.has(m.id) ? porId.get(m.id) : AINDA_NAO_VISTA;
+        if (k === AINDA_NAO_VISTA) {
           const preco = PRECOS[m.model];
-          if (preco) { k = chamadas.length; chamadas.push(novaChamada(m.usage, preco, t)); } else { k = -1; semPreco++; }
-          porId.set(m.id, k);
+          if (preco) { k = chamadas.length; chamadas.push(novaChamada(m.usage, preco, t)); } else { k = SEM_CHAMADA; semPreco++; }
+          // a mensagem sem id fica fora do mapa e nao se junta a nenhuma: todas cairiam na chave undefined e virariam
+          // uma chamada so
+          if (m.id !== undefined && m.id !== null) porId.set(m.id, k);
         }
       }
       for (const b of Array.isArray(m.content) ? m.content : []) {
@@ -124,9 +135,9 @@ function lerSessao(texto) {
         const comando = String(entrada.command || '');
         const arquivo = String(entrada.file_path || '');
         if (COMMIT.test(comando) && !/--dry-run/.test(comando)) chamadas[k].commit = true;
-        if (/^(Edit|Write|NotebookEdit)$/.test(b.name) && arquivo && !ARQUIVO_DE_RASCUNHO.test(arquivo)) chamadas[k].edicao = true;
+        if (GRAVA_ARQUIVO.test(b.name) && arquivo && !ARQUIVO_DE_RASCUNHO.test(arquivo)) chamadas[k].edicao = true;
         // D471: so gravar conta; ler o handoff na abertura marcava 302 de 444 sessoes nas 5 primeiras chamadas
-        if (/^(Edit|Write|NotebookEdit)$/.test(b.name) && /handoff/i.test(arquivo)) chamadas[k].handoff = true;
+        if (GRAVA_ARQUIVO.test(b.name) && /handoff/i.test(arquivo)) chamadas[k].handoff = true;
       }
       if (Array.isArray(m.content) && m.content.length) tUltima = t;
     }
@@ -152,7 +163,7 @@ function lerPasta(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (!e.isFile() || !/\.jsonl$/i.test(e.name)) continue;
     let texto;
-    // A6 (s220, R1 :152): a que nao se le saia calada da amostra; conta em `ilegiveis`, como no gasto (082 p6-2).
+    // a transcricao que nao se le nao some calada da amostra: conta em `ilegiveis`, e o relatorio diz quantas.
     try { texto = fs.readFileSync(path.join(dir, e.name), 'utf8'); } catch (x) { ilegiveis++; continue; }
     const s = lerSessao(texto);
     semPreco += s.semPreco;
@@ -355,6 +366,6 @@ function pastaDasTranscricoes(raiz, env, casa) {
 }
 
 module.exports = {
-  PRECOS, CANDIDATOS, AMOSTRA_MINIMA, TROCA_PADRAO, QUEDA_DE_COMPACTACAO, PISO_DA_COMPACTACAO, lerSessao, lerPasta,
+  PRECOS, CANDIDATOS, AMOSTRA_MINIMA, TROCA_PADRAO, QUEDA_DE_COMPACTACAO, PISO_DA_COMPACTACAO, novaChamada, lerSessao, lerPasta,
   segmentar, custoDaTroca, simular, escolher, calibrar, nomeDaPasta, pastaDasTranscricoes
 };

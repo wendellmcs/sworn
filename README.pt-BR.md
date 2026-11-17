@@ -150,7 +150,7 @@ um `true`/`false` em `.claude/sworn/projeto.json`.
 <!-- pagina:portoes -->
 | Portão | O que faz | Por quê | Desliga com |
 |---|---|---|---|
-| Revisão antes do commit | Nega o `git commit` enquanto o código mudado na sessão não tem revisão cega aprovada, e diz quantos inspetores cada arquivo pede. | Revisão depois do commit é revisão que ninguém faz. | `portaoCommit` |
+| Revisão antes do commit | Nega o `git commit` enquanto o código mudado na sessão não tem revisão cega aprovada, e diz quantos inspetores cada arquivo pede. Antes do `git push`, mostra o que ele publicaria: destino, commits, arquivos, autores e sanitação. | Revisão depois do commit é revisão que ninguém faz, e publicar tem de ser decisão vista. | `portaoCommit` |
 | Revisão antes do "pronto" | Em código `aaa` mudado na sessão, a alegação de entrega pede revisão aprovada, ou o motivo dito de não ter. | Os arquivos de mais risco são onde a revisão cega compensa. | `portaoRevisao` |
 | Referência de topo | Com referência declarada para o tipo do arquivo, a entrega `aaa` pede revisão contra ela, nas duas ordens. | Julgado contra o melhor do mesmo tipo, não contra o gosto. | `portaoReferencia` |
 | Manual antes | Nega editar arquivo `aaa` antes de o manual de execução ser carregado na sessão. | Rigor que nunca foi carregado nunca é aplicado. | `portaoManual` |
@@ -194,11 +194,17 @@ uma vez, no fim de um turno, com o motivo:
 
 ### Painéis
 
-Dois comandos que vêm com o plugin (Claude Code 2.1.287 ou mais novo): o `/sworn-session` mostra o
+Quatro comandos que vêm com o plugin (Claude Code 2.1.287 ou mais novo): o `/sworn-session` mostra o
 contexto usado, as janelas de 5 horas e da semana, o gasto, a previsão e os sinais de troca; o
-`/sworn-plan` mostra o plano ativo, as tarefas feitas e abertas e a estimativa de sessões que faltam. A
-linha de status traz o mesmo medidor em uma linha, e uma faixa acima do prompt mostra o plano e um botão
-por vez, o do comando do sworn que está na hora.
+`/sworn-plan` mostra o plano ativo, as tarefas feitas e abertas e a estimativa de sessões que faltam; o
+`/sworn-review` mostra cada ronda da revisão cega da sessão, por arquivo, com os inspetores e o custo; o
+`/sworn-replay` lista os arquivos que o último turno com edição mudou e, em cada um, as linhas de antes (-) e
+de depois (+), com as linhas longas cortadas. Para mostrá-las, o sworn copia cada arquivo antes e depois da
+edição para a pasta temporária do sistema (`sworn/replay/<sessão>`), que só você lê; as cópias nunca saem
+desta máquina. A linha de status traz o mesmo medidor em uma linha, e uma faixa acima do prompt mostra: o plano; um botão
+por vez, o do comando do sworn que está na hora; nos últimos 10 minutos antes de o cache do chat esfriar,
+quanto a próxima mensagem custaria depois disso; e, enquanto uma ronda da revisão cega roda, quantos dos
+inspetores dela já terminaram, o modelo deles e o custo até agora.
 
 ### Aprender, podar e estudar
 

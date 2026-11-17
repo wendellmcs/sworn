@@ -21,17 +21,26 @@ const jsonio = require('./jsonio.js');
 const HOOK = 'hook';
 const INSTRUCAO = 'instrucao';
 
+// H1 (A6-49, s372): o que existe e nao se le (EACCES, EPERM) conta como presente. O existsSync devolvia false tambem
+// para ele, e o design.json ou o .git sem permissao pareciam ausentes. Qualquer outro erro (ENOENT, ENOTDIR, o
+// caminho invalido com NUL, o nome longo demais) e "nao existe".
 function existe(p) {
-  try { return fs.existsSync(p); } catch (e) { return false; }
+  try {
+    fs.statSync(p);
+    return true;
+  } catch (e) {
+    return !!(e && (e.code === 'EACCES' || e.code === 'EPERM'));
+  }
 }
 
 // A6 (s220, R1 :28): so o ausente e "sem valor"; o que existe e nao se le devolve a causa (o codigo do sistema, ou o
 // erro do JSON), para o portao dizer, em vez de parecer que nunca se gravou. F5a: a leitura e a do lib/jsonio.js.
+// H1 (A6-51, s372): o campo e `causa` (a frase do porque, ou null), nao um sim ou nao.
 function lerProva(p) {
   const r = jsonio.ler(p);
-  if (r.etapa === 'json') return { valor: null, ilegivel: 'JSON invalido: ' + r.erro.message };
-  if (r.etapa === 'leitura') return { valor: null, ilegivel: r.erro.code || r.erro.message };
-  return { valor: r.valor, ilegivel: null };
+  if (r.etapa === 'json') return { valor: null, causa: 'JSON invalido: ' + r.erro.message };
+  if (r.etapa === 'leitura') return { valor: null, causa: r.erro.code || r.erro.message };
+  return { valor: r.valor, causa: null };
 }
 
 /** Os fatos deste ambiente, medidos uma vez e reusados por todos os portoes. */
@@ -41,7 +50,7 @@ function ambiente(cwd, projeto) {
   const degraus = degrausLib.normalizar((p.agentes || {}).degraus);
   const lidos = agentesLib.listar(cwd);
   const prova = lerProva(path.join(cwd, '.claude', 'sworn', 'apelidos-vivos.json'));
-  return {
+  const a = {
     temProjeto: !!projeto,
     temMarchas: !!(p.marchas && Object.keys(p.marchas).length > 0),
     temIntocaveis: Array.isArray(p.intocaveis) && p.intocaveis.length > 0,
@@ -50,12 +59,27 @@ function ambiente(cwd, projeto) {
     temGit: existe(path.join(cwd, '.git')),
     escada: escada.length,
     degraus: degraus.length,
-    temPastaDeAgentes: lidos.existe,
     agentes: lidos.agentes.length,
     catalogo: catalogoLib.ler(cwd),
     prova: prova.valor,
-    provaIlegivel: prova.ilegivel
+    provaIlegivel: prova.causa
   };
+  // H1 (A6-41 a A6-45, s372): a lista lida fica com o ambiente, para o portao do apelido nao reler a pasta; fora do
+  // JSON do --json (nao enumeravel), que mostra as contagens. O temPastaDeAgentes saiu: ninguem o lia.
+  Object.defineProperty(a, 'agentesLidos', { value: lidos, enumerable: false });
+  return a;
+}
+
+// H1 (A6-46, A6-50, s372): a frase do portao dos apelidos vivos, em ifs; era uma cadeia de ternarios de 3 niveis.
+function porqueApelidosVivos(a, cob, sondar) {
+  if (a.provaIlegivel) return 'apelidos-vivos.json nao se le (' + a.provaIlegivel + '): ' + apelidosLib.REGRAVAR;
+  if (cob.provaInvalida) return cob.provaInvalida;
+  if (cob.temProva) {
+    if (cob.naoProvados.length === 0) return 'todos os ' + cob.provados.length + ' apelidos foram sondados';
+    return 'faltam sondar: ' + cob.naoProvados.join(', ') + sondar;
+  }
+  return 'ainda nao se sondou neste ambiente' +
+    (cob.apelidos.length ? ' (a sondar: ' + cob.apelidos.join(', ') + ')' : '') + sondar;
 }
 
 function portao(chave, titulo, determinismo, verificavel, porque) {
@@ -106,17 +130,18 @@ function portoes(cwd, projeto, a) {
   // que nao opina - e a falha silenciosa que este relatorio existe para acusar.
   // A6-87 (D735): o efeito e o passo em palavras comuns; o passo vai pelo init, que grava escada e degraus juntos.
   // A6-112: efeito e passo em frases separadas, e a escada explicada na primeira vez. s266 (R1): o plural certo.
-  lista.push(portao('custo', 'Agente caro em marcha rapida', HOOK,
+  // H1 (A6-118, s372): a marcha glosada no titulo, e a escada tambem no ramo que vale
+  lista.push(portao('custo', 'Agente caro em marcha rapida (a tarefa simples)', HOOK,
     a.escada >= degrausLib.MINIMO,
     a.escada >= degrausLib.MINIMO
-      ? 'escada com ' + a.escada + ' nomes'
+      ? 'escada com ' + a.escada + ' nomes (a lista dos agentes, do mais barato ao mais caro)'
       : 'escada com ' + a.escada + (a.escada === 1 ? ' nome' : ' nomes') + ' (a escada e a lista dos agentes, ' +
         'do mais barato ao mais caro): com menos de ' + degrausLib.MINIMO + ', a checagem que barra o agente ' +
         'mais caro que a tarefa pede fica ' +
         'parada, e so este relatorio mostra isso. Para ela valer, rode o /sworn:init de novo e ponha ao menos ' +
         degrausLib.MINIMO + ' agentes na escada (agentes.escada do .claude/sworn/projeto.json)'));
 
-  const apel = apelidosLib.conferir(projeto, agentesLib.listar(cwd));
+  const apel = apelidosLib.conferir(projeto, a.agentesLidos || agentesLib.listar(cwd));
   // A6-52 (s235): os titulos em palavras comuns, sem "Gatilho n", "H4" nem o campo `model:`.
   lista.push(portao('apelido', 'Modelo que cada agente declara x apelido gravado no projeto', HOOK,
     apel.verificavel,
@@ -141,14 +166,7 @@ function portoes(cwd, projeto, a) {
     'repositorio do plugin) e grave a prova em .claude/sworn/apelidos-vivos.json, no formato que ele mostra';
   lista.push(portao('apelidos-vivos', 'O apelido de modelo ainda e aceito', INSTRUCAO,
     cob.temProva && cob.naoProvados.length === 0,
-    a.provaIlegivel ? 'apelidos-vivos.json nao se le (' + a.provaIlegivel + '): ' + apelidosLib.REGRAVAR
-    : cob.provaInvalida ? cob.provaInvalida
-    : cob.temProva
-      ? (cob.naoProvados.length === 0
-          ? 'todos os ' + cob.provados.length + ' apelidos foram sondados'
-          : 'faltam sondar: ' + cob.naoProvados.join(', ') + sondar)
-      : 'ainda nao se sondou neste ambiente' +
-        (cob.apelidos.length ? ' (a sondar: ' + cob.apelidos.join(', ') + ')' : '') + sondar));
+    porqueApelidosVivos(a, cob, sondar)));
 
   return lista;
 }

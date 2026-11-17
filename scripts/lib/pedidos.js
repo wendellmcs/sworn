@@ -29,7 +29,7 @@ function ligada(projeto) {
   return !(projeto && typeof projeto === 'object' && projeto[CHAVE] === false);
 }
 
-function doisDigitos(n) { return (n < 10 ? '0' : '') + n; }
+function doisDigitos(n) { return String(n).padStart(2, '0'); }
 
 function carimbo(ms) {
   const d = new Date(ms);
@@ -42,12 +42,13 @@ function nomeDaLista(frente) {
   return typeof frente === 'string' && /^[A-Za-z0-9_-]+$/.test(frente) ? frente : SEM_FRENTE;
 }
 
-function caminho(raiz, frente) { return PASTA + '/' + nomeDaLista(frente) + '.md'; }
+/** O caminho da lista, relativo a raiz do projeto (quem chama junta a raiz). */
+function caminho(frente) { return PASTA + '/' + nomeDaLista(frente) + '.md'; }
 
 /** O texto da lista da frente, ou null quando ainda nao existe. Outra falha de leitura lanca: a lista que existe e
  *  nao se le nao pode passar por lista sem pedido aberto. */
 function ler(raiz, frente) {
-  try { return fs.readFileSync(path.join(raiz, caminho(raiz, frente)), 'utf8'); } catch (e) {
+  try { return fs.readFileSync(path.join(raiz, caminho(frente)), 'utf8'); } catch (e) {
     if (e && e.code === 'ENOENT') return null;
     throw e;
   }
@@ -121,7 +122,11 @@ function registrar(raiz, frente, prompt, agora) {
   if (typeof prompt !== 'string' || !fs.existsSync(path.join(raiz, '.claude', 'sworn'))) return null;
   const texto = retomar.limpar(prompt);
   if (!texto) return null;
-  const rel = caminho(raiz, frente);
+  const rel = caminho(frente);
+  // A5-47: sem horario valido, vale o relogio (nunca "NaN-NaN-NaN NaN:NaN" na lista). So numero dentro da faixa de
+  // datas (8,64e15 ms) vale: o isFinite global aceitaria null e '' (viram 0, e a lista ganharia 1970), e um numero
+  // finito maior ainda daria Invalid Date. Math.abs(NaN) e Infinity caem fora.
+  const quando = typeof agora === 'number' && Math.abs(agora) <= 8.64e15 ? agora : Date.now();
   fs.mkdirSync(path.join(raiz, PASTA), { recursive: true });
   const trava = path.join(raiz, rel) + '.trava';
   // sem a trava no prazo (ou sem poder cria-la), o gancho grava assim mesmo: o pedido do dono nao se perde.
@@ -130,7 +135,7 @@ function registrar(raiz, frente, prompt, agora) {
   let travou = false;
   try { travou = travar(trava); } catch (e) { travou = false; }
   try {
-    return registrarTravado(raiz, rel, nomeDaLista(frente), prompt, texto, agora);
+    return registrarTravado(raiz, rel, nomeDaLista(frente), prompt, texto, quando);
   } finally {
     if (travou) soltar(trava);
   }
@@ -140,8 +145,10 @@ function registrarTravado(raiz, rel, lista, prompt, texto, agora) {
   // So o arquivo que nao existe e lista nova: outra falha de leitura lanca, e a numeracao e o cabecalho nao recomecam.
   let atual = null;
   try { atual = fs.readFileSync(path.join(raiz, rel), 'utf8'); } catch (e) { if (!e || e.code !== 'ENOENT') throw e; }
-  const cabecalho = atual === null ? '# Pedidos do dono - ' + lista + '\n\n' : '';
-  const linhas = atual === null ? [] : atual.split('\n');
+  // A5-46: o arquivo que existe vazio (criado a mao, ou truncado) tambem ganha o titulo
+  const nova = atual === null || atual === '';
+  const cabecalho = nova ? '# Pedidos do dono - ' + lista + '\n\n' : '';
+  const linhas = nova ? [] : atual.split('\n');
   const inteiro = retomar.mascarar(retomar.limparLinhas(prompt));
   const citado = handoffColado(texto);
   if (citado) {
@@ -208,7 +215,7 @@ function marcar(raiz, frente, lista, estado, evidencia) {
   // mascara ANTES de tirar os colchetes: o "[segredo omitido]" da mascara nao pode fechar a marca no meio
   const prova = retomar.mascarar(String(evidencia == null ? '' : evidencia)).replace(/[\][]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!prova) throw new Error('falta a evidencia (o commit, a decisao D### ou o que foi respondido)');
-  const arquivo = path.join(raiz, caminho(raiz, frente));
+  const arquivo = path.join(raiz, caminho(frente));
   const marca = ' [' + estado + ': ' + prova + ']';
   const quer = new Set(ns);
   const achados = new Set();

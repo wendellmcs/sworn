@@ -12,6 +12,17 @@ const atalhos = require('../scripts/lib/atalhos.js');
 const RAIZ = path.join(__dirname, '..');
 const PADRAO = ['atalho', 'ponytail', 'shortcut'];
 
+// A6-55: a linha sozinha, pelo caminho do painel (varrer), sem linha de baixo: { oque, limite, gatilho } ou null.
+// Uma linha da no maximo um achado, e sem linha de baixo nada fica cortado: o que sobrar disso reprova aqui.
+function umaLinha(linha, lista) {
+  const achados = atalhos.varrer(['x'], function () { return linha; }, lista);
+  assert.ok(achados.length <= 1, 'mais de um achado numa linha: ' + JSON.stringify(achados));
+  const a = achados[0];
+  if (!a) return null;
+  assert.deepStrictEqual(Object.keys(a).sort(), ['arquivo', 'gatilho', 'limite', 'linha', 'oque'], linha);
+  return { oque: a.oque, limite: a.limite, gatilho: a.gatilho };
+}
+
 test('marcas: padrao atalho, ponytail, shortcut; marcaDeAtalho troca so a primeira', () => {
   assert.deepStrictEqual(atalhos.marcas(null), PADRAO);
   assert.deepStrictEqual(atalhos.marcas({}), PADRAO);
@@ -22,37 +33,37 @@ test('marcas: padrao atalho, ponytail, shortcut; marcaDeAtalho troca so a primei
   }
 });
 
-test('lerLinha: os tres rotulos, em cada prefixo de comentario', () => {
+test('varrer, uma linha: os tres rotulos, em cada prefixo de comentario', () => {
   const esperado = { oque: 'preço fixo do Opus em vez de ler a tabela.', limite: 'só Opus 5.5.',
     gatilho: 'entrar outro modelo na tabela.' };
   const corpo = 'atalho: preço fixo do Opus em vez de ler a tabela. limite: só Opus 5.5. trocar quando: entrar outro modelo na tabela.';
   for (const linha of ['// ' + corpo, '# ' + corpo, '-- ' + corpo, '/* ' + corpo + ' */', '<!-- ' + corpo + ' -->',
     '  const x = 1; // ' + corpo, '\t# ' + corpo, '//' + corpo]) {
-    assert.deepStrictEqual(atalhos.lerLinha(linha, PADRAO), esperado, linha);
+    assert.deepStrictEqual(umaLinha(linha, PADRAO), esperado, linha);
   }
 });
 
-test('lerLinha: sem rotulo vira so o "o que", sem limite e sem gatilho', () => {
-  assert.deepStrictEqual(atalhos.lerLinha('// atalho: pausa medida pelo relogio, vale um fuso', PADRAO),
+test('varrer, uma linha: sem rotulo vira so o "o que", sem limite e sem gatilho', () => {
+  assert.deepStrictEqual(umaLinha('// atalho: pausa medida pelo relogio, vale um fuso', PADRAO),
     { oque: 'pausa medida pelo relogio, vale um fuso', limite: null, gatilho: null });
-  assert.deepStrictEqual(atalhos.lerLinha('# ponytail: x. limite: y.', PADRAO), { oque: 'x.', limite: 'y.', gatilho: null });
-  assert.deepStrictEqual(atalhos.lerLinha('# shortcut: z. trocar quando: w.', PADRAO), { oque: 'z.', limite: null, gatilho: 'w.' });
+  assert.deepStrictEqual(umaLinha('# ponytail: x. limite: y.', PADRAO), { oque: 'x.', limite: 'y.', gatilho: null });
+  assert.deepStrictEqual(umaLinha('# shortcut: z. trocar quando: w.', PADRAO), { oque: 'z.', limite: null, gatilho: 'w.' });
 });
 
 // revisao D688 R3 (correcao, D690): o gatilho era cortado primeiro e levava junto o limite escrito depois dele
-test('lerLinha: rotulos em qualquer ordem, um sem o texto do outro', () => {
-  assert.deepStrictEqual(atalhos.lerLinha('// atalho: a. trocar quando: b. limite: c.', PADRAO),
+test('varrer, uma linha: rotulos em qualquer ordem, um sem o texto do outro', () => {
+  assert.deepStrictEqual(umaLinha('// atalho: a. trocar quando: b. limite: c.', PADRAO),
     { oque: 'a.', limite: 'c.', gatilho: 'b.' });
 });
 
-test('lerLinha: fora de comentario, dentro de string ou marca colada nao conta', () => {
+test('varrer, uma linha: fora de comentario, dentro de string ou marca colada nao conta', () => {
   for (const linha of [
     'texto comum atalho: x',
     'atalho: x',
     "const s = '// atalho: x';",
     'const s = "# atalho: x";',
     'const s = `-- atalho: x`;',
-    // com espaco antes do prefixo: so a aspa aberta segura (mutacao: sem dentroDeString estes passavam)
+    // com espaco antes do prefixo: so a string que fecha depois dele segura (mutacao: sem pular a string, passavam)
     "const s = 'veja // atalho: x';",
     'const s = "texto # atalho: x";',
     'f(`a -- atalho: x`)',
@@ -65,10 +76,66 @@ test('lerLinha: fora de comentario, dentro de string ou marca colada nao conta',
     '// atalho x',
     ''
   ]) {
-    assert.strictEqual(atalhos.lerLinha(linha, PADRAO), null, linha);
+    assert.strictEqual(umaLinha(linha, PADRAO), null, linha);
   }
-  assert.strictEqual(atalhos.lerLinha('// divida: x', ['divida']).oque, 'x', 'marca configurada');
-  assert.strictEqual(atalhos.lerLinha('// atalho: x', ['divida']), null, 'so a marca da lista');
+  assert.strictEqual(umaLinha('// divida: x', ['divida']).oque, 'x', 'marca configurada');
+  assert.strictEqual(umaLinha('// atalho: x', ['divida']), null, 'so a marca da lista');
+});
+
+// A6-54: a aspa se le da esquerda, com escape e apostrofo; a contagem por paridade perdia estes comentarios
+test('varrer, uma linha: aspa escapada, apostrofo, aspa dentro de outra e prefixo dentro de string antes do comentario', () => {
+  for (const linha of [
+    'const s = "a \\" b"; // atalho: x',
+    "const s = 'a \\' b'; // atalho: x",
+    'const s = "a \\\\"; // atalho: x',
+    "Don't touch <!-- atalho: x -->",
+    "it's # atalho: x",
+    "the users' notes <!-- atalho: x -->",
+    // a aspa que nao fecha na linha e texto: o apostrofo depois de uma letra so (I'm, d'agua)
+    "I'm done here <!-- atalho: x -->",
+    "d'água # atalho: x",
+    // o apostrofo de don't nao abre string; a string 'a # b' depois dele fecha e o comentario vem depois
+    "Don't use 'a # b' here // atalho: x",
+    "the users' list 'a # b' // atalho: x",
+    // o apostrofo de uma contracao nao fecha a string: 'it's # b' fecha so no fim (revisao, ronda 3)
+    "x = 'it's # b' // atalho: x",
+    // a aspa depois de espaco fecha, mesmo com letra colada depois dela
+    "x = ' # 'b // atalho: x",
+    // so a mesma aspa fecha: a ' solta dentro da " nao fecha nada
+    'const s = "a \' # b"; // atalho: x',
+    'const s = "it\'s"; // atalho: x',
+    "const s = 'diz \"oi\"'; // atalho: x",
+    'const s = "a # b"; // atalho: x',
+    "s = f'x' # atalho: x"
+  ]) {
+    assert.deepStrictEqual(umaLinha(linha, PADRAO), { oque: 'x', limite: null, gatilho: null }, linha);
+  }
+  // a aspa sem par do I'm nao fecha no apostrofo do don't, dentro do comentario (revisao, ronda 3)
+  assert.deepStrictEqual(umaLinha("I'm done <!-- atalho: don't cache. trocar quando: y. -->", PADRAO),
+    { oque: "don't cache.", limite: null, gatilho: 'y.' });
+  for (const linha of [
+    'const s = "a \\" // atalho: x";',
+    "s = f'veja # atalho: x'",
+    "x = a 'veja # atalho: x'",
+    'const s = "it\'s // atalho: x";',
+    "const s = 'a' + 'b // atalho: x';",
+    's = """doc # atalho: x"""'
+  ]) {
+    assert.strictEqual(umaLinha(linha, PADRAO), null, linha);
+  }
+});
+
+// A6-54 (revisao): a linha se le uma vez; reler do comeco a cada prefixo custava o quadrado do tamanho dela
+test('varrer, uma linha: linha longa com muito prefixo e aspa sem fecho termina rapido', { timeout: 10000 }, () => {
+  const longa = '"' + ' #'.repeat(300000);
+  const aspas = "'a' ".repeat(100000) + '// atalho: x';
+  // a aspa sem fecho e as iguais depois dela, todas escapadas: cada uma relida ate o fim seria o quadrado de novo
+  const escapadas = '"' + '\\"'.repeat(150000) + ' // atalho: x';
+  const inicio = Date.now();
+  assert.strictEqual(umaLinha(longa, PADRAO), null);
+  assert.deepStrictEqual(umaLinha(aspas, PADRAO), { oque: 'x', limite: null, gatilho: null });
+  assert.deepStrictEqual(umaLinha(escapadas, PADRAO), { oque: 'x', limite: null, gatilho: null });
+  assert.ok(Date.now() - inicio < 5000, 'levou ' + (Date.now() - inicio) + ' ms');
 });
 
 test('varrer: linha comecando em 1, pula binario e arquivo que nao leu', () => {
@@ -302,9 +369,10 @@ test('painel: vazio (mock coluna 3) diz onde procurou', () => {
   assert.strictEqual(atalhos.painel([], 245, PADRAO), [
     'Nenhum atalho registrado.',
     '',
-    'Procurei comentários com atalho:, ponytail: ou shortcut: em 245 arquivos (os rastreados pelo git e os novos que ele não ignora).'
+    'Procurei comentários com atalho:, ponytail: ou shortcut: em 245 arquivos de texto, dos rastreados pelo git e dos novos ' +
+      'que ele não ignora (binário, link e arquivo acima de 1 MB ficam fora).'
   ].join('\n'));
-  assert.ok(atalhos.painel([], 1, ['divida']).includes('com divida: em 1 arquivo ('), 'uma marca e um arquivo');
+  assert.ok(atalhos.painel([], 1, ['divida']).includes('com divida: em 1 arquivo de texto,'), 'uma marca e um arquivo');
 });
 
 // --- o CLI, num repositorio de verdade ---
@@ -360,11 +428,62 @@ test('CLI: repositorio sem atalho conta os arquivos; marcaDeAtalho do projeto.js
     let r = rodar(dir);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.ok(r.stdout.startsWith('Nenhum atalho registrado.'), r.stdout);
-    assert.ok(r.stdout.includes('em 2 arquivos ('), r.stdout);
+    assert.ok(r.stdout.includes('em 2 arquivos de texto,'), r.stdout);
     escrever(dir, '.claude/sworn/projeto.json', JSON.stringify({ marcaDeAtalho: 'divida' }));
     r = rodar(dir);
     assert.ok(r.stdout.includes('(marca: divida, ponytail, shortcut)') && r.stdout.includes('b.js\n  :1   so com a marca'), r.stdout);
   } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A6-53: o "em N arquivos" do painel e o dos arquivos de texto lidos; binario e texto acima de 1 MB nao foram lidos
+test('CLI: o total do painel conta so o texto lido, sem o binario e o arquivo acima de 1 MB', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-atalhos-total-'));
+  try {
+    git(dir, ['init', '-q']);
+    escrever(dir, 'a.js', '// nada\n');
+    escrever(dir, 'b.bin', Buffer.from([0x2f, 0x2f, 0x20, 0x00, 0x01]));
+    escrever(dir, 'grande.txt', 'x'.repeat(1024 * 1024 + 1));
+    escrever(dir, 'no-limite.txt', 'x'.repeat(1024 * 1024)); // exatamente 1 MB ainda se le
+    const r = rodar(dir);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(r.stdout.includes('em 2 arquivos de texto,'), r.stdout);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A6-56: o link simbolico nao se segue, nem para dentro nem para fora do repositorio
+test('lerArquivo: link simbolico volta null; o alvo, lido pelo proprio caminho, volta o texto', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-atalhos-link-'));
+  try {
+    const alvo = path.join(dir, 'alvo.js');
+    const link = path.join(dir, 'link.js');
+    fs.writeFileSync(alvo, '// atalho: de fora\n');
+    try { fs.symlinkSync(alvo, link, 'file'); } catch (e) { t.skip('sem permissao para criar link simbolico: ' + e.code); return; }
+    assert.strictEqual(atalhos.lerArquivo(alvo), '// atalho: de fora\n');
+    assert.strictEqual(atalhos.lerArquivo(link), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A6-56, sem permissao de link (Windows sem modo de desenvolvedor): o lstat diz link e o arquivo real nao se le
+test('lerArquivo: o que o lstat diz ser link fica fora, mesmo que o stat ache arquivo', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-atalhos-lstat-'));
+  try {
+    const arq = path.join(dir, 'link.js');
+    fs.writeFileSync(arq, '// atalho: de fora\n');
+    const original = fs.lstatSync;
+    t.mock.method(fs, 'lstatSync', function (p) {
+      if (p === arq) return { isFile: function () { return false; }, isSymbolicLink: function () { return true; }, size: 19 };
+      return original.apply(fs, arguments);
+    });
+    assert.strictEqual(atalhos.lerArquivo(arq), null);
+  } finally {
+    // o node:test restauraria no fim do teste, mas a limpeza abaixo nao pode ver o lstat falso do link.js
+    t.mock.restoreAll();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

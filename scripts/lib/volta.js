@@ -70,7 +70,8 @@ function motivo(r, resumo) {
     const id = r.modelo ? '"' + String(r.modelo).replace(/[^\x20-\x7E]/g, '?') + '"' : 'deste chat';
     linhas.push('Sem o valor em US$: o modelo ' + id + ' nao esta na tabela de precos do sworn.');
   }
-  if (resumo) {
+  // A5-20: o resumir devolve { causa } quando nao monta o resumo; null (o require que lancou) segue sem causa.
+  if (resumo && typeof resumo.caminho === 'string') {
     const h = resumo.handoff;
     const comHandoff = h && h.emDia && typeof h.caminho === 'string' && /^[\x20-\x7E]+$/.test(h.caminho);
     linhas.push('', 'Resumo deste chat gravado em ' + resumo.caminho + ' (sem gastar nada).',
@@ -78,7 +79,9 @@ function motivo(r, resumo) {
       '     Retome o chat ' + resumo.chat + (comHandoff ? ' pelo handoff ' + h.caminho + ' e pelo resumo ' + resumo.caminho +
         ': leia os dois' : ' pelo resumo ' + resumo.caminho + ': leia-o') + ' antes de qualquer coisa e siga de onde ele parou.');
   } else {
-    linhas.push('', 'Sem resumo: nao consegui montar o resumo deste chat.',
+    const causa = resumo && typeof resumo.causa === 'string' && resumo.causa
+      ? ' (' + resumo.causa.replace(/[^\x20-\x7E]/g, '?').slice(0, 200) + ')' : '';
+    linhas.push('', 'Sem resumo: nao consegui montar o resumo deste chat' + causa + '.',
       // A5-59 (D735): onde fica o handoff e como saber se esta em dia.
       '', 'Faca uma destas:', '  1. abra um chat novo e cole o prompt do ultimo handoff (o /sworn:handoff grava em ' +
         '.sworn/handoff/), se ele foi gravado depois do seu ultimo pedido;');

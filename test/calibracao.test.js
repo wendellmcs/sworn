@@ -407,3 +407,30 @@ test('calibrar.js: --gravar recusa valor torto ou no alarme e nao grava; sem pro
     }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('calibracao A6-31/33: so Edit, Write e NotebookEdit marcam edicao, e a mensagem sem preco nao marca chamada nenhuma', () => {
+  const editar = (nome) => ({ type: 'tool_use', name: nome, input: { file_path: 'C:/proj/src/app.js' } });
+  // cada ferramenta que grava marca a sua chamada; um nome que so contem a palavra nao marca
+  const s = cal.lerSessao([fala('pedido'), chamada(60000, { conteudo: [editar('Edit')] }),
+    chamada(61000, { conteudo: [editar('Write')] }), chamada(62000, { conteudo: [editar('NotebookEdit')] }),
+    chamada(63000, { conteudo: [editar('mcp__arquivos__Write')] }), chamada(64000, { conteudo: [editar('MultiEditX')] })].join('\n'));
+  assert.deepStrictEqual(s.chamadas.map((c) => c.edicao), [true, true, true, false, false]);
+  // a mensagem de modelo sem preco nao vira chamada, e a edicao dela nao cai na chamada 0
+  const t = cal.lerSessao([fala('pedido'), chamada(60000),
+    chamada(61000, { id: 'sem', modelo: 'modelo-sem-preco', conteudo: [editar('Edit')] }),
+    chamada(61000, { id: 'sem', modelo: 'modelo-sem-preco', conteudo: [editar('Write')] }), chamada(62000)].join('\n'));
+  assert.deepStrictEqual(t.chamadas.map((c) => c.edicao), [false, false]);
+  // a mesma mensagem sem preco em duas linhas conta uma vez so
+  assert.strictEqual(t.semPreco, 1);
+});
+
+test('calibracao: mensagem sem id vira chamada propria, e nao se junta as outras sem id', () => {
+  const semId = (C) => {
+    const o = JSON.parse(chamada(C));
+    delete o.message.id;
+    return JSON.stringify(o);
+  };
+  const s = cal.lerSessao([fala('pedido'), semId(60000), semId(61000), semId(62000), chamada(63000, { id: 'x' }),
+    chamada(63000, { id: 'x' })].join('\n'));
+  assert.deepStrictEqual(s.chamadas.map((c) => c.C), [60000, 61000, 62000, 63000]);
+});

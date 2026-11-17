@@ -453,8 +453,26 @@ function motivoOutraFrente(alvo, arquivo) {
   ].concat(avisoDeAcento(alvo, true)).join('\n');
 }
 
+/** V3 (D846): o arquivo que outra sessao do sworn escreveu depois que esta abriu, ha `msAtras` ms, e segue sem commit. */
+function motivoOutraSessao(alvo, arquivo, msAtras) {
+  const min = Number.isFinite(msAtras) ? Math.floor(Math.max(0, msAtras) / 60000) : null;
+  const quando = min === null ? '' : min < 1 ? ' (a ultima escrita dela foi ha menos de 1 min)' :
+    ' (a ultima escrita dela foi ha ' + min + ' min)';
+  return [
+    TRAVA_OUTRA_FRENTE,
+    '',
+    'O arquivo ' + ascii(alvo) + ' foi alterado por outra sessao do sworn depois que esta abriu' + quando +
+      ', e a mudanca segue sem commit.',
+    'E trabalho de outra tarefa em andamento neste repositorio: nao o altere por conta propria, ou uma das duas sessoes escreve por cima da outra.',
+    'Quando a outra sessao fizer o commit, este arquivo volta a passar.',
+    '',
+    'Se precisar mesmo tocar nele, isso e decisao do dono. Com a autorizacao do dono,',
+    'liste o caminho exato em ' + (arquivo || ARQUIVO) + ', na secao "## Dentro". Essa ampliacao do escopo e contada e aparece no fecho do turno.'
+  ].concat(avisoDeAcento(alvo, true)).join('\n');
+}
+
 module.exports = {
   ARQUIVO, PASTA_FRENTES, parse, carregar, dentro, declaradoFora, ascii, asciiEmUmaLinha, conteudoDepois, ampliou,
   avisoHeranca, frenteDoAlvo, arquivoEmVigor, nomeSeguro,
-  motivoSemEscopo, motivoFora, motivoDeclaradoFora, motivoIntocavel, motivoOutraFrente, motivoNomeDeFrente
+  motivoSemEscopo, motivoFora, motivoDeclaradoFora, motivoIntocavel, motivoOutraFrente, motivoOutraSessao, motivoNomeDeFrente
 };

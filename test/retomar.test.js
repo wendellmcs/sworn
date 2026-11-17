@@ -198,7 +198,11 @@ test('volta-resumo: montar segue o mock (D588), com o texto do sworn em ASCII', 
   // dentro da raiz sai relativo; fora, como veio
   assert.ok(linhas.indexOf('scripts/referencia.js') !== -1);
   assert.ok(linhas.indexOf('/fora/outro.md') !== -1);
-  assert.ok(linhas.indexOf('Se precisar de handoff completo, rode /sworn:handoff.') !== -1);
+  // A5-79: o que o /sworn:handoff entrega e onde grava
+  assert.deepStrictEqual(linhas.slice(linhas.indexOf('## Para o chat novo') + 3, linhas.indexOf('## Para o chat novo') + 5), [
+    'Para o handoff completo (plano, decisoes, pendencias e o prompt pronto), rode /sworn:handoff: ele grava o texto',
+    'de continuacao em .sworn/handoff/.'
+  ]);
   // A5-22 (D735): o que abrir (o que "Onde parou" cita) e como comparar, sem "ledger" nem "registro"
   const novo = linhas.slice(linhas.indexOf('## Para o chat novo') + 1, linhas.indexOf('## Para o chat novo') + 3);
   assert.deepStrictEqual(novo, [
@@ -221,7 +225,7 @@ test('volta-resumo: montar corta pedido em 600 e resposta em 800, mascara segred
     handoff: null
   } }));
   // acima do teto saem os arquivos mais velhos, nao o fim do resumo
-  assert.ok(t.indexOf('Se precisar de handoff completo, rode /sworn:handoff.') !== -1);
+  assert.ok(t.indexOf('de continuacao em .sworn/handoff/.') !== -1);
   assert.ok(t.indexOf('c'.repeat(300) + '0') !== -1);
   assert.ok(t.indexOf('c'.repeat(300) + '19') === -1);
   const p1 = t.split('\n').filter(function (l) { return /^1\. \(\d\d:\d\d\) a/.test(l); })[0];
@@ -293,17 +297,115 @@ test('volta-resumo: resumir grava e devolve o caminho; handoff em dia = gravado 
   } finally { r.fim(); fs.rmSync(raiz, { recursive: true, force: true }); }
 });
 
-test('volta-resumo: resumir sem registro legivel ou sem pedido devolve null e nao grava nada', () => {
+// A5-20: sem resumo, o resumir diz a causa ({ causa }) em vez do null mudo, e nao grava nada.
+test('volta-resumo: resumir sem registro legivel ou sem pedido devolve a causa e nao grava nada', () => {
   const raiz = pasta();
   const vazio = registro(['']);
   const semPedido = registro([resposta(10, 'so resposta')]);
   try {
     const base = { raiz: raiz, sessao: ID, frente: null, agora: AGORA, volta: { parado: 76 * MIN, contexto: 461234, modelo: null } };
-    assert.strictEqual(retomar.resumir(Object.assign({}, base, { transcript: path.join(raiz, 'nao-existe.jsonl') })), null);
-    assert.strictEqual(retomar.resumir(Object.assign({}, base, { transcript: vazio.f })), null);
-    assert.strictEqual(retomar.resumir(Object.assign({}, base, { transcript: semPedido.f })), null);
+    const semPedidoCausa = { causa: 'nao achei mensagem sua no fim da conversa que li' };
+    assert.deepStrictEqual(retomar.resumir(Object.assign({}, base, { transcript: path.join(raiz, 'nao-existe.jsonl') })),
+      { causa: 'nao consegui ler do disco a conversa deste chat' });
+    assert.deepStrictEqual(retomar.resumir(Object.assign({}, base, { transcript: vazio.f })), semPedidoCausa);
+    assert.deepStrictEqual(retomar.resumir(Object.assign({}, base, { transcript: semPedido.f })), semPedidoCausa);
+    // o resumo grava em .sworn/handoff/: nenhum dos tres casos cria a pasta
+    assert.strictEqual(fs.existsSync(path.join(raiz, '.sworn')), false);
     assert.strictEqual(fs.existsSync(path.join(raiz, '.claude')), false);
+    // a falha ao gravar (id que nao serve de nome) sai como causa, numa linha, sem o "Error:" do Node
+    const ruim = registro([pedido(5, 'faz x')]);
+    // a raiz dentro de uma pasta-mae so deste teste: o arquivo que escapasse por '../fora' cairia nela
+    const mae = pasta();
+    const dentro = path.join(mae, 'r');
+    fs.mkdirSync(dentro);
+    try {
+      const r = retomar.resumir(Object.assign({}, base, { raiz: dentro, transcript: ruim.f, sessao: '../fora' }));
+      assert.strictEqual(r.causa, 'o identificador deste chat nao serve de nome de arquivo');
+      assert.strictEqual(r.caminho, undefined);
+      // nada gravado, nem dentro nem fora da raiz
+      assert.deepStrictEqual(fs.readdirSync(dentro), []);
+      assert.deepStrictEqual(fs.readdirSync(mae), ['r']);
+    } finally { ruim.fim(); fs.rmSync(mae, { recursive: true, force: true }); }
   } finally { vazio.fim(); semPedido.fim(); fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
+// A5-20: a causa de uma excecao qualquer sai mascarada ANTES do corte (o segredo partido nao casaria mais) e cortada
+// em 200 sem partir emoji ao meio.
+test('volta-resumo: a causa longa sai mascarada, em 200 e sem meio emoji', () => {
+  const raiz = pasta();
+  const reg = registro([pedido(5, 'faz x')]);
+  const plano = require('../scripts/lib/plano.js');
+  const original = plano.linhaDoPlanoDaSessao;
+  const segredo = 'sk-' + 'a'.repeat(40);
+  try {
+    // o segredo atravessa a posicao 200; o emoji cai bem no corte
+    plano.linhaDoPlanoDaSessao = function () { throw new Error('x'.repeat(180) + ' ' + segredo + ' fim'); };
+    const r1 = retomar.resumir({ raiz: raiz, sessao: ID, frente: null, agora: AGORA, transcript: reg.f, volta: null });
+    assert.strictEqual(r1.causa.indexOf('sk-'), -1, r1.causa);
+    assert.ok(r1.causa.length <= 200, String(r1.causa.length));
+    plano.linhaDoPlanoDaSessao = function () { throw new Error('y'.repeat(196) + '\u{1F600}' + 'z'.repeat(20)); };
+    const r2 = retomar.resumir({ raiz: raiz, sessao: ID, frente: null, agora: AGORA, transcript: reg.f, volta: null });
+    assert.ok(r2.causa.length <= 200, String(r2.causa.length));
+    assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(r2.causa), 'meio emoji no fim: ' + JSON.stringify(r2.causa.slice(-5)));
+    assert.ok(/\.\.\.$/.test(r2.causa), r2.causa.slice(-5));
+  } finally { plano.linhaDoPlanoDaSessao = original; reg.fim(); fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
+// A5-18: sem horario valido, o dia vira tracos no texto e o nome do arquivo leva a data de hoje.
+test('volta-resumo: gravar sem horario valido usa a data de hoje no nome, nunca NaN', () => {
+  const raiz = pasta();
+  try {
+    const diaDe = function (d) {
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    };
+    // null e '' tambem: o isFinite global os leria como 0 (1970); 1e17 e finito mas fora da faixa de datas
+    for (const agora of [NaN, undefined, Infinity, 'x', null, '', 1e17, -1e17]) {
+      // o dia lido antes e depois: a gravacao que cruza a meia-noite cai num dos dois
+      const antes = diaDe(new Date());
+      const rel = retomar.gravar(raiz, ID, agora, 'texto');
+      const depois = diaDe(new Date());
+      const m = /^\.sworn\/handoff\/(\d{4}-\d{2}-\d{2})-retomar-/.exec(rel);
+      assert.ok(m && (m[1] === antes || m[1] === depois), JSON.stringify(agora) + ' -> ' + rel);
+    }
+    for (const agora of [NaN, null, '', 1e17]) {
+      const t = retomar.montar(dados({ agora: agora }));
+      assert.ok(t.indexOf('Gerado pelo sworn em ---------- --:--') !== -1, JSON.stringify(agora));
+    }
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
+// A5-19: as tres chamadas do git dividem um prazo so; a que fica sem prazo nao roda.
+test('volta-resumo: gitDaRaiz divide um prazo so entre as tres chamadas', () => {
+  const git = require('../scripts/lib/git.js');
+  const original = git.correr;
+  const prazos = [];
+  let relogio = 0;
+  git.correr = function (raiz, args, op) { prazos.push(op.timeout); relogio += 900; return 'saida\n'; };
+  try {
+    const r = retomar.gitDaRaiz('qualquer', 2000, function () { return relogio; });
+    // 2000 de prazo; cada chamada gasta 900: a 1a tem 2000, a 2a 1100, a 3a 200
+    assert.deepStrictEqual(prazos, [2000, 1100, 200]);
+    assert.deepStrictEqual(r, { head: 'saida', ramo: 'saida', modificados: ['saida'] });
+    prazos.length = 0;
+    relogio = 0;
+    git.correr = function (raiz, args, op) { prazos.push(op.timeout); relogio += 1500; return 'x\n'; };
+    const curto = retomar.gitDaRaiz('qualquer', 2000, function () { return relogio; });
+    // a 3a ficaria sem prazo (2000 - 3000): nao roda, e o status sai vazio
+    assert.deepStrictEqual(prazos, [2000, 500]);
+    assert.deepStrictEqual(curto, { head: 'x', ramo: 'x', modificados: [] });
+    // a chamada que falha (git.correr devolve null) nao derruba as outras: sem HEAD nao ha git; sem ramo ou status,
+    // o campo sai vazio
+    const falhas = function (qual) {
+      return function (raiz, args) { return args.join(' ') === qual ? null : 'ok\n'; };
+    };
+    git.correr = falhas('rev-parse --short HEAD');
+    assert.strictEqual(retomar.gitDaRaiz('qualquer', 2000, function () { return 0; }), null);
+    git.correr = falhas('rev-parse --abbrev-ref HEAD');
+    assert.deepStrictEqual(retomar.gitDaRaiz('qualquer', 2000, function () { return 0; }), { head: 'ok', ramo: '', modificados: ['ok'] });
+    git.correr = falhas('status --short');
+    assert.deepStrictEqual(retomar.gitDaRaiz('qualquer', 2000, function () { return 0; }), { head: 'ok', ramo: 'ok', modificados: [] });
+    assert.strictEqual(retomar.PRAZO_DO_GIT_MS, 2000);
+  } finally { git.correr = original; }
 });
 
 // Colheita 10-20, item 13 (D674): o handoff tem dono. O chat que o le marca a posse; outro chat que le o mesmo handoff

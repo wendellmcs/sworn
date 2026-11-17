@@ -147,7 +147,10 @@ test('molde: fatia que e o valor inteiro no frontmatter sai citada e volta igual
     '[lista] fingida',
     '*comeca com estrela',
     'termina com dois-pontos:',
-    'tem "aspas" e \ barra: junto',
+    'tem "aspas" e \\ barra: junto',
+    // a barra so muda a leitura no fim ou antes de aspas: sem o escape de \\, estes dois nao voltam iguais
+    'barra no fim: \\',
+    'barra: \\"antes das aspas\\"',
     '"ja vem entre aspas"'
   ];
   for (const original of casos) {
@@ -210,7 +213,8 @@ test('A4-mol-1: lerRespostas separa ler de interpretar e recusa o que nao e obje
   r = molde.lerRespostas(em('quebrado.json', '{"a": '));
   assert.strictEqual(r.ok, false);
   assert.ok(/quebrado\.json nao e JSON valido: /.test(r.erro), r.erro);
-  [['nulo.json', 'null', 'nulo'], ['lista.json', '[1]', 'lista'], ['numero.json', '5', 'number']].forEach(([n, c, tipo]) => {
+  [['nulo.json', 'null', 'nulo'], ['lista.json', '[1]', 'lista'], ['numero.json', '5', 'numero'], ['texto.json', '"x"', 'texto'],
+    ['logico.json', 'true', 'verdadeiro ou falso']].forEach(([n, c, tipo]) => {
     const x = molde.lerRespostas(em(n, c));
     assert.strictEqual(x.ok, false, n);
     assert.ok(x.erro.indexOf(n + ' tem de ser um objeto JSON') !== -1 && x.erro.indexOf('veio ' + tipo) !== -1, x.erro);
@@ -231,6 +235,48 @@ test('A4-mol-2: lerRespostas aceita o arquivo de respostas com BOM', () => {
   fs.writeFileSync(p, '\uFEFF{"slug": "x"}', 'utf8');
   assert.deepStrictEqual(molde.lerRespostas(p), { ok: true, valores: { slug: 'x' } });
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// A4-67/A4-68: cada falha diz a etapa ('ler', 'json', 'forma'), e o arquivo vazio tem frase propria em vez do
+// "Unexpected end of JSON input" do JSON.parse.
+test('A4-67: lerRespostas diz a etapa da falha e o arquivo vazio tem frase propria', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn respostas-'));
+  const em = (nome, conteudo) => { const p = path.join(dir, nome); fs.writeFileSync(p, conteudo, 'utf8'); return p; };
+  try {
+    assert.strictEqual(molde.lerRespostas(path.join(dir, 'nao-existe.json')).etapa, 'ler');
+    assert.strictEqual(molde.lerRespostas(em('quebrado.json', '{"a": ')).etapa, 'json');
+    assert.strictEqual(molde.lerRespostas(em('lista.json', '[1]')).etapa, 'forma');
+    for (const [nome, conteudo] of [['vazio.json', ''], ['espacos.json', '  \r\n\t'], ['so-bom.json', '\uFEFF']]) {
+      const r = molde.lerRespostas(em(nome, conteudo));
+      assert.strictEqual(r.ok, false, nome);
+      assert.strictEqual(r.etapa, 'json', nome);
+      assert.strictEqual(r.erro, path.join(dir, nome) + ' esta vazio: escreva nele as respostas como um objeto JSON ' +
+        '({ ... }), com uma chave para cada fatia {{texto:<nome>}} do molde');
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A4-12: frontmatter vazio ('---\n---\n'): a cerca de fecho vem logo depois da de abertura, e o resto do molde e
+// corpo. Antes o molde inteiro virava cabecalho: o valor saia entre aspas e a resposta com quebra virava marca.
+test('A4-12: frontmatter vazio fecha na segunda cerca e o resto e corpo', () => {
+  for (const q of ['\n', '\r\n']) {
+    const m = '---' + q + '---' + q + 'quando: {{texto:quando}}' + q;
+    assert.strictEqual(molde.preencher(m, { quando: 'a: b' }, {}), '---' + q + '---' + q + 'quando: a: b' + q);
+    assert.strictEqual(molde.preencher(m, { quando: 'um\ndois' }, {}), '---' + q + '---' + q + 'quando: um\ndois' + q);
+  }
+  // o frontmatter com conteudo segue como antes: o valor do cabecalho sai citado
+  assert.strictEqual(molde.preencher('---\nd: {{texto:quando}}\n---\nc\n', { quando: 'a: b' }, {}), '---\nd: "a: b"\n---\nc\n');
+});
+
+// A4-13: so a chave propria do projeto.json conta como campo; toString e constructor sao herdados de Object.
+test('A4-13: campo herdado (toString, constructor) nao conta como existente', () => {
+  const r = molde.preencher('{{campo:toString}} {{campo:a.constructor}} {{campo:a.b}}', {}, { a: { b: 1 } });
+  assert.strictEqual(r, '(POR PREENCHER: campo toString nao existe em projeto.json) ' +
+    '(POR PREENCHER: campo a.constructor nao existe em projeto.json) ' +
+    '`a.b` de `.claude/sworn/projeto.json` (leia de la, nao decore)');
 });
 
 // ── gerar-skill.js, exercido como processo (so tinha o teste de fiacao sem projeto.json) ──

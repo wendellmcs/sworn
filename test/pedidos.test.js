@@ -59,6 +59,35 @@ test('item 10: lista que existe e nao se le lanca, sem recomecar do 1 nem repeti
   } finally { fs.readFileSync = ler; t.fim(); }
 });
 
+// A5-46: a lista que existe vazia ganha o titulo; A5-47: horario que nao e numero vale o relogio, nunca NaN.
+test('H1: lista vazia ganha o titulo e horario invalido vira a hora de agora', () => {
+  const t = pasta(true);
+  try {
+    fs.mkdirSync(path.join(t.dir, '.claude', 'sworn', 'pedidos'), { recursive: true });
+    fs.writeFileSync(path.join(t.dir, '.claude', 'sworn', 'pedidos', 'f.md'), '');
+    pedidos.registrar(t.dir, 'f', 'primeiro', AGORA);
+    assert.strictEqual(lista(t.dir, 'f'), '# Pedidos do dono - f\n\n1. 2026-10-25 13:05 - primeiro\n');
+    // o carimbo do relogio, escrito como a lista escreve (hora local), sem converter de volta (o horario de verao
+    // repete uma hora, e a conversao de volta erraria por 1 h)
+    const carimbo = function (d) {
+      const dois = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + dois(d.getMonth() + 1) + '-' + dois(d.getDate()) + ' ' + dois(d.getHours()) + ':' +
+        dois(d.getMinutes());
+    };
+    // null e '' tambem: o isFinite global os leria como 0 (1970); 1e17 e finito mas fora da faixa de datas
+    for (const [i, agora] of [NaN, undefined, Infinity, 'x', null, '', 1e17, -1e17].entries()) {
+      const antes = carimbo(new Date());
+      pedidos.registrar(t.dir, 'g', 'pedido ' + i, agora);
+      const depois = carimbo(new Date());
+      const linha = lista(t.dir, 'g').split('\n').filter(function (l) { return / - pedido /.test(l); }).pop();
+      const m = /^\d+\. (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) - pedido (\d+)$/.exec(linha);
+      assert.ok(m && m[2] === String(i), linha);
+      // o registro que cruza a virada do minuto cai num dos dois
+      assert.ok(m[1] === antes || m[1] === depois, JSON.stringify(agora) + ' -> ' + linha);
+    }
+  } finally { t.fim(); }
+});
+
 test('item 10: sem .claude/sworn/ nada se grava (projeto sem sworn nao e poluido)', () => {
   const t = pasta(false);
   try {

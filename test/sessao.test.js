@@ -152,6 +152,26 @@ test('sessao.js: tokens ao vivo negativos ou infinitos nao entram no gatilho de 
   });
 });
 
+// V2 (D847): o cronometro do cache sai do fim do ultimo turno que o mod manda, do contexto ao vivo e do modelo.
+test('sessao.js: devolve o `cache` do fim do ultimo turno, com o contexto ao vivo e o preco do modelo', () => {
+  cenario(function (c) {
+    const grande = Object.assign({}, USO, { context: { tokens: 120000, window: 1000000, percent: 12 } });
+    const r = rodar(c, { uso: grande, amostras: [], sessao: 'sess-c', ultimaVez: 5000, modelo: 'claude-opus-5-5' });
+    // 120 mil tokens x US$ 8 por milhao (escrita de 1 h do Opus 5.5) = US$ 0,96
+    assert.deepStrictEqual(r.cache, { ate: 5000 + 3600000, avisoMs: 600000,
+      frase: 'depois disso a próxima mensagem regrava 120 mil tokens (≈ US$ 0,96). Mande uma mensagem antes disso para poupar.' });
+    // modelo fora da tabela: a frase sai sem o custo
+    const semPreco = rodar(c, { uso: grande, amostras: [], sessao: 'sess-c', ultimaVez: 5000, modelo: 'modelo-novo' });
+    assert.strictEqual(semPreco.cache.frase, 'depois disso a próxima mensagem regrava 120 mil tokens. Mande uma mensagem antes disso para poupar.');
+    // sem o fim do turno (o mod acabou de carregar) ou com ele torto, nao ha o que avisar
+    assert.strictEqual(rodar(c, { uso: grande, amostras: [], sessao: 'sess-c', modelo: 'claude-opus-5-5' }).cache, null);
+    assert.strictEqual(rodar(c, { uso: grande, amostras: [], sessao: 'sess-c', ultimaVez: '5000', modelo: 'claude-opus-5-5' }).cache, null);
+    assert.strictEqual(rodar(c, { uso: grande, amostras: [], sessao: 'sess-c', ultimaVez: -1, modelo: 'claude-opus-5-5' }).cache, null);
+    // o chat pequeno (46.900 tokens, abaixo de 50 mil), com o resto igual ao caso que avisa
+    assert.strictEqual(rodar(c, { uso: USO, amostras: [], sessao: 'sess-c', ultimaVez: 5000, modelo: 'claude-opus-5-5' }).cache, null);
+  });
+});
+
 // Pedido 30 (plano dos pedidos 30-32, Tarefa 2): o medidor devolve a linha do plano, que o mod poe na faixa.
 test('sessao.js: devolve a linha do plano (vazia sem plano)', () => {
   cenario(function (c) {

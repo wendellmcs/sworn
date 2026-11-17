@@ -154,6 +154,16 @@ io.blindar(function () {
       }
       return s;
     });
+    // V3 (D846): o arquivo escrito entra no registro do projeto (lib/toques.js), que a trava 5b das OUTRAS sessoes le.
+    // Falha cala: sem o registro, a outra sessao so perde o aviso deste toque, e a escrita ja aconteceu.
+    try {
+      const escrito = (e.tool_input || {}).file_path || (e.tool_input || {}).notebook_path || doShell;
+      if (typeof escrito === 'string' && escrito && ['grep', 'glob', 'read'].indexOf(ferramenta) === -1) {
+        const base = typeof e.cwd === 'string' && e.cwd ? e.cwd : process.cwd();
+        require('./lib/toques.js').registrar(require('./lib/config.js').raizDoProjeto(base),
+          require('node:path').resolve(base, escrito), e.session_id, Date.now());
+      }
+    } catch (err) { /* fail-open: o toque nao registrado so tira o aviso da outra sessao */ }
     // Item 13 (D674): o agente principal que le um handoff vira o dono dele (retomar.reclamar); se outra sessao o pegou
     // ha menos de 24 h, o aviso entra no contexto. Falha cala: a leitura ja aconteceu e o turno segue.
     // s338: o agente principal que GRAVA um handoff solta as posses dele (retomar.soltar): o chat seguinte nao e

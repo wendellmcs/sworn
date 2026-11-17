@@ -486,8 +486,8 @@ test('A2-46: o aviso diz quais anti-referencias o portao ignorou, pela posicao n
 // aviso de negacao, e a escrita sem valor fora passava calada. validar() diz cada item sem efeito e o que escrever.
 test('A4-des-1: validar acusa o que nao e objeto e cada item sem efeito, por chave e posicao', () => {
   assert.deepStrictEqual(design.validar({ cores: ['#fff'], raios: '4px', antiReferencias: ['gradiente'] }),
-    { ok: true, erros: [] });
-  assert.deepStrictEqual(design.validar({}), { ok: true, erros: [] });
+    { ok: true, erros: [], avisos: [] });
+  assert.deepStrictEqual(design.validar({}), { ok: true, erros: [], avisos: [] });
   for (const [v, tipo] of [[[], 'lista'], [null, 'nulo'], ['x', 'string']]) {
     const r = design.validar(v);
     assert.strictEqual(r.ok, false, tipo);
@@ -501,6 +501,70 @@ test('A4-des-1: validar acusa o que nao e objeto e cada item sem efeito, por cha
   // A4-64: a anti-referencia diz o que falha, como no aviso do portao (motivo).
   assert.match(r.erros[2], /\(so vale texto nao vazio, como "gradiente"; so espacos, numero ou objeto nao valem\)/,
     r.erros[2]);
+});
+
+// H1 (A4-50, s372): a chave que o sworn nao le (um typo como "corres") so avisa: o design.json segue valido, e o aviso
+// diz a chave e as que valem. As chaves que o sworn le nao avisam.
+// As chaves de valor que o sworn le, escritas uma vez para o A4-50 e o A4-59 (o contrato fica a mao, de proposito).
+const CHAVES_DE_VALOR = ['cores', 'raios', 'espacos', 'sombras', 'tamanhos', 'fontes', 'antiReferencias'];
+const CHAVES_LIDAS = CHAVES_DE_VALOR.concat(['desvios']);
+test('A4-50: validar avisa a chave que o sworn nao le, sem tornar o design.json invalido', () => {
+  const r = design.validar({ corres: ['#fff'], cores: ['#fff'], nota: 'x' });
+  assert.strictEqual(r.ok, true, r.erros.join(' | '));
+  // o aviso que nao casa sai inteiro no diff, em vez de estourar no [1]
+  const chave = (a) => (/^a chave "([^"]+)" nao e lida pelo sworn/.exec(a) || [null, a])[1];
+  assert.deepStrictEqual(r.avisos.map(chave), ['corres', 'nota']);
+  assert.ok(r.avisos.every((a) => a.includes('(as que ele le: ' + CHAVES_LIDAS.join(', ') + ')') &&
+    a.endsWith(': confira o nome ou tire do design.json')), r.avisos.join(' | '));
+  const todas = {};
+  for (const k of CHAVES_LIDAS) todas[k] = [];
+  assert.deepStrictEqual(design.validar(todas).avisos, []);
+  // o aviso vem tambem quando ha erro
+  const ruim = design.validar({ cores: [5], corres: [] });
+  assert.strictEqual(ruim.ok, false);
+  assert.deepStrictEqual(ruim.avisos.map(chave), ['corres']);
+  // o nome sai numa linha so e cortado; mais de 12 chaves desconhecidas viram "e mais N"
+  const quebraELonga = design.validar({ ['nota\ncom quebra']: 1, ['x'.repeat(80)]: 1 }).avisos;
+  assert.ok(quebraELonga[0].startsWith('a chave "nota com quebra" nao e lida'), quebraELonga[0]);
+  assert.ok(quebraELonga[1].startsWith('a chave "' + 'x'.repeat(60) + '..." nao e lida'), quebraELonga[1]);
+  assert.ok(quebraELonga.every((a) => a.indexOf('\n') === -1), quebraELonga.join(' | '));
+  const muitas = {};
+  for (let i = 1; i <= 15; i++) muitas['k' + i] = 1;
+  const av = design.validar(muitas).avisos;
+  assert.strictEqual(av.length, 13);
+  const passo = ' que o sworn nao le: corrija as de cima e rode de novo para ver ';
+  assert.strictEqual(av[12], 'e mais 3 chaves' + passo + 'as outras');
+  delete muitas.k14;
+  delete muitas.k15;
+  assert.strictEqual(design.validar(muitas).avisos[12], 'e mais 1 chave' + passo + 'a outra');
+  // exatamente 12 cabem todas: nenhuma linha "e mais"
+  delete muitas.k13;
+  assert.deepStrictEqual(design.validar(muitas).avisos.map(chave), Object.keys(muitas));
+  // o espaco a mais e o que torna a chave desconhecida: ele aparece entre as aspas, sem aparar
+  assert.deepStrictEqual(design.validar({ 'cores ': ['#000'], '  ': 1 }).avisos.map(chave), ['cores ', '  ']);
+});
+
+// H1 (A4-59, s372): 0 e false fora de lista eram lista vazia e passavam calados; agora sao item sem efeito, como
+// dentro da lista. Nulo e texto vazio seguem valendo nada.
+test('A4-59: 0 e false numa chave do design.json sao item sem efeito; nulo e texto vazio nao', () => {
+  const comTodas = (v) => {
+    const sistema = {};
+    for (const k of CHAVES_DE_VALOR) sistema[k] = v;
+    return design.validar(sistema);
+  };
+  for (const v of [0, false]) {
+    const r = comTodas(v);
+    assert.strictEqual(r.ok, false, JSON.stringify(v));
+    assert.deepStrictEqual(r.erros.map((e) => e.split(' sem efeito')[0]), CHAVES_DE_VALOR.map((k) => k + ': item 1'),
+      JSON.stringify(v));
+  }
+  for (const v of [null, undefined, '']) {
+    assert.deepStrictEqual(comTodas(v), { ok: true, erros: [], avisos: [] }, String(JSON.stringify(v)));
+  }
+  // o aviso do portao diz a anti-referencia 0 como ignorada, na mesma frase do validar
+  const m = design.motivo('src/a.css', [{ linha: 3, valor: '#123456', tipo: 'cor' }],
+    Object.assign({}, DESIGN, { antiReferencias: 0 })).split('\n');
+  assert.ok(m.includes('  antiReferencias: item 1 sem efeito: o dono corrige ou tira do design.json'), m.join('\n'));
 });
 
 // A4-des-3 (pedido 12, achado lateral da s212): texto solto vale como lista de um no conferir, mas o motivo() fazia
@@ -605,7 +669,7 @@ test('E2: validar e problemaDoDesvio dizem cada desvio torto ou vencido, pela po
     assert.match(design.problemaDoDesvio({ arquivos: ['a.css'], motivo: 'x', ate }), /"ate" nao e uma data/, JSON.stringify(ate));
   }
   assert.strictEqual(design.desviosDoArquivo({ desvios: [{ arquivos: ['a.css'], motivo: 'x', ate: null }] }, 'a.css', HOJE).length, 1);
-  assert.deepStrictEqual(design.validar({ cores: '' }, HOJE), { ok: true, erros: [] });
+  assert.deepStrictEqual(design.validar({ cores: '' }, HOJE), { ok: true, erros: [], avisos: [] });
   // O plural de "item" no validar continua "itens", e o de "na posicao" e "nas posicoes".
   assert.match(design.validar({ cores: [1, 2] }, HOJE).erros[0], /^cores: itens 1, 2 sem efeito/);
   assert.strictEqual(design.problemaDoDesvio({ arquivos: 'src/a.css', motivo: 'texto solto vale como lista' }), null);

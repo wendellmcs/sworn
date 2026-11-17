@@ -60,7 +60,8 @@ const LISTAS_LIDAS = ['comandosLiberados', 'comandosBloqueados', 'intocaveis'];
 // D655: `portaoRevisao` liga por padrao (so `=== false` desliga, portao-fecho.js), como o portaoReferencia.
 // D674 (item 10): `pedidos` liga por padrao (so `=== false` desliga, pedidos.js).
 // F4e: `guiaDoModelo` liga por padrao (so `=== false` desliga; lido por portao-juiz.js e abertura.js).
-const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura', 'pedidos', 'juizAcima', 'revisaoTodoCodigo', 'aberturaEnxuta', 'provaPorArquivoTocado', 'guiaDoModelo'];
+// Lote 5 item 12 (D846): `avisoDeLeitura` liga por padrao (so `=== false` desliga, aviso-leitura.js).
+const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura', 'pedidos', 'juizAcima', 'revisaoTodoCodigo', 'aberturaEnxuta', 'provaPorArquivoTocado', 'guiaDoModelo', 'avisoDeLeitura'];
 
 // Padrao que NUNCA casa um alvo relativo: letra de unidade (C: ou C:\) ou esquema
 // (file://). O alvo que chega aos portoes e sempre relativo a raiz do projeto
@@ -129,7 +130,7 @@ function avisosDeTipo(projeto) {
     }
   }
   if ('marchas' in projeto) {
-    if (!projeto.marchas || typeof projeto.marchas !== 'object' || Array.isArray(projeto.marchas)) {
+    if (!ehObjeto(projeto.marchas)) {
       avisos.push('marchas tem de ser objeto');
     } else {
       for (const m of MARCHAS) {
@@ -140,11 +141,12 @@ function avisosDeTipo(projeto) {
   if ('marchaPadrao' in projeto && MARCHAS.indexOf(projeto.marchaPadrao) === -1) {
     avisos.push('marchaPadrao tem de ser uma de: ' + MARCHAS.join(', '));
   }
-  if ('travas' in projeto && (!projeto.travas || typeof projeto.travas !== 'object' || Array.isArray(projeto.travas))) {
+  if ('travas' in projeto && !ehObjeto(projeto.travas)) {
     avisos.push('travas tem de ser objeto');
   }
   // PA1-7/A2-2: as chaves de liga/desliga (so booleano decide no portao). "nao" ou 0 nao desliga e o dono
-  // nao sabe. D442/5: as seis; o aviso da qualidadeDeResposta segue vindo de qualidade.js (um so por chave).
+  // nao sabe. D442/5: todas as de CHAVES_LIGA_DESLIGA, menos a qualidadeDeResposta, cujo aviso segue vindo de
+  // qualidade.js (um so por chave).
   for (const chave of CHAVES_LIGA_DESLIGA) {
     if (chave === 'qualidadeDeResposta') continue;
     if (chave in projeto && typeof projeto[chave] !== 'boolean') avisos.push(chave + ' tem de ser true ou false');
@@ -223,6 +225,8 @@ function validar(obj) {
       for (const liberado of obj.comandosLiberados) {
         if (typeof liberado !== 'string' || liberado === bloqueado) continue;
         let casa = false;
+        // A4-21: a regex vem do projeto.json do dono (comandosLiberados), sem teto de custo de proposito: quem a
+        // escreve e quem roda a validacao e o mesmo dono. O try so pega a regex que nem compila.
         try { casa = new RegExp(liberado, 'i').test(bloqueado); } catch (e) { casa = false; }
         if (casa) erros.push('comandosLiberados: "' + liberado + '" neutraliza o comandosBloqueados "' + bloqueado + '"');
       }
@@ -230,7 +234,7 @@ function validar(obj) {
   }
   conferirCaminhos(obj, erros);
   // `obj.travas &&` deixava passar null; e {} nao tem trava nenhuma dentro.
-  if (!obj.travas || typeof obj.travas !== 'object' || Array.isArray(obj.travas)) {
+  if (!ehObjeto(obj.travas)) {
     erros.push('travas tem de ser objeto com as quatro chaves');
   } else {
     for (const t of TRAVAS) {
@@ -415,6 +419,20 @@ function atualizar(antigo, respostas, hoje) {
   return { config: base, mudou: mudou, ignoradas: ignoradas };
 }
 
+// A pasta fixa do padrao: os segmentos antes do primeiro caractere de glob ("src/a/**" da "src/a"); sem nenhum, null.
+function pastaFixa(padrao) {
+  const fixos = [];
+  for (const seg of String(padrao).split('/')) {
+    if (seg === '' || /[*?[\]{}]/.test(seg)) break;
+    fixos.push(seg);
+  }
+  return fixos.length ? fixos.join('/') : null;
+}
+
+// A2-05: o glob.js so entende `*` e `**`; `?`, `[ ]`, `{a,b}` e a barra no fim ficam literais e nao casam o que o
+// dono quis. Padrao nessa forma e inerte pela forma, e a pasta fixa existir no disco nao o salva.
+const FORA_DO_GLOB = /[?[\]{}]|\/$/;
+
 /**
  * Padroes de `intocaveis` que nao casam com NENHUM arquivo do repositorio.
  *
@@ -432,19 +450,6 @@ function atualizar(antigo, respostas, hoje) {
  * caractere de glob) que EXISTE no disco tambem salva o padrao - pasta ignorada pelo git
  * de proposito nao e typo. Padrao sem pasta fixa (`**\/*.pem`) nao se salva assim.
  */
-function pastaFixa(padrao) {
-  const fixos = [];
-  for (const seg of String(padrao).split('/')) {
-    if (seg === '' || /[*?[\]{}]/.test(seg)) break;
-    fixos.push(seg);
-  }
-  return fixos.length ? fixos.join('/') : null;
-}
-
-// A2-05: o glob.js so entende `*` e `**`; `?`, `[ ]`, `{a,b}` e a barra no fim ficam literais e nao casam o que o
-// dono quis. Padrao nessa forma e inerte pela forma, e a pasta fixa existir no disco nao o salva.
-const FORA_DO_GLOB = /[?[\]{}]|\/$/;
-
 function intocaveisInertes(projeto, arquivos, cwd) {
   const padroes = (projeto && Array.isArray(projeto.intocaveis)) ? projeto.intocaveis : [];
   if (!Array.isArray(arquivos) || arquivos.length === 0) return [];
@@ -453,7 +458,12 @@ function intocaveisInertes(projeto, arquivos, cwd) {
     if (arquivos.some(function (a) { return glob.casa(p, a, false); })) return false;
     const fixa = cwd && !FORA_DO_GLOB.test(p.trim()) ? pastaFixa(p) : null;
     if (fixa) {
-      try { if (require('node:fs').existsSync(require('node:path').join(cwd, fixa))) return false; } catch (e) { /* inerte */ }
+      // o erro ao olhar o disco (permissao, caminho invalido) nao salva o padrao: ele segue avisado como inerte
+      try {
+        const fs = require('node:fs');
+        const path = require('node:path');
+        if (fs.existsSync(path.join(cwd, fixa))) return false;
+      } catch (e) { /* segue inerte, como diz acima */ }
     }
     return true;
   });

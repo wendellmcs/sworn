@@ -205,3 +205,19 @@ test('gatilho 1: o README declara a atualizacao do plugin como limite', () => {
   assert.ok(itens.some((l) => /atualizado/.test(l)),
     'a atualizacao do plugin nao aparece entre os limites: ' + itens.length + ' itens');
 });
+
+test('gatilho 1 A6-80: .claude que e arquivo sai 1 com a causa e o passo, sem stack trace', () => {
+  const dir = pasta();
+  try {
+    fs.writeFileSync(path.join(dir, '.claude'), 'nao sou pasta');
+    const r = rodar(['--registrar', 'ok'], dir);
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.ok(r.stdout.startsWith('ERRO: nao consegui gravar o registro da consulta em ' + catalogo.caminho(dir) + ': '),
+      r.stdout);
+    assert.ok(r.stdout.includes('Confira se .claude e .claude/sworn sao pastas (e nao arquivos)'), r.stdout);
+    assert.strictEqual(r.stderr, '', 'stack trace no stderr: ' + r.stderr);
+    assert.strictEqual(fs.readFileSync(path.join(dir, '.claude'), 'utf8'), 'nao sou pasta', 'mexeu no arquivo');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
