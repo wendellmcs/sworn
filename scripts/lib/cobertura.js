@@ -162,8 +162,10 @@ function portoes(cwd, projeto, a) {
   const cob = apelidosLib.cobertura(projeto, a.prova, apelidosLib.agentesDoPlugin());
   // A6-47 (s235): os dois ramos sem a prova inteira dizem o comando que sonda.
   // A6-88 (D735): onde a prova vai (provar-apelidos.js, ondeGravar) e o caminho real do script, entre aspas.
-  const sondar = ': rode node "' + path.join(__dirname, '..', 'provar-apelidos.js') + '" (com --plugin no ' +
-    'repositorio do plugin) e grave a prova em .claude/sworn/apelidos-vivos.json, no formato que ele mostra';
+  // A6-117: o --plugin diz o que faz, igual ao REGRAVAR do lib/apelidos.js.
+  const sondar = ': rode node "' + path.join(__dirname, '..', 'provar-apelidos.js') + '" (no repositorio do proprio ' +
+    'plugin, acrescente --plugin: ele sonda so os agentes do plugin) e grave a prova em .claude/sworn/apelidos-vivos.json, ' +
+    'no formato que ele mostra';
   lista.push(portao('apelidos-vivos', 'O apelido de modelo ainda e aceito', INSTRUCAO,
     cob.temProva && cob.naoProvados.length === 0,
     porqueApelidosVivos(a, cob, sondar)));

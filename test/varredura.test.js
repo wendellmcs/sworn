@@ -531,3 +531,11 @@ test('varrer.js: projeto.json que declara outro arquivo conta so o declarado', (
     assert.deepStrictEqual(saida.instrucoes.porArquivo.map((p) => p.arquivo), ['AGENTS.md']);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// A4-27: sem pasta em texto o readdirSync lancava e a raiz saia em ilegiveis, como se fosse falta de permissao
+test('listar: pasta que nao e texto (ou texto vazio) e erro de uso, nao raiz ilegivel (A4-27)', () => {
+  for (const [ruim, diz] of [[undefined, 'undefined'], [null, 'null'], ['', 'texto vazio'], [42, 'number']]) {
+    assert.throws(() => varredura.listar(ruim), (e) => e instanceof TypeError && e.message.includes('veio ' + diz),
+      'pasta ' + String(ruim));
+  }
+});

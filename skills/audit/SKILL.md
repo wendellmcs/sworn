@@ -154,7 +154,9 @@ serves which role, and how much they are willing to pay. With the facts in hand,
    effort) and is a divergence; `null` is "I don't know" (no answer in the window, a transcript without the effort,
    an alias the plugin does not know), never "matches". Then `foraDaTabela`: agents that answered and are not rungs
    (the plugin's own and the built-in ones), with the last model and effort. If `ilegiveis` is above zero, say how
-   many transcripts could not be read: their agents may show up as "I don't know". If `medido: false` comes, say
+   many transcripts could not be read: their agents may show up as "I don't know". If `linhasLongas` is above zero,
+   say how many transcript lines were skipped for being above 64 MiB: an answer in one of them stays out of the
+   count, so the last model shown may be older than the real one. If `medido: false` comes, say
    "effective model not measured" and the `motivo`; the automatic round never measures it (it reads every subagent
    transcript in the window, too slow for the session opening).
 2. **Overlaps.** Pairs of skills whose triggers compete for the same situation. Two skills that

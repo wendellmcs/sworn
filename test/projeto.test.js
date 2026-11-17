@@ -752,3 +752,94 @@ test('A4-23: todo ERRO do validar.js termina com o passo seguinte', () => {
       r.stdout + r.stderr);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
+
+// A4-76: o primeiro ERRO saia e o resto ficava sem conferir, calado (o design.json depois de um regras.md invalido, os
+// dois depois de um projeto.json invalido); agora os tres sao conferidos e o passo sai uma vez, no fim
+test('A4-76: validar.js confere regras.md e design.json mesmo com o projeto.json invalido ou quebrado, e o passo sai uma vez', () => {
+  const cli = path.join(__dirname, '..', 'scripts', 'validar.js');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-cli-'));
+  const dir = path.join(base, '.claude', 'sworn');
+  const passoCorrigir = 'Corrija o que esta acima e rode a validacao de novo.\n';
+  const roda = () => spawnSync(process.execPath, [cli, base], { encoding: 'utf8', shell: false, timeout: 60000 });
+  const saida = (r) => r.stdout + r.stderr + (r.error ? ' ' + r.error.message : '');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'regras.md'), '- ao subir -> usar node 24.12.0\n', 'utf8');
+    fs.writeFileSync(path.join(dir, 'design.json'), JSON.stringify({ cores: ['#fff', 5] }), 'utf8');
+    for (const [nome, conteudo] of [['projeto invalido', JSON.stringify(copia({ modeloDeAmeaca: 'talvez' }))],
+      ['projeto quebrado', '{ quebrado'], ['projeto valido', JSON.stringify(VALIDO)]]) {
+      fs.writeFileSync(path.join(dir, 'projeto.json'), conteudo, 'utf8');
+      const r = roda();
+      assert.strictEqual(r.status, 1, nome + ': ' + saida(r));
+      assert.ok(/ERRO: regras\.md invalido \(/.test(r.stdout), nome + ': o regras.md ficou sem conferir: ' + r.stdout);
+      assert.ok(/ERRO: design\.json invalido \(/.test(r.stdout), nome + ': o design.json ficou sem conferir: ' + r.stdout);
+      assert.ok(r.stdout.endsWith(passoCorrigir) && r.stdout.split(passoCorrigir).length === 2,
+        nome + ': o passo uma vez no fim: ' + r.stdout);
+    }
+    fs.writeFileSync(path.join(dir, 'regras.md'), '', 'utf8');
+    fs.writeFileSync(path.join(dir, 'design.json'), JSON.stringify({ cores: ['#fff'] }), 'utf8');
+    const r = roda();
+    assert.strictEqual(r.status, 0, saida(r));
+    assert.ok(/^OK: projeto\.json valido .*\nOK: regras\.md valido \(0 regras\)\nOK: design\.json valido\n$/.test(r.stdout),
+      r.stdout);
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
+});
+
+// F5a no validar.js: a leitura e a do jsonio; o projeto.json que existe e nao se le (uma pasta no lugar) diz a causa
+// do sistema, e nao "nao existe" nem "nao e JSON valido"
+test('A4-76 (F5a): projeto.json que nao se le diz a causa, e os outros arquivos seguem conferidos', () => {
+  const cli = path.join(__dirname, '..', 'scripts', 'validar.js');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-cli-'));
+  const dir = path.join(base, '.claude', 'sworn');
+  try {
+    fs.mkdirSync(path.join(dir, 'projeto.json'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'regras.md'), '', 'utf8');
+    const r = spawnSync(process.execPath, [cli, base], { encoding: 'utf8', shell: false, timeout: 60000 });
+    const saida = r.stdout + r.stderr + (r.error ? ' ' + r.error.message : '');
+    assert.strictEqual(r.status, 1, saida);
+    assert.ok(r.stdout.startsWith('ERRO: nao consegui ler ' + path.join(dir, 'projeto.json') + ': EISDIR'), saida);
+    assert.ok(!/nao existe|nao e JSON valido/.test(r.stdout), saida);
+    assert.ok(r.stdout.includes('OK: regras.md valido (0 regras)\n'), saida);
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
+});
+
+// A4-76, rodada 1: o validador que lanca e defeito do sworn; "corrija o que esta acima" mandava mexer num arquivo que
+// pode estar certo. Nenhuma entrada faz os validadores lancarem hoje, entao o --require troca as tres funcoes.
+test('A4-76: o validador que lanca sai como defeito do sworn, e o passo manda avisar, nao corrigir o arquivo', () => {
+  const cli = path.join(__dirname, '..', 'scripts', 'validar.js');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-cli-'));
+  const dir = path.join(base, '.claude', 'sworn');
+  const lib = (n) => JSON.stringify(path.join(__dirname, '..', 'scripts', 'lib', n));
+  const injeta = path.join(base, 'injeta.js');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'projeto.json'), JSON.stringify(VALIDO), 'utf8');
+    fs.writeFileSync(path.join(dir, 'regras.md'), '', 'utf8');
+    fs.writeFileSync(path.join(dir, 'design.json'), JSON.stringify({ cores: ['#fff'] }), 'utf8');
+    // um Error, um null e um texto: o que nao e Error tambem sai dito, e o null nao derruba o catch
+    fs.writeFileSync(injeta,
+      'require(' + lib('projeto.js') + ').validar = function () { throw new Error("quebra de proposito"); };\n' +
+      'require(' + lib('regra.js') + ').validarArquivo = function () { throw null; };\n' +
+      'require(' + lib('design.js') + ').validar = function () { throw "texto lancado"; };\n', 'utf8');
+    const roda = () => spawnSync(process.execPath, ['--require', injeta, cli, base],
+      { encoding: 'utf8', shell: false, timeout: 60000 });
+    const saida = (x) => x.stdout + x.stderr + (x.error ? ' ' + x.error.message : '');
+    const avisar = 'Registre as linhas "defeito do sworn" acima em https://github.com/wendellmcs/sworn/issues; ' +
+      'os arquivos delas nao precisam mudar.\n';
+    const r = roda();
+    assert.strictEqual(r.status, 1, saida(r));
+    for (const [nome, causa] of [['projeto.json', 'quebra de proposito'], ['regras.md', 'null'], ['design.json', 'texto lancado']]) {
+      assert.ok(r.stdout.includes('ERRO: o validador do sworn falhou por dentro ao conferir ' + path.join(dir, nome) +
+        ' (defeito do sworn, nao do arquivo): ' + causa + '\n'), nome + ': ' + r.stdout);
+    }
+    assert.ok(r.stdout.endsWith(avisar), r.stdout);
+    assert.ok(!r.stdout.includes('Corrija'), r.stdout);
+    // com um arquivo errado junto, saem os dois passos, uma vez cada: o de corrigir deixa de fora as linhas de defeito
+    fs.writeFileSync(path.join(dir, 'design.json'), '{ quebrado', 'utf8');
+    const m = roda();
+    assert.strictEqual(m.status, 1, saida(m));
+    assert.ok(m.stdout.endsWith('Corrija os arquivos dos ERRO que nao sao "defeito do sworn" e rode a validacao de novo.\n' +
+      avisar), m.stdout);
+    assert.strictEqual(m.stdout.split('Corrija').length, 2, m.stdout);
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
+});

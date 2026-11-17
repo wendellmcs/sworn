@@ -10,11 +10,15 @@
  *
  * Sai 0 com a pasta gravada; 1 sem pasta ou sem conseguir gravar.
  */
+const fs = require('node:fs');
 const ordens = require('./lib/ordens.js');
 
-const pasta = process.argv[2];
+// A4-120: sem o trim, ' /x ' gravava a recusa com os espacos (o chaveDaRaiz do ordens.js nao apara) e a abertura em
+// /x perguntava de novo. A pasta que existe com o espaco (o POSIX deixa um nome terminar nele) fica como veio.
+const bruta = process.argv[2] || '';
+const pasta = bruta.trim() !== '' && fs.existsSync(bruta) ? bruta : bruta.trim();
 // A4-97 (pedido 12, borda): a pasta so com espacos e falta de pasta, nao uma recusa gravada.
-if (!pasta || !pasta.trim()) {
+if (!pasta) {
   process.stdout.write('ERRO: falta a pasta do projeto: node recusar-init.js <pasta>\n');
   process.exit(1);
 }

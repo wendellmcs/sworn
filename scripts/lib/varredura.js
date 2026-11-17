@@ -24,6 +24,11 @@ const PROFUNDIDADE = 8;
  * seria true em todo repositorio real, o que destruiria o sinal.
  */
 function listar(cwd, limite) {
+  // A4-27: sem pasta em texto o readdirSync lancava e a raiz saia em ilegiveis, como se fosse permissao
+  if (typeof cwd !== 'string' || cwd === '') {
+    throw new TypeError('varredura.listar: a pasta tem de ser um caminho em texto (veio ' +
+      (cwd === '' ? 'texto vazio' : cwd === null ? 'null' : typeof cwd) + ')');
+  }
   // D98: `limite || LIMITE_PADRAO` engolia o zero e devolvia 4000 calado.
   // D98 rodada 2: e o teste de `undefined || null` deixava passar `NaN`, `false` e
   // negativo. Com `NaN`, `arquivos.length >= teto` e sempre falso: a varredura perdia

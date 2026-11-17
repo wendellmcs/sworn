@@ -760,6 +760,36 @@ test('D573: injetado nao medido, sem repetidos ou de forma estranha = linha nenh
   }
 });
 
+test('auditoria-periodica/linhaDoInjetado: item sem plugin em texto ou sem as contagens em numero nao vira linha (A6-116)', () => {
+  const bom = { texto: 't', plugin: 'p', gancho: 'Stop', vezes: 9, caracteres: 30 };
+  const ruins = [{ plugin: undefined }, { plugin: '' }, { plugin: 7 }, { vezes: undefined }, { vezes: '9' },
+    { vezes: Infinity }, { vezes: 0 }, { vezes: -3 }, { caracteres: undefined }, { caracteres: NaN },
+    { caracteres: null }, { caracteres: -5 }, { caracteres: Infinity }, { caracteres: '30' }];
+  for (const ruim of ruins) {
+    const r = Object.assign({}, bom, ruim);
+    // sozinho, o item ruim nao da linha; ao lado de um bom, so o bom conta
+    assert.strictEqual(ap.linhaDoInjetado({ medido: true, repetidos: [r] }, null), null, JSON.stringify(ruim));
+    const linha = ap.linhaDoInjetado({ medido: true, repetidos: [r, bom] }, null);
+    assert.ok(linha.includes('(1): p (no fim do turno) 9x, 30 caracteres.'), JSON.stringify(ruim) + ' -> ' + linha);
+    assert.ok(!/undefined|NaN|Infinity|null/.test(linha), linha);
+  }
+  // zero caracteres segue valendo (vezes zero nao: nao houve repeticao)
+  assert.ok(ap.linhaDoInjetado({ medido: true, repetidos: [Object.assign({}, bom, { caracteres: 0 })] }, null)
+    .includes('9x, 0 caracteres.'));
+});
+
+test('auditoria-periodica/linhaDoInjetado: conversa com quando que nao e numero sai sem a data, nem 1970 nem NaN', () => {
+  const bom = { texto: 't', plugin: 'p', gancho: 'Stop', vezes: 9, caracteres: 30 };
+  for (const quando of [null, '', true, '5', NaN, 1e16, -1e16, Infinity]) {
+    const linha = ap.linhaDoInjetado({ medido: true, repetidos: [bom] }, { id: 'abc', quando: quando });
+    assert.ok(!linha.includes('(abc'), String(quando) + ' -> ' + linha);
+    assert.ok(!/NaN|1970|1969/.test(linha), linha);
+  }
+  // com o quando em ms, o id e a data entram
+  assert.ok(ap.linhaDoInjetado({ medido: true, repetidos: [bom] }, { id: 'abc', quando: Date.UTC(2026, 10, 1, 12) })
+    .includes('(abc, 2026-11-01'));
+});
+
 test('D573: injetado.anterior acha o .jsonl mais recente da pasta que nao e o da sessao atual (exista ou nao o atual)', () => {
   const dir = temp('anterior');
   try {

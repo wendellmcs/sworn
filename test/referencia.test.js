@@ -482,3 +482,15 @@ test('skill: o fecho (mock secao 3) - 3 opcoes, a recomendada primeiro, --gravar
   assert.match(s.slice(a, b), /recommended/);
   assert.ok(s.includes('--gravar'), 'o sim grava pelo script');
 });
+
+// A4-31: a barra do fim saia mesmo escapada; `\|` no fim e texto da ultima celula, nao a borda da tabela
+test('celulas: a borda do fim sai, a barra escapada no fim fica na ultima celula (A4-31)', () => {
+  assert.deepStrictEqual(referencia.celulas('| a | b |'), ['a', 'b']);
+  assert.deepStrictEqual(referencia.celulas('| a | b \\|'), ['a', 'b \\|']);
+  assert.deepStrictEqual(referencia.celulas('| a \\| b | c |'), ['a \\| b', 'c']);
+  assert.deepStrictEqual(referencia.celulas('a | b'), ['a', 'b']);
+  // as bordas com espaco em volta saem; a linha vazia e uma celula vazia, nunca uma linha a menos
+  assert.deepStrictEqual(referencia.celulas('  | a | b |  '), ['a', 'b']);
+  assert.deepStrictEqual(referencia.celulas(''), ['']);
+  assert.deepStrictEqual(referencia.celulas('   '), ['']);
+});

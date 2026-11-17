@@ -207,3 +207,43 @@ test('ligar-atualizacao: o init pergunta e roda o comando com --gravar so depois
   assert.ok(skill.includes('node "${CLAUDE_PLUGIN_ROOT}/scripts/ligar-atualizacao.js" --gravar'), 'o init nao grava');
   assert.ok(/AskUserQuestion/.test(skill.slice(skill.indexOf('ligar-atualizacao.js'))), 'o init nao pergunta antes');
 });
+
+// A4-35: a forma da recusa imprimia o source instalado inteiro, e uma url com credencial (usuario:senha@ ou o token no
+// lugar do usuario) ia ao stdout. Agora o trecho antes do @ vira um marcador, com a frase de troca (tirar calado fazia
+// a forma colada perder o "git@" do ssh); a entrada gravada continua com o source inteiro.
+test('ligar-atualizacao: a forma da recusa troca a credencial da url por um marcador; a gravacao guarda o source inteiro (A4-35)', () => {
+  // a url montada em partes: inteira no fonte, o detector de vazamento da publicacao a le como e-mail
+  const A = '@';
+  const host = A + 'github.com/fulano/sworn.git';
+  const casos = [
+    ['usuario e senha', 'https://fulano:zq7xy9' + host, 'https://'],
+    ['token no lugar do usuario', 'https://zq7xy9' + host, 'https://'],
+    ['senha com @ cru', 'https://fulano:zq7' + A + 'xy9' + host, 'https://'],
+    ['senha com aspas', 'https://fulano:zq7"xy9' + host, 'https://'],
+    ['usuario do ssh', 'ssh://git' + host, 'ssh://']
+  ];
+  for (const [nome, url, esquema] of casos) {
+    const conhecido = { 'plugins/known_marketplaces.json': { 'sworn-local': { source: { source: 'git', url: url } } } };
+    const dir = config(Object.assign({ 'settings.json': JSON.stringify({ extraKnownMarketplaces: ['x'] }) }, conhecido));
+    try {
+      const r = rodar(dir, ['--gravar']);
+      assert.strictEqual(r.status, 1, nome + ': ' + r.saida);
+      assert.ok(r.saida.includes('"url":"' + esquema + '<usuario-e-senha>' + host + '"'), nome + ': ' + r.saida);
+      assert.ok(r.saida.includes('(troque <usuario-e-senha> pelo que vem antes do @'), nome + ': ' + r.saida);
+      assert.ok(!/zq7|xy9/.test(r.saida), nome + ': a credencial foi ao stdout: ' + r.saida);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    const ok = config(conhecido);
+    try {
+      const r = rodar(ok, ['--gravar']);
+      assert.strictEqual(r.status, 0, nome + ': ' + r.saida);
+      assert.ok(!/zq7|xy9/.test(r.saida), nome + ': ' + r.saida);
+      assert.strictEqual(settings(ok).extraKnownMarketplaces['sworn-local'].source.url, url, nome);
+    } finally { fs.rmSync(ok, { recursive: true, force: true }); }
+  }
+  // sem credencial na url, a forma sai como esta e sem a frase de troca
+  const limpo = config(Object.assign({ 'settings.json': JSON.stringify({ extraKnownMarketplaces: ['x'] }) }, CONHECIDO));
+  try {
+    const r = rodar(limpo, ['--gravar']);
+    assert.ok(r.saida.includes('"url":"' + SOURCE.url + '"') && !r.saida.includes('<usuario-e-senha>'), r.saida);
+  } finally { fs.rmSync(limpo, { recursive: true, force: true }); }
+});

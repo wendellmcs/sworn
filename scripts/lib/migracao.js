@@ -41,7 +41,7 @@ function baseDoProjeto(cwd) {
 }
 
 /**
- * Troca .claude/esquadro/ por .claude/sworn/ nos caminhos de `referencias`. Devolve quantos trocou (0 sem
+ * Troca .claude/esquadro/ por .claude/sworn/ nos caminhos de `referencias`. Devolve quantos caminhos distintos trocou (0 sem
  * projeto.json ou sem o que trocar) ou null (existe e nao se le, nao e JSON, ou a troca mexeria em outra coisa). A
  * troca e no texto, para nao reformatar o arquivo do dono; o parser confere que o resultado e so o esperado antes de
  * gravar.
@@ -53,18 +53,22 @@ function trocarReferencias(arquivo) {
   try { obj = JSON.parse(textoLib.semBom(bruto)); } catch (e) { return null; }
   const refs = obj && typeof obj === 'object' && !Array.isArray(obj) ? obj.referencias : null;
   if (!refs || typeof refs !== 'object' || Array.isArray(refs)) return 0;
-  let novo = bruto;
-  let n = 0;
+  // A4-37/38: primeiro o objeto esperado e as trocas por caminho distinto (o mesmo caminho em dois tipos e uma troca
+  // so, e o split do texto ja troca todas as ocorrencias); depois o texto, num passo proprio
+  const trocas = new Map();
   for (const tipo of Object.keys(refs)) {
     if (!Array.isArray(refs[tipo])) continue;
     refs[tipo] = refs[tipo].map(function (p) {
       if (typeof p !== 'string') return p;
       const q = p.replace(RE_SEGMENTO, '$1' + NOVA);
-      if (q !== p) { n++; novo = novo.split(JSON.stringify(p)).join(JSON.stringify(q)); }
+      if (q !== p) trocas.set(p, q);
       return q;
     });
   }
+  const n = trocas.size;
   if (!n) return 0;
+  let novo = bruto;
+  for (const [p, q] of trocas) novo = novo.split(JSON.stringify(p)).join(JSON.stringify(q));
   try {
     if (JSON.stringify(JSON.parse(textoLib.semBom(novo))) !== JSON.stringify(obj)) return null;
     fs.writeFileSync(arquivo, novo, 'utf8');

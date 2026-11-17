@@ -144,7 +144,8 @@ function validarFatias(valores) {
   } else if (v.ferramentas !== undefined && typeof v.ferramentas !== 'string') {
     erros.push('ferramentas tem de ser texto, nao ' + tipo(v.ferramentas) +
       ': liste, separadas por virgula, so as que o papel precisa: ' + FORMATO_DITO);
-  } else if (v.ferramentas !== undefined) {
+  } else if (typeof v.ferramentas === 'string') {
+    // A4-07: sobra o texto vazio ou so de espacos (o com algo dentro e o que nao e texto ja sairam acima)
     erros.push('ferramentas vazia: liste, separadas por virgula, so as que o papel precisa: ' + FORMATO_DITO);
   }
   return erros;

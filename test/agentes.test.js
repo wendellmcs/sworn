@@ -423,7 +423,7 @@ test('agentes: maxTurns que nao e inteiro >= 1 e RECUSADO, dizendo o aceito', (t
 const FORMATO_DITO = 'nomes que comecam com letra e levam so letras, numeros, _ ou - (como Read, Grep)';
 
 test('agentes: ferramentas vazia ou com item fora de [A-Za-z][A-Za-z0-9_-]* e RECUSADA', (t) => {
-  for (const ruim of ['', ' , ', 'Read, Gre p', 'Read, 9x', 'Read; Grep', 'Read, Bash(rm *)']) {
+  for (const ruim of ['', '   ', ' , ', 'Read, Gre p', 'Read, 9x', 'Read; Grep', 'Read, Bash(rm *)']) {
     const { raiz, r } = gerar(t, DOIS, (nome, f) => { f.ferramentas = ruim; });
     assert.strictEqual(r.status, 1, 'ferramentas "' + ruim + '" devia ser recusada: ' + r.stdout);
     assert.ok(r.stdout.includes('RECUSADO'), r.stdout);
@@ -432,6 +432,8 @@ test('agentes: ferramentas vazia ou com item fora de [A-Za-z][A-Za-z0-9_-]* e RE
     // A4-08 (pedido 12, microcopy): o formato em frase, sem a regex crua.
     assert.ok(r.stdout.includes(FORMATO_DITO), 'tem de dizer o valor aceito: ' + r.stdout);
     assert.ok(!r.stdout.includes('[A-Za-z]'), 'regex crua na mensagem: ' + r.stdout);
+    // A4-07: o texto vazio ou so de espacos cai no ramo final, com a frase inteira
+    if (ruim.trim() === '') assert.ok(r.stdout.includes('ferramentas vazia: liste, separadas por virgula'), r.stdout);
     assert.strictEqual(fs.existsSync(agentes.caminho(raiz, 'busca')), false);
   }
 });

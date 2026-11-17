@@ -41,7 +41,8 @@ const RE_FICHA = /^\.claude\/sworn\/referencias\/(tela|codigo|texto)-[^/]+\.md$/
 
 /** As celulas de uma linha de tabela (`| a | b |`), sem as crases de volta do valor; `\|` nao separa. */
 function celulas(linha) {
-  return linha.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(function (c) { return c.trim(); });
+  // A4-31: a barra do fim so sai quando e borda da tabela; `\|` no fim e texto da ultima celula
+  return linha.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map(function (c) { return c.trim(); });
 }
 function valor(c) { return c.replace(/`/g, '').trim().toLowerCase(); }
 // D582: texto livre (achado, origem, o que mediria, o "Não li:") precisa de duas letras ou dígitos seguidos: "-", "x",
@@ -198,4 +199,4 @@ function naReferencia(antigo, tipo, rel) {
   return { config: config, erros: errosDaReferencia(config) };
 }
 
-module.exports = { QUEM, ESTADOS, ESFORCOS, conferir, tipoDaFicha, naReferencia };
+module.exports = { QUEM, ESTADOS, ESFORCOS, conferir, tipoDaFicha, naReferencia, celulas };

@@ -13,8 +13,9 @@ const RE_LINHA = /[^\n]*\n|[^\n]+$/g;
 const CERCA = /^---\s*$/;
 // A1-51/A1-50: o passo que regrava a prova, dito igual nas tres mensagens que pedem a prova de novo. A6-113: com o
 // caminho real do script, entre aspas, como o ramo sondar do cobertura.js (o relativo so valia no repo do plugin).
-const REGRAVAR = 'rode node "' + path.join(__dirname, '..', 'provar-apelidos.js') + '" (com --plugin no repositorio ' +
-  'do plugin) e grave a prova de novo no formato que ele mostra';
+// A6-117: o --plugin diz o que faz (sonda so os agentes do plugin), igual ao sondar do cobertura.js.
+const REGRAVAR = 'rode node "' + path.join(__dirname, '..', 'provar-apelidos.js') + '" (no repositorio do proprio ' +
+  'plugin, acrescente --plugin: ele sonda so os agentes do plugin) e grave a prova de novo no formato que ele mostra';
 
 function semTerminador(linha) {
   return String(linha).replace(/\r?\n$/, '');

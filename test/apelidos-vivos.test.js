@@ -103,6 +103,8 @@ test('A1-51: a prova torta diz o comando que a regrava', () => {
   for (const prova of [{}, { apelidos: [1] }]) {
     const t = apelidos.cobertura(MAPA, prova).provaInvalida;
     assert.ok(t.includes('node "' + SCRIPT + '"') && !/formatoDoResultado/.test(t), t);
+    // A6-117: o --plugin diz o que faz e quando entra
+    assert.ok(t.includes('(no repositorio do proprio plugin, acrescente --plugin: ele sonda so os agentes do plugin)'), t);
   }
 });
 

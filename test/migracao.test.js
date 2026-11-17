@@ -186,3 +186,17 @@ test('T2 (lib): migrarCasa respeita SWORN_VIGIA e a nova ja existente; projeto.j
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
+
+// A4-37/38: o mesmo caminho em dois tipos (ou duas vezes na lista) contava duas trocas, e o aviso dizia "2 caminhos"
+// de um caminho so; a troca no texto ja pega todas as ocorrencias na primeira vez
+test('A4-37: trocarReferencias conta caminhos distintos e troca todas as ocorrencias de cada um', () => {
+  const dir = temp('distintos');
+  try {
+    const bruto = '{"referencias": {"tela": [".claude/esquadro/r.md", ".claude/esquadro/r.md"], ' +
+      '"codigo": [".claude/esquadro/r.md", ".claude/esquadro/s.md", "fora.md"]}}\n';
+    escrever(dir, 'projeto.json', bruto);
+    assert.strictEqual(migracao.trocarReferencias(path.join(dir, 'projeto.json')), 2);
+    assert.strictEqual(ler(dir, 'projeto.json'), bruto.split('.claude/esquadro/').join('.claude/sworn/'));
+    assert.strictEqual(migracao.trocarReferencias(path.join(dir, 'projeto.json')), 0, 'nada mais a trocar');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

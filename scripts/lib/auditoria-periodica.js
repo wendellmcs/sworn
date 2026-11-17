@@ -67,15 +67,21 @@ function emMs(agora) {
   return typeof agora === 'number' && isFinite(agora) ? agora : Date.now();
 }
 
-/** Instante da ultima auditoria (ou da `marca` pedida), em ms; null se a marca nao existe ou nao se le. */
-function lerMarca(cwd, marca) {
+/** A6-69: o JSON da `marca` (padrao: a da auditoria) como objeto; null se nao existe, nao se le ou nao e objeto. */
+function lerJsonDaMarca(cwd, marca) {
   try {
     const m = JSON.parse(textoLib.semBom(fs.readFileSync(config.caminhoEmSworn(cwd, marca || MARCA), 'utf8')));
-    const t = ehObjeto(m) ? Date.parse(m.ultima) : NaN;
-    return isFinite(t) ? t : null;
+    return ehObjeto(m) ? m : null;
   } catch (e) {
     return null;
   }
+}
+
+/** Instante da ultima auditoria (ou da `marca` pedida), em ms; null se a marca nao existe ou nao se le. */
+function lerMarca(cwd, marca) {
+  const m = lerJsonDaMarca(cwd, marca);
+  const t = m ? Date.parse(m.ultima) : NaN;
+  return isFinite(t) ? t : null;
 }
 
 /**
@@ -92,12 +98,8 @@ function vencida(cwd, projeto, agora, marca, nomeDias) {
 
 /** Plano 091 T6: a foto dos contadores de ordem que a auditoria anterior guardou na marca; sem ela, null. */
 function lerFoto(cwd) {
-  try {
-    const m = JSON.parse(textoLib.semBom(fs.readFileSync(config.caminhoEmSworn(cwd, MARCA), 'utf8')));
-    return ehObjeto(m) && ehObjeto(m.ordens) ? m.ordens : null;
-  } catch (e) {
-    return null;
-  }
+  const m = lerJsonDaMarca(cwd, MARCA);
+  return m && ehObjeto(m.ordens) ? m.ordens : null;
 }
 
 /**
@@ -179,9 +181,17 @@ const MOMENTO = {
  */
 function linhaDoInjetado(injetado, conversa) {
   if (!ehObjeto(injetado) || injetado.medido !== true || !Array.isArray(injetado.repetidos)) return null;
-  const rep = injetado.repetidos.filter(ehObjeto);
+  // A6-116: so o item com o plugin em texto, vezes acima de zero e caracteres de zero para cima vira linha; o resto
+  // sairia "undefined" ou uma contagem que nao existe ("-3x").
+  const rep = injetado.repetidos.filter(function (r) {
+    return ehObjeto(r) && typeof r.plugin === 'string' && r.plugin !== '' && Number.isFinite(r.vezes) && r.vezes > 0 &&
+      Number.isFinite(r.caracteres) && r.caracteres >= 0;
+  });
   if (!rep.length) return null;
-  const qual = ehObjeto(conversa) && conversa.id && isFinite(conversa.quando)
+  // so um instante que o Date representa: com isFinite, null e '' passariam e a data sairia 1970; um numero fora do
+  // alcance do Date (acima de 8,64e15 ms) sairia "NaN-NaN-NaN"
+  const qual = ehObjeto(conversa) && conversa.id && Number.isFinite(new Date(conversa.quando).getTime()) &&
+    typeof conversa.quando === 'number'
     ? ' (' + conversa.id + ', ' + dataLocal(conversa.quando) + ')' : '';
   // A6-72 (pedido 12): sem o "gancho" interno, e com o corte que a skill audit propoe.
   // A6-94: o evento em palavras; o que a tabela nao conhece sai so com o plugin.

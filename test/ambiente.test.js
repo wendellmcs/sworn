@@ -448,3 +448,33 @@ test('A6: item de fonte que nao e texto vai a naoLidos e o peso segue', () => {
     assert.deepStrictEqual(r.foraDoPeso, [{ arquivo: 'docs/decisoes.md', n: 1 }]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// A4-75/A4-36: enabledPlugins, hooks ou mcpServers que nao sao um mapa de nomes viravam nomes de indice ("0") ou letras;
+// agora contam como nada e o motivo vai a naoLidos. O .mcp.json vale com mcpServers ou com os servidores na raiz.
+test('A4-75: enabledPlugins, hooks e mcpServers fora da forma de mapa nao viram nomes e vao a naoLidos', () => {
+  const dir = montar({
+    '.claude/settings.json': JSON.stringify({ enabledPlugins: ['superpowers@x'], hooks: 'Stop' }),
+    '.claude/settings.local.json': JSON.stringify({ enabledPlugins: 'abc' }),
+    '.mcp.json': JSON.stringify({ mcpServers: ['servidor'] })
+  });
+  try {
+    const r = ambiente.detectar(dir);
+    assert.deepStrictEqual(r.plugins, []);
+    assert.deepStrictEqual(r.hooks, []);
+    assert.deepStrictEqual(r.mcp, []);
+    assert.deepStrictEqual(r.naoLidos.slice().sort(), [
+      '.claude/settings.json (enabledPlugins nao e um objeto de nomes)',
+      '.claude/settings.json (hooks nao e um objeto de nomes)',
+      '.claude/settings.local.json (enabledPlugins nao e um objeto de nomes)',
+      '.mcp.json (mcpServers nao e um objeto de nomes)'
+    ]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  for (const [nome, mcp] of [['com mcpServers', { mcpServers: { um: {}, dois: {} } }], ['na raiz', { um: {}, dois: {} }]]) {
+    const outro = montar({ '.mcp.json': JSON.stringify(mcp) });
+    try {
+      const r = ambiente.detectar(outro);
+      assert.deepStrictEqual(r.mcp, ['um', 'dois'], nome);
+      assert.deepStrictEqual(r.naoLidos, [], nome);
+    } finally { fs.rmSync(outro, { recursive: true, force: true }); }
+  }
+});

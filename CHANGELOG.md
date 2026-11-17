@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.75.0 — a validação confere todos os arquivos e o aviso de atualização não mostra credencial
+
+**Corrigido**
+
+- **A validação da configuração confere os três arquivos.** O `validar.js` parava no primeiro erro: com o
+  `regras.md` inválido, o `design.json` ficava sem conferir, e com o `projeto.json` inválido, os dois. Agora confere
+  o `projeto.json`, o `regras.md` e o `design.json`, mostra o erro de cada um e diz o passo uma vez, no fim.
+- **A recusa de ligar a atualização automática não mostra credencial.** Quando o `settings.json` não tem a forma
+  certa, a mensagem mostra a entrada a escrever, com o endereço do marketplace instalado. Se esse endereço tinha
+  usuário e senha (ou um token), eles iam para a tela. Agora o trecho antes do `@` vira `<usuario-e-senha>`, e a
+  mensagem diz que é para trocar pelo que está no endereço instalado; o que se grava continua inteiro.
+- **A validação diz quando o defeito é do sworn.** Se a conferência de um arquivo falha por dentro, a mensagem diz
+  que o defeito é do sworn, não do arquivo, e o passo final manda registrar essas linhas nas issues do repositório
+  (junto do de corrigir os outros arquivos, quando algum também tem erro).
+- **A leitura do ambiente não inventa plugin nem servidor.** Um `enabledPlugins`, `hooks` ou `mcpServers` escrito
+  como lista ou texto virava nomes como "0" ou letras soltas. Agora conta como nada e o arquivo aparece entre os não
+  lidos, com o motivo.
+- **A migração da pasta antiga conta cada caminho uma vez.** O mesmo caminho em dois tipos de referência contava
+  duas trocas, e o aviso dizia "2 caminhos" de um só.
+- **O "não perguntar mais o init" grava a pasta sem espaço em volta.** Com espaço antes ou depois, a recusa ficava
+  gravada com ele, e a abertura naquela pasta perguntava de novo. Uma pasta que existe com espaço no nome fica como
+  veio.
+- **A tabela da ficha de referência guarda a barra escapada.** Uma última célula terminada em `\|` perdia a barra.
+- **A varredura recusa pasta inválida.** Sem uma pasta em texto, a raiz aparecia como "não se leu", como se fosse
+  falta de permissão; agora é erro de uso, com o que veio.
+
+## 0.74.0 — a auditoria lê transcrição grande sem estourar e diz o que é o --plugin
+
+**Corrigido**
+
+- **A auditoria lê a transcrição de subagente grande.** O modelo e o esforço que de fato responderam saem das
+  transcrições dos subagentes. Antes cada uma era lida inteira de uma vez: um arquivo de centenas de MB ficava todo
+  na memória, e acima do limite de texto do Node virava "não se leu". Agora a leitura é em blocos, linha a linha, e
+  uma linha acima de 64 MB é pulada sem derrubar o resto do arquivo, e o `/sworn:audit` diz quantas linhas pulou.
+- **A conferência do modelo dos agentes diz o que fazer.** Quando a tabela e o agente divergem, ou quando não dá
+  para saber, a linha dizia só o fato ou "não sei". Agora diz o passo: conferir o arquivo do agente ou acertar a
+  tabela, chamar o agente uma vez, atualizar o Claude Code.
+- **O aviso de texto repetido por plugin não mostra "undefined".** Um item sem o nome do plugin ou sem as contagens
+  saía com "undefined" na linha, e uma contagem negativa saía como "-3x". Agora só entra o item completo, com
+  contagem válida. A data da conversa anterior também não sai mais como 1970 quando falta.
+- **O passo que regrava a prova dos apelidos diz o que é o --plugin.** Ele dizia "com --plugin no repositório do
+  plugin" sem explicar a flag. Agora diz que, no repositório do próprio plugin, o --plugin sonda só os agentes dele.
+- Limpeza: a marca da auditoria se lê num lugar só, e a foto dos contadores usa a mesma leitura.
+
 ## 0.73.0 — a medição de qualidade e o gasto do mês não escondem dado ruim
 
 **Corrigido**

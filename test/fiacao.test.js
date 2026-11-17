@@ -2398,3 +2398,28 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
     SessionEnd: [['', 'fim-sessao.js 10']]
   });
 });
+
+// A4-120: a pasta com espaco em volta era gravada com os espacos (o chaveDaRaiz nao apara) e a abertura nela
+// perguntava de novo
+test('A4-120: recusar-init.js grava a pasta sem os espacos em volta', () => {
+  const cfg = temp('ordem-init-apara');
+  const dir = temp('ordem-init-pasta');
+  try {
+    const g = comum.scriptComoProcesso(path.join('scripts', 'recusar-init.js'), ['  ' + dir + ' \t'], {
+      env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
+    assert.strictEqual(g.status, 0, g.stdout + g.stderr);
+    assert.ok(g.stdout.includes(' em ' + dir + '.\n'), 'a mensagem leva a pasta aparada: ' + g.stdout);
+    const raizes = JSON.parse(fs.readFileSync(path.join(cfg, 'sworn', ordensLib.ARQUIVO_INIT_RECUSADO), 'utf8')).raizes;
+    assert.deepStrictEqual(raizes, [path.resolve(dir).toLowerCase()], 'gravou com os espacos: ' + JSON.stringify(raizes));
+    // a pasta que existe com o espaco no fim (o POSIX deixa; o Windows nao cria esse nome) fica como veio
+    if (process.platform !== 'win32') {
+      const comEspaco = dir + '/fim ';
+      fs.mkdirSync(comEspaco);
+      const g2 = comum.scriptComoProcesso(path.join('scripts', 'recusar-init.js'), [comEspaco], {
+        env: Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: cfg }) });
+      assert.strictEqual(g2.status, 0, g2.stdout + g2.stderr);
+      const depois = JSON.parse(fs.readFileSync(path.join(cfg, 'sworn', ordensLib.ARQUIVO_INIT_RECUSADO), 'utf8')).raizes;
+      assert.ok(depois.indexOf(path.resolve(comEspaco).toLowerCase()) !== -1, JSON.stringify(depois));
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(cfg, { recursive: true, force: true }); }
+});

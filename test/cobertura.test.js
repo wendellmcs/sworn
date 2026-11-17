@@ -208,8 +208,9 @@ test('A6-47: sem prova ou com apelido por sondar, o portao diz o comando que son
     const p = semear(dir);
     const porque = () => porChave(cobertura.relatorio(dir, p), 'apelidos-vivos').porque;
     // A6-88 (D735): onde a prova vai e o caminho real do script, entre aspas (caminho com espaco).
-    const fim = ': rode node "' + path.join(__dirname, '..', 'scripts', 'provar-apelidos.js') + '" (com --plugin no ' +
-      'repositorio do plugin) e grave a prova em .claude/sworn/apelidos-vivos.json, no formato que ele mostra';
+    const fim = ': rode node "' + path.join(__dirname, '..', 'scripts', 'provar-apelidos.js') + '" (no repositorio do ' +
+      'proprio plugin, acrescente --plugin: ele sonda so os agentes do plugin) e grave a prova em ' +
+      '.claude/sworn/apelidos-vivos.json, no formato que ele mostra';
     assert.ok(porque().startsWith('ainda nao se sondou neste ambiente (a sondar: ') && porque().endsWith(fim),
       porque());
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'apelidos-vivos.json'), JSON.stringify({ apelidos: [] }), 'utf8');

@@ -19,6 +19,16 @@ function lerObjeto(cwd, rel, naoLidos) {
   return r.valor;
 }
 
+// A4-75: o campo que tem de ser um mapa de nomes; lista ou texto virava nomes de indice ("0") ou letras e, calado,
+// plugins e servidores que nao existem. Fora da forma: {} e o motivo em `naoLidos`.
+function mapa(obj, campo, rel, naoLidos) {
+  const v = obj[campo];
+  if (v === undefined || v === null) return {};
+  if (typeof v === 'object' && !Array.isArray(v)) return v;
+  naoLidos.push(rel + ' (' + campo + ' nao e um objeto de nomes)');
+  return {};
+}
+
 function subpastas(dir) {
   try {
     return fs.readdirSync(dir, { withFileTypes: true })
@@ -46,15 +56,18 @@ function detectar(cwd) {
   const local = lerObjeto(cwd, '.claude/settings.local.json', naoLidos) || {};
 
   // A4-amb-1 (pedido 12), borda: `false` e plugin desligado - e o local, que vale por cima do settings, desliga.
-  const ligados = Object.assign({}, settings.enabledPlugins || {}, local.enabledPlugins || {});
+  const ligados = Object.assign({}, mapa(settings, 'enabledPlugins', '.claude/settings.json', naoLidos),
+    mapa(local, 'enabledPlugins', '.claude/settings.local.json', naoLidos));
   const plugins = Object.keys(ligados).filter(function (p) { return ligados[p] !== false; });
 
-  const hooks = Object.keys(
-    Object.assign({}, (settings.hooks || {}), (local.hooks || {}))
-  );
+  const hooks = Object.keys(Object.assign({}, mapa(settings, 'hooks', '.claude/settings.json', naoLidos),
+    mapa(local, 'hooks', '.claude/settings.local.json', naoLidos)));
 
+  // A4-36: o .mcp.json vale nas duas formas, { "mcpServers": { nome: {...} } } (a do Claude Code) ou os servidores
+  // direto na raiz, { nome: {...} }; com a chave mcpServers presente, so ela conta
   const mcpArquivo = lerObjeto(cwd, '.mcp.json', naoLidos) || {};
-  const mcp = Object.keys(mcpArquivo.mcpServers || mcpArquivo || {}).filter(function (k) { return k !== 'mcpServers'; });
+  const mcp = Object.keys(Object.prototype.hasOwnProperty.call(mcpArquivo, 'mcpServers')
+    ? mapa(mcpArquivo, 'mcpServers', '.mcp.json', naoLidos) : mcpArquivo);
 
   const delegaveis = [];
   for (const d of (LIMITES.delegaveisConhecidos || [])) {

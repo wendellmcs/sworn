@@ -47,8 +47,16 @@ try {
 // R2: a forma que a recusa pede vai na propria mensagem; D603: com o source real - o instalado ou, sem ele, o publico
 // do README (o teste confere os dois juntos).
 const PUBLICO = { source: 'git', url: 'https://github.com/wendellmcs/sworn.git' };
-const FORMA = '"extraKnownMarketplaces": { "' + MARKETPLACE + '": { "source": ' + JSON.stringify(conhecido || PUBLICO) +
-  ', "autoUpdate": true } }';
+// A4-35: a forma vai a tela, e o source instalado pode ter credencial na url (https://usuario:senha@ ou o token no
+// lugar do usuario). O trecho antes do ultimo @ da autoridade (ate a primeira /, com @ e aspa escapada dentro da
+// senha) vira um marcador, e a frase diz que se troca: tirar calado fazia a forma colada perder o "git@" do ssh ou o
+// token de um repositorio privado. A entrada gravada (o source inteiro) nao perde nada.
+const MARCADOR = '<usuario-e-senha>';
+const SOURCE_NA_TELA = JSON.stringify(conhecido || PUBLICO).replace(/(:\/\/)(?:[^\/\s"\\]|\\.)*@/g,
+  function (m, inicio) { return inicio + MARCADOR + '@'; });
+const FORMA = '"extraKnownMarketplaces": { "' + MARKETPLACE + '": { "source": ' + SOURCE_NA_TELA +
+  ', "autoUpdate": true } }' + (SOURCE_NA_TELA.indexOf(MARCADOR) !== -1
+  ? ' (troque ' + MARCADOR + ' pelo que vem antes do @ na url do marketplace instalado)' : '');
 
 let settings = {};
 let bruto = null;
