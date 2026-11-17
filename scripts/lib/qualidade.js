@@ -3,10 +3,11 @@
 /**
  * Recurso de qualidade de resposta: o bloco que a abertura injeta em toda sessao e a chave que o desliga.
  * O texto nasceu do desenho (docs/qualidade-de-resposta.md, secao 4.1) e so muda pela ronda de ajuste da
- * medicao A/B (D304); mudar uma letra e mudar o que todo usuario recebe. ASCII puro: sai por hook. A chave fica fora de CHAVES de proposito: entrar la
- * invalidaria todo projeto.json ja gravado.
+ * medicao A/B (D304); mudar uma letra e mudar o que todo usuario recebe. ASCII puro: sai por hook.
+ * A chave fica fora de CHAVES de proposito: entrar la invalidaria todo projeto.json ja gravado.
  */
 const CHAVE = 'qualidadeDeResposta';
+// o tamanho maximo do BLOCO, em caracteres: ele entra em toda sessao, e o teste reprova o texto que passar disso
 const TETO = 1000;
 
 const BLOCO = [

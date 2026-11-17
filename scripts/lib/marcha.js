@@ -7,6 +7,8 @@ const ORDEM = ['aaa', 'padrao', 'rapida'];
 // Plano 082 (p8-25): disco que nao distingue caixa - o Windows, como o CAIXA_PADRAO do glob.js (o macOS conta como o
 // Linux no plugin inteiro).
 const CAIXA_IGUAL = process.platform === 'win32';
+// a chave que compara caminhos: em minuscula no Windows (o disco nao distingue caixa), crua fora dele
+function chave(r) { return CAIXA_IGUAL ? r.toLowerCase() : r; }
 
 /** D8: o rigor sai do caminho do arquivo, nunca da classificacao que o agente fez. */
 function resolverMarcha(caminho, projeto) {
@@ -54,7 +56,6 @@ function aaaComReferencia(arquivos, projeto, raiz) {
   const achados = [];
   // Plano 082 (p8-25): no Windows o disco nao distingue caixa - Src/A.css e src/a.css sao um arquivo so, e vale a 1a
   // grafia vista. Fora dele sao dois.
-  const chave = CAIXA_IGUAL ? function (r) { return r.toLowerCase(); } : function (r) { return r; };
   const vistos = new Set();
   for (const arquivo of arquivos) {
     const rel = caminhoLib.relativoAoProjeto(arquivo, raiz);
@@ -80,7 +81,6 @@ function semRevisao(arquivos, aprovados, projeto, raiz, marcha) {
   const path = require('node:path');
   const caminhoLib = require('./caminho.js');
   const commit = require('./commit.js');
-  const chave = CAIXA_IGUAL ? function (r) { return r.toLowerCase(); } : function (r) { return r; };
   const vistos = new Set();
   const achados = [];
   for (const arquivo of arquivos) {

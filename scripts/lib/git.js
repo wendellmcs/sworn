@@ -45,12 +45,9 @@ function prazoDoCorrer() {
 }
 
 /**
- * Foto do git status na abertura da sessao (D17).
- * R3: spawnSync com shell:false. Nada de shell.
- * D49: devolve `null` quando NAO conseguiu fotografar (sem cwd, git ausente, fora
- * de repositorio, timeout) e `[]` quando a arvore esta limpa. Sem essa distincao a
- * guarda da D46 congelaria uma foto que falhou ate o fim da sessao, e a trava 5b
- * ficaria muda pelo resto do dia sem uma linha ao usuario.
+ * Roda `git <args>` em `cwd` (R3: spawnSync com shell:false, nada de shell) e devolve o stdout, ou `null` quando o
+ * git nao respondeu bem (ausente, fora de repositorio, saida diferente de 0, estouro do prazoDoCorrer). Quem precisa
+ * separar o prazo estourado do resto passa `opcoes.falha` e le `falha.timeout`.
  */
 function correr(cwd, args, opcoes) {
   // maxBuffer opcional: o padrao daqui (1 MiB, o do spawnSync, mantido) estoura em saida grande e viraria `null`.
@@ -77,6 +74,13 @@ function prefixo(cwd) {
   return bruto.replace(/\r?\n/g, '').replace(/\\/g, '/');
 }
 
+/**
+ * Foto do git status na abertura da sessao (D17).
+ * D49: devolve `null` quando NAO conseguiu fotografar (sem cwd, git ausente, fora
+ * de repositorio, timeout) e `[]` quando a arvore esta limpa. Sem essa distincao a
+ * guarda da D46 congelaria uma foto que falhou ate o fim da sessao, e a trava 5b
+ * ficaria muda pelo resto do dia sem uma linha ao usuario.
+ */
 function modificados(cwd) {
   if (!cwd) return null;
   // D42: sem --untracked-files=all o git colapsa pasta inteiramente nao rastreada

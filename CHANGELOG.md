@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.76.0 — o aviso de recomeço cita caminho com espaço e a retomada não espera git demais
+
+**Corrigido**
+
+- **O prompt de recomeço funciona com caminho que tem espaço.** Quando o sworn sugere abrir um chat novo, o prompt
+  pronto cita o resumo e o handoff. Um caminho com espaço era lido só até o espaço; agora ele vai entre aspas.
+- **A retomada depois da compactação consulta só os primeiros repositórios.** A linha `HEAD:` do estado da sessão
+  chamava o git duas vezes para cada repositório tocado, sem limite, no começo da sessão. Agora mostra os três
+  primeiros e nomeia os que ficaram de fora, com o comando que mostra o `HEAD` de cada um. Repositório ainda sem
+  commit não ocupa lugar, e as consultas também param, para muitos repositórios vazios não atrasarem o começo.
+- **O título da tarefa aberta é cortado como o nome do plano.** O título vem do arquivo do plano e entrava inteiro na
+  retomada; agora fica numa linha só e é cortado no mesmo tamanho do nome do plano.
+- **Uma função seta com nome de limite não é lida como limite.** O portão que impede afrouxar um limite lia
+  `max => 5` (uma função de JavaScript) como o limite `max` valendo 5. Agora só lê assim a chave de hash do Ruby
+  (`"max" => 5` ou `:max => 5`).
+
+**Interno**
+
+- Comentários que diziam outra coisa do que o código faz (o `correr` do git, os contadores do turno, o tamanho do
+  bloco de qualidade) e duas repetições de código (a chave de caminho do `marcha.js`, o `ascii` da abertura).
+
 ## 0.75.0 — a validação confere todos os arquivos e o aviso de atualização não mostra credencial
 
 **Corrigido**

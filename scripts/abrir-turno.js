@@ -10,7 +10,8 @@ const volta = require('./lib/volta.js');
 
 // UserPromptSubmit: zera as marcas do turno anterior (trabalhoReal, bloqueouNesteTurno,
 // buscouNesteTurno, gravouHandoff) e preserva todo o resto do estado da sessao (contadores, e as chaves
-// que a T18 usa). A busca e marca do TURNO: um turno que so leu nao chega ao fecho que a
+// que a T18 usa). Os contadores nao sao zerados aqui porque sao o balde do turno: o Stop os descarrega no ledger e
+// os zera (D123, portao-fecho.js). A busca e marca do TURNO: um turno que so leu nao chega ao fecho que a
 // apagaria, e sem ela aqui o turno seguinte criava arquivo sem procurar (ronda 1 do 8b).
 io.blindar(function () {
   io.lerEntrada(function (e) {

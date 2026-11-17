@@ -118,6 +118,29 @@ test('0.11.0: handoff do modelo em dia - a opcao 1 aponta o handoff e o resumo; 
   assert.strictEqual(atrasado, MOCK);
   const acento = volta.motivo(r, { caminho: RESUMO, chat: 'd731fc49', handoff: { caminho: 'pasta/ação-handoff.md', emDia: true } });
   assert.strictEqual(acento, MOCK, 'caminho fora de ASCII nao entra no aviso (D532); o resumo o cita');
+  // A5-23: caminho com espaco (o handoff e o resumo) sai entre aspas nas tres citacoes; o sem espaco segue cru, acima
+  const comEspaco = volta.motivo(r, { caminho: 'C:/Temp/meu resumo.md', chat: 'd731fc49',
+    handoff: { caminho: '.sworn/handoff/2026-11-17 h1.md', emDia: true } }).split('\n');
+  assert.ok(comEspaco.indexOf('Resumo deste chat gravado em "C:/Temp/meu resumo.md" (sem gastar nada).') !== -1,
+    comEspaco.join('\n'));
+  assert.ok(comEspaco.indexOf('     Retome o chat d731fc49 pelo handoff ".sworn/handoff/2026-11-17 h1.md" e pelo resumo ' +
+    '"C:/Temp/meu resumo.md": leia os dois antes de qualquer coisa e siga de onde ele parou.') !== -1, comEspaco.join('\n'));
+  const aspa = volta.motivo(r, { caminho: '/tmp/meu "chat"/resumo.md', chat: 'd731fc49', handoff: null });
+  assert.ok(aspa.split('\n').indexOf('Resumo deste chat gravado em `/tmp/meu "chat"/resumo.md` (sem gastar nada).') !== -1,
+    'com aspa dentro, crases: ' + aspa);
+  // com aspa e crase, nenhum dos dois delimita: vai como string JSON, nas tres citacoes
+  const ambos = '/tmp/meu "chat" `x`/resumo.md';
+  const json = JSON.stringify(ambos);
+  const comAmbos = volta.motivo(r, { caminho: ambos, chat: 'd731fc49', handoff: { caminho: ambos, emDia: true } }).split('\n');
+  assert.ok(comAmbos.indexOf('Resumo deste chat gravado em ' + json + ' (sem gastar nada).') !== -1, comAmbos.join('\n'));
+  assert.ok(comAmbos.indexOf('     Retome o chat d731fc49 pelo handoff ' + json + ' e pelo resumo ' + json +
+    ': leia os dois antes de qualquer coisa e siga de onde ele parou.') !== -1, comAmbos.join('\n'));
+  const aspaSo = volta.motivo(r, { caminho: '/tmp/meu "chat"/resumo.md', chat: 'd731fc49', handoff: null }).split('\n');
+  assert.ok(aspaSo.indexOf('     Retome o chat d731fc49 pelo resumo `/tmp/meu "chat"/resumo.md`: leia-o antes de qualquer ' +
+    'coisa e siga de onde ele parou.') !== -1, aspaSo.join('\n'));
+  const soResumo = volta.motivo(r, { caminho: 'C:/Temp/meu resumo.md', chat: 'd731fc49', handoff: null });
+  assert.ok(soResumo.split('\n').indexOf('     Retome o chat d731fc49 pelo resumo "C:/Temp/meu resumo.md": leia-o antes de ' +
+    'qualquer coisa e siga de onde ele parou.') !== -1, soResumo);
   // 0.11.1 (P2 da revisao da 0.11.0): sem caminho, o teste ASCII via "undefined" e o aviso dizia "pelo handoff undefined"
   for (const torto of [undefined, null, 42]) {
     const sem = volta.motivo(r, { caminho: RESUMO, chat: 'd731fc49', handoff: { caminho: torto, emDia: true } });

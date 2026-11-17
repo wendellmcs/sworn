@@ -314,6 +314,30 @@ test('A5-64: comparacao de igualdade com o nome do piso nao e valor novo dele; a
     '>= num portao e regua');
 });
 
+// A5-75: a funcao seta do JS (`max => 5`) nao e regua; a chave de hash do Ruby, com aspa ou com `:`, segue sendo.
+test('A5-75: funcao seta com o nome da regua nao e valor dela; a chave de hash do Ruby segue acusando', () => {
+  for (const linha of ['const f = max => 5;', 'xs.map(teto => 3)', 'const g = limite  =>  7;']) {
+    assert.deepStrictEqual(Object.keys(catraca.pares(linha)), [], linha);
+  }
+  // 1 -> 9 subiria o teto: so passa se a seta nao for lida como regua
+  assert.deepStrictEqual(catraca.afrouxou('const f = max => 1;', 'const f = max => 9;'), []);
+  // pares devolve objeto sem prototipo: a copia simples compara so as chaves e os valores
+  assert.deepStrictEqual(Object.assign({}, catraca.pares('{ "max" => 5 }')), { max: [5] });
+  assert.deepStrictEqual(Object.assign({}, catraca.pares("{ 'teto' => 5 }")), { teto: [5] });
+  assert.deepStrictEqual(Object.assign({}, catraca.pares('{ :max => 5 }')), { max: [5] });
+  // o `:` vale antes do identificador inteiro, nao so antes da palavra
+  assert.deepStrictEqual(Object.values(catraca.pares('{ :eslint_max => 5 }')), [[5]]);
+  assert.strictEqual(catraca.afrouxou('{ :eslint_max => 0 }', '{ :eslint_max => 9 }').length, 1, 'simbolo com prefixo');
+  assert.deepStrictEqual(Object.keys(catraca.pares('xs.map(eslint_max => 5)')), [], 'seta com prefixo segue fora');
+  // a chave de objeto do JS colada na seta (`cb:max=>5`, codigo compacto) nao e simbolo do Ruby
+  assert.deepStrictEqual(catraca.afrouxou('const o = {cb:max=>1};', 'const o = {cb:max=>9};'), [], 'chave de objeto do JS');
+  assert.deepStrictEqual(catraca.afrouxou('const o = {"cb":max=>1};', 'const o = {"cb":max=>9};'), [], 'chave com aspa');
+  assert.deepStrictEqual(catraca.afrouxou('const o = {[k]:max=>1};', 'const o = {[k]:max=>9};'), [], 'chave calculada');
+  assert.deepStrictEqual(Object.values(catraca.pares(':max => 5')), [[5]], 'simbolo no comeco da linha');
+  assert.deepStrictEqual(Object.values(catraca.pares('h = {a: :max => 5}')), [[5]], 'simbolo depois de espaco');
+  assert.strictEqual(catraca.afrouxou('{ "piso" => 2 }', '{ "piso" => 1 }').length, 1, 'hash do Ruby');
+});
+
 // F5 (achado da R2b, s369): a regua e identificada pelo NOME INTEIRO, nao pela palavra solta. Uma constante nova de
 // medida maxima num arquivo que ja tinha outra era lida como o teto velho subindo, e o portao negava a criacao.
 test('F5: regua nova com outro nome e criacao; a mesma regua subindo segue acusando, com o nome no aviso', () => {

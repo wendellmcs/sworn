@@ -668,7 +668,7 @@ test('0.9.1 (D568): HEAD de cada repositorio onde houve arquivo tocado, na ordem
     const dir = projeto();
     const git = function (cwd, args) {
       const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false'].concat(args),
-        { cwd: cwd, encoding: 'utf8' });
+        { cwd: cwd, encoding: 'utf8', timeout: 60000 });
       return r.status === 0 ? r.stdout.trim() : null;
     };
     try {
@@ -693,6 +693,76 @@ test('0.9.1 (D568): HEAD de cada repositorio onde houve arquivo tocado, na ordem
       const b = blocoDe(rein.montar(dir, 'p6', 'compact') || '', 'ESTADO - trabalho desta sessao') || '';
       // A linha inteira: o segundo arquivo do filho nao repete o repositorio.
       assert.strictEqual((b.match(/^HEAD: .*$/m) || [''])[0], 'HEAD: filho ' + shaFilho + ' (ramo) | raiz ' + shaRaiz + ' (principal)', b);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// A5-55: cada repositorio custa duas chamadas ao git no SessionStart; do 4o em diante so se nomeia
+test('A5-55: o HEAD sai de no maximo 3 repositorios, e a linha nomeia os que ficaram de fora', (t) => {
+  comTmp((rein) => {
+    const dir = projeto();
+    const git = function (cwd, args) {
+      const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false'].concat(args),
+        { cwd: cwd, encoding: 'utf8', timeout: 60000 });
+      return r.status === 0 ? r.stdout.trim() : null;
+    };
+    const real = function (p) { return fs.realpathSync.native(path.resolve(p)).toLowerCase(); };
+    try {
+      // so o git ausente pula o teste; um init que falha com o git presente (permissao, trava, prazo) reprova
+      if (git(dir, ['--version']) === null) { t.skip('git ausente'); return; }
+      const nomes = ['r1', 'r2', 'r3', 'r4', 'r5'];
+      const tocados = [];
+      for (const n of nomes) {
+        const repo = path.join(dir, n);
+        fs.mkdirSync(repo);
+        assert.notStrictEqual(git(repo, ['init', '-q', '-b', 'm']), null, 'git init em ' + n);
+        assert.strictEqual(real(git(repo, ['rev-parse', '--show-toplevel'])), real(repo));
+        fs.writeFileSync(path.join(repo, 'a.js'), 'x', 'utf8');
+        git(repo, ['add', 'a.js']); git(repo, ['commit', '-q', '-m', 'a']);
+        tocados.push(path.join(repo, 'a.js'));
+      }
+      const sha = function (n) { return git(path.join(dir, n), ['rev-parse', '--short', 'HEAD']); };
+      require('../scripts/lib/estado.js').gravar('p55', { arquivosTocados: tocados.slice(0, 4) });
+      const b = blocoDe(rein.montar(dir, 'p55', 'compact') || '', 'ESTADO - trabalho desta sessao') || '';
+      assert.strictEqual((b.match(/^HEAD: .*$/m) || [''])[0], 'HEAD: r1 ' + sha('r1') + ' (m) | r2 ' + sha('r2') +
+        ' (m) | r3 ' + sha('r3') + ' (m) | nao consultados (git -C <pasta> log -1 mostra o HEAD): r4', b);
+      require('../scripts/lib/estado.js').gravar('p56', { arquivosTocados: tocados });
+      const c = blocoDe(rein.montar(dir, 'p56', 'compact') || '', 'ESTADO - trabalho desta sessao') || '';
+      assert.ok(/ \| nao consultados \(git -C <pasta> log -1 mostra o HEAD\): r4, r5$/m.test(c), c);
+      require('../scripts/lib/estado.js').gravar('p57', { arquivosTocados: tocados.slice(0, 3) });
+      const d = blocoDe(rein.montar(dir, 'p57', 'compact') || '', 'ESTADO - trabalho desta sessao') || '';
+      assert.ok(/^HEAD: r1 .* \| r3 [0-9a-f]+ \(m\)$/m.test(d) && !/nao consultados/.test(d), 'no teto, nada a mais: ' + d);
+      // repositorio sem commit nao ocupa lugar nem entra na lista; as consultas param no dobro do teto (6), e os
+      // depois de 6 vazios so sao nomeados
+      const vazios = [];
+      for (let i = 1; i <= 6; i++) {
+        const v = path.join(dir, 'v' + i);
+        fs.mkdirSync(v);
+        assert.notStrictEqual(git(v, ['init', '-q', '-b', 'm']), null, 'git init em v' + i);
+        assert.strictEqual(real(git(v, ['rev-parse', '--show-toplevel'])), real(v));
+        vazios.push(path.join(v, 'a.js'));
+      }
+      require('../scripts/lib/estado.js').gravar('p58', { arquivosTocados: vazios.slice(0, 3).concat([tocados[0]]) });
+      const e = blocoDe(rein.montar(dir, 'p58', 'compact') || '', 'ESTADO - trabalho desta sessao') || '';
+      assert.strictEqual((e.match(/^HEAD: .*$/m) || [''])[0], 'HEAD: r1 ' + sha('r1') + ' (m)', e);
+      require('../scripts/lib/estado.js').gravar('p59', { arquivosTocados: vazios.concat([tocados[0], tocados[1]]) });
+      const f = blocoDe(rein.montar(dir, 'p59', 'compact') || '', 'ESTADO - trabalho desta sessao') || '';
+      assert.strictEqual((f.match(/^HEAD: .*$/m) || [''])[0], 'HEAD: nao consultados (git -C <pasta> log -1 mostra o HEAD): r1, r2', f);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// A5-06: o titulo da tarefa vem do arquivo do plano, editavel a mao: uma linha so, com o teto de 200
+test('A5-06: Tarefa aberta passa o titulo por umaLinha (teto de 200)', () => {
+  comTmp((rein) => {
+    const dir = projeto({
+      '.claude/sworn/plano-ativo.json': JSON.stringify({ arquivo: 'p.md', sessionId: 's1' }),
+      'p.md': '### Tarefa 3: ' + 't'.repeat(250) + '\n- [ ] a\n'
+    });
+    try {
+      const linhas = (rein.montar(dir, 's1', 'compact') || '').split('\n');
+      const tarefa = linhas.filter((l) => l.startsWith('Tarefa aberta: '))[0];
+      assert.strictEqual(tarefa, 'Tarefa aberta: Tarefa 3 - ' + 't'.repeat(197) + '...', tarefa);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

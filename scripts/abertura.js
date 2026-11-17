@@ -79,7 +79,7 @@ function avisoDasFichas(cwd, projeto, agora) {
   // Marca ilegivel ou que nao e objeto (5, "x", lista): vale como vazia; senao a atribuicao abaixo lancava.
   try { vistos = JSON.parse(fs.readFileSync(marca, 'utf8')); } catch (e) { vistos = {}; }
   if (!vistos || typeof vistos !== 'object' || Array.isArray(vistos)) vistos = {};
-  const ascii = require('./lib/escopo.js').ascii;
+  const ascii = escopoLib.ascii;
   const partes = [];
   for (const nome of nomes) {
     const rel = '.claude/sworn/referencias/' + nome;

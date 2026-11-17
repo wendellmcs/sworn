@@ -160,6 +160,7 @@ function nucleo(cwd) {
 
 // Plano 0.9.1 (D560, D568): o que a sessao fez, para o compact nao apagar. Os arquivos listados tem teto; o resto vira conta.
 const TETO_DE_ARQUIVOS = 8;
+const TETO_DE_REPOSITORIOS = 3;
 
 /** A pasta do repositorio de `abs` (a mais perto com `.git`), subindo pelo disco; null fora de repositorio. Pelo
  *  disco, e nao por `git rev-parse` por arquivo: a sessao pode ter tocado dezenas, e isto roda em toda compactacao. */
@@ -173,21 +174,34 @@ function repositorioDe(abs) {
   }
 }
 
-/** D568: o HEAD de cada repositorio onde houve arquivo tocado, na ordem em que apareceram. O que contem a pasta
- *  aberta se chama "raiz"; repositorio sem commit (ou git que nao responde) fica de fora. */
+/** D568: o HEAD de cada repositorio onde houve arquivo tocado, na ordem em que apareceram, ate TETO_DE_REPOSITORIOS
+ *  deles (A5-55). O que contem a pasta aberta se chama "raiz"; repositorio sem commit (ou git que nao responde) fica
+ *  de fora sem gastar o teto. */
 function linhaDoHead(cwd, relativos) {
   const vistos = [];
   const partes = [];
+  let consultas = 0;
+  const fora = [];
   for (const rel of relativos) {
     const repo = repositorioDe(path.resolve(cwd, rel));
     if (!repo || vistos.indexOf(repo.toLowerCase()) !== -1) continue;
     vistos.push(repo.toLowerCase());
+    // A5-55: cada repositorio custa chamadas ao git (prazo de 5 s cada) dentro do SessionStart. O teto conta os HEAD
+    // mostrados (o repositorio sem commit nao tira o lugar de um com HEAD), e as consultas tem o seu, para muitos
+    // repositorios sem commit seguidos nao somarem prazo; do teto em diante a linha so nomeia (sem chamar o git) e
+    // diz o comando que mostra o HEAD de cada um
+    if (partes.length >= TETO_DE_REPOSITORIOS || consultas >= 2 * TETO_DE_REPOSITORIOS) {
+      fora.push(caminhoLib.relativoAoProjeto(repo, cwd) || 'raiz');
+      continue;
+    }
+    consultas++;
     const sha = git.correr(repo, ['rev-parse', '--short', 'HEAD']);
     if (sha === null) continue;
     const ramo = (git.correr(repo, ['rev-parse', '--abbrev-ref', 'HEAD']) || '').trim();
     partes.push((caminhoLib.relativoAoProjeto(repo, cwd) || 'raiz') + ' ' + sha.trim() +
       (ramo && ramo !== 'HEAD' ? ' (' + ramo + ')' : ''));
   }
+  if (fora.length) partes.push('nao consultados (git -C <pasta> log -1 mostra o HEAD): ' + fora.join(', '));
   return partes.length ? 'HEAD: ' + partes.join(' | ') : null;
 }
 
@@ -422,7 +436,7 @@ function montar(cwd, sessionId, origem) {
       // F2-20: os dois valores vem de um arquivo editavel a mao: uma linha so, com teto.
       const linhas = ['Plano: ' + umaLinha(ativo.arquivo), 'Dono: ' + declarado(ativo.sessionId)];
       if (aberta) {
-        linhas.push('Tarefa aberta: Tarefa ' + aberta.n + ' - ' + aberta.titulo);
+        linhas.push('Tarefa aberta: Tarefa ' + aberta.n + ' - ' + umaLinha(aberta.titulo));
         linhas.push('Passos por marcar: ' + aberta.abertos + ' de ' + aberta.total);
         linhas.push('RELEIA o texto dessa tarefa NO ARQUIVO antes de continuar. Nao de memoria.');
       } else {

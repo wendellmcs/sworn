@@ -147,6 +147,18 @@ function paresPorNome(texto) {
         // A5-64 (D735): `==`/`===` compara, nao atribui (o plural do cicatriz.js foi lido como o piso descendo).
         // `>=` segue regua: num portao (`cobertura >= 80`) o numero e o piso de verdade.
         if (m.groups.sep.indexOf('==') !== -1) continue;
+        // A5-75: `max => 5` e a funcao seta do JS (o parametro max devolve 5), nao regua; a chave de hash do Ruby
+        // (`"max" => 5`, `:max => 5`, `:eslint_max => 5`) segue regua, pela aspa no separador ou pelo `:` antes do
+        // identificador inteiro (o prefixo com `_` faz parte dele). Simbolo so com o `:` no comeco da linha ou depois
+        // de espaco, `{`, `(`, `[` ou `,`: colado a uma chave (`{cb:max=>5}`, `{"cb":max=>5}`, `{[k]:max=>5}`) e a
+        // seta como valor de objeto do JS. O ternario sem espaco (`y :max=>5`) fica como simbolo. A chave do Perl sem aspa
+        // (`max_warnings => 0`) e igual a seta do JS por fora, e fica de fora com ela.
+        if (m.groups.sep.indexOf('=>') !== -1 && !/["']/.test(m.groups.sep)) {
+          let comeco = m.index;
+          while (comeco > 0 && /[a-z0-9_$]/.test(linha[comeco - 1])) comeco--;
+          const simbolo = linha[comeco - 1] === ':' && (comeco === 1 || /[\s{(\[,]/.test(linha[comeco - 2]));
+          if (!simbolo) continue;
+        }
         // A2-02: `2_000`, `1e3` e `Infinity` eram lidos so pelo 1o digito (2, 1) ou nem lidos.
         const n = m.groups.numero;
         const valor = /infinity$/.test(n) ? (n[0] === '-' ? -Infinity : Infinity) : Number(n.replace(/_/g, ''));

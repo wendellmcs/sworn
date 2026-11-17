@@ -53,6 +53,15 @@ function duracao(ms) {
   return Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0') + ' min';
 }
 
+// A5-23: o caminho com espaco vai entre aspas, senao o prompt colado le so ate o espaco; sem espaco fica como e.
+// Caminho que ja tem aspa dupla (o POSIX deixa) vai entre crases, que a aspa de dentro nao fecha; com aspa e crase,
+// vai como string JSON (a aspa de dentro escapada por barra), que nenhum dos dois fecha.
+function citado(caminho) {
+  if (!/\s/.test(caminho)) return caminho;
+  if (caminho.indexOf('"') === -1) return '"' + caminho + '"';
+  return caminho.indexOf('`') === -1 ? '`' + caminho + '`' : JSON.stringify(caminho);
+}
+
 /**
  * O texto do aviso (D550; 0.11.0, mock D588). ASCII: o id do modelo que vier torto sai com "?" no lugar.
  * `resumo` = o que o retomar.resumir devolveu ({ caminho, chat, handoff }) ou null: com ele, a opcao 1 traz o prompt
@@ -74,10 +83,10 @@ function motivo(r, resumo) {
   if (resumo && typeof resumo.caminho === 'string') {
     const h = resumo.handoff;
     const comHandoff = h && h.emDia && typeof h.caminho === 'string' && /^[\x20-\x7E]+$/.test(h.caminho);
-    linhas.push('', 'Resumo deste chat gravado em ' + resumo.caminho + ' (sem gastar nada).',
+    linhas.push('', 'Resumo deste chat gravado em ' + citado(resumo.caminho) + ' (sem gastar nada).',
       '', 'Faca uma destas:', '  1. abra um chat novo e cole:',
-      '     Retome o chat ' + resumo.chat + (comHandoff ? ' pelo handoff ' + h.caminho + ' e pelo resumo ' + resumo.caminho +
-        ': leia os dois' : ' pelo resumo ' + resumo.caminho + ': leia-o') + ' antes de qualquer coisa e siga de onde ele parou.');
+      '     Retome o chat ' + resumo.chat + (comHandoff ? ' pelo handoff ' + citado(h.caminho) + ' e pelo resumo ' + citado(resumo.caminho) +
+        ': leia os dois' : ' pelo resumo ' + citado(resumo.caminho) + ': leia-o') + ' antes de qualquer coisa e siga de onde ele parou.');
   } else {
     const causa = resumo && typeof resumo.causa === 'string' && resumo.causa
       ? ' (' + resumo.causa.replace(/[^\x20-\x7E]/g, '?').slice(0, 200) + ')' : '';
