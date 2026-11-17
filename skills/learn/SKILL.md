@@ -20,6 +20,13 @@ writing still requires the user's yes. At most one offer every 5 turns; turn it 
 `"sugerirAprender": false` in `.claude/sworn/projeto.json`. If the message was a bug report or an
 answer to a question, ignore the offer: go on without running the skill, and nothing is written.
 
+## What this skill does NOT do
+
+- Nothing becomes a rule without the user's yes in Step 4.
+- It does not decide whether the correction was right: it shows what it understood (Step 1) and the user decides.
+- It writes only to `.claude/sworn/regras.md`, and only through `propor-regra.js` (Step 5); no other instruction
+  file is touched.
+
 ## Step 1 — separate what was corrected from what I understood
 
 Called without the correction, ask the user for it in one sentence, and start here with their answer.

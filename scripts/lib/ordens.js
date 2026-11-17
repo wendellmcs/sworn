@@ -9,15 +9,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const config = require('./config.js');
+const { ehObjeto } = require('./texto.js');
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 const MARCA_CALIBRAR = 'calibrar-ordem.json';
 // O "perguntar de novo em 30 dias" do mock: a ordem do calibrar sai no maximo uma vez nesse intervalo.
 const DIAS_ENTRE_ORDENS_DO_CALIBRAR = 30;
-
-function ehObjeto(p) {
-  return !!p && typeof p === 'object' && !Array.isArray(p);
-}
 
 /** 250000 -> "250 mil". */
 function emMil(n) {

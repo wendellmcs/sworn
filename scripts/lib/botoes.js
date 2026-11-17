@@ -101,8 +101,10 @@ function daSessao(entrada) {
   // A7-50: o arquivo e de onde vem a regra (as marchas do projeto.json), como o revisar.
   const aaa = e.padraoCarregado !== true ? arquivoAaa(s.arquivosTocados, projeto, e.raiz) : '';
   if (aaa) {
+    // A7-79: diz onde se muda a marca (a chave "marchas" do .claude/sworn/projeto.json).
     lista.push(botao('padrao', 'O arquivo ' + aaa + ' está entre os que o projeto.json marca com o cuidado mais ' +
-      'alto: carregue o manual antes de seguir.', 'carregar o manual', '/sworn:playbook'));
+      'alto: carregue o manual antes de seguir. Para mudar a marca, edite "marchas" em .claude/sworn/projeto.json.',
+    'carregar o manual', '/sworn:playbook'));
   }
 
   // Plano 082 (p5-33): a ordem e a de ORDEM, nao a dos if acima (as duas podiam divergir sem aviso).

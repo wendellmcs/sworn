@@ -33,6 +33,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const config = require('./config.js');
 const textoLib = require('./texto.js');
+const { ehObjeto } = textoLib;
 const gitLib = require('./git.js');
 
 const CHAVE = 'auditarNaAbertura';
@@ -44,10 +45,6 @@ const PADROES = { diasEntreAuditorias: 7, diasSkillParada: 90, diasEntreAtalhos:
 const MAX_POR_CATEGORIA = 5;
 const ATALHOS_LISTADOS = 10; // mock D576: o resto pelo /sworn:shortcuts
 const DIA_MS = 24 * 60 * 60 * 1000;
-
-function ehObjeto(p) {
-  return !!p && typeof p === 'object' && !Array.isArray(p);
-}
 
 /** Ligado por padrao. So `false` desliga (como sugerirAprender e qualidadeDeResposta). */
 function ligada(projeto, chave) {

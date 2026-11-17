@@ -1,4 +1,5 @@
 'use strict';
+const { ehObjeto } = require('./texto.js');
 
 /**
  * Recurso de qualidade de resposta: o bloco que a abertura injeta em toda sessao e a chave que o desliga.
@@ -24,10 +25,6 @@ const BLOCO = [
   "Reply in the user's language; the rules hold in any. Files you write (plan, decision, handoff) are out.",
   'Desligar neste projeto: "' + CHAVE + '": false em .claude/sworn/projeto.json.'
 ].join('\n') + '\n';
-
-function ehObjeto(p) {
-  return !!p && typeof p === 'object' && !Array.isArray(p);
-}
 
 /** O bloco, ou null quando o projeto desligou. So `false` desliga: tipo errado segue ligado e avisa. */
 function bloco(projeto) {

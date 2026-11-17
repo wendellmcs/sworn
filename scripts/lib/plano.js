@@ -335,9 +335,12 @@ function planoDoObjetivo(objetivo) {
   return achados.length ? achados[achados.length - 1] : null;
 }
 
+// A7-31: a guarda vem antes do existsSync, para nao sondar caminho fora da pasta do projeto
 function ultimoNoDisco(cwd, achados) {
   for (let i = achados.length - 1; i >= 0; i--) {
-    try { if (fs.existsSync(path.join(cwd, achados[i]))) return achados[i]; } catch (e) { /* segue */ }
+    if (!dentroDoProjeto(cwd, achados[i])) continue;
+    // R1 do H1v: resolvido como o caminhoDoPlano (o path.join colava o caminho absoluto de dentro na pasta).
+    try { if (fs.existsSync(caminhoDoPlano(cwd, achados[i]))) return achados[i]; } catch (e) { /* segue */ }
   }
   return null;
 }
@@ -760,10 +763,15 @@ function nomeCurto(ativo) {
 }
 
 // Plano 082 (p7-9): a unidade da conta, pelo tipo das linhas (os de RE_ITEM); singular no total 1.
-const UNIDADE = { tarefa: ['tarefa', 'tarefas'], etapa: ['etapa', 'etapas'], fase: ['fase', 'fases'],
-  onda: ['onda', 'ondas'], item: ['item', 'itens'] };
-UNIDADE.task = UNIDADE.tarefa; UNIDADE.step = UNIDADE.etapa; UNIDADE.stage = UNIDADE.etapa;
-UNIDADE.wave = UNIDADE.onda; UNIDADE.phase = UNIDADE.fase;
+// A7-30: um literal so; o nome em ingles aponta para o mesmo par do portugues.
+const TAREFA = ['tarefa', 'tarefas'];
+const ETAPA = ['etapa', 'etapas'];
+const FASE = ['fase', 'fases'];
+const ONDA = ['onda', 'ondas'];
+const UNIDADE = {
+  tarefa: TAREFA, task: TAREFA, etapa: ETAPA, step: ETAPA, stage: ETAPA, fase: FASE, phase: FASE,
+  onda: ONDA, wave: ONDA, item: ['item', 'itens']
+};
 
 /** Uma linha so: espaco, tab e quebra viram um espaco (o texto vem do plano, que o dono escreve). */
 function umaLinha(v) { return String(v === undefined || v === null ? '' : v).replace(/\s+/g, ' ').trim(); }

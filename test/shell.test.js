@@ -29,11 +29,30 @@ test('shell: 2>/dev/null em Windows e apontado', () => {
 test('shell: && em PowerShell 5.1 e apontado', () => {
   const p = shell.conferir('npm test && npm run build', { so: 'win32', shell: 'powershell' });
   assert.ok(p.some((x) => x.achado === '&&'));
+  // R1 do H1v: sem espaco em volta o PowerShell 5.1 tambem recusa; dentro de aspas segue fora
+  assert.deepStrictEqual(shell.conferir('cd dir&&npm test', WIN).map((x) => x.achado), ['&&']);
+  assert.deepStrictEqual(shell.conferir('npm test||exit 1', WIN).map((x) => x.achado), ['||']);
+  assert.deepStrictEqual(shell.conferir('Write-Output "a&&b||c"', WIN), []);
 });
 
 test('shell: comando unix inexistente no PowerShell e apontado', () => {
   for (const cmd of ['which node', 'touch a.txt', 'head -n 5 a.txt', 'tail -n 5 a.txt']) {
     assert.ok(shell.conferir(cmd, WIN).length > 0, 'devia apontar: ' + cmd);
+  }
+  // A9-06: colado em `;`, `|` ou entre parenteses tambem e o comando
+  const casos = { 'which;ls': 'which', '(which git)': 'which', 'ls|head': 'head', 'x;tail -n 2 a': 'tail',
+    '(touch a.txt)': 'touch', 'Get-Item a |head': 'head',
+    // R1 do H1v: a quebra de linha, a chave e o `&` tambem separam comando
+    'x\nhead a': 'head', '{ which git }': 'which', '{which git}': 'which', '&tail a': 'tail',
+    // e o /tmp depois de `=`, `>` ou `;`
+    '$d=/tmp/x': '/tmp', 'echo a>/tmp/b': '/tmp', 'ls;/tmp/run': '/tmp', 'sort </tmp/in.txt': '/tmp' };
+  for (const cmd of Object.keys(casos)) {
+    assert.ok(shell.conferir(cmd, WIN).some((x) => x.achado === casos[cmd]), 'devia apontar: ' + cmd);
+  }
+  // a palavra dentro de outra segue fora
+  for (const cmd of ['Get-Item header.txt', 'npm run tailwind', 'echo whichever', 'Write-Output "a;head"',
+    "Write-Output 'x|tail'", 'Get-Item C:/tmp/a', 'Write-Output ${head}', '${tail} = 3', 'Write-Output ${which}']) {
+    assert.strictEqual(shell.conferir(cmd, WIN).length, 0, 'nao devia apontar: ' + cmd);
   }
 });
 

@@ -549,6 +549,34 @@ test('R2: com varios "Plano:", vale o ultimo que existe no disco; nenhum existe 
     'espaço, ponha-o entre crases no Objetivo: `` Plano: `meu plano.md` ``.\n');
 });
 
+// A7-31: o "Plano:" fora da pasta do projeto nem e sondado no disco; vale o ultimo de dentro que existe
+test('A7-31: Plano: fora do projeto que existe no disco nao ganha do plano de dentro', () => {
+  const pai = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-painel-fora-'));
+  try {
+    const base = path.join(pai, 'proj');
+    fs.mkdirSync(path.join(base, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(base, 'plano.md'), PLANO);
+    fs.writeFileSync(path.join(pai, 'fora.md'), PLANO);
+    fs.writeFileSync(path.join(base, '.claude', 'sworn', 'escopo.md'),
+      '# Escopo\n**Objetivo:** X. Plano: plano.md. depois Plano: ../fora.md\n## Dentro\n- x/**\n');
+    const achado = planoLib.acharPlanoDaFrente(base, null);
+    assert.strictEqual(achado && achado.arquivo, 'plano.md', JSON.stringify(achado));
+    // R1 do H1v (borda): o caminho absoluto de fora tambem perde; o absoluto de dentro que existe ganha
+    const escopo = path.join(base, '.claude', 'sworn', 'escopo.md');
+    // entre crases: a pasta temporaria pode ter espaco, e o "Plano:" sem crase corta no espaco
+    const abs = (p) => '`' + p.replace(/\\/g, '/') + '`';
+    fs.writeFileSync(escopo, '# Escopo\n**Objetivo:** X. Plano: plano.md. depois Plano: ' + abs(path.join(pai, 'fora.md')) +
+      '\n## Dentro\n- x/**\n');
+    const absFora = planoLib.acharPlanoDaFrente(base, null);
+    assert.strictEqual(absFora && absFora.arquivo, 'plano.md', JSON.stringify(absFora));
+    fs.writeFileSync(path.join(base, 'outro.md'), PLANO);
+    fs.writeFileSync(escopo, '# Escopo\n**Objetivo:** X. Plano: plano.md. depois Plano: ' + abs(path.join(base, 'outro.md')) +
+      '\n## Dentro\n- x/**\n');
+    const absDentro = planoLib.acharPlanoDaFrente(base, null);
+    assert.ok(absDentro && path.basename(absDentro.arquivo) === 'outro.md', JSON.stringify(absDentro));
+  } finally { fs.rmSync(pai, { recursive: true, force: true }); }
+});
+
 test('R2: estimativa com trabalho pela frente nunca sai 0 sessoes', () => {
   assert.deepStrictEqual(planoLib.estimativaDeSessoes(1, 3, 1), { sessoes: 1, media: 1 / 3 });
   assert.deepStrictEqual(planoLib.estimativaDeSessoes(7, 3, 0), { sessoes: 0, media: 7 / 3 });
@@ -897,4 +925,16 @@ test('R1 da s45: tabela-resumo dos cabecalhos sem caixa nao conta cada item duas
     .map(function (t) { return t.id; }), ['2a', '3']);
   // tipo diferente nao e resumo: "Etapa 1" e "Fase 1" seguem os dois
   assert.strictEqual(planoLib.parseItens('### Etapa 1: Mapear\n| Fase | X |\n|---|---|\n| 1 | a |').length, 2);
+});
+
+// A7-30: o tipo em ingles conta na unidade do par em portugues, no plural e no singular.
+test('A7-30: Task, Step, Stage, Phase e Wave contam como tarefas, etapas, fases e ondas', () => {
+  const casos = { Task: 'tarefa', Step: 'etapa', Stage: 'etapa', Phase: 'fase', Wave: 'onda' };
+  for (const [tipo, pt] of Object.entries(casos)) {
+    const dois = [{ tipo: tipo, estado: 'feita', titulo: 'a' }, { tipo: tipo, estado: 'aberta', titulo: 'b' }];
+    const l2 = planoLib.linhaDoPlano({ arquivo: 'p.md' }, dois);
+    assert.ok(l2.indexOf('1 de 2 ' + pt + 's') !== -1, tipo + ': ' + l2);
+    const l1 = planoLib.linhaDoPlano({ arquivo: 'p.md' }, [{ tipo: tipo, estado: 'aberta', titulo: 'b' }]);
+    assert.ok(l1.indexOf('0 de 1 ' + pt + ' ') !== -1, tipo + ': ' + l1);
+  }
 });

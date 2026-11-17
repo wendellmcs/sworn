@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.77.0 — o painel do plano fica na pasta do projeto e o paralelo vê o mesmo arquivo escrito de outro jeito
+
+**Corrigido**
+
+- **O painel do plano não escolhe um plano de fora do projeto.** Quando o escopo cita mais de um `Plano:`, o painel
+  fica com o último que existe no disco. Um caminho que sai da pasta do projeto (`../fora.md`) ganhava do plano de
+  dentro se existisse; agora ele é pulado antes mesmo de o disco ser consultado.
+- **O `/sworn:parallel` vê o mesmo arquivo escrito de dois jeitos.** Duas tarefas que editam o mesmo arquivo são
+  recusadas, mas `src//a.js` e `src/../src/a.js` passavam como arquivos diferentes de `src/a.js`. Agora o caminho é
+  normalizado antes da comparação, também com a letra da unidade do Windows (`C:\..\a.js` é `C:\a.js`). Um caminho que não nomeia arquivo nenhum (`.`, `src/..` ou só a raiz `/`) é
+  recusado, e o caminho de rede (`\\servidor\pasta`) não vira um caminho de uma barra só. Uma tarefa escrita como
+  lista (`[...]`) dá um erro que diz o formato certo, em vez de um erro sobre uma chave `"0"`.
+- **O vigia que puxa as novidades recusa remoto e ramo que começam com `-`.** O vigia é a busca semanal de
+  novidades do mantenedor do plugin e vem desligado; quem não o ligou não é afetado. Esses dois valores vão ao
+  `git fetch`, que leria `-u...` como uma opção dele. Antes só `--` era recusado.
+- **O aviso de comando do bash no PowerShell pega `which`, `touch`, `head` e `tail` colados em `;`, `|`,
+  parênteses, chaves ou `&`** (`(head arq)`, `ls;tail`, `{which git}`). Palavras que só os contêm, como
+  `header.txt` ou `tailwind`, e a variável entre chaves (`${head}`), seguem sem aviso. O mesmo aviso pega `&&` e
+  `||` sem espaço em volta (`cd pasta&&npm test`), que o PowerShell 5.1 recusa, e o `/tmp` depois de `=`, `<` ou `>`
+  (`$d=/tmp/x`).
+- **A causa de um erro não mostra mais "undefined"** quando o erro tem nome e não tem mensagem, e o corte da
+  causa longa não parte um emoji ao meio. Num aviso, um nome entre aspas que termina em barra invertida
+  (`C:\pasta\`) agora mostra a aspa que fecha.
+- **O botão que sugere carregar o manual diz onde mudar isso.** Ele aparece para arquivo que o projeto marca com o
+  cuidado mais alto, e agora termina dizendo que a marca se muda na chave `"marchas"` do
+  `.claude/sworn/projeto.json`.
+
+**Documentação**
+
+- As skills `/sworn:handoff`, `/sworn:init` e `/sworn:learn` ganharam a seção do que elas não fazem, como o manual
+  já tinha.
+- Três notas da 0.20.x explicam termos que usavam sem dizer o que são: o atalho e o "trocar quando"; o aviso de
+  que a leitura do uso da conversa demorou; e quem é "quem decide" quando o `git status` falha.
+
+**Interno**
+
+- A conferência de "é um objeto JSON de verdade" tinha cópias em onze arquivos; agora há uma só, com teste que
+  recusa cópia nova. Teste novo do medidor para a resposta em JSON sem os campos esperados, e a tabela de unidades
+  do painel do plano num literal só.
+
 ## 0.76.0 — o aviso de recomeço cita caminho com espaço e a retomada não espera git demais
 
 **Corrigido**
@@ -1282,13 +1322,15 @@ nova passou de cerca de 290 ms para cerca de 250 ms.
 - **O relatório de cobertura com menos de dois agentes na escada** diz o plural certo, explica o que é a escada (a
   lista dos agentes, do mais barato ao mais caro) e separa o efeito do passo.
 - **O aviso de atalho sem "trocar quando" diz o efeito em palavras comuns** ("ninguém lembra de trocar o atalho"),
-  sem o jargão "dívida esquecida".
-- **O status do medidor atrasado ficou mais curto**, para caber na linha de status sem corte.
+  sem o jargão "dívida esquecida". O atalho é uma simplificação de propósito, marcada num comentário do código; o
+  "trocar quando" é a parte do comentário que diz em que momento refazê-la direito.
+- **O aviso de que a leitura do uso da conversa demorou ficou mais curto**, para caber inteiro na linha de status
+  (a linha de baixo da tela do Claude Code) sem corte. Não há o que fazer: outra leitura já começou no lugar dela.
 - **O agente do `/sworn:parallel` que para num erro** não manda mais consertar "o que a mensagem aponta" quando ela
   não aponta nada: conserte a causa se a mensagem a nomear e rode de novo; se parar igual, o `/workflows` mostra onde
   ele parou.
-- **O manual, quando o `git status` falha**, separa os dois casos numa lista curta (fora de um repositório git: diz
-  na resposta e segue; qualquer outra falha: para e leva o erro a quem decide).
+- **O manual, quando o `git status` falha**, separa dois casos: fora de um repositório git, diz isso na resposta e
+  segue; em qualquer outra falha, para e leva o erro a quem decide o projeto (a pessoa que o `/sworn:init` registrou).
 - **As notas da 0.20.0** dizem o que é o `texto.js` e qual comando o confere, o que o manual faz fora de um
   repositório git e o que é o `/sworn:radar`.
 

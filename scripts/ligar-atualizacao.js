@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const textoLib = require('./lib/texto.js');
+const { ehObjeto } = textoLib;
 
 /**
  * D598 (revisao completa, A11-02): o /sworn:init pergunta se o usuario quer as versoes novas sozinho e, com o
@@ -32,7 +33,6 @@ function recusar(porQue, comoResolver) {
 const PERMISSAO = 'confira se voce pode ler e gravar o arquivo e a pasta dele, e rode de novo';
 const CONHECIDOS = path.join(pastaConfig, 'plugins', 'known_marketplaces.json');
 
-function ehObjeto(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
 // R2: `source` que serve tem ao menos o tipo (`source.source`, como "git"); `{}` gravaria uma entrada que nao instala.
 function ehSource(v) { return ehObjeto(v) && typeof v.source === 'string' && v.source !== ''; }
 

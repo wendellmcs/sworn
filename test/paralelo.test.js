@@ -157,6 +157,41 @@ test('paralelo: papel e donoDe declarados vao ao agente; o mesmo arquivo em duas
     { tarefa: 'b', edita: true, donoDe: ['src/x.js'] },
     { tarefa: 'c', edita: true, donoDe: ['.\\SRC\\a.js'] },
   ]), /tasks 1 and 3 both own SRC\/a\.js; two agents must not edit the same file/);
+  // A7-38: a barra dobrada e o `..` que volta nao escondem o dono repetido
+  await assert.rejects(rodar([
+    { tarefa: 'a', edita: true, donoDe: ['src//a.js'] },
+    { tarefa: 'b', edita: true, donoDe: ['src/../src/a.js'] },
+  ]), /tasks 1 and 2 both own src\/a\.js; two agents must not edit the same file/);
+  // R3 do H1v: no absoluto, o `..` acima da raiz cai (como no path.resolve)
+  await assert.rejects(rodar([
+    { tarefa: 'a', edita: true, donoDe: ['/a.js'] },
+    { tarefa: 'b', edita: true, donoDe: ['/../a.js'] },
+  ]), /tasks 1 and 2 both own \/a\.js; two agents must not edit the same file/);
+  // ... e a letra da unidade do Windows nao cai com o `..`, escrito com qualquer barra
+  await assert.rejects(rodar([
+    { tarefa: 'a', edita: true, donoDe: ['C:\\proj\\a.js'] },
+    { tarefa: 'b', edita: true, donoDe: ['C:/../proj/x/../a.js'] },
+  ]), /tasks 1 and 2 both own C:\/proj\/a\.js; two agents must not edit the same file/);
+  // A7-38 (borda): o `..` que sobra no comeco e a barra do caminho absoluto ficam; sao outros arquivos, sem colisao
+  for (const [x, y] of [['../../a.js', 'a.js'], ['/a.js', 'a.js']]) {
+    const duas = await rodar([
+      { tarefa: 'a', edita: true, donoDe: [x] },
+      { tarefa: 'b', edita: true, donoDe: [y] },
+    ]);
+    assert.strictEqual(duas.chamadas.length, 2, x + ' e ' + y + ' sao arquivos diferentes');
+  }
+  // R1 do H1v: `.` e `a/..` nao nomeiam arquivo; o caminho de rede nao vira o absoluto de uma barra so
+  for (const v of ['.', 'src/..', './', '/', '/.', '//', '/..', '/a/../..', 'C:\\', 'C:/..', 'c:\\a\\..']) {
+    await assert.rejects(rodar([{ tarefa: 'a', edita: true, donoDe: [v] }]), /task 1: donoDe ".*" names no file/, v);
+  }
+  const rede = await rodar([
+    { tarefa: 'a', edita: true, donoDe: ['\\\\srv\\pasta\\a.js'] },
+    { tarefa: 'b', edita: true, donoDe: ['/srv/pasta/a.js'] },
+  ]);
+  assert.strictEqual(rede.chamadas.length, 2, 'o caminho de rede e outro arquivo');
+  // A7-37: a tarefa que e uma lista diz isso, nao "unknown key"
+  await assert.rejects(rodar([['a', 'b']]), /task 1 is a list; a task is text or an object such as \{"tarefa": "\.\.\."\}/);
+  await assert.rejects(rodar([['a', 'b']]), (e) => !/unknown key/.test(e.message));
   await assert.rejects(rodar([{ tarefa: 'a', donoDe: ['src/a.js'] }]), /task 1: donoDe is only for a task that edits/);
   for (const v of ['src/a.js', [], [''], [1]]) {
     await assert.rejects(rodar([{ tarefa: 'a', edita: true, donoDe: v }]), /task 1: donoDe must be a list of file paths/, JSON.stringify(v));

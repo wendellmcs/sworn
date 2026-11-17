@@ -202,6 +202,15 @@ test('A7: flag presente sem valor e erro de uso que diz qual, exit 2, nada grava
         JSON.stringify(args) + ' -> ' + r.stderr);
       assert.ok(!fs.existsSync(padrao) && !fs.existsSync(d), JSON.stringify(args) + ' gravou');
     }
+    // A7-06: --remote e --ramo vao soltos ao git fetch; com "-" na frente o git leria opcao
+    for (const flag of ['--remote', '--ramo']) {
+      const r = comum.scriptComoProcesso(SCRIPT, ['--repo', base, flag, '-upload-pack=x', '--destino', d], {
+        cwd: base, env: Object.assign({}, process.env, { SWORN_VIGIA: padrao })
+      });
+      assert.strictEqual(r.status, 2, flag + ' -> ' + r.stdout + r.stderr);
+      assert.ok(r.stderr.indexOf('vigia: ' + flag + ' nao pode comecar com "-": o git o leria como opcao.\nuso: ') === 0, r.stderr);
+      assert.ok(!fs.existsSync(padrao) && !fs.existsSync(d), flag + ' gravou');
+    }
     // sem --repo nenhum, o erro diz que ele falta
     const sem = puxar(['--destino', d]);
     assert.ok(sem.stderr.indexOf('vigia: falta --repo (a pasta do clone).\nuso: ') === 0, sem.stderr);

@@ -25,6 +25,16 @@ variables in both shells, and a root named `proj$dev` becomes `proj`: measured, 
 **sibling folder** and returns `exit 0` without a single line of error. A name with an apostrophe is the only special case — double it
 to `''` in PowerShell, and write `'\''` in bash.
 
+## What this skill does NOT do
+
+- It does not fill in a guess: what the scan could not infer is shown as "I couldn't infer it" and asked (Step 3).
+- It does not duplicate what is already installed, and it turns nothing off on its own: an overlapping hook or
+  plugin is the owner's call (Step 2b).
+- It does not write into any folder but the root of Step 0. It does not overwrite an existing `design.json` without
+  the owner's yes (Step 5b), and it never overwrites an existing project skill (Step 7c).
+- It does not edit `.claude/settings.local.json` with `Write`: the parallel-work authorization goes through
+  `autorizar-paralelo.js`, which merges into what the file already holds (Step 5c).
+
 ## Step 0 — resolve the root and show it to the user
 
 **Before anything else.** Turn the root into an **absolute** path, confirm it is a

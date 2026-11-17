@@ -25,9 +25,12 @@ function causaDoErro(e) {
     const traducao = Object.prototype.hasOwnProperty.call(TRADUCOES, codigo) ? TRADUCOES[codigo] : null;
     causa = traducao ? traducao + ' (' + codigo + ')' : codigo;
   } else {
-    causa = e && e.name ? e.name + ': ' + e.message : String(e);
+    // R1 do H1v: sem mensagem, so o nome (antes saia "AbortError: undefined").
+    causa = e && e.name ? (e.message ? e.name + ': ' + e.message : String(e.name)) : String(e);
   }
-  return causa.replace(/\s+/g, ' ').slice(0, 200);
+  // R1 do H1v: o corte conta caractere, nao metade de um emoji (o par substituto partido saia quebrado).
+  // 400 unidades ja cobrem 200 caracteres: o Array.from nao percorre a mensagem inteira (stdout grande).
+  return Array.from(causa.replace(/\s+/g, ' ').slice(0, 400)).slice(0, 200).join('');
 }
 
 /**
@@ -44,10 +47,11 @@ function veioDeSubagente(prompt) {
 
 /**
  * O valor entre aspas, numa linha so, para um aviso: a aspa de dentro vira \" e a quebra de linha vira espaco, para o
- * nome que traz uma ou outra nao deformar a mensagem. A barra fica como esta (o caminho do Windows se le igual).
+ * nome que traz uma ou outra nao deformar a mensagem. A barra fica como esta (o caminho do Windows se le igual),
+ * menos a que vem logo antes de uma aspa ou do fim: essa dobra, para nao comer a aspa (R2 do H1v: `C:\pasta\`).
  */
 function entreAspas(valor) {
-  return '"' + String(valor).replace(/[\r\n]+/g, ' ').replace(/"/g, '\\"') + '"';
+  return '"' + String(valor).replace(/[\r\n]+/g, ' ').replace(/(\\+)(?="|$)/g, '$1$1').replace(/"/g, '\\"') + '"';
 }
 
 /**
@@ -66,4 +70,12 @@ function mensagemDoSubagente(e) {
   return typeof m === 'string' ? m : undefined;
 }
 
-module.exports = { semBom, causaDoErro, veioDeSubagente, entreAspas, mensagemDoSubagente };
+/**
+ * A7-32: o objeto JSON de verdade (nem null, nem lista, nem valor solto). Fonte unica: os modulos que o copiavam
+ * o pegam daqui.
+ */
+function ehObjeto(v) {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+module.exports = { semBom, causaDoErro, veioDeSubagente, entreAspas, mensagemDoSubagente, ehObjeto };

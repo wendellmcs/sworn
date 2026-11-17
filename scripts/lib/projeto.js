@@ -1,6 +1,7 @@
 'use strict';
 const glob = require('./glob.js');
 const degrausLib = require('./degraus.js');
+const { ehObjeto } = require('./texto.js');
 
 const MARCHAS = ['rapida', 'padrao', 'aaa'];
 const AMEACAS = ['interno', 'publico'];
@@ -24,8 +25,6 @@ const TRAVAS = ['fecho', 'escopo', 'destrutivo', 'outraFrente'];
 
 // Os objetos que o re-init funde por chave em vez de substituir (F1-C01; D503: referencias, por tipo).
 const FUNDE_POR_CHAVE = ['travas', 'marchas', 'limiares', 'referencias'];
-
-function ehObjeto(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
 
 /**
  * Plano 082 (p1-33): a fusao por chave de `a` com `b` (b vence), chave a chave como dado. O Object.assign tratava a

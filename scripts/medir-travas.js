@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const travas = require('./lib/medicao-travas.js');
 const qualidade = require('./medir-qualidade.js');
-const { causaDoErro, entreAspas } = require('./lib/texto.js');
+const { causaDoErro, entreAspas, ehObjeto } = require('./lib/texto.js');
 
 /**
  * A MEDICAO DE ANTES/DEPOIS DAS TRAVAS (plano T3a, D628): quantas vezes o agente diz "pronto" sem prova, sem o
@@ -433,7 +433,6 @@ function apurarRodada(argv) {
   }
   // A6-64 (R1, borda): null ou lista no lugar do objeto quebrava adiante (env.modelo) com o erro do Node em ingles.
   // A6-89 (D735, borda): o mesmo com o item da lista ({"execucoes":[null]}), que quebrava em e.condicao.
-  const ehObjeto = function (v) { return !!v && typeof v === 'object' && !Array.isArray(v); };
   // A6-114: {} e {"execucoes":5} caiam numa lista vazia e apuravam; a lista vazia de verdade ([]) segue valendo,
   // porque o --gerar a grava antes da 1a execucao e a rodada sai incompleta, sem veredito.
   const lista = ehObjeto(env) && Array.isArray(env.execucoes) ? env.execucoes : null;

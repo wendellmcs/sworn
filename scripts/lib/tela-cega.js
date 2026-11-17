@@ -10,6 +10,7 @@ const { spawnSync } = require('node:child_process');
 const { fileURLToPath } = require('node:url');
 const captura = require('./captura.js');
 const textoLib = require('./texto.js');
+const { ehObjeto } = textoLib;
 
 const SCRIPT = path.join(__dirname, '..', 'capturar-tela.js');
 // O prazo de cada captura: os 30 s padrao do --tempo-max do script, mais abrir e fechar o navegador e esperar o perfil
@@ -109,8 +110,6 @@ function trocarPrefixos(texto, prefixos) {
   return s;
 }
 
-// Objeto de verdade: nem null, nem lista.
-const ehObjeto = function (v) { return !!v && typeof v === 'object' && !Array.isArray(v); };
 // O valor quando e um objeto, ou {}.
 const objetoOuVazio = function (v) { return ehObjeto(v) ? v : {}; };
 // So os itens que sao objeto: um item torto (texto solto, null, lista) fica fora da evidencia do inspetor.

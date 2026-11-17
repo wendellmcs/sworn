@@ -35,6 +35,11 @@ if (args && !Array.isArray(args) && args.teto !== undefined) {
 
 const erros = []
 const tarefas = lista.map((t, i) => {
+  // A7-37: a lista dentro da lista viraria o proprio objeto e sairia "unknown key \"0\""
+  if (Array.isArray(t)) {
+    erros.push('task ' + (i + 1) + ' is a list; a task is text or an object such as {"tarefa": "..."}')
+    return { n: i + 1, tarefa: '', edita: false, modelo: 'haiku', esforco: 'medium', papel: '' }
+  }
   const o = typeof t === 'string' ? { tarefa: t } : (t && typeof t === 'object' ? t : {})
   const texto = typeof o.tarefa === 'string' ? o.tarefa.trim() : ''
   if (!texto) erros.push('task ' + (i + 1) + ' has no text')
@@ -59,11 +64,15 @@ const tarefas = lista.map((t, i) => {
       erros.push('task ' + (i + 1) + ': donoDe is only for a task that edits ("edita": true)')
     } else {
       donoDe = o.donoDe.map(caminho)
+      // R1 do H1v: `.` ou `a/..` passam no "nao vazio" acima, mas nao nomeiam arquivo nenhum depois de normalizados.
+      // R2 do H1v: so a raiz (`/`, `/.`, `//`, `C:/`) tambem nao nomeia arquivo.
+      const vazios = o.donoDe.filter((a, j) => !donoDe[j] || /^(?:[A-Za-z]:)?\/+$/.test(donoDe[j]))
+      if (vazios.length) erros.push('task ' + (i + 1) + ': donoDe ' + JSON.stringify(vazios[0]) + ' names no file')
     }
   }
   return { n: i + 1, tarefa: texto, edita, modelo, esforco, papel, donoDe }
 })
-// Dono de arquivo: comparado sem caixa, com `\` virando `/` e sem o `./` do comeco.
+// Dono de arquivo: comparado sem caixa, com `\` virando `/` e o caminho normalizado (caminho(), abaixo).
 const donos = new Map()
 for (const t of tarefas) {
   for (const a of t.donoDe || []) {
@@ -74,8 +83,23 @@ for (const t of tarefas) {
 }
 if (erros.length) throw new Error('parallel: ' + erros.join('; ') + '. ' + USO)
 
+// A7-38: normalizado a mao (o script do workflow nao tem o `path`): `src//a.js`, `./src/a.js` e `src/../src/a.js`
+// viram `src/a.js`, para o dono repetido nao escapar pela grafia. O `..` que sobe acima do comeco fica no relativo;
+// no absoluto ele cai, como no path.resolve (R3 do H1v: `/../a.js` e `/a.js` sao o mesmo arquivo; `C:/../a.js` e
+// `C:/a.js` tambem: a letra da unidade fica fora das partes, e o `..` nao a apaga).
 function caminho(a) {
-  return a.trim().replace(/\\/g, '/').replace(/^(?:\.\/)+/, '')
+  const t = a.trim().replace(/\\/g, '/')
+  const unidade = /^[A-Za-z]:\//.test(t) ? t.slice(0, 2) : ''
+  const resto = t.slice(unidade.length)
+  const absoluto = resto.startsWith('/')
+  const partes = []
+  for (const p of resto.split('/')) {
+    if (p === '' || p === '.') continue
+    if (p === '..' && partes.length && partes[partes.length - 1] !== '..') partes.pop()
+    else if (p !== '..' || !absoluto) partes.push(p)
+  }
+  // R1 do H1v: o caminho de rede (`\\servidor\pasta`) guarda as duas barras do comeco; so a barra solta vira uma.
+  return unidade + (!unidade && resto.startsWith('//') ? '//' : absoluto ? '/' : '') + partes.join('/')
 }
 
 const rodam = tarefas.slice(0, teto)

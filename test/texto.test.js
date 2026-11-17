@@ -139,6 +139,9 @@ test('083 T6: entreAspas escapa a aspa e junta as quebras de linha; o resto fica
   assert.strictEqual(texto.entreAspas('a\r\nb\nc'), '"a b c"');
   assert.strictEqual(texto.entreAspas('C:\\pasta\\a.css'), '"C:\\pasta\\a.css"', 'a barra do Windows fica');
   assert.strictEqual(texto.entreAspas(undefined), '"undefined"');
+  // R2 do H1v: a barra antes do fim ou de uma aspa dobra, para a aspa final seguir sendo a que fecha
+  assert.strictEqual(texto.entreAspas('C:\\pasta\\'), '"C:\\pasta\\\\"');
+  assert.strictEqual(texto.entreAspas('a\\"b'), '"a\\\\\\"b"');
 });
 
 // A2-16 (P2 do pedido 12): o escalar.js e o gravar-veredito.js tinham cada um a sua copia de mensagemDe, e elas ja
@@ -165,4 +168,43 @@ test('A2-16: mensagemDoSubagente le o fim do subagente e o handback; o resto e u
     assert.ok(fonte.indexOf('mensagemDoSubagente(') !== -1, nome + ' nao chama texto.mensagemDoSubagente');
     assert.strictEqual(fonte.indexOf('function mensagemDe('), -1, nome + ' ainda tem a propria copia');
   });
+});
+
+// A7-32: o ehObjeto tinha copias em onze arquivos; agora so o texto.js o define e os outros o importam.
+test('A7-32: ehObjeto aceita so objeto de verdade e nenhum script tem copia propria', () => {
+  for (const v of [{}, { a: 1 }, Object.create(null)]) assert.strictEqual(texto.ehObjeto(v), true, JSON.stringify(v));
+  for (const v of [null, undefined, [], [1], 'x', 0, 1, true, false, NaN]) {
+    assert.strictEqual(texto.ehObjeto(v), false, String(v));
+  }
+  const fs = require('node:fs');
+  const path = require('node:path');
+  // R2 do H1v: o metodo na mesma linha (`{ ehObjeto(v) {`), com static/async, e a seta async tambem sao copia.
+  const COPIA = /function ehObjeto\s*\(|ehObjeto\s*[=:]\s*(?:async\s+)?(?:function|\(|\w+\s*=>)|\behObjeto\s*\([^)]*\)\s*\{/;
+  for (const c of ['function ehObjeto(v) {', 'const ehObjeto = v => v', 'ehObjeto: (v) => v', 'ehObjeto = async v => v',
+    'const u = { ehObjeto(v) { return v; } };', '  static ehObjeto(v) {', '  async ehObjeto(v) {']) {
+    assert.ok(COPIA.test(c), c);
+  }
+  for (const c of ['if (ehObjeto(x)) {', 'const { ehObjeto } = require(\'./texto\');', 'return ehObjeto(a) && ehObjeto(b);',
+    'module.exports = { ehObjeto, outro };']) {
+    assert.ok(!COPIA.test(c), c);
+  }
+  const copias = [];
+  const varrer = function (pasta) {
+    for (const nome of fs.readdirSync(pasta, { withFileTypes: true })) {
+      const p = path.join(pasta, nome.name);
+      if (nome.isDirectory()) varrer(p);
+      else if (/\.js$/.test(nome.name) && nome.name !== 'texto.js' && COPIA.test(fs.readFileSync(p, 'utf8'))) copias.push(p);
+    }
+  };
+  varrer(path.join(__dirname, '..', 'scripts'));
+  assert.deepStrictEqual(copias, []);
+});
+
+// R1 do H1v: erro com nome e sem mensagem nao mostra "undefined"; o corte nao parte emoji.
+test('R1 H1v: causaDoErro sem mensagem e com emoji no corte', () => {
+  assert.strictEqual(texto.causaDoErro({ name: 'AbortError' }), 'AbortError');
+  assert.strictEqual(texto.causaDoErro({ name: 'Error', message: '' }), 'Error');
+  const longo = texto.causaDoErro(new Error('x'.repeat(192) + '\u{1F600}\u{1F600}'));
+  assert.strictEqual(longo, 'Error: ' + 'x'.repeat(192) + '\u{1F600}');
+  assert.ok(!/[\uD800-\uDBFF]$/.test(longo), 'sem metade de par no fim');
 });

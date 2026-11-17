@@ -1,6 +1,6 @@
 'use strict';
 
-const { veioDeSubagente } = require('./texto.js');
+const { veioDeSubagente, ehObjeto } = require('./texto.js');
 
 /**
  * T3b (D611): o radar do usuario (/sworn:radar) se oferece sozinho quando o dono pede melhoria, sugestao ou
@@ -15,7 +15,8 @@ const { veioDeSubagente } = require('./texto.js');
  * - "nova feature" so vale no comeco da clausula ou depois de vontade; "a nova feature quebrou o login" e bug.
  * - "melhorar" so conta quando o objeto e o projeto; "melhore sua resposta" e sobre o proprio agente.
  * - "sugira" so conta com o objeto logo depois ("sugira melhorias"), nao "sugira uma mensagem de commit".
- * O resto de falso positivo o proprio modelo descarta pela instrucao, e a oferta sai no maximo 1 vez por sessao.
+ * O resto de falso positivo o proprio modelo descarta pela instrucao, e a oferta sai no maximo 1 vez por sessao
+ * (quem conta e o abrir-turno.js, pela marca ofereceuRadar do estado da sessao).
  */
 const CHAVE = 'oferecerRadar';
 
@@ -89,10 +90,6 @@ function parecePedidoDeMelhoria(prompt) {
   // D477/D484: o relatorio que CITA um pedido nao e o dono pedindo (filtro em texto.js).
   if (veioDeSubagente(prompt)) return false;
   return PADROES.some(function (re) { return re.test(t); });
-}
-
-function ehObjeto(p) {
-  return !!p && typeof p === 'object' && !Array.isArray(p);
 }
 
 /** Ligado por padrao, com ou sem projeto.json. So `false` desliga (como sugerirAprender). */

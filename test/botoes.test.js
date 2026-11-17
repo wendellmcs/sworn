@@ -159,7 +159,7 @@ test('plano 082 (p5-36): os 7 textos e rotulos (8 menos o paralelo, 091 #5), sem
     calibrar: 'Já há 557 conversas salvas: dá para calibrar quando trocar de chat. [calibrar]',
     // A7-50: o padrao diz qual arquivo (o primeiro que pede o cuidado) e de onde vem a regra, como o revisar
     padrao: 'O arquivo src/a.js está entre os que o projeto.json marca com o cuidado mais alto: carregue o manual ' +
-      'antes de seguir. [carregar o manual]'
+      'antes de seguir. Para mudar a marca, edite "marchas" em .claude/sworn/projeto.json. [carregar o manual]'
   });
   for (const x of tudo) {
     // A7 (pedido 12, R1 :47 microcopy): "gatilho", "cruzou" e "handoff" sem explicar eram jargao no texto do handoff.

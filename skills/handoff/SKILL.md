@@ -15,6 +15,16 @@ stopped chat): the summary is a mechanical snapshot of the old chat's log, not t
 it says (step 1) and, if the work calls for a full bridge, write the handoff here, in the new chat — never in the stopped chat,
 which would rewrite the entire conversation.
 
+## What this skill does NOT do
+
+- It does not replace the plan: each step still comes from the plan, and the handoff only points at it.
+- It does not open a new chat, and it does not tell the user to open one; the one exception is a sworn version
+  installed in this session, which loads only in a new chat (Step 3).
+- It does not come out while a background agent of this session still runs, and it never stops one so the handoff can come out.
+- It does not carry a number from memory or from the previous handoff: each one is read from disk in Step 1.
+- The draft script (`handoff-curto.js`, Step 2) only prints: the file exists only after your `Write`. No secret, credential or customer data goes
+  into it.
+
 ## Step 1 — check the facts on disk, not from memory
 
 **Background agents first.** The handoff only comes out with every background agent of this session finished: a

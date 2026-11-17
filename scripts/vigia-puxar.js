@@ -16,8 +16,8 @@
  * So grava se o conteudo tiver a linha `semana: AAAA-MM-DD` valida (mesmo parser da abertura): arquivo
  * quebrado nunca sobrescreve a ultima novidade boa. A gravacao e atomica (temporario + rename). Toda
  * tentativa, boa ou ruim, deixa `ultima-busca.json` = { quando, ok, motivo, semana } para a abertura poder
- * dizer por que nada chegou. Exit 0 = gravou; 1 = falhou; 2 = faltou --repo ou uma flag veio sem valor (nada e
- * gravado).
+ * dizer por que nada chegou. Exit 0 = gravou; 1 = falhou; 2 = faltou --repo, uma flag veio sem valor ou o --remote
+ * ou o --ramo comeca com "-" (nada e gravado).
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -36,11 +36,14 @@ function erroDeUso(texto) {
 
 // A7 (pedido 12, R1 :34): flag presente vazia, no fim da linha ou seguida de outra flag virava o padrao sem aviso
 // (`--destino ''` gravava na pasta do vigia). Agora e erro de uso que diz qual, antes de tocar no disco.
-function valor(nome) {
+// A7-06: o --remote e o --ramo vao como argumento solto ao `git fetch`; com `-` na frente (`-u...`) o git o leria como
+// opcao, entao `paraGit` recusa qualquer `-` inicial, nao so o `--`.
+function valor(nome, paraGit) {
   const i = process.argv.indexOf(nome);
   if (i === -1) return null;
   const v = process.argv[i + 1];
   if (v === undefined || v === '' || v.startsWith('--')) erroDeUso(nome + ' pede um valor.');
+  if (paraGit && v.startsWith('-')) erroDeUso(nome + ' nao pode comecar com "-": o git o leria como opcao.');
   return v;
 }
 
@@ -85,8 +88,8 @@ function falhar(destino, motivo) {
 
 const repo = valor('--repo');
 if (!repo) erroDeUso('falta --repo (a pasta do clone).');
-const remote = valor('--remote') || 'backup';
-const ramo = valor('--ramo') || 'claude/vigia';
+const remote = valor('--remote', true) || 'backup';
+const ramo = valor('--ramo', true) || 'claude/vigia';
 const arquivo = valor('--arquivo') || 'vigia/novidades.md';
 const destino = valor('--destino') ? path.resolve(valor('--destino')) : vigia.pasta(process.env);
 

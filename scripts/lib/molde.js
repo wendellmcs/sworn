@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const regraLib = require('./regra.js');
-const { semBom } = require('./texto.js');
+const { semBom, ehObjeto } = require('./texto.js');
 
 const RE_SLOT = /\{\{(campo|texto):([A-Za-z][A-Za-z0-9_.]*)\}\}/g;
 const MARCA = 'POR PREENCHER';
@@ -154,11 +154,6 @@ function lerRespostas(arquivo) {
       erro: arquivo + ' tem de ser um objeto JSON ({ ... }) com as respostas por nome; veio ' + tipoJson(valores) };
   }
   return { ok: true, valores: valores };
-}
-
-/** O objeto JSON ({ ... }): nem nulo, nem lista, nem valor solto. */
-function ehObjeto(v) {
-  return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
 /** O tipo de um valor lido de JSON, em portugues, como o resto das frases (o typeof daria "number" ou "boolean").

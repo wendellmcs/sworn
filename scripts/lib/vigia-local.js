@@ -42,6 +42,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const textoLib = require('./texto.js');
+const { ehObjeto } = textoLib;
 const escopoLib = require('./escopo.js');
 
 const CHAVE = 'vigia';
@@ -59,10 +60,6 @@ const CORTE = ' [...]';
 const DIAS_VELHO = 14;
 const DIA_MS = 24 * 60 * 60 * 1000;
 const RE_SEMANA = /^semana:\s*(\d{4}-\d{2}-\d{2})\s*$/;
-
-function ehObjeto(p) {
-  return !!p && typeof p === 'object' && !Array.isArray(p);
-}
 
 /** Pasta do vigia: `SWORN_VIGIA` (resolvida) ou `~/.claude/sworn/vigia`. */
 function pasta(env) {

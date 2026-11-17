@@ -1,6 +1,6 @@
 'use strict';
 
-const { veioDeSubagente } = require('./texto.js');
+const { veioDeSubagente, ehObjeto } = require('./texto.js');
 
 /**
  * Bloco A1 (D426): o dono CORRIGIU o comportamento do agente -> o plugin sugere transformar a correcao
@@ -97,10 +97,6 @@ function pareceCorrecao(prompt) {
   // D477: o relatorio que CITA uma correcao nao e o dono corrigindo (filtro em texto.js, D484).
   if (veioDeSubagente(prompt)) return false;
   return PADROES.some(function (re) { return re.test(t); });
-}
-
-function ehObjeto(p) {
-  return !!p && typeof p === 'object' && !Array.isArray(p);
 }
 
 /** Ligado por padrao, com ou sem projeto.json. So `false` desliga (como qualidadeDeResposta). */

@@ -91,8 +91,9 @@ for (const vazio of [undefined, null, '']) {
 }
 
 // A7-22 (pedido 12): a resposta serve a qualquer falha (Node ausente, saida diferente de 0, JSON torto, prazo
-// estourado), que caem todas no mesmo ramo do mods.tsx; o teste simula tres: a saida 1, a saida 0 com stdout que nao
-// e JSON (so no /sworn-session: o plano.js --texto responde texto) e o process.run que lanca (A7-72). Ela diz as
+// estourado), que caem todas no mesmo ramo do mods.tsx; o teste simula a saida 1, a saida 0 com stdout que nao
+// e JSON ou que e JSON sem a curta em texto (A7-81; esses so no /sworn-session: o plano.js --texto responde texto) e
+// o process.run que lanca (A7-72). Ela diz as
 // causas possiveis e um passo que serve a qualquer uma (pedir ao Claude), sem mandar quem nao programa ao terminal.
 // P2 da R1 (s241): sem o caminho do script nem os passos tecnicos; o Node.js fica so como causa (e o que se instala).
 // A7-60 e A7-62: sem "medida" nem "script do sworn" (termos internos); a frase pronta para o Claude e o que ele traz.
@@ -107,6 +108,13 @@ const FALHAS = [
   { nome: 'saida 1', run: () => ({ value: { exitCode: 1, stdout: '', stderr: 'node nao achado' } }) },
   { nome: 'saida 0 sem JSON', soSessao: true,
     run: () => ({ value: { exitCode: 0, stdout: 'isto nao e JSON', stderr: '' } }) },
+  // A7-81: JSON valido sem a curta em texto (o mod so aceita a medida com curta em texto): sem o campo, null e a
+  // curta que nao e texto.
+  { nome: 'JSON sem os campos', soSessao: true,
+    run: () => ({ value: { exitCode: 0, stdout: '{"x":1}', stderr: '' } }) },
+  { nome: 'JSON null', soSessao: true, run: () => ({ value: { exitCode: 0, stdout: 'null', stderr: '' } }) },
+  { nome: 'curta que nao e texto', soSessao: true,
+    run: () => ({ value: { exitCode: 0, stdout: '{"curta":1,"longa":"l","cruzou":false}', stderr: '' } }) },
   { nome: 'run que lanca', run: () => { throw new Error('prazo estourado') } },
 ]
 
@@ -665,7 +673,7 @@ test('botoes: comando que nao e do sworn nao vira botao', async ($, on) => {
 const TEXTO_HANDOFF = 'A conversa chegou a um limite que o sworn conta (tamanho do contexto): ' +
   'gere o handoff (o texto que continua daqui); o trabalho segue nesta conversa.'
 const TEXTO_PADRAO = 'O arquivo src/a.js está entre os que o projeto.json marca com o cuidado mais alto: carregue ' +
-  'o manual antes de seguir.'
+  'o manual antes de seguir. Para mudar a marca, edite "marchas" em .claude/sworn/projeto.json.'
 const ESTADOS_DO_MOCK = [
   { nome: 'plano em curso, titulo longo cortado', plano: 'plano 082 · 2 de 7 tarefas · próxima: Tarefa 3 — barra do medidor em uma linha e o res...',
     botoes: [], linhas: 'sworn plano 082 · 2 de 7 tarefas · próxima: Tarefa 3 — barra do medidor em uma linha e o res...', rotulo: null },
