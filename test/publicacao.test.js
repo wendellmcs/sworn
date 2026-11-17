@@ -134,7 +134,8 @@ test('publicacao: o README diz o proximo passo da ficha do radar fora do formato
   const m = README.match(/A ficha fora do formato[^.]*\./);
   assert.ok(m, 'o README nao fala da ficha do radar fora do formato');
   assert.ok(/\/sworn:radar/.test(m[0]), 'sem o proximo passo: ' + m[0]);
-  assert.ok(/o \/sworn:radar confere/.test(ler('scripts/lib/vigia-local.js')), 'a frase da abertura mudou');
+  // P16-vigia-local-r2-10: a linha do radar manda ao /sworn:radar uma vez, no fecho
+  assert.ok(/' Para ver e escolher: \/sworn:radar\.'/.test(ler('scripts/lib/vigia-local.js')), 'a frase da abertura mudou');
 });
 
 test('publicacao: a versao do manifesto e a do topo do CHANGELOG', () => {

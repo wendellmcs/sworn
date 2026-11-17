@@ -949,15 +949,20 @@ gancho nenhum abre rede. O arquivo só é gravado se a primeira linha for `seman
 arquivo quebrado nunca sobrescreve a última novidade boa; o script sai com 0 quando grava, 1 quando falha e 2
 quando falta `--repo`. Na abertura: semana nova, mostra e marca como vista; a mesma semana, silêncio. A novidade sai em
 até 12 linhas, e a linha longa quebra em até três, sem partir o link. Se o arquivo sumiu, não se lê, não traz a
-linha `semana:` ou a semana vista já tem 14 dias ou mais, a abertura avisa no máximo uma vez por dia; quando a última
-busca falhou, o aviso diz quando e por quê.
+linha `semana:`, a semana vista já tem 14 dias ou mais ou ainda está no futuro, a abertura avisa no máximo uma vez por
+dia, e o aviso diz o que conferir (a tarefa agendada, o ramo da rotina na nuvem ou a data do arquivo); quando a última
+busca falhou, o aviso diz quando e por quê. A abertura lê só os primeiros 256 KB do arquivo: quando ele passa disso, a
+última linha da novidade avisa que o resto está só em `novidades.md`.
 
 **O radar da semana, na mesma abertura.** Uma segunda tarefa agendada roda o mesmo `vigia-puxar.js` com
 `--ramo claude/radar --arquivo radar/semana.md --destino <pasta do vigia>/radar`, e traz a ficha da semana do
 `/sworn:radar`. A abertura não mostra a ficha, que é texto de terceiros: mostra uma linha só, com quantos
 candidatos ela tem e quantos para adotar, e manda ao `/sworn:radar` para ver e escolher. A ficha fora do formato
-diz quantos problemas tem e manda ao `/sworn:radar`, que confere a ficha e mostra cada problema. Vale a mesma chave `vigia` e as mesmas regras: uma vez por semana nova, aviso de problema no
-máximo uma vez por dia.
+diz quantos problemas tem e manda ao `/sworn:radar`, que confere a ficha e mostra cada problema. A ficha maior que
+256 KB não é contada: a linha diz isso e manda abrir o arquivo da ficha, cujo caminho vem na linha de baixo (no
+disco, a ficha sempre se chama `<pasta do vigia>/radar/novidades.md`, seja qual for o `--arquivo`). Vale a mesma chave `vigia` (`"vigia": false` desliga os dois) e as mesmas
+regras: uma vez por semana nova, aviso de problema no máximo uma vez por dia. Enquanto a pasta `radar/` não existe (a
+tarefa do radar nunca rodou), o radar fica calado.
 
 **Valor entre aspas não desliga.** Todas as chaves de liga/desliga só aceitam o booleano `true` ou `false`, sem
 aspas. `"portaoDecisao": "false"` não desliga nada: o portão segue ligado. Você não precisa descobrir isso sozinho. A
