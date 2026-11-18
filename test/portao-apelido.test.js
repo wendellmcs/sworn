@@ -410,6 +410,46 @@ test('portao-apelido --corrigir: agente que nao diverge e RECUSADO, nao reescrit
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// L2-s103-17: o mesmo `name:` em dois arquivos dava duas divergencias, e o --corrigir consertava so a primeira.
+test('L2-s103-17: --corrigir com o nome em dois arquivos recusa, lista os dois e nao grava nada', () => {
+  const dir = projeto(DOIS);
+  try {
+    agente(dir, 'busca', '---\nname: busca\nmodel: caro\n---\n');
+    agente(dir, 'busca-velha', '---\nname: busca\nmodel: medio\n---\n');
+    agente(dir, 'arquiteto', '---\nname: arquiteto\nmodel: caro\n---\n');
+    const antes = ['busca', 'busca-velha'].map((n) => fs.readFileSync(agentesLib.caminho(dir, n), 'utf8'));
+    const mapa = JSON.parse(cli(dir, ['--mapa']).stdout);
+    assert.strictEqual(mapa.divergencias.filter((x) => x.agente === 'busca').length, 2,
+      'a premissa: as duas copias divergem: ' + JSON.stringify(mapa.divergencias));
+    for (const para of ['arquivo', 'mapa']) {
+      const c = cli(dir, ['--corrigir', 'busca', '--para', para]);
+      assert.strictEqual(c.status, 1, para + ': ' + c.stdout + c.stderr);
+      assert.ok(/^RECUSADO: /.test(c.stdout), para + ': ' + c.stdout);
+      assert.ok(c.stdout.includes('.claude/agents/busca.md') && c.stdout.includes('.claude/agents/busca-velha.md'),
+        para + ': tinha de listar os dois arquivos: ' + c.stdout);
+    }
+    assert.deepStrictEqual(['busca', 'busca-velha'].map((n) => fs.readFileSync(agentesLib.caminho(dir, n), 'utf8')), antes,
+      'recusou e mesmo assim mexeu num arquivo');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  // uma copia diverge so no modelo e a outra so no esforco: ainda sao dois arquivos com o mesmo nome
+  const dir2 = projeto(DOIS_ESFORCO);
+  try {
+    agente(dir2, 'busca', '---\nname: busca\nmodel: barato\neffort: high\n---\n');
+    agente(dir2, 'busca-velha', '---\nname: busca\nmodel: caro\neffort: low\n---\n');
+    agente(dir2, 'arquiteto', '---\nname: arquiteto\nmodel: caro\neffort: high\n---\n');
+    const mapa = JSON.parse(cli(dir2, ['--mapa']).stdout);
+    assert.deepStrictEqual([mapa.divergencias, mapa.esforcoDivergente].map((l) => l.filter((x) => x.agente === 'busca').length),
+      [1, 1], 'a premissa: uma divergencia de cada lado: ' + JSON.stringify(mapa));
+    const c = cli(dir2, ['--corrigir', 'busca', '--para', 'arquivo']);
+    assert.strictEqual(c.status, 1, c.stdout + c.stderr);
+    assert.ok(/^RECUSADO: /.test(c.stdout) && c.stdout.includes('busca-velha.md'), c.stdout);
+  } finally {
+    fs.rmSync(dir2, { recursive: true, force: true });
+  }
+});
+
 // A1-27 (pedido 12, microcopy): o degrau escrito com "nome" no lugar de "agente" o mapa le, e o conserto do
 // --para mapa nao acha. A mensagem dizia "degraus", sem o passo; agora diz onde esta e o que fazer.
 test('A1-27: --para mapa com o agente gravado em outra forma diz o arquivo e o passo, sem jargao', () => {

@@ -12,6 +12,12 @@ chat, is back at the session effort (measured by sworn on Claude Code 2.1.311), 
 at the start of each turn of an AAA task (playbook, §2). There is nothing to run. Effort is how hard the model
 thinks, not what it verifies: the AAA gates still decide that (playbook, §2 and §4).
 
+## What this skill does NOT do
+
+- It does not change the model, only the effort (next section).
+- It does not last past the turn: the next turn is back at the session effort, so the playbook calls it again.
+- It does not run anything, and it does not change what the AAA gates verify: effort is how hard the model thinks.
+
 ## The model does not change
 
 A skill that the model calls changes **only the effort**. Measured by sworn on Claude Code 2.1.310: called through the

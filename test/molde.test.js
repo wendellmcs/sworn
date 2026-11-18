@@ -276,7 +276,7 @@ test('A4-13: campo herdado (toString, constructor) nao conta como existente', ()
   const r = molde.preencher('{{campo:toString}} {{campo:a.constructor}} {{campo:a.b}}', {}, { a: { b: 1 } });
   assert.strictEqual(r, '(POR PREENCHER: campo toString nao existe em projeto.json) ' +
     '(POR PREENCHER: campo a.constructor nao existe em projeto.json) ' +
-    '`a.b` de `.claude/sworn/projeto.json` (leia de la, nao decore)');
+    '`a.b` de `.claude/sworn/projeto.json` (leia de lá, não decore)');
 });
 
 // ── gerar-skill.js, exercido como processo (so tinha o teste de fiacao sem projeto.json) ──
@@ -297,9 +297,44 @@ function projetoParaSkill() {
   for (const s of molde.slots(texto)) {
     if (s.tipo === 'texto') valores[s.nome] = 'conteudo de ensaio para ' + s.nome;
   }
+  // A4-08: o slug fora do formato e recusado; o de ensaio ja vem no formato
+  valores.slug = 'skill-de-ensaio';
   fs.writeFileSync(path.join(raiz, 'respostas.json'), JSON.stringify(valores), 'utf8');
   return raiz;
 }
+
+// A4-08: o slug normalizado calado dava pasta meu-projeto e name: "Meu Projeto"; agora o slug fora do formato sai ERRO
+// com o valor aceito, nada gravado, e o do formato grava a pasta e o name: iguais
+test('A4-08: gerar-skill recusa o slug fora do formato e diz o valor aceito; o do formato da pasta e name: iguais', (t) => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const raiz = projetoParaSkill();
+  t.after(() => fs.rmSync(raiz, { recursive: true, force: true }));
+  const valores = JSON.parse(fs.readFileSync(path.join(raiz, 'respostas.json'), 'utf8'));
+  for (const [dado, aceito] of [['Meu Projeto', 'meu-projeto'], ['api_v2', 'api-v2'], ['Skill', 'skill'],
+    ['a--b', 'a-b'], ['Ação', 'a-o'], ['-x-', 'x']]) {
+    fs.writeFileSync(path.join(raiz, 'ruim.json'), JSON.stringify(Object.assign({}, valores, { slug: dado })), 'utf8');
+    const r = gerarSkill(raiz, ['--respostas', 'ruim.json', '--gravar']);
+    assert.strictEqual(r.status, 1, dado + ': ' + r.stdout + r.stderr);
+    assert.ok(r.stdout.startsWith('ERRO: o slug "' + dado + '" nao serve de nome de pasta e de skill. Use "' + aceito +
+      '"'), r.stdout);
+    assert.strictEqual(fs.existsSync(path.join(raiz, '.claude', 'skills')), false, dado + ': gravou');
+  }
+  // o que nao vira nome nenhum (so hifens, so acento) e o slug que nao e texto saem ERRO sem sugerir nome
+  for (const [dado, frase] of [['---', /nao tem letra nem digito/], ['ãé', /nao tem letra nem digito/],
+    [123, /tem de ser texto \(veio number\)/], [['x'], /tem de ser texto \(veio lista\)/]]) {
+    fs.writeFileSync(path.join(raiz, 'ruim.json'), JSON.stringify(Object.assign({}, valores, { slug: dado })), 'utf8');
+    const r = gerarSkill(raiz, ['--respostas', 'ruim.json', '--gravar']);
+    assert.strictEqual(r.status, 1, String(dado) + ': ' + r.stdout + r.stderr);
+    assert.match(r.stdout, frase, r.stdout);
+    assert.doesNotMatch(r.stdout, /Use "/, r.stdout);
+    assert.strictEqual(fs.existsSync(path.join(raiz, '.claude', 'skills')), false, String(dado) + ': gravou');
+  }
+  const r = gerarSkill(raiz, ['--respostas', 'respostas.json', '--gravar']);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  const skill = fs.readFileSync(path.join(raiz, '.claude', 'skills', 'skill-de-ensaio', 'SKILL.md'), 'utf8');
+  assert.match(skill, /^---\r?\nname: skill-de-ensaio\r?\n/);
+});
 
 function gerarSkill(raiz, args) {
   const path = require('node:path');

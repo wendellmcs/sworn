@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const barra = (p) => String(p).split(String.fromCharCode(92)).join('/'); // A3-15: a saida usa barra normal
 const design = require('../scripts/lib/design.js');
 const estiloShell = require('../scripts/lib/estilo-shell.js');
 // A leitura linear se prova por prazo: um por entrada, com o nome dela na mensagem. O teto tem folga para a carga
@@ -725,7 +726,7 @@ test('E2: o preparar-revisao.js leva o design.md ao pacote do arquivo de estilo,
     const css = preparar('src/promo.css');
     assert.strictEqual(css.status, 0, css.stdout + css.stderr);
     const saida = JSON.parse(css.stdout);
-    assert.strictEqual(saida.design, path.join(path.dirname(saida.a), 'design.md'));
+    assert.strictEqual(saida.design, barra(path.join(path.dirname(saida.a), 'design.md')));
     assert.match(fs.readFileSync(saida.design, 'utf8'), /campanha de natal/);
     assert.match(saida.aviso, /design\.md vai a cada lente de tela/);
     const rodadaJs = preparar('src/app.js');
@@ -1097,4 +1098,40 @@ test('F5b r1: o aviso marca o corte das cores e so lista cor que e texto', () =>
   assert.strictEqual(linhaDasCores(doze), '  cores:    ' + doze.slice(0, 10).join(' ') + ' ...');
   assert.strictEqual(linhaDasCores(doze.slice(0, 10)), '  cores:    ' + doze.slice(0, 10).join(' '), 'dez cabem, sem marca');
   assert.strictEqual(linhaDasCores(['', {}, '#fff', '  ']), '  cores:    #fff', 'so texto nao vazio');
+});
+
+// A2-16: a unidade do CSS nao tem caixa. `13PX` passava sem conferencia porque a RE_MEDIDA so tinha a flag `g`.
+test('A2-16: a medida em maiusculas e lida e conferida como a minuscula', () => {
+  const v = (css) => design.valoresCrus(css).map((a) => a.valor);
+  assert.deepStrictEqual(v('.a { padding: 13PX; margin: 2REM -.5Em; }'), ['13px', '2rem', '-.5em']);
+  assert.strictEqual(design.conferir('.a{margin:13PX;}', DESIGN).ok, false, '13PX fora do sistema passou');
+  assert.strictEqual(design.conferir('.a{margin:13PX;}', { espacos: ['13px'] }).ok, true, 'a caixa nao muda o valor');
+  // controles: o hifen colado a uma palavra nao vira sinal de menos, em qualquer caixa
+  assert.ok(v('.a { margin: a-8PX; }').indexOf('-8px') === -1, 'o hifen colado virou sinal');
+  assert.deepStrictEqual(v('.a { width: 13PXL; }'), [], 'unidade colada a outra letra nao e medida');
+});
+
+// A2-16: o que o GUIA declara no que o sworn nao promete, preso aqui ao que o codigo faz. Se o portao passar a ler
+// `oklch()` ou deixar de ler o `@media`, este teste cai e o GUIA tem de mudar junto.
+test('A2-16: o GUIA diz o que o portao de design nao le, e o codigo faz o que ele diz', () => {
+  const guia = fs.readFileSync(path.join(__dirname, '..', 'GUIA.md'), 'utf8');
+  const naoPromete = guia.split(/^## /m).filter((s) => s.indexOf('NÃO promete') !== -1)[0] || '';
+  const item = naoPromete.split(/\n(?=- \*\*)/).filter((b) => /portão de design/.test(b))[0] || '';
+  for (const t of ['`oklch()` ou `lab()`', 'por nome dentro de `color-mix()`', '`#hex` dentro do `color-mix()` é conferido']) {
+    assert.ok(item.indexOf(t) !== -1, 'o item do design no que o sworn nao promete nao cita ' + t);
+  }
+  // o que o portao confere fica na secao dele, nao na lista do que nao promete
+  const regua = guia.split(/\n\s*\n/).filter((p) => p.indexOf('**A régua: `design.json` e `DESIGN.md`.**') === 0)[0] || '';
+  for (const t of ['`13PX`', '`@media`', '`design.caminhosDeEstilo`']) {
+    assert.ok(regua.indexOf(t) !== -1, 'a secao do portao de design no GUIA nao cita ' + t);
+    assert.ok(item.indexOf(t) === -1, t + ' voltou para a lista do que o sworn nao promete');
+  }
+  const v = (css) => design.valoresCrus(css).map((a) => a.tipo + ':' + a.valor);
+  assert.deepStrictEqual(v('.a { color: oklch(0.5 0.1 200); }'), [], 'oklch passou a ser lido');
+  assert.deepStrictEqual(v('.a { color: lab(50% 40 59); }'), [], 'lab passou a ser lido');
+  assert.deepStrictEqual(v('.a { color: color-mix(in srgb, red 50%, blue); }'), [], 'nome de cor passou a ser lido');
+  assert.deepStrictEqual(v('.a { color: color-mix(in srgb, #ff0000 50%, #0000ff); }'), ['cor:#ff0000', 'cor:#0000ff'],
+    'o #hex dentro do color-mix deixou de ser lido');
+  assert.deepStrictEqual(v('@media (min-width: 768px) { .a { color: red; } }'), ['medida:768px'],
+    'a medida do @media deixou de contar');
 });

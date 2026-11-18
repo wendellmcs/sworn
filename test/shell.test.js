@@ -69,6 +69,20 @@ test('shell: a palavra dentro de string literal nao e apontada', () => {
   assert.strictEqual(shell.conferir('Write-Output "o caminho /tmp e do Linux"', WIN).length, 0);
 });
 
+// A1-14: -Force e -Recurse sao do PowerShell e o rm de la os aceita; so o grupo de letras do bash com r (ou o
+// --recursive) e apontado, em qualquer argumento do mesmo comando, sem passar para o comando seguinte
+test('A1-14: o rm do PowerShell com -Force ou -Recurse passa; o -rf do bash, em qualquer argumento, e apontado', () => {
+  const doRm = (cmd) => shell.conferir(cmd, WIN, 'PowerShell').filter((p) => p.achado === 'rm -r').length;
+  for (const cmd of ['rm -Force build', 'rm -Recurse -Force build', 'rm -i a.txt', 'rm a-r.txt', 'rm x; git log -r',
+    'rm x | Select-String -r', 'rm a.txt\ngit branch -r']) {
+    assert.strictEqual(doRm(cmd), 0, cmd);
+  }
+  for (const cmd of ['rm -rf build', 'rm -fr build', 'rm -Rf build', 'rm -r build', 'rm --recursive build',
+    'rm -Force -rf build', 'rm build -r']) {
+    assert.strictEqual(doRm(cmd), 1, cmd);
+  }
+});
+
 test('shell: na segunda tentativa o motivo manda TROCAR DE IDIOMA', () => {
   const p = shell.conferir('rm -rf build', WIN);
   const primeiro = shell.motivoIdioma('rm -rf build', p, 1);
@@ -752,6 +766,17 @@ test('T1/F3-01: atribuicao, time, ! e palavra entre aspas na frente deixam o cd 
     assert.ok(r && r.achado === 'cd', JSON.stringify(c) + ' -> ' + JSON.stringify(r));
   }
 });
+// A1-10: `builtin` e `command` na frente sao como `time`: o cd segue em posicao de comando.
+test('A1-10: builtin e command na frente deixam o cd em posicao de comando (Bash)', () => {
+  for (const c of ['builtin cd x', 'command cd x', 'ls && builtin cd x']) {
+    const r = shell.cdSolto(c, 'Bash');
+    assert.ok(r && r.achado === 'cd', JSON.stringify(c) + ' -> ' + JSON.stringify(r));
+  }
+  // controle: a palavra como argumento nao e prefixo, `command -v cd` so pergunta onde o cd esta, e `exec cd x`
+  // falha sem mudar a pasta (o exec so roda programa)
+  for (const c of ['echo builtin cd x', 'command -v cd', 'exec cd x']) assert.strictEqual(shell.cdSolto(c, 'Bash'), null, c);
+});
+
 test('T1/F3-01 controle: atribuicao e cd entre aspas como argumento, e cd em $( ), seguem livres (Bash)', () => {
   for (const c of ['echo x=1 cd y', "echo 'cd' x", 'x=1', 'x=$(cd y)']) {
     assert.strictEqual(shell.cdSolto(c, 'Bash'), null, JSON.stringify(c));
@@ -921,6 +946,45 @@ test('D486: envolverEmSubshell - so o Bash, com o ) na linha de baixo; PowerShel
   assert.strictEqual(shell.envolverEmSubshell('cd sub && ls', null), null);
   assert.strictEqual(shell.envolverEmSubshell('cd sub && ls \\  ', bash), null);
   assert.strictEqual(shell.envolverEmSubshell('x', { forma: 'bash', achado: null, teto: true }), null);
+});
+
+// A1-11: com o heredoc sem fecho, o `)` viraria corpo; com o fecho, envolve como antes.
+test('A1-11: envolverEmSubshell fica null quando um heredoc nao tem a linha de fecho', () => {
+  const bash = shell.cdSolto('cd sub && ls', 'Bash');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<EOF\nabc', bash), null);
+  assert.strictEqual(shell.envolverEmSubshell("cd sub && cat <<'FIM'\nabc\nEOF", bash), null);
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<A <<B\na\nA\nb', bash), null, 'o 2o sem fecho');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<EOF\n\tEOF', bash), null, 'com << o tab nao fecha');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<A<<B\na\nA\nb', bash), null, 'as marcas coladas');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<\\EOF\nabc', bash), null, 'a barra na frente');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<E"O"F\nabc\nE', bash), null, 'a aspa no meio nao corta a palavra');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<END-OF\nabc\nEND', bash), null, 'o hifen nao corta a palavra');
+  // a marca dentro de aspa conta de proposito: o comando fica negado, o lado seguro
+  assert.strictEqual(shell.envolverEmSubshell("cd sub && echo '<<EOF'", bash), null, 'a marca na aspa');
+  // controle: fechado (tambem o <<- com tab, os dois em sequencia e o here-string) envolve
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<EOF\nabc\nEOF', bash), '( cd sub && cat <<EOF\nabc\nEOF\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<-EOF\nabc\n\tEOF', bash), '( cd sub && cat <<-EOF\nabc\n\tEOF\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<A <<B\na\nA\nb\nB', bash), '( cd sub && cat <<A <<B\na\nA\nb\nB\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<<abc', bash), '( cd sub && cat <<<abc\n)');
+  assert.strictEqual(shell.envolverEmSubshell("cd sub && cat <<'FIM'\nabc\nFIM", bash), "( cd sub && cat <<'FIM'\nabc\nFIM\n)");
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<\\EOF\nabc\nEOF', bash), '( cd sub && cat <<\\EOF\nabc\nEOF\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<A<<B\na\nA\nb\nB', bash), '( cd sub && cat <<A<<B\na\nA\nb\nB\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<END-OF\nabc\nEND-OF', bash), '( cd sub && cat <<END-OF\nabc\nEND-OF\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<fim.txt\nabc\nfim.txt', bash), '( cd sub && cat <<fim.txt\nabc\nfim.txt\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<E"O"F\nabc\nEOF', bash), '( cd sub && cat <<E"O"F\nabc\nEOF\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<E\\OF\nabc\nEOF', bash), '( cd sub && cat <<E\\OF\nabc\nEOF\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && cat <<EOF>out.txt\nabc\nEOF', bash), '( cd sub && cat <<EOF>out.txt\nabc\nEOF\n)');
+  assert.strictEqual(shell.envolverEmSubshell('cd sub && echo $((1<<2))', bash), '( cd sub && echo $((1<<2))\n)');
+});
+
+// L2-s103-18: o caminho e a causa vem de fora e podem trazer acento; o aviso sai todo em ASCII.
+test('L2-s103-18: avisoTabela sai em ASCII mesmo com acento no caminho e na causa', () => {
+  const t = shell.avisoTabela([{ tipo: 'arquivo', onde: 'tabela/sessão.json', causa: 'não se leu' },
+    { tipo: 'regra', achado: 'x', onde: 'regras[0]', causa: 'padrão inválido' }]);
+  assert.match(t, /tabela\/sessao\.json/);
+  assert.match(t, /nao se leu/);
+  assert.match(t, /padrao invalido/);
+  assert.doesNotMatch(t, /[^\x20-\x7E\n]/, 'so ASCII');
 });
 
 test('A9-04/A9-05 (D745): motivo e sugestao da tabela real saem no aviso em portugues, em ASCII', () => {

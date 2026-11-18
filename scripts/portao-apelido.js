@@ -83,6 +83,18 @@ if (tem('corrigir')) {
       'rode este mesmo script so com --mapa.\n');
     process.exit(1);
   }
+  // L2-s103-17: o mesmo `name:` em dois arquivos de agente dava duas divergencias, e o [0] consertava so a primeira,
+  // calado. Sem saber qual arquivo e o certo, recusa e lista os dois (fail-closed: nada gravado).
+  const arquivosDeste = [];
+  for (const x of r.divergencias.filter(deste).concat(r.esforcoDivergente.filter(deste))) {
+    if (arquivosDeste.indexOf(x.arquivo) === -1) arquivosDeste.push(x.arquivo);
+  }
+  if (arquivosDeste.length > 1) {
+    process.stdout.write('RECUSADO: "' + alvo + '" e o nome de mais de um agente:\n');
+    for (const f of arquivosDeste) process.stdout.write('  - .claude/agents/' + f + '\n');
+    process.stdout.write('Deixe esse nome em um arquivo so (mude o `name:` dos outros) e rode de novo.\n');
+    process.exit(1);
+  }
 
   if (destino === 'arquivo') {
     // A1-15: pelo arquivo que o --mapa mostra, nao pelo nome - o `name:` do frontmatter pode diferir dele.

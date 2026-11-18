@@ -26,13 +26,22 @@ const NAO_DECLARADO = 'nao declarado';
 // dentro dele injetaria linhas no texto reinjetado) e com teto de tamanho.
 const LIMITE_DO_VALOR = 200;
 
+// D869: os outros controles (C0, DEL, C1) e os separadores U+2028/U+2029 viram o texto \uXXXX. O U+2028 quebra a
+// linha em quem le o texto reinjetado, e um ESC cru mexe no terminal; o tab fica, e so espaco.
+const CONTROLE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u2028\u2029]/g;
+
 function umaLinha(v) {
-  const t = String(v).replace(/[\r\n]+/g, ' ').trim();
+  // o trim antes do escape: o separador na ponta some como espaco, em vez de virar texto \u2028 na ponta
+  const t = String(v).replace(/[\r\n]+/g, ' ').trim()
+    .replace(CONTROLE, function (c) { return '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'); });
   if (t.length <= LIMITE_DO_VALOR) return t;
   let corte = LIMITE_DO_VALOR - 3;
   // F2-23: o corte nao parte um par substituto (emoji): se o ultimo caractere que ficaria e a 1a metade, recua um.
   const ultimo = t.charCodeAt(corte - 1);
   if (ultimo >= 0xD800 && ultimo <= 0xDBFF) corte -= 1;
+  // nem parte o escape: o \u001b cortado em \u00 deixaria um escape pela metade; recua ate antes da barra
+  const pedaco = /\\(?:u[0-9a-f]{0,3})?$/.exec(t.slice(0, corte));
+  if (pedaco) corte = pedaco.index;
   return t.slice(0, corte) + '...';
 }
 
@@ -41,6 +50,39 @@ function umaLinha(v) {
  *  `null` como se fosse um valor. */
 function declarado(v) {
   return typeof v === 'string' && v.trim() ? umaLinha(v) : NAO_DECLARADO;
+}
+
+/** R-T26-04 (R5/D36): o texto do escopo sai em ASCII, como nos avisos do portao (escopo.js), e numa linha so. */
+function umaLinhaAscii(v) {
+  return umaLinha(escopoLib.ascii(v));
+}
+
+// A5-19: acima de 10 mil caracteres o harness guarda o resto do texto em arquivo e mostra so o comeco. As regras e
+// a ordem vem primeiro; passando de 9 mil, a lista do escopo encolhe e aponta o arquivo que a tem inteira.
+const CARACTERES_REINJETADOS = 9000;
+
+/** As linhas do bloco do escopo, com ate `quantos` itens de Dentro e de Fora (o resto vira uma linha que aponta
+ *  o arquivo). */
+function linhasDoEscopo(esc, cabeca, arquivo, quantos) {
+  const linhas = cabeca.slice();
+  const listar = function (itens) {
+    for (const d of itens.slice(0, quantos)) {
+      // R-T26-04: o item e caminho; em ASCII (acento tirado, simbolo virou ?) ele nomeia pasta que nao existe, entao
+      // diz onde esta o nome exato.
+      const limpo = umaLinhaAscii(d);
+      linhas.push('  - ' + limpo + (limpo !== umaLinha(d) ? ' (nome exato em ' + arquivo + ')' : ''));
+    }
+    if (itens.length > quantos) {
+      linhas.push('  ... e mais ' + (itens.length - quantos) + ' item(ns): a lista inteira esta em ' + arquivo);
+    }
+  };
+  linhas.push('Dentro do escopo:');
+  listar(esc.dentro);
+  if (esc.fora.length) {
+    linhas.push('Fora de escopo (a parte que funciona):');
+    listar(esc.fora);
+  }
+  return linhas;
 }
 
 /** 0.3.3, itens 26/28: a causa do erro. F3-22: o codigo do Node vem traduzido ("e uma pasta (EISDIR)"), de `texto.causaDoErro`. So ASCII. */
@@ -143,9 +185,8 @@ function nucleo(cwd) {
     linhas.push('');
     linhas.push(
       ctx
-        ? 'Fonte das regras: .claude/sworn/regras.md; do contexto: ' +
-          '.claude/sworn/projeto.json. Regra numerica se cita com arquivo:linha.'
-        : 'Fonte: .claude/sworn/regras.md. Regra numerica se cita com arquivo:linha.'
+        ? 'Fonte das regras: .claude/sworn/regras.md; do contexto: .claude/sworn/projeto.json.'
+        : 'Fonte: .claude/sworn/regras.md.'
     );
     return linhas.join('\n') + '\n';
   } catch (e) {
@@ -394,22 +435,22 @@ function montar(cwd, sessionId, origem) {
   const s = estado.ler(sessionId);
   const frente = s.frente;
   const esc = escopoLib.carregar(cwd, frente);
+  let escopoNaPosicao = -1;
+  let refazerEscopo = null;
   if (esc && (esc.dentro.length || esc.objetivo)) {
-    const linhas = [];
+    const cabeca = [];
     // Com vinculo a uma frente que ainda existe, a primeira linha diz qual e -
     // sem isto, depois de uma compactacao o agente le "Dentro do escopo" e nao
     // tem como saber que o arquivo que manda e o da frente, nao o escopo.md.
     const arquivo = escopoLib.arquivoEmVigor(cwd, frente);
-    if (frente && arquivo !== escopoLib.ARQUIVO) linhas.push('Frente: ' + escopoLib.nomeSeguro(frente) + ' (' + arquivo + ')');
-    // F2-20: objetivo e itens vem de um arquivo que o dono edita a mao: passam por `umaLinha` (teto de tamanho).
-    if (esc.objetivo) linhas.push('Objetivo: ' + umaLinha(esc.objetivo));
-    linhas.push('Dentro do escopo:');
-    for (const d of esc.dentro) linhas.push('  - ' + umaLinha(d));
-    if (esc.fora.length) {
-      linhas.push('Fora de escopo (a parte que funciona):');
-      for (const f of esc.fora) linhas.push('  - ' + umaLinha(f));
-    }
-    estadoPartes.push(bloco('ESTADO - escopo declarado', linhas));
+    if (frente && arquivo !== escopoLib.ARQUIVO) cabeca.push('Frente: ' + escopoLib.nomeSeguro(frente) + ' (' + arquivo + ')');
+    // F2-20: objetivo e itens vem de um arquivo que o dono edita a mao: uma linha so, com teto de tamanho, em ASCII.
+    if (esc.objetivo) cabeca.push('Objetivo: ' + umaLinhaAscii(esc.objetivo));
+    refazerEscopo = function (quantos) {
+      return bloco('ESTADO - escopo declarado', linhasDoEscopo(esc, cabeca, arquivo, quantos));
+    };
+    escopoNaPosicao = estadoPartes.length;
+    estadoPartes.push(refazerEscopo(Infinity));
   }
 
   const ativo = planoLib.lerAtivo(cwd);
@@ -431,7 +472,8 @@ function montar(cwd, sessionId, origem) {
       ['Plano ativo ignorado: ' + umaLinha(ativo.arquivo) + ' fica fora do projeto e nao foi lido.']));
   } else if (ativo) {
     try {
-      const tarefas = planoLib.parseTarefas(fs.readFileSync(path.join(cwd, ativo.arquivo), 'utf8'));
+      // A5-03: o "arquivo" pode vir absoluto (dentro do projeto, conferido acima); path.join o colava ao cwd.
+      const tarefas = planoLib.parseTarefas(fs.readFileSync(path.resolve(cwd, ativo.arquivo), 'utf8'));
       const aberta = tarefas.filter(function (t) { return t.abertos > 0; })[0];
       // F2-20: os dois valores vem de um arquivo editavel a mao: uma linha so, com teto.
       const linhas = ['Plano: ' + umaLinha(ativo.arquivo), 'Dono: ' + declarado(ativo.sessionId)];
@@ -454,8 +496,10 @@ function montar(cwd, sessionId, origem) {
 
   // Plano 0.9.1 (Tarefa 1): `s.contadores` e do turno e morre no fecho; a conta da sessao e o turno somado ao balde
   // da sessao, a mesma que o gatilho de saude le.
+  // A5-13: so os baldes de portao que nega; os outros contadores (agentes despachados, revisao fechada, ordens) nao
+  // sao "portoes que dispararam".
   const c = saude.acumular(s);
-  const chaves = Object.keys(c);
+  const chaves = Object.keys(c).filter(function (k) { return saude.BALDES_DE_BLOQUEIO.indexOf(k) !== -1 && c[k] > 0; });
   if (chaves.length) {
     estadoPartes.push(bloco('ESTADO - portoes que dispararam nesta sessao',
       chaves.map(function (k) { return '  ' + c[k] + 'x ' + k; })));
@@ -465,7 +509,17 @@ function montar(cwd, sessionId, origem) {
   if (trabalho.length) estadoPartes.push(bloco('ESTADO - trabalho desta sessao', trabalho));
 
   if (!estadoPartes.length) return partes.length ? partes.join('\n') + '\n' : null;
-  return partes.concat(estadoPartes).join('\n') + '\n';
+  let texto = partes.concat(estadoPartes).join('\n') + '\n';
+  // A5-19: passou da medida, a lista do escopo encolhe pela metade ate caber (ou ate nenhum item).
+  if (refazerEscopo) {
+    let quantos = Math.max(esc.dentro.length, esc.fora.length);
+    while (texto.length > CARACTERES_REINJETADOS && quantos > 0) {
+      quantos = Math.floor(quantos / 2);
+      estadoPartes[escopoNaPosicao] = refazerEscopo(quantos);
+      texto = partes.concat(estadoPartes).join('\n') + '\n';
+    }
+  }
+  return texto;
 }
 
 module.exports = {

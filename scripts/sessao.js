@@ -55,7 +55,7 @@ try {
   const gastoMes = gastoLib.gastoDoMes({ real: guardar.gastoReal, arquivoDoCache: path.join(pastaDoCache, 'gasto-mes.json') });
   // Pedido 30: a linha do plano da sessao, para a faixa do mod ('' sem plano). Mesma pasta do plano.js --texto.
   // Plano 082 (p6-24): a barra nao leva mais o plano; ele fica so na faixa.
-  const linhaDoPlano = require('./lib/plano.js').linhaDoPlanoDaSessao(process.cwd(), s.frente);
+  const linhaDoPlano = require('./lib/plano.js').linhaDoPlanoDaSessao(raiz, s.frente);
   resposta = medidor.linhaDaSessao({
     uso: entrada.uso,
     amostras: entrada.amostras,

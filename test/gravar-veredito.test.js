@@ -982,9 +982,11 @@ test('F2b: o inspetor e a skill dizem que o P2 sem tipo invalida o veredito e qu
   const passo4 = skill.slice(skill.indexOf('## Step 4'), skill.indexOf('## Step 5'));
   assert.doesNotMatch(passo4, /counts as `erro`/);
   const passo5 = skill.slice(skill.indexOf('## Step 5'), skill.indexOf('## Step 6'));
-  assert.match(passo5, /\*\*Round 1 approves by itself\*\* when every lens of the band voted and no verdict brings any finding at all/);
+  assert.match(passo5, /\*\*Round 1 approves by itself\*\* when every lens of the band voted and no verdict brings a finding other than a\s+`melhoria`/);
+  assert.match(passo5, /P2 `melhoria` on the new side goes to the record and does not hold the round \(a P0 or P1 marked `melhoria`, or one on\s+the old side, still does\)/);
   assert.ok(passo5.includes('`ronda 1 completa sem achado nenhum: aprovado`'), 'o Passo 5 nao cita o motivo que o script escreve');
-  assert.match(passo5, /\| two dry rounds, or round 1 complete with no finding at all \(with a reference: and `referencia\.pronta`\) \| Approved\./);
+  assert.ok(passo5.includes('`ronda 1 completa so com melhoria (vai ao registro): aprovado`'), 'o Passo 5 nao cita o motivo da melhoria');
+  assert.match(passo5, /\| two dry rounds, or round 1 complete with no finding other than a P2 `melhoria` \(with a reference: and `referencia\.pronta`\) \| Approved\./);
 });
 
 // F2d (a): o playbook e as referencias dele diziam a regra velha (seca = sem P1 ou acima; P2 nunca segura; o teto

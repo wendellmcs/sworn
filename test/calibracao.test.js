@@ -160,6 +160,34 @@ test('calibracao: amostra pequena fica no padrao da D464 e diz por que', () => {
   assert.strictEqual(r.sugestao.suficiente, false);
   assert.strictEqual(r.sugestao.tokensDeContexto, saude.LIMIARES_PADRAO.tokensDeContexto);
   assert.ok(/amostra pequena/.test(r.sugestao.motivo), r.sugestao.motivo);
+  assert.ok(/Rode de novo depois de mais algumas semanas de uso$/.test(r.sugestao.motivo), r.sugestao.motivo);
+  // os dois minimos faltam aqui, e os dois aparecem, com a contagem em K como nas faixas
+  assert.match(r.sugestao.motivo, /^amostra pequena: 1 sessao, de 30 no minimo; 0 conversas chegaram a 175K, de 10 no minimo\./);
+});
+
+test('calibracao: o motivo da amostra diz so o minimo que faltou; com custo zero, o motivo diz isso', () => {
+  const curtas = [];
+  for (let i = 0; i < 30; i++) curtas.push(cal.lerSessao([fala('x'), chamada(60000), chamada(70000)].join('\n')));
+  const r = cal.calibrar(curtas, {});
+  assert.strictEqual(r.sugestao.suficiente, false);
+  assert.match(r.sugestao.motivo, /^amostra pequena: 0 conversas chegaram a 175K, de 10 no minimo\. Fica/);
+  assert.doesNotMatch(r.sugestao.motivo, /sessoes/);
+  // uma conversa so chega a 175K: o singular
+  const umaLonga = curtas.slice(1).concat(cal.lerSessao([fala('x'), chamada(160000), chamada(180000)].join('\n')));
+  assert.match(cal.calibrar(umaLonga, {}).sugestao.motivo, /^amostra pequena: 1 conversa chegou a 175K, de 10 no minimo\. Fica/);
+  // 30 sessoes que passam de 175K, com preco zero: a amostra basta, mas o custo e zero e nao ha o que comparar
+  const zero = [];
+  for (let i = 0; i < 30; i++) {
+    const s0 = cal.lerSessao([fala('x'), chamada(160000), chamada(180000), chamada(190000)].join('\n'));
+    s0.chamadas = s0.chamadas.map((c) => Object.assign(cal.novaChamada({ cache_read_input_tokens: c.C }, [0, 0, 0, 0, 0], c.t),
+      { commit: c.commit, edicao: c.edicao, handoff: c.handoff }));
+    zero.push(s0);
+  }
+  const s = cal.calibrar(zero, {});
+  assert.strictEqual(s.sugestao.suficiente, false);
+  assert.strictEqual(s.sugestao.tokensDeContexto, saude.LIMIARES_PADRAO.tokensDeContexto);
+  assert.strictEqual(s.sugestao.motivo, 'as chamadas da amostra somam custo zero, e sem custo nao ha o que comparar. ' +
+    'Fica o padrao do plugin. Confira se as transcricoes da pasta trazem os tokens de cada chamada (o campo usage)');
 });
 
 // ── a pasta das transcricoes ─────────────────────────────────────────────
@@ -433,4 +461,87 @@ test('calibracao: mensagem sem id vira chamada propria, e nao se junta as outras
   const s = cal.lerSessao([fala('pedido'), semId(60000), semId(61000), semId(62000), chamada(63000, { id: 'x' }),
     chamada(63000, { id: 'x' })].join('\n'));
   assert.deepStrictEqual(s.chamadas.map((c) => c.C), [60000, 61000, 62000, 63000]);
+});
+
+// A6-03: a tabela da pagina de precos (lida em 2026-11-18), o id com data no fim e o Haiku 5.5 acima de 100 mil.
+test('calibracao A6-03: tabela de precos inteira, id com data e o Haiku 5.5 acima de 100 mil tokens de prompt', () => {
+  assert.deepStrictEqual(cal.PRECOS['claude-sonnet-5-5'], [2, 10, 0.10, 2.5, 4]);
+  assert.deepStrictEqual(cal.PRECOS['claude-fable-5-2'], [8, 40, 0.20, 10, 16]);
+  assert.deepStrictEqual(cal.precoDaChamada('claude-haiku-4-5-20251001', {}), [1, 5, 0.10, 1.25, 2]);
+  assert.strictEqual(cal.precoDaChamada('modelo-sem-preco', {}), undefined);
+  assert.strictEqual(cal.precoDaChamada('toString', {}), undefined);
+  // em 100 mil ainda e o preco de baixo; um token acima, a chamada inteira paga o de cima (a escrita de cache conta)
+  const ate = { input_tokens: 1000, cache_read_input_tokens: 99000, cache_creation_input_tokens: 0 };
+  const acima = { input_tokens: 1000, cache_read_input_tokens: 99000, cache_creation_input_tokens: 1 };
+  assert.deepStrictEqual(cal.precoDaChamada('claude-haiku-5-5', ate), [0.1, 0.5, 0.01, 0.125, 0.2]);
+  assert.deepStrictEqual(cal.precoDaChamada('claude-haiku-5-5', acima), [0.5, 2.5, 0.05, 0.625, 1]);
+  // pela lerSessao: o Fable 5.2 entra na conta (antes caia em semPreco) e o Haiku com 150 mil paga o preco de cima
+  const s = cal.lerSessao([chamada(60000, { modelo: 'claude-fable-5-2' }),
+    chamada(150000, { modelo: 'claude-haiku-5-5' })].join('\n'));
+  assert.strictEqual(s.semPreco, 0);
+  assert.strictEqual(s.chamadas.length, 2);
+  const alto = cal.precoDaChamada('claude-haiku-5-5', acima);
+  const esperado = (150000 * alto[2] + 100 * alto[1]) / 1e6;
+  assert.ok(Math.abs(s.chamadas[1].custo - esperado) < 1e-12, s.chamadas[1].custo + ' != ' + esperado);
+});
+
+// A6-06: o id vazio juntava todas as mensagens de id vazio numa chamada so.
+test('calibracao A6-06: mensagem de id vazio nao se junta a outra', () => {
+  const vazio = (C) => {
+    const o = JSON.parse(chamada(C));
+    o.message.id = '';
+    return JSON.stringify(o);
+  };
+  const s = cal.lerSessao([fala('pedido'), vazio(60000), vazio(61000), vazio(62000), chamada(63000, { id: 'x' }),
+    chamada(63000, { id: 'x' })].join('\n'));
+  assert.deepStrictEqual(s.chamadas.map((c) => c.C), [60000, 61000, 62000, 63000]);
+});
+
+// A6-08: a simulacao ia ate o alarme padrao, mesmo com o projeto de alarme mais baixo (o --gravar recusa no alarme).
+test('calibracao A6-08: a simulacao para no alarme do projeto, e sem limiar para simular fica o que vale hoje', () => {
+  assert.deepStrictEqual(cal.candidatosAbaixoDe(250000), [150000, 175000, 200000, 225000]);
+  assert.deepStrictEqual(cal.candidatosAbaixoDe(undefined), cal.CANDIDATOS);
+  assert.deepStrictEqual(cal.candidatosAbaixoDe(0), cal.CANDIDATOS);
+  // o alarme que nao e numero finito cai no padrao; o enorme para na janela de 1M, sem milhoes de limiares
+  assert.deepStrictEqual(cal.candidatosAbaixoDe(Infinity), cal.CANDIDATOS);
+  const enorme = cal.candidatosAbaixoDe(1e12);
+  assert.strictEqual(enorme.length, 34);
+  assert.strictEqual(enorme[enorme.length - 1], 975000);
+  // 30 sessoes que chegam a 180 mil: amostra suficiente, para a recusa vir do alarme e nao da amostra
+  const sessoes = [];
+  for (let i = 0; i < 30; i++) {
+    sessoes.push(cal.lerSessao([fala('pedido'), chamada(160000), chamada(170000), fala('mais'), chamada(180000)].join('\n')));
+  }
+  const r = cal.calibrar(sessoes, { alarme: 250000, limiarAtual: 175000 });
+  assert.deepStrictEqual(r.simulacao.map((l) => l.limiar), [150000, 175000, 200000, 225000]);
+  // em 150 mil as 30 conversas trocam e pagam mais; em 175 mil nenhuma troca: e o menor que empata
+  assert.strictEqual(r.sugestao.tokensDeContexto, 175000);
+  assert.strictEqual(r.sugestao.suficiente, true);
+  // amostra pequena com o alarme baixo: o motivo e o do alarme, porque esperar mais semanas nao o resolve
+  const poucas = cal.calibrar(sessoes.slice(0, 3), { alarme: 100000, limiarAtual: 90000 });
+  assert.strictEqual(poucas.sugestao.tokensDeContexto, 90000);
+  assert.match(poucas.sugestao.motivo, /^o alarme deste projeto \(100K\)/);
+  // o alarme que nao e mil redondo aparece como veio, nao arredondado (400 nao vira 0K)
+  assert.match(cal.calibrar(sessoes, { alarme: 400 }).sugestao.motivo, /^o alarme deste projeto \(400\)/);
+  const baixo = cal.calibrar(sessoes, { alarme: 150000, limiarAtual: 120000 });
+  assert.deepStrictEqual(baixo.simulacao, []);
+  assert.strictEqual(baixo.sugestao.suficiente, false);
+  assert.strictEqual(baixo.sugestao.tokensDeContexto, 120000);
+  assert.match(baixo.sugestao.motivo, /^o alarme deste projeto \(150K\) nao passa do ponto onde a simulacao comeca \(150K\)/);
+  assert.match(baixo.sugestao.motivo, /suba limiares\.tokensAlarme no projeto\.json para acima de 150000$/);
+});
+
+test('calibrar.js A6-08: o comando passa o alarme do projeto.json para a simulacao', () => {
+  const dir = pasta();
+  const trans = path.join(dir, 'trans');
+  fs.mkdirSync(trans);
+  fs.writeFileSync(path.join(trans, 's1.jsonl'), [fala('pedido'), chamada(160000), chamada(170000), chamada(180000)].join('\n'));
+  const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
+  fs.mkdirSync(path.dirname(arq), { recursive: true });
+  fs.writeFileSync(arq, JSON.stringify({ shell: 'bash', limiares: { tokensAlarme: 200000 } }));
+  try {
+    const r = rodar(['--pasta', trans], dir);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.deepStrictEqual(JSON.parse(r.stdout).simulacao.map((l) => l.limiar), [150000, 175000]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

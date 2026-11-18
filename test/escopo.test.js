@@ -44,6 +44,32 @@ test('escopo: marcador de lista e crase sao removidos', () => {
   assert.ok(!e.dentro.some((d) => d.startsWith('-')));
 });
 
+// L2-s103-12: o caminho com crase no nome vai entre crases duplas, como no Markdown; com uma crase so, quebrava no meio.
+test('L2-s103-12: a crase fecha na mesma quantidade que abriu', () => {
+  const d = (linha) => escopo.parse('## Dentro\n' + linha + '\n').dentro;
+  assert.deepStrictEqual(d('- ``a`b.js``'), ['a`b.js']);
+  assert.deepStrictEqual(d('- ``` a``b.js ``` (motivo)'), ['a``b.js']);
+  assert.deepStrictEqual(d('- `` `x.md ``'), ['`x.md']);
+  assert.deepStrictEqual(d('- ``a```b.js``'), ['a```b.js'], 'a sequencia mais longa no meio nao fecha');
+  // controles: a crase simples, a anotacao depois dela e a crase sem fecho seguem como antes
+  assert.deepStrictEqual(d('- `src/a.js` (motivo)'), ['src/a.js']);
+  assert.deepStrictEqual(d('- `a` e `b`'), ['a']);
+  assert.deepStrictEqual(d('- `src/a.js'), ['src/a.js']);
+  // a cerca sem fecho do mesmo tamanho nao encolhe para fechar antes: segue o caminho sem crase, como antes
+  assert.deepStrictEqual(d('- ``a`'), ['a']);
+  assert.deepStrictEqual(d('- ```a``'), ['a']);
+  // uma linha longa de crases sem fecho nao trava o parser
+  const t0 = Date.now();
+  d('- ' + '`'.repeat(40000));
+  assert.ok(Date.now() - t0 < 1000, 'a linha de crases levou ' + (Date.now() - t0) + ' ms');
+});
+
+// L2-s103-14: o `dentro` que nao e lista nao derruba o aviso.
+test('L2-s103-14: motivoFora com dentro que nao e lista diz (vazio)', () => {
+  const m = escopo.motivoFora('src/a.js', 'padrao', { dentro: 'src/**', fora: [] });
+  assert.ok(m.includes('  (vazio)'), m);
+});
+
 test('escopo: dentro casa caminho exato e glob', () => {
   const e = escopo.parse(TEXTO);
   assert.strictEqual(escopo.dentro('scripts/portao-escopo.js', e), true);
@@ -140,12 +166,16 @@ test('A2-04: a linha que o motivo manda escrever casa o arquivo; com acento, o m
     const item = escopo.motivoSemEscopo(alvo, 'padrao').split('\n').filter((l) => /^ {2}- /.test(l))[0];
     return escopo.dentro(alvo, escopo.parse('## Dentro\n' + item.trim() + '\n'));
   };
-  for (const alvo of ['docs/Manual (v2).md', 'docs/Relatorio - final.md', 'docs/notas #1.md', 'src/a b.js', 'src/a.js']) {
+  for (const alvo of ['docs/Manual (v2).md', 'docs/Relatorio - final.md', 'docs/notas #1.md', 'src/a b.js', 'src/a.js',
+    'docs/a`b.md', 'docs/a``b.md', '`x.md', 'x.md`']) {
     assert.strictEqual(casaPeloRemedio(alvo), true, alvo);
   }
   const ACENTO = /acento ou caractere especial: copie-o da sua chamada/;
   for (const m of [escopo.motivoSemEscopo('docs/Relatório.md', 'padrao'), escopo.motivoOutraFrente('docs/Relatório.md'),
-    escopo.motivoFora('docs/Relatório.md', 'padrao', escopo.parse('## Dentro\n- src/**\n'))]) {
+    escopo.motivoFora('docs/Relatório.md', 'padrao', escopo.parse('## Dentro\n- src/**\n')),
+    // L2-s103-13: os tres motivos que nao tinham o aviso
+    escopo.motivoDeclaradoFora('docs/Relatório.md', 'docs/**'), escopo.motivoIntocavel('docs/Relatório.md'),
+    escopo.motivoNomeDeFrente('.claude/sworn/escopos/relatório.md')]) {
     assert.match(m, ACENTO, m);
     assert.ok(/^[\x20-\x7E\n]*$/.test(m), 'fora de ASCII: ' + m);
     // revisao cega do L2 (ronda 2): a linha e um bloco proprio na forma unica - em branco antes e depois (ou e a ultima)

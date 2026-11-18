@@ -106,6 +106,27 @@ test('A2-05: padrao com barra no fim ou {a,b} e inerte pela forma, mesmo com a p
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// L2-s103-22/23: o colchete de rota (Next.js) e literal no glob.js, entao a pasta da rota no disco salva o padrao; e o
+// padrao com espaco em volta acha a pasta pelo mesmo texto sem espaco que a forma conferiu.
+test('L2-s103-22/23: segmento de rota [id] salva pela pasta no disco; espaco em volta nao muda a pasta', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-rota-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'app', '[id]'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'pages', '[[...slug]]'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'sec'));
+    const r = projeto.intocaveisInertes({
+      intocaveis: ['app/[id]/**', 'pages/[[...slug]]/**', 'app/[nome]/**', ' sec/** ', 'src/[ab].js']
+    }, ARQUIVOS, dir);
+    // a rota que nao existe (app/[nome]) segue inerte, e a classe de caractere [ab] e inerte pela forma
+    assert.deepStrictEqual(r, ['app/[nome]/**', 'src/[ab].js']);
+    assert.doesNotMatch(projeto.motivoInerte(['app/[nome]/**']), /so entende/, 'rota nao e erro de forma');
+    assert.match(projeto.motivoInerte(['src/[ab].js']), /so entende/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('D244/defeito 6: padrao sem pasta fixa (so glob) nao se salva pelo disco', () => {
   const os = require('node:os');
   assert.deepStrictEqual(projeto.intocaveisInertes({ intocaveis: ['**/*.pem'] }, ARQUIVOS, os.tmpdir()), ['**/*.pem']);

@@ -13,6 +13,16 @@ function semente(texto) {
   return h >>> 0;
 }
 
+/** O embaralhamento final do murmur3 (fmix32): cada bit da saida depende de todos os da entrada. */
+function embaralhar(h) {
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b) >>> 0;
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35) >>> 0;
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
 /**
  * B5: o inspetor recebe A e B sem autoria e sem ordem fixa.
  * O mapa fica com quem despachou, e o inspetor nunca o ve.
@@ -21,7 +31,10 @@ function rotular(itens, sementeTexto) {
   if (!Array.isArray(itens) || itens.length !== 2) {
     throw new Error('rotular espera exatamente dois itens');
   }
-  const inverter = (semente(sementeTexto) % 2) === 1;
+  // A3-14: o bit mais fraco do FNV-1a e so a paridade dos caracteres de codigo impar (o multiplicador e impar): duas
+  // sementes que mudam um 'b' por um 'd' davam sempre a mesma ordem. O embaralhamento final do murmur3 (fmix32)
+  // espalha todos os bits, e o bit de cima decide.
+  const inverter = (embaralhar(semente(sementeTexto)) >>> 31) === 1;
   const primeiro = inverter ? itens[1] : itens[0];
   const segundo = inverter ? itens[0] : itens[1];
   return {
@@ -46,23 +59,125 @@ function proximaRonda(dir) {
 
 /**
  * D257 secao 11, item 11: uma base por arquivo. O id e o caminho relativo com a barra virando
- * duplo underscore e todo caractere fora de [a-zA-Z0-9._-] virando underscore
- * (scripts/lib/escopo.js -> scripts__lib__escopo.js). Sempre um nome de pasta seguro. Nunca so
+ * duplo underscore (scripts/lib/escopo.js -> scripts__lib__escopo.js). Sempre um nome de pasta seguro. Nunca so
  * digitos: `2026` viraria uma ronda solta do formato antigo (temPastaNumeradaSolta), e ganha `_`.
+ * A3-12b: o resto fora de [a-zA-Z0-9.-] (o _ tambem) virava _, e a/b.js e a__b.js caiam na mesma base, somando as
+ * rondas dos dois. Agora cada um vira ~ e o seu codigo de 4 digitos hexadecimais (_ -> ~005f, espaco -> ~0020), e o
+ * id volta a dizer de qual caminho veio. O caminho sem _ nem caractere especial guarda o id de antes. O _ solto so
+ * sai do prefixo: o id so de digitos, so de pontos (.. sairia de revisao/) ou vazio ganha _ na frente.
+ * O id comprido (o ç vira 5 caracteres, e o nome de uma pasta tem teto de 255) fica nos primeiros ID_CORTE caracteres,
+ * mais ~~ e o FNV-1a do caminho inteiro: o ~ do codigo sempre vem antes de 4 digitos, e ~~ so sai daqui.
  */
+const ID_LONGO = 150;
+const ID_CORTE = 140;
 function idDoArquivo(rel) {
+  const s = String(rel == null ? '' : rel);
+  let id = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '/') id += '__';
+    else if (/[a-zA-Z0-9.-]/.test(ch)) id += ch;
+    else id += '~' + s.charCodeAt(i).toString(16).padStart(4, '0');
+  }
+  if (id.length > ID_LONGO) id = id.slice(0, ID_CORTE) + '~~' + semente(s).toString(16).padStart(8, '0');
+  return /^(\d+|\.*)$/.test(id) ? '_' + id : id;
+}
+
+/**
+ * O id de antes da A3-12b: o _ e todo caractere fora de [a-zA-Z0-9._-] viravam _. So para achar a base antiga; null
+ * quando o id de antes so tem pontos ou e vazio (revisao/.. e a pasta de cima, nunca uma base).
+ */
+function idDeAntes(rel) {
   const id = String(rel == null ? '' : rel).split('/').join('__').replace(/[^a-zA-Z0-9._-]/g, '_');
+  if (/^\.*$/.test(id)) return null;
   return /^\d+$/.test(id) ? '_' + id : id;
+}
+
+/**
+ * O arquivo que o mapa.json de cada ronda numerada da base cita (com barra normal), ou null na ronda sem mapa legivel
+ * ou sem `arquivo`. null no lugar da lista quando a base nao se le. Quem le a lista decide o que fazer com o null.
+ */
+function arquivosPorRonda(base) {
+  let rondas = [];
+  try {
+    rondas = fs.readdirSync(base, { withFileTypes: true })
+      .filter(function (e) { return e.isDirectory() && /^\d+$/.test(e.name); });
+  } catch (e) {
+    // a base que nao se le nao diz de quem e: quem chama trata o null
+    return null;
+  }
+  return rondas.map(function (r) {
+    try {
+      let t = fs.readFileSync(path.join(base, r.name, 'mapa.json'), 'utf8');
+      if (t.charCodeAt(0) === 0xfeff) t = t.slice(1);
+      const m = JSON.parse(t);
+      return m && typeof m.arquivo === 'string' ? m.arquivo.replace(/\\/g, '/') : null;
+    } catch (e) {
+      // a ronda sem mapa legivel nao diz de quem e: quem chama trata o null
+      return null;
+    }
+  });
 }
 
 // 0.3.3, item 18: a regra do id em texto, para os avisos dos scripts. Mora ao lado do idDoArquivo, e um
 // teste prende que o texto e a funcao concordam.
 const REGRA_DO_ID = 'o caminho do arquivo revisado com cada / trocado por __ e cada caractere fora de ' +
-  'letras, numeros, ".", "_" e "-" trocado por _';
+  'letras sem acento, numeros, "." e "-" trocado por ~ e o seu codigo em 4 digitos hexadecimais, de 0 a 9 e de a a f (o _ vira ~005f, o espaco ' +
+  '~0020, o ç ~00e7); o id feito so de numeros ou so de pontos ganha um _ na frente (2026 vira _2026), e o de ' +
+  'mais de 150 caracteres fica nos 140 primeiros, mais ~~ e uma marca de 8 caracteres';
 
-/** A base das rondas de um arquivo: <revisao>/<id>. As rondas moram em <base>/<n>/. */
+/**
+ * A base das rondas de um arquivo: <revisao>/<id>. As rondas moram em <base>/<n>/.
+ * A3-12b: a base com o id de antes, enquanto alguma ronda dela for deste arquivo e a nova nao existir, ainda e a dele:
+ * o preparar-revisao.js a muda para o id novo (migrarBaseAntiga) antes de abrir a ronda seguinte, e ate la o
+ * apurar-ronda.js a acha aqui. Tambem fica nela a base misturada, que o migrarBaseAntiga nao muda. Abrir a base nova
+ * zeraria a contagem e daria mais 3 rondas ao mesmo arquivo.
+ */
 function baseDoArquivo(revisao, rel) {
-  return path.join(revisao, idDoArquivo(rel));
+  const id = idDoArquivo(rel);
+  const nova = path.join(revisao, id);
+  const antes = idDeAntes(rel);
+  if (antes === null || antes === id || fs.existsSync(nova)) return nova;
+  const antiga = path.join(revisao, antes);
+  // o rel chega com barra normal (o preparar e o apurar o normalizam); a \ teria o seu proprio id, ~005c.
+  // fail-closed para a base antiga: a base ou a ronda que nao se le nao prova que a revisao e deste arquivo
+  return (arquivosPorRonda(antiga) || []).indexOf(rel) !== -1 ? antiga : nova;
+}
+
+/**
+ * A3-12b: muda a base que mora no id de antes de `rel` para o id novo do arquivo que as rondas dela citam. Serve aos
+ * dois lados de uma colisao: a base de a__b.js no id de antes (a__b.js) e tambem a pasta de a/b.js, e a de a_b.js
+ * (id de antes a_b.js) so tem nome velho. Depois, cada arquivo fica com as suas rondas. So muda a base cujas rondas
+ * todas citam um arquivo so, cujo id de antes e o nome da pasta, com o id novo diferente e a pasta nova ainda livre; a
+ * base misturada (os dois arquivos ja somados) ou com ronda ilegivel fica como esta. O baseDoArquivo a segue dando ao
+ * arquivo enquanto alguma ronda legivel o citar; com todas as rondas ilegiveis, nada prova de quem ela e, e o arquivo
+ * abre a base do id novo, com a contagem do zero.
+ * So a pasta do id de antes pode ser a base antiga de outro arquivo: o id de antes nunca tem ~ (o ~ virava _), e o id
+ * novo que difere do de antes sempre tem.
+ * Devolve null quando nada muda, { de, para } quando mudou, e { de, para, erro } quando o rename falhou: o
+ * preparar-revisao.js para com ERRO, senao o outro arquivo cairia nas rondas desta base.
+ */
+function migrarBaseAntiga(revisao, rel) {
+  const id = idDeAntes(rel);
+  if (id === null) return null;
+  const de = path.join(revisao, id);
+  if (!fs.existsSync(de)) return null;
+  const porRonda = arquivosPorRonda(de);
+  // a ronda ilegivel (null) e diferente do dono, e a base com ela nao muda; todas ilegiveis, ou nenhuma ronda (dono
+  // undefined), o id de antes do dono e null, e null nunca e o id
+  if (!porRonda) return null;
+  const dono = porRonda[0];
+  if (porRonda.some(function (a) { return a !== dono; }) || idDeAntes(dono) !== id) return null;
+  const para = path.join(revisao, idDoArquivo(dono));
+  // o id novo igual ao de antes cai aqui tambem: a pasta de destino e a propria base
+  if (fs.existsSync(para)) return null;
+  try {
+    fs.renameSync(de, para);
+    return { de: de, para: para };
+  } catch (e) {
+    // fail-closed: quem chama recebe o erro e para; a base fica onde estava
+    return { de: de, para: para, erro: e };
+  }
 }
 
 /**
@@ -202,5 +317,6 @@ function montarReferencia(entradas, ler) {
   return { texto: blocos.join('\n'), faltam: faltam, urls: urls, grandes: grandes };
 }
 
-module.exports = { semente, rotular, proximaRonda, idDoArquivo, REGRA_DO_ID, baseDoArquivo, temPastaNumeradaSolta,
+module.exports = { semente, rotular, proximaRonda, idDoArquivo, REGRA_DO_ID, baseDoArquivo, migrarBaseAntiga,
+  temPastaNumeradaSolta,
   TRECHO_MARGEM, recortarTrecho, linhasDoTrecho, tipoDaReferencia, TETO_DA_REFERENCIA, montarReferencia };

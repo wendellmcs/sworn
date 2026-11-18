@@ -11,8 +11,20 @@ function relativoAoProjeto(arquivo, cwd) {
   if (!arquivo || !cwd) return null;
   const abs = path.resolve(cwd, String(arquivo));
   const rel = path.relative(cwd, abs);
-  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  if (rel === '' || saiDoProjeto(rel) || path.isAbsolute(rel)) return null;
   return glob.normalizar(rel);
+}
+
+/**
+ * A2-09: o caminho relativo sobe para fora do projeto so quando comeca pelo segmento `..` inteiro. O arquivo
+ * `..env` (ou a pasta `..cache/`) dentro do projeto tambem comeca por dois pontos e nao sai: com o
+ * `startsWith('..')` ele virava "fora", e o portao de escopo o deixava passar sem conferir. O segmento termina na
+ * barra `/` ou no separador do sistema (`sep`, o `path.sep` quando nao vem): no Linux e no macOS a barra invertida e
+ * letra do nome, e `..\notas` e um arquivo de dentro. O `sep` so vem no teste, para conferir os dois sistemas.
+ */
+function saiDoProjeto(rel, sep) {
+  const s = sep || path.sep;
+  return rel === '..' || rel.startsWith('../') || rel.startsWith('..' + s);
 }
 
 /**
@@ -35,7 +47,7 @@ function dentroPeloCaminhoReal(arquivo, cwd) {
   } catch (e) {
     return relativoAoProjeto(arquivo, cwd) !== null;
   }
-  return !(rel === '' || /^\.\.(?:[\\/]|$)/.test(rel) || path.isAbsolute(rel));
+  return !(rel === '' || saiDoProjeto(rel) || path.isAbsolute(rel));
 }
 
 /**
@@ -68,4 +80,4 @@ function apagarItemPorItem(alvo) {
   }
 }
 
-module.exports = { relativoAoProjeto, dentroPeloCaminhoReal, apagarPasta };
+module.exports = { relativoAoProjeto, dentroPeloCaminhoReal, saiDoProjeto, apagarPasta };

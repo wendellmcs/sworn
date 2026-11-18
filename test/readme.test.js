@@ -208,9 +208,22 @@ test('readme: os seis limites sao os seis da spec, por assunto', () => {
   const comModelo = fs.readdirSync(dirAg).filter((f) => /\.md$/.test(f))
     .filter((f) => /^model:/m.test(frente(f))).map((f) => f.replace(/\.md$/, ''));
   const secaoLimites = secao('limites').corpo;
-  assert.strictEqual(/uma exceção, declarada/.test(secaoLimites), comModelo.length > 0,
-    'agentes com model: ' + JSON.stringify(comModelo) +
-    ' - a excecao declarada tem de existir so se eles existirem');
+  // A8-27: os agentes com model: sao uma excecao; o workflows/parallel.js, que aceita apelidos de modelo, e outra.
+  // A conta declarada no GUIA.md tem de ser a dos arquivos de verdade.
+  const arqParallel = path.join(RAIZ, 'workflows', 'parallel.js');
+  // sem o arquivo, nao ha essa excecao: conta zero em vez de quebrar
+  const temParallel = fs.existsSync(arqParallel) && /MODELOS = \[/.test(fs.readFileSync(arqParallel, 'utf8'));
+  const excecoes = (comModelo.length > 0 ? 1 : 0) + (temParallel ? 1 : 0);
+  const declarada = [null, /uma exceção, declarada\./, /duas exceções, declaradas\./][excecoes];
+  const quais = 'agentes com model: ' + JSON.stringify(comModelo) + (temParallel ? ' e o workflows/parallel.js' : '');
+  if (declarada) {
+    assert.ok(declarada.test(secaoLimites), 'o GUIA.md tem de declarar ' + excecoes + ' excecao(oes) (' + quais + ')');
+  } else {
+    assert.ok(!/exceç(ão|ões), declaradas?/.test(secaoLimites), 'nenhum arquivo nomeia modelo: tire a excecao declarada');
+  }
+  if (temParallel) {
+    assert.ok(secaoLimites.includes('`workflows/parallel.js`'), 'a excecao declarada nao cita o `workflows/parallel.js`');
+  }
   comModelo.forEach((n) => assert.ok(secaoLimites.indexOf('`' + n + '`') !== -1,
     'excecao nao nomeada: ' + n));
 });

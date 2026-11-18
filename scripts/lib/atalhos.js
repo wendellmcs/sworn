@@ -10,7 +10,8 @@ const MARCA_PADRAO = 'atalho';
 // Quem ja usa o ponytail (ou a grafia inglesa dele) nao precisa reescrever os comentarios.
 const MARCAS_ACEITAS = ['ponytail', 'shortcut'];
 const PALAVRA = /^[A-Za-z][A-Za-z0-9_-]*$/;
-const PREFIXOS = ['<!--', '//', '/*', '--', '#'];
+// A6-14: o /** antes do /*, para o '*' do JSDoc nao ficar na frente da marca
+const PREFIXOS = ['<!--', '//', '/**', '/*', '--', '#'];
 const ASPAS = ['"', "'", '`'];
 // Os dois rotulos da nota depois do "o que"; a fonte unica do nome deles.
 const ROTULO = { limite: 'limite', gatilho: 'trocar quando' };
@@ -56,6 +57,17 @@ function entreLetras(linha, j) {
  * comum; o tipo dela fica marcado, porque nenhuma aspa igual depois dela fecha.
  */
 function comentario(linha) {
+  const c = comecos(linha);
+  return c.length ? linha.slice(c[0]) : null;
+}
+
+/**
+ * A6-14: cada comeco de comentario da linha, da esquerda, como { resto, antes }: a marca que nao vem logo depois do
+ * primeiro prefixo (o `--` de `x -- y  # atalho:`) ainda e achada no seguinte. Devolve o indice onde o texto de cada
+ * comentario comeca (logo depois do prefixo): a linha longa com muito prefixo nao e fatiada a cada um.
+ */
+function comecos(linha) {
+  const achados = [];
   const semFecho = {};
   for (let i = 0; i < linha.length; i++) {
     const c = linha[i];
@@ -67,9 +79,31 @@ function comentario(linha) {
     }
     if (i > 0 && linha[i - 1] !== ' ' && linha[i - 1] !== '\t') continue;
     const prefixo = PREFIXOS.find(function (p) { return linha.startsWith(p, i); });
-    if (prefixo) return linha.slice(i + prefixo.length);
+    if (prefixo) {
+      achados.push(i + prefixo.length);
+      i += prefixo.length - 1;
+    }
   }
-  return null;
+  return achados;
+}
+
+/**
+ * Se um `//` antes do comeco `k` engole o resto da linha. O `//` dentro de um `/* x *\/` ou `<!-- x -->` que fecha
+ * depois dele nao conta; num `/*` ou `<!--` que nao fecha na linha, o resto ja e bloco e nenhum `//` depois conta.
+ */
+function barrasAbertas(crua, todos, k) {
+  let fechadoAte = -1;
+  for (let j = 0; j < k; j++) {
+    const p = todos[j];
+    if (p < fechadoAte) continue;
+    if (crua.slice(p - 2, p) === '//') return true;
+    const fecho = /\/\*\*?$/.test(crua.slice(0, p)) ? '*/' : (crua.slice(p - 4, p) === '<!--' ? '-->' : null);
+    if (!fecho) continue;
+    const f = crua.indexOf(fecho, p);
+    if (f === -1) return false;
+    fechadoAte = f + fecho.length;
+  }
+  return false;
 }
 
 function limpo(t) {
@@ -91,17 +125,28 @@ function rotuloEm(texto, nome) { return new RegExp('\\b' + nome + ':', 'i').exec
  */
 function linhaDaMarca(linha, listaDeMarcas) {
   const crua = String(linha);
-  const resto = comentario(crua);
-  if (resto === null) return null;
-  const m = reMarca(listaDeMarcas).exec(semFecho(resto));
-  if (!m) return null;
-  return {
-    corpo: m[1],
-    nota: semFecho(resto).trim(),
-    // D690: o que vem antes do texto do comentario termina no prefixo que abre bloco
-    emBloco: /(\/\*|<!--)$/.test(crua.slice(0, crua.length - resto.length)),
-    fechou: FIM_DE_BLOCO.test(crua)
-  };
+  const naFrente = new RegExp('\\s*(?:' + listaDeMarcas.join('|') + '):', 'y');
+  const todos = comecos(crua);
+  // o comeco que vem depois de um `//` esta dentro dele; os outros (`#` de titulo, `--` de variavel CSS, `/* x */`
+  // ja fechado) nao engolem o resto da linha
+  const depoisDeBarras = function (k) { return barrasAbertas(crua, todos, k); };
+  for (let k = 0; k < todos.length; k++) {
+    const c = todos[k];
+    naFrente.lastIndex = c;
+    if (!naFrente.test(crua)) continue;
+    const resto = crua.slice(c);
+    const m = reMarca(listaDeMarcas).exec(semFecho(resto));
+    if (!m) continue;
+    return {
+      corpo: m[1],
+      nota: semFecho(resto).trim(),
+      // D690: o que vem antes do texto do comentario termina no prefixo que abre bloco (o /** tambem); o /* de
+      // `// ver /* atalho:` esta dentro do //, e a linha de baixo e codigo
+      emBloco: !depoisDeBarras(k) && /(\/\*\*?|<!--)$/.test(crua.slice(0, c)),
+      fechou: FIM_DE_BLOCO.test(crua)
+    };
+  }
+  return null;
 }
 
 /** { oque, limite, gatilho } do texto depois da marca. Rotulo que falta vem null. */

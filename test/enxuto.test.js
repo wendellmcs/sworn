@@ -49,6 +49,8 @@ test('enxuto: ligado sem projeto, chave ausente, true ou tipo errado; so o boole
   assert.strictEqual(e.CHAVE, 'menosCodigo');
   const linha = e.BLOCO.split('\n').filter((l) => /^Desligar/.test(l))[0];
   assert.ok(linha && linha.includes('"' + e.CHAVE + '": false'), 'a linha de desligar cita a chave que o codigo le');
+  // A11-09 (H1): o bloco sai sem projeto.json, e a linha diz de onde o arquivo vem
+  assert.ok(linha.endsWith('(sem ele, rode antes o /sworn:init).'), linha);
 });
 
 test('enxuto: a chave e de liga/desliga do projeto.json (aviso de tipo, nao ignorada)', () => {

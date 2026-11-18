@@ -473,16 +473,29 @@ const mudancas = rondas.map(function (_, i) {
   const depois = ladoNovo(i);
   return antes && depois ? diffLinhas.blocos(antes, depois) : null;
 });
+// A3-16: o que a mudanca mexeu contra o HEAD, medido na ronda 1 entre o lado HEAD e o do trabalho (os textos da pasta
+// dela, inteiros ou recortes, os mesmos que o inspetor cita). Sem o mapa com um lado HEAD ou sem o texto de um dos
+// lados, null: o apurar nao mede, e tudo segura como antes.
+const diffDoHead = (function () {
+  const mapa = mapas[0];
+  if (!mapa || !veredito.mapaDoTrabalho(mapa) || (mapa.A !== 'HEAD' && mapa.B !== 'HEAD')) return null;
+  const head = linhasDoArquivo(0, mapa.A === 'HEAD' ? 'A' : 'B', 1);
+  const novo = linhasDoArquivo(0, mapa.A === 'HEAD' ? 'B' : 'A', 1);
+  return head && novo ? diffLinhas.blocos(head, novo) : null;
+})();
 
 let r;
 try {
   r = veredito.apurar(rondas, { mapas: mapas, refutados: refutados, mesmos: mesmos, textoDaLinha: textoDaLinha,
     trechoNoArquivo: trechoNoArquivo, provaNoRepo: provaNoRepo, invertidas: invertidas, faixas: faixas,
-    lentesDoMapa: lentesDoMapa, mudancas: mudancas });
+    lentesDoMapa: lentesDoMapa, mudancas: mudancas, diffDoHead: diffDoHead });
 } catch (err) {
   // 0.3.3, item 7: o erro diz o defeito; a linha seguinte diz onde corrigir e o que fazer depois.
-  // L3 (A3-03): o voto que falta ja diz o que fazer; a linha da refutacao nao e com ele.
-  if (err.codigo === 'VOTO_QUE_FALTA') falhar('ERRO: ' + err.message + '.\n');
+  // L3 (A3-03): o voto que falta ja diz o que fazer; a linha da refutacao nao e com ele. L3-s104-3: nem a faixa
+  // desconhecida do mapa.json.
+  if (err.codigo === veredito.VOTO_QUE_FALTA || err.codigo === veredito.FAIXA_DESCONHECIDA) {
+    falhar('ERRO: ' + err.message + '.\n');
+  }
   const doMesmos = err.message.indexOf('mesmos.json') !== -1;
   process.stdout.write('ERRO: ' + err.message + '\n' + (doMesmos
     ? 'Corrija ' + baseRel + '/mesmos.json (ou apague o arquivo) e rode este comando de novo.\n'
@@ -502,13 +515,13 @@ for (const t of r.trechoNaoConfere) {
     'abaixo), descartado (ronda ' + t.ronda + ', lente ' + t.lente + '): "' + String(t.trecho).slice(0, 60) + '"');
 }
 // L3 (A3-05): o achado fora do formato segue descartado sem travar a ronda (D422), mas a aprovacao diz que houve.
-if (r.encerrar && r.motivo === 'duas rondas secas seguidas: aprovado' && descartados.length) {
+if (r.aprovado === true && descartados.length) {
   r.motivo += ', com ' + descartados.length + ' achado(s) descartado(s) por estar fora do formato: leia ' +
     'vereditosDescartados antes de dar por aprovado';
 }
-// O "aprovado" se le no motivo da apuracao, antes de qualquer texto acrescentado depois dela (o do detector, o do
-// inventario, o dos registros, o prefixo da degradada, que e texto livre e pode trazer a palavra).
-const aprovou = r.encerrar && /aprovado/.test(String(r.motivo));
+// A3-17: a aprovacao e o booleano da apuracao, nao a palavra "aprovado" no motivo (texto livre, que o detector, o
+// inventario, os registros e o prefixo da degradada aumentam depois e podem trazer a palavra).
+const aprovou = r.aprovado === true;
 // E3 itens 3 e 4: os arquivos que o preparar-revisao.js grava na ultima ronda e nenhum inspetor abre. Ausente = nada
 // muda; ilegivel ou fora da forma = ERRO, como o refutados.json: o que ele diz nao some calado.
 const ultimaRonda = pastas[pastas.length - 1];
@@ -554,10 +567,11 @@ if (inventario) {
 }
 // B2: a revisao degradada diz isso antes de tudo; o fecho cobra a mesma linha na resposta (o "aprovou" ja foi lido
 // acima, antes de todo texto acrescentado).
-// F2a (D828.2/.5): o que nao segurou a ronda (melhoria, ou achado em linha nova) nao some no fecho: vai para o plano.
+// F2a (D828.2/.5): o que nao segurou a ronda (melhoria, achado em linha nova ou, A3-16, fora da mudanca) nao some no
+// fecho: vai para o plano.
 if (r.encerrar && r.registros.length) {
-  r.motivo += '; ha ' + r.registros.length + ' achado(s) em "registros" (melhoria ou linha nova): copie-os para o ' +
-    'registro do plano';
+  r.motivo += '; ha ' + r.registros.length + ' achado(s) em "registros" (melhoria, linha nova ou fora da mudanca): ' +
+    'copie-os para o registro do plano';
 }
 if (degradado) r.motivo = 'DEGRADADO: ' + degradado + '. ' + r.motivo;
 
@@ -655,6 +669,7 @@ process.stdout.write(JSON.stringify({
   ronda: r.ronda,
   rondasSecas: r.secas,
   encerrar: r.encerrar,
+  aprovado: aprovou,
   motivo: r.motivo,
   degradado: degradado,
   telas: telas,
@@ -662,6 +677,7 @@ process.stdout.write(JSON.stringify({
   inventario: inventario,
   placarDaUltimaRonda: r.placar,
   achadosNovosP0P1: r.novos,
+  achadosAindaAbertos: r.achadosAindaAbertos,
   registros: r.registros,
   achadosDoLadoAntigo: r.achadosDoLadoAntigo,
   refutados: r.refutados,

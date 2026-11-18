@@ -1,5 +1,375 @@
 # Changelog
 
+## 0.81.0 — o leitor do plano ignora os blocos de código e não abre um plano que não existe
+
+**Mais barato, sem perder o que a revisão acha**
+
+- **O commit de JS ou TS que só muda comentário ou espaço não pede mais revisão cega** (`scripts/lib/commit.js`,
+  `scripts/lib/so-comentario.js`): o portão de commit lê o arquivo do HEAD e o de agora sem os comentários e, se o
+  código sair igual, deixa o commit passar, como já fazia com o `.md`. Uma quebra de linha nova conta (ela muda o
+  ponto e vírgula automático), e o comentário que uma ferramenta lê (`@ts-ignore`, `eslint-disable`, `@__PURE__`)
+  conta como código. Na dúvida o portão cobra a revisão como antes: arquivo com JSX (`.jsx`, `.tsx`, ou `</` e `/>`
+  no texto), string ou comentário sem fecho, arquivo acima de 2 MiB e o atalho novo sem o `trocar quando:`.
+- **O arquivo de teste na revisão completa chama 4 lentes, e não 8** (`scripts/lib/veredito.js`,
+  `scripts/preparar-revisao.js`): correção, estados, borda e manutenção. Medido em 888 rondas: nos testes, as outras
+  quatro (texto, segurança, pedido e código a mais) gastaram 301 inspetores e acharam 3 problemas graves que nenhuma
+  outra lente achou. Conta como teste o arquivo numa pasta `test/`, `tests/`, `__tests__/` ou `spec/`, ou com o nome
+  `*.test.*`, `*.spec.*`, `test_*.py`, `*_test.py` ou `*_test.go`, sempre com código (o `.md` de uma pasta `spec/`
+  segue com as 8). O arquivo de gancho, manifesto ou configuração dentro dessas pastas também segue com as 8, a de
+  segurança inclusive.
+- **A ronda 1 só com sugestão de melhoria aprova sozinha** (`scripts/lib/veredito.js`): a melhoria vai ao registro e
+  não pede mais a ronda 2 só para confirmar. Vale só para a melhoria P2 válida do lado novo: o erro, a dúvida que o
+  inspetor não conferiu, a melhoria do lado antigo e a que sai descartada por estar fora do formato seguem pedindo.
+
+**Segurança**
+
+- **Ligar a atualização automática não copia mais uma credencial para o `settings.json`**
+  (`scripts/ligar-atualizacao.js`): quando o source instalado do marketplace tem senha ou token na url (antes do `@`
+  em http(s), ou num parâmetro como `?access_token=`), o comando recusa, com e sem `--gravar`, e diz como instalar de
+  uma url sem credencial. O token da query também sai da tela: vira `<segredo>`, como o usuário e a senha já viravam
+  `<usuario-e-senha>`. O source que você mesmo pôs no `settings.json` segue como está.
+- **A pasta `.sworn/handoff/` ganha um `.gitignore` com `*`** (`scripts/lib/retomar.js`, `scripts/marcar-trabalho.js`):
+  o handoff traz caminhos e trechos do chat e não entra mais no git do projeto por engano. Um `.gitignore` que já
+  esteja na pasta fica como está.
+- **O texto reinjetado não leva mais caractere de controle cru** (`scripts/lib/reinjecao.js`): o separador de linha
+  Unicode, o ESC e os outros controles de um valor do `projeto.json` viram o texto do escape; antes o separador
+  partia a linha para quem lia, e o ESC mexia no terminal.
+- **O arquivo mudado pelo shell também pede revisão antes do commit** (`scripts/portao-commit.js`): o `sed -i`, a
+  redireção e o `git apply` não passavam pelo registro do Write e do Edit, e o commit passava sem cobrar a revisão
+  dele. Agora conta o que o git diz mudado desde a abertura da sessão, menos o que já estava mudado nela (de outra
+  frente). Sem a foto da abertura, vale só o registro, como antes.
+- **O `del /f` do cmd e o apagar no fim do cano barram** (`scripts/lib/destrutivo.js`): `del /f a.txt`,
+  `Get-ChildItem -Recurse | Remove-Item`, `ls | xargs rm` e `gci | % { rm $_ }` passavam pela trava de comando
+  destrutivo. O cano que não apaga (`ls | grep rm`, `git ls-files | xargs -r grep -n rm`), o `||` e o apagar só com
+  nomes escritos e sem `xargs` (`echo y | rm -i a.txt`) seguem passando.
+
+**Corrigido**
+
+- **O `rm -Force` e o `rm -Recurse` do PowerShell passam** (`modelos/shell-win32.json`): só o grupo de letras do
+  bash com `r` (`-rf`, `-fr`, `-r`) ou o `--recursive` é apontado, em qualquer argumento do mesmo comando e da
+  mesma linha.
+- **O slug fora do formato não vira mais um nome de pasta diferente do `name:` da skill** (`scripts/gerar-skill.js`):
+  o gerador recusa e diz o valor aceito (só letras minúsculas, dígitos e `-`); o slug que não vira nome nenhum (só
+  hifens, só acento) ou que não é texto sai com erro, sem nome sugerido.
+- **O projeto com `bun.lock` é Bun, e a prova roda o script `test`** (`scripts/lib/varredura.js`): o `bun.lock` de
+  texto do Bun 1.2 é reconhecido, e a prova gravada é `bun run test` (o `bun test` é o executor do Bun e ignora o
+  script).
+- **O `regras.md` em UTF-16 não dá mais OK com 0 regras** (`scripts/lib/regra.js`): o validador recusa o texto com
+  byte nulo e manda gravar de novo em UTF-8.
+- **A foto do git que falhou na abertura não vira árvore limpa no fim do turno** (`scripts/portao-fecho.js`): a
+  sessão segue sem foto, e a próxima abertura (compactação, retomada) tenta de novo; antes, a trava de outra frente
+  ficava muda até o fim da sessão.
+- **O repositório grande não emudece a trava de outra frente** (`scripts/lib/git.js`): o `git status` da foto e o
+  `git ls-files` aceitam até 32 MiB de saída; com 1 MiB, a lista virava "não sei".
+- **Depois da compactação, o contexto é medido de novo** (`scripts/lib/transcricoes.js`): a última chamada de antes
+  do `compact_boundary` não conta mais, e o alarme de tamanho não dispara falso logo depois de `/compact`.
+- **Sem o histórico, a auditoria por cicatriz não lista nenhuma regra para podar** (`scripts/lib/cicatriz.js`): lista
+  os itens lidos, sem julgamento, e o `--json` traz `temCicatriz` e as contas como `null`.
+- **A skill com `description: >-` entra no cruzamento de sobreposição** (`scripts/lib/auditoria.js`): a descrição em
+  YAML de bloco (`>`, `|`, `>2`) e a simples que segue nas linhas de baixo são lidas inteiras, e a entre aspas sai
+  sem elas, mesmo com `# comentário` depois; o `# comentário` depois do texto simples também sai, e o escape da
+  entre aspas duplas (`\t`, `\"`, `é`) vira o caractere.
+- **O atalho num `/** */` ou depois de outro comentário da linha é achado** (`scripts/lib/atalhos.js`): o `*` do
+  JSDoc não fica mais na frente da marca, e a busca segue para o comentário seguinte da mesma linha (o `/*` dentro
+  de um `//` não abre bloco, e o `//` dentro de um comentário já fechado não engole o resto da linha).
+- **Os comandos de uso, cobertura, auditoria, catálogo, plano, sessão e experimento olham a raiz do projeto** quando
+  rodam de uma subpasta, como os outros scripts (`scripts/uso.js`, `cobertura.js`, `auditar.js`, `catalogo.js`,
+  `plano.js`, `sessao.js`, `experimento.js`); o caminho que se digita (`--seguranca`, `--memoria`, `--proxima-decisao`,
+  `--abrir`) segue valendo da pasta de onde se roda.
+- **O inspetor que não consegue comparar os dois lados devolve `empate`** (`agents/inspector.md`): antes a instrução
+  pedia só o "nao sei", e o veredito saía sem o campo `melhor`, que o gancho recusa. A dica da skill gerada que manda
+  ler um campo do `projeto.json` sai acentuada (`scripts/lib/molde.js`).
+- **O que está num bloco de código do plano é exemplo e não conta.** Uma caixa `- [ ]` ou um cabeçalho
+  `## Tarefa 9` de exemplo, entre `` ``` `` ou `~~~`, não vira mais passo aberto, tarefa ou etapa. Vale no portão de
+  fecho (que barra dizer que a etapa terminou enquanto ela tem caixa aberta), no passo aberto que ele cita e no painel
+  do plano. Uma tabela de etapas termina onde começa um bloco de código.
+- **O bloco de código que nunca fecha não esconde mais o resto do plano.** Antes, os passos abertos dali até o fim
+  sumiam do portão de fecho, e a etapa podia fechar com caixa aberta. Agora esse bloco não conta como bloco, e o que
+  vem depois segue contado.
+- **A linha que fecha o bloco de código segue a regra do Markdown.** Ela não tem texto depois das crases ou dos tis:
+  `` ``` js `` dentro do bloco não fecha. E `` ```x``` `` no começo da linha é código dentro da linha, não bloco.
+- **O plano gravado com BOM (a marca invisível que editores do Windows põem no começo do arquivo) conta a 1ª tarefa
+  no portão de fecho.** Antes, só o painel tirava a marca.
+- **`node "<plugin>/scripts/plano.js" --abrir <caminho>` recusa o caminho que não existe, ou que é uma pasta.** Antes,
+  ele gravava o plano ativo, e o painel passava a dizer que não conseguia ler o plano. Agora o comando diz qual caminho
+  conferir e sai com erro, sem gravar nada; quando o problema não é o arquivo faltar, ele diz a causa.
+- **A tabela-resumo das tarefas não toma mais o lugar da tabela de etapas.** A linha de tabela com o tipo e o número
+  de um cabeçalho do plano (`| 1 |` numa tabela `| Item |`, com `### Item 1`) conta pelo cabeçalho. O `[FEITO]` posto
+  nela marca a tarefa como feita quando o cabeçalho não tem caixas, e a linha de total dessa tabela não vira mais aviso
+  de linha sem id.
+- **Na tabela de etapas, a data não vira etapa** (`2026-10-13` ou `13/10/2026` na 1ª célula vai para as linhas sem
+  id), e a barra escapada no fim da linha (`\|`) fica na célula.
+- **O `/sworn:init` acha a pasta certa em mais casos.** Ele passa a funcionar no macOS antigo (resolve a pasta com
+  `cd` + `pwd -P`, porque o `realpath` não existe lá). A pasta que é um atalho ou uma junção do Windows tem o conteúdo
+  listado, em vez de uma linha só com o nome dela. Com a pasta terminada em ponto ou espaço, que no Windows mostra a
+  pasta vizinha sem dar erro, o init mostra os nomes e pede que você confirme. Na lista dos arquivos a proteger, um
+  nome que termina em `=`, `*` ou `|` não perde mais esse caractere quando ele faz parte do nome de verdade (no
+  bash, a listagem acrescenta esses sinais para dizer o tipo do arquivo, e o init só os tira quando o arquivo sem
+  eles existe; se não, pergunta).
+- **O `/sworn:init` avisa antes de começar** se uma pasta acima já tem configuração do sworn, que manda nos portões até
+  esta ter a sua. Também avisa que o Claude Code vai pedir sua aprovação em várias gravações, e que `.sworn/` pode ir
+  para o `.gitignore` do projeto.
+- **O roteiro do `/sworn:init` bate com o código.** Quem já rodou o init e viu o `OK` do validador no fim não precisa
+  refazer nada: o que muda é o que ele diz e grava daqui em diante. Sem esse `OK`, rode `/sworn:init` de novo.
+  - O `projeto.json` sai com `limiares` vazio, que deixa os limiares no padrão do plugin. Antes o roteiro não citava
+    essa chave, e o `projeto.json` podia sair recusado pelo validador.
+  - Sem agentes declarados, o passo que gera os arquivos dos agentes é pulado, em vez de terminar em erro.
+  - O init explica certo quais agentes o portão de custo barra num trabalho simples: os mais caros, a metade de cima
+    da lista arredondada para baixo (numa lista de 5 agentes, os 2 últimos). Antes o texto dizia "arredondada para
+    cima" e dava o exemplo certo, e você podia ouvir a posição errada.
+  - Ao citar `travas`, o init diz que são as quatro chaves do `projeto.json`, e não as oito travas do guia (o guia
+    conta também portões sem chave).
+  - O init não mexe mais no texto das regras ao copiá-las para o `regras.md`. Antes, o roteiro mandava ajustar ali
+    três dados que esse arquivo não tem (quem decide no projeto, o comando que prova que está pronto e as ameaças
+    consideradas); eles ficam no `projeto.json`, que o init grava a partir das suas respostas.
+  - A pergunta da atualização automática diz que o sim grava no `settings.json` do Claude Code deste computador, e
+    que os dois "não" fazem o próximo init perguntar de novo.
+- **O `GUIA.md` descreve certo o que o plugin já fazia.** Só o texto mudou; o comportamento é o mesmo.
+  - O portão de custo barra os agentes da metade mais cara da lista, e não só o mais caro (também no README).
+  - O guia passa a contar o que o sworn faz a cada pedido seu: oferece o `/sworn:radar` quando o pedido é de
+    melhoria, grava o pedido na lista numerada e, numa conversa grande parada há mais de 1 hora, segura a primeira
+    mensagem e mostra quanto custa continuar. E o que a abertura da sessão faz: pergunta se você quer rodar o
+    `/sworn:init` quando o projeto não tem configuração, e manda calibrar depois de 30 conversas.
+  - Onde a atualização automática é gravada, e o que fazer quando o `settings.json` está com o JSON quebrado.
+  - A lista das lentes da revisão cega mostra as dezoito, com a "Código que não precisava existir", que faltava.
+  - O guia lista os três lugares onde o plugin guarda nome de modelo: os dois agentes da revisão cega e o roteiro do
+    `/sworn:parallel`.
+  - A tabela de ferramentas explica o `catalogo.js`, o comando que confere se é hora de consultar a lista de
+    modelos; e a tabela de ganchos diz que chamar uma skill também conta como trabalho feito no turno.
+  - O guia dá um exemplo de como o painel do plano conta quando o plano tem cabeçalhos de etapa e também uma tabela
+    de etapas.
+  - O guia explica as licenças ELv2 e AGPL que o `/sworn:radar` cita. Ele também diz o que a abertura mostra do radar
+    da semana: quantos projetos são candidatos e quantos a ficha propõe adotar.
+- **Este registro explica melhor três versões antigas.** Só o texto mudou.
+  - Na 0.13.0, quantos projetos a medição de custo do radar leu, em que arquivo fica a chave `oferecerRadar` e o que
+    é o vigia.
+  - Na 0.12.0, o título fica curto, e cada comando que o portão passou a barrar diz o que ele destrói. Os termos da
+    revisão cega (ronda, lente, faixa) e o `fork` ganham uma explicação.
+  - Na 0.7.8, o que são a frente, o Objetivo e as marcas de sessão; o que fazer para avisar um defeito do painel; e o
+    item das etapas em tabela, separado em o que o painel lê, como marcar e o que acontece sem marca, com o `[FEITO]`
+    que não conta.
+- **O comando que liga a atualização automática (`scripts/ligar-atualizacao.js`) erra menos e diz melhor por que
+  recusou.**
+  - Ele só diz "já ligada" quando a entrada do marketplace também tem o `source` certo. Com o `source` torto, ele
+    regrava a entrada com o `source` do marketplace instalado.
+  - Um `settings.json` vazio vale como um arquivo sem nada, e não é recusado como JSON quebrado.
+  - Um `settings.json` que é um link grava no arquivo para onde o link aponta, mesmo quando esse arquivo ainda não
+    existe, e o link fica.
+  - Ele não escreve num arquivo temporário que já existia com o mesmo nome, nem o apaga: recusa e diz qual é.
+  - Quando não acha o marketplace instalado, a recusa diz por quê: o arquivo de marketplaces do Claude Code não
+    existe, não abre, não se lê, não tem a entrada ou tem a entrada sem o tipo do `source`. E diz o que fazer em
+    cada caso: instalar o marketplace, corrigir o JSON do arquivo ou conferir a permissão de leitura.
+  - Quando a forma que a recusa mostra usa o `source` público, a recusa diz isso. Assim, quem instalou o marketplace
+    de outro lugar sabe que deve trocá-lo.
+  - Quando o problema é permissão para ler ou gravar o `settings.json`, a recusa não oferece mais o caminho pelo
+    `/plugin`.
+- **A apuração da revisão cega (`scripts/lib/veredito.js` e `scripts/apurar-ronda.js`) erra menos ao decidir o que
+  segura a ronda.**
+  - Na ronda 1, a apuração compara o trabalho com o HEAD. O achado do lado novo que fica a mais de 2 linhas de tudo o
+    que mudou vai para `registros` como `fora da mudanca`, sem segurar a ronda. Antes, segurar ou não dependia de o inspetor citar o rótulo A ou B de uma linha
+    que os dois lados mostram igual. As lentes do pedido e da correção (a regressão em quem chama o que mudou)
+    seguem segurando onde for.
+  - O achado que segurou uma ronda e volta igual na última aparece em `achadosAindaAbertos`, o `motivo` diz quantos
+    são, e a revisão não aprova enquanto ele estiver lá. A lente que o repetiu volta na ronda seguinte. Antes da
+    terceira ronda, o `motivo` manda consertar ou refutar cada um; na terceira, a última, eles entram no conserto dos
+    outros achados abertos, cada um com um teste, e o que sobrar vai para o plano. Antes, duas rondas secas aprovavam
+    com o defeito ainda aberto.
+  - A lacuna contra a referência pode ser refutada na fonte, com `"lacuna": true` no `refutados.json`. Antes, a
+    lacuna P0 ou P1 do trabalho não tinha como sair.
+  - Com referência, a segunda passada (A e B trocados) também precisa do voto das lentes da faixa e das que acharam
+    erro na ronda anterior.
+  - Quando o `mapa.json` traz uma faixa que não existe, a apuração para com um erro e manda preparar a revisão de
+    novo. Antes, ela valia calada como a faixa completa.
+  - A conta das descrições de um mesmo achado não fica lenta quando elas são milhares.
+- **O portão do commit e o cartão do push leem o comando como o shell lê** (`scripts/lib/commit.js`,
+  `scripts/lib/push.js`).
+  - Eles acham o `git commit` e o `git push` dentro de `bash -c "..."`, `eval`, `cmd /c` e `powershell -Command`,
+    com opção do git de valor separado (`git --git-dir .git commit`) e com a linha quebrada no meio (a barra do bash
+    ou a crase do PowerShell). Antes, nesses casos o commit passava sem o portão.
+  - O texto de um heredoc (a mensagem do `git commit -F - <<EOF`) não conta mais como comando nem como a marca
+    `# sworn: sem-revisao` ou `# sworn: push-visto`: a marca vale só como comentário do comando.
+  - O comando do PowerShell se lê com as regras dele: `git -C "C:\pasta\" commit` acha a pasta.
+  - A pasta do commit segue o shell: `cd a && cd b` é `a/b`, os `-C` se somam (`-C a -C b` é `a/b`) e partem do `cd`
+    de antes, e o `-C ""` não muda a pasta. O `cd -` volta como em cada shell: no bash, para a pasta de antes; no
+    PowerShell, um passo atrás na história. O `cd` sozinho do bash vai para a pasta pessoal.
+  - No portão de estilo, a crase com quebra de linha colada numa palavra do PowerShell separa as palavras, como o
+    PowerShell faz: `Set-Content`+quebra+`a.css` agora mostra o `a.css` ao portão.
+  - Um alias do git para o commit (`git ci`) ainda passa sem o portão.
+  - O portão gasta menos git: em vez de dois gits por arquivo mudado, um por pasta e três por repositório.
+  - Fora do Windows, o arquivo aprovado com outra caixa no nome (`A.js` e `a.js`) não vale mais como o mesmo.
+- **O aviso "menos código" diz de onde vem o `projeto.json`**: sem ele, rode antes o `/sworn:init`.
+- **O portão de fecho lê melhor a saída que você colou** (`scripts/lib/evidencia.js`).
+  - O bloco de 4 crases (para citar um bloco dentro de outro) e o de `~~~` agora valem como evidência; antes a
+    alegação com a saída colada neles era barrada como sem evidência.
+  - A cor do terminal entre `fail` e o número não esconde mais a falha.
+  - O `fail 0` de uma suíte não apaga mais o `npm ERR!` ou o `ETIMEDOUT` de outra; no nome de um teste que passou,
+    essas palavras seguem sem barrar.
+  - O motivo diz o que é a prova de pronto: o comando em `provaDePronto`, no `.claude/sworn/projeto.json`.
+- **A revisão cega acha o lado antigo de mais arquivos e prepara um pacote mais cego**
+  (`scripts/preparar-revisao.js`).
+  - O arquivo renomeado com `git mv` (ou com `git add` nos dois nomes) é comparado com o nome antigo no HEAD; antes ele
+    saía como arquivo novo, sem lado antigo. Depois de um `mv` simples, ele ainda sai como novo.
+  - Onde o disco ignora a caixa, o caminho pedido com outra caixa (`RAIZ.TXT`) é o arquivo do HEAD, com o nome que o
+    git guarda. Num disco que diferencia a caixa, o arquivo com outra caixa segue sendo outro arquivo.
+  - O arquivo novo com `[`, `]`, `*` ou `?` no nome sai como arquivo novo; antes ele saía com um lado antigo vazio que
+    não dizia isso.
+  - Se o git não responde ao procurar o outro nome, a preparação para com erro; antes o arquivo saía como novo.
+  - `A.txt` e `B.txt` saem sem o BOM e com fim de linha LF nos dois lados. Antes, com `core.autocrlf`, o lado com CRLF
+    dizia qual era o do disco.
+  - No Windows, os caminhos da saída JSON e do aviso usam barra normal.
+  - Uma opção desconhecida (`--completo`) é recusada e nada é gravado; antes ela era ignorada calada.
+  - O `--completa` num arquivo que já estava na faixa completa avisa que não mudou nada.
+- **O portão de comando destrutivo erra menos nos dois sentidos** (`scripts/lib/destrutivo.js`).
+  - `rm foo bar`, sem opção, não é mais lido como `rm -f`; antes, o `f` de `foo` bastava.
+  - O redirecionamento não conta como alvo do `rm`: `rm -f >/dev/null` passa, e `rm -f 2>/dev/null x` segue barrado
+    pelo `x`.
+  - Depois do `--`, o nome que começa com `-` é alvo: `rm -rf -- -dist` barra. E `rm -- -rf`, que apaga só o arquivo
+    chamado `-rf`, passa.
+  - `git branch -vD x`, `-Dv x` e `-v -D x` barram como o `-D`; antes passavam. `git branch -- -D` (uma branch
+    chamada `-D`) segue passando.
+  - O `dd.exe` do Git for Windows barra como o `dd`.
+  - O GUIA diz o que a trava 5 não lê: o nome montado pelo shell, outro interpretador, o destrutivo no fim do cano.
+- **O portão de escrita confere a régua e o design em mais casos** (`scripts/portao-escopo.js`).
+  - Na marcha rápida (texto, documentação, config), a edição que afrouxa a régua de um teste e a cor fora do sistema
+    de design passam a barrar; antes a marcha rápida liberava antes de conferir as duas.
+  - O `design.json` vale mesmo sem o `projeto.json`; antes ele só valia depois do `/sworn:init`.
+  - O `Write` que regrava um arquivo de estilo inteiro não barra mais pelo valor fora do sistema que já estava nele
+    (como o `Edit` já fazia); o valor acrescentado segue barrando.
+  - O `NotebookEdit` tem a célula nova conferida pela régua e pelo design, contra a célula de antes.
+  - O portão não lê mais arquivo de qualquer tamanho. A régua compara o arquivo inteiro até 32 MB, e acima disso nega
+    a edição com o passo seguinte, porque o trecho sozinho deixava passar o `Edit` que só troca o número. O arquivo de
+    escopo é lido até 1 MB; acima disso, toda a lista "Dentro" conta como ampliada.
+- **O texto que o sworn devolve depois da compactação cabe inteiro e diz menos coisa errada**
+  (`scripts/lib/reinjecao.js`).
+  - Passando de 9 mil caracteres, a lista do escopo encolhe e aponta o arquivo que a tem inteira; antes, acima de
+    10 mil, o harness mostrava só o começo e cortava o resto.
+  - O plano ativo gravado com caminho absoluto, dentro do projeto, volta a se ler.
+  - "Portões que dispararam" lista só os portões que negaram, sem os contadores de agentes e de revisão.
+  - O objetivo e as listas do escopo saem sem acento e sem caractere fora de ASCII, como nos avisos do portão; o item que mudou na conversão diz em que arquivo está o nome exato.
+  - O rodapé das regras só diz de onde elas vêm; a frase que mandava citar a regra com arquivo:linha saiu.
+- **O roteiro da revisão cega (`/sworn:review`) diz melhor o que fazer.** Só o texto mudou.
+  - Quando a apuração para porque falta o voto de um inspetor, o roteiro diz o próximo passo em cada caso, em vez de
+    "escreva o voto que falta" (que convidava quem escreveu o código a votar no lugar do inspetor): o inspetor que não
+    votou na 1ª rodada é chamado; o que achou um erro e não voltou é chamado de novo, para dizer se o erro continua, ou
+    quem conduz a revisão refuta o achado em `refutados.json`, com a prova.
+  - O jargão "molhar a rodada" virou "segurar a rodada", com definição: o achado que segura a rodada conta contra a
+    aprovação.
+  - O caminho do arquivo vai entre aspas nos dois comandos, para funcionar com espaço no nome.
+  - A regra de saída da lente `enxuto` diz quem conta os achados refutados: quem mantém o sworn, porque nenhum script
+    conta.
+- **A lista dos arquivos tocados na sessão fica certa em mais casos** (`scripts/marcar-trabalho.js`).
+  - O notebook escrito pelo `NotebookEdit` entra na lista; antes, o gancho nem rodava depois dele, e o portão do
+    commit não cobrava a revisão do notebook.
+  - O mesmo arquivo escrito por outro caminho (o relativo depois do absoluto, outra barra ou, no Windows, outras
+    maiúsculas e minúsculas) entra uma vez só.
+- **O `projeto.json` é conferido e atualizado certo em mais casos** (`scripts/lib/projeto.js`).
+  - O aviso de `intocaveis` que não pega arquivo nenhum não acusa mais a pasta de rota com colchete no nome, como
+    `app/[id]/**` do Next.js, quando a pasta existe no disco; antes, o colchete contava como erro de forma.
+  - Padrão de `intocaveis` com espaço em volta procura a pasta no disco sem o espaço.
+  - Rodar o `/sworn:init` de novo troca só a escada e os degraus de `agentes`, como ele promete; o que foi posto à
+    mão em `agentes` fica. Antes, o objeto inteiro era trocado e o resto se perdia.
+  - `agentes` que não é objeto (texto, lista, número) reprova na validação; antes, passava calado. Para corrigir,
+    escreva `agentes` como objeto, com a escada em `agentes.escada`, por exemplo `"agentes": { "escada": ["a", "b"] }`.
+- **O inventário de obrigações dos manuais lê certo mais casos** (`scripts/lib/obrigacoes.js`).
+  - Um bloco de código aberto com ` ``` ` só fecha com ` ``` `, e o aberto com `~~~` só com `~~~`; antes, o outro
+    marcador dentro do exemplo fechava o bloco, e o resto do exemplo virava obrigação.
+  - A obrigação marcada como fora do sworn (`FORA`) precisa citar a decisão que a tirou dali. Agora vale também
+    `D - <número>`, com espaço dos dois lados do hífen. Deixam de valer, por serem prosa: o `D` separado por
+    espaço de um número de um dígito só (`D 5`), e o número seguido, sem espaço, de letra ou de extensão de
+    arquivo (`D<número>abc`, `decisão <número>.js`). Para citar, escreva `D<número>`, `D-<número>` ou
+    `decisão <número>`.
+- **O `/sworn:calibrate` conta o custo certo de mais modelos** (`scripts/lib/calibracao.js`, `scripts/calibrar.js`).
+  - A tabela de preços segue a página de preços da Anthropic de 2026-11-18. Entram o Fable 5.2, o Fable 5, os Mythos
+    e os modelos 4.x; antes, as chamadas deles ficavam fora da conta. A leitura de cache do Sonnet 5.5 passa a custar
+    US$ 0,10 por milhão; antes contava US$ 0,20, o dobro.
+  - O Haiku 5.5 paga o preço mais alto na chamada cujo prompt passa de 100 mil tokens, contando a leitura e a escrita
+    de cache. O nome do modelo com data no fim (`claude-haiku-4-5-20251001`) usa o preço do nome sem a data.
+  - A simulação para no alarme do seu projeto (`limiares.tokensAlarme`), não mais no alarme padrão: o limiar
+    sugerido sempre é um que o `--gravar` aceita. Com o alarme em 150 mil ou abaixo, não há limiar para comparar:
+    fica o limiar que vale hoje, e o motivo diz para subir o alarme para acima de 150 mil se quiser calibrar. Esse
+    motivo vem antes do da amostra pequena, porque esperar mais semanas não resolve o alarme baixo.
+  - O motivo da amostra pequena diz só o mínimo que faltou: as sessões, as conversas que chegam a 175 mil tokens, ou
+    os dois. Os tokens aparecem em milhares, como nas faixas de custo (175 mil tokens se escreve `175K`).
+  - Duas mensagens da transcrição sem o campo `id`, ou com ele vazio, contam como duas chamadas, não como uma só.
+  - A skill avisa antes de ler as conversas, o que leva uns 15 segundos com 200 conversas e minutos com muito mais.
+- **A revisão cega marca o arquivo como revisado pelo resultado da apuração, não por uma palavra do texto**
+  (`scripts/apurar-ronda.js`, `scripts/lib/veredito.js`). Antes, o arquivo contava como aprovado quando o motivo da
+  apuração trazia a palavra "aprovado"; agora a apuração devolve o campo `aprovado` (`true` ou `false`), e a saída do
+  `apurar-ronda.js` também o traz. O texto do motivo não muda. Com os textos de hoje, o motivo de uma revisão não
+  aprovada não traz essa palavra: nenhuma revisão já fechada precisa rodar de novo. A troca evita que um texto novo
+  no motivo mude a aprovação.
+- **O `/sworn:handoff` avisa que o portão de escopo pode negar a gravação** (`skills/handoff/SKILL.md`). Antes, a
+  gravação do handoff podia ser negada sem que a skill dissesse o que fazer. Agora ela manda o Claude, antes de
+  gravar, acrescentar `.sworn/handoff/**` (e o plano, se for marcar caixas nele) na seção "Dentro" do arquivo de
+  escopo (`.claude/sworn/escopo.md`, ou o da frente em `.claude/sworn/escopos/`), com o motivo. Se isso também for
+  negado, o handoff sai no chat, sem gravar, e nunca por outro caminho que contorne o portão.
+- **O número da sessão no plano não repete mais o de uma sessão anterior** (`skills/handoff/SKILL.md`). Antes, um chat
+  novo podia tomar como sua a nota `(sessao N, ...)` que outra sessão deixou no Objetivo e marcar as caixas com o
+  mesmo N, e o painel do plano contava uma sessão a menos. Agora só vale a nota que a própria conversa gravou. As
+  marcas já gravadas não mudam: só a contagem das sessões gastas pode ter saído menor.
+- **Toda skill do plugin diz o que não faz**, numa seção própria (`skills/effort-high/SKILL.md`,
+  `skills/effort-low/SKILL.md`, `skills/playbook/SKILL.md`): a mesma regra que o sworn cobra das skills do seu projeto.
+  Nas duas skills de esforço, a seção lembra que o esforço vale só até o fim do turno, e por isso o manual as chama a
+  cada turno.
+- **O `cd` solto também é visto depois de `builtin` e `command`** (`scripts/lib/shell.js`). `builtin cd pasta` e
+  `command cd pasta` mudam a pasta como `cd pasta`, e antes passavam sem aviso. `exec cd pasta` segue livre: ele falha
+  e a pasta não muda.
+- **O comando com heredoc sem a linha de fecho não é mais posto num subshell** (`scripts/lib/shell.js`). Vale para o
+  comando com `cd` solto, o único que o sworn põe num subshell. Antes, o `)` que fecha o subshell virava mais uma
+  linha do texto do heredoc, e o bash recusava o comando inteiro por erro de sintaxe, sem rodar nada. Agora esse
+  comando é negado com o aviso do `cd` solto, que diz como reescrever o `cd`; a linha de fecho do heredoc falta do
+  mesmo jeito e precisa entrar.
+- **O aviso da tabela de idioma do PowerShell sai todo sem acento** (`scripts/lib/shell.js`), também no caminho do
+  arquivo e na causa do erro, como os outros avisos do sworn.
+- **O arquivo cujo nome começa por dois pontos, como `..env`, conta como de dentro do projeto**
+  (`scripts/lib/caminho.js`). Antes ele era lido como fora do projeto, e o portão de escopo o deixava ser escrito sem
+  conferir o escopo da tarefa. Só o `..` inteiro, seguido de barra ou sozinho, sobe para fora.
+- **O portão de design confere a medida escrita em maiúsculas** (`scripts/lib/design.js`): `13PX` e `2REM` passavam
+  sem conferência, e agora são lidos como `13px` e `2rem`. O GUIA diz também o que o portão não lê (a cor em
+  `oklch()` ou `lab()`, com qualquer valor, e a cor dada por nome dentro de `color-mix()`) e que a medida de um
+  `@media` é conferida como as outras.
+- **O `/sworn:init` explica o `caminhosDeEstilo`** (`skills/init/SKILL.md`): o caminho de estilo que não é `.css`,
+  `.scss`, `.sass`, `.less` ou `.styl` (um `theme.ts`, CSS-in-JS) entra em `design.caminhosDeEstilo` no
+  `projeto.json`, com o sim do dono, e passa a contar como estilo para os portões e a revisão.
+- **A autorização do `/sworn:parallel` não trunca mais o `.claude/settings.local.json`**
+  (`scripts/autorizar-paralelo.js`): a regra é gravada num arquivo temporário e só depois troca o original. Antes,
+  uma escrita interrompida no meio (disco cheio, processo encerrado) deixava o arquivo pela metade, e as outras
+  permissões do dono se perdiam.
+- **O portão de catraca lê o número com expoente negativo e não lê um nome como infinito**
+  (`scripts/lib/catraca.js`): `1e-3` era lido como `1`, e o teto que subia de `1e-3` para `1e-2` passava sem aviso.
+  Um nome que começa por `infinity`, como `infinityScale`, era lido como um teto infinito, e a edição era negada sem
+  motivo.
+- **O escopo aceita caminho com crase no nome** (`scripts/lib/escopo.js`): na seção `## Dentro` do `escopo.md`, entre
+  crases duplas, como no Markdown (``` ``a`b.js`` ```), o caminho é lido inteiro; antes ele era cortado na primeira
+  crase. O aviso do arquivo sem escopo, que mostra a linha a copiar para essa seção, já a escreve nessa forma. O aviso
+  de que o caminho tem acento (copie o nome da sua chamada, não do aviso) passa a sair também quando o arquivo foi
+  declarado fora da tarefa, está na lista `intocaveis` ou é um arquivo de escopo com nome que não serve.
+- **O aviso de modelo divergente diz quais nomes perderam o acento** (`scripts/lib/apelidos.js`): antes a linha só
+  dizia que algum nome saía sem acento; agora cita cada um, como aparece no aviso, para você achar o nome real no
+  arquivo do agente.
+- **O conserto do modelo recusa o nome repetido** (`scripts/portao-apelido.js`): com o mesmo `name:` em dois arquivos
+  de `.claude/agents/`, o `--corrigir` consertava só o primeiro e não avisava. Agora ele não grava nada, lista os
+  arquivos e pede que o nome fique em um só.
+- **O portão de custo reconhece o `fork` escrito de outro jeito** (`scripts/lib/custo.js`): uma chamada a `Fork`, com
+  maiúscula, ou a `fork` com um espaço antes ou depois do nome passava sem ser julgada, mesmo num trabalho simples em
+  que o `fork` é barrado; agora ela é julgada como o `fork`.
+- **O portão de custo julga a chamada sem tipo de agente** (`scripts/portao-agente.js`): sem `subagent_type`, o Claude
+  Code e o Qwen Code despacham o `general-purpose`, e o portão deixava essa chamada passar sem olhar. Agora ela é
+  julgada como o `general-purpose`, na escada e na tabela dos degraus.
+- **A ordem de A e B na revisão cega varia de verdade** (`scripts/lib/cegar.js`): a versão que ia para o lado A
+  dependia de um detalhe pobre do sorteio, e revisões com sementes parecidas punham sempre a mesma versão em A. Agora
+  o sorteio usa a semente inteira, e a ordem muda de uma revisão para outra.
+- **Dois arquivos diferentes não dividem mais a mesma pasta de revisão** (`scripts/lib/cegar.js`,
+  `scripts/preparar-revisao.js`): `a/b.js` e `a__b.js` (ou `a b.js` e `a_b.js`) caíam na mesma pasta em
+  `.claude/sworn/revisao/`, e as rondas de um contavam para o outro. A `/` segue virando `__`; o `_` e os outros
+  caracteres fora de letras sem acento, números, `.` e `-` agora viram `~` e um código (`_` vira `~005f`, o espaço
+  `~0020`), e o caminho sem eles guarda o nome de antes. A revisão em andamento com o nome de antes segue na pasta
+  dela, e na próxima preparação essa pasta muda para o nome novo. Duas pastas não mudam: a que já tem rondas dos
+  dois arquivos e a que tem uma ronda que não se lê. Nelas tudo segue como na 0.80.0, e cada arquivo citado nas
+  rondas continua contando ali. Para separar os dois, tire essa pasta de `.claude/sworn/revisao/`: cada arquivo
+  recomeça na ronda 1, na pasta própria. Se a mudança falhar (a pasta aberta em outro programa), a preparação para
+  com erro e não grava nada: feche o programa e prepare de novo.
+
 ## 0.80.0 — o vigia e o radar da abertura dizem o que conferir e não leem o arquivo inteiro
 
 **Corrigido**
@@ -1919,17 +2289,18 @@ ajudam. Cada mudança ganhou antes um teste que falhava e passou pela revisão c
   `.claude/esquadro/radar/<AAAA-MM-DD>.md` com o que vale trazer, como entra, como fica melhor que o original,
   esforço, valor, licença e veredito (adotar, inspiração ou descartar). Licença fechada, ELv2 ou AGPL: só a ideia,
   reescrita. Na dúvida sobre o encaixe, faz no máximo 3 perguntas. Só lê e propõe: o que você escolher entra com teste
-  antes e revisão cega. Medido numa rodada real: cerca de US$ 1,20 e 6 minutos numa sessão Sonnet, com 4 projetos a
-  fundo.
+  antes e revisão cega. Medido numa rodada real: cerca de US$ 1,20 e 6 minutos numa sessão Sonnet, com 11 projetos
+  lidos por cima e 4 deles a fundo.
 - **O radar se oferece sozinho.** Quando você pede melhoria, sugestão ou função nova, o Claude pergunta, uma vez por
   sessão e com o custo, se quer a busca; nada roda sem o seu sim. Nunca no repositório do próprio plugin;
-  `"oferecerRadar": false` desliga.
+  `"oferecerRadar": false` em `.claude/esquadro/projeto.json` desliga.
 - **`referencia.js --tipo radar`** confere a ficha do radar em qualquer pasta, mais a tabela dos candidatos.
 - **Para quem mantém o plugin: o radar da semana.** Toda segunda, uma rotina na nuvem lê os projetos em alta da semana
   no GitHub e grava a ficha num repositório privado; uma tarefa agendada do Windows a traz para
   `~/.claude/esquadro/vigia/radar/`, e o começo de cada sessão mostra uma linha só, com quantos candidatos e quantos
-  para adotar. Usa a mesma chave da novidade da semana do vigia (o outro aviso semanal da abertura, que já existia):
-  `"vigia": true` em `.claude/esquadro/projeto.json` mostra as duas linhas, `false` tira as duas.
+  para adotar. Usa a mesma chave do vigia, o outro aviso semanal da abertura, que já existia: ele mostra a novidade da
+  semana do plugin, que outra tarefa agendada traz de um repositório privado. `"vigia": true` em
+  `.claude/esquadro/projeto.json` mostra as duas linhas, `false` tira as duas.
 
 **Melhora: cada peça na hora em que ajuda**
 
@@ -1943,7 +2314,7 @@ ajudam. Cada mudança ganhou antes um teste que falhava e passou pela revisão c
 - A abertura avisa ficha de referência guardada fora da lista `referencias`, ou com mais de 180 dias.
 - O `/esquadro:auditar` também mede as skills do plugin contra as do seu projeto e aponta as que se sobrepõem.
 
-## 0.12.0 — revisão do plugin inteiro: portões que deixavam passar, revisão cega que aprovava sem voto, init que liga a atualização
+## 0.12.0 — revisão do plugin inteiro: 40 consertos
 
 Uma revisão de todo o plugin, em 12 áreas, deu 40 consertos, feitos em 6 lotes; dois deles são testes que faltavam.
 Abaixo eles vêm agrupados pelo que você nota, então um item pode juntar vários. Cada conserto ganhou antes um teste que
@@ -1958,11 +2329,15 @@ falhava e passou pela revisão cega. Os defeitos menores que sobraram ficaram re
 **Corrige: portão de comando destrutivo**
 
 - **Apagar com a opção fora do lugar de costume passava.** `rm dist -rf`, `rm --verbose -rf x`, `rm x -Rf` e
-  `sudo rm --verbose -rf x` não eram barrados. Agora a opção vale em qualquer posição.
+  `sudo rm --verbose -rf x` não eram barrados; cada um apaga a pasta sem perguntar. Agora a opção vale em qualquer
+  posição.
 - **Opção longa abreviada passava.** O git aceita `reset --har`, `checkout --forc` e `push --del`, mas o portão só
-  conhecia a forma inteira. Agora conhece as abreviações.
-- **Descartar a árvore inteira por outro nome passava.** `git checkout :/`, `./`, `*` e `git restore ./` agora barram
-  como `checkout .`; `dd` com `of=` antes de `if=` e `git branch -d -f` (ou `-df`, `--delete --force`) também.
+  conhecia a forma inteira. Os dois primeiros jogam fora o que você mudou e não salvou num commit; o terceiro apaga um
+  ramo no servidor. Agora o portão conhece as abreviações.
+- **Descartar todas as mudanças por outro nome passava.** `git checkout :/`, `./`, `*` e `git restore ./` desfazem o
+  que você mudou em todos os arquivos, como `checkout .`, e agora barram igual. Também barram o `dd` com `of=` antes de
+  `if=`, que grava por cima de um disco ou arquivo, e o `git branch -d -f` (ou `-df`, `--delete --force`), que apaga
+  um ramo mesmo com commits que não estão em nenhum outro.
 - **Um teste publicado levava um ID de sessão real.** Trocado por um inventado, e o `sanitar` passou a acusar ID de
   sessão que exista nesta máquina.
 
@@ -1976,17 +2351,20 @@ falhava e passou pela revisão cega. Os defeitos menores que sobraram ficaram re
   entre crases.
 - **Padrão com barra no fim ou com `{js,ts}` no `projeto.json` não casava nada, e o aviso se calava.** Agora o aviso diz
   a forma certa.
-- **Subagente `fork` passava pelo portão de custo como o mais barato.** Agora conta como o topo da escada.
+- **Subagente `fork` (uma cópia da própria conversa, no mesmo modelo) passava pelo portão de custo como o mais
+  barato.** Agora conta como o topo da escada.
 - **O `NotebookEdit` passava sem o portão de escopo.** Agora passa por ele, como o Write e o Edit.
 - **Uma falha ao gravar o estado derrubava o portão de agente.** Agora ele segue e decide.
 
 **Corrige: revisão cega**
 
 - **Dois defeitos diferentes na mesma linha contavam como um só.** Agora cada descrição conta.
-- **Uma ronda com uma lente só, ou com uma lente inventada, aprovava.** Agora a ronda 1 exige as lentes da faixa, e a
-  lente que achou P0 ou P1 tem de votar de novo na ronda seguinte.
-- **Severidade escrita "p1" ou linha escrita "L42" sumia da conta.** Agora se lê. Quando a aprovação descarta algum
-  veredito fora do formato, ela diz quantos.
+- **Uma ronda (uma rodada da revisão cega) com um inspetor só, ou com um ponto de vista inventado, aprovava.** Cada
+  inspetor lê com um ponto de vista (a lente: correção, segurança, texto...), e o tamanho da mudança (a faixa) diz
+  quais lentes entram. Agora a ronda 1 exige todas as lentes da faixa, e a lente que achou um defeito grave (P0 ou
+  P1) tem de ler de novo na ronda seguinte.
+- **Severidade escrita "p1" ou linha escrita "L42" sumia da conta.** Agora se lê. Quando a aprovação descarta alguma
+  resposta de inspetor fora do formato, ela diz quantas.
 - **A skill prometia subir de faixa, e o `preparar-revisao.js` não deixava.** Agora aceita `--completa`.
 - **Justificar um arquivo "fora" sem citar decisão passava.** Agora a justificativa tem de citar a decisão.
 
@@ -2424,7 +2802,9 @@ agentes. Sem a chave `referencias`, a revisão custa o mesmo de antes.
 
 **Corrigido**
 
-- **Plano da sessão sem frente.** A sessão que não está ligada a nenhuma frente lê agora o Objetivo do
+- **Plano da sessão sem frente.** Uma frente é uma linha de trabalho com o seu arquivo de escopo em
+  `.claude/esquadro/escopos/`; o Objetivo é o parágrafo desse arquivo que diz o que a frente quer e qual plano ela
+  segue. A sessão que não está ligada a nenhuma frente lê agora o Objetivo do
   `.claude/esquadro/escopo.md`; antes, ela via o plano de outra frente (a única com plano anotado), sem aviso. Quando
   o `escopo.md` não anota plano e uma só frente anota, o painel mostra o plano dessa frente, diz que a sessão não está
   ligada a ela e qual arquivo editar para ligar; com várias, lista as frentes, como antes.
@@ -2432,25 +2812,29 @@ agentes. Sem a chave `referencias`, a revisão custa o mesmo de antes.
   aspas, terminado em `.md`. Com as duas formas no Objetivo, vale a que aponta para um arquivo que existe; se os
   dois existem, vale o `Plano:`; se nenhum existe, também vale o `Plano:`, e o painel diz que não consegue lê-lo.
 - **Sessões gastas do plano, não da frente.** As sessões gastas e a estimativa saem agora das marcas de sessão no
-  próprio plano. A sessão 12 anota `(s12: feito)` na caixa `- [x]` do plano que ela marca; caixa refeita por duas
+  próprio plano (a marca diz qual sessão fez o passo). A sessão 12 anota `(s12: feito)` na caixa `- [x]` do plano que ela marca; caixa refeita por duas
   sessões leva as duas, `(s12, s13: refeito)`. Cada número conta uma vez, também no plano aberto por `--abrir`. Antes
   contavam as marcas da frente inteira (41 para um plano de 2 sessões). Plano sem marca: o painel diz como anotar.
 - **Plano anotado fora do projeto.** O plano anotado no Objetivo só é lido dentro da pasta do projeto; fora dela, o
   painel diz que não lê e dá as duas saídas: anotar um caminho dentro do projeto ou abrir o plano com `--abrir`. Se
-  o plano é lido mas a conta falha, o painel diz isso, e não mais "nao consegui ler", e pede para registrar a
-  mensagem como defeito do esquadro.
+  o plano é lido mas a conta falha, o painel diz isso, e não mais "nao consegui ler", e diz como avisar o defeito:
+  copie a mensagem e cole no chat com o pedido "registrar defeito do esquadro".
 
 **Novo**
 
-- **Etapas em tabela.** O painel lê o plano que lista as etapas numa tabela: 1ª coluna `Etapa`, `Fase`, `Item`,
-  `Tarefa` ou `Onda`, uma etapa por linha, começando pelo id (como `P0` ou `2b-0`). Para marcar uma etapa como feita,
-  ponha `[FEITO]` na 1ª célula dela. Sem nenhum `[FEITO]` na tabela, o painel segue a última `ETAPA <id>` do Objetivo
-  do escopo cujo id a tabela tem: as linhas acima dela contam como feitas, e ela como em curso; uma linha "estado
-  pelo escopo:" diz isso e como marcar. Sem `ETAPA` com id da tabela, as etapas ficam sem estado (`[?]`). Com um
-  `[FEITO]` que seja, só as marcas valem. Vale a 1ª dessas tabelas; linha sem id fica fora da conta, e o painel avisa
-  quais e pede o id; plano com caixas de passo segue nas caixas. `\|` dentro da célula é barra, não divisa de coluna,
-  e o plano gravado com BOM (a marca invisível que editores do Windows põem no começo do arquivo) lê igual. Antes, o
-  plano do APP (etapas P0-P7 numa tabela) dava "o painel nao consegue contar as tarefas".
+- **Etapas em tabela.** Antes, o plano do APP (etapas P0-P7 numa tabela) dava "o painel nao consegue contar as
+  tarefas". Agora o painel lê o plano que lista as etapas numa tabela.
+  - **O que o painel lê.** A 1ª coluna se chama `Etapa`, `Fase`, `Item`, `Tarefa` ou `Onda`, com uma etapa por linha,
+    começando pelo id (como `P0` ou `2b-0`). Vale a 1ª dessas tabelas. A linha sem id fica fora da conta, e o painel
+    avisa quais são e pede o id. O plano com caixas de passo segue nas caixas. `\|` dentro da célula é barra, não
+    divisa de coluna, e o plano gravado com BOM (a marca invisível que editores do Windows põem no começo do arquivo)
+    lê igual.
+  - **Como marcar.** Para marcar uma etapa como feita, ponha `[FEITO]` na 1ª célula dela. Só conta o `[FEITO]` na 1ª
+    célula de uma linha com id, na tabela que vale: em outra célula, em linha sem id ou em outra tabela, ele não marca
+    nada. Com um `[FEITO]` que seja, só as marcas valem.
+  - **Sem marca nenhuma.** Sem `[FEITO]` na tabela, o painel segue a última `ETAPA <id>` do Objetivo do escopo cujo id
+    a tabela tem: as linhas acima dela contam como feitas, e ela como em curso; uma linha "estado pelo escopo:" diz
+    isso e como marcar. Sem `ETAPA` com id da tabela, as etapas ficam sem estado (`[?]`).
 
 **Mudado**
 

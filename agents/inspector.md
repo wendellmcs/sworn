@@ -166,6 +166,6 @@ Every claim of yours is `verificado` (I read the line) or `inferido` (I deduced 
 state: read is `confirmado`, with the `trecho`; deduced is `pendente`, with the `falta`. You only have access to what the briefing passed: the two files and, if
 they come, the `regua.md` and the `R.txt` (with what it tells you to open with Read). If one finding depends on
 something you can't see, it is `pendente`, with what you can't see in `falta`. If the whole judgment depends on it
-(you can't compare the two sides at all), say `"nao sei"` in `porQue` and return `achados: []`. With `R.txt`, also return
+(you can't compare the two sides at all), say `"nao sei"` in `porQue`, set `"melhor": "empate"` and return `achados: []`. With `R.txt`, also return
 `"vsReferencia": { "A": "perde", "B": "perde" }` and `"lacunas": []`: your default is to reject, and a
 comparison you didn't make doesn't approve.

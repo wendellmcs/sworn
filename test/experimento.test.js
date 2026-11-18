@@ -108,7 +108,9 @@ test('experimento: NADA e a UNICA coluna que reprova o plugin - FORA e cobertura
 test('L3 A3-20: FORA sem citar a decisao INVALIDA; com D<numero> ou "decisao <numero>" vale', () => {
   // revisao L3 R2 (correcao, P1): prosa com numero nao e citacao - "decis" solto, d minusculo separado, nome de arquivo
   for (const ev of ['porque sim', 'ja foi decidido', 'D', 'AD82', 'a decisao de 5 minutos', 'decisivo 3', 'tela d 5',
-    'veja d3.js', 'decidido em 2026-10-22', 'nr. 82']) {
+    'veja d3.js', 'decidido em 2026-10-22', 'nr. 82',
+    // L3-s105-1/3: D maiusculo so com espaco e um digito e prosa; a palavra decisao com numero que vira nome tambem
+    'tela D 5', 'decisao 3.js', 'decisao 82abc']) {
     const r = resultado();
     r.linhas[2] = { id: 'guarda-1', mecanismo: 'FORA', evidencia: ev };
     const c = ob.conferirResultado(LINHAS, r);
@@ -119,7 +121,9 @@ test('L3 A3-20: FORA sem citar a decisao INVALIDA; com D<numero> ou "decisao <nu
   for (const ev of ['D82: contrato de negocio fica no AGENTS.md', 'decisão 8 do dono', 'ver d82', 'decisões 82 e 83',
     'D 82', 'D-82', 'decisoes 82', 'decisão nº 82', 'decisão #82', 'decisão 82',
     // R2: numero por extenso, ponto e cerquilha depois do D
-    'decisao numero 82', 'decisão número 82', 'decisao nr. 82', 'D.82', 'D#82', '(D82)', 'pela D82.']) {
+    'decisao numero 82', 'decisão número 82', 'decisao nr. 82', 'D.82', 'D#82', '(D82)', 'pela D82.',
+    // L3-s105-2: separador forte com espaco dos dois lados
+    'D - 82', 'D #82', 'D5', 'pela decisao 82.']) {
     const r = resultado();
     r.linhas[2] = { id: 'guarda-1', mecanismo: 'fora', evidencia: ev };
     assert.strictEqual(ob.conferirResultado(LINHAS, r).veredito, 'BASTA', ev);

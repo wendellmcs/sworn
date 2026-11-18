@@ -42,18 +42,18 @@ function suiteAntesDoCommit(e, projeto, raiz) {
  * o portao de commit e o cartao do push juntos); o push com a marca "# sworn: push-visto" passa. O que o git nao
  * responde sai no cartao como nao conferido.
  */
-function cartaoDoPush(comando, cwd, raiz, projeto) {
+function cartaoDoPush(comando, cwd, raiz, projeto, ferramenta) {
   if (!projeto || projeto.portaoCommit === false) return null;
-  if (push.visto(comando)) return null;
-  const pasta = push.pastaDoPush(comando);
+  if (push.visto(comando, ferramenta)) return null;
+  const pasta = push.pastaDoPush(comando, ferramenta);
   let r;
   try {
     let classes = null;
     try { classes = require('./lib/sanitacao.js').classes(raiz); } catch (err) { /* segue sem */ } // fail-open: sem as classes, o cartao diz que a sanitacao nao foi conferida
-    r = push.levantar(pasta ? path.resolve(cwd, pasta) : cwd, comando, classes);
+    r = push.levantar(pasta ? path.resolve(cwd, pasta) : cwd, comando, classes, ferramenta);
   } catch (err) { // fail-closed: o levantamento que lanca ainda nega, com o cartao que diz o erro
     let avisos = [];
-    try { avisos = push.ler(comando).avisos; } catch (e2) { /* sem avisos */ } // fail-closed: o cartao sai igual, sem a lista de avisos
+    try { avisos = push.ler(comando, ferramenta).avisos; } catch (e2) { /* sem avisos */ } // fail-closed: o cartao sai igual, sem a lista de avisos
     r = { remoto: null, url: null, ramo: null, avisos: avisos, commits: null,
       porQue: 'o levantamento falhou: ' + String(err && err.message || err).slice(0, 200) };
   }
@@ -66,8 +66,10 @@ function cartaoDoPush(comando, cwd, raiz, projeto) {
 io.blindar(function () {
   io.lerEntrada(function (e) {
     const comando = (e.tool_input || {}).command;
-    const ehCommit = commit.ehCommit(comando);
-    const ehPush = push.ehPush(comando);
+    // A2-10 (H1): a ferramenta (Bash ou PowerShell) da o idioma em que o comando se le
+    const ferramenta = e.tool_name;
+    const ehCommit = commit.ehCommit(comando, ferramenta);
+    const ehPush = push.ehPush(comando, ferramenta);
     if (!ehCommit && !ehPush) return io.permitir();
     const cwd = e.cwd || process.cwd();
     const raiz = config.raizDoProjeto(cwd);
@@ -76,11 +78,42 @@ io.blindar(function () {
       const motivo = portaoDoCommit(e, comando, cwd, raiz, projeto);
       if (motivo) return io.negarFerramenta(motivo);
     }
-    const cartao = ehPush ? cartaoDoPush(comando, cwd, raiz, projeto) : null;
+    const cartao = ehPush ? cartaoDoPush(comando, cwd, raiz, projeto, ferramenta) : null;
     if (cartao) return io.negarFerramenta(cartao);
     io.permitir();
   });
 });
+
+/**
+ * D870 (A2-11): o arquivo editado pelo shell (sed -i, redirecao, git apply) nao entra em arquivosTocados, que so ve o
+ * file_path das ferramentas. Os tocados do commit somam o que o git diz mudado agora, menos o que ja estava mudado na
+ * foto da abertura (trabalho de outra frente). A foto e o agora vem do mesmo git status, relativos a raiz (-z, sem
+ * aspas), e se comparam com a caixa: no disco que distingue caixa, `Readme.md` da foto nao esconde o `README.md` mexido
+ * agora. Contra os tocados (o file_path, que no Windows pode vir noutra caixa) vale a chave do commit.js: sem caixa
+ * so no Windows. Sem a foto
+ * ou sem resposta do git, so a lista, como antes (fail-open: sem a foto nao se separa o trabalho desta sessao do de
+ * outra frente).
+ */
+function tocadosDoCommit(s, raiz) {
+  const lista = Array.isArray(s.arquivosTocados) ? s.arquivosTocados.slice() : [];
+  if (!Array.isArray(s.gitAbertura)) return lista;
+  let agora = null;
+  try { agora = require('./lib/git.js').modificados(raiz); } catch (err) { agora = null; } // fail-open: so a lista
+  if (!Array.isArray(agora)) return lista;
+  function exata(p) { return path.resolve(raiz, String(p)); }
+  // a regra de caixa do commit.js: sem caixa so no Windows, onde o disco nao distingue; no Linux, `Readme.md` tocado
+  // nao esconde o `README.md` mexido pelo shell, que e outro arquivo
+  function chave(p) { return commit.chave(exata(p)); }
+  const vistos = new Set(lista.map(chave));
+  const daAbertura = new Set(s.gitAbertura.map(exata));
+  for (const rel of agora) {
+    const k = chave(rel);
+    if (vistos.has(k) || daAbertura.has(exata(rel))) continue;
+    vistos.add(k);
+    lista.push(rel);
+  }
+  return lista;
+}
 
 /** O portao do commit: o motivo da negacao, ou null quando o commit passa. Grava no estado da sessao: a recusa da
  *  ordem de revisar (marca sem-revisao), o contador commit_sem_revisao e a ordem dada; chamar duas vezes conta duas. */
@@ -90,16 +123,16 @@ function portaoDoCommit(e, comando, cwd, raiz, projeto) {
     const falta = suiteAntesDoCommit(e, projeto, raiz);
     if (falta) return falta;
   }
-  if (commit.semRevisao(comando)) {
+  if (commit.semRevisao(comando, e.tool_name)) {
     // Plano 091 T6: a marca depois de um commit negado e a recusa do dono (so conta com a ordem pendente).
     try { estado.alterar(e.session_id, function (s) { s.ordensPendentes = ordens.marcarRecusada(s, 'revisar'); return s; }); } catch (err) { /* passa igual */ }
     return null;
   }
   if (!projeto || projeto.portaoCommit === false) return null;
   const s = estado.ler(e.session_id);
-  const pasta = commit.pastaDoComando(comando);
+  const pasta = commit.pastaDoComando(comando, e.tool_name);
   const design = require('./lib/design.js');
-  const lista = commit.pendentes(s.arquivosTocados, s.revisadosAprovados, raiz,
+  const lista = commit.pendentes(tocadosDoCommit(s, raiz), s.revisadosAprovados, raiz,
     commit.topo(pasta ? path.resolve(cwd, pasta) : cwd),
     function (rel) { return design.ehArquivoDeEstilo(rel, projeto); },
     require('./lib/atalhos.js').marcas(projeto), s.revisadosNoTeto);

@@ -126,6 +126,12 @@ function textoDosBlocos(conteudo) {
 const LEITORES = {
   // Claude Code: pula a linha de subagente (isSidechain), como sempre.
   claude: function (o, i, r) {
+    // A5-04: a fronteira da compactacao (/compact ou a automatica) zera a medida: o uso de antes dela e o contexto que
+    // saiu, e o alarme de saude disparava falso ate a proxima chamada. Sem chamada depois dela, a medida e null.
+    if (o.isSidechain !== true && o.type === 'system' && o.subtype === 'compact_boundary') {
+      r.ultimaChamada = null;
+      return;
+    }
     if (o.isSidechain === true || !o.message) return;
     const u = o.message.usage;
     if (u) {

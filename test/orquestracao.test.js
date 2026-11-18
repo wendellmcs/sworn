@@ -89,6 +89,18 @@ test('orquestracao: toda skill diz quando entra (description com "Use")', () => 
   }
 });
 
+// R-T24-04: o criterio 6 da rubrica (scripts/lib/rubrica.js) vale para as skills do proprio plugin.
+test('orquestracao: toda skill do plugin tem a secao do que ela nao faz (criterio 6 da rubrica)', () => {
+  const rubrica = require(path.join(RAIZ, 'scripts', 'lib', 'rubrica.js'));
+  const sem = [];
+  for (const n of fs.readdirSync(path.join(RAIZ, 'skills'))) {
+    const f = path.join('skills', n, 'SKILL.md');
+    if (!fs.existsSync(path.join(RAIZ, f))) continue;
+    if (rubrica.conferir(ler(f)).erros.some(function (e) { return String(e).indexOf('criterio 6') === 0; })) sem.push(n);
+  }
+  assert.deepStrictEqual(sem, [], 'skill sem "## What this skill does NOT do"');
+});
+
 test('orquestracao: todo agente e chamado por outra peca do plugin', () => {
   for (const a of fs.readdirSync(path.join(RAIZ, 'agents'))) {
     const nome = a.replace(/\.md$/, '');
@@ -157,6 +169,24 @@ test('ligacao L11: o handoff leva os estudos em andamento (radar e referencia)',
 
 // D788: .claude/ e caminho protegido do Claude Code (a escrita do modelo la pede permissao no modo padrao e e negada
 // sem tela, registro da rodada cc3 da D786): o handoff do modelo mora fora dela, onde nada pergunta.
+// A8-11: o Write do handoff passa pelo portao de escopo; a skill diz o que liberar e o que fazer se negar.
+test('A8-11: o /sworn:handoff avisa da trava 4 antes do Write e nunca contorna o portao', () => {
+  // O texto e prosa quebrada em linhas: junta os espacos antes de procurar, para a quebra nao reprovar.
+  const s = ler('skills/handoff/SKILL.md').replace(/\s+/g, ' ');
+  const i = s.indexOf('scope gate (lock 4)');
+  assert.ok(i > 0 && i < s.indexOf('handoff-curto.js" --conferir'), 'o aviso vem antes da conferencia');
+  assert.ok(s.includes('`.sworn/handoff/**`'), 'o que pôr no escopo');
+  assert.ok(/write it through another path that works around the gate/i.test(s), 'nunca contornar');
+  assert.ok(s.includes('skip the check below and the plan marks'), 'negado, nao confere nem marca');
+});
+
+// s45-39: so a nota que esta conversa gravou da o N; a que ja estava no Objetivo e de outra sessao.
+test('s45-39: o N da sessao so vem da nota que esta conversa gravou', () => {
+  const s = ler('skills/handoff/SKILL.md').replace(/\s+/g, ' ');
+  assert.ok(s.includes('Only a note this conversation wrote counts'), 'qual nota vale');
+  assert.ok(s.includes('a note that was already in the Objetivo when the conversation opened belongs to another session'));
+});
+
 test('D788: o /sworn:handoff grava em .sworn/handoff/, fora da protecao de .claude/', () => {
   const s = ler('skills/handoff/SKILL.md');
   assert.ok(s.includes('`.sworn/handoff/AAAA-MM-DD-<slug>.md`'), 'o destino do handoff');

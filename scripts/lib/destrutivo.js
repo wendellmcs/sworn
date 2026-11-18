@@ -193,6 +193,15 @@ function lerComando(cmd, fundo, opts) {
   // `&`, quebra) ou um novo `$(` desliga a marca. So a leitura `dolarSepara`
   // liga a marca; nas demais leituras nada muda.
   let semCmd0 = false;
+  // D871: marca o segmento que vem depois de um `|` simples (o `||` e "ou", nao cano): o comando dele recebe pela
+  // entrada o que o anterior lista. Liga no `|` e desliga no separador seguinte. O ForEach-Object (`%`) do cano abre
+  // blocos que rodam para cada item: TODO segmento dentro deles leva a marca (`gci | % { echo $_; rm $_ }`), e todo
+  // bloco do mesmo `%` conta, ate o separador que o encerra (`% -Begin { } -Process { rm $_ }`, `% { } { rm $_ }`;
+  // marcar o -Begin tambem e barrar a mais, nunca a menos). `noForEach`: o proximo `{` neste nivel e bloco desses.
+  // `blocos` guarda, por chave aberta, se ela marca e o noForEach de fora, que volta no `}`.
+  let doCano = false;
+  let noForEach = false;
+  const blocos = [];
   let i = 0;
   const n = cmd.length;
 
@@ -207,7 +216,11 @@ function lerComando(cmd, fundo, opts) {
 
   function fecharSegmento() {
     fecharToken();
-    if (texto.trim() !== '' || tokens.length) segmentos.push(montar(texto, tokens, citados, nivel, semCmd0));
+    if (texto.trim() !== '' || tokens.length) {
+      segmentos.push(montar(texto, tokens, citados, nivel, semCmd0,
+        doCano || blocos.some(function (b) { return b.marca; })));
+      if (doCano && tokens.length > 0 && /^(?:%|foreach(?:-object)?)$/i.test(tokens[0])) noForEach = true;
+    }
     texto = '';
     tokens = [];
     citados = [];
@@ -357,8 +370,15 @@ function lerComando(cmd, fundo, opts) {
     }
 
     if (SEPARA_SEGMENTO.indexOf(c) !== -1) {
+      const cano = c === '|' && cmd[i + 1] !== '|' && cmd[i - 1] !== '|';
       fecharSegmento();
       semCmd0 = false; // separador de verdade: o que segue volta a ser comando
+      // o `% Name; rm a.txt` sem bloco nao leva a marca ao `rm`; o `&` do `|&` (saida e erro no cano) e do mesmo cano
+      const dePipe = c === '&' && cmd[i - 1] === '|';
+      if (c === '{') { blocos.push({ marca: noForEach, fora: noForEach }); noForEach = false; }
+      else if (c === '}') { const b = blocos.pop(); noForEach = b ? b.fora : false; }
+      else if (!dePipe) noForEach = false;
+      if (!dePipe) doCano = cano;
       i++;
       continue;
     }
@@ -559,7 +579,7 @@ function lerTudo(cmd) {
   return segmentos;
 }
 
-function montar(texto, tokens, citados, nivel, semCmd0) {
+function montar(texto, tokens, citados, nivel, semCmd0, doCano) {
   const posCmd = new Set();
   const lista = [];
   const cit = [];
@@ -623,7 +643,8 @@ function montar(texto, tokens, citados, nivel, semCmd0) {
   const semAspas = lista.map(function (t) {
     return /\s/.test(t) ? '"' + t + '"' : t;
   }).join(' ');
-  return { texto: texto.trim(), semAspas: semAspas, tokens: lista, citados: cit, posCmd: posCmd, posAmpla: posAmpla, posCam: posCam, nivel: nivel };
+  return { texto: texto.trim(), semAspas: semAspas, tokens: lista, citados: cit, posCmd: posCmd, posAmpla: posAmpla, posCam: posCam, nivel: nivel,
+    doCano: doCano };
 }
 
 // D80/F1: o token esta na lista de wrappers? Compara tambem sem o `^` e pelo
@@ -825,10 +846,29 @@ function apelidoPS(seg) {
 // no molde do `apelidoPS`: `rm` em posicao de comando e outro token que seja opcao recursiva ou forcada. Como na regra
 // de texto: o `^` no nome nao conta (limite declarado da D54) e sem alvo e prosa (`grep -rn "rm -rf" .`, FIX22/F3).
 const RM_OPCAO = new RegExp('^(?:-(?!-)[a-zA-Z]*[rRf][a-zA-Z]*|--' + abrev('recursive') + '|--' + abrev('force') + ')$');
+// L1-s102-11: o redirecionamento nao e alvo (`rm -f >/dev/null` nao apaga nada). O token so com o operador
+// (`>`, `2>`, `>>`) leva o seguinte junto, que e o arquivo da saida, nao um alvo do rm. Sem o seguinte, o operador
+// fecha o segmento porque o leitor partiu a linha no `&` do `2>&1`: o resto da linha pode ter alvo, e conta como tendo.
+const REDIRECIONA = /^[0-9&]*[<>]/;
+const SO_OPERADOR = /^[0-9&]*[<>]+&?$/;
 function rmForcado(seg) {
   const a = achaCmd(seg, /^rm(?:\.exe)?$/i);
   if (a === null || seg.tokens[a.k].indexOf('^') !== -1 || !corrobora(seg, RM_OPCAO, a)) return false;
-  for (let k = a.k + 1; k < seg.tokens.length; k++) if (seg.tokens[k][0] !== '-') return true;
+  // a opcao so conta antes do `--`: `rm -- -rf` apaga o arquivo chamado `-rf`, sem ser recursivo nem forcado
+  const traco2 = seg.tokens.indexOf('--', a.k + 1);
+  const opcoes = seg.tokens.slice(a.k + 1, traco2 === -1 ? seg.tokens.length : traco2);
+  if (!opcoes.some(function (t) { return RM_OPCAO.test(t); })) return false;
+  let fimDasOpcoes = false;
+  for (let k = a.k + 1; k < seg.tokens.length; k++) {
+    const t = seg.tokens[k];
+    if (REDIRECIONA.test(t)) {
+      if (SO_OPERADOR.test(t)) { if (k === seg.tokens.length - 1) return true; k++; }
+      continue;
+    }
+    // depois do `--`, o `-dist` e arquivo; o `-` sozinho e arquivo sempre
+    if (fimDasOpcoes || t[0] !== '-' || t === '-') return true;
+    if (t === '--') fimDasOpcoes = true;
+  }
   return false;
 }
 
@@ -838,6 +878,96 @@ function rmForcado(seg) {
 function formaCmd(seg) {
   const a = achaCmd(seg, APELIDO_CMD);
   return a !== null && corrobora(seg, /^\/s(?![a-z])/i, a);
+}
+
+// D871: o `del /f` (ou `erase /f`) do cmd forca o apagar do arquivo somente leitura, que sem o /f fica, como o
+// `rm -f`. Lido como o `/s` acima: o apelido em posicao de comando e outro token que seja a chave `/f` (sozinha ou
+// junta, `/f/q`).
+function delForcado(seg) {
+  const a = achaCmd(seg, /^(?:del|erase)(?:\.exe)?$/i);
+  return a !== null && corrobora(seg, /^\/f(?![a-z])/i, a);
+}
+
+// D871: o apagar no fim do cano (`gci -Recurse | Remove-Item`, `ls | xargs rm`, `gci | % { rm $_ }`) apaga cada item
+// que o comando anterior lista, sem nome de arquivo para conferir. Leitura estrita do comando, e nao a folgada do
+// segmentoApaga (que conta todo argumento do portador e barrava `ls | xargs -r grep -n rm`): o token 0 e, quando ele e
+// portador (xargs, sudo), o 1o token depois das opcoes dele, do valor de cada opcao que leva valor (`-n 1`, `-u root`),
+// da atribuicao do env (`X=1`) e do numero ou duracao (`timeout 5s`, `nice 10`).
+// As opcoes que levam valor separado, por portador: a mesma letra muda de sentido (o -E do xargs leva valor, o do sudo
+// nao). Opcao desconhecida com valor separado faz o valor parecer o comando, e a leitura para sem barrar.
+const VALOR_DO_PORTADOR = {
+  xargs: /^(?:-[nILPsadE]|--(?:max-args|max-lines|max-procs|max-chars|arg-file|delimiter|eof|process-slot-var))$/,
+  sudo: /^(?:-[ugCDhprtTU]|--(?:user|group|close-from|chdir|host|prompt|role|type|command-timeout|other-user))$/,
+  doas: /^-[uC]$/,
+  env: /^(?:-[uC]|--(?:unset|chdir))$/,
+  timeout: /^(?:-[sk]|--(?:signal|kill-after))$/,
+  nice: /^(?:-n|--adjustment)$/,
+  ionice: /^-[cnpP]$/,
+  stdbuf: /^-[ioe]$/
+};
+const PULA_NO_PORTADOR = /^(?:[A-Za-z_][A-Za-z0-9_]*=.*|\d+(?:\.\d+)?[smhd]?)$/;
+// O portador com argumento posicional antes do comando: o arquivo de trava do flock, a mascara do taskset, a prioridade
+// do chrt, a arquitetura do setarch, a raiz do chroot (`ls | flock /tmp/l xargs rm`).
+const POSICIONAIS_DO_PORTADOR = { flock: 1, taskset: 1, chrt: 1, setarch: 1, chroot: 1 };
+// Quem passa o que le da entrada como ARGUMENTO do comando: so com ele o nome escrito nao basta (`ls | xargs rm a.txt`
+// apaga a.txt e cada item listado).
+const ENTRADA_VIRA_ARGUMENTO = new Set(['xargs', 'parallel']);
+// O nome escrito por inteiro, sem variavel, curinga nem substituicao (letra de qualquer lingua e espaco do nome entre
+// aspas valem): `echo y | rm -i a.txt` apaga a.txt, e nao o que o echo lista (o rm so le a entrada para a pergunta do
+// -i); `gci | % { rm $_ }` tem a variavel e apaga cada item.
+const NOME_ESCRITO = /^[\p{L}\p{M}\p{N} _.\/\\:@+,=-]+$/u;
+// O parametro do PowerShell que leva valor separado (-ErrorAction SilentlyContinue, -Exclude keep.txt, -Filter *.log):
+// o valor nao e nome, e o Remove-Item sem -Path segue apagando o que vem do cano. Os que nao levam valor sao as chaves
+// (-Recurse, -Force, -WhatIf, -Confirm, -Verbose, -Debug, por inteiro ou pelo prefixo: `-Verb`) e os de caminho (-Path,
+// -LiteralPath), cujo valor e o nome. A flag curta junta do POSIX (`rm -iv a.txt` depois do cano) cai como parametro
+// com valor e barra: `-iv` tambem e o apelido do -InformationVariable, e na duvida o cano barra (fail-closed).
+const PS_COM_VALOR = /^-[a-z][a-z]+$/i;
+const PS_SEM_VALOR = /^-(?:r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?|fo(?:r(?:c(?:e)?)?)?|wh(?:a(?:t(?:i(?:f)?)?)?)?|wi|co(?:n(?:f(?:i(?:r(?:m)?)?)?)?)?|cf|ve(?:r(?:b(?:o(?:s(?:e)?)?)?)?)?|vb|de(?:b(?:u(?:g)?)?)?|db)$/i;
+const PS_CAMINHO = /^-(?:pa(?:t(?:h)?)?|l(?:i(?:t(?:e(?:r(?:a(?:l(?:p(?:a(?:t(?:h)?)?)?)?)?)?)?)?)?)?|lp|pspath)$/i;
+function soNomesEscritos(args) {
+  let algum = false;
+  for (let j = 0; j < args.length; j++) {
+    const a = args[j];
+    if (/^-/.test(a)) {
+      if (PS_COM_VALOR.test(a) && !PS_SEM_VALOR.test(a) && !PS_CAMINHO.test(a)) j++;
+      continue;
+    }
+    if (!NOME_ESCRITO.test(a)) return false;
+    algum = true;
+  }
+  return algum;
+}
+function apagaNoCano(seg) {
+  if (seg.doCano !== true) return false;
+  const tk = seg.tokens;
+  const apaga = function (t) { return [t, nu(t), nomeCmd(t, true), nomeCmd(nu(t), true)].some(function (x) { return VERBO_DE_APAGAR.test(x); }); };
+  let viaArgumento = false;
+  let k = 0;
+  while (k < tk.length) {
+    // o nome entre aspas tambem roda (`ls | "rm"`): o citado nao sai da leitura
+    if (apaga(tk[k])) return viaArgumento || !soNomesEscritos(tk.slice(k + 1));
+    // `ls | xargs sh -c 'rm "$@"' _`: o texto do -c roda com cada item; sem o xargs, o -c nao recebe os itens
+    if (viaArgumento && NOME_DE_SHELL.has(nomeBase(tk[k]))) {
+      let p = k + 1;
+      while (p < tk.length && /^-/.test(tk[p]) && !FLAG_DO_C.test(tk[p])) p++;
+      return p < tk.length - 1 && FLAG_DO_C.test(tk[p]) && temApagar(tk[p + 1], 1);
+    }
+    if (!portaAqui(tk[k])) return false;
+    const portador = nomeBase(tk[k]);
+    if (ENTRADA_VIRA_ARGUMENTO.has(portador)) viaArgumento = true;
+    const valor = VALOR_DO_PORTADOR[portador];
+    let posicionais = POSICIONAIS_DO_PORTADOR[portador] || 0;
+    k++;
+    while (k < tk.length) {
+      // o posicional antes do pulo do numero: a prioridade do chrt e a mascara do taskset sao numero (`chrt 10 xargs`),
+      // e pular o 10 como numero gastava a vaga no xargs, que o laco nunca via como portador
+      if (/^-/.test(tk[k])) k += valor && valor.test(tk[k]) ? 2 : 1;
+      else if (posicionais > 0) { posicionais--; k++; }
+      else if (PULA_NO_PORTADOR.test(tk[k])) k++;
+      else break;
+    }
+  }
+  return false;
 }
 
 // D50/D51: apagar referencia no remoto. Quem decide e o TOKEN: `-d`, `--delete`,
@@ -963,12 +1093,20 @@ function dryRunClean(t) {
 // Como o leitor ja garante que o segmento e UM comando, "os dois aparecem no
 // mesmo segmento" e a leitura certa - e o custo deixa de ser quadratico.
 const REGRAS = [
-  { re: /\brm\s+(-[a-zA-Z]*\s+)*-?[a-zA-Z]*[rf][a-zA-Z]*\s+\S/i, semAspas: true, motivo: 'rm recursivo ou forcado' },
+  // A1-12: a opcao comeca com `-` (sem ele, `rm foo bar` e `echo rm foo bar` barravam pelo `f` de `foo`).
+  // L1-s102-11: o alvo nao e redirecionamento, nem so opcoes (curtas ou longas, e um `--` no fim delas) ate um
+  // redirecionamento ou o fim (`rm -r -f >/dev/null`, `rm -rf --verbose >/dev/null`), como no `rmForcado`. Depois
+  // do `--` tudo e alvo (`rm -rf -- -dist`), e o `-` sozinho tambem.
+  // O operador no fim do segmento segue contando como alvo: o leitor parte a linha no `&` do `2>&1`, e o alvo depois
+  // dele (`rm -rf 2>&1 x`) cai em outro segmento; `rm -f 2>&1`, sem alvo, barra (falso positivo aceito).
+  { re: /\brm\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*[rf][a-zA-Z]*\s+(?!(?:-(?:[^\s-]|-\S)\S*(?:\s+|$))*(?:--(?:\s+|$))?(?:[0-9&]*[<>](?![<>]*\s*$)|$))\S/i, semAspas: true, motivo: 'rm recursivo ou forcado' },
   { re: /\brm\b/i, e: /--(recursive|force)(?![\w-])/i, semAspas: true, motivo: 'rm recursivo ou forcado' },
   { fn: rmForcado, motivo: 'rm recursivo ou forcado' },
   { re: /\bRemove-Item\b/i, e: PS_FLAG_TXT, motivo: 'Remove-Item recursivo ou forcado' },
   { fn: apelidoPS, motivo: 'apelido do PowerShell para Remove-Item, recursivo ou forcado' },
   { fn: formaCmd, motivo: 'forma do cmd: apaga a arvore inteira' },
+  { fn: delForcado, motivo: 'del /f do cmd: forca o apagar, ate do arquivo somente leitura' },
+  { fn: apagaNoCano, motivo: 'apagar no fim do cano: apaga cada item que o comando anterior lista' },
   { re: new RegExp(GIT + 'reset\\s+--' + abrev('hard') + '(?![\\w-])', 'i'), semAspas: true, motivo: 'git reset --hard descarta trabalho nao commitado' },
   // D420/SH-03: `--force` por extenso tambem apaga (so `-f` agrupado era lido).
   // D429/1: a flag que apaga (-f/-d/-x agrupada ou --force) pode vir depois de outra opcao (`-q -fd`, `-e x -fd`);
@@ -1053,8 +1191,9 @@ const REGRAS = [
   { re: new RegExp(GIT + 'push' + FIM + SEG + '\\s(?::[A-Za-z]|--' + abrev('delete') + '(?![\\w-])|--' + abrev('mirror') + '(?![\\w-]))', 'i'), semAspas: true, motivo: 'apaga referencia no remoto' },
   { re: new RegExp(GIT + 'push' + FIM + SEG + '\\s\\+(?=[^\\s]*[A-Za-z/])[^\\s]+', 'i'), semAspas: true, motivo: 'apaga referencia no remoto' },
   { fn: apagaRemoto, motivo: 'apaga referencia no remoto' },
-  // Sem `i` de proposito: `-d` apaga branch ja mesclada e e seguro; `-D` nao.
-  { re: new RegExp(GIT + 'branch\\s+-D\\b'), semAspas: true, motivo: 'apaga branch sem conferir merge' },
+  // Sem `i` de proposito: `-d` apaga branch ja mesclada e e seguro; `-D` nao. L1-s102-8/14: o `-D` agrupado
+  // (`-vD`, `-Dv`) ou depois de outra opcao (`-v -D`) tambem, mas nao depois do `--`, onde e nome de branch.
+  { re: new RegExp(GIT + 'branch\\s+(?:(?!--(?:\\s|$))[^\\s;|&]+\\s+)*-[a-zA-Z]*D[a-zA-Z]*' + FIM), semAspas: true, motivo: 'apaga branch sem conferir merge' },
   // A1-05 (revisao completa, L1): `-d` com `-f` e o mesmo que `-D` (`git branch --delete --force x` apaga sem conferir
   // merge), agrupados ou nao. Dois testes independentes sobre o segmento, como a D51 desenhou.
   { re: new RegExp(GIT + 'branch' + FIM + SEG + '\\s(?:-[a-zA-Z]*d[a-zA-Z]*|--' + abrev('delete') + ')' + FIM),
@@ -1064,9 +1203,11 @@ const REGRAS = [
   { re: /\bDROP\s+(TABLE|DATABASE|SCHEMA)\b/i, semAspas: true, motivo: 'DROP apaga a tabela, o banco ou o schema inteiro' },
   { re: /\bTRUNCATE\s+TABLE\b/i, semAspas: true, motivo: 'TRUNCATE apaga a tabela inteira' },
   { re: /\bnpm\s+publish\b/i, semAspas: true, motivo: 'publicacao nao pedida' },
-  { re: /\b(mkfs|dd\s+if=)/i, semAspas: true, motivo: 'escrita direta de disco' },
+  // L1-s102-9: o `dd.exe` (Git for Windows, Cygwin) e o mesmo `dd`. Por texto, como o resto da familia: `echo dd
+  // if=a of=b` tambem barra (falso positivo aceito, igual ao `echo rm -rf x`).
+  { re: /\b(mkfs|dd(?:\.exe)?\s+if=)/i, semAspas: true, motivo: 'escrita direta de disco' },
   // A1-04 (revisao completa, L1): o `dd` aceita os operandos em qualquer ordem (`dd of=/dev/sda if=img`).
-  { re: /\bdd\s/i, e: /\sof=/i, semAspas: true, motivo: 'escrita direta de disco' }
+  { re: /\bdd(?:\.exe)?\s/i, e: /\sof=/i, semAspas: true, motivo: 'escrita direta de disco' }
 ];
 
 // D721 (A1-06): padrao invalido no projeto.json nao pode derrubar o portao, e tambem nao some calado: vai para
@@ -1412,7 +1553,7 @@ const MOTIVO_APAGAR_DEPOIS_DE_AMPLIAR = 'o escopo foi ampliado neste turno, e ap
   'na resposta final o que ficou para apagar e por que';
 
 // Os motivos das regras de apagar arquivo (REGRAS acima): so neles o aviso fala do arquivo nomeado que passa.
-const MOTIVO_DE_APAGAR = /^(?:rm |Remove-Item |apelido do PowerShell para Remove-Item)/;
+const MOTIVO_DE_APAGAR = /^(?:rm |Remove-Item |apelido do PowerShell para Remove-Item|del \/f |apagar no fim do cano)/;
 
 function motivo(comando, r, alvo) {
   // Plano 082, Tarefa 5 (mock S10): a forma unica dos avisos. A liberacao fica por ultimo, como acao do dono.

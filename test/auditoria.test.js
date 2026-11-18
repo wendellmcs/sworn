@@ -45,6 +45,47 @@ test('auditoria: duas skills com o mesmo gatilho sao apontadas', () => {
   assert.ok(r[0].termos.includes('revisar'));
 });
 
+// A6-07: a description em YAML de bloco (`>-`, `|`) virava o proprio `>-`, e a skill sumia do cruzamento
+test('A6-07: a descricao em YAML de bloco e lida inteira, e a skill entra na sobreposicao', () => {
+  assert.strictEqual(aud.descricaoDe('---\nname: a\ndescription: >-\n  Use quando for revisar\n  codigo antes de fechar\n' +
+    'outro: 1\n---\n'), 'Use quando for revisar codigo antes de fechar');
+  assert.strictEqual(aud.descricaoDe('description: |\r\n  linha um\r\n\r\n  linha dois\r\n---'), 'linha um linha dois');
+  assert.strictEqual(aud.descricaoDe('description: "entre aspas"'), 'entre aspas');
+  assert.strictEqual(aud.descricaoDe('description: simples'), 'simples');
+  assert.strictEqual(aud.descricaoDe('name: sem descricao'), '');
+  // o escalar simples em varias linhas, o indicador com digito ou comentario, o bloco vazio e as aspas simples
+  assert.strictEqual(aud.descricaoDe('description:\n  revisa o diff\n  antes do commit\nname: x'),
+    'revisa o diff antes do commit');
+  assert.strictEqual(aud.descricaoDe('description: revisa o diff\n  antes do commit\n---'), 'revisa o diff antes do commit');
+  assert.strictEqual(aud.descricaoDe('description: >2\n  texto\n'), 'texto');
+  assert.strictEqual(aud.descricaoDe('description: >- # nota\n  texto\n'), 'texto');
+  assert.strictEqual(aud.descricaoDe('description: >\n  a\n  b\n'), 'a b');
+  assert.strictEqual(aud.descricaoDe('description: >-\n---\n'), '');
+  assert.strictEqual(aud.descricaoDe("description: 'it''s x'"), "it's x");
+  // o comentario depois do fecho da aspa e a aspa que segue na linha de baixo
+  assert.strictEqual(aud.descricaoDe('description: "revisa o diff" # gerado\n'), 'revisa o diff');
+  assert.strictEqual(aud.descricaoDe("description: 'a b' # c\n"), 'a b');
+  assert.strictEqual(aud.descricaoDe('description: "revisa\n  o diff"\nname: x\n'), 'revisa o diff');
+  assert.strictEqual(aud.descricaoDe('description: "a # b"\n'), 'a # b');
+  assert.strictEqual(aud.descricaoDe('description: "a" # diz "b"\n'), 'a');
+  // o comentario depois do escalar simples sai; o `#` colado no texto fica; o escape da dupla vira o caractere
+  assert.strictEqual(aud.descricaoDe('description: revisa o diff # gerado\n'), 'revisa o diff');
+  assert.strictEqual(aud.descricaoDe('description: C#x\n'), 'C#x');
+  assert.strictEqual(aud.descricaoDe('description: # nada\n  revisa\n'), 'revisa');
+  assert.strictEqual(aud.descricaoDe('description: "revisa\\to \\"diff\\" \\u00e9 \\\\"\n'), 'revisa\to "diff" é \\');
+  const dir = pasta('bloco');
+  try {
+    const skill = (nome, cabeca) => {
+      fs.mkdirSync(path.join(dir, '.claude', 'skills', nome), { recursive: true });
+      fs.writeFileSync(path.join(dir, '.claude', 'skills', nome, 'SKILL.md'), '---\nname: ' + nome + '\n' + cabeca + '---\n\nx\n');
+    };
+    skill('revisar', 'description: >-\n  Use quando for revisar codigo\n  antes de fechar\n');
+    skill('code-review', 'description: Use quando precisar revisar codigo do diff\n');
+    const r = aud.auditar(dir, {});
+    assert.strictEqual(r.sobreposicoes.length, 1, JSON.stringify(r.sobreposicoes));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('auditoria: skills sem termo em comum nao sao apontadas', () => {
   assert.strictEqual(aud.sobreposicoes([
     { nome: 'a', descricao: 'Use quando for publicar em producao' },

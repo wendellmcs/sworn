@@ -916,9 +916,11 @@ test('D514 #1: linha vazia da tabela de etapas (espacador) nao vira "sem id" nem
 test('R1 da s45: tabela-resumo dos cabecalhos sem caixa nao conta cada item duas vezes (vale o cabecalho)', () => {
   const plano = '### Item 1 — x [FEITO]\n### Item 2 — y\n\n| Item | Onde |\n|---|---|\n| 1 | a |\n| 2 [FEITO] | b |\n| 3 | c |';
   const itens = planoLib.parseItens(plano);
+  // s45-28: o [FEITO] da linha "| 2 [FEITO] |", descartada por repetir o cabecalho, passa ao "### Item 2" (antes se
+  // perdia, e o item feito saia "sem marca")
   assert.deepStrictEqual(itens.map(function (t) { return t.id + (t.tabela ? ' (tabela)' : '') + '=' + t.estado; }),
-    ['1=feita', '2=sem marca', '3 (tabela)=sem marca']);
-  assert.ok(planoLib.painelTexto({ arquivo: 'p.md' }, itens).indexOf('**Plano p — 1 de 3 itens**') === 0);
+    ['1=feita', '2=feita', '3 (tabela)=sem marca']);
+  assert.ok(planoLib.painelTexto({ arquivo: 'p.md' }, itens).indexOf('**Plano p — 2 de 3 itens**') === 0);
   // o cabecalho guarda o id em minusculas, a tabela como esta escrito: "### Etapa 2A" e "| 2a |" numa tabela
   // "| ETAPAS |" sao o mesmo (o cabecalho so aceita id de numero, RE_ITEM; "### Etapa P1" nao e cabecalho)
   assert.deepStrictEqual(planoLib.parseItens('### Etapa 2A: x\n| ETAPAS | X |\n|---|---|\n| 2a | a |\n| 3 | b |')

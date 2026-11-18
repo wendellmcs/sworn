@@ -513,6 +513,27 @@ test('projeto: re-init com degraus grava os dois lados, como o montar', () => {
   assert.ok(r.mudou.includes('agentes'));
 });
 
+// A4-11: o reinit.md promete que a subchave de `agentes` posta a mao sobrevive ao re-init.
+test('A4-11: re-init funde agentes por chave - escada e degraus novos, a subchave a mao fica', () => {
+  const antes = copia({ agentes: { escada: ['velho'], degraus: [{ agente: 'velho', apelido: 'z' }], nota: 'a mao' } });
+  const r = projeto.atualizar(antes, {
+    degraus: [{ agente: 'a', apelido: 'x' }, { agente: 'b', apelido: 'y' }]
+  }, '2026-09-30');
+  assert.deepStrictEqual(r.config.agentes.escada, ['a', 'b']);
+  assert.deepStrictEqual(r.config.agentes.degraus.map((d) => d.agente), ['a', 'b']);
+  assert.strictEqual(r.config.agentes.nota, 'a mao');
+});
+
+// A4-12: texto ou lista em `agentes` passava o validador, que so olhava agentes.escada.
+test('A4-12: agentes que nao e objeto reprova no validador', () => {
+  for (const v of ['texto', ['a'], null, 0, false]) {
+    const r = projeto.validar(copia({ agentes: v }));
+    assert.ok(r.erros.some((e) => /agentes tem de ser objeto/.test(e)), JSON.stringify(v) + ': ' + JSON.stringify(r.erros));
+  }
+  assert.deepStrictEqual(projeto.validar(copia({ agentes: { escada: ['a'] } })).erros, []);
+  assert.deepStrictEqual(projeto.validar(copia({ agentes: {} })).erros, [], 'objeto sem escada segue valido');
+});
+
 test('projeto: o que sai do re-init continua passando no validador', () => {
   const r = projeto.atualizar(copia({}), { quemDecide: 'Bruno' }, '2026-09-30');
   const v = projeto.validar(r.config);

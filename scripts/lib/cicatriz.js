@@ -201,7 +201,8 @@ function varrer(raizManual, raizCorpus, opcoes) {
 
   const avaliados = itens.map(function (it) {
     const r = temCorpus ? conferir(it, indice, o.minimo, o.fracao)
-      : { temCicatriz: false, tipos: [], provas: [] };
+      // A5-17: sem corpus, ninguem foi julgado: temCicatriz null (nem com, nem sem)
+      : { temCicatriz: null, tipos: [], provas: [] };
     return {
       arquivo: it.arquivo, linha: it.linha, texto: it.texto,
       temCicatriz: r.temCicatriz, tipos: r.tipos, provas: r.provas
@@ -227,9 +228,9 @@ function varrer(raizManual, raizCorpus, opcoes) {
     itens: avaliados,
     resumo: {
       total: avaliados.length,
-      comCicatriz: com.length,
-      semCicatriz: avaliados.length - com.length,
-      porTipo: porTipo
+      comCicatriz: temCorpus ? com.length : null,
+      semCicatriz: temCorpus ? avaliados.length - com.length : null,
+      porTipo: temCorpus ? porTipo : null
     }
   };
 }
@@ -251,6 +252,15 @@ function texto(r, limite) {
     linhas.push('Aponte o corpus com --corpus <pasta> e rode de novo: a pasta (ou um arquivo) com os .md do');
     linhas.push('historico, como o registro de decisoes, os incidentes e os achados; as subpastas entram.');
     linhas.push('');
+    // A5-17: o aviso dizia que seria mentir e a lista de poda saia mesmo assim; cego, so os itens lidos, sem julgamento
+    linhas.push('Itens de instrucao lidos, sem julgamento de cicatriz (' + r.itens.length + '):');
+    for (const a of r.itens.slice(0, teto)) {
+      linhas.push('  - "' + a.arquivo + ':' + a.linha + '" ' + Array.from(a.texto).slice(0, 90).join(''));
+    }
+    if (r.itens.length > teto) linhas.push('  ... mais ' + (r.itens.length - teto) + '.');
+    linhas.push('');
+    linhas.push('Nada foi alterado aqui.');
+    return linhas.join('\n');
   }
 
   linhas.push('Itens de instrucao: ' + r.resumo.total +

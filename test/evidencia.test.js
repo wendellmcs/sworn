@@ -3,6 +3,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 const ev = require('../scripts/lib/evidencia.js');
 
+// P17-93 (H1): a largura de linha que todo motivo cumpre: o citado() corta o comando em 120, e o recuo leva 2.
+const LARGURA_MAX = 122;
+const cabe = (m) => m.split('\n').every((l) => l.length <= LARGURA_MAX);
+
 test('evidencia: alegacao sem bloco e sem ressalva bloqueia', () => {
   assert.strictEqual(ev.deveBloquear('Pronto, os testes passaram.'), true);
   assert.strictEqual(ev.deveBloquear('Corrigido e funcionando.'), true);
@@ -63,8 +67,18 @@ test('evidencia D31: "sem teste" solto nao conta mais como ressalva honesta (bur
 // D634 (7a): o bloco que mostra falha nao prova sucesso.
 
 test('evidencia D634: alegacao com so blocos que mostram falha -> deveBloquearPorFalha', () => {
-  const falhas = ['# tests 5\n# pass 2\n# fail 3', '  2 failing', 'ok 1 - a\nnot ok 2 - b', '$ npm test\nExit code 1',
-    'npm ERR! Test failed.', 'Command timed out after 2m', '1 test failed', 'tempo esgotado', 'failures: 4'];
+  // P17-98 (H1): cada saida com o executor que a escreve
+  const falhas = [
+    '# tests 5\n# pass 2\n# fail 3', // tap (node --test --test-reporter=tap)
+    '  2 failing', // mocha
+    'ok 1 - a\nnot ok 2 - b', // tap, linha a linha
+    '$ npm test\nExit code 1', // shell: o codigo de saida
+    'npm ERR! Test failed.', // npm
+    'Command timed out after 2m', // o tempo esgotado do harness, em ingles
+    '1 test failed', // jest e vitest
+    'tempo esgotado', // o tempo esgotado, em portugues
+    'failures: 4' // junit e pytest
+  ];
   for (const f of falhas) {
     const texto = 'Pronto, os testes passaram.\n\n```\n' + f + '\n```';
     assert.strictEqual(ev.deveBloquearPorFalha(texto), true, 'devia ver falha em: ' + JSON.stringify(f));
@@ -92,14 +106,20 @@ test('evidencia D634: declaraRessalva le a prosa (nao-rodou ou falha que segue),
 });
 
 test('evidencia D634: os motivos do 7b e do 8 citam o comando em ASCII (R5) e curto', () => {
-  const vermelho = ev.motivoTesteVermelho('npm test -- ação');
+  const vermelho = ev.motivoTesteVermelho('npm test -- a\u00e7\u00e3o');
   assert.ok(/^[\n\x20-\x7E]*$/.test(vermelho), 'ASCII (R5): ' + vermelho);
   // R5: o motivo e ASCII puro, entao citado() troca cada caractere fora de ASCII do comando por '?' ("ação" -> "a??o").
   assert.ok(vermelho.indexOf('npm test -- a??o') !== -1, 'cada caractere fora de ASCII vira "?": ' + vermelho);
-  const longo = ev.motivoTesteVermelho('npm test ' + 'x'.repeat(300));
-  assert.ok(longo.split('\n').every((l) => l.length <= 124) && /\.\.\.$/m.test(longo), longo);
+  // um comando bem maior que a linha (o citado() corta em 120)
+  const longo = ev.motivoTesteVermelho('npm test ' + 'x'.repeat(3 * LARGURA_MAX));
+  assert.ok(cabe(longo), 'linha acima de ' + LARGURA_MAX + ' caracteres: ' + longo);
+  assert.ok(/\.\.\.$/m.test(longo), 'o comando cortado termina em "...": ' + longo);
   const prova = ev.motivoProvaNaoRodou('npm test');
   assert.ok(/prova de pronto/.test(prova) && prova.indexOf('  npm test') !== -1, prova);
+  // P17-29 (H1): o motivo diz o que e a prova de pronto (a chave do projeto.json)
+  for (const m of [prova, ev.motivoProvaRodando('npm test')]) {
+    assert.ok(/provaDePronto/.test(m) && /\.claude\/sworn\/projeto\.json/.test(m) && cabe(m), m);
+  }
 });
 
 // D785 (2.1): o motivo do laco da prova manda rodar e consertar sem perguntar; no teto, escalar; nunca a ressalva.
@@ -111,7 +131,7 @@ test('evidencia D785: o motivo do laco conta a volta, manda consertar sem pergun
       assert.ok(/^[\n\x20-\x7E]*$/.test(m), 'ASCII (R5): ' + m);
       assert.ok(m.indexOf('  npm test') !== -1 && /sem perguntar/i.test(m), m);
       assert.ok(!/declare|"did not run"|diga que ainda falha/.test(m), 'a ressalva nao e saida: ' + m);
-      assert.ok(m.split('\n').every((l) => l.length <= 124), m);
+      assert.ok(cabe(m), m);
     }
     assert.ok(/1 de 3/.test(ev.motivoDoLaco(tipo, 'npm test', 1)), 'conta a volta');
     assert.ok(/3 de 3/.test(ev.motivoDoLaco(tipo, 'npm test', 3)), 'a 3a volta ainda manda consertar');
@@ -134,16 +154,17 @@ test('evidencia D785: saida com spawn EPERM manda a prova sem processo filho, em
     const m = ev.motivoDoLaco('vermelho', 'node --test test/', n, true);
     assert.ok(/spawn EPERM/.test(m) && /node --test --test-isolation=none/.test(m), m);
     assert.ok(/recusar a opcao, --experimental-test-isolation=none/.test(m), 'o node antigo: ' + m);
-    assert.ok(/^[\n\x20-\x7E]*$/.test(m) && m.split('\n').every((l) => l.length <= 124), m);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(m) && cabe(m), m);
     assert.ok(!/EPERM|isolation/.test(ev.motivoDoLaco('vermelho', 'node --test test/', n)), 'sem a marca, o de antes');
   }
 });
 
 // A3-10 (pedido 12): citado() fazia String(null) e o motivo trazia "null", onde semBlocos e analisar dao ''.
 test('evidencia A3-10: comando ausente nao vira "null" nem "undefined" no motivo', () => {
-  for (const v of [null, undefined]) {
+  for (const v of [null, undefined, '']) {
     for (const m of [ev.motivoTesteVermelho(v), ev.motivoConferenciaVermelha(v), ev.motivoProvaNaoRodou(v),
-      ev.motivoConferenciaRodando(v), ev.motivoDoLaco('pendente', v, 1)]) {
+      ev.motivoProvaRodando(v), ev.motivoConferenciaRodando(v), ev.motivoDoLaco('pendente', v, 1),
+      ev.motivoDoLaco('vermelho', v, 1)]) {
       assert.ok(!/null|undefined/.test(m), m);
     }
   }
@@ -160,7 +181,77 @@ test('evidencia D634: quem declara que ainda falha ou que nao rodou nao e barrad
 test('evidencia D634: textoMostraFalha olha um texto solto (a saida de um comando)', () => {
   assert.strictEqual(ev.textoMostraFalha('# pass 3\n# fail 2'), true);
   assert.strictEqual(ev.textoMostraFalha('# pass 3\n# fail 0'), false);
-  assert.strictEqual(ev.textoMostraFalha(undefined), false);
+});
+
+// P17-86 (H1): entrada vazia ou ausente nas portas do D634 (falha na saida e ressalva) nao barra nem conta como
+// ressalva. O deveBloquear e o deveBloquearPorCausa tem os seus casos vazios nos testes deles.
+test('evidencia P17-86: undefined, null e texto vazio nao mostram falha nem ressalva', () => {
+  for (const v of [undefined, null, '']) {
+    assert.strictEqual(ev.textoMostraFalha(v), false, String(v));
+    assert.strictEqual(ev.deveBloquearPorFalha(v), false, String(v));
+    assert.strictEqual(ev.declaraRessalva(v), false, String(v));
+  }
+});
+
+// P17-19 (H1): a cor do terminal entre a palavra e o numero nao esconde a falha.
+test('evidencia P17-19: a saida com cor do terminal (ANSI) ainda mostra a falha', () => {
+  assert.strictEqual(ev.textoMostraFalha('# pass 3\n# fail \x1b[31m2\x1b[39m'), true);
+  assert.strictEqual(ev.textoMostraFalha('\x1b[31m2\x1b[0m failing'), true);
+  assert.strictEqual(ev.textoMostraFalha('# pass 3\n# fail \x1b[32m0\x1b[39m'), false, 'o zero com cor segue zero');
+  assert.strictEqual(ev.deveBloquearPorFalha('Pronto, passou.\n```\n\x1b[31mfail\x1b[0m 1\n```'), true);
+});
+
+// P17-32 (H1): o resumo que zera de uma suite nao apaga o erro do executor de outra.
+test('evidencia P17-32: ERR! e ETIMEDOUT fora das linhas de teste verde contam mesmo com "fail 0"', () => {
+  assert.strictEqual(ev.textoMostraFalha('# pass 3\n# fail 0\nnpm ERR! code ELIFECYCLE'), true);
+  assert.strictEqual(ev.textoMostraFalha('# fail 0\nError: connect ETIMEDOUT'), true);
+  // no nome de um teste, nao: o que passou (tap, spec do node, mocha) e a linha que abre o teste ou a suite
+  // (o "# Subtest:" do tap, o "▶" do spec)
+  for (const b of ['ok 4 - repete no ETIMEDOUT\n# fail 0', '✔ mostra npm ERR! ao usuario (2ms)\nℹ fail 0',
+    '  ✓ trata ETIMEDOUT\n  3 passing', '# Subtest: detecta npm ERR!\nok 1 - detecta npm ERR!\n# tests 1\n# fail 0',
+    '▶ erros do npm ERR!\n  ✔ caso 1 (1ms)\n▶ erros do npm ERR! (2ms)\nℹ fail 0']) {
+    assert.strictEqual(ev.textoMostraFalha(b), false, JSON.stringify(b));
+  }
+  // o teste que falha com o nome desses segue falha, pela outra linha
+  assert.strictEqual(ev.textoMostraFalha('# Subtest: detecta npm ERR!\nnot ok 1 - detecta npm ERR!\n# fail 1'), true);
+  // na causa, o "error:" no nome de um teste que passou nao e o defeito reproduzido
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa: o parser.\n```\n# Subtest: error: x\nok 1 - error: x\n```'), true);
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa: o parser.\n```\nError: x\n```'), false);
+  // "timed out" segue sob o resumo: e tambem prosa de log
+  assert.strictEqual(ev.textoMostraFalha('retry: request timed out, trying again\n# fail 0'), false);
+});
+
+// A3-19 (H1): a cerca de 3+ crases ou de tils, fechada pela mesma.
+test('evidencia A3-19: a cerca de 4 crases e a de ~~~ sao blocos; a de 3 dentro da de 4 nao fecha', () => {
+  const saida = '# pass 4\n# fail 0';
+  for (const t of ['````\n' + saida + '\n````', '~~~\n' + saida + '\n~~~', '~~~~text\n' + saida + '\n~~~~~',
+    '````\n```\n' + saida + '\n```\n````']) {
+    const texto = 'Pronto, os testes passaram.\n\n' + t;
+    assert.strictEqual(ev.deveBloquear(texto), false, 'a cerca devia valer: ' + JSON.stringify(t));
+    assert.strictEqual(ev.deveBloquearPorFalha(texto), false, JSON.stringify(t));
+  }
+  // fecha so com o mesmo caractere, do mesmo tamanho ou maior
+  for (const t of ['````\n' + saida + '\n```', '~~~\n' + saida + '\n```', '```\n' + saida + '\n~~~']) {
+    assert.strictEqual(ev.deveBloquear('Pronto, os testes passaram.\n\n' + t), true, 'nao fechou: ' + JSON.stringify(t));
+  }
+  // dentro da cerca de 4, a de 3 e texto: a falha de dentro conta, e a alegacao de dentro nao e prosa
+  assert.strictEqual(ev.deveBloquearPorFalha('Pronto, passou.\n````\n```\n# fail 2\n```\n````'), true);
+  assert.strictEqual(ev.analisar('Segue a saida.\n~~~\ntudo pronto\n~~~').alegaSucesso, false);
+  assert.strictEqual(ev.semBlocos('a\n````\nx\n````\nb').indexOf('x'), -1);
+  // a linguagem de codigo-fonte segue fora, em qualquer cerca; e o CRLF fecha igual
+  assert.strictEqual(ev.deveBloquear('Pronto, passou.\n~~~js\n' + saida + '\n~~~'), true);
+  assert.strictEqual(ev.deveBloquear('Pronto, passou.\r\n````\r\n' + saida + '\r\n````\r\n'), false);
+});
+
+// P17-22 (H1): todo motivo do portao abre com o mesmo cabecalho.
+test('evidencia P17-22: os motivos abrem com o cabecalho da trava 3 e cabem na largura', () => {
+  const x = 'npm test ' + 'x'.repeat(3 * LARGURA_MAX);
+  for (const m of [ev.MOTIVO, ev.MOTIVO_FALHA, ev.MOTIVO_CAUSA, ev.motivoTesteVermelho(x), ev.motivoConferenciaVermelha(x),
+    ev.motivoProvaNaoRodou(x), ev.motivoProvaRodando(x), ev.motivoConferenciaRodando(x), ev.motivoDoLaco('vermelho', x, 1),
+    ev.motivoDoLaco('vermelho', x, ev.TETO_DO_LACO + 1)]) {
+    assert.ok(m.startsWith('sworn - portao de fecho (trava 3)'), m);
+    assert.ok(cabe(m), 'linha acima de ' + LARGURA_MAX + ' caracteres: ' + m);
+  }
 });
 
 test('evidencia D634: nome de teste com "timed out" ou "ERR!" numa saida com "fail 0" nao e falha', () => {
@@ -347,6 +438,8 @@ test('evidencia D634: MOTIVO_FALHA e ASCII (R5), diz o que fazer e traz a regra 
   assert.ok(/^[\x20-\x7E\n]+$/.test(ev.MOTIVO_FALHA), 'MOTIVO_FALHA tem caractere fora de ASCII');
   assert.ok(/mostra falha/.test(ev.MOTIVO_FALHA));
   assert.ok(/instavel/.test(ev.MOTIVO_FALHA));
+  // P17-96 (H1): o "diz o que fazer" do titulo
+  assert.ok(/rode de novo/.test(ev.MOTIVO_FALHA), ev.MOTIVO_FALHA);
 });
 
 // P04 (R-mattpocock, C1 do plano unico): "achei a causa" so com o bug reproduzido - a saida do comando que mostra o
@@ -420,6 +513,8 @@ test('P04: alegar a causa sem o bug reproduzido barra; com bloco de saida, ou co
   assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\n✔ handles error: empty input (1ms)\n# fail 0\n```'), true);
   assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\n✔ returns expected value but trims (1ms)\n```'), true);
   assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nlog: error: retrying\n# pass 3\n# fail 0\n```'), true);
+  // P17-19 (H1): o zero com a cor do terminal anula o erro solto do mesmo jeito
+  assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nlog: error: retrying\n# pass 3\n# fail \x1b[32m0\x1b[39m\n```'), true);
   // fora das linhas de teste que passou: a palavra solta sem os dois-pontos, ou o esperado sem o obtido, nao reproduz
   assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nhandles Error case\n```'), true);
   assert.strictEqual(ev.deveBloquearPorCausa('Achei a causa.\n```\nreturns expected value\n```'), true);

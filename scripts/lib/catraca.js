@@ -140,8 +140,10 @@ function paresPorNome(texto) {
       // (`maxWarnings: number = 0`), so quando o tipo vem seguido de `=`.
       // Aviso: `max` e `min` casam em QUALQUER uso (CSS, variavel de codigo) e geram falso positivo;
       // por isso `ehRegua` (abaixo, no laco) descarta esses casos so para as palavras GENERICAS.
+      // L2-s103-01/02: o `infinity` so vale inteiro (`infinityScale` e um nome, nao o numero), e o expoente aceita o
+      // sinal dos dois lados (`1e-3` era lido como 1).
       const re = new RegExp('(?<![a-z0-9])' + palavra + '(?<sufixo>[a-z_-]*)(?::\\s*[a-z_$.]+(?=\\s*=))?' +
-        '(?<sep>["\'\\s:=>_-]{0,12}?)(?<numero>-?(?:infinity|\\d[\\d_]*(?:\\.\\d+)?(?:e\\+?\\d+)?))', 'g');
+        '(?<sep>["\'\\s:=>_-]{0,12}?)(?<numero>-?(?:infinity(?![a-z0-9_$])|\\d[\\d_]*(?:\\.\\d+)?(?:e[+-]?\\d+)?))', 'g');
       let m;
       while ((m = re.exec(linha)) !== null) {
         // A5-64 (D735): `==`/`===` compara, nao atribui (o plural do cicatriz.js foi lido como o piso descendo).

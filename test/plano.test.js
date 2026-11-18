@@ -442,6 +442,146 @@ test('082 T6 (p7-5): plano-ativo.json com caminho absoluto se le na faixa, no pa
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// H1z (os "vale" de lib/plano.js na triagem dos antigos)
+test('A7-02/s45-1: parseTarefas tira o BOM - o cabecalho da 1a linha segue tarefa e o passo aberto segue cobrado', () => {
+  const t = plano.parseTarefas('\uFEFF### Tarefa 1: a\n- [ ] x\n- [x] y');
+  assert.deepStrictEqual(t.map((x) => [x.n, x.abertos, x.total]), [[1, 1, 2]]);
+});
+
+test('L5-s107-1/2: dentro do bloco de codigo, caixa nao e passo e "## Tarefa N" nao e tarefa (portao, painel e caixaAberta)', () => {
+  const texto = '### Tarefa 1: a\n- [x] feito\n```md\n## Tarefa 9: exemplo\n- [ ] exemplo\n```\n- [x] outro';
+  const t = plano.parseTarefas(texto);
+  assert.deepStrictEqual(t.map((x) => [x.n, x.abertos, x.total]), [[1, 0, 2]]);
+  const itens = plano.parseItens(texto.replace(/### Tarefa 1/, '### Item 1').replace(/## Tarefa 9/, '## Item 9'));
+  assert.deepStrictEqual(itens.map((x) => [x.id, x.abertos, x.total]), [['1', 0, 2]]);
+  const dir = tmp({ 'p.md': texto });
+  try {
+    plano.abrir(dir, 'p.md', 's');
+    assert.strictEqual(plano.caixaAberta(dir, null), null, 'a caixa de exemplo virou tarefa');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('L5-s107-3: a cerca que nunca fecha nao esconde do portao os passos abertos dali ate o fim', () => {
+  const t = plano.parseTarefas('### Tarefa 1: a\n```\n- [ ] aberto depois da cerca sem par\n### Tarefa 2: b\n- [ ] outro');
+  assert.deepStrictEqual(t.map((x) => [x.n, x.abertos]), [[1, 1], [2, 1]]);
+  // e uma cerca fechada antes segue valendo: so a que nao fecha deixa de ser cerca
+  const u = plano.parseTarefas('### Tarefa 1: a\n```\n- [ ] exemplo\n```\n- [ ] real\n~~~\n- [ ] sem par');
+  assert.deepStrictEqual(u.map((x) => [x.n, x.abertos, x.total]), [[1, 2, 2]]);
+  const dir = tmp({ 'p.md': '# Plano\n```\n- [ ] depois da cerca sem par' });
+  try {
+    plano.abrir(dir, 'p.md', 's');
+    assert.deepStrictEqual(plano.caixaAberta(dir, null), { arquivo: 'p.md', caixa: 'depois da cerca sem par' });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('L5-s108-1: a cerca so fecha sem texto depois do marcador (com espaco no fim, fecha)', () => {
+  // "``` js" dentro do bloco nao fecha: a caixa de baixo segue no exemplo
+  const t = plano.parseTarefas('### Tarefa 1: a\n```\n``` js\n- [ ] exemplo\n```\n- [ ] real');
+  assert.deepStrictEqual(t.map((x) => [x.abertos, x.total]), [[1, 1]]);
+  const u = plano.parseTarefas('### Tarefa 1: a\n```\n- [ ] exemplo\n```  \n- [ ] real');
+  assert.deepStrictEqual(u.map((x) => [x.abertos, x.total]), [[1, 1]]);
+});
+
+test('L5-s108-1 (b): a cerca recuada num item de lista (4 espacos ou tab) segue cerca - a caixa de exemplo nao e passo', () => {
+  const t = plano.parseTarefas('### Tarefa 1: a\n- [x] passo\n    ```md\n    - [ ] exemplo\n    ```\n- [x] outro');
+  assert.deepStrictEqual(t.map((x) => [x.abertos, x.total]), [[0, 2]]);
+  const u = plano.parseTarefas('### Tarefa 1: a\n- [x] passo\n\t~~~\n\t- [ ] exemplo\n\t~~~');
+  assert.deepStrictEqual(u.map((x) => [x.abertos, x.total]), [[0, 1]]);
+});
+
+test('L5-s107-3 (b): a cerca sem par nao custa releitura - 60 mil linhas que abrem e nao fecham leem em tempo linear', { timeout: 20000 }, () => {
+  const texto = '### Tarefa 1: a\n' + '``` a\n'.repeat(60000) + '- [ ] real';
+  const inicio = Date.now();
+  const t = plano.parseTarefas(texto);
+  assert.deepStrictEqual(t.map((x) => x.abertos), [1]);
+  assert.ok(Date.now() - inicio < 3000, 'levou ' + (Date.now() - inicio) + ' ms');
+});
+
+test('L5-s107-3 (c): a cerca de 4 crases fecha na de 4 mais abaixo, mesmo com uma de 3 no meio', () => {
+  const t = plano.parseTarefas('### Tarefa 1: a\n````\n- [ ] ex\n```\n- [ ] ex2\n````\n- [ ] real');
+  assert.deepStrictEqual(t.map((x) => [x.abertos, x.total]), [[1, 1]]);
+});
+
+test('L5-s107-3 (d): depois da cerca sem par, a leitura segue - um bloco fechado abaixo dela segue sendo bloco', () => {
+  const t = plano.parseTarefas('### Tarefa 1: a\n```\n- [ ] real\n~~~\n- [ ] exemplo\n~~~\n- [ ] outro');
+  assert.deepStrictEqual(t.map((x) => [x.abertos, x.total]), [[2, 2]]);
+});
+
+test('CommonMark: "```x``` texto" e codigo na linha, nao abre cerca (a cerca de crases nao tem crase depois)', () => {
+  const t = plano.parseTarefas('### Tarefa 1: a\n```x``` texto\n- [ ] real\n```\n- [ ] depois');
+  assert.deepStrictEqual(t.map((x) => [x.abertos, x.total]), [[2, 2]]);
+});
+
+test('bloco de codigo fecha a tabela de etapas: a linha com divisas depois dele nao e etapa', () => {
+  const itens = plano.parseItens('| Etapa | X |\n|---|---|\n| P0 | a |\n```\nx\n```\n| P1 | b |');
+  assert.deepStrictEqual(itens.map((x) => x.id), ['P0']);
+});
+
+test('caixaAberta tira o BOM: a cerca da 1a linha segue cerca', () => {
+  const dir = tmp({ 'p.md': '\uFEFF```\n- [ ] exemplo\n```\n- [ ] real' });
+  try {
+    plano.abrir(dir, 'p.md', 's');
+    assert.deepStrictEqual(plano.caixaAberta(dir, null), { arquivo: 'p.md', caixa: 'real' });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('s45-3: a barra no fim da linha da tabela sem a divisa final fica na celula', () => {
+  const itens = plano.parseItens('| Etapa | X |\n|---|---|\n| P0 | barra \\|');
+  assert.deepStrictEqual(itens.map((x) => [x.id, x.titulo]), [['P0', 'barra |']]);
+});
+
+test('s45-5: data na 1a celula de uma tabela "| Item |" nao vira etapa (vai para as linhas sem id)', () => {
+  const itens = plano.parseItens('| Item | X |\n|---|---|\n| 2026-10-13 | x |\n| 1 | a |\n| 2b-0 | b |');
+  assert.deepStrictEqual(itens.map((x) => x.id), ['1', '2b-0']);
+  assert.deepStrictEqual(itens.semId, [{ linha: 3, texto: '2026-10-13' }]);
+  // R2 do H1z: a data no formato daqui tambem; "1.2.10" e "13.10" seguem ids
+  const br = plano.parseItens('| Item | X |\n|---|---|\n| 13/10/2026 | a |\n| 13.10.2026 | b |\n| 13-10-2026 | c |\n' +
+    '| 13/10 | d |\n| 1.2.10 | e |\n| 13.10 | f |');
+  assert.deepStrictEqual(br.map((x) => x.id), ['1.2.10', '13.10']);
+  assert.deepStrictEqual(br.semId.map((x) => x.texto), ['13/10/2026', '13.10.2026', '13-10-2026', '13/10']);
+});
+
+test('A7-03: abrir recusa o plano que nao existe ou e pasta, sem gravar o plano-ativo.json', () => {
+  const dir = tmp({ 'docs/p.md': PLANO });
+  try {
+    assert.throws(() => plano.abrir(dir, 'docs/nao.md', 's'),
+      /^Error: Não abri .*nao\.md: o arquivo não existe\. Confira o caminho do plano e rode de novo; o plano não foi aberto\.$/);
+    assert.throws(() => plano.abrir(dir, 'docs', 's'),
+      /: o caminho é uma pasta, não um arquivo\. Confira o caminho do plano e rode de novo; o plano não foi aberto\.$/);
+    // o erro que nao e "nao existe" (aqui, caminho com caractere nulo) diz a causa, em vez de "nao existe"
+    assert.throws(() => plano.abrir(dir, 'docs/p\u0000.md', 's'),
+      (e) => /: não consegui ler o caminho, .+\. Confira o caminho do plano e rode de novo; o plano não foi aberto\.$/.test(e.message) &&
+        !/não existe/.test(e.message));
+    assert.ok(!fs.existsSync(path.join(dir, plano.ATIVO)), 'gravou o plano-ativo.json de um plano que nao existe');
+    const r = spawnSync(process.execPath, [path.join(RAIZ_PLUGIN, 'scripts', 'plano.js'), '--abrir', 'docs/nao.md'],
+      { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.ok(r.stderr.indexOf('Não abri ') === 0 && !/\n\s+at /.test(r.stderr), r.stderr);
+    // controle: o que existe abre
+    assert.strictEqual(plano.abrir(dir, 'docs/p.md', 's').arquivo, 'docs/p.md');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('s45-25/s45-29: a tabela-resumo toda repetida dos cabecalhos nao toma o lugar da tabela de etapas', () => {
+  const itens = plano.parseItens('### Item 1 — x\n### Item 2 — y\n\n| Item | Onde |\n|---|---|\n| 1 | a |\n| 2 | b |\n\n' +
+    '| Etapa | X |\n|---|---|\n| P0 | a |\n| P1 | b |');
+  assert.deepStrictEqual(itens.map((x) => x.id), ['1', '2', 'P0', 'P1']);
+});
+
+test('s45-26: o rodape sem id da tabela-resumo toda repetida nao vira aviso de linha sem id', () => {
+  const itens = plano.parseItens('### Item 1 — x\n\n| Item | Onde |\n|---|---|\n| 1 | a |\n| Total | 1 |');
+  assert.deepStrictEqual(itens.map((x) => x.id), ['1']);
+  assert.strictEqual(itens.semId, undefined, JSON.stringify(itens.semId));
+});
+
+test('s45-28: o [FEITO] da linha repetida da tabela-resumo passa ao cabecalho sem caixa (e nao ao de tipo diferente)', () => {
+  const itens = plano.parseItens('### Item 1 — x\n### Item 2 — y\n\n| Item | Onde |\n|---|---|\n| 1 [FEITO] | a |\n| 2 | b |');
+  assert.deepStrictEqual(itens.map((x) => x.id + '=' + x.estado), ['1=feita', '2=sem marca']);
+  // as caixas mandam: o cabecalho com caixa aberta segue aberto
+  const c = plano.parseItens('### Item 1 — x\n- [ ] passo\n\n| Item | Onde |\n|---|---|\n| 1 [FEITO] | a |');
+  assert.deepStrictEqual(c.map((x) => x.id + '=' + x.estado), ['1=aberta']);
+});
+
 // p7-2: a faixa le o plano a cada medida; acima do teto (bytes no disco) ela fica vazia em vez de ler o arquivo.
 test('082 T6 (p7-2): plano no teto se le na faixa; um byte acima, a faixa fica vazia', () => {
   const dir = tmp({});
@@ -450,9 +590,9 @@ test('082 T6 (p7-2): plano no teto se le na faixa; um byte acima, a faixa fica v
     const alvo = path.join(dir, rel);
     fs.mkdirSync(path.dirname(alvo), { recursive: true });
     const enche = (n) => PLANO + '\n' + 'x'.repeat(n - Buffer.byteLength(PLANO + '\n', 'utf8'));
-    plano.abrir(dir, rel, 's');
     assert.strictEqual(plano.TETO_DO_PLANO, 1024 * 1024);
     fs.writeFileSync(alvo, enche(plano.TETO_DO_PLANO), 'utf8');
+    plano.abrir(dir, rel, 's'); // A7-03: o abrir pede o arquivo no disco
     assert.strictEqual(fs.statSync(alvo).size, plano.TETO_DO_PLANO);
     assert.strictEqual(plano.linhaDoPlanoDaSessao(dir, null), 'plano x · 1 de 2 tarefas · próxima: Tarefa 2 — marcha');
     fs.writeFileSync(alvo, enche(plano.TETO_DO_PLANO + 1), 'utf8');
@@ -542,7 +682,6 @@ test('item 14: notaViva conta os turnos com trabalho desde a ultima mudanca do p
 });
 
 test('item 14: o abrir-turno pede a nota viva depois de 5 turnos com trabalho sem o plano mudar', () => {
-  const { spawnSync } = require('node:child_process');
   const estado = require('../scripts/lib/estado.js');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-nota-'));
   const sessoes = path.join(dir, 'sessoes');

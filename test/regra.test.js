@@ -82,6 +82,19 @@ test('regra: validarArquivo reprova o arquivo inteiro por uma regra ruim', () =>
   assert.strictEqual(r.ok, true, 'linha sem seta e prosa, nao regra invalida');
 });
 
+// A4-19: o regras.md em UTF-16 lido como UTF-8 vem com byte nulo entre as letras e dava OK com 0 regras
+test('A4-19: validarArquivo reprova o texto com byte nulo (UTF-16 lido como UTF-8), com o passo', () => {
+  const certo = '- ao editar arquivo -> rodar git status\n';
+  const utf16 = Buffer.from('\uFEFF' + certo, 'utf16le').toString('utf8');
+  const r = regra.validarArquivo(utf16);
+  assert.deepStrictEqual([r.ok, r.total], [false, 0]);
+  assert.ok(r.erros.some((e) => /byte nulo \(U\+0000\).*grave de novo em UTF-8/.test(e)), r.erros.join('\n'));
+  // um nulo so, no meio de um arquivo UTF-8 com regra boa, tambem reprova
+  const meio = regra.validarArquivo(certo + 'x' + String.fromCharCode(0) + 'y\n');
+  assert.deepStrictEqual([meio.ok, meio.total], [false, 1]);
+  assert.deepStrictEqual([regra.validarArquivo(certo).ok, regra.validarArquivo('').ok], [true, true]);
+});
+
 test('regra: validarArquivo reprova regra com fato volatil', () => {
   const r = regra.validarArquivo('- ao subir -> usar node 24.12.0\n');
   assert.strictEqual(r.ok, false);

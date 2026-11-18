@@ -148,6 +148,9 @@ function encerrarTurno(e, s, avisoExtra) {
   // SESSAO sobrevive. Separar os dois e exatamente o que a T18 existe para fazer.
   // Os campos da SESSAO que os outros portoes gravam - avisos de "uma vez por sessao" e
   // registros - moram em `estado.CAMPOS_DA_SESSAO`: fora dela, morriam a cada turno.
+  // A5-02: a foto que falhou (sem gitAbertura) segue sem foto, e a proxima abertura (compact, resume) tenta de novo;
+  // o `|| []` a gravava como arvore limpa, e a trava de outra frente ficava muda pelo resto da sessao
+  const fotoDaAbertura = Array.isArray(s.gitAbertura) ? s.gitAbertura : undefined;
   const sessao = function (dados) { estado.gravar(e.session_id, Object.assign(dados, estado.camposDaSessao(s))); };
   // D464: o alarme de tamanho tambem sai uma vez por sessao, e em laco fica pendente como o aviso.
   const avisouAlarme = s.avisouAlarme === true || (entrega && vs.alarme === true);
@@ -162,12 +165,12 @@ function encerrarTurno(e, s, avisoExtra) {
     // (arquivoDoHandoff, campo do turno) tem de ser o da marca: o de um subagente tambem o grava, sem trocar a marca.
     // s369 (P1 do dono): a continuacao que esta ordem abre segue o trabalho depois do handoff (paradaNoHandoff).
     sessao({ avisouSaude: true, avisouAlarme: avisouAlarme, avisouEspera: avisouEspera,
-      turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [],
+      turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: fotoDaAbertura,
       arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, tokensDeContexto: tokensDeContexto,
       handoffDaSessao: s.handoffDaSessao === s.arquivoDoHandoff ? s.handoffDaSessao || null : null,
       handoffDoGatilho: true });
   } else {
-    sessao({ turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: s.gitAbertura || [],
+    sessao({ turnosComTrabalho: s.turnosComTrabalho || 0, gitAbertura: fotoDaAbertura,
       arquivosTocados: s.arquivosTocados || [], contadoresSessao: acumulados, avisouSaude: s.avisouSaude || false,
       avisouAlarme: avisouAlarme, avisouEspera: avisouEspera, tokensDeContexto: tokensDeContexto,
       handoffDaSessao: s.handoffDaSessao || null });

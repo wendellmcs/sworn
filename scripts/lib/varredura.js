@@ -126,7 +126,8 @@ function detectarLinguagem(tem) {
 function detectarGerenciador(tem) {
   if (tem('pnpm-lock.yaml')) return 'pnpm';
   if (tem('yarn.lock')) return 'yarn';
-  if (tem('bun.lockb')) return 'bun';
+  // A4-09: o Bun 1.2+ grava o bun.lock de texto; o bun.lockb e o binario de antes
+  if (tem('bun.lockb') || tem('bun.lock')) return 'bun';
   if (tem('package-lock.json')) return 'npm';
   if (tem('package.json')) return 'npm';
   if (tem('poetry.lock')) return 'poetry';
@@ -141,7 +142,10 @@ const STUB_NPM_INIT = /no test specified/i;
 function detectarProva(cwd, tem, linguagem, gerenciador) {
   const pkg = lerPacote(cwd);
   const script = pkg && pkg.scripts && typeof pkg.scripts.test === 'string' ? pkg.scripts.test : null;
-  if (script && !STUB_NPM_INIT.test(script)) return (gerenciador || 'npm') + ' test';
+  // A4-09: `bun test` e o executor de testes do Bun, que ignora o scripts.test; `bun run test` roda o script
+  if (script && !STUB_NPM_INIT.test(script)) {
+    return gerenciador === 'bun' ? 'bun run test' : (gerenciador || 'npm') + ' test';
+  }
   if (linguagem === 'python' && (tem('pytest.ini') || tem('pyproject.toml') || tem('tests'))) return 'pytest';
   if (linguagem === 'go') return 'go test ./...';
   if (linguagem === 'rust') return 'cargo test';

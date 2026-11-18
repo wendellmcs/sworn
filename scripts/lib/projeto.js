@@ -23,8 +23,10 @@ const TIPOS_REFERENCIA = ['tela', 'codigo', 'texto'];
 
 const TRAVAS = ['fecho', 'escopo', 'destrutivo', 'outraFrente'];
 
-// Os objetos que o re-init funde por chave em vez de substituir (F1-C01; D503: referencias, por tipo).
-const FUNDE_POR_CHAVE = ['travas', 'marchas', 'limiares', 'referencias'];
+// Os objetos que o re-init funde por chave em vez de substituir (F1-C01; D503: referencias, por tipo). A4-11:
+// `agentes` tambem, como o skills/init/references/reinit.md promete: o init grava escada e degraus juntos e a
+// subchave posta a mao sobrevive.
+const FUNDE_POR_CHAVE = ['travas', 'marchas', 'limiares', 'referencias', 'agentes'];
 
 /**
  * Plano 082 (p1-33): a fusao por chave de `a` com `b` (b vence), chave a chave como dado. O Object.assign tratava a
@@ -294,10 +296,12 @@ function validar(obj) {
     }
   }
 
-  if ('agentes' in obj) {
-    const esc = obj.agentes && obj.agentes.escada;
+  // A4-12: texto ou lista em `agentes` nao tem escada a conferir e passava calado.
+  if ('agentes' in obj && !ehObjeto(obj.agentes)) erros.push('agentes tem de ser objeto');
+  if ('agentes' in obj && ehObjeto(obj.agentes)) {
+    const esc = obj.agentes.escada;
     if (esc !== undefined && !ehListaDeTexto(esc)) erros.push('agentes.escada tem de ser lista de texto');
-    const deg = obj.agentes && obj.agentes.degraus;
+    const deg = obj.agentes.degraus;
     if (deg !== undefined) {
       if (!Array.isArray(deg)) {
         erros.push('agentes.degraus tem de ser lista');
@@ -418,19 +422,28 @@ function atualizar(antigo, respostas, hoje) {
   return { config: base, mudou: mudou, ignoradas: ignoradas };
 }
 
+// L2-s103-22: segmento inteiro de rota do Next.js e afins (`[id]`, `[...slug]`, `[[...slug]]`): pasta de verdade,
+// com o colchete no nome, que o glob.js casa como literal.
+const SEGMENTO_DE_ROTA = /^\[\[?(\.\.\.)?[\w-]+\]\]?$/;
+
 // A pasta fixa do padrao: os segmentos antes do primeiro caractere de glob ("src/a/**" da "src/a"); sem nenhum, null.
+// O segmento de rota e literal, entao entra na pasta fixa.
 function pastaFixa(padrao) {
   const fixos = [];
   for (const seg of String(padrao).split('/')) {
-    if (seg === '' || /[*?[\]{}]/.test(seg)) break;
+    if (seg === '' || (/[*?[\]{}]/.test(seg) && !SEGMENTO_DE_ROTA.test(seg))) break;
     fixos.push(seg);
   }
   return fixos.length ? fixos.join('/') : null;
 }
 
 // A2-05: o glob.js so entende `*` e `**`; `?`, `[ ]`, `{a,b}` e a barra no fim ficam literais e nao casam o que o
-// dono quis. Padrao nessa forma e inerte pela forma, e a pasta fixa existir no disco nao o salva.
+// dono quis. Padrao nessa forma e inerte pela forma, e a pasta fixa existir no disco nao o salva. O colchete do
+// segmento de rota nao conta: ali o literal e o que o dono quis.
 const FORA_DO_GLOB = /[?[\]{}]|\/$/;
+function foraDoGlob(p) {
+  return FORA_DO_GLOB.test(p.split('/').filter(function (seg) { return !SEGMENTO_DE_ROTA.test(seg); }).join('/'));
+}
 
 /**
  * Padroes de `intocaveis` que nao casam com NENHUM arquivo do repositorio.
@@ -455,7 +468,8 @@ function intocaveisInertes(projeto, arquivos, cwd) {
   return padroes.filter(function (p) {
     if (typeof p !== 'string' || !p.trim()) return false;
     if (arquivos.some(function (a) { return glob.casa(p, a, false); })) return false;
-    const fixa = cwd && !FORA_DO_GLOB.test(p.trim()) ? pastaFixa(p) : null;
+    // L2-s103-23: a pasta fixa sai do mesmo texto sem espaco que a forma conferiu.
+    const fixa = cwd && !foraDoGlob(p.trim()) ? pastaFixa(p.trim()) : null;
     if (fixa) {
       // o erro ao olhar o disco (permissao, caminho invalido) nao salva o padrao: ele segue avisado como inerte
       try {
@@ -474,7 +488,7 @@ function motivoInerte(inertes) {
     inertes.map(function (p) { return '  - ' + p; }).join('\n'),
     'Padrao que nao casa nada nao protege nada. Se a pasta ainda nao existe, esta certo;',
     'se e typo, o arquivo que voce quis proteger esta desprotegido AGORA.'
-  ].concat(inertes.some(function (p) { return FORA_DO_GLOB.test(String(p).trim()); })
+  ].concat(inertes.some(function (p) { return foraDoGlob(String(p).trim()); })
     ? ['O sworn so entende * e **: escreva "pasta/**" em vez de "pasta/", e um padrao para cada extensao em vez de {a,b}.']
     : [], ['Confira em .claude/sworn/projeto.json, chave `intocaveis`.']).join('\n');
 }

@@ -47,7 +47,7 @@ Todo agente de código pega os mesmos vícios, e nenhum deles aparece no primeir
 | cria `utils2.js` sem procurar o `utils.js` que já existe | nega arquivo novo quando nada foi buscado no turno e o projeto tem arquivo de mesmo nome (procura sozinho; sem git, todo arquivo novo) |
 | escreve `&&` no PowerShell 5.1 do Windows | barra a sintaxe de shell errada para a ferramenta que vai rodar |
 | edita o arquivo que outra sessão está mexendo | nega a escrita em arquivo que já estava modificado quando a sessão abriu |
-| manda o modelo mais caro corrigir um erro de digitação | barra o agente do topo da escada quando a tarefa só tem trabalho leve |
+| manda o modelo mais caro corrigir um erro de digitação | barra os agentes da metade mais cara da escada quando a tarefa só tem trabalho leve |
 | commita código que ninguém revisou | nega o commit até o código mudado ter revisão cega aprovada |
 | pede a sua decisão no meio de uma muralha de texto | nega a pergunta que não tem exatamente 3 opções, a recomendada primeiro |
 | perde o fio quando o chat fica longo | diz quando trocar de chat, por gatilho contado, e entrega o prompt pronto |

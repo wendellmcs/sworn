@@ -27,6 +27,36 @@ test('F5a: rodar devolve o resultado do spawn, com stdout em texto, e ok() diz s
   assert.strictEqual(gitLib.ok({ status: 0, stdout: '', error: new Error('x') }), false, 'erro com status 0 nao e sucesso');
 });
 
+// A3-11 (H1): com o nome antigo, o diff pareia o renome; o renome puro (git mv sem mudar o conteudo) so traz o cabecalho,
+// sem bloco @@, e mede zero, e nao null ("nao sei medir", que dava a faixa completa).
+test('A3-11: diffContraHead com o nome antigo mede o renome; o renome puro mede zero', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-git-mv-'));
+  try {
+    const g = function (args) {
+      const r = gitLib.rodar(dir, args);
+      assert.strictEqual(r.status, 0, args.join(' ') + ': ' + r.stderr);
+    };
+    g(['init', '-q']);
+    g(['config', 'user.email', 'ensaio@ensaio']);
+    g(['config', 'user.name', 'ensaio']);
+    g(['config', 'commit.gpgsign', 'false']);
+    g(['config', 'core.autocrlf', 'false']);
+    fs.writeFileSync(path.join(dir, 'velho.txt'), 'um\ndois\ntres\n', 'utf8');
+    g(['add', 'velho.txt']);
+    g(['commit', '-qm', 'base']);
+    g(['mv', 'velho.txt', 'novo.txt']);
+    assert.deepStrictEqual(gitLib.diffContraHead(dir, 'novo.txt', 'velho.txt'),
+      { removidas: 0, acrescentadas: 0, blocos: [] });
+    fs.writeFileSync(path.join(dir, 'novo.txt'), 'um\nDOIS\ntres\n', 'utf8');
+    const d = gitLib.diffContraHead(dir, 'novo.txt', 'velho.txt');
+    assert.strictEqual(d.removidas, 1);
+    assert.strictEqual(d.acrescentadas, 1);
+    const sem = gitLib.diffContraHead(dir, 'novo.txt');
+    assert.strictEqual(sem.removidas, 0, 'sem o nome antigo, o novo conta inteiro como acrescentado');
+    assert.strictEqual(sem.acrescentadas, 3);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('F5a: rodar roda sem shell - argumento com espaco chega inteiro ao git', () => {
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-git-espaco-'));
   try {
@@ -91,6 +121,30 @@ test('F5a: rodar entrega ao spawnSync o prazo e a saida padrao finitos e o env s
   assert.strictEqual(vistos[1].timeout, 20000, 'timeout 0 vira o padrao, nunca "sem limite"');
   assert.strictEqual(vistos[1].env.SWORN_TESTE_ENV, 'x');
   assert.strictEqual(vistos[1].env.PATH || vistos[1].env.Path, process.env.PATH || process.env.Path);
+});
+
+// A5-07: o status da foto e o ls-files corriam com 1 MiB; a lista de um repositorio grande estourava e virava null
+test('A5-07: modificados e rastreados pedem 32 MiB ao spawnSync, e a lista acima de 1 MiB nao vira null', () => {
+  const cp = require('node:child_process');
+  const original = cp.spawnSync;
+  const grande = 'x'.repeat(2 * 1024 * 1024);
+  const vistos = [];
+  cp.spawnSync = function (cmd, args, config) {
+    vistos.push([args[0], config.maxBuffer]);
+    if (args[0] === 'rev-parse') return { status: 0, stdout: '\n', stderr: '' };
+    // a resposta passa de 1 MiB: o spawnSync de verdade, com o buffer pequeno, daria ENOBUFS
+    if (grande.length > config.maxBuffer) return { status: null, stdout: '', stderr: '', error: { code: 'ENOBUFS' } };
+    return { status: 0, stdout: args[0] === 'status' ? '?? ' + grande + '\0' : grande + '\n', stderr: '' };
+  };
+  let foto;
+  let lista;
+  try {
+    foto = gitLib.modificados(RAIZ);
+    lista = gitLib.rastreados(RAIZ);
+  } finally { cp.spawnSync = original; }
+  assert.deepStrictEqual(vistos.filter((v) => v[0] !== 'rev-parse'), [['status', 32 * 1024 * 1024], ['ls-files', 32 * 1024 * 1024]]);
+  assert.ok(Array.isArray(foto) && foto.length === 1, 'a foto grande nao vira null');
+  assert.ok(Array.isArray(lista) && lista.length === 1, 'a lista grande nao vira null');
 });
 
 test('F5a: correr segue o contrato antigo (texto ou null) por cima de rodar', () => {

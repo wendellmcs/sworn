@@ -95,7 +95,7 @@ try { lidas = calibracao.lerPasta(pasta); } catch (e) {
   sair(1, { erro: '--pasta nao se le como pasta (' + texto.causaDoErro(e) + '); passe --pasta <pasta das ' +
     'transcricoes deste projeto>' });
 }
-const relatorio = calibracao.calibrar(lidas.sessoes, { limiarAtual: emVigor.n });
+const relatorio = calibracao.calibrar(lidas.sessoes, { limiarAtual: emVigor.n, alarme: alarme });
 relatorio.limiarAtualDe = emVigor.de;
 relatorio.amostra.chamadasSemPreco = lidas.semPreco;
 relatorio.amostra.transcricoesIlegiveis = lidas.ilegiveis;

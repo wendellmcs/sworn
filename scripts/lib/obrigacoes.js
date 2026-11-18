@@ -113,14 +113,20 @@ function arquivosDoManual(dir) {
 function linhasLogicas(bruto) {
   const fisicas = String(bruto == null ? '' : bruto).split(/\r?\n/);
   const out = [];
-  let emCerca = false;
+  // A3-22: a cerca fecha pelo mesmo marcador que a abriu; o ~~~ dentro de uma cerca de crases e texto do exemplo.
+  let cerca = null;
   let acc = null;
   const fecharAcc = () => { if (acc) { out.push(acc); acc = null; } };
 
   for (let i = 0; i < fisicas.length; i++) {
     const l = fisicas[i];
-    if (/^\s*(```|~~~)/.test(l)) { fecharAcc(); emCerca = !emCerca; continue; }
-    if (emCerca) continue;
+    const marca = l.match(/^\s*(```|~~~)/);
+    if (marca && (cerca === null || cerca === marca[1])) {
+      fecharAcc();
+      cerca = cerca === null ? marca[1] : null;
+      continue;
+    }
+    if (cerca !== null) continue;
     if (l.trim() === '') { fecharAcc(); continue; }
 
     const cab = l.match(RE_CABECALHO);
@@ -143,8 +149,10 @@ function acentoFora(s) {
 // A citacao de decisao do FORA (ver conferirResultado): a letra D com o numero, ou a palavra decisao com o numero.
 // O lookahead final recusa o numero que continua em letra ou extensao ("D82abc", "d3.js"). Sem repeticao aninhada:
 // cada espaco so cabe num \s*, e o texto montado de proposito nao faz o regex retroceder em tempo exponencial (D601).
-const CITA_D = /(?:^|[^A-Za-z0-9_])(?:D[\s.#-]{0,2}|d)\d+(?![A-Za-z0-9_]|\.[A-Za-z])/;
-const CITA_DECISAO = /\bdecis(?:ao|oes)\s*(?:(?:numero|nr|n)\.?\s*)?(?:[#\u00ba\u00b0:]\s*)?\d+/i;
+// L3-s105-2/3: depois do D, colado, um separador forte (. # -) com um espaco de cada lado no maximo ("D - 82"), ou
+// so espaco com dois digitos ou mais ("D 82"): "tela D 5" e prosa. L3-s105-1: o mesmo lookahead na palavra decisao.
+const CITA_D = /(?:^|[^A-Za-z0-9_])(?:D(?:\s?[.#-]\s?|\s(?=\d\d))?|d)\d+(?![A-Za-z0-9_]|\.[A-Za-z])/;
+const CITA_DECISAO = /\bdecis(?:ao|oes)\s*(?:(?:numero|nr|n)\.?\s*)?(?:[#\u00ba\u00b0:]\s*)?\d+(?![A-Za-z0-9_]|\.[A-Za-z])/i;
 function citaDecisao(texto) {
   const t = acentoFora(texto);
   return CITA_D.test(t) || CITA_DECISAO.test(t);

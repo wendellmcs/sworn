@@ -4,6 +4,8 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+// A3-15: a saida usa barra normal no Windows; o caminho nativo do teste vai comparado por aqui.
+const barra = (p) => String(p).replace(/\\/g, '/');
 const { spawnSync } = require('node:child_process');
 const cegar = require('../scripts/lib/cegar.js');
 const comum = require('./lib/comum.js');
@@ -27,6 +29,21 @@ test('cegar: sementes diferentes trocam a ordem em algum momento', () => {
   const mapas = new Set();
   for (let i = 0; i < 40; i++) mapas.add(JSON.stringify(cegar.rotular(ITENS, 'sessao-' + i).mapa));
   assert.strictEqual(mapas.size, 2, 'as duas ordens tem de aparecer');
+});
+
+test('A3-14: a ordem nao e a paridade dos caracteres da semente', () => {
+  // Todas estas sementes tem a mesma quantidade de caracteres de codigo impar (b, d, f... sao pares): com o bit mais
+  // fraco do FNV-1a, todas davam a mesma ordem.
+  const mapas = new Set();
+  for (const ch of 'bdfhjlnprtvxz') mapas.add(JSON.stringify(cegar.rotular(ITENS, 'sessao-' + ch).mapa));
+  assert.strictEqual(mapas.size, 2, 'as duas ordens tem de aparecer entre sementes de mesma paridade');
+  // E a troca de um so caractere no fim nao alterna a ordem como um relogio: com o bit fraco, 'sessao-0' a
+  // 'sessao-9' alternavam par e impar sem falhar.
+  let alternou = 0;
+  for (let i = 0; i < 9; i++) {
+    if (cegar.rotular(ITENS, 'sessao-' + i).mapa.A !== cegar.rotular(ITENS, 'sessao-' + (i + 1)).mapa.A) alternou++;
+  }
+  assert.ok(alternou < 9, 'a ordem alternou nas 9 trocas, como a paridade');
 });
 
 test('cegar: A e B recebem os dois itens, sem perder nenhum', () => {
@@ -79,8 +96,9 @@ function repoDeEnsaio() {
 // `env` (opcional): o ambiente do processo, para o teste que liga a sessao numa frente (D824); sem ele, o do processo
 // de teste, como o spawn herdaria. F1g: no proprio processo de teste (comum.scriptComoProcesso, o mesmo status e
 // stdout); o teste "F1g: o CLI em processo sai igual" confere contra o processo de verdade.
-function rodarCli(cwd, rel, env) {
-  return comum.scriptComoProcesso(CLI, ['--arquivo', rel, '--semente', 'fixa'],
+// `extras` (opcional): mais argumentos depois dos de sempre.
+function rodarCli(cwd, rel, env, extras) {
+  return comum.scriptComoProcesso(CLI, ['--arquivo', rel, '--semente', 'fixa'].concat(extras || []),
     { cwd: cwd, env: env || Object.assign({}, process.env) });
 }
 
@@ -231,10 +249,211 @@ test('preparar-revisao: arquivo que nao existe no disco diz qual, sem stack trac
 // pasta viravam "rondas 1, 2, 3" de uma revisao so.
 function baseDeRevisao(dir) { return path.join(dir, '.claude', 'sworn', 'revisao'); }
 
-test('cegar: idDoArquivo troca a barra por duplo underscore e o resto fora de [a-zA-Z0-9._-] por underscore', () => {
+// Uma ronda n da base rev/id; sem `arquivo`, a ronda fica sem mapa.json. O mapa sai com BOM, como o Bloco de Notas
+// grava: o arquivosPorRonda do cegar.js o tira antes do JSON.parse.
+function rondaDeEnsaio(rev, id, n, arquivo) {
+  fs.mkdirSync(path.join(rev, id, String(n)), { recursive: true });
+  if (arquivo !== undefined) {
+    fs.writeFileSync(path.join(rev, id, String(n), 'mapa.json'), '\ufeff' + JSON.stringify({ arquivo: arquivo }), 'utf8');
+  }
+}
+
+test('cegar: idDoArquivo troca a barra por duplo underscore e o resto fora de [a-zA-Z0-9.-] por ~ e o codigo', () => {
   assert.strictEqual(cegar.idDoArquivo('scripts/lib/escopo.js'), 'scripts__lib__escopo.js');
   assert.strictEqual(cegar.idDoArquivo('raiz.txt'), 'raiz.txt');
-  assert.strictEqual(cegar.idDoArquivo('a b/cç.js'), 'a_b__c_.js');
+  assert.strictEqual(cegar.idDoArquivo('a b/cç.js'), 'a~0020b__c~00e7.js');
+  assert.strictEqual(cegar.idDoArquivo('meu_arquivo.js'), 'meu~005farquivo.js');
+});
+
+test('A3-12b: idDoArquivo da ids diferentes para caminhos diferentes', () => {
+  // Antes, a/b.js e a__b.js davam a__b.js; a_/b.js e a/_b.js, a___b.js; a_b.js e a b.js, a_b.js: cada par numa base
+  // so, com as rondas somadas.
+  const longo = 'pasta/' + 'ç'.repeat(55) + '.md';
+  const caminhos = ['a/b.js', 'a__b.js', 'a_/b.js', 'a/_b.js', 'a_b.js', 'a b.js', 'a~b.js', 'a~005fb.js', '_2026', '2026',
+    'a/b/c', 'a__b/c', 'a/b__c', 'xé.js', 'x😀.js', '..', '.', '', '_..', '_', 'a'.repeat(150), 'a'.repeat(151),
+    longo, longo.replace('.md', '.txt')];
+  const ids = caminhos.map(cegar.idDoArquivo);
+  assert.strictEqual(new Set(ids).size, caminhos.length, ids.join(' '));
+  ids.forEach(function (id) {
+    assert.match(id, /^[a-zA-Z0-9._~-]+$/, 'nome de pasta seguro: ' + id);
+    assert.doesNotMatch(id, /^\.*$/, 'nem . nem .., que saem de revisao/: ' + id);
+    assert.ok(id.length <= 150, 'cabe num nome de pasta: ' + id.length);
+  });
+  // O id comprido guarda o comeco legivel e ganha ~~ e a marca do caminho inteiro; o de 150 fica inteiro. O corte
+  // pode partir um codigo ao meio (o ~00 antes do ~~ e o resto de um ~00e7), e de proposito: quem separa os ids e a
+  // marca, nao o comeco.
+  assert.strictEqual(cegar.idDoArquivo('a'.repeat(150)), 'a'.repeat(150));
+  assert.match(cegar.idDoArquivo(longo), /^pasta__(~00e7){26}~00~~[0-9a-f]{8}$/);
+  assert.strictEqual(cegar.idDoArquivo('..'), '_..');
+  assert.strictEqual(cegar.idDoArquivo(''), '_');
+  // O caminho comum nao muda.
+  assert.strictEqual(cegar.idDoArquivo('1.2'), '1.2');
+});
+
+test('A3-12b: a revisao em andamento com o id de antes segue na base antiga, so se for deste arquivo', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-idantes-'));
+  try {
+    const rev = path.join(dir, 'revisao');
+    const ronda = function (id, n, arquivo) { rondaDeEnsaio(rev, id, n, arquivo); };
+    // O caminho sem _ nem caractere especial nao muda de base.
+    assert.strictEqual(cegar.baseDoArquivo(rev, 'a/b.js'), path.join(rev, 'a__b.js'));
+    // a__b.js revisado na 0.80.0: duas rondas em revisao/a__b.js/, a ultima sem mapa legivel.
+    ronda('a__b.js', 1, 'a__b.js');
+    ronda('a__b.js', 2);
+    assert.strictEqual(cegar.baseDoArquivo(rev, 'a__b.js'), path.join(rev, 'a__b.js'), 'a contagem segue na antiga');
+    // a_b.js nao tem base antiga: vai direto para a nova.
+    assert.strictEqual(cegar.baseDoArquivo(rev, 'a_b.js'), path.join(rev, 'a~005fb.js'), 'sem base antiga');
+    // A base de outra pasta (x_y.js nao e o id de antes de d/x_y.js) nao conta, mesmo com o mapa citando o arquivo.
+    ronda('x_y.js', 1, 'd\\x_y.js');
+    assert.strictEqual(cegar.baseDoArquivo(rev, 'd/x_y.js'), path.join(rev, 'd__x~005fy.js'), 'outro caminho: base nova');
+    // A barra invertida no mapa e a mesma grafia.
+    ronda('d__x_y.js', 1, 'd\\x_y.js');
+    assert.strictEqual(cegar.baseDoArquivo(rev, 'd/x_y.js'), path.join(rev, 'd__x_y.js'), 'a barra invertida e a mesma');
+    // Com a base nova ja aberta, ela vale, mesmo com a antiga ali.
+    fs.mkdirSync(path.join(rev, 'd__x~005fy.js'), { recursive: true });
+    assert.strictEqual(cegar.baseDoArquivo(rev, 'd/x_y.js'), path.join(rev, 'd__x~005fy.js'), 'a nova ja existe');
+    // A base antiga com mapa quebrado nao prova nada: base nova.
+    ronda('q_r.js', 1);
+    fs.writeFileSync(path.join(rev, 'q_r.js', '1', 'mapa.json'), '{ quebrado', 'utf8');
+    assert.strictEqual(cegar.baseDoArquivo(rev, 'q_r.js'), path.join(rev, 'q~005fr.js'));
+    // O caminho so de pontos nao olha revisao/.. como base antiga.
+    fs.mkdirSync(path.join(dir, '1'));
+    fs.writeFileSync(path.join(dir, '1', 'mapa.json'), JSON.stringify({ arquivo: '..' }), 'utf8');
+    assert.strictEqual(cegar.baseDoArquivo(rev, '..'), path.join(rev, '_..'));
+    assert.strictEqual(cegar.migrarBaseAntiga(rev, '..'), null);
+    assert.ok(fs.existsSync(path.join(dir, '1')), 'a pasta de cima ficou onde estava');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A3-12b: migrarBaseAntiga leva a base antiga para o id novo do arquivo dela, e so ela', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-migrar-'));
+  try {
+    const rev = path.join(dir, 'revisao');
+    const ronda = function (id, n, arquivo) { rondaDeEnsaio(rev, id, n, arquivo); };
+    // revisao/a__b.js e de a__b.js (0.80.0). Preparar a/b.js, cujo id e a__b.js, leva a base para a~005f~005fb.js.
+    ronda('a__b.js', 1, 'a__b.js');
+    ronda('a__b.js', 2, 'a__b.js');
+    fs.writeFileSync(path.join(rev, 'a__b.js', 'fechada.json'), '{}', 'utf8');
+    const m = cegar.migrarBaseAntiga(rev, 'a/b.js');
+    assert.deepStrictEqual(m, { de: path.join(rev, 'a__b.js'), para: path.join(rev, 'a~005f~005fb.js') });
+    assert.strictEqual(fs.existsSync(path.join(rev, 'a__b.js')), false, 'a pasta de a/b.js ficou livre');
+    assert.ok(fs.existsSync(path.join(rev, 'a~005f~005fb.js', '2', 'mapa.json')), 'as rondas foram juntas');
+    assert.ok(fs.existsSync(path.join(rev, 'a~005f~005fb.js', 'fechada.json')), 'a fechada.json foi junta');
+    assert.strictEqual(cegar.baseDoArquivo(rev, 'a__b.js'), path.join(rev, 'a~005f~005fb.js'));
+    assert.strictEqual(cegar.baseDoArquivo(rev, 'a/b.js'), path.join(rev, 'a__b.js'));
+    // O proprio arquivo tambem leva a sua base antiga ao preparar.
+    ronda('c_d.js', 1, 'c_d.js');
+    assert.deepStrictEqual(cegar.migrarBaseAntiga(rev, 'c_d.js'), { de: path.join(rev, 'c_d.js'), para: path.join(rev, 'c~005fd.js') });
+    // A base no id de agora fica: e/f.js com as suas rondas em e__f.js.
+    ronda('e__f.js', 1, 'e/f.js');
+    assert.strictEqual(cegar.migrarBaseAntiga(rev, 'e/f.js'), null);
+    assert.ok(fs.existsSync(path.join(rev, 'e__f.js', '1')));
+    // A base misturada (os dois arquivos ja somados) fica como esta.
+    ronda('g__h.js', 1, 'g__h.js');
+    ronda('g__h.js', 2, 'g/h.js');
+    assert.strictEqual(cegar.migrarBaseAntiga(rev, 'g/h.js'), null);
+    assert.ok(fs.existsSync(path.join(rev, 'g__h.js', '2')));
+    // A ronda sem mapa legivel nao diz de quem e: fica.
+    ronda('i__j.js', 1, 'i__j.js');
+    ronda('i__j.js', 2);
+    assert.strictEqual(cegar.migrarBaseAntiga(rev, 'i/j.js'), null);
+    // Nem a ronda com mapa legivel que nao diz o arquivo.
+    ronda('o__p.js', 1, 'o__p.js');
+    ronda('o__p.js', 2);
+    fs.writeFileSync(path.join(rev, 'o__p.js', '2', 'mapa.json'), JSON.stringify({ mapa: { A: 'HEAD' } }), 'utf8');
+    assert.strictEqual(cegar.migrarBaseAntiga(rev, 'o/p.js'), null);
+    assert.ok(fs.existsSync(path.join(rev, 'o__p.js', '2')));
+    // Com a pasta nova ja ocupada, nada se sobrescreve.
+    ronda('k__l.js', 1, 'k__l.js');
+    fs.mkdirSync(path.join(rev, 'k~005f~005fl.js'));
+    fs.writeFileSync(path.join(rev, 'k~005f~005fl.js', 'outra.txt'), 'x', 'utf8');
+    assert.strictEqual(cegar.migrarBaseAntiga(rev, 'k/l.js'), null);
+    assert.ok(fs.existsSync(path.join(rev, 'k__l.js', '1')));
+    assert.ok(fs.existsSync(path.join(rev, 'k~005f~005fl.js', 'outra.txt')));
+    // A base de um arquivo cujo id de antes nao e o nome da pasta (o mapa de outro lugar) nao e movida.
+    ronda('m__n.js', 1, 'zz_y.js');
+    assert.strictEqual(cegar.migrarBaseAntiga(rev, 'm/n.js'), null);
+    // A base sem ronda nenhuma tambem fica.
+    fs.mkdirSync(path.join(rev, 's__t.js'));
+    assert.strictEqual(cegar.migrarBaseAntiga(rev, 's/t.js'), null);
+    assert.ok(fs.existsSync(path.join(rev, 's__t.js')));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A3-12b: o rename que falha volta com o erro, e a base fica onde estava', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-migrar-erro-'));
+  const renomear = fs.renameSync;
+  try {
+    const rev = path.join(dir, 'revisao');
+    rondaDeEnsaio(rev, 'a__b.js', 1, 'a__b.js');
+    fs.renameSync = function () { const e = new Error('EPERM: ocupado'); e.code = 'EPERM'; throw e; };
+    const m = cegar.migrarBaseAntiga(rev, 'a/b.js');
+    assert.strictEqual(m.erro.code, 'EPERM');
+    assert.strictEqual(m.de, path.join(rev, 'a__b.js'));
+    assert.ok(fs.existsSync(path.join(rev, 'a__b.js', '1', 'mapa.json')));
+  } finally {
+    fs.renameSync = renomear;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('A3-12b: o preparar-revisao.js de a/b.js nao herda as rondas de a__b.js da base antiga', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const rev = baseDeRevisao(dir);
+    // sub/aninhado.txt tem o id sub__aninhado.txt, o id de antes de um arquivo chamado sub__aninhado.txt, revisado
+    // na 0.80.0 em duas rondas.
+    rondaDeEnsaio(rev, 'sub__aninhado.txt', 1, 'sub__aninhado.txt');
+    rondaDeEnsaio(rev, 'sub__aninhado.txt', 2, 'sub__aninhado.txt');
+    const r = rodarCli(dir, 'sub/aninhado.txt');
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const s = JSON.parse(r.stdout);
+    assert.strictEqual(path.basename(path.dirname(s.a)), '1', 'sub/aninhado.txt comeca na ronda 1: ' + s.a);
+    assert.ok(fs.existsSync(path.join(rev, 'sub~005f~005faninhado.txt', '2', 'mapa.json')),
+      'as rondas de sub__aninhado.txt foram para o id novo dele');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A3-12b: o preparar-revisao.js nao muda a base antiga quando para antes, e para com ERRO se nao consegue muda-la', () => {
+  const plantar = function (dir) {
+    const rev = baseDeRevisao(dir);
+    rondaDeEnsaio(rev, 'sub__aninhado.txt', 1, 'sub__aninhado.txt');
+    return rev;
+  };
+  // Com o regras.md ilegivel (uma pasta), o preparar para com "Nada foi gravado" e a base antiga fica.
+  const dir = repoDeEnsaio();
+  try {
+    const rev = plantar(dir);
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn', 'regras.md'), { recursive: true });
+    const r = rodarCli(dir, 'sub/aninhado.txt');
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.strictEqual(r.stderr, '', 'stack trace na saida de erro: ' + r.stderr);
+    assert.match(r.stdout, /Nada foi gravado/);
+    assert.ok(fs.existsSync(path.join(rev, 'sub__aninhado.txt', '1', 'mapa.json')), 'a base antiga nao mudou');
+    assert.strictEqual(fs.existsSync(path.join(rev, 'sub~005f~005faninhado.txt')), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  // O rename que falha: ERRO, nenhuma ronda nova, e a base antiga no lugar.
+  const dir2 = repoDeEnsaio();
+  const renomear = fs.renameSync;
+  try {
+    const rev = plantar(dir2);
+    fs.renameSync = function (de) {
+      if (String(de).indexOf('sub__aninhado.txt') !== -1) { const e = new Error('EBUSY: ocupado'); e.code = 'EBUSY'; throw e; }
+      return renomear.apply(fs, arguments);
+    };
+    const r = rodarCli(dir2, 'sub/aninhado.txt');
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.strictEqual(r.stderr, '', 'stack trace na saida de erro: ' + r.stderr);
+    assert.match(r.stdout, /^ERRO: a revisao em \.claude\/sworn\/revisao\/sub__aninhado\.txt usa o nome antigo/);
+    assert.match(r.stdout, /\.claude\/sworn\/revisao\/sub~005f~005faninhado\.txt/);
+    assert.match(r.stdout, /Nada foi gravado/);
+    assert.match(r.stdout, /rode de novo/, 'diz o que fazer: ' + r.stdout);
+    assert.deepStrictEqual(fs.readdirSync(path.join(rev, 'sub__aninhado.txt')), ['1'], 'nenhuma ronda nova');
+    assert.strictEqual(fs.existsSync(path.join(rev, 'sub~005f~005faninhado.txt')), false, 'nenhuma pasta nova');
+  } finally {
+    fs.renameSync = renomear;
+    fs.rmSync(dir2, { recursive: true, force: true });
+  }
 });
 
 // Arquivo de nome so com digitos (`2026`, sem extensao) daria a base `revisao/2026`, igual a uma
@@ -277,9 +496,9 @@ test('T2/item 11: dois arquivos preparados na mesma pasta vao para bases separad
     assert.strictEqual(path.basename(s1.base), 'raiz.txt');
     assert.strictEqual(path.basename(s2.base), 'sub__aninhado.txt');
     assert.strictEqual(path.basename(path.dirname(s1.base)), 'revisao');
-    assert.strictEqual(path.dirname(s1.a), path.join(s1.base, '1'));
-    assert.strictEqual(path.dirname(s2.b), path.join(s2.base, '1'));
-    assert.strictEqual(s2.vereditos, path.join(s2.base, '1', 'vereditos'));
+    assert.strictEqual(path.dirname(s1.a), barra(path.join(s1.base, '1')));
+    assert.strictEqual(path.dirname(s2.b), barra(path.join(s2.base, '1')));
+    assert.strictEqual(s2.vereditos, barra(path.join(s2.base, '1', 'vereditos')));
     assert.deepStrictEqual(fs.readdirSync(baseDeRevisao(dir)).sort(), ['raiz.txt', 'sub__aninhado.txt'],
       'nenhuma pasta numerada solta em revisao/');
     assert.doesNotMatch(s1.aviso, /formato antigo/);
@@ -306,8 +525,8 @@ test('T2/item 11: com pasta numerada solta (formato da 0.3.0) segue gravando la,
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const s = JSON.parse(r.stdout);
     assert.strictEqual(s.ronda, 2, 'continua a contagem da pasta plana');
-    assert.strictEqual(s.base, baseDeRevisao(dir));
-    assert.strictEqual(path.dirname(s.a), path.join(baseDeRevisao(dir), '2'));
+    assert.strictEqual(s.base, barra(baseDeRevisao(dir)));
+    assert.strictEqual(path.dirname(s.a), barra(path.join(baseDeRevisao(dir), '2')));
     assert.match(s.aviso, /formato antigo/);
     assert.strictEqual(fs.existsSync(path.join(baseDeRevisao(dir), 'raiz.txt')), false, 'nao abre base nova no meio da revisao');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -459,7 +678,7 @@ test('0.3.2/item 11: o aviso do formato antigo diz para onde mover, com o id do 
     const r = rodarCli(dir, 'raiz.txt');
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const s = JSON.parse(r.stdout);
-    assert.ok(s.aviso.indexOf('.claude/sworn/revisao/a_b__c.js/') !== -1,
+    assert.ok(s.aviso.indexOf('.claude/sworn/revisao/a~0020b__c.js/') !== -1,
       'o aviso tem de dizer o destino com o id da revisao antiga: ' + s.aviso);
     assert.strictEqual(s.aviso.indexOf('revisao/raiz.txt/'), -1, 'o id e o da revisao antiga, nao o do arquivo de agora: ' + s.aviso);
     assert.doesNotMatch(s.aviso, /base unica|base por arquivo/, s.aviso);
@@ -545,8 +764,8 @@ function fotoDaPasta(raiz) {
   (function andar(p) {
     fs.readdirSync(p, { withFileTypes: true }).forEach(function (e) {
       const c = path.join(p, e.name);
-      if (e.isDirectory()) { foto[path.relative(raiz, c).replace(/\\/g, '/') + '/'] = null; andar(c); }
-      else foto[path.relative(raiz, c).replace(/\\/g, '/')] = fs.readFileSync(c, 'utf8');
+      if (e.isDirectory()) { foto[barra(path.relative(raiz, c)) + '/'] = null; andar(c); }
+      else foto[barra(path.relative(raiz, c))] = fs.readFileSync(c, 'utf8');
     });
   })(raiz);
   return foto;
@@ -572,7 +791,7 @@ test('0.3.3/item 2: base ja fechada e arquivada INTEIRA pelo preparar, e a revis
     const s2 = JSON.parse(r.stdout);
     assert.strictEqual(s2.ronda, 1, 'a revisao nova nao herda a contagem nem o teto da fechada');
     const destino = path.join(dir, '.claude', 'sworn', 'revisao-fechada', 'raiz.txt', '2026-09-29-173045');
-    assert.strictEqual(s2.arquivada, destino, 'a saida diz para onde foi (data e hora locais no carimbo): ' + r.stdout);
+    assert.strictEqual(s2.arquivada, barra(destino), 'a saida diz para onde foi (data e hora locais no carimbo): ' + r.stdout);
     assert.deepStrictEqual(fotoDaPasta(destino), antes, 'nada se apaga: a base inteira, igual a de antes');
     assert.deepStrictEqual(fs.readdirSync(s2.base), ['1'], 'a base nova so tem a ronda 1');
     assert.match(s2.aviso, /revisao-fechada\/raiz\.txt\/2026-09-29-173045/, s2.aviso);
@@ -594,8 +813,8 @@ test('0.3.3/item 2: duas revisoes fechadas no mesmo segundo nao colidem (sufixo 
     assert.strictEqual(r3.status, 0, r3.stdout + r3.stderr);
     const s3 = JSON.parse(r3.stdout);
     const pai = path.join(dir, '.claude', 'sworn', 'revisao-fechada', 'raiz.txt');
-    assert.strictEqual(s2.arquivada, path.join(pai, '2026-09-29-173045'));
-    assert.strictEqual(s3.arquivada, path.join(pai, '2026-09-29-173045-2'), 'o segundo do mesmo segundo ganha sufixo');
+    assert.strictEqual(s2.arquivada, barra(path.join(pai, '2026-09-29-173045')));
+    assert.strictEqual(s3.arquivada, barra(path.join(pai, '2026-09-29-173045-2')), 'o segundo do mesmo segundo ganha sufixo');
     assert.deepStrictEqual(fs.readdirSync(pai).sort(), ['2026-09-29-173045', '2026-09-29-173045-2'],
       'a primeira arquivada segue la, intacta');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -708,7 +927,7 @@ test('pendencia #8: base ABERTA cujo arquivo ganhou commit depois dela e arquiva
     assert.deepStrictEqual(fs.readdirSync(s2.base), ['1'], 'a base nova so tem a ronda 1');
     assert.match(s2.aviso, /ficou aberta \(sem fechada\.json\) e o arquivo ganhou commit depois dela/, s2.aviso);
     // o aviso diz para onde as rondas foram e que nada se apagou
-    assert.ok(s2.aviso.includes('sem apagar nada, para ' + path.relative(dir, s2.arquivada).replace(/\\/g, '/')),
+    assert.ok(s2.aviso.includes('sem apagar nada, para ' + barra(path.relative(dir, s2.arquivada))),
       s2.aviso);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -1128,7 +1347,7 @@ test('0.3.3/item 15: o id da revisao antiga vem da ultima pasta numerada com map
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const s = JSON.parse(r.stdout);
     assert.strictEqual(s.ronda, 4);
-    assert.ok(s.aviso.indexOf('.claude/sworn/revisao/a_b__c.js/') !== -1,
+    assert.ok(s.aviso.indexOf('.claude/sworn/revisao/a~0020b__c.js/') !== -1,
       'o aviso tem de achar o id na pasta 1: ' + s.aviso);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -1172,14 +1391,15 @@ test('0.3.3/item 18: o texto da regra do id concorda com o idDoArquivo (o que el
   assert.strictEqual(cegar.idDoArquivo('a/b'), 'a__b');
   // Os caracteres que o texto lista entre aspas sao os que a funcao mantem.
   const listados = (cegar.REGRA_DO_ID.match(/"(.)"/g) || []).map(function (s) { return s[1]; });
-  assert.deepStrictEqual(listados, ['.', '_', '-'], cegar.REGRA_DO_ID);
-  assert.match(cegar.REGRA_DO_ID, /letras, numeros/);
+  assert.deepStrictEqual(listados, ['.', '-'], cegar.REGRA_DO_ID);
+  assert.match(cegar.REGRA_DO_ID, /letras sem acento, numeros/);
   listados.concat(['a', 'Z', '7']).forEach(function (c) {
     assert.strictEqual(cegar.idDoArquivo('x' + c + 'y'), 'x' + c + 'y', 'o texto diz que "' + c + '" fica');
   });
-  // O resto vira "_" (o texto diz "trocado por _").
-  [' ', 'ç', '@', '$'].forEach(function (c) {
-    assert.strictEqual(cegar.idDoArquivo('x' + c + 'y'), 'x_y', 'o texto diz que "' + c + '" vira _');
+  // O resto vira ~ e o codigo em 4 hexadecimais (o texto diz "o _ vira ~005f").
+  assert.ok(cegar.REGRA_DO_ID.indexOf('o _ vira ' + cegar.idDoArquivo('_')) !== -1, cegar.REGRA_DO_ID);
+  [[' ', '~0020'], ['ç', '~00e7'], ['@', '~0040'], ['$', '~0024'], ['_', '~005f'], ['~', '~007e']].forEach(function (p) {
+    assert.strictEqual(cegar.idDoArquivo('x' + p[0] + 'y'), 'x' + p[1] + 'y', 'o texto diz que "' + p[0] + '" vira ' + p[1]);
   });
 });
 
@@ -1320,7 +1540,7 @@ test('T2/F2-08: formato antigo com revisao/fechada.json: o aviso diz que ela fic
     assert.ok(fs.existsSync(path.join(baseDeRevisao(dir), 'fechada.json')));
     assert.match(s.aviso, /ja estava fechada \(revisao\/fechada\.json\)/, s.aviso);
     assert.match(s.aviso, /fora do arquivamento automatico/, s.aviso);
-    assert.ok(s.aviso.includes('.claude/sworn/revisao-fechada/a_b__c.js/<carimbo>/'), 'diz para onde mover, com o id: ' + s.aviso);
+    assert.ok(s.aviso.includes('.claude/sworn/revisao-fechada/a~0020b__c.js/<carimbo>/'), 'diz para onde mover, com o id: ' + s.aviso);
     assert.match(s.aviso, /pastas numeradas e o fechada\.json/, s.aviso);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   // sem mapa legivel: o destino fica com <id> e a regra do id ja esta no aviso
@@ -1453,8 +1673,8 @@ test('RV-01: CONTROLE - arquivo diferente do HEAD e arquivo novo nao levam ident
 });
 
 // Ronda 2 do lote 2 (D422), RV-01: a comparacao do identico e por texto normalizado. Com core.autocrlf=true
-// (Windows) o disco tem CRLF e o blob do HEAD tem LF; BOM so num dos lados idem. So a decisao do identico
-// normaliza: o conteudo gravado em A.txt/B.txt segue o do disco.
+// (Windows) o disco tem CRLF e o blob do HEAD tem LF; BOM so num dos lados idem. A3-12a (H1): A.txt e B.txt saem
+// normalizados do mesmo jeito (o helper devolve os dois).
 function mapaDeRevisaoCommitada(textoNoHead, textoNoDisco) {
   const dir = repoDeEnsaio();
   try {
@@ -1467,7 +1687,7 @@ function mapaDeRevisaoCommitada(textoNoHead, textoNoDisco) {
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const saida = JSON.parse(r.stdout);
     const mapa = JSON.parse(fs.readFileSync(path.join(path.dirname(saida.a), 'mapa.json'), 'utf8'));
-    return { mapa: mapa, saida: saida };
+    return { mapa: mapa, saida: saida, A: fs.readFileSync(saida.a, 'utf8'), B: fs.readFileSync(saida.b, 'utf8') };
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -1484,21 +1704,31 @@ test('RV-01: BOM so no disco ainda e identico', () => {
   assert.match(x.saida.aviso, /igual ao HEAD/);
 });
 
-// S7 da P2 (D426), L2-pre-2: o identico vem da normalizacao, mas A.txt e B.txt sao gravados como estao no
-// disco e no HEAD. Se diferem em fim de linha ou BOM, o aviso nao pode dizer que sao "o mesmo texto": o inspetor
-// distingue os lados por esse resto.
-test('L2-pre-2: identico so pela normalizacao (CRLF ou BOM) avisa que A e B diferem em fim de linha ou BOM', () => {
+// S7 da P2 (D426), L2-pre-2, e A3-12a (H1): o identico vem da normalizacao, e A.txt e B.txt saem normalizados do
+// mesmo jeito: o lado com CRLF ou BOM nao denuncia qual e o do disco, e o aviso pode dizer "o mesmo texto".
+test('A3-12a: identico so pela normalizacao (CRLF ou BOM) grava A e B iguais, sem o CRLF e sem o BOM', () => {
   const casos = [['LF no HEAD e CRLF no disco', 'linha um\nlinha dois\n', 'linha um\r\nlinha dois\r\n'],
-    ['BOM so no disco', 'linha um\nlinha dois\n', '﻿linha um\nlinha dois\n']];
+    ['BOM so no disco', 'linha um\nlinha dois\n', '﻿linha um\nlinha dois\n'],
+    ['CRLF e BOM so no HEAD', '﻿linha um\r\nlinha dois\r\n', 'linha um\nlinha dois\n']];
   for (const [nome, head, disco] of casos) {
     const x = mapaDeRevisaoCommitada(head, disco);
     assert.strictEqual(x.mapa.identico, true, nome);
     assert.match(x.saida.aviso, /igual ao HEAD/, nome);
-    // Plano 083 (p4-21): o BOM vem explicado, e o aviso nao usa "cegueira" (termo interno da revisao).
-    assert.match(x.saida.aviso, /diferem so no fim de linha ou na marca invisivel do inicio do arquivo, o BOM \(a diferenca/, nome);
-    assert.doesNotMatch(x.saida.aviso, /sao o mesmo texto/, nome);
+    assert.match(x.saida.aviso, /A e B sao o mesmo texto/, nome);
+    // Plano 083 (p4-21): o aviso nao usa "cegueira" (termo interno da revisao).
     assert.doesNotMatch(x.saida.aviso, /cegueira/, nome);
+    assert.strictEqual(x.A, 'linha um\nlinha dois\n', nome);
+    assert.strictEqual(x.B, x.A, nome);
   }
+});
+
+// A3-12a (H1): fora do identico, o lado com CRLF (o disco, com autocrlf) tambem sai com LF: o inspetor nao ve o fim de
+// linha diferir em toda linha, e nao sabe por ele qual lado e o do disco.
+test('A3-12a: mudanca com CRLF so no disco grava os dois lados com LF', () => {
+  const x = mapaDeRevisaoCommitada('linha um\nlinha dois\n', '﻿linha um\r\nlinha 2\r\n');
+  assert.notStrictEqual(x.mapa.identico, true);
+  for (const lado of [x.A, x.B]) assert.ok(!/\r|﻿/.test(lado), JSON.stringify(lado));
+  assert.ok([x.A, x.B].some((l) => l.indexOf('linha 2') !== -1));
 });
 
 // Plano 083 (p4-21): arquivo novo diz o efeito (o inspetor sabe qual lado e o novo), sem o termo interno "cegueira".
@@ -1535,7 +1765,7 @@ test('RV-04: mapa.json do formato antigo com BOM ainda diz o id da revisao antig
       '\uFEFF' + JSON.stringify({ arquivo: 'a b/c.js', mapa: { A: 'HEAD', B: 'trabalho' } }), 'utf8');
     const r = rodarCli(dir, 'raiz.txt');
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
-    assert.ok(JSON.parse(r.stdout).aviso.indexOf('.claude/sworn/revisao/a_b__c.js/') !== -1, r.stdout);
+    assert.ok(JSON.parse(r.stdout).aviso.indexOf('.claude/sworn/revisao/a~0020b__c.js/') !== -1, r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -1625,6 +1855,23 @@ test('D485: arquivo novo, de estilo ou igual ao HEAD vai a completa, com as lent
       lentes: ['correcao', 'escopo', 'estados', 'borda', 'manutencao', 'microcopy', 'medidor', 'design'], linhasMudadas: 1 });
     // igual ao HEAD: sem medida, o nao sei deixa todas as de logica
     assert.deepStrictEqual(faixaDe(dir, 'logica.js'), { faixa: 'completa', lentes: TODAS_DE_LOGICA, linhasMudadas: 0 });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// H1-custo (D868): o arquivo de teste na faixa completa leva so as LENTES_DO_TESTE
+test('H1-custo: preparar-revisao chama so correcao, estados, borda e manutencao no arquivo de teste', () => {
+  const dir = repoDeFaixas();
+  try {
+    fs.mkdirSync(path.join(dir, 'test'));
+    fs.writeFileSync(path.join(dir, 'test', 'a.test.js'), linhas(60, 'const t ='), 'utf8');
+    const t = faixaDe(dir, 'test/a.test.js');
+    assert.strictEqual(t.faixa, 'completa', 'o arquivo novo vai a completa');
+    assert.deepStrictEqual(t.lentes, ['correcao', 'estados', 'borda', 'manutencao']);
+    // de dentro da pasta de teste o nome chega sem ela: vale o caminho relativo a raiz
+    assert.deepStrictEqual(faixaDe(path.join(dir, 'test'), 'a.test.js').lentes, t.lentes, 'de dentro da pasta test');
+    // o mesmo texto fora da pasta de teste leva as de logica
+    fs.writeFileSync(path.join(dir, 'b.js'), linhas(60, 'const t ='), 'utf8');
+    assert.deepStrictEqual(faixaDe(dir, 'b.js').lentes, SEM_SEGURANCA);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -1840,11 +2087,11 @@ test('D503: com referencia do tipo, o pacote leva R.txt e a passada invertida, e
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const s = JSON.parse(r.stdout);
     const pasta = path.dirname(s.a);
-    assert.strictEqual(s.referencia, path.join(pasta, 'R.txt'));
+    assert.strictEqual(s.referencia, barra(path.join(pasta, 'R.txt')));
     assert.strictEqual(fs.readFileSync(s.referencia, 'utf8'), '=== referencia 1 de 1: ref/modelo.txt ===\ntexto de topo\n');
     assert.deepStrictEqual(s.invertida, {
-      a: path.join(pasta, 'invertida', 'A.txt'), b: path.join(pasta, 'invertida', 'B.txt'),
-      vereditos: path.join(pasta, 'invertida', 'vereditos')
+      a: barra(path.join(pasta, 'invertida', 'A.txt')), b: barra(path.join(pasta, 'invertida', 'B.txt')),
+      vereditos: barra(path.join(pasta, 'invertida', 'vereditos'))
     });
     assert.strictEqual(fs.readFileSync(s.invertida.a, 'utf8'), fs.readFileSync(s.b, 'utf8'), 'o A invertido e o B');
     assert.strictEqual(fs.readFileSync(s.invertida.b, 'utf8'), fs.readFileSync(s.a, 'utf8'), 'o B invertido e o A');
@@ -1931,7 +2178,7 @@ test('082 T5: referencia que nao se le diz o caminho tentado, o que fazer pela c
     fs.writeFileSync(path.join(dir, 'ref', 'topo.md'), 'topo\n', 'utf8');
     comProjeto(dir, { referencias: { texto: ['ref/topo.md', 'ref/sumiu.md'] } });
     const s = JSON.parse(rodarCli(dir, 'raiz.txt').stdout);
-    assert.ok(s.aviso.indexOf('caminho tentado: "' + path.resolve(dir, 'ref/sumiu.md') + '"') !== -1, s.aviso);
+    assert.ok(s.aviso.indexOf('caminho tentado: "' + barra(path.resolve(dir, 'ref/sumiu.md')) + '"') !== -1, s.aviso);
     assert.match(s.aviso, /confira o caminho em "referencias" do projeto\.json \(relativo a raiz do projeto\)/, s.aviso);
     assert.doesNotMatch(s.aviso, /aponte um arquivo/, s.aviso);
     assert.match(s.aviso, /o inspetor julga sem ela/, s.aviso);
@@ -2010,8 +2257,8 @@ test('082 T6 (p3-23): conteudo da referencia nao forja o cabecalho de outra entr
   const crlf = cegar.montarReferencia(['ref/a.txt'], function () { return { tipo: 'texto', conteudo: 'a\r\n=== referencia 9 de 9: x ===\r\n' }; });
   assert.strictEqual((crlf.texto.match(/^=== referencia /gm) || []).length, 1, crlf.texto);
   // Plano 083 (p5-8): a linha que ja vem com "\===" ganha mais uma barra; sem isso ficava igual a "===" escapada.
-  const barra = cegar.montarReferencia(['ref/a.txt'], function () { return { tipo: 'texto', conteudo: '=== x\n\\=== x\n\\\\===y\n' }; });
-  assert.ok(barra.texto.indexOf('\n\\=== x\n\\\\=== x\n\\\\\\===y\n') !== -1, barra.texto);
+  const comBarra = cegar.montarReferencia(['ref/a.txt'], function () { return { tipo: 'texto', conteudo: '=== x\n\\=== x\n\\\\===y\n' }; });
+  assert.ok(comBarra.texto.indexOf('\n\\=== x\n\\\\=== x\n\\\\\\===y\n') !== -1, comBarra.texto);
   // controle: barra no meio da linha, ou "==" so, nao muda
   const meio = cegar.montarReferencia(['ref/a.txt'], function () { return { tipo: 'texto', conteudo: 'a \\=== b\n\\== c\n' }; });
   assert.ok(meio.texto.indexOf('\na \\=== b\n\\== c\n') !== -1, meio.texto);
@@ -2046,7 +2293,7 @@ test('082 T6 (p1-8): referencia fora da raiz do projeto nao se le, nem por camin
     fs.writeFileSync(path.join(fora, 'segredo.txt'), 'SEGREDO-DE-FORA\n', 'utf8');
     fs.mkdirSync(path.join(dir, 'ref'));
     fs.writeFileSync(path.join(dir, 'ref', 'topo.md'), 'topo\n', 'utf8');
-    const entradas = ['ref/topo.md', path.join(fora, 'segredo.txt'), path.relative(dir, path.join(fora, 'segredo.txt')).replace(/\\/g, '/')];
+    const entradas = ['ref/topo.md', path.join(fora, 'segredo.txt'), barra(path.relative(dir, path.join(fora, 'segredo.txt')))];
     let comLink = false;
     try { fs.symlinkSync(path.join(fora, 'segredo.txt'), path.join(dir, 'ref', 'link.md'), 'file'); comLink = true; } catch (e) { /* sem permissao de link */ }
     if (comLink) entradas.push('ref/link.md');
@@ -2129,7 +2376,8 @@ test('082 T6 (p1-31): a causa de cada referencia que falta vai ao mapa.json e a 
     const s = JSON.parse(rodarCli(dir, 'raiz.txt').stdout);
     const esperado = [{ entrada: 'ref/sumiu.md', codigo: 'ENOENT', caminho: path.resolve(dir, 'ref/sumiu.md') }];
     const forma = function (l) { return l.map(function (f) { return { entrada: f.entrada, codigo: f.codigo, caminho: f.caminho }; }); };
-    assert.deepStrictEqual(forma(s.referenciaQueFalta), esperado);
+    // A3-15: na saida JSON, com barra normal; no mapa.json, o caminho nativo.
+    assert.deepStrictEqual(forma(s.referenciaQueFalta), [Object.assign({}, esperado[0], { caminho: barra(esperado[0].caminho) })]);
     assert.ok(typeof s.referenciaQueFalta[0].causa === 'string' && s.referenciaQueFalta[0].causa !== '');
     const mapa = JSON.parse(fs.readFileSync(path.join(path.dirname(s.a), 'mapa.json'), 'utf8'));
     assert.deepStrictEqual(forma(mapa.referencia.faltam), esperado);
@@ -2216,7 +2464,7 @@ test('D824: sem escopo declarado, nada de pedido.md, e a saida diz por que', () 
     assert.match(saida.semPedido, /^sem escopo declarado em \.claude\/sworn\/escopo\.md: a lente escopo julga so o que mudou alem do necessario; /);
     assert.match(saida.semPedido, /declare o \*\*Objetivo:\*\* e a lista "## Dentro" em \.claude\/sworn\/escopo\.md$/);
     assert.ok(!fs.existsSync(path.join(path.dirname(saida.a), 'pedido.md')));
-    assert.match(saida.aviso, / Sem pedido\.md: o escopo em vigor, \.claude\/sworn\/escopo\.md \(sem CLAUDE_CODE_SESSION_ID, nao sei a frente da sessao\), nao declara objetivo nem Dentro \(veja semPedido\)\./);
+    assert.match(saida.aviso, / Sem pedido\.md: o escopo em vigor, \.claude\/sworn\/escopo\.md \(sem CLAUDE_CODE_SESSION_ID, nao sei a frente da sessao\), nao declara objetivo nem Dentro; o campo semPedido desta saida diz o que declarar nele\./);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -2308,10 +2556,197 @@ test('F1g: o CLI em processo sai igual ao processo de verdade, no aceito e no re
       const emProcesso = rodarCli(a, caso[0]);
       const p = spawnSync(process.execPath, [CLI, '--arquivo', caso[0], '--semente', 'fixa'],
         { cwd: b, encoding: 'utf8', shell: false });
-      const limpo = function (s, dir) { return s.split(dir).join('<dir>').split(JSON.stringify(dir).slice(1, -1)).join('<dir>'); };
+      const limpo = function (s, dir) { return s.split(barra(dir)).join('<dir>').split(dir).join('<dir>').split(JSON.stringify(dir).slice(1, -1)).join('<dir>'); };
       assert.strictEqual(emProcesso.status, caso[1], caso[0] + ': ' + emProcesso.stdout);
       assert.strictEqual(p.status, caso[1], caso[0] + ': ' + p.stdout);
       assert.strictEqual(limpo(emProcesso.stdout, a), limpo(p.stdout, b), caso[0]);
     } finally { fs.rmSync(a, { recursive: true, force: true }); fs.rmSync(b, { recursive: true, force: true }); }
   });
+});
+
+// A3-11 (H1): o arquivo fora do HEAD pelo caminho exato pode estar la por outro nome.
+const ladosDe = function (s) { return [fs.readFileSync(s.a, 'utf8'), fs.readFileSync(s.b, 'utf8')].sort(); };
+
+test('A3-11: o renomeado com git mv tem lado antigo, o nome de antes no HEAD, e nao vira arquivo novo', () => {
+  const dir = repoDeEnsaio();
+  try {
+    gitOk(dir, ['mv', 'raiz.txt', 'renomeado.txt']);
+    const r = rodarCli(dir, 'renomeado.txt');
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const s = JSON.parse(r.stdout);
+    assert.deepStrictEqual(ladosDe(s), ['raiz em HEAD\n', 'raiz no trabalho\n']);
+    assert.strictEqual(s.linhasMudadas, 1, 'o diff vai do nome antigo ao novo, e nao conta o arquivo inteiro');
+    assert.doesNotMatch(s.aviso, /E arquivo novo/);
+    assert.match(s.aviso, /renomeado: o lado antigo e raiz\.txt no HEAD/);
+    const mapa = JSON.parse(fs.readFileSync(path.join(path.dirname(s.a), 'mapa.json'), 'utf8'));
+    assert.strictEqual(mapa.renomeadoDe, 'raiz.txt');
+    assert.strictEqual(mapa.novo, undefined);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A3-11: o renomeado muito mudado (abaixo dos 50% de semelhanca do -M) ainda se mede como um par: 6 linhas mudadas
+// de 10, e nao o arquivo inteiro apagado e criado (10).
+test('A3-11: o renomeado muito mudado se mede contra o nome antigo, linha a linha', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const linhas = function (pre, n) { return Array.from({ length: n }, (_, i) => pre + (i + 1)).join('\n'); };
+    fs.writeFileSync(path.join(dir, 'dez.txt'), linhas('linha de antes numero ', 10) + '\n', 'utf8');
+    gitOk(dir, ['add', 'dez.txt']);
+    gitOk(dir, ['commit', '-qm', 'dez']);
+    gitOk(dir, ['mv', 'dez.txt', 'outro.txt']);
+    fs.writeFileSync(path.join(dir, 'outro.txt'), linhas('trocada ', 6) + '\n' +
+      linhas('linha de antes numero ', 10).split('\n').slice(6).join('\n') + '\n', 'utf8');
+    const s = saidaOk(rodarCli(dir, 'outro.txt'));
+    assert.match(s.aviso, /renomeado: o lado antigo e dez\.txt/);
+    assert.strictEqual(s.linhasMudadas, 6, s.aviso);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A3-11: o git mv puro (o mesmo conteudo) e identico ao nome antigo; o aviso diz que so o nome mudou, e nao que o
+// arquivo foi commitado.
+test('A3-11: o renomeado sem mudanca de conteudo sai identico ao nome antigo, e o aviso diz que so o nome mudou', () => {
+  const dir = repoDeEnsaio();
+  try {
+    gitOk(dir, ['add', 'raiz.txt']);
+    gitOk(dir, ['commit', '-qm', 'raiz igual']);
+    gitOk(dir, ['mv', 'raiz.txt', 'mesmo.txt']);
+    const s = saidaOk(rodarCli(dir, 'mesmo.txt'));
+    assert.match(s.aviso, /O conteudo esta igual ao de raiz\.txt no HEAD \(so o nome mudou\)/);
+    assert.doesNotMatch(s.aviso, /revisar depois de commitar/);
+    assert.doesNotMatch(s.aviso, /nao ha lado antigo/, 'o renome tem lado antigo, so que igual ao novo');
+    assert.strictEqual(s.linhasMudadas, 0, s.aviso);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// F2c: com o trecho recortado, a definicao de topo do nome que o trecho usa fica a mostra, e a saida conta as linhas.
+test('F2c: o recorte que usa uma funcao de topo de fora da margem conta as linhas a mostra em trecho.extras', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const corpo = function (ultima) {
+      return ['function ajuda() {', '  return 1;', '}'].concat(Array.from({ length: 60 }, (_, i) => '// linha ' + i),
+        [ultima]).join('\n') + '\n';
+    };
+    fs.writeFileSync(path.join(dir, 'uso.js'), corpo('const x = 0;'), 'utf8');
+    gitOk(dir, ['add', 'uso.js']);
+    gitOk(dir, ['commit', '-qm', 'uso']);
+    fs.writeFileSync(path.join(dir, 'uso.js'), corpo('const x = ajuda();'), 'utf8');
+    const s = saidaOk(rodarCli(dir, 'uso.js'));
+    assert.ok(s.trecho, 'saiu recortado: ' + s.aviso);
+    assert.ok(s.trecho.extras > 0, JSON.stringify(s.trecho));
+    assert.match(s.aviso, /Nos vaos ficam tambem a mostra/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A3-11: o nome com [ ] que nao esta no HEAD e arquivo novo. Sem o `--` do git show, o nome virava filtro de caminho
+// (status 0, saida vazia), e o pacote saia com um lado antigo vazio que nao dizia "arquivo novo".
+test('A3-11: o arquivo novo com [ ] no nome sai como arquivo novo', () => {
+  const dir = repoDeEnsaio();
+  try {
+    fs.writeFileSync(path.join(dir, 'novo[1].txt'), 'so no disco\n', 'utf8');
+    const s = saidaOk(rodarCli(dir, 'novo[1].txt'));
+    assert.match(s.aviso, /E arquivo novo/);
+    assert.deepStrictEqual(ladosDe(s), ['', 'so no disco\n']);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A3-11: o renomeado que o git nao ve (mv sem git add) segue arquivo novo', () => {
+  const dir = repoDeEnsaio();
+  try {
+    fs.renameSync(path.join(dir, 'raiz.txt'), path.join(dir, 'solto.txt'));
+    const s = saidaOk(rodarCli(dir, 'solto.txt'));
+    assert.match(s.aviso, /E arquivo novo/);
+    assert.doesNotMatch(s.aviso, /renomeado/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A3-11: a caixa se decide pelo disco, nao pela plataforma (o APFS e a pasta do Windows podem diferenciar a caixa). A
+// sonda roda na propria pasta do repositorio de ensaio: outra pasta pode diferenciar a caixa de outro jeito.
+function discoIgnoraCaixaEm(dir) {
+  const sonda = path.join(dir, 'Sonda-Caixa.tmp');
+  fs.writeFileSync(sonda, 'x', 'utf8');
+  try {
+    return fs.existsSync(path.join(dir, 'sonda-caixa.tmp'));
+  } finally { fs.rmSync(sonda, { force: true }); }
+}
+
+test('A3-11: o caminho com outra caixa e o arquivo do HEAD so onde o disco ignora a caixa; onde nao, e outro arquivo', () => {
+  const dir = repoDeEnsaio();
+  try {
+    if (!discoIgnoraCaixaEm(dir)) {
+      fs.writeFileSync(path.join(dir, 'RAIZ.TXT'), 'outro arquivo\n', 'utf8');
+      const n = saidaOk(rodarCli(dir, 'RAIZ.TXT'));
+      assert.strictEqual(n.arquivo, 'RAIZ.TXT');
+      assert.match(n.aviso, /E arquivo novo/);
+      assert.doesNotMatch(n.aviso, /difere do que o git guarda/);
+      return;
+    }
+    const s = saidaOk(rodarCli(dir, 'RAIZ.TXT'));
+    assert.strictEqual(s.arquivo, 'raiz.txt');
+    assert.deepStrictEqual(ladosDe(s), ['raiz em HEAD\n', 'raiz no trabalho\n']);
+    assert.match(s.aviso, /O caminho pedido \(RAIZ\.TXT\) difere do que o git guarda so na caixa das letras/);
+    assert.strictEqual(path.basename(s.base), 'raiz.txt', 'a base e a do nome do git');
+    // O nome com [ ] e o arquivo, nao um padrao: a[b].txt casa A[B].txt (o mesmo arquivo), e nao ab.txt.
+    fs.writeFileSync(path.join(dir, 'A[B].txt'), 'colchete em HEAD\n', 'utf8');
+    gitOk(dir, ['add', '--', ':(literal)A[B].txt']);
+    gitOk(dir, ['commit', '-qm', 'colchete']);
+    fs.writeFileSync(path.join(dir, 'A[B].txt'), 'colchete no trabalho\n', 'utf8');
+    const c = saidaOk(rodarCli(dir, 'a[b].txt'));
+    assert.strictEqual(c.arquivo, 'A[B].txt', c.aviso);
+    assert.deepStrictEqual(ladosDe(c), ['colchete em HEAD\n', 'colchete no trabalho\n']);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A3-15 (H1): os caminhos da saida, e o do aviso, com barra normal no Windows; nos outros, o caminho nativo.
+test('A3-15: no Windows, nenhum caminho da saida JSON nem do aviso leva barra invertida', () => {
+  const dir = repoDeEnsaio();
+  try {
+    comRegras(dir, '# Regras deste projeto\n\n## Régua do projeto - fatias\n\n| --primary | #0055ff |\n');
+    fs.mkdirSync(path.join(dir, 'ref'));
+    fs.writeFileSync(path.join(dir, 'ref', 'topo.md'), 'topo\n', 'utf8');
+    comProjeto(dir, { referencias: { texto: ['ref/topo.md', 'ref/sumiu.md'] } });
+    escopoEm(dir, '.claude/sworn/escopo.md', 'o aninhado diz outra coisa', ['sub/**']);
+    const s = saidaOk(rodarCli(dir, 'sub/aninhado.txt'));
+    const caminhos = {
+      base: s.base, a: s.a, b: s.b, vereditos: s.vereditos, regua: s.regua, pedido: s.pedido, referencia: s.referencia,
+      'invertida.a': s.invertida && s.invertida.a, 'invertida.b': s.invertida && s.invertida.b,
+      'invertida.vereditos': s.invertida && s.invertida.vereditos,
+      'referenciaQueFalta.caminho': s.referenciaQueFalta && s.referenciaQueFalta[0].caminho
+    };
+    for (const k of Object.keys(caminhos)) {
+      assert.strictEqual(typeof caminhos[k], 'string', k + ' falta na saida: ' + JSON.stringify(s));
+      if (process.platform === 'win32') assert.ok(caminhos[k].indexOf('\\') === -1, k + ': ' + caminhos[k]);
+    }
+    const tentado = /caminho tentado: "([^"]*)"/.exec(s.aviso);
+    assert.ok(tentado, s.aviso);
+    if (process.platform === 'win32') assert.ok(tentado[1].indexOf('\\') === -1, tentado[1]);
+    assert.ok(fs.existsSync(s.a) && fs.statSync(s.vereditos).isDirectory(), 'o caminho com barra normal se abre');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// L3-s104-6 (H1): a flag fora do USO e recusada, sem gravar nada; o valor de uma flag pode comecar com --.
+test('L3-s104-6: flag desconhecida (--completo) e recusada e nada se grava; arquivo chamado --x.txt vale', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const r = rodarCli(dir, 'raiz.txt', null, ['--completo']);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.match(r.stdout, /--completo nao e uma opcao deste script/);
+    assert.match(r.stdout, /uso: preparar-revisao\.js/);
+    assert.strictEqual(fs.existsSync(baseDeRevisao(dir)), false, 'nada foi gravado');
+    fs.writeFileSync(path.join(dir, '--x.txt'), 'arquivo de nome estranho\n', 'utf8');
+    assert.strictEqual(saidaOk(rodarCli(dir, '--x.txt')).arquivo, '--x.txt');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// L3-s104-7 (H1): o --completa sobre a faixa que ja era a completa diz que nao mudou nada.
+test('L3-s104-7: --completa em arquivo novo (ja na completa) avisa que a flag nao mudou nada', () => {
+  const dir = repoDeEnsaio();
+  try {
+    fs.writeFileSync(path.join(dir, 'novo.txt'), 'so no disco\n', 'utf8');
+    const s = saidaOk(rodarCli(dir, 'novo.txt', null, ['--completa']));
+    assert.strictEqual(s.faixa, 'completa');
+    assert.match(s.aviso, /O --completa nao mudou nada: a medida do diff ja dava a faixa completa/);
+    assert.doesNotMatch(s.aviso, /Faixa completa pedida por --completa/);
+    const sem = saidaOk(rodarCli(dir, 'novo.txt'));
+    assert.doesNotMatch(sem.aviso, /--completa/, 'sem a flag, nada se diz dela');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

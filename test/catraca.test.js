@@ -84,6 +84,19 @@ test('A2-39/40: o aviso diz o que afrouxou sem jargao, como refazer e o caminho 
   for (const l of m.split('\n')) assert.ok(l.length <= 100, 'linha com ' + l.length + ': ' + l);
 });
 
+// L2-s103-01/02: o `infinity` colado a um nome (`infinityScale`) virava Infinity, e o `1e-3` era lido como 1.
+test('L2-s103-01/02: infinity so inteiro, e o expoente negativo e lido', () => {
+  assert.deepStrictEqual(Object.keys(catraca.pares('maxWarnings = infinityScale')), [], 'o nome que comeca por infinity virou numero');
+  assert.deepStrictEqual(Object.keys(catraca.pares('maxWarnings = infinity_x')), []);
+  assert.deepStrictEqual(catraca.pares('maxWarnings = Infinity;').maxwarnings, [Infinity], 'controle: o Infinity inteiro');
+  assert.deepStrictEqual(catraca.pares('max_ratio = 1e-3').max, [0.001]);
+  assert.deepStrictEqual(catraca.pares('max_ratio = 1e+3').max, [1000], 'controle: o expoente com +');
+  assert.deepStrictEqual(catraca.pares('max_ratio = 1e3').max, [1000], 'controle: o expoente sem sinal');
+  // o efeito no portao: o teto que sobe de 1e-3 para 1e-2 afrouxa; o nome infinityScale nao afrouxa nada
+  assert.strictEqual(catraca.afrouxou('max_ratio = 1e-3', 'max_ratio = 1e-2').length, 1, 'o teto que subiu passou');
+  assert.strictEqual(catraca.afrouxou('maxWarnings = 5', 'maxWarnings = infinityScale').length, 0, 'o nome virou teto infinito');
+});
+
 // A2-35 (P2 do pedido 12): Math.max.apply com a lista inteira estourava a pilha (RangeError) a partir de ~130 mil
 // ocorrencias (medido na s206); o extremo sai por laco.
 test('A2-35: o extremo de uma lista enorme nao estoura a pilha', () => {

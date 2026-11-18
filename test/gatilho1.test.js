@@ -160,16 +160,46 @@ test('gatilho 1: a secao do init nao crava nome de modelo nenhum', () => {
  * caminho do plugin dentro de uma string JavaScript. Com barra invertida - a forma
  * do caminho de instalacao no Windows - cada barra vira escape e o require falha.
  */
+// O que conta e o codigo do -e (entre as aspas logo depois dele): o caminho passado como argumento do node, fora
+// da string JavaScript, chega ao process.argv cru e nao sofre o escape (forma do Passo 0 do init, H1).
+// Cada `node -e` da linha conta (o 2o depois de && tambem), e a aspa escapada (\") fica dentro do codigo. O -e que
+// nao abre aspa, ou cuja aspa nao fecha, devolve o resto da linha: na duvida, acusa.
+function codigoDoNodeE(linha) {
+  const codigos = [];
+  const RE = /node -e\s*/g;
+  let m;
+  while ((m = RE.exec(linha)) !== null) {
+    const resto = linha.slice(RE.lastIndex);
+    const q = /^(["'])((?:\\.|(?!\1)[^\\])*)\1/.exec(resto);
+    codigos.push(q ? q[2] : resto);
+  }
+  return codigos.length ? codigos.join('\n') : null;
+}
+
 test('gatilho 1: nenhuma skill poe o caminho do plugin dentro de node -e', () => {
   const sujas = [];
   for (const s of skills()) {
     for (const linha of s.texto.split(/\r?\n/)) {
-      if (/node -e/.test(linha) && linha.includes('${CLAUDE_PLUGIN_ROOT}')) {
+      const codigo = codigoDoNodeE(linha);
+      if (codigo !== null && codigo.includes('${CLAUDE_PLUGIN_ROOT}')) {
         sujas.push(s.nome + ': ' + linha.trim().slice(0, 80));
       }
     }
   }
   assert.deepStrictEqual(sujas, []);
+});
+
+test('gatilho 1: o leitor do node -e pega o caminho dentro do codigo e solta o que vai como argumento', () => {
+  assert.ok(codigoDoNodeE('node -e "require(\'${CLAUDE_PLUGIN_ROOT}/x.js\')"').includes('${CLAUDE_PLUGIN_ROOT}'));
+  assert.ok(!codigoDoNodeE('node -e "require(process.argv[1])" "${CLAUDE_PLUGIN_ROOT}/x.js"').includes('${CLAUDE_PLUGIN_ROOT}'));
+  // sem aspas fechadas, o resto da linha conta: na duvida, acusa
+  assert.ok(codigoDoNodeE('node -e require(${CLAUDE_PLUGIN_ROOT})').includes('${CLAUDE_PLUGIN_ROOT}'));
+  // a aspa escapada nao corta o codigo, e o 2o node -e da linha tambem e lido
+  assert.ok(codigoDoNodeE('node -e "require(\\"${CLAUDE_PLUGIN_ROOT}/x.js\\")"').includes('${CLAUDE_PLUGIN_ROOT}'));
+  assert.ok(codigoDoNodeE('node -e "1" && node -e "require(\'${CLAUDE_PLUGIN_ROOT}/x.js\')"').includes('${CLAUDE_PLUGIN_ROOT}'));
+  // o -e colado na aspa tambem e lido
+  assert.ok(codigoDoNodeE('node -e"require(\'${CLAUDE_PLUGIN_ROOT}/x.js\')"').includes('${CLAUDE_PLUGIN_ROOT}'));
+  assert.strictEqual(codigoDoNodeE('node scripts/x.js'), null);
 });
 
 /** O comando escrito na skill e o que o agente copia: ele tem de rodar como esta. */

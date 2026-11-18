@@ -15,12 +15,13 @@ const catalogo = require('./lib/catalogo.js');
  * comandos das skills ja o passam.
  *
  * ESTE SCRIPT NAO ABRE CONEXAO (decisao 14): quem consulta e a skill, no agente
- * principal. Le e grava na pasta atual - quem chama roda de dentro da raiz.
+ * principal. Le e grava na raiz do projeto (a pasta com .claude/sworn/projeto.json), mesmo rodado de uma subpasta.
  */
 
 const flags = require('./lib/flags.js');
 
-const cwd = process.cwd();
+// A6-15/A7-06: da subpasta, a raiz do projeto (a pasta com .claude/sworn/projeto.json), como os outros scripts
+const cwd = require('./lib/config.js').raizDoProjeto(process.cwd());
 const USO = 'uso: catalogo.js --motivo <motivo> | --registrar <' +
   catalogo.DESFECHOS.join('|') + '> [fonte...] | --degradado';
 const FLAGS = ['--motivo', '--registrar', '--degradado'];

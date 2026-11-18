@@ -3,6 +3,7 @@
 const auditoria = require('./lib/auditoria.js');
 const config = require('./lib/config.js');
 const injetado = require('./lib/injetado.js');
+const path = require('node:path');
 
 // --memoria <caminho do MEMORY.md>: quem chama (a skill) passa o caminho; o script nao o adivinha.
 // Sem o argumento, ou sem valor depois dele, a chave `memoria` diz "nao medida" e a causa.
@@ -12,19 +13,20 @@ function valor(nome) {
   return v && !v.startsWith('--') ? v : null;
 }
 
-const cwd = process.cwd();
+// A6-15/A7-06: da subpasta, a raiz do projeto (a pasta com .claude/sworn/projeto.json), como os outros scripts
+const cwd = config.raizDoProjeto(process.cwd());
 
 // Colheita 10-20, item 17 + V7: --seguranca <pasta> varre a pasta de um plugin ou skill antes de instalar, sem IA.
 if (process.argv.indexOf('--seguranca') !== -1) {
   const pasta = valor('--seguranca');
   const fs = require('node:fs');
-  const path = require('node:path');
   if (!pasta) {
     process.stdout.write('ERRO: falta a pasta. Uso: node auditar.js --seguranca <pasta> (a pasta do plugin ou da skill, ' +
       'baixada e ainda nao instalada).\n');
     process.exit(1);
   }
-  const abs = path.resolve(cwd, pasta);
+  // a pasta e argumento de quem roda: relativa a pasta de onde rodou, nao a raiz (o cwd daqui sobe ate ela)
+  const abs = path.resolve(process.cwd(), pasta);
   let ehPasta = false;
   try { ehPasta = fs.statSync(abs).isDirectory(); } catch (e) { ehPasta = false; }
   if (!ehPasta) {
@@ -38,8 +40,10 @@ if (process.argv.indexOf('--seguranca') !== -1) {
 // (sem projeto, as fontes canonicas candidatas entram no peso); por isso nao ha `|| {}` aqui.
 // --transcricao <caminho>: opcional. Sem ele, a transcricao e a da sessao do ambiente (lib/injetado.js, localizar).
 // D706: o efetivo (as transcricoes de subagente da pasta dela) so se mede aqui, nunca na rodada automatica.
+// o --memoria tambem e caminho de quem roda: absoluto aqui, para a auditoria nao o resolver pela raiz
+const memoriaDada = valor('--memoria');
 const r = auditoria.auditar(cwd, config.carregarProjeto(cwd), {
-  memoria: valor('--memoria'),
+  memoria: memoriaDada ? path.resolve(process.cwd(), memoriaDada) : memoriaDada,
   transcricao: injetado.localizar(valor('--transcricao'), process.env),
   efetivo: true
 });

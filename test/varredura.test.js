@@ -310,8 +310,20 @@ test('varredura: reconhece as linguagens secundarias e a prova de cada uma', () 
   }
 });
 
+// A4-09: o bun.lock de texto (Bun 1.2+) e Bun, e a prova roda o scripts.test com `bun run test`, nao o executor do Bun
+test('A4-09: o bun.lock de texto e Bun e a prova e bun run test; yarn e pnpm seguem com <gerenciador> test', () => {
+  for (const [trava, gerenciador, prova] of [['bun.lock', 'bun', 'bun run test'], ['bun.lockb', 'bun', 'bun run test'],
+    ['yarn.lock', 'yarn', 'yarn test'], ['pnpm-lock.yaml', 'pnpm', 'pnpm test']]) {
+    const dir = montar({ 'package.json': JSON.stringify({ scripts: { test: 'node --test' } }), [trava]: '' });
+    try {
+      const i = varredura.inferir(varredura.listar(dir).arquivos, dir);
+      assert.deepStrictEqual([i.gerenciador, i.provaDePronto], [gerenciador, prova], trava);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
+});
+
 test('varredura: reconhece os gerenciadores secundarios', () => {
-  const casos = [['yarn.lock', 'yarn'], ['bun.lockb', 'bun'], ['poetry.lock', 'poetry'], ['uv.lock', 'uv']];
+  const casos = [['yarn.lock', 'yarn'], ['bun.lockb', 'bun'], ['bun.lock', 'bun'], ['poetry.lock', 'poetry'], ['uv.lock', 'uv']];
   for (const [arquivo, gerenciador] of casos) {
     const dir = montar({ [arquivo]: '' });
     try {

@@ -9,7 +9,7 @@
     { "padrao": "(^|[\\s;|()}&]|(?<!\\$)\\{)tail([\\s;|(){}&]|$)", "achado": "tail", "sugestao": "Get-Content arq -Tail N", "motivo": "tail nao existe no PowerShell" },
     { "padrao": "<<\\s*'?[A-Za-z_]+'?", "achado": "heredoc", "sugestao": "here-string @'...'@ com o fecho '@ na coluna 0", "motivo": "o PowerShell nao tem heredoc" },
     { "padrao": "mkdir\\s+-p", "achado": "mkdir -p", "sugestao": "New-Item -ItemType Directory -Force caminho", "motivo": "-p nao e flag do PowerShell" },
-    { "padrao": "\\brm\\s+-[a-zA-Z]*r", "achado": "rm -r", "sugestao": "Remove-Item -Recurse -Force", "motivo": "no PowerShell rm e o Remove-Item, que nao aceita flags do bash como -rf" },
+    { "padrao": "\\brm[ \\t]+(?:[^\\s;|&]+[ \\t]+)*?(?:-[rRfivdI]*[rR][rRfivdI]*\\b|--recursive\\b)", "achado": "rm -r", "sugestao": "Remove-Item -Recurse -Force", "motivo": "no PowerShell rm e o Remove-Item, que nao aceita flags do bash como -rf" },
     { "padrao": "\\bexport\\s+[A-Z_]+=", "achado": "export VAR=", "sugestao": "$env:VAR = 'valor'", "motivo": "export nao existe no PowerShell" }
   ],
   "regrasPowerShell51": [

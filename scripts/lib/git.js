@@ -44,6 +44,9 @@ function prazoDoCorrer() {
   return n > 0 && Number.isSafeInteger(n) ? n : 5000;
 }
 
+// A5-07: a lista do status e do ls-files num repositorio grande passa de 1 MiB; 32 MiB, como as ultimasMudancas
+const SAIDA_DE_LISTA_BYTES = 32 * 1024 * 1024;
+
 /**
  * Roda `git <args>` em `cwd` (R3: spawnSync com shell:false, nada de shell) e devolve o stdout, ou `null` quando o
  * git nao respondeu bem (ausente, fora de repositorio, saida diferente de 0, estouro do prazoDoCorrer). Quem precisa
@@ -85,7 +88,9 @@ function modificados(cwd) {
   if (!cwd) return null;
   // D42: sem --untracked-files=all o git colapsa pasta inteiramente nao rastreada
   // numa entrada so ("sub/"), e a trava 5b nao protege nada dentro dela.
-  const saida = correr(cwd, ['status', '--porcelain', '--untracked-files=all', '-z']);
+  // A5-07: a arvore com muitos arquivos novos passa de 1 MiB e a foto virava `null` (trava de outra frente muda)
+  const saida = correr(cwd, ['status', '--porcelain', '--untracked-files=all', '-z'],
+    { maxBuffer: SAIDA_DE_LISTA_BYTES });
   if (saida === null) return null;
   const partes = saida.split('\0').filter(function (p) { return p !== ''; });
   // F1g (s372): arvore limpa nao tem caminho a converter, e o prefixo era um git a mais em toda abertura, todo turno
@@ -178,7 +183,7 @@ function mudancasRastreadas(cwd) {
  */
 function rastreados(cwd) {
   if (!cwd) return null;
-  const bruto = correr(cwd, ['ls-files']);
+  const bruto = correr(cwd, ['ls-files'], { maxBuffer: SAIDA_DE_LISTA_BYTES });
   if (bruto === null) return null;
   return bruto.split(/\r?\n/).filter(function (a) { return !!a; });
 }
@@ -236,10 +241,13 @@ function ultimasMudancas(cwd, pasta, opcoes) {
  * medir (git que falha, binario, saida sem bloco): sem medida, a faixa e a completa. `:(literal)` para que um
  * nome com `*` ou `?` nao vire padrao; --ignore-cr-at-eol porque o identico tambem ignora o CRLF. `rel` e relativo
  * a `cwd`. Plano 091 (#1): saiu do preparar-revisao.js para o portao do commit medir a mesma faixa.
+ * A3-11 (H1): com `antigo` (o nome no HEAD do arquivo renomeado), o diff vai do antigo ao `rel`. O -M1% pareia os dois
+ * mesmo muito mudados: quem chama ja sabe pelo indice que e troca de nome, e sem par o diff seria apagar mais criar.
  */
-function diffContraHead(cwd, rel) {
-  const saida = correr(cwd, ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--ignore-cr-at-eol', '-U0',
-    'HEAD', '--', ':(literal)' + rel], { timeout: 10000, maxBuffer: 64 * 1024 * 1024 });
+function diffContraHead(cwd, rel, antigo) {
+  const caminhos = antigo ? ['-M1%', 'HEAD', '--', ':(literal)' + antigo, ':(literal)' + rel] : ['HEAD', '--', ':(literal)' + rel];
+  const saida = correr(cwd, ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--ignore-cr-at-eol', '-U0']
+    .concat(caminhos), { timeout: 10000, maxBuffer: 64 * 1024 * 1024 });
   if (saida === null) return null;
   const blocos = [];
   const re = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm;
@@ -248,7 +256,11 @@ function diffContraHead(cwd, rel) {
     blocos.push({ antigoIni: Number(m[1]), antigoQtd: m[2] === undefined ? 1 : Number(m[2]),
       novoIni: Number(m[3]), novoQtd: m[4] === undefined ? 1 : Number(m[4]) });
   }
-  if (blocos.length === 0 && saida.trim() !== '') return null;
+  // O renome sem mudanca de conteudo (git mv puro) so traz o cabecalho, sem @@: mediu zero, nao "nao sei medir".
+  const soCabecalho = /^diff --git /.test(saida) && saida.split('\n').every(function (l) {
+    return l === '' || /^(diff --git |similarity index |rename (from|to) |(old|new) mode |index )/.test(l);
+  });
+  if (blocos.length === 0 && saida.trim() !== '' && !soCabecalho) return null;
   const soma = function (campo) { return blocos.reduce(function (t, b) { return t + b[campo]; }, 0); };
   return { removidas: soma('antigoQtd'), acrescentadas: soma('novoQtd'), blocos: blocos };
 }

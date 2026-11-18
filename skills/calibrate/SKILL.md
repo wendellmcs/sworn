@@ -17,6 +17,10 @@ output. Even so, do not paste the output outside this conversation unless the ow
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/calibrar.js"
 
+Reading the transcripts takes a while: about 15 seconds for 200 conversations, measured, and minutes in a
+project with many more. Before running, tell the owner in one line that the measurement is reading the
+conversations and may take from a few seconds to several minutes; give the command a timeout of at least 5 minutes.
+
 Run from the project folder. The script looks for the transcripts in `projects/` of the Claude Code
 config folder. If it does not find them, it exits with `erro` and asks for the path: the folder is the one that has this project's `.jsonl`
 files, inside `~/.claude/projects/` (or `projects/` in `CLAUDE_CONFIG_DIR`, if
@@ -31,8 +35,10 @@ and call `/sworn:calibrate` again; and stop. Do not read or open the `.jsonl` fi
 
 1. **The sample:** how many sessions, from what date to what date, and how much they cost in total.
 2. **The suggestion** (`sugestao`): the threshold and the reason. If `suficiente` comes back `false`, say in
-   so many words that the sample is small and that the current threshold stays; show the reason the script gave, do not
-   propose writing anything and say it is worth running again after a few more weeks of use.
+   so many words that the current threshold stays and show the reason the script gave, and do not propose writing
+   anything. When the reason is a small sample, say it is worth running again after a few more weeks of use; when it
+   is the alarm at 150 thousand or below, say there is no threshold below the alarm to compare, and that to
+   calibrate, the alarm (`limiares.tokensAlarme` in `projeto.json`) has to be above 150 thousand.
 3. **Why that number:** the `simulacao` row for the suggested threshold and the two neighbors.
    A negative `pctDoCusto` is savings against never switching; positive, extra spend. The suggestion's
    rule is the lowest threshold at which switching does not cost more than not switching.

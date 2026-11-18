@@ -2532,7 +2532,7 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
       ['AskUserQuestion', 'portao-decisao.js 10']
     ],
     PostToolUse: [
-      ['Write|Edit|Grep|Glob|Read|AskUserQuestion|Skill', 'marcar-trabalho.js 10'],
+      ['Write|Edit|NotebookEdit|Grep|Glob|Read|AskUserQuestion|Skill', 'marcar-trabalho.js 10'],
       // F3a (D828): no shell, o marcar-trabalho e o conferir-depois rodam num processo so
       ['Bash|PowerShell', 'depois-do-shell.js 15'],
       ['SubagentHandback', 'gravar-veredito.js 10'],

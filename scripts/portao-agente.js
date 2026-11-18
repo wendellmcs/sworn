@@ -10,14 +10,18 @@ const escalada = require('./lib/escalada.js');
 io.blindar(function () {
   io.lerEntrada(function (e) {
     const cwd = config.raizDoProjeto(e.cwd || process.cwd());
-    const tipo = (e.tool_input || {}).subagent_type;
+    // L2-s103-20: sem subagent_type o Claude Code (e o Qwen Code) despacham o general-purpose; o `!tipo` liberava
+    // essa chamada sem julgamento, ainda que o dono tenha posto o general-purpose no topo da escada.
+    const bruto = (e.tool_input || {}).subagent_type;
+    const semTipo = bruto === undefined || bruto === null || (typeof bruto === 'string' && bruto.trim() === '');
+    // O tipo que nao e texto segue como o seu JSON: o escalada.deNovo e o motivo leem texto, e {"toString": 1} lancava.
+    const tipo = semTipo ? custo.AGENTE_SEM_TIPO : (typeof bruto === 'string' ? bruto : JSON.stringify(bruto));
 
     // F18: contar sempre. Custo e informacao do dono, e ele so a tem se alguem contar.
     // A2-06 (molde D420/SH-02): estado fora do ar lancava aqui e `io.blindar` liberava o agente caro. Cada contador
     // fica no seu try, com o nome literal: o leitor de baldes dos testes (test/auxiliar-baldes.js) le esse padrao.
     try { estado.incrementar(e.session_id, 'agentes_despachados'); } catch (err) { /* o balde vale menos que a negacao */ }
 
-    if (!tipo) return io.permitir();
     const projeto = config.carregarProjeto(cwd);
     if (!projeto) return io.permitir();
 

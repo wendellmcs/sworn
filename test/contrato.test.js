@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const barra = (p) => String(p).split(String.fromCharCode(92)).join('/'); // A3-15: a saida usa barra normal
 const comum = require('./lib/comum.js');
 const cegar = require('../scripts/lib/cegar.js');
 const contrato = require('../scripts/lib/contrato.js');
@@ -314,7 +315,7 @@ test('F2c: preparar-revisao poe o contrato no pacote do recorte de codigo, e so 
   assert.strictEqual(s.faixa, 'uma');
   // duas faixas por lado (o require e o ajudante), nos dois lados
   assert.deepStrictEqual(s.trecho, { margem: cegar.TRECHO_MARGEM, extras: 4 });
-  assert.strictEqual(s.contrato, path.join(path.dirname(s.a), 'contrato.txt'));
+  assert.strictEqual(s.contrato, barra(path.join(path.dirname(s.a), 'contrato.txt')));
   const c = fs.readFileSync(s.contrato, 'utf8');
   assert.match(c, /== src\/lib\/util\.js:1-2 {2}ok \(used as `util\.ok`\)\n\/\*\* sempre verdadeiro \*\/\nfunction ok\(\) \{ return true; \}\n/);
   for (const lado of [s.a, s.b]) {

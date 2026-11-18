@@ -47,7 +47,23 @@ function caminhoComparavel(p) {
   return process.platform === 'win32' ? r.toLowerCase() : r;
 }
 
-// PostToolUse em Write|Edit|Bash|PowerShell|Grep|Glob|Read|AskUserQuestion: houve trabalho real
+/** A5-09: o arquivo ja esta na lista por outro caminho (relativo depois do absoluto, outra barra, outra caixa no Windows)?
+ *  O caminho novo se resolve pelo cwd desta chamada, nao pelo do processo do gancho. O item relativo ja guardado so
+ *  casa pelo texto igual: o cwd em que ele entrou pode nao ser o de agora. Caminho que nao e texto compara como veio:
+ *  o path.resolve lancaria e a gravacao inteira desta chamada se perderia. */
+function jaTocado(lista, base, arquivo) {
+  if (typeof arquivo !== 'string') return lista.indexOf(arquivo) !== -1;
+  const path = require('node:path');
+  const chave = caminhoComparavel(path.resolve(base, arquivo));
+  return lista.some(function (a) {
+    if (typeof a !== 'string') return false;
+    if (!path.isAbsolute(a)) return a === arquivo;
+    return caminhoComparavel(a) === chave;
+  });
+}
+
+// PostToolUse no matcher do hooks.json (Write, Edit, NotebookEdit, Grep, Glob, Read, Skill, AskUserQuestion; Bash e
+// PowerShell chegam pelo depois-do-shell.js): houve trabalho real
 // neste turno (o AskUserQuestion so conta a decisao do dono; perguntar nao e trabalho).
 io.blindar(function () {
   io.lerEntrada(function (e) {
@@ -124,7 +140,8 @@ io.blindar(function () {
           const op = resp && typeof resp === 'object' ? resp.gitOperation : null;
           if ((op && op.commit && op.commit.sha) || commitNaSaida(resp)) s.commitsFeitos = (s.commitsFeitos || 0) + 1;
         }
-        const arquivo = (e.tool_input || {}).file_path || doShell;
+        // L2-s103-06: o NotebookEdit escreve pelo notebook_path, como o portao-escopo.js le.
+        const arquivo = (e.tool_input || {}).file_path || (e.tool_input || {}).notebook_path || doShell;
         // s369 (P1 do dono): depois do handoff gravado, qualquer ferramenta do agente principal fora do proprio
         // arquivo do handoff conta como seguir o trabalho (o portao-fecho.js barra a parada logo depois do handoff).
         if (s.gravouHandoff === true && !e.agent_id && !(arquivo && saude.ehArquivoDeHandoff(arquivo))) {
@@ -132,7 +149,11 @@ io.blindar(function () {
         }
         if (arquivo) {
           s.arquivosTocados = s.arquivosTocados || [];
-          if (s.arquivosTocados.indexOf(arquivo) === -1) s.arquivosTocados.push(arquivo);
+          // A5-09: o mesmo arquivo por outra barra, outra caixa (no Windows) ou relativo depois do absoluto entra uma
+          // vez so; a lista guarda o caminho como veio, que os outros portoes leem.
+          if (!jaTocado(s.arquivosTocados, typeof e.cwd === 'string' && e.cwd ? e.cwd : process.cwd(), arquivo)) {
+            s.arquivosTocados.push(arquivo);
+          }
           // Plano 091 (#1): editado depois de aprovado volta para a lista do portao do commit (lib/commit.js).
           if (Array.isArray(s.revisadosAprovados)) s.revisadosAprovados = require('./lib/commit.js').semAprovado(s.revisadosAprovados, arquivo);
           // D785 (2.1): marca do TURNO; o laco da prova do portao do fecho so cobra o turno que editou codigo.
@@ -176,7 +197,12 @@ io.blindar(function () {
         const retomar = require('./lib/retomar.js');
         if (String(e.tool_name || '').toLowerCase() === 'read') {
           aviso = retomar.reclamar(raiz, require('node:path').resolve(raiz, alvo), e.session_id, Date.now());
-        } else retomar.soltar(raiz, e.session_id);
+        } else {
+          // D869: o handoff gravado pelo agente (Write, Edit ou o shell) deixa a .sworn/handoff com o .gitignore '*'.
+          // Antes do soltar, que pode lancar; o protegerPasta nao lanca e nao cria a pasta (o handoff fora dela nao a cria)
+          retomar.protegerPasta(require('node:path').join(raiz, retomar.PASTA));
+          retomar.soltar(raiz, e.session_id);
+        }
       }
     } catch (err) { aviso = null; }
     if (aviso) return io.permitir({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: aviso } });

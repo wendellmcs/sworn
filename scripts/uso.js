@@ -6,7 +6,8 @@ const path = require('node:path');
 const texto = require('./lib/texto.js');
 const projeto = require('./lib/projeto.js');
 
-const alvo = path.join(process.cwd(), '.claude', 'sworn', 'contadores.json');
+// A6-15/A7-06: da subpasta, a raiz do projeto (a pasta com .claude/sworn/projeto.json), como os outros scripts
+const alvo = path.join(require('./lib/config.js').raizDoProjeto(process.cwd()), '.claude', 'sworn', 'contadores.json');
 // A6 (s220): so o arquivo ausente e vazio. JSON quebrado, valor que nao e objeto simples e erro de leitura saem com a
 // causa, como o estado.descarregar os ve (lib/estado.js:257, que guarda o torto como .corrompido no fim do turno).
 // A6-06 e A6-09 (D735): a causa traduzida (o texto do Node entre aspas, marcado como dele) e o efeito sem jargao.

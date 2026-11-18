@@ -43,6 +43,35 @@ test('varrer, uma linha: os tres rotulos, em cada prefixo de comentario', () => 
   }
 });
 
+// A6-14: o /** deixava o '*' na frente da marca, e a marca depois de um primeiro prefixo que nao era o dela sumia
+test('A6-14: a marca depois de /** e a do comentario seguinte da mesma linha sao achadas', () => {
+  const esperado = { oque: 'x.', limite: 'y.', gatilho: 'z.' };
+  const corpo = 'atalho: x. limite: y. trocar quando: z.';
+  for (const linha of ['/** ' + corpo + ' */', '  /**' + corpo + ' */', 'a = b -- c  # ' + corpo, 'x = 1 # nota // ' + corpo,
+    '/* sem marca */ // ' + corpo]) {
+    assert.deepStrictEqual(umaLinha(linha, PADRAO), esperado, linha);
+  }
+  // so comentario sem marca, ou a marca dentro de string depois do comentario, segue sem atalho
+  assert.strictEqual(umaLinha('/** so doc */', PADRAO), null);
+  assert.strictEqual(umaLinha('// nota "# atalho: x"', PADRAO), null);
+});
+
+// o /* dentro de um // nao abre bloco: a linha de baixo sem prefixo e codigo e fica fora da nota
+test('A6-14: o /* dentro de // nao abre bloco, e a linha de baixo sem prefixo nao entra na nota', () => {
+  const achados = atalhos.varrer(['x.js'], function () { return '// ver /* atalho: a.\nlimite: b.\n'; }, PADRAO);
+  assert.deepStrictEqual(achados.map((a) => [a.oque, a.limite]), [['a.', null]]);
+});
+
+// so o `//` engole o resto da linha: o `#` de titulo, o `--` de variavel CSS e o `/* x */` ja fechado nao
+test('A6-14: o bloco aberto depois de #, -- ou de um /* x */ fechado segue na linha de baixo', () => {
+  for (const linha of ['# Titulo <!-- atalho: a.\nlimite: b. -->\n', '  --cor: red; /* atalho: a.\n   limite: b. */\n',
+    '/* x */ /* atalho: a.\n   limite: b. */\n', '<!-- ver // aqui --> <!-- atalho: a.\nlimite: b. -->\n',
+    '/* a // b */ /* atalho: a.\n   limite: b. */\n', '/* a // b /* atalho: a.\n   limite: b. */\n']) {
+    const achados = atalhos.varrer(['x.css'], function () { return linha; }, PADRAO);
+    assert.deepStrictEqual(achados.map((a) => [a.oque, a.limite]), [['a.', 'b.']], linha);
+  }
+});
+
 test('varrer, uma linha: sem rotulo vira so o "o que", sem limite e sem gatilho', () => {
   assert.deepStrictEqual(umaLinha('// atalho: pausa medida pelo relogio, vale um fuso', PADRAO),
     { oque: 'pausa medida pelo relogio, vale um fuso', limite: null, gatilho: null });

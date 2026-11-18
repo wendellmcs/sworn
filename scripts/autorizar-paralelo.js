@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { gravarAtomico } = require('./lib/estado.js');
 
 /**
  * D451: a autorizacao do /sworn:parallel, dada UMA vez no /sworn:init. Grava a regra de permissao
@@ -80,9 +81,11 @@ if (conferir || ja) sair(0, { autorizado: ja, gravou: false });
 
 obj.permissions = obj.permissions || {};
 obj.permissions.allow = (obj.permissions.allow || []).concat([REGRA]);
+// A2-22: grava num temporario e renomeia. Com a escrita direta, uma queda no meio (disco cheio, processo morto)
+// deixava o settings.local.json truncado, e o dono perdia as outras permissoes do arquivo.
 try {
   fs.mkdirSync(path.dirname(arquivo), { recursive: true });
-  fs.writeFileSync(arquivo, JSON.stringify(obj, null, 2) + '\n');
+  gravarAtomico(arquivo, JSON.stringify(obj, null, 2) + '\n');
 } catch (e) {
   sair(1, { autorizado: false, gravou: false, erro: 'nao consegui gravar ' + RELATIVO + ' (' + e.message + '); confira se a pasta .claude aceita gravacao e rode de novo' });
 }

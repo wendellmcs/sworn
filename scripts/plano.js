@@ -19,14 +19,19 @@ function arg(nome) {
   });
 }
 
-const cwd = process.cwd();
-const abrirEm = arg('abrir');
+// A6-15/A7-06: da subpasta, a raiz do projeto (a pasta com .claude/sworn/projeto.json), como os outros scripts
+const cwd = require('./lib/config.js').raizDoProjeto(process.cwd());
+// --abrir e --proxima-decisao sao caminhos de quem roda: relativos a pasta de onde rodou; o --abrir vai gravado
+// relativo a raiz, como quando se roda dela
+const abrirDado = arg('abrir');
+const abrirEm = abrirDado && !path.isAbsolute(abrirDado) && path.resolve(process.cwd()) !== path.resolve(cwd)
+  ? path.relative(cwd, path.resolve(process.cwd(), abrirDado)) : abrirDado;
 const decisoes = arg('proxima-decisao');
 const sessaoDaFlag = arg('sessao');
 
 if (decisoes) {
   // D460: ausente segue dando 1 (projeto sem decisao ainda), mas avisa: caminho errado gravava "D1" calado
-  const alvo = path.resolve(cwd, decisoes);
+  const alvo = path.resolve(process.cwd(), decisoes);
   let st = null;
   try { st = fs.statSync(alvo); } catch (e) { st = null; }
   if (st && !st.isFile()) {

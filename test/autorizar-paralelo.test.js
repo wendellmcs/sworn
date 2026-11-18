@@ -163,6 +163,35 @@ test('autorizar: .git na pasta pessoal (dotfiles) nao vira raiz do projeto (conf
   });
 });
 
+// A2-22: a escrita que cai no meio nao pode truncar o arquivo do dono. O preload grava metade e lanca, como um disco
+// cheio; com a escrita direta, o settings.local.json ficava pela metade.
+test('A2-22: a escrita que falha no meio deixa o settings.local.json do dono inteiro', () => {
+  comDir((dir) => {
+    fs.mkdirSync(path.join(dir, '.claude'));
+    const antes = JSON.stringify({ model: 'x', permissions: { allow: ['Bash(npm test)'] }, env: { A: '1' } });
+    fs.writeFileSync(local(dir), antes);
+    const preload = path.join(dir, 'cai-no-meio.js');
+    fs.writeFileSync(preload, [
+      "const fs = require('fs');",
+      'const original = fs.writeFileSync;',
+      'fs.writeFileSync = function (alvo, dados, ...resto) {',
+      "  if (String(alvo).indexOf('settings.local.json') !== -1) {",
+      '    original.call(fs, alvo, String(dados).slice(0, 10), ...resto);',
+      "    const e = new Error('ENOSPC: disco cheio'); e.code = 'ENOSPC'; throw e;",
+      '  }',
+      '  return original.call(fs, alvo, dados, ...resto);',
+      '};'
+    ].join('\n'));
+    const r = spawnSync(process.execPath, ['-r', preload, SCRIPT], { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    let json = null;
+    try { json = JSON.parse(r.stdout); } catch (e) { json = null; }
+    assert.strictEqual(json && json.gravou, false, r.stdout + r.stderr);
+    assert.strictEqual(fs.readFileSync(local(dir), 'utf8'), antes, 'o arquivo do dono ficou truncado');
+    assert.deepStrictEqual(fs.readdirSync(path.join(dir, '.claude')), ['settings.local.json'], 'sobrou temporario');
+  });
+});
+
 test('autorizar: settings.local.json com BOM (PowerShell 5.1) ou vazio nao para o init (D460)', () => {
   for (const [nome, conteudo, esperado] of [
     ['BOM', '\uFEFF' + JSON.stringify({ model: 'x' }), { model: 'x', permissions: { allow: [REGRA] } }],

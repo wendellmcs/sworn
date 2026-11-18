@@ -5,6 +5,8 @@ const path = require('node:path');
 const ob = require('./lib/obrigacoes.js');
 const texto = require('./lib/texto.js');
 const flags = require('./lib/flags.js');
+// A6-15/A7-06: da subpasta, a raiz do projeto (a pasta com .claude/sworn/projeto.json), como os outros scripts
+const RAIZ = require('./lib/config.js').raizDoProjeto(process.cwd());
 
 /**
  * O EXPERIMENTO DA D83: o manual antigo ainda e preciso, ou o plugin basta?
@@ -86,7 +88,7 @@ const linhas = ob.linhasDoExperimento(cruz);
 // ── o veredito ───────────────────────────────────────────────────────────
 
 if (tem('--veredito')) {
-  const onde = arg('--resultado') || path.join(process.cwd(), RESULTADO[0], RESULTADO[1], RESULTADO[2]);
+  const onde = arg('--resultado') || path.join(RAIZ, RESULTADO[0], RESULTADO[1], RESULTADO[2]);
   // A saida e colada como evidencia: caminho de fora da pasta atual sai so pelo nome.
   const relativo = path.relative(process.cwd(), onde);
   const mostrar = (relativo.startsWith('..') || path.isAbsolute(relativo)) ? path.basename(onde) : relativo;
@@ -125,7 +127,7 @@ if (tem('--veredito')) {
 
 // ── o roteiro ────────────────────────────────────────────────────────────
 
-const onde = path.join(process.cwd(), RESULTADO[0], RESULTADO[1], RESULTADO[2]);
+const onde = path.join(RAIZ, RESULTADO[0], RESULTADO[1], RESULTADO[2]);
 process.stdout.write(JSON.stringify({
   manualDoPlugin: { arquivos: doPlugin.arquivos, obrigacoes: doPlugin.obrigacoes.length,
     porFamilia: doPlugin.porFamilia },

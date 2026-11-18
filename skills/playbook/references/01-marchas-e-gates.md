@@ -89,7 +89,9 @@ behavior.
 - `git diff --check` clean.
 - Files changed listed in the answer.
 
-**Minimum evidence:** the diff and the file list.
+**Minimum evidence:** the diff and the file list. No blind review: the commit gate does not ask for one on a text
+file (`.md`, `.txt`) nor on a JS or TS file whose diff only changes comments or whitespace (a `@ts-`, `eslint` or
+`@__PURE__` comment counts as code, and so does a new shortcut mark without its trigger).
 
 **Do not use Fast when:** the changed text is one of the product's canonical labels
 (`{{texto:rotulosCanonicos}}`), or the config touched governs permission, build, publishing or an endpoint.

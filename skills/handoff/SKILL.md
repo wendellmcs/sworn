@@ -64,7 +64,19 @@ and never containing `retomar` (that word names the summary of a stopped chat). 
 nothing. The output says `arquivo: <path>` and brings the text: the reading order, the topology and `git status`, the
 plan's next unticked item copied from the file, the open pending items and requests, and the prompt. Replace each `<<...>>`
 mark with what it asks, keep the rest as it came, and write the file with **Write** at that path: the hooks only
-recognize this session's handoff by a Write or an Edit. Then check it:
+recognize this session's handoff by a Write or an Edit.
+
+**In a configured project, the scope gate (lock 4) can deny this Write**, and the Edit of the plan further below: it
+only lets you write what the task's declared scope covers. Before writing, put `.sworn/handoff/**` (and the plan's
+path, if you will mark boxes in it) under "Dentro" in the scope in force (`.claude/sworn/escopo.md`, or the front's
+file in `.claude/sworn/escopos/`), with `Edit`, writing the reason on the same line, without erasing the rest. The
+gate does not block the edit of the scope file itself, but it counts the expansion and flags it at the close-out of
+the turn. If that edit is also denied, or the scope belongs to another task and the owner does not authorize the
+expansion, write nothing: skip the check below and the plan marks, paste the handoff text in the chat, in a code
+block, say it was not written and why, and go to Step 3. Never write it through another path that works around the
+gate.
+
+Then check it:
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-curto.js" --conferir <path>
 
@@ -123,8 +135,9 @@ If the session works on a plan, let the plan panel (`/sworn-plan`) find it in th
   backticks if it has a space. New plan: replace the old `Plano:`, do not add another;
 - on each box this session ticks in the plan, its mark: `- [x] step (sN: what was done)`. A box
   ticked by an earlier session does not get this session's N. The sessions spent and the panel's estimate come from these
-  marks. **The session's N:** if it has already written its note `(sessao N, ...)` in the Objetivo, it is that note's N. If
-  it has not yet, read the disk: the highest number already used among the notes in the Objetivo of the scope in force and the
+  marks. **The session's N:** if this conversation has already written its note `(sessao N, ...)` in the Objetivo, it is
+  that note's N. Only a note this conversation wrote counts, before or after a compaction: a note that was already in
+  the Objetivo when the conversation opened belongs to another session. If it has not yet, read the disk: the highest number already used among the notes in the Objetivo of the scope in force and the
   marks `(sN` of the plan, plus 1 (1 if there is none); write the note with it before ticking boxes or table
   rows. The note and all the session's marks, in a box or in a table row, carry that N.
   Two sessions open at the same time may arrive at the same N: when writing the note, if the N is already in another session's

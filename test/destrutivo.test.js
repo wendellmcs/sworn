@@ -685,6 +685,48 @@ test('destrutivo D50: a forma do cmd dos mesmos apelidos', () => {
   }
 });
 
+// D871: o `del /f` sem `/s` e o apagar no fim do cano passavam (o GUIA os listava entre os que passam)
+test('destrutivo D871: del /f do cmd e o apagar no fim do cano barram; o cano que nao apaga e o "ou" passam', () => {
+  const barra = {
+    'del /f do cmd: forca o apagar, ate do arquivo somente leitura': ['del /f a.txt', 'erase /F/Q a.txt',
+      'cmd /c del /f /q a.txt', 'del.exe /q /f a.txt', 'DEL /F a.txt', 'del /f "meu arquivo.txt"'],
+    'apagar no fim do cano: apaga cada item que o comando anterior lista': ['Get-ChildItem -Recurse | Remove-Item',
+      'gci *.tmp | ri', 'ls | xargs rm', 'ls -n 1 | xargs -n 1 rm', 'find . -name x | xargs -0 rm', 'ls | xargs -I {} rm {}',
+      'ls |& rm', 'ls | sudo -u root rm', 'gci | % { rm $_ }', 'gci | ForEach-Object { Remove-Item $_ }',
+      'ls | /usr/bin/rm', 'gci |Remove-Item', 'ls | timeout 5 rm', 'ls | "rm"',
+      // ronda 1: toda instrucao do bloco, o valor de opcao de cada portador, o env e a duracao, o -c depois do xargs
+      'gci | % { echo $_; rm $_ }', 'gci | ForEach-Object { if ($_) { rm $_ } }', 'gci | % { Remove-Item }',
+      'ls | xargs sudo -E rm', 'ls | sudo -g wheel rm', 'ls | env X=1 rm', 'ls | timeout 5s rm',
+      'ls | xargs --delimiter , rm', "ls | xargs sh -c 'rm \"$@\"' _", 'ls | xargs rm a.txt',
+      // ronda 2: o valor do parametro do PowerShell nao e nome; o posicional do portador; todo bloco do mesmo %
+      'gci -Recurse | Remove-Item -ErrorAction SilentlyContinue', 'gci *.log | ri -Exclude keep.log',
+      'gci | Remove-Item -Filter *.log', 'find . -name x | flock /tmp/l xargs rm', 'ls | taskset 0x1 xargs rm',
+      'gci -Recurse | ForEach-Object -Begin { $n = 0 } -Process { rm $_ }', 'gci | % { 1 } { rm $_ }', 'gci | % {} { rm $_ }',
+      // ronda 3: o posicional numerico do portador nao come o xargs; o prefixo da chave nao leva o argumento seguinte
+      'ls | chrt 10 xargs rm a.txt', 'ls | taskset 3 xargs rm a.txt', 'ls | taskset -c 0 xargs rm a.txt',
+      'gci | % { Remove-Item -Verb $_ a.txt }', 'gci | % { Remove-Item -Conf $_ a.txt }']
+  };
+  for (const [motivo, cmds] of Object.entries(barra)) {
+    for (const cmd of cmds) assert.deepStrictEqual(destrutivo.classificar(cmd), { destrutivo: true, motivo: motivo }, cmd);
+  }
+  for (const cmd of ['del /q a.txt', 'del /fast.txt', 'a || rm x', 'ls | grep rm', 'git ls-files | xargs -r grep -n rm',
+    'gci | Select-Object Name', 'ls | sort; rm x', 'gci | % { echo $_ }; rm a', 'git log | head', 'cat x | tee y',
+    'ls | xargs echo rm', 'gci | Out-File del.txt',
+    // ronda 1: o nome escrito sem xargs nao apaga o que o cano lista; o `%` sem bloco nao marca o comando seguinte
+    'echo y | rm -i a.txt', 'ls |& rm x', 'gci | Remove-Item a.txt', 'gci | % { rm a.txt }', 'gci | % Name; rm a.txt', 'gci | % Name; rm $x',
+    'gci | % { $_ }; if (x) { rm a.txt }', 'ls | sh -c "rm x"', 'ls |', '| rm x',
+    // ronda 2: o nome com espaco ou acento, o -Path e o -LiteralPath dao nome; o separador encerra os blocos do %
+    'echo y | rm -i "meu arquivo.txt"', 'echo y | rm -i relatório.txt', 'gci | Remove-Item -Path a.txt',
+    'gci | Remove-Item -LiteralPath a.txt -WhatIf', 'gci | Remove-Item -WhatIf a.txt', 'gci | % { 1 }; rm $x',
+    'gci | % { 1 } | sort; rm $x', 'gci | % { 1 }; if (x) { rm $x }']) {
+    assert.strictEqual(destrutivo.classificar(cmd).destrutivo, false, 'devia passar: ' + cmd);
+  }
+  // o aviso das duas regras traz a forma que passa (apagar pelo nome)
+  for (const cmd of ['del /f a.txt', 'ls | xargs rm']) {
+    assert.ok(destrutivo.motivo(cmd, destrutivo.classificar(cmd)).indexOf('Apagar arquivo pelo nome') !== -1, cmd);
+  }
+});
+
 test('destrutivo D50: as outras formas de destruir referencia no remoto', () => {
   for (const cmd of ['git push origin :main', 'git push origin --delete main',
                      'git push --delete origin main', 'git push --mirror origin',
@@ -735,6 +777,15 @@ test('D49: a foto que falhou nao congela a sessao', () => {
     assert.strictEqual(abrir(fora, 'startup').status, 0, 'o hook tem de sair com 0 mesmo falhando (R6)');
     assert.strictEqual(estadoDe().gitAbertura, undefined,
       'foto que falhou nao pode virar lista vazia gravada: ' + JSON.stringify(estadoDe()));
+
+    // A5-02: o fecho de um turno com trabalho regravava a foto que falhou como `[]` (arvore limpa), e a reabertura
+    // via a lista e nao fotografava mais
+    const noFora = (script, extra) => comum.ganchoComoProcesso(path.join('scripts', script),
+      Object.assign({ session_id: 'd49', cwd: fora }, extra), { env: env });
+    assert.strictEqual(noFora('marcar-trabalho.js', { tool_name: 'Write' }).status, 0);
+    assert.strictEqual(noFora('portao-fecho.js').status, 0);
+    assert.strictEqual(estadoDe().gitAbertura, undefined,
+      'o fecho do turno nao grava a foto que falhou como lista vazia: ' + JSON.stringify(estadoDe()));
 
     // Reabertura, agora dentro do repositorio: a segunda chance tem de valer.
     assert.strictEqual(abrir(repo, 'resume').status, 0);
@@ -3451,4 +3502,70 @@ test('F5b: o apagar simples cuja conferencia quebra, com escopo declarado, e neg
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+// A1-12 / L1-s102-11: a opcao do rm comeca com `-`, e o redirecionamento nao e alvo.
+test('A1-12/L1-s102-11: rm sem opcao passa; o redirecionamento nao vira alvo, o alvo depois dele sim', () => {
+  for (const cmd of [
+    'rm -f 2>/dev/null x', 'rm -f x 2>/dev/null', 'rm -rf "$x" >log', 'rm -rf >log x', 'rm -f > out x', 'rm -r -f x',
+    'r""m -rf >/dev/null dist', 'bash -c "rm -rf x"', 'bash -c "rm -rf -- x"',
+    // depois do `--` o `-dist` e alvo, e o `-` sozinho tambem
+    'rm -rf -- -dist', 'rm -f -- -', 'rm -rf -', 'rm -rf -- -dist >/dev/null',
+    // o leitor parte a linha no `&` do `2>&1`, e o alvo depois dele fica em outro segmento: segue barrando. O `rm -f
+    // 2>&1` sem alvo tambem barra hoje (falso positivo declarado no GUIA), e fica fora daqui para nao virar regra.
+    'rm -rf 2>&1 x'
+  ]) assert.strictEqual(destrutivo.classificar(cmd).destrutivo, true, 'devia barrar: ' + cmd);
+  for (const cmd of [
+    'rm foo bar', 'echo rm foo bar', 'rm -f >/dev/null', 'rm -f > /dev/null', 'rm -rf >/dev/null',
+    'rm -rf 2>/dev/null', 'rm -f >>log', 'rm -rf --verbose >/dev/null', 'rm -rf -- 2>/dev/null', 'rm -rf',
+    // depois do `--`, o `-rf` e o nome do arquivo, nao a opcao
+    'rm -- -rf'
+  ]) assert.strictEqual(destrutivo.classificar(cmd).destrutivo, false, 'nao devia barrar: ' + cmd);
+});
+
+// As duas regras do rm (texto e token) se cobrem uma a outra; cada uma tem de achar o alvo sozinha, senao a mutacao
+// de uma passa calada pela outra.
+test('L1-s102-11: a regra de texto e a por token do rm acham o alvo cada uma sozinha', () => {
+  const texto = destrutivo.REGRAS.find(function (r) { return r.re && r.re.source.indexOf('\\brm\\s+(-') === 0; });
+  const token = destrutivo.REGRAS.find(function (r) { return r.fn && r.fn.name === 'rmForcado'; });
+  assert.ok(texto && token, 'as duas regras do rm existem');
+  for (const cmd of ['rm -rf -- -dist', 'rm -rf -', 'rm -f -- -', 'rm -rf 2>&1 x']) {
+    const seg = destrutivo.lerComando(cmd)[0];
+    assert.ok(texto.re.test(seg.texto), 'a regra de texto devia barrar: ' + cmd);
+    assert.ok(token.fn(seg), 'a regra por token devia barrar: ' + cmd);
+  }
+});
+
+// L1-s102-8/14: o `-D` agrupado ou depois de outra opcao apaga sem conferir merge; depois do `--` e nome de branch.
+test('L1-s102-8/14: git branch -D agrupado ou depois de opcao barra; -dv, -- -D e opcao longa com D passam', () => {
+  for (const cmd of [
+    'git branch -vD x', 'git branch -Dv x', 'git branch -v -D x', 'git branch -dD x',
+    'git branch x -D', "git -C 'a b' branch -vD feat"
+  ]) {
+    const r = destrutivo.classificar(cmd);
+    assert.strictEqual(r.destrutivo, true, 'devia barrar: ' + cmd);
+    assert.strictEqual(r.motivo, 'apaga branch sem conferir merge', 'barrou com outro motivo: ' + cmd);
+  }
+  for (const cmd of [
+    'git branch -dv x', 'git branch -M novo', 'git branch -- -D',
+    'git branch -m velho feat-D', 'git branch --sort=-committerDate', 'git branch --no-Dx'
+  ]) assert.strictEqual(destrutivo.classificar(cmd).destrutivo, false, 'nao devia barrar: ' + cmd);
+});
+
+// L1-s102-9: o dd.exe e o mesmo dd; por texto, `echo dd if= of=` tambem barra (falso positivo aceito, como o do rm).
+test('L1-s102-9: dd.exe escreve no disco como o dd', () => {
+  // `dd.exe if=a`, sem `of=`, barra como o `dd if=a` (a regra do `if=` nao pede o `of=`)
+  for (const cmd of ['dd.exe if=a of=/dev/sda', 'DD.EXE of=/dev/sda if=a', 'echo dd if=a of=/dev/sda', 'dd.exe if=a']) {
+    const r = destrutivo.classificar(cmd);
+    assert.strictEqual(r.destrutivo, true, 'devia barrar: ' + cmd);
+    assert.strictEqual(r.motivo, 'escrita direta de disco', 'barrou com outro motivo: ' + cmd);
+  }
+  assert.strictEqual(destrutivo.classificar('dd.exe --version').destrutivo, false, 'sem if= nem of= o dd nao escreve');
+});
+
+// L1-s102-10: `git checkout main *` sobrescreve os arquivos com a versao do main, e barra de proposito.
+test('L1-s102-10: git checkout main * descarta mudancas e barra', () => {
+  const r = destrutivo.classificar('git checkout main *');
+  assert.strictEqual(r.destrutivo, true, 'git checkout main * sobrescreve os arquivos com o main e devia barrar');
+  assert.strictEqual(r.motivo, 'git checkout . (ou git checkout -- .) descarta todas as mudancas', 'barrou com outro motivo');
 });

@@ -61,8 +61,9 @@ const UNIDADES = ['px', 'rem', 'em'];
 // D244 (P2 da D238 secao 6): `.04em` sem zero a esquerda. O `\b` antes do digito separava o
 // ponto, e a medida lida era `04em`. A segunda alternativa le o ponto quando ele nao vem
 // colado a letra, digito ou outro ponto (em `a.5em` ou `1.2.5em` nao e medida inteira).
+// A2-16: a unidade do CSS nao tem caixa (`13PX` = `13px`), dai o `i`; o valor sai em minusculas no normalizarValor.
 const RE_MEDIDA = new RegExp('(?:(?<![\\w.-])-)?(?:\\b\\d+(?:\\.\\d+)?|(?<![\\w.])\\.\\d+)(?:' +
-  UNIDADES.join('|') + ')\\b', 'g');
+  UNIDADES.join('|') + ')\\b', 'gi');
 
 function normalizarValor(v) {
   return String(v).trim().toLowerCase().replace(/\s+/g, '');
@@ -776,6 +777,9 @@ function conferirComputado(estilo, sistema, caminho, hoje) {
 function conferir(texto, sistema, antes, caminho, hoje) {
   if (!sistema) return { ok: true, fora: [] };
   // A2-03: no Edit, o valor fora que ja estava no `old_string` (contexto, legado) nao e do pedido: desconta, por contagem.
+  // L2-s103-03: limite da contagem, sem posicao: o valor fora que sai de um lugar e volta noutro no mesmo Edit, na
+  // mesma quantidade, passa calado, como mudanca de lugar. A posicao nao resolveria: o `new_string` inteiro e lido
+  // de novo e as linhas andam com ele, e casar por linha acusaria todo valor legado que so mudou de linha.
   const jaTinha = new Map();
   if (typeof antes === 'string') {
     for (const a of conferir(antes, sistema, undefined, caminho, hoje).fora) {

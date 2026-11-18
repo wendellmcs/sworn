@@ -726,6 +726,16 @@ test('D420/PT-04: projeto.json que nao e objeto tambem e ilegivel, e ausente con
       assert.match(r.json.systemMessage, /existe mas nao se le/);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
+  // H1 (mutacao do A2-21): o ausente, que o titulo promete, nao era conferido
+  comTmp((tmp) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-ileg2b-'));
+    try {
+      escrever(dir, 'src/a.js', 'x\n');
+      const r = rodar(entrada(dir, 'src/a.js'), tmp);
+      assert.match(r.json.systemMessage, /nao tem \.claude\/sworn\/projeto\.json\. Rode \/sworn:init/);
+      assert.ok(!/nao se le/.test(r.json.systemMessage), r.json.systemMessage);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
 });
 
 test('A2-03 (D721): o aviso de projeto.json ilegivel traz o passo antes do init, com o caminho do validar.js', () => {
@@ -912,6 +922,15 @@ test('A12-02: NotebookEdit passa pelo portao de escopo - fora do escopo e intoca
   });
 });
 
+const DESIGN_BRANCO = JSON.stringify({ cores: ['#ffffff'], raios: ['4px'], espacos: ['8px'], sombras: [], antiReferencias: [] });
+
+/** O Write (tool_input.content) de `conteudo` em `rel`, na sessao `id`. */
+function escritaInteira(dir, rel, conteudo, id) {
+  const w = comSessao(entrada(dir, rel), id);
+  w.tool_input.content = conteudo;
+  return w;
+}
+
 // A2-03 (revisao completa, L2): o portao de design conferia o new_string inteiro; o valor legado que o Edit so leva de
 // contexto (o mesmo no old_string) barrava a edicao e mandava trocar o que o pedido nao tocava.
 test('A2-03: valor fora do sistema que ja estava no old_string nao barra o Edit; o acrescentado barra', () => {
@@ -919,8 +938,7 @@ test('A2-03: valor fora do sistema que ja estava no old_string nao barra o Edit;
     const dir = montarProjeto();
     try {
       escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.css\n');
-      escrever(dir, '.claude/sworn/design.json',
-        JSON.stringify({ cores: ['#ffffff'], raios: ['4px'], espacos: ['8px'], sombras: [], antiReferencias: [] }));
+      escrever(dir, '.claude/sworn/design.json', DESIGN_BRANCO);
       escrever(dir, 'src/a.css', '.a { padding: 13px; color: red }\n');
       liberou(rodar(editar(dir, 'src/a.css', '.a { padding: 13px; color: red }', '.a { padding: 13px; color: #ffffff }', 'a203-ctx'), tmp));
       const novo = rodar(editar(dir, 'src/a.css', '.a { padding: 13px; color: red }', '.a { padding: 13px; margin: 13px; color: #ffffff }', 'a203-mais'), tmp);
@@ -938,11 +956,7 @@ test('TS-03 (lote 3, D423): token_fora_do_sistema - Write (content) e Edit (new_
       escrever(dir, '.claude/sworn/design.json',
         JSON.stringify({ cores: ['#ff6600', '#ffffff'], raios: ['4px'], espacos: ['4px', '8px'], sombras: [], antiReferencias: [] }));
       escrever(dir, 'src/app.css', '.a { color: #ff6600; }\n');
-      const escrita = (conteudo, id) => {
-        const w = comSessao(entrada(dir, 'src/app.css'), id);
-        w.tool_input.content = conteudo;
-        return w;
-      };
+      const escrita = (conteudo, id) => escritaInteira(dir, 'src/app.css', conteudo, id);
       const wFora = rodar(escrita('.a { color: #ff0000; }\n', 'ts03-w'), tmp);
       assert.ok(negou(wFora), 'Write com cor fora do sistema tinha de negar');
       assert.match(motivoDeNegacao(wFora), /fora do sistema de design/);
@@ -971,11 +985,7 @@ test('E2 (D827): o desvio declarado no design.json libera o valor so na tela del
       // Os dois arquivos ja existem: a escrita e edicao (arquivo novo e outra trava, a 7).
       escrever(dir, 'src/checkout/pagar.css', '.pagar { color: #ff6600; }\n');
       escrever(dir, 'src/home.css', '.home { color: #ff6600; }\n');
-      const escrita = (alvo, id) => {
-        const w = comSessao(entrada(dir, alvo), id);
-        w.tool_input.content = '.pagar { color: #0050aa; }\n';
-        return w;
-      };
+      const escrita = (alvo, id) => escritaInteira(dir, alvo, '.pagar { color: #0050aa; }\n', id);
       const dentro = rodar(escrita('src/checkout/pagar.css', 'e2-dentro'), tmp);
       assert.ok(!negou(dentro), 'na tela do desvio a cor tinha de passar: ' + motivoDeNegacao(dentro));
       liberou(dentro);
@@ -1065,6 +1075,141 @@ test('091 #6: controles - arquivo de marcha padrao passa sem manual; "portaoManu
     try {
       assert.strictEqual(carregarSkill(dir, tmp, 'sworn:playbook').status, 0);
       liberou(rodar(entrada(dir, 'src/auth/login.js'), tmp));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// A2-13: a marcha rapida saia antes da catraca e do design; o arquivo de config afrouxava a regua sem barrar.
+test('A2-13: em marcha rapida, sem escopo declarado, a catraca e o design barram', () => {
+  comTmp((tmp) => {
+    const dir = montarProjeto();
+    try {
+      escrever(dir, '.claude/sworn/design.json', DESIGN_BRANCO);
+      escrever(dir, 'docs/regua.md', '"minimo": 80\n');
+      const desce = rodar(editar(dir, 'docs/regua.md', '"minimo": 80', '"minimo": 40', 'a213-c'), tmp);
+      assert.ok(negou(desce), 'a catraca afrouxada em marcha rapida tinha de negar');
+      assert.match(motivoDeNegacao(desce), /minimo: 80 -> 40/);
+      liberou(rodar(editar(dir, 'docs/regua.md', '"minimo": 80', '"minimo": 90', 'a213-c2'), tmp));
+      escrever(dir, 'docs/a.css', '.a { color: #ffffff }\n');
+      const fora = rodar(editar(dir, 'docs/a.css', 'color: #ffffff', 'color: #ff0000', 'a213-d'), tmp);
+      assert.ok(negou(fora), 'a cor fora do sistema em marcha rapida tinha de negar');
+      assert.match(motivoDeNegacao(fora), /#ff0000/);
+      liberou(rodar(editar(dir, 'docs/a.css', 'color: #ffffff', 'color: #ffffff; ', 'a213-d2'), tmp));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// R-T20-07: sem projeto.json, o design.json nunca barrava.
+test('R-T20-07: sem projeto.json, o design.json que existe barra a cor fora do sistema', () => {
+  comTmp((tmp) => {
+    const dir = comum.temporaria('sworn-sem-proj-');
+    try {
+      escrever(dir, '.claude/sworn/design.json', DESIGN_BRANCO);
+      escrever(dir, 'a.css', '.a { color: #ffffff }\n');
+      const fora = rodar(editar(dir, 'a.css', 'color: #ffffff', 'color: #ff0000', 'rt07'), tmp);
+      assert.ok(negou(fora), 'sem projeto.json, o design.json tinha de barrar');
+      assert.match(motivoDeNegacao(fora), /fora do sistema de design/);
+      const dentro = rodar(editar(dir, 'a.css', 'color: #ffffff', 'color: #ffffff; ', 'rt07-ok'), tmp);
+      liberou(dentro);
+      assert.match((dentro.json && dentro.json.systemMessage) || '', /nao tem \.claude\/sworn\/projeto\.json/,
+        'o aviso de sem projeto.json segue saindo');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// L2-s103-04: o Write por cima nao passava o arquivo atual como "antes", e o valor legado barrava a regravacao.
+test('L2-s103-04: Write por cima desconta o valor fora que ja estava no arquivo; o acrescentado barra', () => {
+  comTmp((tmp) => {
+    const dir = montarProjeto();
+    try {
+      escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/a.css\n');
+      escrever(dir, '.claude/sworn/design.json', DESIGN_BRANCO);
+      escrever(dir, 'src/a.css', '.a { padding: 13px; color: red }\n');
+      liberou(rodar(escritaInteira(dir, 'src/a.css', '.a { padding: 13px; color: #ffffff }\n', 'l04-ok'), tmp));
+      const mais = rodar(escritaInteira(dir, 'src/a.css', '.a { padding: 13px; margin: 13px; color: #ffffff }\n', 'l04-mais'), tmp);
+      assert.ok(negou(mais), 'o segundo 13px e acrescentado e tinha de negar');
+      assert.match(motivoDeNegacao(mais), /13px/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+function editarCelula(dir, rel, celula, fonte, id, modo) {
+  const t = { notebook_path: path.join(dir, rel), cell_id: celula, new_source: fonte };
+  if (modo) t.edit_mode = modo;
+  return { session_id: id, cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'NotebookEdit', tool_input: t };
+}
+
+// L2-s103-05: o new_source do NotebookEdit nao era lido pela catraca nem pelo design.
+test('L2-s103-05: NotebookEdit tem a celula conferida pela catraca e pelo design', () => {
+  comTmp((tmp) => {
+    const dir = montarProjeto({ design: { caminhosDeEstilo: ['docs/estilo.ipynb'] } });
+    try {
+      const nb = (fonte, outra) => JSON.stringify({ cells: [{ id: 'c1', cell_type: 'code', source: [fonte] },
+        { id: 'c2', cell_type: 'code', source: [outra] }], nbformat: 4, nbformat_minor: 5 });
+      // a c2 tem um minimo mais baixo: comparar com o notebook inteiro (e nao com a c1) esconderia a descida da c1
+      escrever(dir, 'docs/regua.ipynb', nb('minimo = 80\n', 'minimo = 50\n'));
+      const desce = rodar(editarCelula(dir, 'docs/regua.ipynb', 'c1', 'minimo = 60\n', 'l05-c'), tmp);
+      assert.ok(negou(desce), 'a celula que desce o minimo tinha de negar');
+      assert.match(motivoDeNegacao(desce), /minimo: 80 -> 60/);
+      liberou(rodar(editarCelula(dir, 'docs/regua.ipynb', 'c1', 'minimo = 90\n', 'l05-c2'), tmp));
+      // a celula inserida compara com o notebook inteiro: ela pode redefinir o que outra dizia
+      const ins = rodar(editarCelula(dir, 'docs/regua.ipynb', 'c2', 'minimo = 45\n', 'l05-ins', 'insert'), tmp);
+      assert.ok(negou(ins), 'a celula inserida abaixo do menor minimo do notebook tinha de negar');
+      // inserida depois da c1 (minimo 80): o que conta e o menor do notebook (50), nao o da celula vizinha
+      liberou(rodar(editarCelula(dir, 'docs/regua.ipynb', 'c1', 'minimo = 55\n', 'l05-ins2', 'insert'), tmp));
+      escrever(dir, '.claude/sworn/design.json', DESIGN_BRANCO);
+      // a c2 ja tem a cor fora: so ela, nao a c1, desconta o valor legado
+      escrever(dir, 'docs/estilo.ipynb', nb('cor = "#ffffff"\n', 'velha = "#ff0000"\n'));
+      const fora = rodar(editarCelula(dir, 'docs/estilo.ipynb', 'c1', 'cor = "#ff0000"\n', 'l05-d'), tmp);
+      assert.ok(negou(fora), 'a cor fora do sistema na celula tinha de negar, mesmo ja estando em outra celula');
+      assert.match(motivoDeNegacao(fora), /#ff0000/);
+      liberou(rodar(editarCelula(dir, 'docs/estilo.ipynb', 'c1', 'cor = "#ffffff"\n', 'l05-d2'), tmp));
+      liberou(rodar(editarCelula(dir, 'docs/estilo.ipynb', 'c2', 'velha = "#ff0000"\nnova = 1\n', 'l05-d3'), tmp));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// L2-s103-07: o portao lia o arquivo inteiro sem medida. Ate 32 MB a catraca compara o arquivo inteiro; um byte acima,
+// nega qualquer edicao (o trecho sozinho deixava o arquivo inchado afrouxar a regua por um Edit so do numero).
+test('L2-s103-07: ate 32 MB a catraca compara o arquivo inteiro; acima, nega', () => {
+  comTmp((tmp) => {
+    const dir = montarProjeto();
+    try {
+      const MB32 = 32 * 1024 * 1024;
+      const fim = '\n"minimo": 80\n';
+      escrever(dir, 'docs/medida.md', 'x'.repeat(MB32 - fim.length) + fim);
+      assert.strictEqual(fs.statSync(path.join(dir, 'docs/medida.md')).size, MB32);
+      assert.ok(negou(rodar(editar(dir, 'docs/medida.md', '80', '40', 'l07-m'), tmp)),
+        'com 32 MB o arquivo inteiro e comparado e o Edit so do numero nega');
+      liberou(rodar(editar(dir, 'docs/medida.md', '80', '90', 'l07-m2'), tmp));
+      escrever(dir, 'docs/grande.md', 'x'.repeat(MB32 + 1 - fim.length) + fim);
+      const grande = rodar(editar(dir, 'docs/grande.md', '80', '90', 'l07-g'), tmp);
+      assert.ok(negou(grande), 'um byte acima de 32 MB o arquivo nao se compara inteiro e a edicao nega');
+      assert.match(motivoDeNegacao(grande), /passa de 32 MB/);
+      // o Write inofensivo (sobe o minimo): so a medida pode negar
+      const w = rodar(escritaInteira(dir, 'docs/grande.md', '"minimo": 90\n', 'l07-w'), tmp);
+      assert.ok(negou(w), 'o Write por cima do arquivo grande tambem nega');
+      assert.match(motivoDeNegacao(w), /passa de 32 MB/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// L2-s103-07: o arquivo de escopo vai ate 1 MB; acima, conta vazio, e regrava-lo igual conta como ampliacao.
+test('L2-s103-07: escopo.md acima de 1 MB conta vazio; regrava-lo igual conta ampliacao, abaixo nao', () => {
+  comTmp((tmp) => {
+    const dir = montarProjeto();
+    try {
+      const cheio = (bytes) => '## Dentro\n- src/**\n\n<!-- ' + 'x'.repeat(bytes) + ' -->\n';
+      const pequeno = cheio(1000);
+      escrever(dir, '.claude/sworn/escopo.md', pequeno);
+      liberou(rodar(escritaInteira(dir, '.claude/sworn/escopo.md', pequeno, 'l07-e1'), tmp));
+      assert.strictEqual((lerEstado(tmp, 'l07-e1').contadores || {}).escopo_ampliado, undefined,
+        'regravar o mesmo escopo pequeno nao amplia');
+      const grande = cheio(1024 * 1024);
+      escrever(dir, '.claude/sworn/escopo.md', grande);
+      liberou(rodar(escritaInteira(dir, '.claude/sworn/escopo.md', grande, 'l07-e2'), tmp));
+      assert.strictEqual(lerEstado(tmp, 'l07-e2').contadores.escopo_ampliado, 1,
+        'o escopo acima de 1 MB nao se le e o Dentro inteiro conta como novo');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

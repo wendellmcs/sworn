@@ -751,3 +751,46 @@ test('F5b r2: continuacao depois de > e de <<, traco curto e longo no Join-Path 
   assert.deepStrictEqual(ps("[IO.File]::WriteAllText(\u2018src/a.css\u2019, 'x')"), alvo, '[IO.File] com aspa simples tipografica');
   assert.deepStrictEqual(ps("[IO.File]::WriteAllText(\u201Csrc/a.css\u201D, 'x')"), alvo, '[IO.File] com aspa dupla tipografica');
 });
+
+// A2-10/A2-20 (H1): o leitor de shell daqui e o do commit.js e do push.js: comentarios guardados, os comandos de
+// dentro em ordem e a continuacao de linha do PowerShell.
+test('A2-10: lerShell guarda os comentarios do primeiro nivel; aspa, heredoc e palavra colada nao sao comentario', () => {
+  const ler = function (c, ps) { return estiloShell.lerShell(c, ps).comentarios; };
+  assert.deepStrictEqual(ler('echo a # um\necho b #dois\r\n'), ['# um', '#dois']);
+  assert.deepStrictEqual(ler('echo "a # b" a#b'), []);
+  assert.deepStrictEqual(ler("cat <<'EOF'\n# corpo\nEOF\n# depois"), ['# depois']);
+  assert.deepStrictEqual(ler("echo 'a # b' # c", true), ['# c']);
+});
+
+test('A2-10: comandosSimples poe os comandos de dentro logo depois de quem os roda, ate a profundidade lida', () => {
+  const nomes = function (c, ps) {
+    return estiloShell.comandosSimples(c, ps).map(function (x) { return x.profundidade + ':' + x.palavras.map(function (w) { return w.t; }).join(' '); });
+  };
+  assert.deepStrictEqual(nomes('a; bash -c "b; eval c d"; e'), ['0:a', '0:bash -c b; eval c d', '1:b', '1:eval c d', '2:c d', '0:e']);
+  assert.deepStrictEqual(nomes('powershell -Command "x y"').slice(1), ['1:x y']);
+  // do 4o nivel em diante nao se le (PROFUNDIDADE_MAXIMA = 3)
+  const fundo = nomes("eval eval eval eval z");
+  assert.deepStrictEqual(fundo, ['0:eval eval eval eval z', '1:eval eval eval z', '2:eval eval z', '3:eval z']);
+  assert.ok(Array.isArray(estiloShell.comandosSimples('a # b').comentarios));
+  assert.deepStrictEqual(estiloShell.programa({ palavras: [{ t: 'sudo' }, { t: 'X=1' }, { t: 'C:/bin/Git.EXE' }, { t: 'a' }] }),
+    { nome: 'git', args: [{ t: 'a' }] });
+  assert.strictEqual(estiloShell.programa({ palavras: [{ t: 'then' }] }), null);
+});
+
+test('A2-10: a continuacao de linha do PowerShell (crase e quebra) nao entra na palavra', () => {
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('Set-Content -Path `\n  a.css -Value x', {}, { ferramenta: 'PowerShell' }), ['a.css']);
+  assert.deepStrictEqual(estiloShell.lerShell('a `\r\nb', true)[0].palavras.map(function (w) { return w.t; }), ['a', 'b']);
+  // tambem entre o operador e o alvo da redirecao
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell('echo x > `\n  a.css', {}, { ferramenta: 'PowerShell' }), ['a.css']);
+  // colada na palavra de antes, ela separa (no PowerShell e espaco); no bash a barra e quebra juntam os lados
+  assert.deepStrictEqual(estiloShell.lerShell('Set-Content`\na.css x', true)[0].palavras.map(function (w) { return w.t; }),
+    ['Set-Content', 'a.css', 'x']);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell("Set-Content`\na.css 'x'", {}, { ferramenta: 'PowerShell' }), ['a.css']);
+  assert.deepStrictEqual(estiloShell.alvosDeEstiloNoShell("Set-Content -Path`\r\na.css 'x'", {}, { ferramenta: 'PowerShell' }), ['a.css']);
+  assert.deepStrictEqual(estiloShell.lerShell('ab\\\ncd', false)[0].palavras.map(function (w) { return w.t; }), ['abcd']);
+});
+
+test('A2-10: a palavra do (Join-Path ...) cumpre a forma das outras: qi -1, sem aspa', () => {
+  const w = estiloShell.lerShell('Set-Content (Join-Path a b.css) x', true)[0].palavras[1];
+  assert.deepStrictEqual(w, { t: 'a/b.css', q: false, qi: -1 });
+});

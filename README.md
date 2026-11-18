@@ -47,7 +47,7 @@ Every coding agent picks up the same habits, and none of them show on day one:
 | creates `utils2.js` without looking for the `utils.js` that exists | denies a new file when nothing was searched in the turn and the project has a file of the same name (it searches by itself; without git, any new file) |
 | writes `&&` in Windows PowerShell 5.1 | blocks the wrong shell syntax for the tool that will run it |
 | edits the file another session is working on | denies writes to files that were already modified when the session opened |
-| sends the most expensive model to fix a typo | blocks the top-tier agent when the task only has light work |
+| sends the most expensive model to fix a typo | blocks the agents in the more expensive half of the ladder when the task only has light work |
 | commits code nobody reviewed | denies the commit until the changed code has an approved blind review |
 | asks you to decide inside a wall of text | denies the question without exactly 3 options, the recommended one first |
 | loses the thread when the chat gets long | says when to switch chats, by a counted trigger, and hands over a ready prompt |

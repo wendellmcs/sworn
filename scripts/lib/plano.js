@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const escopoLib = require('./escopo.js');
+const { semBom } = require('./texto.js');
 
 // D660: o plano em ingles conta igual - Task = Tarefa aqui; Step/Stage = Etapa, Wave = Onda, Phase = Fase no RE_ITEM.
 const RE_TAREFA = /^#{2,4}\s*(?:Tarefa|Task)\s+(\d+)\s*[:.\-]\s*(.+?)\s*$/i;
@@ -22,14 +23,45 @@ function contarCaixa(atual, linha) {
 // bloco de codigo nao e cabecalho (senao esconderia do portao os passos abertos depois do bloco). Cabecalho com forma
 // de item ("### Tarefa 2b", que o RE_TAREFA nao casa) tambem nao fecha: as caixas dele seguem cobradas na de cima.
 // R2 da s107: a cerca guarda o marcador que a abriu e so fecha com o mesmo caractere, comprimento igual ou maior
-// (CommonMark) - uma linha ~~~ dentro de um bloco ``` nao fecha. Devolve o marcador aberto, ou null fora da cerca.
+// (CommonMark) - uma linha ~~~ dentro de um bloco ``` nao fecha. L5-s108-1: a linha que fecha nao tem texto depois do
+// marcador ("``` js" dentro do bloco nao fecha). O recuo segue livre: a cerca recuada num item de lista ("- [ ] passo"
+// e o bloco embaixo com 4 espacos) e cerca no CommonMark, e o leitor nao acompanha o recuo de cada lista.
 const RE_CABECALHO = /^(#{1,6})\s/;
-const RE_CERCA = /^\s*(`{3,}|~{3,})/;
-function cerca(aberta, linha) {
-  const m = linha.match(RE_CERCA);
-  if (!m) return aberta;
-  if (!aberta) return m[1];
-  return m[1][0] === aberta[0] && m[1].length >= aberta.length ? null : aberta;
+const RE_CERCA = /^\s*(`{3,}|~{3,})(.*)$/;
+
+/**
+ * Para cada linha, true se ela e de um bloco de codigo (a linha da cerca inclusive). L5-s107-1/2: o que esta dentro
+ * nao e tarefa, cabecalho, tabela nem caixa. L5-s107-3: a cerca que nunca fecha nao e cerca (sem isso escondia do
+ * portao todos os passos abertos dali ate o fim): a linha dela e texto comum. Linear (roda no Stop e a cada medida):
+ * a cerca so abre se ha, mais abaixo, linha que a fecha - do mesmo caractere, do comprimento dela ou maior, sem texto.
+ */
+function linhasNaCerca(linhas) {
+  const n = linhas.length;
+  const m = linhas.map(function (l) { return RE_CERCA.exec(l); });
+  // fechaDepois[c][i]: o maior marcador do caractere c, sem texto depois, da linha i ao fim
+  const fechaDepois = { '`': new Array(n + 1).fill(0), '~': new Array(n + 1).fill(0) };
+  for (let i = n - 1; i >= 0; i--) {
+    fechaDepois['`'][i] = fechaDepois['`'][i + 1];
+    fechaDepois['~'][i] = fechaDepois['~'][i + 1];
+    if (m[i] && !m[i][2].trim()) {
+      const c = m[i][1][0];
+      fechaDepois[c][i] = Math.max(fechaDepois[c][i], m[i][1].length);
+    }
+  }
+  const dentro = new Array(n).fill(false);
+  let aberta = null;
+  for (let i = 0; i < n; i++) {
+    const f = m[i];
+    if (aberta) {
+      dentro[i] = true;
+      if (f && f[1][0] === aberta[0] && f[1].length >= aberta.length && !f[2].trim()) aberta = null;
+    } else if (f && !(f[1][0] === '`' && f[2].indexOf('`') !== -1) && fechaDepois[f[1][0]][i + 1] >= f[1].length) {
+      // CommonMark: a cerca de crases nao tem crase no texto depois dela ("```x``` texto" e codigo na linha, nao cerca)
+      aberta = f[1];
+      dentro[i] = true;
+    }
+  }
+  return dentro;
 }
 function fechaItem(linha, nivel) {
   const m = linha.match(RE_CABECALHO);
@@ -38,13 +70,14 @@ function fechaItem(linha, nivel) {
 
 /** CLAUDE.md: etapa so e completa quando TODOS os subitens dela estao feitos. */
 function parseTarefas(texto) {
-  const linhas = String(texto == null ? '' : texto).split(/\r?\n/);
+  // A7-02/s45-1: o BOM sai aqui tambem (os leitores do portao leem o arquivo cru), como no parseItens.
+  const linhas = semBom(texto == null ? '' : texto).split(/\r?\n/);
+  const naCerca = linhasNaCerca(linhas);
   const tarefas = [];
   let atual = null;
   let nivel = 0;
-  let naCerca = null;
   linhas.forEach(function (linha, i) {
-    naCerca = cerca(naCerca, linha);
+    if (naCerca[i]) return;
     const cab = linha.match(RE_TAREFA);
     if (cab) {
       atual = { n: parseInt(cab[1], 10), titulo: cab[2].trim(), abertos: 0, total: 0, linha: i + 1 };
@@ -52,7 +85,7 @@ function parseTarefas(texto) {
       tarefas.push(atual);
       return;
     }
-    if (atual && !naCerca && fechaItem(linha, nivel)) { atual = null; return; }
+    if (atual && fechaItem(linha, nivel)) { atual = null; return; }
     contarCaixa(atual, linha);
   });
   return tarefas;
@@ -83,17 +116,23 @@ function estadoDoItem(t) {
 // com caixa de passo em cabecalho ignora tabela (as caixas mandam; tabela-resumo das tarefas duplicaria).
 const RE_TIPO_TABELA = /^(Tarefa|Item|Etapa|Onda|Fase|Task|Step|Stage|Wave|Phase)s?$/i;
 const RE_SEP_TABELA = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/;
-const ID_ETAPA = '[A-Za-z]{0,3}\\d+[a-z]?(?:[.\\-]\\d+[a-z]?)*';
-const RE_ID_CELULA = new RegExp('^(' + ID_ETAPA + ')(?!\\w)\\s*(?:[:.\\-—–]\\s*)?(.*)$');
+// s45-5: o 1o bloco de digitos tem 1 a 3 (a data "2026-10-13" numa tabela "| Item |" virava etapa)
+const ID_ETAPA = '[A-Za-z]{0,3}\\d{1,3}[a-z]?(?:[.\\-]\\d+[a-z]?)*';
+// R2 do H1z: a data com ano de 4 digitos (13/10/2026, 13.10.2026, 13-10-2026) e o id seguido de "/" tambem nao viram
+// etapa da tabela; o ETAPA do Objetivo segue no ID_ETAPA puro.
+const RE_ID_CELULA = new RegExp('^(?!\\d{1,2}[./\\-]\\d{1,2}[./\\-]\\d{4}(?!\\w))(' + ID_ETAPA + ')(?![\\w/])\\s*' +
+  '(?:[:.\\-—–]\\s*)?(.*)$');
 
-// D513 #1: "\|" e barra dentro da celula (markdown), nao divisa de coluna.
+// D513 #1: "\|" e barra dentro da celula (markdown), nao divisa de coluna; s45-3: nem no fim da linha.
 function celulas(linha) {
-  return linha.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map(function (c) {
+  return linha.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map(function (c) {
     return c.replace(/\\\|/g, '|').replace(/\*\*/g, '').trim();
   });
 }
 
-// P2 #20 (D512): os itens nao tem `n` - o id e a chave ("P1" e "E1", "3a" e "3b" davam o mesmo n).
+// P2 #20 (D512): os itens nao tem `n` - o id e a chave ("P1" e "E1", "3a" e "3b" davam o mesmo n). s45-12: o id da
+// tabela guarda a caixa do plano (o painel exibe "P0"), o do cabecalho vem em minusculas; toda comparacao de id e
+// em minusculas (tabela.ids, a chave do parseItens, o deduzirPeloEscopo).
 function itemDaTabela(tabela, linha, i) {
   const cel = celulas(linha);
   const m = cel[0].replace(RE_FEITO, ' ').trim().match(RE_ID_CELULA);
@@ -172,17 +211,17 @@ function soAgrupa(t, prox) {
  */
 function parseItens(texto) {
   // D513 #2: o BOM (comum no Windows) nao esconde o cabecalho da 1a linha.
-  const linhas = String(texto == null ? '' : texto).replace(/^\uFEFF/, '').split(/\r?\n/);
+  const linhas = semBom(texto == null ? '' : texto).split(/\r?\n/);
+  const naCerca = linhasNaCerca(linhas);
   const itens = [];
   const tabelas = [];
   let atual = null;
   let tabela = null;
-  let naCerca = null;
-  // Cada linha cai em um so caso, nesta ordem: (1) dentro de uma tabela de etapas aberta; (2) abre uma tabela;
-  // (3) cabecalho de item, que passa a receber as caixas; (4) cabecalho que fecha o item (A7-01); (5) caixa, contada
-  // no item do cabecalho de cima.
+  // Cada linha cai em um so caso, nesta ordem: (0) bloco de codigo, ignorado; (1) dentro de uma tabela de etapas
+  // aberta; (2) abre uma tabela; (3) cabecalho de item, que passa a receber as caixas; (4) cabecalho que fecha o item
+  // (A7-01); (5) caixa, contada no item do cabecalho de cima.
   linhas.forEach(function (linha, i) {
-    naCerca = cerca(naCerca, linha);
+    if (naCerca[i]) { tabela = null; return; }
     // D513 #7: guarda a linha na tabela aberta (a etapa entra em `itens`) e diz se ela era da tabela.
     // R2 da s44: cabecalho com |---| embaixo, mesmo colado, abre outra tabela (nao soma etapas na aberta).
     if (tabela && !abreTabela(linhas, i) && guardarSeForDaTabela(tabela, linha, i, itens)) return;
@@ -200,17 +239,23 @@ function parseItens(texto) {
       itens.push(atual);
       return;
     }
-    if (atual && !naCerca && fechaItem(linha, atual.nivel)) { atual = null; return; }
+    if (atual && fechaItem(linha, atual.nivel)) { atual = null; return; }
     contarCaixa(atual, linha);
   });
-  const vale = tabelaQueVale(itens);
   // R1 da s45: linha da tabela com o tipo e o id de um cabecalho e a tabela-resumo dele - conta uma vez, a do
-  // cabecalho (sem isso, "### Item 1" e "| 1 |" numa tabela "| Item |" davam 2 itens).
+  // cabecalho (sem isso, "### Item 1" e "| 1 |" numa tabela "| Item |" davam 2 itens). s45-25: o filtro vem ANTES da
+  // escolha da tabela (a tabela-resumo, toda descartada, era escolhida e a de etapas sumia). s45-28: o [FEITO] da
+  // linha descartada passa ao cabecalho.
   const chave = function (t) { return (t.tipo + ' ' + t.id).toLowerCase(); };
-  const dosCabecalhos = new Set(itens.filter(function (t) { return !t.tabela; }).map(chave));
-  const validos = itens.filter(function (t) {
-    return !t.tabela || (t.nTabela === vale && !dosCabecalhos.has(chave(t)));
+  const cabecalhos = new Map();
+  itens.forEach(function (t) { if (!t.tabela) cabecalhos.set(chave(t), t); });
+  const semDuplicar = itens.filter(function (t) {
+    if (!t.tabela || !cabecalhos.has(chave(t))) return true;
+    if (t.marcadoFeito) cabecalhos.get(chave(t)).marcadoFeito = true;
+    return false;
   });
+  const vale = tabelaQueVale(semDuplicar);
+  const validos = semDuplicar.filter(function (t) { return !t.tabela || t.nTabela === vale; });
   const tarefas = validos.filter(function (t, i) { return !soAgrupa(t, validos[i + 1]); });
   tarefas.forEach(function (t) { t.estado = estadoDoItem(t); });
   const semId = vale ? tabelas[vale - 1].semId : [];
@@ -251,7 +296,7 @@ function deduzirPeloEscopo(itens, objetivo) {
 function lerAtivo(cwd) {
   try {
     // D442/10: JSON gravado no Windows costuma vir com BOM (D124); sem semBom o plano valido sumia calado.
-    const o = JSON.parse(require('./texto.js').semBom(fs.readFileSync(path.join(cwd, ATIVO), 'utf8')));
+    const o = JSON.parse(semBom(fs.readFileSync(path.join(cwd, ATIVO), 'utf8')));
     return o && typeof o === 'object' ? o : null;
   } catch (e) { return null; }
 }
@@ -262,6 +307,16 @@ function abrir(cwd, arquivoDoPlano, sessionId) {
     sessionId: String(sessionId || 'sem-sessao'),
     tarefa: null
   };
+  // A7-03: o plano que nao existe (ou e pasta) nao vira plano ativo; antes o painel abria um plano que nao se le.
+  const doPlanoAbs = caminhoDoPlano(cwd, arquivoDoPlano);
+  let st = null;
+  let erro = null;
+  try { st = fs.statSync(doPlanoAbs); } catch (e) { erro = e; }
+  if (!st || !st.isFile()) {
+    throw new Error('Não abri ' + doPlanoAbs + ': ' + (st ? 'o caminho é uma pasta, não um arquivo'
+      : erro && erro.code === 'ENOENT' ? 'o arquivo não existe' : 'não consegui ler o caminho, ' + causaDoDisco(erro)) +
+      '. Confira o caminho do plano e rode de novo; o plano não foi aberto.');
+  }
   const alvo = path.join(cwd, ATIVO);
   // Plano 082 (p7-16): o erro do disco (EACCES, ENOSPC, pasta que e arquivo) sobe com o arquivo e o que fazer, sem stack.
   // Plano 083 (p3-14): com acento e a causa em palavras (o --abrir e comando, nao aviso de gancho: fora da R5).
@@ -429,6 +484,8 @@ function sessoesDoPlano(texto) {
 /**
  * P2 #6 (D512): o plano tirado do Objetivo (frente ou escopo.md) so se le dentro da pasta do projeto - "Plano:
  * ../fora.md" fazia o painel ler qualquer arquivo. O --abrir segue livre: quem roda escolhe o caminho.
+ * s45-22: a trava e lexica (path.resolve/relative): link simbolico ou junction de dentro que aponta para fora passa.
+ * Fica fora do modelo de ameaca: o link ja esta no disco do projeto, posto por quem tem acesso a ele.
  */
 function dentroDoProjeto(cwd, rel) {
   const r = path.relative(path.resolve(cwd), path.resolve(cwd, String(rel)));
@@ -890,13 +947,12 @@ function caixaAberta(cwd, frente) {
   if (!arquivo) return null;
   let texto;
   try { texto = fs.readFileSync(caminhoDoPlano(cwd, arquivo), 'utf8'); } catch (e) { return null; }
-  let cerca = null;
-  for (const linha of texto.split(/\r?\n/)) {
-    /* a caixa de exemplo dentro de bloco de codigo (```/~~~, ate indentado) nao e tarefa */
-    const f = /^\s*(`{3,}|~{3,})/.exec(linha);
-    if (f) { if (!cerca) cerca = f[1][0]; else if (f[1][0] === cerca) cerca = null; continue; }
-    if (cerca) continue;
-    const m = /^\s*-\s*\[ \]\s*(.*)$/.exec(linha);
+  // a caixa de exemplo dentro de bloco de codigo nao e tarefa; a mesma regra de cerca dos leitores do plano
+  const linhas = semBom(texto).split(/\r?\n/);
+  const naCerca = linhasNaCerca(linhas);
+  for (let i = 0; i < linhas.length; i++) {
+    if (naCerca[i]) continue;
+    const m = /^\s*-\s*\[ \]\s*(.*)$/.exec(linhas[i]);
     if (m) return { arquivo: String(arquivo), caixa: m[1].replace(/\*\*/g, '').trim().slice(0, 160) };
   }
   return null;

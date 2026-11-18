@@ -155,9 +155,30 @@ function temRisco(texto, rel) {
   return RISCO.test(String(texto || '')) || RISCO_PELO_CAMINHO.test(String(rel || '').replace(/\\/g, '/'));
 }
 
+// H1-custo (D868; medido em 2026-11-18 nas 888 rondas deste projeto): no arquivo de teste, `microcopy`, `seguranca`,
+// `escopo` e `enxuto` gastaram 301 inspetores e acharam 3 P0/P1 que nenhuma outra lente achou (a 5 linhas); as
+// quatro que ficam acharam 40. O teste na faixa completa leva so estas.
+const LENTES_DO_TESTE = ['correcao', 'estados', 'borda', 'manutencao'];
+// o arquivo de teste pelo caminho: pasta de teste, ou o nome no padrao das ferramentas de teste mais usadas
+// (a barra das duas grafias, a do Windows tambem)
+const CAMINHO_DE_TESTE = /(?:^|[\\/])(?:tests?|__tests__|specs?)[\\/]|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|[\\/])test_[^\\/]*\.py$|_test\.(?:py|go)$/i;
+
+// so o codigo conta como teste: o .md de uma pasta spec/ e o .sh de uma pasta test/ seguem com todas as lentes
+const CODIGO_DE_TESTE = /\.(?:[cm]?[jt]sx?|py|go|rb|java|kts?|rs|cs|php|swift)$/i;
+
+/**
+ * H1-custo: `rel` (relativo a raiz) e um arquivo de teste com codigo. O de risco pelo caminho (`test/hooks/x.js`)
+ * nunca e: ele segue com todas as lentes, a `seguranca` inclusive.
+ */
+function ehArquivoDeTeste(rel) {
+  const r = String(rel || '');
+  return CAMINHO_DE_TESTE.test(r) && CODIGO_DE_TESTE.test(r) && !RISCO_PELO_CAMINHO.test(r.replace(/\\/g, '/'));
+}
+
 /**
  * F2d (c): as chaves das lentes da faixa completa. `o.estilo` (arquivo de estilo: entram `design` e `medidor`),
- * `o.risco` (false tira a `seguranca`), `o.grande` (false tira a `enxuto`), `o.fotos` (com foto, entram as de tela).
+ * `o.risco` (false tira a `seguranca`), `o.grande` (false tira a `enxuto`), `o.fotos` (com foto, entram as de tela),
+ * `o.teste` (true: so as LENTES_DO_TESTE, mais `design` e `medidor` com `estilo`, antes das de tela).
  * Em `risco` e `grande`, valor ausente conta como "nao sei", e a lente fica. O `estilo` o preparar sempre sabe
  * (design.ehArquivoDeEstilo): so com `true` entram `design` e `medidor`.
  */
@@ -167,6 +188,12 @@ function lentesDaCompleta(o) {
   if (!x.estilo) lista = lista.filter(function (c) { return SAEM_SO_LOGICA.indexOf(c) === -1; });
   if (x.risco === false) lista = lista.filter(function (c) { return c !== 'seguranca'; });
   if (x.grande === false) lista = lista.filter(function (c) { return c !== 'enxuto'; });
+  // o teste de estilo segue com `design` e `medidor`, como diz o `estilo` acima
+  if (x.teste === true) {
+    lista = lista.filter(function (c) {
+      return LENTES_DO_TESTE.indexOf(c) !== -1 || (!!x.estilo && SAEM_SO_LOGICA.indexOf(c) !== -1);
+    });
+  }
   if (x.fotos) lista = lista.concat(LENTES_UI.map(function (l) { return l.chave; }));
   return lista;
 }
@@ -181,18 +208,28 @@ const ESTADOS = ['confirmado', 'pendente'];
 // arquivo so de logica, as LENTES sem as de SAEM_SO_LOGICA.
 const MINIMO_DA_COMPLETA = LENTES.length - SAEM_SO_LOGICA.length;
 
-/** L3 (A3-03): o voto que falta para a apuracao (como a ronda vazia); o codigo deixa o CLI dizer so o que fazer. */
-function votoQueFalta(texto) {
+// L3 (A3-03) / L3-s104-4: o codigo do erro do voto que falta; o apurar-ronda.js le o mesmo nome daqui.
+const VOTO_QUE_FALTA = 'VOTO_QUE_FALTA';
+// L3-s104-3: a faixa do mapa.json que nao e nenhuma das que o preparar-revisao.js grava. Como o voto que falta, o
+// erro ja diz o que fazer, e o CLI nao junta a linha da refutacao.
+const FAIXA_DESCONHECIDA = 'FAIXA_DESCONHECIDA';
+const FAIXAS = Object.keys(LENTES_DA_FAIXA).concat('completa');
+
+function erroComCodigo(texto, codigo) {
   const e = new Error(texto);
-  e.codigo = 'VOTO_QUE_FALTA';
+  e.codigo = codigo;
   return e;
 }
+/** L3 (A3-03): o voto que falta para a apuracao (como a ronda vazia); o codigo deixa o CLI dizer so o que fazer. */
+function votoQueFalta(texto) { return erroComCodigo(texto, VOTO_QUE_FALTA); }
 
 // Ronda 1 do 8c.5: a lente entra na chave. Dois defeitos de lentes diferentes na mesma
 // linha sao dois achados; a mesma lente repetindo o mesmo lugar segue sendo um. A
 // severidade continua primeiro: o motivo do teto conta os abertos pelo prefixo P0| e P1|.
-function chaveAchado(a, lente) {
-  return [a.severidade, a.arquivo, a.linha, lente].join('|');
+// D244 / L3-s104-12: com o lado (do mapa da ronda), a chave e pelo lado, porque o rotulo A/B e sorteado a cada ronda;
+// sem ele, pelo arquivo citado.
+function chaveAchado(a, lente, lado) {
+  return [a.severidade, lado || a.arquivo, a.linha, lente].join('|');
 }
 
 // D503/D508 (plano d503, E5): com referencia (R.txt no pacote), cada lado e julgado contra ela. O inspetor segue cego
@@ -507,6 +544,11 @@ function conferirRefutados(refutados, provaNoRepo) {
       throw new Error('refutacao com passada invalida' + onde + '"passada" e 2 para achado da 2a passada (invertida/), ' +
         'ou fica fora do objeto');
     }
+    // A3-09: a lacuna contra a referencia tambem se refuta na fonte; a refutacao dela diz que e de lacuna.
+    if (r.lacuna !== undefined && r.lacuna !== true) {
+      throw new Error('refutacao com lacuna invalida' + onde + '"lacuna" e true para refutar uma lacuna contra a ' +
+        'referencia, ou fica fora do objeto');
+    }
     if (typeof provaNoRepo === 'function' && !provaConfere(r, provaNoRepo)) {
       throw new Error('refutacao com prova que nao confere' + onde + 'cite em "prova" um arquivo:linha do repositorio ' +
         'e ponha em "simbolo" o texto que esta nessa linha (ou ate 2 vizinhas), ou ponha em "comando" o comando que ' +
@@ -516,9 +558,11 @@ function conferirRefutados(refutados, provaNoRepo) {
   return lista;
 }
 
-function refutado(lista, ronda, lente, a, passada) {
+// A3-09: a refutacao com "lacuna": true so tira a lacuna do mesmo lugar, e a sem ela so o achado.
+function refutado(lista, ronda, lente, a, passada, deLacuna) {
   return lista.some(function (r) {
-    return r.ronda === ronda && mesmaLente(r.lente, lente) && r.linha === a.linha && r.severidade === a.severidade &&
+    return (r.lacuna === true) === !!deLacuna && r.ronda === ronda && mesmaLente(r.lente, lente) &&
+      r.linha === a.linha && r.severidade === a.severidade &&
       rotuloDoArquivo(r.arquivo) === rotuloDoArquivo(a.arquivo) && (r.passada || 1) === passada;
   });
 }
@@ -561,8 +605,18 @@ function resultadoDasDuasOrdens(o1, o2) {
 // D387 (#11c): dois achados do mesmo arquivo a ate 10 linhas um do outro viram "par candidato" para o
 // juiz de mesmo defeito. Distancia 10 entra; 11 fica fora.
 const DISTANCIA_PAR = 10;
-// F2a (D828.5): nas rondas 2 e 3, o achado segura a ronda a ate estas linhas de uma linha tocada ou ja citada.
+// F2a (D828.5): nas rondas 2 e 3, o achado segura a ronda a ate estas linhas de uma linha tocada ou ja citada. A3-16:
+// na ronda 1, a ate estas linhas de uma linha que mudou contra o HEAD.
 const VIZINHAS_DA_VERIFICADA = 2;
+// A3-16: as lentes cujo achado segura a ronda 1 mesmo longe da mudanca (o pedido e a regressao)
+const SEGURAM_FORA_DA_MUDANCA = ['escopo', 'correcao'];
+/** A linha esta a ate VIZINHAS_DA_VERIFICADA de alguma das linhas do conjunto. */
+function pertoDe(linhas, linha) {
+  for (let n = linha - VIZINHAS_DA_VERIFICADA; n <= linha + VIZINHAS_DA_VERIFICADA; n++) {
+    if (linhas.has(n)) return true;
+  }
+  return false;
+}
 const RESPOSTAS_MESMO = ['sim', 'nao', 'nao-sei'];
 
 /**
@@ -640,29 +694,39 @@ function descricaoNormal(d) {
 /**
  * L3 (A3-03) / F2d (c): a ronda 1 traz as lentes da faixa (ou, na completa sem a lista do mapa, o minimo); a ronda
  * seguinte traz de volta cada lente que achou P0, P1 ou P2 de erro do lado novo. Falta = erro VOTO_QUE_FALTA.
+ * L3-s104-2: com referencia, roda tambem para os vereditos da 2a passada (segunda = true): a ordem trocada e metade do
+ * voto, e a lente que falta nela deixava a comparacao incompleta calada.
  */
-function conferirLentes(indice, ronda, comNovosAntes, faixa1, lentes1) {
+function conferirLentes(indice, ronda, comNovosAntes, faixa1, lentes1, segunda) {
+  // L3-s104-3: faixa que nao e conhecida nao tem lista nem minimo que valha; antes caia no minimo da completa calada
+  if (FAIXAS.indexOf(faixa1) === -1) {
+    throw erroComCodigo('a ronda 1 tem a faixa ' + JSON.stringify(faixa1) + ' no mapa.json, que nao e uma faixa ' +
+      'conhecida (' + FAIXAS.slice(0, -1).join(', ') + ' ou ' + FAIXAS[FAIXAS.length - 1] + '): prepare a revisao de ' +
+      'novo (Passo 1 do /sworn:review) e rode de novo',
+    FAIXA_DESCONHECIDA);
+  }
   const presentes = new Set(ronda.map(function (vd) { return vd && lenteCanonica(vd.lente); }));
   const conhecidas = Array.from(presentes).filter(function (l) { return l && chaveDaLente(l) !== null; });
-  const grave = 'grave o veredito de cada uma na pasta vereditos da ronda ' + (indice + 1) +
-    ' (Passo 2 do /sworn:review) e rode de novo';
+  const ordem = segunda ? ' (com A e B trocados)' : '';
+  const grave = 'grave o veredito de cada uma na pasta ' + (segunda ? 'invertida/vereditos' : 'vereditos') +
+    ' da ronda ' + (indice + 1) + ' (Passo 2 do /sworn:review) e rode de novo';
   if (indice === 0) {
     const esperadas = lentesDaFaixa(faixa1) || (faixa1 === 'completa' ? lentes1 : null);
     const faltam = esperadas ? esperadas.filter(function (l) { return !presentes.has(l); }) : [];
     if (faltam.length) {
-      throw votoQueFalta('ronda 1 da faixa ' + faixa1 + ' sem o voto da(s) lente(s) ' + faltam.join(', ') +
+      throw votoQueFalta('ronda 1' + ordem + ' da faixa ' + faixa1 + ' sem o voto da(s) lente(s) ' + faltam.join(', ') +
         ': a ronda 1 chama todas as lentes da faixa; ' + grave);
     }
     if (!esperadas && conhecidas.length < MINIMO_DA_COMPLETA) {
-      throw votoQueFalta('ronda 1 da faixa ' + faixa1 + ' com ' + conhecidas.length + ' lente(s) conhecida(s) (' +
-        (conhecidas.join(', ') || 'nenhuma') + '): o minimo e ' + MINIMO_DA_COMPLETA + ' (a tabela de familias do ' +
-        'Passo 2 do /sworn:review); chame as que faltam, ' + grave);
+      throw votoQueFalta('ronda 1' + ordem + ' da faixa ' + faixa1 + ' com ' + conhecidas.length +
+        ' lente(s) conhecida(s) (' + (conhecidas.join(', ') || 'nenhuma') + '): o minimo e ' + MINIMO_DA_COMPLETA +
+        ' (a tabela de familias do Passo 2 do /sworn:review); chame as que faltam, ' + grave);
     }
     return;
   }
   const naoVoltaram = Array.from(comNovosAntes).filter(function (l) { return !presentes.has(l); });
   if (naoVoltaram.length) {
-    throw votoQueFalta('ronda ' + (indice + 1) + ' sem o voto da(s) lente(s) que acharam P0, P1 ou P2 de erro do lado novo na ronda ' +
+    throw votoQueFalta('ronda ' + (indice + 1) + ordem + ' sem o voto da(s) lente(s) que acharam P0, P1 ou P2 de erro do lado novo na ronda ' +
       indice + ': ' + naoVoltaram.join(', ') + '. A ronda seguinte confere o proprio achado (Passo 4 do ' +
       '/sworn:review): ' + grave + '. Achado refutado na fonte vai em refutados.json e nao obriga a lente a voltar');
   }
@@ -694,7 +758,8 @@ function conferirEntradaDaRonda(ronda, indice, inv, mapa) {
 /**
  * D503 (E6/E8): o resultado da lente contra a referencia nesta passada (o pior das vezes que ela votou, pelo
  * PESO_REFERENCIA) e as lacunas do lado do trabalho. A lacuna do lado HEAD e o que ja estava atras antes da mudanca:
- * nao barra. onde = { lente, passada, indice, mapa }, nomeados para a troca de dois numeros nao passar calada.
+ * nao barra. onde = { lente, passada, indice, mapa, refutados }, nomeados para a troca de dois numeros nao passar
+ * calada. A3-09: a lacuna refutada na fonte (refutacao com "lacuna": true) tambem nao barra, e sai da lista.
  */
 function anotarReferencia(daRonda, vd, lacunasValidas, onde) {
   const lenteChave = onde.lente;
@@ -710,6 +775,7 @@ function anotarReferencia(daRonda, vd, lacunasValidas, onde) {
   }
   for (const lacuna of lacunasValidas) {
     if (mapaP[rotuloDoArquivo(lacuna.arquivo)] !== 'trabalho') continue;
+    if (refutado(onde.refutados, indice + 1, lenteChave, lacuna, passada, true)) continue;
     daLente.lacunas.push({ lente: lenteChave, ronda: indice + 1, passada: passada, severidade: lacuna.severidade,
       arquivo: lacuna.arquivo, linha: lacuna.linha, descricao: lacuna.descricao });
   }
@@ -722,24 +788,26 @@ function anotarReferencia(daRonda, vd, lacunasValidas, onde) {
  * chave no veredito, a que nao bate ganha ordinal novo (ali nenhum defeito some; 2 repetidos reescritos molham -
  * custo aceito). Uma descricao so, que nao bate, fica na base e conta como reescrita: um defeito novo SOZINHO na
  * linha de um ja visto some (desenho D475). Devolve Map "chave\ndescricao" -> ordinal (1 = a base).
+ * L3-s105-4: as descricoes de cada chave sao um Map descricao -> posicao (a 1a e 0), no veredito e no historico: a
+ * busca nao percorre a lista, e milhares de descricoes na mesma chave contam em tempo linear.
  */
 function ordinaisDasDescricoes(achados, semOrdem, historicoDaChave) {
   const grupos = new Map();
   for (const a of achados) {
     const k = semOrdem(a);
-    if (!grupos.has(k)) grupos.set(k, []);
+    if (!grupos.has(k)) grupos.set(k, new Map());
     const g = grupos.get(k);
     const d = descricaoNormal(a.descricao);
-    if (g.indexOf(d) === -1) g.push(d);
+    if (!g.has(d)) g.set(d, g.size);
   }
   const vezDaDescricao = new Map();
   grupos.forEach(function (descricoes, k) {
     const historico = historicoDaChave.get(k);
-    if (!historico) historicoDaChave.set(k, descricoes.slice());
-    descricoes.forEach(function (d, i) {
-      let vez = historico ? historico.indexOf(d) : i;
-      if (vez === -1 && descricoes.length === 1) vez = 0;
-      else if (vez === -1) vez = historico.push(d) - 1;
+    if (!historico) historicoDaChave.set(k, new Map(descricoes));
+    descricoes.forEach(function (i, d) {
+      let vez = !historico ? i : historico.has(d) ? historico.get(d) : -1;
+      if (vez === -1 && descricoes.size === 1) vez = 0;
+      else if (vez === -1) { vez = historico.size; historico.set(d, vez); }
       vezDaDescricao.set(k + '\n' + d, vez + 1);
     });
   });
@@ -832,10 +900,13 @@ function eixosDosNovos(novos, chaves, metas) {
 }
 
 /**
- * O fim da apuracao: { encerrar, motivo }. Duas secas aprovam; a ronda 1 completa sem achado aprova sozinha (F2b);
+ * O fim da apuracao: { encerrar, aprovado, motivo }. Duas secas aprovam; a ronda 1 completa sem achado aprova sozinha (F2b);
  * o teto encerra sem aprovar; senao, a ronda seguinte. A referencia nao alcancada na ultima ronda barra a aprovacao.
- * c = { ronda, secas, quantosAbertos, referencia, faixa1, ronda1SemAchado }; quantosAbertos e o numero (no apurar,
- * `abertos` e o Set das chaves).
+ * c = { ronda, secas, quantosAbertos, referencia, faixa1, ronda1SemAchado, ronda1ComMelhoria, quantosAindaAbertos };
+ * ronda1SemAchado ignora a melhoria confirmada (H1-custo), e ronda1ComMelhoria so muda o motivo; quantosAbertos e o
+ * numero (no apurar, `abertos` e o Set das chaves). A3-06: com quantosAindaAbertos > 0 (achado que segurou uma ronda
+ * e voltou igual na ultima) tambem nao aprova: a lente disse que o defeito segue ali. A3-17: `aprovado` e o booleano
+ * que o apurar-ronda.js le para marcar o arquivo como revisado; o motivo e so texto para quem le.
  */
 function fimDaApuracao(c) {
   // A ultima ronda tem referencia e ela ainda nao foi alcancada: barra a aprovacao. Sem referencia (null), nao barra.
@@ -844,25 +915,28 @@ function fimDaApuracao(c) {
   // empata nem vence entra em lentesAtras); se acontecer, diz a causa e o que fazer, e nao "nenhuma lente julgada".
   const quaisAtras = atras ? ' (' + (c.referencia.lentesAtras.join(', ') ||
     'nenhuma lente julgou contra a referencia: grave os vereditos desta ronda com vsReferencia e apure de novo') + ')' : '';
-  if (c.secas >= 2 && !atras) return { encerrar: true, motivo: 'duas rondas secas seguidas: aprovado' };
-  // F2b (D828): sem a faixa (base de antes) ninguem conferiu quais lentes votaram, e a ronda 1 nao aprova sozinha. O
-  // motivo leva "aprovado": e a palavra que o apurar-ronda.js le para marcar o arquivo como revisado.
-  if (c.ronda === 1 && c.faixa1 !== null && c.ronda1SemAchado && !atras) {
-    return { encerrar: true, motivo: 'ronda 1 completa sem achado nenhum: aprovado' };
+  const segue = c.quantosAindaAbertos > 0;
+  if (c.secas >= 2 && !atras && !segue) {
+    return { encerrar: true, aprovado: true, motivo: 'duas rondas secas seguidas: aprovado' };
+  }
+  // F2b (D828): sem a faixa (base de antes) ninguem conferiu quais lentes votaram, e a ronda 1 nao aprova sozinha.
+  if (c.ronda === 1 && c.faixa1 !== null && c.ronda1SemAchado && !atras && !segue) {
+    return { encerrar: true, aprovado: true, motivo: c.ronda1ComMelhoria
+      ? 'ronda 1 completa so com melhoria (vai ao registro): aprovado' : 'ronda 1 completa sem achado nenhum: aprovado' };
   }
   if (c.ronda >= TETO) {
-    return { encerrar: true,
+    return { encerrar: true, aprovado: false,
       motivo: 'teto de ' + TETO + ' rondas com ' + c.quantosAbertos + ' achado(s) aberto(s) (P0, P1 ou P2 de erro)' +
         (atras ? ' e a referencia nao alcancada' + quaisAtras : '') +
         // D785 item 5 (s369, 2.5): o teto nao vai ao dono. D828.3 (F2a): nem abre revisao nova; o conserto sai com
-        // teste e mutacao, e o commit com a marca que o portao de commit pede (commit.MARCA). O texto nao pode dizer
-        // "aprovado": o apurar-ronda.js le essa palavra para marcar o arquivo como revisado.
+        // teste e mutacao, e o commit com a marca que o portao de commit pede (commit.MARCA).
         ': conserte o que e erro, cada conserto com um teste que reprova quando o codigo e estragado de proposito; ' +
         'com a suite inteira verde, o commit sai com "# sworn: sem-revisao" no fim do comando, sem perguntar; o que ' +
         'sobrar vira registro no plano' };
   }
-  return { encerrar: false,
+  return { encerrar: false, aprovado: false,
     motivo: 'ronda ' + (c.ronda + 1) + ' chama so as lentes que acharam P0, P1 ou P2 de erro' +
+      (segue ? ' e as que repetiram um achado ainda aberto' : '') +
       (atras ? ' e as que nao empatam com a referencia ou tem lacuna P0/P1' + quaisAtras : '') };
 }
 
@@ -897,7 +971,14 @@ function fimDaApuracao(c) {
  *   mudancas[i] = (F2a, i >= 1) os blocos do diff-linhas.js entre o lado novo da ronda i-1 e o da ronda i; a posicao
  *                0 nao se le. Sem a lista numa ronda, ou com uma ronda sem o mapa dos dois lados (mapaDoTrabalho),
  *                a medida cai e nao volta: dali em diante nada e 'linha nova' e tudo molha como antes.
+ *   diffDoHead  = (A3-16) os blocos do diff-linhas.js entre o lado HEAD e o do trabalho da ronda 1. Com eles (lista
+ *                nao vazia) e o mapa da ronda 1 com um lado HEAD, o achado do lado novo da ronda 1 a mais de
+ *                VIZINHAS_DA_VERIFICADA linhas de toda linha mudada vai a `registros` como 'fora da mudanca' (menos o da
+ *                lente do pedido). Sem eles, tudo segura como antes.
+ *   refutados com "lacuna": true (A3-09) tiram a lacuna do mesmo lugar contra a referencia, e nao o achado.
  * pendentes e trechoNaoConfere saem sempre (listas, vazias quando nao ha), de todas as rondas, com ronda e lente.
+ * achadosAindaAbertos (A3-06) sai sempre: o achado que segurou uma ronda antes e voltou igual (a mesma chave) na
+ * ultima, sem refutacao nela; nao e novo e nao molha, mas o motivo diz quantos sao.
  * paresCandidatos sai sempre: achado P0/P1 novo da ultima ronda x outro achado do lado novo, mesmo
  * arquivo (o lado, com mapa; o rotulo, sem), a ate DISTANCIA_PAR linhas, chave diferente.
  * paresFortes (F2d parte b) sai sempre: os paresCandidatos na mesma linha (distancia 0), os unicos que vao ao juiz.
@@ -910,9 +991,11 @@ function apurar(rondas, opcoes) {
   const refutados = conferirRefutados(op.refutados, op.provaNoRepo);
   const vistos = new Set();
   const variantesDaChave = new Map();
-  // D602: chave sem ordinal -> as descricoes ja vistas nela, na ordem do ordinal (a 1a e a base)
+  // D602: chave sem ordinal -> Map das descricoes ja vistas nela para a posicao do ordinal (a 0 e a base)
   const historicoDaChave = new Map();
   const abertos = new Set();
+  // A3-06: chave -> o achado que segurou uma ronda antes e voltou igual na ultima (nao e novo, e segue aberto)
+  const aindaAbertos = new Map();
   let secas = 0;
   let novosDaUltima = [];
   let novosChavesDaUltima = [];
@@ -937,7 +1020,9 @@ function apurar(rondas, opcoes) {
   let verificaveis = new Set();
   // F2b (D828): a ronda 1 em que nenhum veredito traz achado nenhum (nem pendente, nem melhoria, nem do lado antigo,
   // nem fora do formato; com referencia, nem lacuna) aprova sozinha, se as lentes da faixa foram conferidas.
+  // H1-custo (D868): a melhoria confirmada vai ao registro e nao segura a ronda 1; o erro e o pendente seguram.
   let ronda1SemAchado = true;
+  let ronda1ComMelhoria = false;
 
   // L3 (A3-03): com a faixa da ronda 1 (o mapa.json do preparar-revisao.js a grava), o script confere as lentes; sem
   // ela (base de antes), a conta de antes.
@@ -969,12 +1054,11 @@ function apurar(rondas, opcoes) {
       });
       verificaveis = levadas;
     }
-    const emLinhaNova = function (linha) {
-      for (let n = linha - VIZINHAS_DA_VERIFICADA; n <= linha + VIZINHAS_DA_VERIFICADA; n++) {
-        if (verificaveis.has(n)) return false;
-      }
-      return true;
-    };
+    const emLinhaNova = function (linha) { return !pertoDe(verificaveis, linha); };
+    // A3-16: as linhas do lado novo que mudaram contra o HEAD, so na ronda 1 e so com o mapa dos dois lados (um deles o
+    // HEAD); sem o diff, com ele vazio ou com o arquivo igual ao HEAD, nao ha medida, e tudo segura como antes
+    const mudouNoHead = indice === 0 && mapaDoTrabalho(mapa) && (mapa.A === 'HEAD' || mapa.B === 'HEAD') &&
+      Array.isArray(op.diffDoHead) && op.diffDoHead.length > 0 ? new Set(diffLinhas.tocadas(op.diffDoHead)) : null;
     // as linhas que esta ronda cita so entram nas verificaveis no fim dela: o achado nao verifica a si mesmo
     const citadas = [];
     const daRonda = new Map();
@@ -990,29 +1074,48 @@ function apurar(rondas, opcoes) {
             (vd && vd.lente ? ', lente "' + String(vd.lente) + '"' : '') + ': ' + invalido.join('; '));
         }
         const r = validarVeredito(vd, { comReferencia: comReferencia });
-        if (indice === 0 && (vd.achados.length > 0 || (comReferencia && vd.lacunas.length > 0))) ronda1SemAchado = false;
+        // so o P2 de melhoria valido (o validarVeredito nao o descartou) do lado do trabalho, lido como no ehMelhoria
+        // (caixa e espaco); o P0/P1 marcado melhoria, a melhoria descartada ou fora do formato e a do lado velho (ou sem
+        // lado) seguem segurando
+        const melhoriasQueNaoSeguram = r.achadosValidos.filter(function (a) {
+          const rotulo = a ? rotuloDoArquivo(a.arquivo) : null;
+          const doTrabalho = !!(mapaP && rotulo && mapaP[rotulo] === 'trabalho');
+          return !!a && a.estado === 'confirmado' && severidadeDoConfirmado(a) === 'P2' && tipoDoP2(a) === 'melhoria' &&
+            doTrabalho;
+        }).length;
+        const seguram = vd.achados.length - melhoriasQueNaoSeguram;
+        if (indice === 0 && (seguram > 0 || (comReferencia && vd.lacunas.length > 0))) ronda1SemAchado = false;
+        if (indice === 0 && melhoriasQueNaoSeguram > 0) ronda1ComMelhoria = true;
         // O placar (qual rotulo saiu melhor) conta so a ordem normal: a ordem trocada julga os mesmos dois arquivos
         // com os rotulos invertidos, e somar as duas contaria cada lente duas vezes, uma em cada rotulo.
         if (passada === 1 && indice === rondas.length - 1 && placar[vd.melhor] !== undefined) placar[vd.melhor] += 1;
         // RV-02 (D422): a chave leva a lente CANONICA; "Correcao e regressao" e "correcao" sao a mesma lente.
         const lenteChave = lenteCanonica(vd.lente);
         if (comReferencia) {
-          anotarReferencia(daRonda, vd, r.lacunasValidas, { lente: lenteChave, passada: passada, indice: indice, mapa: mapaP });
+          anotarReferencia(daRonda, vd, r.lacunasValidas, { lente: lenteChave, passada: passada, indice: indice, mapa: mapaP,
+            refutados: refutados });
         }
         const ladoDe = function (a) {
           const rotulo = rotuloDoArquivo(a.arquivo);
           return mapaP && rotulo ? mapaP[rotulo] : null;
         };
-        const semOrdem = function (a) {
-          const lado = ladoDe(a);
-          return lado ? [a.severidade, lado, a.linha, lenteChave].join('|') : chaveAchado(a, lenteChave);
+        const semOrdem = function (a) { return chaveAchado(a, lenteChave, ladoDe(a)); };
+        // A3-16: o achado do lado novo, na ronda 1, longe de toda linha que mudou contra o HEAD. A lente do pedido e a
+        // de correcao ficam de fora: o que o pedido pede e falta, e a regressao (quem chama a funcao que mudou), podem
+        // estar justamente onde nada mudou
+        const foraDaMudanca = function (x) {
+          return mudouNoHead !== null && SEGURAM_FORA_DA_MUDANCA.indexOf(lenteChave) === -1 &&
+            ladoDe(x) === 'trabalho' && !pertoDe(mudouNoHead, x.linha);
         };
         const marca = function (x) {
           return Object.assign({ ronda: indice + 1, lente: lenteChave }, passada === 2 ? { passada: 2 } : {}, x);
         };
         for (const p of r.pendentesValidos) pendentes.push(marca(p));
-        // F2a: citou a linha do lado novo, achado ou pendente, contando ou nao: a linha fica verificavel
-        for (const x of r.achadosValidos.concat(r.pendentesValidos)) if (ladoDe(x) === 'trabalho') citadas.push(x.linha);
+        // F2a: citou a linha do lado novo, achado ou pendente, contando ou nao: a linha fica verificavel. A3-16: menos a
+        // linha fora da mudanca, que nao e do trabalho e nao vira verificacao na ronda seguinte
+        for (const x of r.achadosValidos.concat(r.pendentesValidos)) {
+          if (ladoDe(x) === 'trabalho' && !foraDaMudanca(x)) citadas.push(x.linha);
+        }
         // Lote 3/4a: o confirmado cujo trecho nao esta no arquivo citado nao conta (nem para o ordinal); sem como ler o
         // arquivo (null), conta como antes.
         const achados = r.achadosValidos.filter(function (a) {
@@ -1034,7 +1137,17 @@ function apurar(rondas, opcoes) {
           // D475 (s99): a mesma chave sobre uma linha REESCRITA entre rondas e evidencia nova, nao repeticao.
           const bruto = typeof op.textoDaLinha === 'function' && rotulo ? op.textoDaLinha(indice, rotulo, a.linha, passada) : null;
           const k = chavePeloTexto(kBase, bruto, variantesDaChave, indice + 1);
-          if (vistos.has(k)) continue;
+          if (vistos.has(k)) {
+            // A3-06: o que segurou uma ronda antes e voltou igual nao e novo (D475: nao molha), mas nao sumiu. A lente
+            // volta na ronda seguinte, para conferir o conserto; na ultima ronda a saida o lista, e a apuracao nao aprova
+            // com ele (fimDaApuracao).
+            if (abertos.has(k) && novosChaves.indexOf(k) === -1 && !ehMelhoria(a) &&
+                !refutado(refutados, indice + 1, lenteChave, a, passada)) {
+              lentesComNovos.add(lenteChave);
+              if (indice === rondas.length - 1 && !aindaAbertos.has(k)) aindaAbertos.set(k, marca(a));
+            }
+            continue;
+          }
           vistos.add(k);
           // L2-ver-3 (S7, D426): o que o juiz le leva a lente canonica, a mesma da chave, e nao a grafia do inspetor.
           const meta = { chave: k, ronda: indice + 1, lente: lenteChave, severidade: a.severidade, linha: a.linha,
@@ -1046,12 +1159,15 @@ function apurar(rondas, opcoes) {
           // D503 (E7): o achado da 2a passada sai marcado; o A.txt dela e outro arquivo que o da 1a.
           const marcado = passada === 2 ? Object.assign({}, a, { passada: 2 }) : a;
           if (lado === 'HEAD') { antigos.push(marcado); continue; }
-          const foiRefutado = refutado(refutados, indice + 1, vd.lente, a, passada);
+          const foiRefutado = refutado(refutados, indice + 1, lenteChave, a, passada);
           // D823 (R1, dono): o P2 tambem molha a ronda, como o P0 e o P1. F2a (D828.2/.5): menos o P2 de melhoria e,
           // nas rondas 2 e 3 com a mudanca medida, o achado do lado novo longe das linhas verificaveis; os dois vao a
           // `registros`. O refutado nao e registro: a refutacao ja o tirou.
+          // A3-16: na ronda 1, o de longe da mudanca contra o HEAD e 'fora da mudanca' (fica entre os vistos, como a
+          // melhoria: repetido, segue o mesmo registro).
           const registro = foiRefutado ? null : ehMelhoria(a) ? 'melhoria'
-            : soVerifica && lado === 'trabalho' && emLinhaNova(a.linha) ? 'linha nova' : null;
+            : soVerifica && lado === 'trabalho' && emLinhaNova(a.linha) ? 'linha nova'
+              : foraDaMudanca(a) ? 'fora da mudanca' : null;
           if (registro !== null) {
             // o registro de linha nova nao fica entre os vistos: a linha dele passa a citada, e o mesmo achado que
             // voltar na ronda seguinte e verificacao e segura. A melhoria fica: repetida, e um registro so.
@@ -1069,7 +1185,10 @@ function apurar(rondas, opcoes) {
       }
     }
     citadas.forEach(function (linha) { verificaveis.add(linha); });
-    if (faixa1 !== null) conferirLentes(indice, ronda, lentesComNovosAntes, faixa1, lentes1);
+    if (faixa1 !== null) {
+      conferirLentes(indice, ronda, lentesComNovosAntes, faixa1, lentes1, false);
+      if (comReferencia) conferirLentes(indice, inv.vereditos, lentesComNovosAntes, faixa1, lentes1, true);
+    }
     lentesComNovosAntes = lentesComNovos;
     daRonda.forEach(function (e, lente) {
       refLentes.set(lente, { lente: lente, ronda: indice + 1, ordem1: e.ordem1, ordem2: e.ordem2,
@@ -1095,15 +1214,22 @@ function apurar(rondas, opcoes) {
   const eixos = eixosDosNovos(novosDaUltima, novosChavesDaUltima, metas);
   const ronda = rondas.length;
   const fim = fimDaApuracao({ ronda: ronda, secas: secas, quantosAbertos: abertos.size, referencia: referencia, faixa1: faixa1,
-    ronda1SemAchado: ronda1SemAchado });
-  return { ronda: ronda, secas: secas, encerrar: fim.encerrar, motivo: fim.motivo, novos: novosDaUltima, placar: placar,
+    ronda1SemAchado: ronda1SemAchado, ronda1ComMelhoria: ronda1ComMelhoria, quantosAindaAbertos: aindaAbertos.size });
+  const achadosAindaAbertos = Array.from(aindaAbertos.values());
+  // A3-06: o motivo diz quantos voltaram iguais; com eles a apuracao nao aprova (fimDaApuracao). No teto o proximo
+  // passo e o do teto (conserto com teste, o resto no plano), para as duas frases nao mandarem coisas diferentes.
+  const motivo = fim.motivo + (achadosAindaAbertos.length ? '; ' + achadosAindaAbertos.length + ' achado(s) ainda ' +
+    'aberto(s), repetido(s) igual(is) na ultima ronda depois de segurar uma ronda (achadosAindaAbertos)' +
+    (ronda >= TETO ? ': entram no conserto acima como os outros abertos' :
+      ': conserte cada um antes da ronda seguinte, ou refute-o em refutados.json') : '');
+  return { ronda: ronda, secas: secas, encerrar: fim.encerrar, aprovado: fim.aprovado, motivo: motivo, novos: novosDaUltima, placar: placar,
     achadosDoLadoAntigo: antigosDaUltima, refutados: refutados, paresCandidatos: paresCandidatos, paresFortes: paresFortes,
     provaveisMesmos: provaveisMesmos, referencia: referencia, pendentes: pendentes, trechoNaoConfere: trechoNaoConfere,
-    eixos: eixos, registros: registros };
+    eixos: eixos, registros: registros, achadosAindaAbertos: achadosAindaAbertos };
 }
 
 module.exports = {
   LENTES, LENTES_UI, FAMILIAS, LENTE_DO_PEDIDO, lentesSoTela, SAEM_SO_LOGICA, familiasPara, FAIXA_UMA_ATE,
-  FAIXA_DUAS_ATE, faixaDaMudanca, lentesDaFaixa, temRisco, lentesDaCompleta, TETO, chaveDaLente, errosDoVeredito,
-  validarVeredito, apurar, conferirMesmos, DISTANCIA_PAR, mapaDoTrabalho
+  FAIXA_DUAS_ATE, faixaDaMudanca, lentesDaFaixa, temRisco, lentesDaCompleta, LENTES_DO_TESTE, ehArquivoDeTeste, TETO, chaveDaLente, errosDoVeredito,
+  validarVeredito, apurar, conferirMesmos, DISTANCIA_PAR, mapaDoTrabalho, VOTO_QUE_FALTA, FAIXA_DESCONHECIDA
 };

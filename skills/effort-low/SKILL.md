@@ -12,6 +12,12 @@ chat, is back at the session effort (measured by sworn on Claude Code 2.1.311), 
 at the start of each turn of a Fast task (playbook, §2). There is nothing to run. Low effort is not a lower gate:
 "Fast" never means improvised, and the gear's gate still decides what is verified (playbook, §2).
 
+## What this skill does NOT do
+
+- It does not change the model, only the effort (next section).
+- It does not last past the turn: the next turn is back at the session effort, so the playbook calls it again.
+- It does not run anything, and it does not lower the gate: the Fast gear's gate still decides what is verified.
+
 ## The model does not change
 
 A skill that the model calls changes **only the effort**. Measured by sworn on Claude Code 2.1.310: called through the

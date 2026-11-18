@@ -44,7 +44,10 @@ what the user typed.
     (Resolve-Path -LiteralPath '<raiz>').Path
     Test-Path -LiteralPath '<raiz>' -PathType Container
 
-    realpath -- '<raiz>' ; test -d '<raiz>' && echo E-PASTA || echo NAO-E-PASTA
+    ( cd -- '<raiz>' && pwd -P ) ; test -d '<raiz>' && echo E-PASTA || echo NAO-E-PASTA
+
+In bash, `cd` + `pwd -P` and not `realpath`: older macOS ships without `realpath`, and `pwd -P` also gives the real
+folder behind a link or a Windows junction (measured: a junction root answers with its target).
 
 Three reasons, all measured:
 
@@ -57,6 +60,26 @@ Three reasons, all measured:
   line and `exit 0`. `Test-Path -PathType Container` and `test -d` answer `False`/`NAO-E-PASTA`.
 
 If the root does not exist or is not a folder, **stop and ask**. Do not try to guess which one it was.
+
+**Then check whether a folder above already has a configuration.** The gates do not use the session's folder as it
+comes: they climb from it to the first folder with `.claude/sworn/projeto.json` (`raizDoProjeto` in
+`scripts/lib/config.js`). Run, with the absolute root:
+
+    node -e "const p = require('path'), r = require(process.argv[1]).raizDoProjeto(process.argv[2]); console.log(p.resolve(r) === p.resolve(process.argv[2]) ? 'ESTA' : r)" "${CLAUDE_PLUGIN_ROOT}/scripts/lib/config.js" '<raiz>'
+
+It prints `ESTA` when the gates would use the root itself — always the case when no folder above has a
+configuration, as in most first inits — and then carry on. The command compares the two paths itself, so the bash
+form of the root (`/c/...`) and the Windows form node prints (`C:\...`) do not look like two folders. If it prints
+a folder, that folder is above the root; tell the owner: that folder is already
+configured, and until this init writes, the gates in force here are its gates; after it, a session opened in the
+root follows the root's configuration, and one opened in the folder above still follows that one, even for files
+inside the root. Ask whether to configure the root or leave it to the folder above.
+
+**Tell the owner two more things before going on.** First, init writes files inside `.claude/`, and Claude Code asks
+for their approval before each of those writes: several permission prompts are expected, and declining one leaves
+that file unwritten. Second, sworn keeps its running state (counters, review rounds) in `.claude/sworn/` and its
+handoffs in `.sworn/`: if they should not show up among the uncommitted files, `.sworn/` (and `.claude/`, if the
+project does not version it) goes into the project's `.gitignore`. Init does not edit `.gitignore`; the owner does.
 
 ## Step 0b — is there already a configuration here?
 
@@ -138,7 +161,7 @@ Present the `inferido` block in a short table, and say explicitly that it is inf
 |---|---|
 | Language | … |
 | Package manager | … |
-| Command that checks the project (`provaDePronto`) | … |
+| Command that checks the project | … |
 | Platform / shell | … |
 | Canonical-source candidates | … |
 | Design system | … |
@@ -153,7 +176,7 @@ front open here — tell the user now, don't let them find out when a gate denie
 Empty list: the tree is clean. **`null`: I couldn't take the snapshot** — no git, outside a
 repository, or the command failed; in that case say that I don't know, **never "nothing modified"**.
 
-**If `temGit` is `false`, warn that one of the four protections goes mute in this project** — the one that
+**If `temGit` is `false`, warn that one of the locks goes mute in this project** — the one that
 prevents writing to a file that was already being touched when the session opened. With no git there is no opening snapshot,
 and with no snapshot it has nothing to compare against. Say this in words, not by the internal name of the
 lock: the user will only see that name at the close-out. Promising a protection that the project's structure
@@ -182,9 +205,9 @@ List **one level, no recursion, at the absolute root of Step 0**, with the shell
 a guess about the operating system, not a measurement of the shell you have:
 
     Get-ChildItem -Force -LiteralPath '<raiz>' | ForEach-Object { if ($_.PSIsContainer) { "$($_.Name)/" } else { "$($_.Name)" } }
-    ls -A1F '<raiz>'
+    ls -A1F '<raiz>/'
 
-Three details of those commands are not style — they are what makes them work, and each one was measured:
+Four details of those commands are not style — they are what makes them work, and each one was measured:
 
 - **The single quotes.** With double quotes, a root `proj$dev` becomes `proj` in both shells and the command
   lists the **sibling folder**, with `exit 0` and no error. With no quotes at all the failure mode **varies with the
@@ -194,13 +217,21 @@ Three details of those commands are not style — they are what makes them work,
 - **`-LiteralPath`, never `-Path`.** `-Path` treats a bracket as a search pattern: a root named
   `projeto [v2]` returns an **empty list, with no error, with success**. Then the rule "if it fails, use
   the other one" doesn't save you, because nothing failed.
+- **The slash after the root, in bash.** A root that is a link or a Windows junction, listed as `'<raiz>'`, comes
+  back as **one line**, its own name with `@`, and `exit 0`; with `'<raiz>/'` it lists the folder behind it.
 - **The type mark.** Question 4 needs to know whether each name is a folder or a file, because the shape of the
   pattern changes, and ambiguous names are common (`credenciais` may be a file, `chaves.d` may be a folder). In
   PowerShell the slash comes from `PSIsContainer`, which is reliable. **In bash, careful:** `-F` marks
   `/ @ * = | >`, and **only the slash means folder**. A shortcut to a folder comes out as `nome@`, an
-  executable as `nome*`. Treat `@` as "I don't know" and **ask**; strip any other mark from the name
-  before writing the pattern. A shortcut read as a file becomes a pattern that doesn't protect the contents:
-  measured, `atalho-segredos` does not match `atalho-segredos/prod.token`.
+  executable as `nome*`. Treat `@` as "I don't know" and **ask**. Strip another mark (`* = | >`) only when the
+  name without it exists — `test -e '<raiz>/<name without the mark>'` answers yes; otherwise the mark may be part of
+  the real name (a file called `chave=` is listed as `chave=`), so **ask**. A shortcut read as a file becomes a
+  pattern that doesn't protect the contents: measured, `atalho-segredos` does not match `atalho-segredos/prod.token`.
+
+**A root whose name ends in a dot or a space, on Windows, lists another folder.** Windows drops the trailing dot or
+space: measured, in PowerShell a root `proj.` (or `proj `) passes Step 0 and lists the **sibling** `proj`, with no
+error; in bash the listing fails with `cannot access`. With such a root, show the owner the names listed and ask
+them to confirm it is the right folder before using them.
 
 **If the listing comes back empty, do not conclude there is nothing to protect** — Step 0 already proved that the root
 exists and is a folder, so an empty list here is either a truly empty project or a command defect. Say which
@@ -365,9 +396,9 @@ do.
 
 And state the real size of the difference, instead of leaving it implied: `padrao` only requires the declared
 scope. `aaa` requires the scope **and** the execution manual (the skill with "padrao" in its name) loaded in the
-session before editing the file; turn it off with `"portaoManual": false`. With a top reference declared
-for the file's type, `aaa` also demands at close-out the review against it (turn it off with
-`"portaoReferencia": false`).
+session before editing the file; turn it off with `"portaoManual": false` in `projeto.json`. With a top reference
+declared for the file's type, `aaa` also demands at close-out the review against it (turn it off with
+`"portaoReferencia": false`, also in `projeto.json`).
 
 **The three keys are lowercase** — `aaa`, `padrao`, `rapida` — and all three must exist. The map
 is **not** `path → gear`; it is gear → list of patterns, and that is how it is written:
@@ -413,7 +444,15 @@ lacks; keep it only here, with what reason and until when?". Only after their ye
 - `ate`: optional end date, as YYYY-MM-DD;
 - the extra values, in the same keys as the system (`cores`, `raios`, `espacos`, `sombras`, `tamanhos`, `fontes`).
 Never declare one to make a value pass.
-**In a re-init, the `Write` here is denied by the scope gate** if `escopo.md` does not cover that file:
+**Style outside a style file.** The gates treat the `.css`, `.scss`, `.sass`, `.less` and `.styl` files as style.
+When the tokens or the styles live elsewhere (a `theme.ts`, a `tokens.ts`, CSS-in-JS under `src/theme/`), ask the
+owner: "besides the `.css` files, which files hold the colors, sizes or fonts of the screens? sworn will check them
+like the `.css` ones". After their yes, add the paths to `.claude/sworn/projeto.json` with `Edit`, keeping the rest
+of the file, as `"design": { "caminhosDeEstilo": ["src/theme/**", "tokens.ts"] }`, a list of globs relative to the
+root. The token check (on `Write`, on `Edit` and on style written by a shell command), the commit gate and the blind
+review then treat those files as style. Without the key, only the extensions count.
+**In a re-init, the `Write` of `design.json` and the `Edit` of `projeto.json` here are denied by the scope gate** if
+`escopo.md` does not cover those files:
 declare it first, as Step 0b says. **If `design.json` already exists, do not overwrite it without
 asking:** show the owner what changes (field by field) and only write with their OK.
 
@@ -472,8 +511,8 @@ Copy `${CLAUDE_PLUGIN_ROOT}/modelos/regras.md` to **`<absolute root>/.claude/swo
 writing**: a folder error here is only reported if the file lands where the next step looks.
 
 Read with `Read` and write with `Write` — never `Copy-Item`, `Set-Content` or `Out-File`, for the same
-encoding reason explained in the next step. Adjust only what is specific to the project (who
-decides, proof of done, threat model). Do not invent a new rule here — a new rule comes in through
+encoding reason explained in the next step. Copy it as it is: who decides, the proof of done and the threat model are
+not in `regras.md`, they go into `projeto.json` in Step 7. Do not invent a new rule here — a new rule comes in through
 `/sworn:learn`, with approval.
 
 **You will probably see a warning from `sworn` itself** saying that this project has no
@@ -489,7 +528,7 @@ configuration stands on its own, and the rules come in when the template exists.
 Before writing, **read `${CLAUDE_PLUGIN_ROOT}/scripts/lib/projeto.js`** and use the constants
 `CHAVES` and `TRAVAS` as the format — it is the only source of truth of the file, and it changes over time.
 **Check your list against `CHAVES`, not against the list below:** that is what is known today, and the
-code is what counts. Six values required there **come from no question at all**, and are yours:
+code is what counts. Seven values required there **come from no question at all**, and are yours:
 
 - `versaoConfig`: `1`;
 - `geradoEm`: today's date, `YYYY-MM-DD`. **Measure, don't remember** — run `Get-Date -Format yyyy-MM-dd`
@@ -500,7 +539,10 @@ code is what counts. Six values required there **come from no question at all**,
   — forgetting it makes `validar.js` fail with `falta a chave plataforma`;
 - `comandosBloqueados` and `comandosLiberados`: empty lists — no question in this script
   fills them. **In a re-init, keep the values of the current `projeto.json`** (Step 0b);
-- `travas`: all four, `true` by default. In a re-init, also keep those of the current `projeto.json`.
+- `travas`: its four keys (`TRAVAS`), `true` by default. In a re-init, also keep those of the current `projeto.json`.
+  Four keys, not "the eight locks" the guide counts: the guide also counts gates that have no key here;
+- `limiares`: `{}` — no question fills it, and an empty object leaves every threshold at the plugin's default
+  (`/sworn:calibrate` writes it later). In a re-init, keep the current one.
 
 Outside `CHAVES`, the optional `referencias` (the `CHAVES_OPCIONAIS` list) goes in only through the answer at the end of Step 4b:
 the paths by type, or `{}` for "never"; with "leave it for later", do not write the key. **In a re-init, start from the
@@ -555,7 +597,9 @@ revert between one command and another. Measured: outside the root, they say *"r
 after init wrote; inside another project already configured, they propose writing **into it**. Before
 writing, check that the proposal's `Destino seria:` starts with the root.
 
-The rungs from question 6 are already written. Now they become files in `.claude/agents/`.
+The rungs from question 6 are already written. Now they become files in `.claude/agents/`. **If question 6 was
+answered with no agents** (`agentes.degraus` empty), skip 7b: there is nothing to generate, and
+`gerar-agentes.js` would only answer `ERRO: este projeto nao tem degraus gravados`, which is not a failure here.
 
 **1. Find out what the template asks, and for which rungs:**
 
@@ -733,8 +777,9 @@ that it was updated, and the plugin guide (`GUIA.md`) declares this as a limit. 
 
 The `sworn` marketplace is third-party: Claude Code installs it with automatic update
 **off**, and without it the user stays on the version they installed. This step runs on every init, including
-a re-init, and writes outside the project (in the user's Claude Code `settings.json`), so it does not go
-through the scope of Step 0b.
+a re-init, and writes outside the project (in the user's Claude Code `settings.json`, the settings file of Claude Code
+itself, in `~/.claude/` or in `CLAUDE_CONFIG_DIR`, valid for every project), so it does not go through the scope of
+Step 0b. A marketplace is the catalog Claude Code installs plugins from; `sworn` comes from its own.
 
 **1. Check before asking:**
 
@@ -745,9 +790,11 @@ without asking. `ERRO` → paste the output, tell the user what it asks for and 
 item 2.
 
 **2. Ask through `AskUserQuestion`, in 3 options**, first saying that the new version arrives a few
-minutes after the session opens and takes effect from the next session: **turn on now (recommended)** —
-receives the fixes without doing anything; **no, I'll update by hand** — show the two commands under "To
-update by hand" in the plugin guide (`GUIA.md`); **not now** — the next init asks again.
+minutes after the session opens and takes effect from the next session, and that a yes writes one key in the
+Claude Code `settings.json` of this computer (the path the command printed), not in the project: **turn on now
+(recommended)** — receives the fixes without doing anything; **no, I'll update by hand** — show now the two
+commands under "To update by hand" in the plugin guide (`GUIA.md`); **not now** — show nothing. Say in the question
+that, for both "no" answers, the answer is not saved, so the next init asks again.
 
 **3. Only with a yes**, run the same command with `--gravar` and paste the output:
 
@@ -869,8 +916,8 @@ binds the session to that front; without a binding, the general `escopo.md` stay
 
 **The last row is not a lock, and say so.** There is no `travas.custo`: the cost gate goes quiet
 on its own when the ladder has fewer than two names. And it does not block only the top agent — it blocks
-the upper half of the ladder, rounded up. On a ladder of five, the last two; on one of
-four, also the last two. Say at which position the cut starts **on the ladder they just
+the expensive half of the ladder, rounded down (the cheaper half, rounded up, passes). On a ladder of five, the
+last two; on one of four, also the last two; on one of three, the last one. Say at which position the cut starts **on the ladder they just
 answered**, otherwise they find out at the first denied dispatch.
 
 **Say it out loud, don't leave it only in the table:** the key `travas.escopo` exists in `projeto.json` and the
@@ -889,7 +936,7 @@ saved as on and has no way of firing in this project.
 **If you configured a different folder from the one the user is working in, say this:** the
 gates look at the folder where the agent's session was opened, not the one that was just configured. The
 locks in this table apply when they are working **inside** this root; opening the session
-elsewhere, none of them fires. Promising four locks on without this caveat is announcing
+elsewhere, none of them fires. Promising the locks of this table on without this caveat is announcing
 protection that will not happen.
 
 Also say what `sworn` **does not** promise — it does not judge whether the interface came out beautiful, does not

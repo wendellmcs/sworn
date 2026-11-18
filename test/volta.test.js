@@ -243,7 +243,9 @@ test('0.11.0: abrir-turno grava o resumo antes de parar e o aviso traz o prompt 
     const um = abrir(t.dir, sessoes, 'abcdef12-3456', t.f);
     assert.ok(parou(um), JSON.stringify(um));
     const pasta = path.join(t.dir, '.sworn', 'handoff');
-    const gravados = fs.readdirSync(pasta);
+    // D869: a pasta ganha o .gitignore '*' junto com o resumo
+    assert.strictEqual(fs.readFileSync(path.join(pasta, '.gitignore'), 'utf8'), '*\n');
+    const gravados = fs.readdirSync(pasta).filter(function (n) { return n !== '.gitignore'; });
     assert.strictEqual(gravados.length, 1);
     assert.match(gravados[0], /^\d{4}-\d\d-\d\d-retomar-abcdef12\.md$/);
     const rel = '.sworn/handoff/' + gravados[0];

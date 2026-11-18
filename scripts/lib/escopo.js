@@ -21,6 +21,22 @@ function nomeSeguro(frente) {
 // F2-18: regua horizontal do markdown (`---`, `***`, `___`, com ou sem marcador e espacos) separa trechos; nao e caminho.
 const REGUA = /^([-*_])(?:\s*\1){2,}$/;
 
+// L2-s103-12: o que esta entre a cerca de crases do comeco e a primeira sequencia de crases do MESMO tamanho, como no
+// Markdown (``a`b.js`` le `a`b.js`), ou null sem fecho. A cerca de abertura e a sequencia inteira: sem fecho igual, nao
+// encolhe para fechar antes. Por indexOf, nao por regex: uma linha longa de crases nao custa tempo quadratico.
+function dentroDaCerca(s) {
+  const n = (s.match(/^`+/) || [''])[0].length;
+  if (!n) return null;
+  for (let i = n; ;) {
+    const j = s.indexOf('`', i);
+    if (j === -1) return null;
+    let k = j;
+    while (k < s.length && s[k] === '`') k++;
+    if (k - j === n) return s.slice(n, j).trim();
+    i = k;
+  }
+}
+
 /**
  * D244/defeito 2: o item de lista e o CAMINHO, e o resto da linha e anotacao. Antes a linha
  * inteira virava padrao, e `src/a.js (motivo)` nunca casava arquivo nenhum. Caminho pode ter
@@ -33,8 +49,9 @@ function caminhoDoItem(t) {
   // 0.3.3, item 23: marcador sozinho na linha (`-`, `*`, `+`) nao e item; sem o `$`, o marcador sem
   // texto sobrava como o caminho `-`.
   const s = t.replace(/^[-*+](?:\s+|$)/, '').trim();
-  const crase = s.match(/^`+([^`]+)`+/);
-  if (crase) return crase[1].trim();
+  // L2-s103-12: com uma crase so abrindo e fechando, o caminho com crase no nome quebrava no meio.
+  const cercado = dentroDaCerca(s);
+  if (cercado !== null) return cercado;
   const corte = s.search(/\s+(?:\(|\u2014|--\s|-\s|#)/);
   return (corte === -1 ? s : s.slice(0, corte)).replace(/`+/g, '').trim();
 }
@@ -221,7 +238,7 @@ function motivoSemEscopo(alvo, marcha, arquivo) {
     '  **Objetivo:** <uma linha sobre o que esta tarefa resolve>',
     '  ## Dentro',
     // A2-04: entre crases, o parser le o caminho inteiro (sem crase, corta em ` (`, ` - `, ` #`).
-    '  - `' + alvoAscii + '`',
+    '  - ' + entreCrases(alvoAscii),
     '  ## Fora de escopo',
     '  - <o que esta tarefa NAO vai mexer>',
     ''
@@ -234,7 +251,8 @@ function motivoSemEscopo(alvo, marcha, arquivo) {
 }
 
 function motivoFora(alvo, marcha, esc, arquivo) {
-  const lista = (esc && esc.dentro.length) ? esc.dentro.map(function (d) { return '  - ' + ascii(d); }).join('\n') : '  (vazio)';
+  // L2-s103-14: o `dentro` que nao e lista (escopo montado a mao) vira "(vazio)", nao um TypeError no meio do aviso.
+  const lista = (esc && Array.isArray(esc.dentro) && esc.dentro.length) ? esc.dentro.map(function (d) { return '  - ' + ascii(d); }).join('\n') : '  (vazio)';
   return [
     TRAVA_ESCOPO,
     '',
@@ -260,7 +278,16 @@ function motivoDeclaradoFora(alvo, padrao, arquivo) {
     'Escolha uma:',
     NAO_EDITE,
     '  2. se a tarefa mudou, reescreva ' + (arquivo || ARQUIVO) + ' e diga por que.'
-  ].join('\n');
+  ].concat(avisoDeAcento(alvo, true)).join('\n');
+}
+
+// L2-s103-12: o caminho entre crases que o parser le de volta inteiro. A cerca e uma crase mais longa que a maior
+// sequencia de crases do nome, com espaco quando o nome comeca ou termina por crase (a regra do Markdown).
+function entreCrases(s) {
+  const maior = (String(s).match(/`+/g) || []).reduce(function (n, c) { return Math.max(n, c.length); }, 0);
+  const cerca = '`'.repeat(maior + 1);
+  const folga = /^`|`$/.test(s) ? ' ' : '';
+  return cerca + folga + s + folga + cerca;
 }
 
 /** Nome de frente fora da classe [a-zA-Z0-9_-]: negado sem gravar vinculo nenhum. */
@@ -272,7 +299,7 @@ function motivoNomeDeFrente(alvo) {
     '',
     'Nome de frente so pode ter letras sem acento, numeros, "_" e "-".',
     'Renomeie o arquivo e tente de novo.'
-  ].join('\n');
+  ].concat(avisoDeAcento(alvo, true)).join('\n');
 }
 
 /**
@@ -434,7 +461,7 @@ function motivoIntocavel(alvo) {
     'Faca uma destas:',
     '  1. siga sem mexer nele; se ele precisar de mudanca, conte ao usuario no fecho do turno;',
     '  2. ou peca ao dono que decida: 3 opcoes, a recomendada primeiro, cada uma com o que muda e o custo.'
-  ].join('\n');
+  ].concat(avisoDeAcento(alvo, true)).join('\n');
 }
 
 function motivoOutraFrente(alvo, arquivo) {

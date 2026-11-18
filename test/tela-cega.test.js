@@ -7,6 +7,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const barra = (p) => String(p).split(String.fromCharCode(92)).join('/'); // A3-15: a saida usa barra normal
 const { spawnSync } = require('node:child_process');
 const { pathToFileURL, fileURLToPath } = require('node:url');
 const telaCega = require('../scripts/lib/tela-cega.js');
@@ -321,8 +322,8 @@ test('ponta a ponta: cada lado leva a foto pelo rotulo cego, sem endereco; o fec
   const mapa = JSON.parse(fs.readFileSync(path.join(ronda, 'mapa.json'), 'utf8'));
   assert.ok(!fs.existsSync(telasDe(p.dir)), 'a pasta de trabalho das fotos saiu');
   for (const rotulo of ['A', 'B']) {
-    assert.deepStrictEqual(saida.fotos[rotulo], { imagem: path.join(ronda, rotulo + '.png'),
-      evidencia: path.join(ronda, rotulo + '.evidencia.json') });
+    assert.deepStrictEqual(saida.fotos[rotulo], { imagem: barra(path.join(ronda, rotulo + '.png')),
+      evidencia: barra(path.join(ronda, rotulo + '.evidencia.json')) });
     const png = fs.readFileSync(saida.fotos[rotulo].imagem);
     assert.strictEqual(png.subarray(1, 4).toString('latin1'), 'PNG');
     const texto = fs.readFileSync(saida.fotos[rotulo].evidencia, 'utf8');

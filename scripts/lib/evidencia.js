@@ -67,16 +67,40 @@ const NAO_RODOU = [
 // cerca em linha propria, corpo nao vazio, e linguagem que nao seja de codigo-fonte.
 const LINGUAGEM_DE_CODIGO = /^(js|jsx|ts|tsx|mjs|cjs|py|rb|php|java|cs|c|cpp|h|go|rs|swift|kt|html|css|scss|xml|yaml|yml|toml|ini|sql|md|diff|patch)$/i;
 
-function blocosDeSaida(texto) {
-  const re = /^[ \t]*```([A-Za-z0-9_+-]*)[ \t]*\r?\n([\s\S]*?)^[ \t]*```[ \t]*$/gm;
-  const achados = [];
-  let m;
-  while ((m = re.exec(texto)) !== null) {
-    if (LINGUAGEM_DE_CODIGO.test(m[1] || '')) continue;
-    if ((m[2] || '').trim() === '') continue;
-    achados.push(m[2]);
+// A3-19 (H1): a cerca e de 3 ou mais crases ou tils, como no Markdown; fecha so com o mesmo caractere, pelo menos do
+// mesmo tamanho, numa linha sozinha. Antes so a de 3 crases valia: a de 4 (para citar um bloco dentro) e a de ~~~
+// ficavam sem bloco, e a alegacao com a saida colada nelas era barrada.
+const ABRE_CERCA = /^[ \t]*(`{3,}|~{3,})([A-Za-z0-9_+-]*)[ \t]*$/;
+const FECHA_CERCA = /^[ \t]*(`{3,}|~{3,})[ \t]*$/;
+
+/** As cercas fechadas do texto, na ordem: { lingua, corpo, ini, fim } (ini e fim: o trecho inteiro, cercas inclusas). */
+function cercas(texto) {
+  const linhas = texto.split('\n');
+  const achadas = [];
+  let pos = 0;
+  let aberta = null;
+  for (const bruta of linhas) {
+    const l = bruta.replace(/\r$/, '');
+    const fimDaLinha = pos + bruta.length;
+    if (aberta === null) {
+      const m = ABRE_CERCA.exec(l);
+      if (m) aberta = { marca: m[1], lingua: m[2], ini: pos, corpoIni: fimDaLinha + 1 };
+    } else {
+      const m = FECHA_CERCA.exec(l);
+      if (m && m[1][0] === aberta.marca[0] && m[1].length >= aberta.marca.length) {
+        achadas.push({ lingua: aberta.lingua, corpo: texto.slice(aberta.corpoIni, pos), ini: aberta.ini, fim: fimDaLinha });
+        aberta = null;
+      }
+    }
+    pos = fimDaLinha + 1;
   }
-  return achados;
+  return achadas;
+}
+
+function blocosDeSaida(texto) {
+  return cercas(comoTexto(texto)).filter(function (c) {
+    return !LINGUAGEM_DE_CODIGO.test(c.lingua) && c.corpo.trim() !== '';
+  }).map(function (c) { return c.corpo; });
 }
 
 // A entrada vira texto: null e undefined dao '' (String(null) daria "null").
@@ -84,8 +108,16 @@ function comoTexto(v) {
   return String(v == null ? '' : v);
 }
 
+/**
+ * O texto sem os blocos: as cercas fechadas (de qualquer tamanho) e, no que sobra, todo trecho de ``` a ```, mesmo
+ * que passe de uma linha (o par inline, ou a cerca que abriu e nao fechou ate o proximo ```).
+ */
 function semBlocos(texto) {
-  return comoTexto(texto).replace(/```[\s\S]*?```/g, ' ');
+  const t = comoTexto(texto);
+  let fora = '';
+  let pos = 0;
+  for (const c of cercas(t)) { fora += t.slice(pos, c.ini) + ' '; pos = c.fim; }
+  return (fora + t.slice(pos)).replace(/```[\s\S]*?```/g, ' ');
 }
 
 function analisar(texto) {
@@ -111,9 +143,18 @@ const FALHA_NA_SAIDA = [
   /\bfail(?:s|ed|ures?)?[ \t]*[:=]?[ \t]*[1-9]/i, /\b[1-9]\d*[ \t]+(?:tests?[ \t]+)?(?:failed|failing|failures?)\b/i,
   /^[ \t]*not ok\b(?!.*#[ \t]*(?:todo|skip))/im, /\bexit(?:ed with)?[ \t]+(?:code|status)[ \t]*[:=]?[ \t]*[1-9]/i
 ];
-// Palavras soltas: tambem aparecem no nome de um teste que passou. Valem so quando a saida nao traz o resumo que zera.
-const FALHA_SOLTA = [/\bERR!/, /\btimed out\b/i, /tempo esgotado/i, /\bETIMEDOUT\b/];
+// As marcas de erro do executor: tambem aparecem no nome de um teste, entao valem fora das linhas que so nomeiam
+// teste (NOME_DE_TESTE), mas sempre (P17-32, H1): antes o "fail 0" de uma suite apagava o `npm ERR!` de outra.
+const FALHA_FORA_DO_VERDE = [/\bERR!/, /\bETIMEDOUT\b/];
+// Frases soltas: so valem quando a saida nao traz o resumo que zera ("timed out" tambem e prosa de log).
+const FALHA_SOLTA = [/\btimed out\b/i, /tempo esgotado/i];
 const RESUMO_SEM_FALHA = [/\bfail(?:s|ed|ures?)?[ \t]*[:=]?[ \t]*0\b/i, /\b0[ \t]+(?:tests?[ \t]+)?(?:failed|failing|failures?)\b/i];
+// A linha que so nomeia um teste, e o nome pode ter "ERR!", "error:" ou "expected": a do teste que passou (tap, spec
+// do node, mocha, jest) e a que abre o teste ou a suite (o "# Subtest:" do tap, o "▶" do spec). A falha de um teste
+// nunca fica so nela: aparece em outra linha (not ok, ✖, fail N).
+const NOME_DE_TESTE = /^[ \t]*(?:ok\b|[✔✓▶]|PASS\b|# Subtest:).*$/gm;
+// P17-19 (H1): a cor do terminal (ESC [ ... m) entre "fail" e o numero escondia a falha das regex.
+const COR_DO_TERMINAL = /\x1b\[[0-9;]*m/g;
 
 // Quem diz que a falha segue nao mente. "o teste falhava; corrigido" nao entra: e a causa contada, nao a falha de agora.
 // "nao passa" fica de fora (D639): a regex nao separa "o teste nao passa" de "o GET nao passa pelo filtro nos testes",
@@ -127,8 +168,10 @@ const AINDA_FALHA = [
 ];
 
 function textoMostraFalha(texto) {
-  const t = comoTexto(texto);
+  const t = comoTexto(texto).replace(COR_DO_TERMINAL, '');
   if (FALHA_NA_SAIDA.some(function (r) { return r.test(t); })) return true;
+  const semNomes = t.replace(NOME_DE_TESTE, '');
+  if (FALHA_FORA_DO_VERDE.some(function (r) { return r.test(semNomes); })) return true;
   return !RESUMO_SEM_FALHA.some(function (r) { return r.test(t); }) && FALHA_SOLTA.some(function (r) { return r.test(t); });
 }
 
@@ -173,12 +216,20 @@ const PERGUNTA_FINAL = [
   'Teste instavel se corrige ou se remove: rodar de novo ate passar nao e prova.'
 ];
 
-const MOTIVO_FALHA = [
-  'sworn - portao de fecho (trava 3).',
-  '',
+// P17-22/27 (H1): o cabecalho de todo motivo deste portao, escrito uma vez. R5: os motivos sao ASCII puro (chegam ao
+// Claude, e sao o ponto de reinjecao da regra, falha A1).
+const TRAVA = 'sworn - portao de fecho (trava 3)';
+const CABECALHO = TRAVA + '.';
+
+/** Um motivo: o cabecalho, uma linha em branco, as linhas do `corpo` e as do `fim` (a PERGUNTA_FINAL, onde vai). */
+function montar(corpo, fim) {
+  return [CABECALHO, ''].concat(corpo, fim || []).join('\n');
+}
+
+const MOTIVO_FALHA = montar([
   'Voce afirmou sucesso, mas o bloco que voce colou mostra falha',
   '(teste falho, exit code diferente de 0, not ok, ERR! ou tempo esgotado).'
-].concat(PERGUNTA_FINAL).join('\n');
+], PERGUNTA_FINAL);
 
 // O comando citado no motivo: ASCII (R5) e curto.
 function citado(comando) {
@@ -187,64 +238,55 @@ function citado(comando) {
 }
 
 function motivoTesteVermelho(comando) {
-  return [
-    'sworn - portao de fecho (trava 3).',
-    '',
-    'Voce afirmou sucesso, mas o ultimo teste que rodou nesta sessao falhou:',
-    '  ' + citado(comando)
-  ].concat(PERGUNTA_FINAL).join('\n');
+  return montar(['Voce afirmou sucesso, mas o ultimo teste que rodou nesta sessao falhou:', '  ' + citado(comando)],
+    PERGUNTA_FINAL);
 }
 
 // R2b: a ultima conferencia da tela contra a referencia (scripts/conferir-tela.js) saiu 1 - alguma medida ficou sem
 // comparar, ou a chamada errou. Rodar outro teste depois nao apaga: so a conferencia que sai 0 libera.
 function motivoConferenciaVermelha(comando) {
-  return [
-    'sworn - portao de fecho (trava 3).',
-    '',
+  return montar([
     'Voce afirmou sucesso, mas a ultima conferencia da tela contra a referencia saiu 1:',
     '  ' + citado(comando),
     '',
     'Alguma medida ficou sem comparar (listada em naoComparado do conferencia.json) ou a chamada errou.',
     'O que nao se comparou nunca conta como igual.'
-  ].concat(PERGUNTA_FINAL).join('\n');
+  ], PERGUNTA_FINAL);
 }
 
+// P17-29 (H1): o motivo diz o que e a prova de pronto (a chave do projeto.json), e nao so o nome dela.
+const QUAL_PROVA = 'a prova de pronto do projeto (o comando em provaDePronto, no .claude/sworn/projeto.json)';
+
 function motivoProvaNaoRodou(prova) {
-  return [
-    'sworn - portao de fecho (trava 3).',
-    '',
-    'Voce afirmou sucesso, mas a prova de pronto do projeto nao rodou depois',
-    'da ultima edicao de codigo:',
+  return montar([
+    'Voce afirmou sucesso, mas ' + QUAL_PROVA,
+    'nao rodou depois da ultima edicao de codigo:',
     '  ' + citado(prova),
     '',
     'Rode-a e cole a saida, ou declare que nao rodou e por que.'
-  ].join('\n');
+  ]);
 }
 
 /** A4 (s369): a prova lancada em segundo plano depois da ultima edicao, sem o aviso de fim. ASCII (R5). */
 function motivoProvaRodando(prova) {
-  return [
-    'sworn - portao de fecho (trava 3).',
-    '',
-    'Voce afirmou sucesso, mas a prova de pronto do projeto ainda roda em segundo plano,',
-    'sem resultado:',
+  return montar([
+    'Voce afirmou sucesso, mas ' + QUAL_PROVA,
+    'ainda roda em segundo plano, sem resultado:',
     '  ' + citado(prova),
     '',
     'Espere o aviso de fim dela e cole a saida, ou declare que ela ainda nao terminou.'
-  ].join('\n');
+  ]);
 }
 
 /** F5 (achado da R2b): a conferencia da tela lancada em segundo plano, sem o aviso de fim. ASCII (R5). */
 function motivoConferenciaRodando(comando) {
-  return [
-    'sworn - portao de fecho (trava 3).',
-    '',
+  return montar([
     'Voce afirmou sucesso, mas a conferencia da tela contra a referencia ainda roda em segundo plano,',
     'sem resultado:',
     '  ' + citado(comando),
     '',
     'Espere o aviso de fim dela e cole o resumo, ou declare que ela ainda nao terminou.'
-  ].join('\n');
+  ]);
 }
 
 // D785 (2.1): as voltas do laco da prova que mandam consertar; a seguinte manda escalar, e dali em diante o portao
@@ -270,13 +312,13 @@ function motivoDoLaco(tipo, comando, n, sandbox) {
       'e conserte o que falhar depois disso.', '');
   }
   if (n <= TETO_DO_LACO) {
-    return ['sworn - portao de fecho (trava 3), laco da prova (' + n + ' de ' + TETO_DO_LACO + ').', ''].concat(oQue, [
+    return [TRAVA + ', laco da prova (' + n + ' de ' + TETO_DO_LACO + ').', ''].concat(oQue, [
       'Sem perguntar ao usuario: rode a prova, conserte o que falhar e rode de novo,',
       'ate passar. Depois cole a saida que passa, dentro de um bloco ``` .',
       'Teste instavel se corrige ou se remove: rodar de novo ate passar nao e prova.'
     ]).join('\n');
   }
-  const titulo = 'sworn - portao de fecho (trava 3), laco da prova: ' + TETO_DO_LACO + ' voltas sem passar.';
+  const titulo = TRAVA + ', laco da prova: ' + TETO_DO_LACO + ' voltas sem passar.';
   return [titulo, ''].concat(oQue, [
     'Sem perguntar ao usuario: escale. Despache o agente que vem na escada logo depois do',
     'que fez o trabalho ate aqui (agentes.escada em .claude/sworn/projeto.json, do mais',
@@ -358,16 +400,16 @@ function deveBloquearPorCausa(texto) {
 
 // O bloco mostra o defeito: falha de teste, ou a linha de erro fora das linhas de teste que passou (o nome do teste
 // verde pode ter "error:" ou "expected ... but"); o resumo que zera as falhas ("fail 0") anula o erro solto.
-const TESTE_QUE_PASSOU = /^[ \t]*(?:ok\b|[✔✓]|PASS\b).*$/gm;
 function mostraDefeito(bloco) {
   if (textoMostraFalha(bloco)) return true;
-  if (RESUMO_SEM_FALHA.some(function (r) { return r.test(bloco); })) return false;
-  const resto = bloco.replace(TESTE_QUE_PASSOU, '');
+  const semCor = bloco.replace(COR_DO_TERMINAL, '');
+  if (RESUMO_SEM_FALHA.some(function (r) { return r.test(semCor); })) return false;
+  const resto = semCor.replace(NOME_DE_TESTE, '');
   return DEFEITO_NA_SAIDA.some(function (r) { return r.test(resto); });
 }
 
 const MOTIVO_CAUSA = [
-  'sworn - portao de fecho (trava 3): causa sem o defeito reproduzido.',
+  TRAVA + ': causa sem o defeito reproduzido.',
   '',
   'Voce disse que achou a causa e nao mostrou o defeito acontecendo.',
   'Antes de dar a causa por achada, faca uma destas duas coisas e responda de novo:',
@@ -379,10 +421,7 @@ const MOTIVO_CAUSA = [
   'Nao reescreva a frase para escapar do portao. Reproduza, ou declare.'
 ].join('\n');
 
-// R5: ASCII puro. Este texto chega ao Claude, e e o ponto de reinjecao da regra (falha A1).
-const MOTIVO = [
-  'sworn - portao de fecho (trava 3).',
-  '',
+const MOTIVO = montar([
   'Voce afirmou sucesso e nao colou evidencia desta rodada.',
   'Faca uma destas duas coisas, e responda de novo:',
   '',
@@ -394,7 +433,7 @@ const MOTIVO = [
   'demonstracao de que os arquivos lidos pelo teste nao estao no diff.',
   '',
   'Nao reescreva a frase para escapar do portao. Rode, ou declare.'
-].join('\n');
+]);
 
 module.exports = {
   NAO_RODOU, semBlocos, analisar, deveBloquear, MOTIVO, textoMostraFalha, deveBloquearPorFalha, declaraRessalva,

@@ -18,38 +18,25 @@ const BUFFER_DO_LOG = 16 * 1024 * 1024;
 // O achado de sanitacao num autor (superficie 2 do sanitacao.js) aponta o autor pelo numero na lista do cartao.
 const SUPERFICIE_AUTOR = 2;
 
-/** O `git push`, como o `git commit` do commit.js: opcoes globais antes, depois de cd ou encadeado. O grupo 2 sao os
- *  argumentos do push, ate o fim do comando dele. */
-const GIT_PUSH = /(?:^|[\s;&|(/\\])git(?:\.exe)?((?:\s+(?:-[cC]\s+\S+|--?[A-Za-z][\w-]*(?:=\S+)?))*)\s+push(?![\w-])([^;&|\n]*)/d;
+// A2-10/A2-20 (H1): o `git push` se le pelo mesmo leitor de shell do commit.js (commit.chamadaGit): opcoes globais
+// antes (tambem com o valor separado, `--git-dir X`), depois de cd, encadeado, dentro de bash -c ou eval. `ferramenta`
+// ('Bash' ou 'PowerShell', a do gancho) escolhe o idioma; sem ela, valem as regras do commit.js.
 
-/** O comando roda um `git push`? Entre aspas nao conta. */
-function ehPush(comando) {
-  if (typeof comando !== 'string' || !comando) return false;
-  return GIT_PUSH.test(commit.semAspas(comando));
+/** O comando roda um `git push`? Entre aspas, em heredoc ou em comentario nao conta. */
+function ehPush(comando, ferramenta) {
+  return commit.chamadaGit(comando, ferramenta, 'push') !== null;
 }
 
-/** A marca do push visto, fora de aspas. */
-function visto(comando) {
-  return typeof comando === 'string' && MARCA_RE.test(commit.semAspas(comando));
+/** A marca do push visto, num comentario do comando (entre aspas nao vale). */
+function visto(comando, ferramenta) {
+  return commit.temMarca(comando, ferramenta, MARCA_RE);
 }
 
-/** Os argumentos do push, do comando original (as aspas saem, o valor fica). O comentario da marca e o
- *  redirecionamento (`2>&1`, `> saida`) nao sao argumentos: o corte e no primeiro dos dois fora de aspas (o semAspas
- *  guarda o tamanho, entao a posicao vale no original). */
-function argumentos(comando) {
-  const c = String(comando || '');
-  const limpo = commit.semAspas(c);
-  const m = GIT_PUSH.exec(limpo);
-  if (!m) return [];
-  const ini = m.indices[2][0];
-  const fim = m.indices[2][1];
-  const corte = /\s(?:#|\d*[<>])/.exec(limpo.slice(ini, fim));
-  const bruto = c.slice(ini, corte ? ini + corte.index : fim);
-  const re = /"((?:[^"\\]|\\.)*)"|'([^']*)'|(\S+)/g;
-  const lista = [];
-  let t;
-  while ((t = re.exec(bruto)) !== null) lista.push(t[1] !== undefined ? t[1] : (t[2] !== undefined ? t[2] : t[3]));
-  return lista;
+/** Os argumentos do push, sem as aspas. O comentario da marca e o redirecionamento (`2>&1`, `> saida`) nao sao
+ *  argumentos: o leitor de shell os separa das palavras. */
+function argumentos(comando, ferramenta) {
+  const g = commit.chamadaGit(comando, ferramenta, 'push');
+  return g ? g.args.map(function (a) { return a.t; }) : [];
 }
 
 // As opcoes que o cartao destaca, e as que levam valor (o valor nao e o remoto). O --force-if-includes sozinho nao
@@ -68,8 +55,8 @@ const TODOS = /^--(?:all|branches|mirror|tags)$/;
 
 /** { remoto, refs, opcoes, avisos, todos } do push: o primeiro argumento que nao e opcao e o remoto; os outros, as
  *  refspecs, ja sem o `+` da frente. */
-function ler(comando) {
-  const args = argumentos(comando);
+function ler(comando, ferramenta) {
+  const args = argumentos(comando, ferramenta);
   const opcoes = [];
   const soltos = [];
   for (let i = 0; i < args.length; i++) {
@@ -110,10 +97,10 @@ function porNulo(s) {
 /**
  * O que o push levaria. `cwd` e a pasta do push. Tudo vem do git local, pelo que ele sabe do remoto: os commits que
  * nenhum ramo daquele remoto tem. O que nao foi conferido fica null, com o porque em `porQue` (commits e arquivos) e
- * em `porQueSanitacao`.
+ * em `porQueSanitacao`. `ferramenta`: a do gancho, que da o idioma do comando.
  */
-function levantar(cwd, comando, classes) {
-  const p = ler(comando);
+function levantar(cwd, comando, classes, ferramenta) {
+  const p = ler(comando, ferramenta);
   const r = { remoto: p.remoto, url: null, ramo: null, avisos: p.avisos, semNome: false, todos: p.todos, porQue: null,
     commits: null, arquivos: null, autores: null, sanitacao: null, porQueSanitacao: null, varridos: 0 };
   const ramoLocal = (git.correr(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']) || '').trim() || null;
@@ -222,8 +209,8 @@ function cartao(r) {
 }
 
 /** A pasta do push: o `git -C <pasta>` dele, ou o ultimo `cd` antes; sem nenhum, null (o commit.js le do mesmo jeito). */
-function pastaDoPush(comando) {
-  return commit.pastaDoComando(comando, GIT_PUSH);
+function pastaDoPush(comando, ferramenta) {
+  return commit.pastaDoComando(comando, ferramenta, 'push');
 }
 
 module.exports = { MARCA, ehPush, visto, argumentos, ler, semCredencial, levantar, cartao, pastaDoPush, TETO_DA_VARREDURA };

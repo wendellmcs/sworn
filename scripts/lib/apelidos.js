@@ -182,8 +182,15 @@ function motivo(r) {
     'gravou no mapa (campo "agentes" de .claude/sworn/projeto.json):'
   ];
   // A1-08: nome e arquivo vem do dono e podem ter acento; o aviso sai em ASCII (R5), e o nome sem acento nao e o real.
-  let mudou = false;
-  const a = function (v) { const s = ascii(v); if (s !== String(v)) mudou = true; return s; };
+  // L2-s103-15: guarda QUAIS valores mudaram, sem repetir, para a linha de rodape os citar; so o flag nao dizia qual. O
+  // valor pode vir do arquivo do agente (nome, arquivo, o que ele declara) ou do mapa (o gravado): o rodape cita os dois.
+  const mudados = [];
+  const a = function (v) {
+    const s = ascii(v);
+    // o valor ausente (null, undefined) sai vazio, mas nao perdeu acento nenhum
+    if (v != null && s !== String(v) && mudados.indexOf(s) === -1) mudados.push(s);
+    return s;
+  };
   for (const d of r.divergencias) {
     linhas.push('  - "' + a(d.agente) + '" em ".claude/agents/' + a(d.arquivo) + '"');
     linhas.push('      o arquivo diz: ' + a(d.declarado));
@@ -194,7 +201,10 @@ function motivo(r) {
     linhas.push('      o arquivo diz: effort: ' + a(d.declarado));
     linhas.push('      o mapa diz:    esforco ' + a(d.gravado));
   }
-  if (mudou) linhas.push('Nome com acento ou caractere especial sai aqui sem acento: use o nome real, do arquivo do agente.');
+  if (mudados.length) {
+    linhas.push('Saem aqui sem acento ou caractere especial: ' +
+      mudados.map(function (s) { return '"' + s + '"'; }).join(', ') + '. Copie o valor real do arquivo do agente ou de .claude/sworn/projeto.json, nao deste aviso.');
+  }
   // A1-48/A1-28: quem le o systemMessage e quem decide; cada direcao diz onde se troca.
   linhas.push('Nada foi bloqueado: um dos dois lados ficou velho, e so voce sabe qual.');
   linhas.push('');

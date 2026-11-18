@@ -49,6 +49,12 @@ test('obrigacoes: o que esta dentro de cerca de codigo nao vira obrigacao', () =
   assert.deepStrictEqual(b.map((x) => x.tipo), ['paragrafo', 'paragrafo']);
 });
 
+// A3-22: o ~~~ dentro da cerca de crases (e o contrario) e texto do exemplo, nao fecha a cerca.
+test('A3-22: a cerca fecha pelo mesmo marcador que a abriu', () => {
+  const b = ob.linhasLogicas('antes\n\n```\n~~~\n- **Nunca faca isto** no exemplo\n```\n\n~~~\n```\n- **Nem isto**\n~~~\n\ndepois\n');
+  assert.deepStrictEqual(b.map((x) => x.texto), ['antes', 'depois']);
+});
+
 // ── as tres formas ───────────────────────────────────────────────────────
 
 test('obrigacoes: forma 1 - cabecalho ordinal vira obrigacao, com familia e numero', () => {

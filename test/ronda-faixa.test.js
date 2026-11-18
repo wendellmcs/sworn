@@ -11,13 +11,13 @@ const MIN = 60 * 1000;
 // O caminho dos vereditos como o briefing do Windows o traz (com barra invertida, "\"); o teste de rondaDoCaminho
 // prova tambem o de barra normal.
 const caminhoWindows = (arquivo, ronda) => 'C:\\w\\.claude\\sworn\\revisao\\' + arquivo + '\\' + ronda + '\\vereditos';
-// sonnet: entrada 2, saida 10, leitura 0,20, escrita de 5 min 2,5 (US$ por milhao)
-// 1000 x 2 + 2000 x 10 + 10000 x 0,2 + 20000 x 2,5 = US$ 0,074
+// sonnet 5.5: entrada 2, saida 10, leitura 0,10, escrita de 5 min 2,5 (US$ por milhao)
+// 1000 x 2 + 2000 x 10 + 10000 x 0,1 + 20000 x 2,5 = US$ 0,073
 const USO = { input_tokens: 1000, output_tokens: 2000, cache_read_input_tokens: 10000, cache_creation_input_tokens: 20000,
   model: 'claude-sonnet-5-5' };
 const inspetor = (arquivo, ronda, inicio, fim, extra) => ({ vereditos: caminhoWindows(arquivo, ronda),
   modelo: 'claude-sonnet-5-5', inicio: inicio, fim: fim, usage: fim === null ? null : USO, ...extra });
-const custa074 = (valor) => assert.ok(Math.abs(valor - 0.074) < 1e-9, 'custo ' + valor + ', esperado 0.074');
+const custa073 = (valor) => assert.ok(Math.abs(valor - 0.073) < 1e-9, 'custo ' + valor + ', esperado 0.073');
 
 test('os limites: 30 min sem resposta (a linha diz isso) e 10 min de pausa entre lotes da mesma ronda', () => {
   assert.strictEqual(rf.PARADO_MS, 30 * MIN);
@@ -49,11 +49,11 @@ test('curto: o nome do modelo pelo id; fora dos conhecidos, o id; sem modelo, va
 });
 
 test('custoDe: pela tabela do /sworn:calibrate, com o modelo do usage antes do do disparo', () => {
-  custa074(rf.custoDe(USO, 'claude-opus-5-5'));
+  custa073(rf.custoDe(USO, 'claude-opus-5-5'));
   // sem modelo no usage vale o do disparo; espaco, sufixo de contexto e data saem antes de procurar na tabela
-  custa074(rf.custoDe({ ...USO, model: undefined }, 'claude-sonnet-5-5[1m]'));
-  custa074(rf.custoDe({ ...USO, model: 'claude-sonnet-5-5-20261001' }, ''));
-  custa074(rf.custoDe({ ...USO, model: ' claude-sonnet-5-5[1m] ' }, ''));
+  custa073(rf.custoDe({ ...USO, model: undefined }, 'claude-sonnet-5-5[1m]'));
+  custa073(rf.custoDe({ ...USO, model: 'claude-sonnet-5-5-20261001' }, ''));
+  custa073(rf.custoDe({ ...USO, model: ' claude-sonnet-5-5[1m] ' }, ''));
   assert.strictEqual(rf.custoDe({ ...USO, model: 'modelo-novo' }, 'claude-sonnet-5-5'), null);
   assert.strictEqual(rf.custoDe(null, 'claude-sonnet-5-5'), null);
   // "constructor" nao e modelo da tabela

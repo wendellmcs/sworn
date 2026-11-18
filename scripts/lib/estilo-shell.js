@@ -48,13 +48,17 @@ const JANELA_JOIN_PATH = 2000;
  * `q` = a palavra tinha aspas; `qi` = onde, no texto `t`, a primeira aspa abriu (-1 sem aspa). Aspas, escape e
  * here-string seguem o idioma (`ps`): a aspa simples do bash nao tem escape e a do PowerShell escapa a si mesma
  * dobrada; a barra escapa no bash e a crase no PowerShell.
+ * A2-10 (H1): a lista leva tambem `comentarios`, o texto de cada comentario (`# ...`, sem o \r do fim), onde o
+ * commit.js e o push.js leem as marcas; quem copiar a lista (filter, slice) perde esse campo.
  */
 function lerShell(comando, ps) {
   let s = String(comando);
   if (ps) s = aspasRetas(s);
   const n = s.length;
+  const escapa = ps ? '`' : '\\'; // o escape e a continuacao de linha: a crase no PowerShell, a barra no bash
   const comandos = [];
   const pendentes = []; // heredocs abertos: o corpo vem depois da proxima quebra de linha
+  const comentarios = [];
   let atual = { palavras: [], redir: [], docs: [] };
   const fecharComando = function () {
     if (atual.palavras.length || atual.redir.length) comandos.push(atual);
@@ -71,7 +75,11 @@ function lerShell(comando, ps) {
       const c = s[i];
       // F5b r1: a continuacao de linha do bash (barra e quebra, com ou sem \r) nao e palavra nem parte dela; antes
       // ela sozinha virava a palavra vazia, e o vazio passava a ser o nome do programa
-      if (!ps && c === '\\' && (s[i + 1] === '\n' || (s[i + 1] === '\r' && s[i + 2] === '\n'))) {
+      // A2-10 (H1): a do PowerShell e a crase e quebra; antes a crase escapava a quebra para dentro da palavra.
+      // No bash ela junta os dois lados numa palavra so; no PowerShell ela e espaco, e fecha a palavra que vinha
+      // (`Set-Content`<quebra>a.css` sao duas palavras).
+      if (c === escapa && (s[i + 1] === '\n' || (s[i + 1] === '\r' && s[i + 2] === '\n'))) {
+        if (ps && achou) break;
         i += s[i + 1] === '\n' ? 2 : 3;
         continue;
       }
@@ -104,7 +112,7 @@ function lerShell(comando, ps) {
             i++;
             break;
           }
-          if (d === (ps ? '`' : '\\') && i + 1 < n) {
+          if (d === escapa && i + 1 < n) {
             const e = s[i + 1];
             if (ps || '"\\$`\n'.indexOf(e) !== -1) { t += e; i += 2; continue; }
           }
@@ -150,12 +158,12 @@ function lerShell(comando, ps) {
     return Math.min(i, n);
   }
 
-  // F5b r2: tambem a continuacao de linha do bash, para o alvo de `> \` e a marca de `<< \` na linha de baixo
+  // F5b r2: tambem a continuacao de linha (a do bash e, A2-10, a do PowerShell), para o alvo de `> \` e a marca de `<< \` na linha de baixo
   function pularEspacos(i) {
     for (;;) {
       while (i < n && ESPACO.test(s[i])) i++;
-      if (!ps && s[i] === '\\' && s[i + 1] === '\n') { i += 2; continue; }
-      if (!ps && s[i] === '\\' && s[i + 1] === '\r' && s[i + 2] === '\n') { i += 3; continue; }
+      if (s[i] === escapa && s[i + 1] === '\n') { i += 2; continue; }
+      if (s[i] === escapa && s[i + 1] === '\r' && s[i + 2] === '\n') { i += 3; continue; }
       return i;
     }
   }
@@ -165,11 +173,18 @@ function lerShell(comando, ps) {
     const c = s[i];
     if (c === '\n') { fecharComando(); i = corpos(i + 1); continue; }
     if (ESPACO.test(c)) { i++; continue; }
-    if (c === '#') { while (i < n && s[i] !== '\n') i++; continue; } // comentario: so aparece entre palavras
+    if (c === '#') {
+      // comentario: so aparece entre palavras. A2-10 (H1): o texto fica em `comentarios`, onde o commit.js e o push.js
+      // leem as marcas (sem-revisao, push-visto); a marca dentro de aspas ou de heredoc nao e comentario.
+      const i0 = i;
+      while (i < n && s[i] !== '\n') i++;
+      comentarios.push(s.slice(i0, i).replace(/\r$/, ''));
+      continue;
+    }
     if (ps && c === '(' && atual.palavras.length) {
       // D396 n. 3: no PowerShell, `(Join-Path a b)` como argumento e o caminho a/b, nao o fim do comando
       const jp = joinPathEm(s, i);
-      if (jp) { atual.palavras.push({ t: jp.t, q: false }); i = jp.fim; continue; }
+      if (jp) { atual.palavras.push({ t: jp.t, q: false, qi: -1 }); i = jp.fim; continue; }
     }
     if (c === ';' || c === '(' || c === ')' || c === '|') { fecharComando(); i++; continue; }
     if (c === '&' && s[i + 1] !== '>') { fecharComando(); i++; continue; }
@@ -224,6 +239,7 @@ function lerShell(comando, ps) {
     atual.palavras.push({ t: w.t, q: w.q, qi: w.qi });
   }
   fecharComando();
+  comandos.comentarios = comentarios;
   return comandos;
 }
 
@@ -424,14 +440,72 @@ function ehEncodedCommand(t) {
 /** O roteiro de um -EncodedCommand: base64 do texto em UTF-16LE (o Buffer pula o que nao e base64: nunca lanca). */
 function roteiroCodificado(b64) { return Buffer.from(String(b64), 'base64').toString('utf16le'); }
 
+/** O programa de um comando simples, depois dos prefixos (`sudo`, `then`...) e das atribuicoes: { nome, args } ou null. */
+function programa(cmd) {
+  let k = 0;
+  while (k < cmd.palavras.length && (PREFIXOS.has(cmd.palavras[k].t) || ehAtribuicao(cmd.palavras[k]))) k++;
+  if (k >= cmd.palavras.length) return null;
+  return { nome: nomeDoPrograma(cmd.palavras[k].t), args: cmd.palavras.slice(k + 1) };
+}
+
+/**
+ * O comando que um programa roda escrito em texto (bash -c, eval, cmd /c, powershell -Command ou -EncodedCommand):
+ * { texto, ps } (o idioma de dentro), ou null quando o programa nao roda outro comando.
+ */
+function internoDe(nome, args, cmd, ps) {
+  const textos = args.map(function (a) { return a.t; });
+  if (INTERPRETADOR_DE_SHELL.has(nome)) {
+    const ic = args.findIndex(function (a) { return !a.q && /^-[A-Za-z]*c$/.test(a.t); });
+    if (ic !== -1 && ic + 1 < args.length) return { texto: args[ic + 1].t, ps: false };
+    // D396 n. 7: sem -c e sem arquivo de roteiro, o roteiro e o heredoc (`bash <<EOF`, `sh -s <<EOF`)
+    if (ic === -1 && cmd.docs.length && !args.some(function (a) { return a.q || !/^-/.test(a.t); })) {
+      return { texto: cmd.docs.join('\n'), ps: false };
+    }
+  } else if (nome === 'eval') {
+    return { texto: textos.join(' '), ps: ps };
+  } else if (nome === 'cmd') {
+    // cmd /c "echo x > a.css": a barra invertida do Windows e caminho, como no PowerShell.
+    // atalho: le o de dentro com TODAS as regras do PowerShell (crase escapa, aspa simples, here-string, Join-Path),
+    // nao so a da barra. limite: o cmd.exe nao tem nenhuma delas, e `echo a`> x.css` (crase literal no cmd) nao se
+    // le. trocar quando: o cmd tiver leitor proprio.
+    const ic = args.findIndex(function (a) { return !a.q && /^\/[ck]$/i.test(a.t); });
+    if (ic !== -1) return { texto: textos.slice(ic + 1).join(' '), ps: true };
+  } else if (INTERPRETADOR_PS.has(nome)) {
+    const ic = args.findIndex(function (a) { return !a.q && /^-c(?:o|om|omm|omma|omman|ommand)?$/i.test(a.t); });
+    const ie = args.findIndex(function (a) { return !a.q && ehEncodedCommand(a.t); });
+    if (ic !== -1 && ic + 1 < args.length) return { texto: textos.slice(ic + 1).join(' '), ps: true };
+    // F5b r1 (seguranca): o roteiro em base64 escapava sem ser lido
+    if (ie !== -1 && ie + 1 < args.length) return { texto: roteiroCodificado(args[ie + 1].t), ps: true };
+  }
+  return null;
+}
+
+/**
+ * A2-10 (H1): os comandos simples do texto, na ordem, com os de dentro (bash -c, eval, cmd /c, powershell -Command)
+ * logo depois de quem os roda, ate PROFUNDIDADE_MAXIMA niveis. Cada um: { palavras, redir, docs, ps, profundidade }.
+ * A lista leva `comentarios`, os do primeiro nivel (os de dentro sao texto de outro comando, como a aspa).
+ */
+function comandosSimples(texto, ps, profundidade) {
+  const p = profundidade || 0;
+  const lidos = lerShell(texto, ps);
+  const saida = [];
+  lidos.forEach(function (cmd) {
+    saida.push({ palavras: cmd.palavras, redir: cmd.redir, docs: cmd.docs, ps: ps, profundidade: p });
+    const prog = p < PROFUNDIDADE_MAXIMA ? programa(cmd) : null;
+    const de = prog && internoDe(prog.nome, prog.args, cmd, ps);
+    if (de) comandosSimples(de.texto, de.ps, p + 1).forEach(function (c) { saida.push(c); });
+  });
+  saida.comentarios = lidos.comentarios;
+  return saida;
+}
+
 /** Os caminhos que UM comando simples escreve. */
 function escritosPorComando(cmd, ps, profundidade) {
   const alvos = cmd.redir.slice();
-  let k = 0;
-  while (k < cmd.palavras.length && (PREFIXOS.has(cmd.palavras[k].t) || ehAtribuicao(cmd.palavras[k]))) k++;
-  if (k >= cmd.palavras.length) return alvos;
-  const nome = nomeDoPrograma(cmd.palavras[k].t);
-  const args = cmd.palavras.slice(k + 1);
+  const prog = programa(cmd);
+  if (!prog) return alvos;
+  const nome = prog.nome;
+  const args = prog.args;
   const textos = args.map(function (a) { return a.t; });
 
   if (nome === 'tee') {
@@ -500,33 +574,8 @@ function escritosPorComando(cmd, ps, profundidade) {
     scripts.forEach(function (sc) { alvosDeScriptNode(sc).forEach(function (p) { alvos.push(p); }); });
   } else if (profundidade < PROFUNDIDADE_MAXIMA) {
     // programa que roda outro comando escrito em texto: bash -c, eval, powershell -Command
-    let interno = null;
-    let internoPs = ps;
-    if (INTERPRETADOR_DE_SHELL.has(nome)) {
-      const ic = args.findIndex(function (a) { return !a.q && /^-[A-Za-z]*c$/.test(a.t); });
-      if (ic !== -1 && ic + 1 < args.length) { interno = args[ic + 1].t; internoPs = false; }
-      // D396 n. 7: sem -c e sem arquivo de roteiro, o roteiro e o heredoc (`bash <<EOF`, `sh -s <<EOF`)
-      else if (ic === -1 && cmd.docs.length && !args.some(function (a) { return a.q || !/^-/.test(a.t); })) {
-        interno = cmd.docs.join('\n');
-        internoPs = false;
-      }
-    } else if (nome === 'eval') {
-      interno = textos.join(' ');
-    } else if (nome === 'cmd') {
-      // cmd /c "echo x > a.css": a barra invertida do Windows e caminho, como no PowerShell.
-      // atalho: le o de dentro com TODAS as regras do PowerShell (crase escapa, aspa simples, here-string, Join-Path),
-      // nao so a da barra. limite: o cmd.exe nao tem nenhuma delas, e `echo a`> x.css` (crase literal no cmd) nao se
-      // le. trocar quando: o cmd tiver leitor proprio.
-      const ic = args.findIndex(function (a) { return !a.q && /^\/[ck]$/i.test(a.t); });
-      if (ic !== -1) { interno = textos.slice(ic + 1).join(' '); internoPs = true; }
-    } else if (INTERPRETADOR_PS.has(nome)) {
-      const ic = args.findIndex(function (a) { return !a.q && /^-c(?:o|om|omm|omma|omman|ommand)?$/i.test(a.t); });
-      const ie = args.findIndex(function (a) { return !a.q && ehEncodedCommand(a.t); });
-      if (ic !== -1 && ic + 1 < args.length) { interno = textos.slice(ic + 1).join(' '); internoPs = true; }
-      // F5b r1 (seguranca): o roteiro em base64 escapava sem ser lido
-      else if (ie !== -1 && ie + 1 < args.length) { interno = roteiroCodificado(args[ie + 1].t); internoPs = true; }
-    }
-    if (interno !== null) escritosPorTexto(interno, internoPs, profundidade + 1).forEach(function (p) { alvos.push(p); });
+    const de = internoDe(nome, args, cmd, ps);
+    if (de) escritosPorTexto(de.texto, de.ps, profundidade + 1).forEach(function (p) { alvos.push(p); });
   }
   return alvos;
 }
@@ -632,4 +681,5 @@ function motivoShell(alvos) {
   return linhas.join('\n');
 }
 
-module.exports = { alvosDeEstiloNoShell, motivoShell };
+// A2-20 (H1): o leitor de shell e um so; o commit.js e o push.js leem o git por ele.
+module.exports = { alvosDeEstiloNoShell, motivoShell, lerShell, comandosSimples, programa, nomeDoPrograma };

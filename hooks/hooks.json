@@ -97,7 +97,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit|Grep|Glob|Read|AskUserQuestion|Skill",
+        "matcher": "Write|Edit|NotebookEdit|Grep|Glob|Read|AskUserQuestion|Skill",
         "hooks": [
           {
             "type": "command",

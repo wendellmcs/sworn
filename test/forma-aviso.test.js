@@ -83,6 +83,19 @@ test('A1-08: comando e agente com acento saem em ASCII nos avisos de shell e de 
   assert.match(t, /sem acento/, 'tinha de avisar que o nome real tem acento: ' + t);
   assert.ok(apelidos.motivo({ divergencias: [{ agente: 'busca', arquivo: 'busca.md', declarado: 'a', gravado: 'b' }] })
     .indexOf('sem acento') === -1, 'nome sem acento nao leva a linha');
+  // L2-s103-15: a linha diz QUAIS valores sairam sem acento, cada um uma vez, e nao cita o que ja era ASCII
+  const dois = apelidos.motivo({ divergencias: [
+    { agente: 'revisão', arquivo: 'revisão.md', declarado: 'opus', gravado: 'sonnet' },
+    { agente: 'busca', arquivo: 'busca.md', declarado: 'opus', gravado: 'sonnet' }],
+  esforcoDivergente: [{ agente: 'revisão', arquivo: 'revisão.md', declarado: 'high', gravado: 'médio' }] });
+  confereForma('apelidos dois', dois, { caminhos: ['.claude/agents/revisao.md', '.claude/agents/busca.md'], acao: 'destas' });
+  const rodape = dois.split('\n').filter((l) => /sem acento/.test(l));
+  assert.deepStrictEqual(rodape, ['Saem aqui sem acento ou caractere especial: "revisao", "revisao.md", "medio". ' +
+    'Copie o valor real do arquivo do agente ou de .claude/sworn/projeto.json, nao deste aviso.'],
+    'a linha tinha de citar cada valor mudado uma vez: ' + dois);
+  // o valor ausente sai vazio, mas nao perdeu acento: nao entra no rodape
+  const ausente = apelidos.motivo({ divergencias: [{ agente: 'busca', arquivo: 'busca.md', declarado: undefined, gravado: null }] });
+  assert.ok(ausente.indexOf('sem acento') === -1, 'valor ausente nao leva a linha: ' + ausente);
 });
 
 test('T5: roteamento por custo na forma unica', () => {

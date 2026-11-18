@@ -7,6 +7,10 @@ const { entreAspas } = require('./texto.js');
 // A entrevista pergunta a escada deste projeto e grava em projeto.json:agentes.escada.
 const ESCADA_PADRAO = [];
 const FORK = 'fork';
+// L2-s103-20: o agente que a chamada sem subagent_type despacha, no Claude Code e no Qwen Code.
+const AGENTE_SEM_TIPO = 'general-purpose';
+// L2-s103-19: o tipo vem do modelo; ' fork' e 'Fork' caiam no nivel 0 e passavam fora do julgamento.
+function ehFork(tipo) { return typeof tipo === 'string' && tipo.trim().toLowerCase() === FORK; }
 
 // Valor que nao e texto sai em JSON: o String() cru lancava com {"toString": 1}, e o `io.blindar` do portao liberava.
 // A2-48: vale tambem para o nome da escada; o validar so avisa, e o portao roda com o projeto.json como esta.
@@ -20,11 +24,14 @@ function escada(projeto) {
 /** 0 = fora da escada, e portanto fora do julgamento deste portao. */
 function nivelDoAgente(tipo, projeto) {
   const lista = escada(projeto);
-  const i = lista.indexOf(String(tipo || ''));
+  // L2-s103-19: ' Fork' acha o fork que o dono pos na escada, escrito 'fork' ou 'Fork', como o 'fork' exato acharia.
+  // Tipo que nao e texto nao e nome de agente: fica fora da escada, sem o String() que lancava com {"toString": 1}.
+  const i = ehFork(tipo) ? lista.findIndex(ehFork)
+    : (typeof tipo === 'string' ? lista.indexOf(tipo) : -1);
   // A12-01: o `fork` (Claude Code 2.1.302) roda no modelo do agente principal e nunca esta na escada.
   // atalho: fork = topo da escada. limite: com o principal num modelo barato, o fork tambem e barrado.
   // trocar quando: o gancho receber o modelo do agente principal.
-  if (i === -1 && tipo === FORK) return lista.length;
+  if (i === -1 && ehFork(tipo)) return lista.length;
   return i === -1 ? 0 : i + 1;
 }
 
@@ -40,7 +47,7 @@ function marchaMaximaDoEscopo(esc, projeto) {
 }
 
 /**
- * F18: agente do topo da escada em trabalho que so toca caminho de marcha rapida
+ * F18: agente da metade mais cara da escada em trabalho que so toca caminho de marcha rapida
  * e desproporcao mensuravel. Nas outras marchas o portao nao opina:
  * rigor e eixo independente do custo, e modelo barato pode passar por portao rigoroso.
  */
@@ -64,7 +71,7 @@ function permitido(tipo, marchaMax, projeto) {
       'Voce despachou ' + entreAspas(tipo) + ', da metade mais cara da escada deste projeto, mas o escopo',
       'declarado so toca caminho de marcha rapida (o nivel de rigor mais leve que o projeto.json da a um',
       'caminho, no campo marchas).',
-    ].concat(tipo === FORK && lista.indexOf(FORK) === -1
+    ].concat(ehFork(tipo) && !lista.some(ehFork)
       ? ['O "fork" roda no modelo do agente principal e conta como o topo da escada.'] : [], [
       'Escada deste projeto, do mais barato ao mais caro:',
       lista.map(function (a) { return '  - ' + citado(a); }).join('\n'),
@@ -129,4 +136,4 @@ function chamadaDaTabela(tipo, entrada, projeto, opcoes) {
   };
 }
 
-module.exports = { nivelDoAgente, marchaMaximaDoEscopo, permitido, chamadaDaTabela };
+module.exports = { nivelDoAgente, marchaMaximaDoEscopo, permitido, chamadaDaTabela, AGENTE_SEM_TIPO };

@@ -5,7 +5,7 @@ description: Portable execution manual for any project. Use at the start of ever
 
 # Universal AAA Standard
 
-## 1. What this skill is, and what it is not
+## 1. What this skill is, and what it does NOT do
 
 It is the **procedure**: it says which quality gate applies to each task and what evidence proves
 the gate passed. **It is not a business rule, and it invents no fact about the project** — every concrete

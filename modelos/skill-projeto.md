@@ -107,7 +107,7 @@ even after context compaction.
 | Scope | Editing a file outside `escopo.md` (or the linked front's file) in standard or AAA gear |
 | Destructive | A command that needs a human decision |
 | Other front | Writing to a file that was already modified when the session opened |
-| Cost | Top-of-the-ladder agent on fast-gear-only work |
+| Cost | An agent from the more expensive half of the ladder on fast-gear-only work |
 | Design | Raw value outside the declared tokens |
 
 Blind review: `/sworn:review`. Chat switch: `/sworn:handoff`. New rule:

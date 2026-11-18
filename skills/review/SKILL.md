@@ -12,13 +12,15 @@ produced it — and the reasoning that produced the bug reproduces the bug.
 
 ## Step 1 — prepare the blind package
 
-    node "${CLAUDE_PLUGIN_ROOT}/scripts/preparar-revisao.js" --arquivo <caminho> [--completa]
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/preparar-revisao.js" --arquivo '<caminho>' [--completa]
 
 The script writes `A.txt`, `B.txt` and `mapa.json` in `.claude/sworn/revisao/<arquivo>/<n>/`: each
 file has its own base, and `<n>` is its round. The `<arquivo>` is the file id: each `/` in the path
-becomes `__`, each character outside letters, digits, `.`, `_` and `-` becomes `_`, and an id made only of digits
-gets a `_` in front (rule of the `idDoArquivo` function, in `scripts/lib/cegar.js`). The
-exact path comes in the output (`a`, `b`, `vereditos` and `base`); use what the output says, don't rebuild it.
+becomes `__`, each character outside unaccented letters, digits, `.` and `-` becomes `~` and its code in 4 hex
+digits (`_` becomes `~005f`; an emoji, which is two UTF-16 units, becomes two such codes), an id made only of digits or only of dots gets a `_` in front, and an id over 150
+characters is cut and ends in `~~` plus a hash (rule of the `idDoArquivo` function, in `scripts/lib/cegar.js`). A
+review started under the old id stays in its old folder until the next preparation moves it. The exact path comes in
+the output (`a`, `b`, `vereditos` and `base`); use what the output says, don't rebuild it.
 **You don't open `mapa.json`, and no inspector receives its path.** In a style file with a `design.json`, the round
 also has `detector.json`: what the design detector found, hidden from the inspectors so the `ui-design` lens judges
 without it; the tally crosses the two after the verdicts (`detector` in its output). A screen file that already
@@ -113,7 +115,10 @@ the code one judges code, the UI one judges screens. They are not merged.
 is not a hook, manifest, configuration or shell script; minus `enxuto` when the change is small (40 lines or fewer, and
 not a new file); and the screen lenses (`LENTES_UI`) only when the round has the photos (`--tela-depois`). Measured on
 the closed reviews, `seguranca` and `enxuto` found only 4 P0/P1 each that no other lens found; `estados` and `borda`
-stay apart (only 32% of what `estados` found, `borda` also found). Dispatch every lens in `lentes`: the list goes into
+stay apart (only 32% of what `estados` found, `borda` also found). **A test file** (in a `test/`, `tests/`,
+`__tests__/` or `spec/` folder, or named `*.test.*`, `*.spec.*`, `test_*.py`, `*_test.py` or `*_test.go`) gets only
+`correcao`, `estados`, `borda` and `manutencao` (owner's decision, 2026-11-18): in 888 rounds, the other four spent
+301 inspectors on test files and found 3 P0/P1 that no other lens found. Dispatch every lens in `lentes`: the list goes into
 `mapa.json`, and the tally checks that each one voted. You can add a lens the script left out, never drop one; a
 screen change without the photos gets no screen lens, so prepare with `--tela-depois` to have them.
 
@@ -127,7 +132,7 @@ were refuted at the source): that is 8 inspectors, the ones in `LENTES` without 
 `escopo` lens stays in the logic-only file: it judges against the task's request, `pedido.md`. When in doubt, the 10 — they only leave out when it is clear the file is not style and
 doesn't build a screen.
 
-**Lens `escopo` (the request)** — it goes in every review of the `completa` band: in the code family, and in the
+**Lens `escopo` (the request)** — it goes in every review of the `completa` band except a test file's: in the code family, and in the
 screen-only review next to the eight screen lenses. Step 1 writes `pedido.md` in the round (the `**Objetivo:**` line and the
 `## Dentro` list, what the task may touch, of the scope file in force; the output brings `pedido`, or `semPedido` when
 no scope is declared). Add to the `escopo` inspector's briefing: "Also read `<pedido>`: it is the task's request."
@@ -142,7 +147,8 @@ each with its count and worst severity. Present the two axes apart, never as one
 
 **Lens `enxuto` (code that didn't need to exist, since 0.9.0)** — born under observation, because a lens
 that judges "too much" was already refuted at the source in 5 of 6 findings (`escopo`, before it got the `pedido.md`). **Exit rule:** after 10
-reviews with it, if 2 of every 3 of its findings were refuted at the source, it goes into
+reviews with it, if 2 of every 3 of its findings were refuted at the source (no script counts this: whoever
+maintains sworn counts it, from the `enxuto` entries in the reviews' `refutados.json`), it goes into
 `SAEM_SO_LOGICA` and leaves the logic-only file, like `medidor`. Validation at the boundary, data loss,
 security and accessibility are never excess: a finding of its against these is refuted. A deliberate shortcut,
 with the comment `atalho: <o que>. limite: <até onde vale>. trocar quando: <gatilho>.`, is declared
@@ -233,27 +239,30 @@ the shell or any other path that circumvents the gate. All of this also applies 
 
 ## Step 3 — tally by script, never by judgment
 
-    node "${CLAUDE_PLUGIN_ROOT}/scripts/apurar-ronda.js" --arquivo <caminho>
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/apurar-ronda.js" --arquivo '<caminho>'
 
 The `--arquivo` is the same as in Step 1 and chooses its base. Without it, the script finds the base by itself if
 there is only one; with more than one, it stops with an error that lists the files.
 
-Who decides whether the round was dry is the script, not you. Paste its output into the response.
+Who decides whether the round was dry is the script, not you. A round is dry when no finding holds it (keeps it
+open): below, "holds the round" means the finding counts against approval, and "does not hold" means it does not. Paste its output into the response.
 When the rounds had photos, the output brings `telas` (`antes` and `depois`: address, time, hash, HTTP status and how
 many console entries, page errors and accessibility items each photo recorded, from the last round with photos): it
 is the screen evidence of the close-out, so keep it in the answer that closes the review.
 
 - **The script checks which lenses voted.** The `mapa.json` carries the band: round 1 without some lens of the band (in
   `completa`, with fewer than 7 known lenses) stops with `ERRO`, like a round without a verdict, and so does a round where a
-  lens that found P0, P1 or P2 `erro` in the round before (a finding in `novos`) didn't come back. Write the missing vote
-  and run again.
-- **A finding outside the format** (severity that is not P0, P1 or P2; no `arquivo:linha`) is discarded and does not wet the
+  lens that found P0, P1 or P2 `erro` in the round before (a finding in `novos`) didn't come back. A missing lens of the
+  band: dispatch it with its round-1 briefing and run again. A lens that found an `erro` and didn't come back: dispatch
+  it again in this round to say whether its finding is still on the new side, or, if the source disproves the finding,
+  put it in `refutados.json` (below) with the proof; then run again.
+- **A finding outside the format** (severity that is not P0, P1 or P2; no `arquivo:linha`) is discarded and does not hold the
   round. When the review approves with any, the `motivo` says how many: read `vereditosDescartados` before calling it
   approved. A discarded P0 or P1 that is a real defect gets fixed, and the file goes through a new review.
 - **Every finding has a state.** `confirmado` carries the severity and the `trecho` copied from the cited file; the
   script looks for it in that round's `A.txt`/`B.txt`, on the cited line or up to 2 around it, and the one that is not there
-  goes to `trechoNaoConfere` and to `vereditosDescartados` without wetting the round. `pendente` carries no severity, only the
-  exact fact that is missing (`falta`): it goes to `pendentes` and does not wet the round either. Read both lists: a
+  goes to `trechoNaoConfere` and to `vereditosDescartados` without holding the round. `pendente` carries no severity, only the
+  exact fact that is missing (`falta`): it goes to `pendentes` and does not hold the round either. Read both lists: a
   pendente that the source confirms, or a discarded trecho that points to a real defect, gets fixed like any P0/P1. A
   finding with no state invalidates the whole verdict (`ERRO`): write it again. Rejected is `refutados.json`, below.
 - **Every confirmed P2 says its `tipo`** (`erro` or `melhoria`). A verdict with a P2 without it invalidates like one
@@ -265,15 +274,26 @@ is the screen evidence of the close-out, so keep it in the answer that closes th
   invalidates like one without `trecho` (`ERRO`, and the hook does not write it): dispatch that lens again, with the
   same briefing and the warning that names the missing field (the format is in `agents/inspector.md`), instead of
   writing the fields yourself.
-- **Only the new side wets the round.** The script reads the `mapa.json` of each round: a P0/P1 cited on the old
+- **Only the new side holds the round.** The script reads the `mapa.json` of each round: a P0/P1 cited on the old
   side (what the change fixes, or what already existed) goes to `achadosDoLadoAntigo` — information, not a
   block. You still don't open `mapa.json`: the script reads it.
 - **What does not hold the round goes to `registros`** (owner's decision, 2026-11-10). Each one says why in
   `registro`: `melhoria` is a P2 the inspector marked `tipo: "melhoria"`, in any round; `linha nova` is, in rounds 2
   and 3, a finding on the new side more than 2 lines away from every line the fix changed and from every line cited
-  before. The script measures the change itself, comparing the new side of the round with the one before; when it
-  cannot measure it, the finding holds the round as usual. Neither kind wets the round or counts as open. When the
-  review closes with any, the `motivo` says how many: copy each one to the record of the plan in the close-out.
+  before; `fora da mudanca` is, in round 1, a finding on the new side more than 2 lines away from every line the
+  change touched against HEAD (what already existed, out of scope: it is recorded, not fixed), except for the
+  `escopo` and `correcao` lenses: a missing piece of the request, or a regression in a caller of what changed, may
+  sit where nothing changed. The script measures the change itself, comparing
+  the new side of the round with the one before (in round 1, with the HEAD side); when it cannot measure it, the
+  finding holds the round as usual. None of these kinds holds the round or counts as open. When the review closes
+  with any, the `motivo` says how many: copy each one to the record of the plan in the close-out.
+- **What held a round and came back the same is still open.** A finding that held an earlier round and comes back
+  with the same key (same severity, lens and line, on the same side of the change: work or HEAD as `mapa.json` says,
+  not the A/B label; reworded text is still the same key) is not new and does not hold the round, but you dispatch
+  its lens again in the next round, as a lens that found an error (in both passes, with a reference), and the review
+  does not approve while one came back in the last round: the output lists them
+  in `achadosAindaAbertos` and the `motivo` says how many. Before the cap, fix each one or refute it in
+  `refutados.json`; at the cap they are handled with the other open findings, by the cap row of Step 5.
 - **The detector is crossed after the verdicts** (style file with `design.json`). `detector` in the output splits
   the last round in three: `lenteEDetector` (both saw it), `soDetector` (the detector saw a value outside the
   system that the `ui-design` lens did not cite) and `soLente`. Each `soDetector` item is a finding to settle: swap
@@ -300,14 +320,19 @@ is the screen evidence of the close-out, so keep it in the answer that closes th
 - **With a reference**, the output brings `referencia` (without it, `null`): `lentes`, each with `ordem1`, `ordem2` and
   `resultado` (`vence`, `empata`, `perde` or `incompleta`, by the last round that called it); `lacunas` of the new
   side; `lentesAtras` (those that lose, are incomplete or have a P0/P1 gap); and `pronta`. A finding of the 2nd pass
-  comes out with `passada: 2`: its `A.txt` is another file, so its refutation carries `"passada": 2`.
+  comes out with `passada: 2`: its `A.txt` is another file, so its refutation carries `"passada": 2`. A gap refuted
+  at the primary source goes in `refutados.json` like a finding, with `"lacuna": true` and the gap's `ronda`,
+  `lente`, `arquivo`, `linha`, `severidade` (and `passada`): it leaves `lacunas` and stops holding `pronta`. You
+  dispatch the 2nd pass (A and B swapped) with the same lenses as the 1st: in round 1, every lens of the `faixa`
+  (Step 2); in a later round, every lens that found an error in the round before. When either pass lacks one
+  of them, the script stops with an `ERRO` that names the round, the pass and the missing lens.
 - **Neighboring findings may be the same defect.** The output lists in `paresCandidatos` the nearby pairs (up to 10
   lines apart) and in `paresFortes` those on the same line. If `paresFortes` is not empty, dispatch **one**
   `sworn:dedupe-judge` subagent with that list (with more than 50 pairs, batches of up to 50, one subagent per
   batch, in the same burst). The other candidates do not go to the judge: measured on 79 closed reviews, the same
   line held 49 of the 58 pairs the judge called the same defect, with 85 pairs to judge instead of 365. Write what it returns to `mesmos.json`, in the same folder as `refutados.json`, with
   Write: `[{ "novo": "<chave>", "outro": "<chave>", "resposta": "sim" }]`, and run the script again. The output then
-  brings `provaveisMesmos`. **Nothing in the count changes:** the new finding still wets the round. If it is a repeat
+  brings `provaveisMesmos`. **Nothing in the count changes:** the new finding still holds the round. If it is a repeat
   of something already fixed, prove that at the source and use `refutados.json`; the judge's word is not proof. A judge that
   fails or doesn't answer: proceed without `mesmos.json`, and the output is the usual one.
 
@@ -364,9 +389,12 @@ the new review at round 1 judges the current one.
 
 `apurar-ronda.js` says when to stop.
 
-**Round 1 approves by itself** when every lens of the band voted and no verdict brings any finding at all: no
-`confirmado` (not even a `melhoria`, one on the old side or one outside the format) and no `pendente`. The `motivo`
-is `ronda 1 completa sem achado nenhum: aprovado`, and there is no round 2. With any finding, round 2 runs as usual.
+**Round 1 approves by itself** when every lens of the band voted and no verdict brings a finding other than a
+`melhoria`: no `pendente` and no other `confirmado` (not even one on the old side or one outside the format). A
+P2 `melhoria` on the new side goes to the record and does not hold the round (a P0 or P1 marked `melhoria`, or one on
+the old side, still does). The `motivo` is
+`ronda 1 completa sem achado nenhum: aprovado`, or `ronda 1 completa so com melhoria (vai ao registro): aprovado`,
+and there is no round 2. With any other finding, round 2 runs as usual.
 With a reference, it also takes `referencia.pronta` and no gap at all in `lacunas`. A base prepared by an older
 version, whose `mapa.json` has no band, still needs two dry rounds.
 
@@ -379,7 +407,7 @@ Three possible outcomes:
 
 | `motivo` | What you do |
 |---|---|
-| two dry rounds, or round 1 complete with no finding at all (with a reference: and `referencia.pronta`) | Approved. Close by saying how many agents ran, in how many rounds, and copy `registros`, if any, to the record of the plan |
+| two dry rounds, or round 1 complete with no finding other than a P2 `melhoria` (with a reference: and `referencia.pronta`) | Approved. Close by saying how many agents ran, in how many rounds, and copy `registros`, if any, to the record of the plan |
 | cap of 3 rounds with P0, P1 or P2 `erro` open, or the reference not reached | **Do not ask, and do not open a new review.** Fix what is an error, each fix with a test that fails when the code is broken on purpose. Run the whole suite and wait for green. Then commit with `# sworn: sem-revisao` at the end of the command: the commit gate names the files closed at the cap and asks for that mark. Write what stays open, and `registros`, in the record of the plan |
 | hasn't ended yet (includes the reference not reached before round 3) | Fix and run the next round, with the lenses the `motivo` lists |
 
@@ -387,8 +415,10 @@ Three possible outcomes:
 
 The close-out lists **every changed file in scope that did not go through this review**, and why
 (cost choice, generated file, outside the family of lenses). A new file goes through, with one side
-empty: say that in it the blindness does not exist. Silence about what was not inspected is the same as
-saying it was.
+empty: say that in it the blindness does not exist. A renamed file keeps its old side only when git sees the
+rename (`git mv`, or `git add` on both names); after a plain `mv` it comes out as new, so stage the rename
+before preparing, or say in the close-out that the old side was missing. Silence about what was not
+inspected is the same as saying it was.
 
 ## What this review does not do
 

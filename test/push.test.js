@@ -22,6 +22,23 @@ test('push: o detector acha o git push como o do commit, e a marca so fora de as
   assert.strictEqual(push.visto('git push origin main'), false);
 });
 
+// A2-10 (H1): o push se le pelo leitor de shell do commit.js
+test('A2-10: o push dentro de bash -c, com opcao global de valor separado e no PowerShell', () => {
+  for (const c of ['bash -c "git push origin main"', 'eval git push', 'git --git-dir .git push origin main',
+    'git -c a.b=1 -C r push']) {
+    assert.strictEqual(push.ehPush(c), true, c);
+  }
+  assert.strictEqual(push.ehPush("cat <<'EOF'\ngit push origin main\nEOF"), false, 'no heredoc e texto');
+  assert.deepStrictEqual(push.argumentos('bash -c "git push origin main"'), ['origin', 'main']);
+  assert.deepStrictEqual(push.argumentos('git --git-dir .git push origin main'), ['origin', 'main'], 'o valor da opcao global nao e o remoto');
+  assert.deepStrictEqual(push.argumentos("git push origin 'a b' # sworn: push-visto", 'PowerShell'), ['origin', 'a b']);
+  assert.deepStrictEqual(push.argumentos('git push origin `\n  main', 'PowerShell'), ['origin', 'main'], 'a continuacao de linha do PowerShell');
+  assert.strictEqual(push.visto("git push <<'EOF'\n# sworn: push-visto\nEOF"), false, 'no heredoc nao e a marca');
+  assert.strictEqual(push.visto('git push origin main # sworn: push-visto', 'PowerShell'), true);
+  assert.strictEqual(push.pastaDoPush('cd a && git -C b push'), 'a/b');
+  assert.strictEqual(push.pastaDoPush('git -C x commit -m y && git push'), null, 'o -C do commit nao e a pasta do push');
+});
+
 test('push: os argumentos, o remoto, as refspecs e os avisos', () => {
   assert.deepStrictEqual(push.argumentos('git push origin main # sworn: push-visto'), ['origin', 'main']);
   assert.deepStrictEqual(push.argumentos('git push "meu remoto" main && echo ok'), ['meu remoto', 'main']);

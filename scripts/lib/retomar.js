@@ -283,8 +283,17 @@ function gravar(raiz, sessao, agora, texto) {
   // A5-18: sem horario valido, o nome leva a data de hoje (nunca "NaN-NaN-NaN" nem "----------")
   const rel = PASTA + '/' + dia(horarioValido(agora) ? agora : Date.now()) + '-retomar-' + id + '.md';
   fs.mkdirSync(path.join(raiz, PASTA), { recursive: true });
+  protegerPasta(path.join(raiz, PASTA));
   fs.writeFileSync(path.join(raiz, rel), texto);
   return rel;
+}
+
+/** D869: a pasta dos handoffs leva um .gitignore com '*': o handoff traz caminhos e trechos do chat e nao entra no git
+ *  do projeto por engano. So cria o que falta (flag wx, que tambem nao segue link): nunca reescreve o .gitignore que o
+ *  dono pos, e nao cria a pasta. */
+function protegerPasta(pasta) {
+  try { fs.writeFileSync(path.join(pasta, '.gitignore'), '*\n', { flag: 'wx' }); }
+  catch (e) { /* fail-open: ja existe (EEXIST) ou a pasta nao existe; o handoff segue e o git do dono decide */ }
 }
 
 // A5-19: as tres chamadas dividem um prazo so (antes, 2 s cada, ate 6 s segurando a mensagem do dono). A que fica sem
@@ -392,5 +401,5 @@ function soltar(raiz, sessao) {
   return meus.length;
 }
 
-module.exports = { PASTA, PRAZO_DO_GIT_MS, lerRegistro, montar, gravar, gitDaRaiz, resumir, limpar, limparLinhas, mascarar,
+module.exports = { PASTA, PRAZO_DO_GIT_MS, lerRegistro, montar, gravar, protegerPasta, gitDaRaiz, resumir, limpar, limparLinhas, mascarar,
   cortar, reclamar, soltar };

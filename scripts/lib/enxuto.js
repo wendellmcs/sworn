@@ -24,7 +24,8 @@ const BLOCO = [
   'Nunca se corta: validacao na fronteira, perda de dados, seguranca, acessibilidade.',
   'Atalho de proposito leva comentario: atalho: <o que>. limite: <ate onde vale>. trocar quando: <gatilho>.',
   'Vale para codigo; texto de documento fica fora.',
-  'Desligar neste projeto: "' + CHAVE + '": false em .claude/sworn/projeto.json.'
+  // A11-09 (H1): o bloco sai tambem sem projeto.json; o arquivo nasce no /sworn:init.
+  'Desligar neste projeto: "' + CHAVE + '": false em .claude/sworn/projeto.json (sem ele, rode antes o /sworn:init).'
 ].join('\n') + '\n';
 
 /** O bloco, ou null quando o projeto desligou. So o booleano `false` desliga (D388/D415). */

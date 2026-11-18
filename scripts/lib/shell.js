@@ -183,7 +183,9 @@ function avisoTabela(problemas) {
   linhas.push('Este aviso sai uma vez por sessao.');
   linhas.push('');
   linhas.push('Faca assim: conserte o arquivo no plugin sworn; o comando seguinte ja usa a tabela consertada.');
-  return linhas.join('\n');
+  // L2-s103-18: p.onde e p.causa vem de fora (o caminho e o e.message) e podem trazer acento; sai em ASCII como os
+  // outros avisos.
+  return linhas.map(ascii).join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -215,8 +217,12 @@ function avisoTabela(problemas) {
 //   `function f { }` guarda o corpo como no bash; a chamada (sem caixa) o repete.
 // ---------------------------------------------------------------------------
 
-// `time` e `!` na frente tambem deixam a palavra seguinte em posicao de comando (T1/F3-01)
-const PALAVRA_CHAVE_BASH = new Set(['then', 'do', 'else', 'elif', 'if', 'while', 'until', 'time', '!']);
+// `time` e `!` na frente tambem deixam a palavra seguinte em posicao de comando (T1/F3-01). A1-10: `builtin`
+// e `command` tambem: `builtin cd x` e `command cd x` mudam a pasta como `cd x`. `exec` nao: `exec cd x` falha
+// ("cd: not found", o exec so roda programa e o cd e do shell) e a pasta fica (medido no Git Bash, s372). Limite:
+// a opcao depois do prefixo (`command -p cd x`) tira o cd da posicao de comando, e ele passa sem aviso.
+const PALAVRA_CHAVE_BASH = new Set(['then', 'do', 'else', 'elif', 'if', 'while', 'until', 'time', '!',
+  'builtin', 'command']);
 const ATRIBUICAO = /^[A-Za-z_][A-Za-z0-9_]*\+?=/; // `x=1 cd y`: a atribuicao na frente nao tira a posicao de comando
 const ASPA = String.fromCharCode(0); // bash: marca o trecho entre aspas na palavra (`'cd'` e cd, `'then'` nao e palavra-chave)
 // `cd..` e `cd\` sao funcoes do PowerShell 5.1 (medido, D290); `sl\` nao e comando.
@@ -590,7 +596,40 @@ function motivoCdSolto(comando, achado) {
 function envolverEmSubshell(comando, achado) {
   if (!achado || achado.teto || achado.forma !== 'bash' || typeof comando !== 'string') return null;
   if (/\\$/.test(comando.replace(/\s+$/, ''))) return null;
+  if (heredocSemFecho(comando)) return null;
   return '( ' + comando + '\n)';
+}
+
+// A1-11: o heredoc sem a linha de fecho faria do `)` da linha de baixo mais uma linha do corpo, e o subshell nunca
+// fecharia. Le as marcas linha a linha, como o bash: o corpo comeca na linha seguinte e termina na linha igual a
+// palavra (com `<<-`, depois de tirar os tabs da frente). `<<<` e here-string, sem corpo. A palavra e a do bash
+// inteira, ate o espaco ou o operador (`END-OF`, `fim.txt`), e a linha de fecho e ela sem as aspas e sem a barra:
+// `<<'FIM'`, `<<\EOF`, `<<E"O"F` e `<<E\OF` fecham na linha `FIM` ou `EOF` (medido no Git Bash, s372). Duas marcas
+// podem vir coladas (`<<A<<B`): o lookbehind nao gasta o caractere de antes. A palavra que comeca por digito nao se
+// le: `$((1<<2))` e conta, e o heredoc com fecho numerico e raro. A marca dentro de aspa ou de comentario tambem
+// conta: o comando fica negado, que e o lado seguro.
+const MARCA_HEREDOC = /(?<!<)<<(-?)[ \t]*(?![0-9])((?:'[^'\n]*'|"[^"\n]*"|\\.|[^\s;&|<>()'"\\])+)/g;
+const PARTE_DA_PALAVRA = /'([^']*)'|"([^"]*)"|\\(.)/g;
+function linhaDeFecho(palavra) {
+  return palavra.replace(PARTE_DA_PALAVRA, (todo, simples, dupla, escapado) =>
+    simples !== undefined ? simples : (dupla !== undefined ? dupla : escapado));
+}
+function heredocSemFecho(comando) {
+  const linhas = comando.split(/\r?\n/);
+  let i = 0;
+  while (i < linhas.length) {
+    const marcas = [];
+    MARCA_HEREDOC.lastIndex = 0;
+    let m;
+    while ((m = MARCA_HEREDOC.exec(linhas[i])) !== null) marcas.push({ tirarTab: m[1] === '-', fim: linhaDeFecho(m[2]) });
+    i++;
+    for (const marca of marcas) {
+      while (i < linhas.length && (marca.tirarTab ? linhas[i].replace(/^\t+/, '') : linhas[i]) !== marca.fim) i++;
+      if (i >= linhas.length) return true;
+      i++;
+    }
+  }
+  return false;
 }
 
 /**

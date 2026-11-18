@@ -227,4 +227,5 @@ code does not show up. The decision to install is the owner's.
   the same as an essential skill.
 - **It doesn't judge content quality.** Term overlap is a signal, not a verdict — two skills
   may both cite "review" and do legitimately different things.
-- **It doesn't delete, move or edit.** It only measures and proposes.
+- **It doesn't delete, move or edit on its own.** It only measures and proposes; the `mv` of Step 3 happens only
+  after the owner's yes.

@@ -104,6 +104,12 @@ function parseRegras(texto) {
 function validarArquivo(texto) {
   const regras = parseRegras(texto);
   const erros = [];
+  // A4-19: o UTF-16 (o Bloco de Notas antigo, o Out-File do PowerShell 5.1) chega com um byte nulo entre as letras;
+  // nenhuma linha casa e o arquivo dava OK com 0 regras, sem nenhuma valer
+  if (/\u0000/.test(String(texto == null ? '' : texto))) {
+    erros.push('o arquivo tem byte nulo (U+0000): nao e texto UTF-8, talvez UTF-16; grave de novo em UTF-8 e ' +
+      'rode de novo');
+  }
   for (const r of regras) {
     const v = validarRegra(r.bruta);
     if (!v.ok) for (const e of v.erros) erros.push('linha ' + r.linha + ': ' + e);

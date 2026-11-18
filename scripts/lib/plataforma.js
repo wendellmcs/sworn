@@ -42,9 +42,10 @@ const textoLib = require('./texto.js');
  * seria abrir o buraco exato por onde um ponto cego de verdade passaria - e e a
  * mesma regra que `sanitacao.js` ja aplica as iscas dele.
  *
- * Consequencia dura para quem editar este arquivo: **nao escrever aqui, nem em
- * comentario, o texto que um marcador caca.** Se precisar citar, quebre em
- * pedacos como abaixo.
+ * Consequencia dura para quem editar este arquivo: **o texto que um marcador caca
+ * so entra aqui, nem em comentario, quebrado em pedacos como abaixo.** O uso de
+ * verdade que este arquivo faz (ele tambem toca o sistema) nao foge da regra: ele
+ * esta em PONTOS e na matriz, como qualquer outro arquivo.
  */
 const MARCADORES = [
   {
@@ -102,9 +103,10 @@ const PONTOS = [
     chave: 'process_platform',
     classe: SO_NO_SISTEMA,
     titulo: 'Deducao do sistema e do idioma de shell',
-    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/lib/admissao.js', 'scripts/lib/glob.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
+    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/lib/admissao.js', 'scripts/lib/commit.js', 'scripts/lib/glob.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
                'scripts/lib/pastas.js', 'scripts/lib/plataforma.js', 'scripts/lib/projeto.js', 'scripts/lib/prova-no-fecho.js', 'scripts/lib/replay.js', 'scripts/lib/saude.js',
-               'scripts/lib/toques.js', 'scripts/lib/varredura.js', 'scripts/marcar-trabalho.js', 'scripts/medir-qualidade.js'],
+               'scripts/lib/toques.js', 'scripts/lib/varredura.js', 'scripts/marcar-trabalho.js', 'scripts/medir-qualidade.js',
+               'scripts/preparar-revisao.js'],
     comoSeProva: 'rodando a suite naquele sistema: quem responde e o proprio Node',
     ressalva: 'a CONSEQUENCIA da deducao e injetavel e esta exercitada - ver tabela_de_plataforma ' +
               'e barra_invertida. O que nao se prova aqui e a deducao em si.'
@@ -162,7 +164,7 @@ const PONTOS = [
     classe: SO_NO_SISTEMA,
     titulo: 'Caminho relativo remontado pelo separador do sistema',
     arquivos: ['scripts/apurar-ronda.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/drift.js', 'scripts/lib/alvo-apagar.js', 'scripts/lib/cicatriz.js',
-               'scripts/lib/busca.js', 'scripts/lib/citacao.js', 'scripts/lib/contrato.js', 'scripts/lib/replay.js', 'scripts/medir-qualidade.js',
+               'scripts/lib/busca.js', 'scripts/lib/caminho.js', 'scripts/lib/citacao.js', 'scripts/lib/commit.js', 'scripts/lib/contrato.js', 'scripts/lib/replay.js', 'scripts/medir-qualidade.js',
                'scripts/medir-travas.js', 'scripts/vigentes.js'],
     comoSeProva: 'rodando a suite naquele sistema: o separador e o do proprio Node',
     ressalva: 'no Windows a troca vira barra normal; fora dele e identidade. ' +
@@ -174,7 +176,7 @@ const PONTOS = [
     titulo: 'Caminho do Windows normalizado para barra normal',
     arquivos: [
       'scripts/abertura.js', 'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/handoff-curto.js',
-      'scripts/lib/alvo-apagar.js',
+      'scripts/lib/alvo-apagar.js', 'scripts/lib/cegar.js',
       'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
       'scripts/lib/guias-modelo.js', 'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
       'scripts/lib/projeto.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',

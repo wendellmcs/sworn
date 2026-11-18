@@ -63,6 +63,46 @@ function contradicoes(regras) {
   return achados;
 }
 
+// A6-07: `description: >-` (ou `|`, `>`) e o YAML de bloco: o texto vem nas linhas recuadas de baixo. O match de uma
+// linha devolvia o `>-`, e a skill sumia do cruzamento de sobreposicao. A dobrada e a literal viram uma linha so;
+// a entre aspas sai sem elas, mesmo com `# comentario` depois do fecho ou seguindo nas linhas de baixo.
+function entreAspas(v) {
+  const dupla = /^"((?:[^"\\]|\\.)*)"(?:[ \t]+#.*)?$/.exec(v);
+  // o escape da dupla vira o caractere que ele diz (`\n`, `\t`, `\"`, `é`), como o YAML le
+  if (dupla) {
+    return dupla[1].replace(/\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)/g, function (_, e) {
+      if (e.length > 1) return String.fromCharCode(parseInt(e.slice(1), 16));
+      return { n: '\n', t: '\t', r: '\r', '0': '\0' }[e] || e;
+    });
+  }
+  const simples = /^'((?:[^']|'')*)'(?:[ \t]+#.*)?$/.exec(v);
+  return simples ? simples[1].replace(/''/g, "'") : null;
+}
+
+function descricaoDe(texto) {
+  const linhas = String(texto || '').split(/\r?\n/);
+  for (let i = 0; i < linhas.length; i++) {
+    const m = /^description:[ \t]*(.*)$/i.exec(linhas[i]);
+    if (!m) continue;
+    const valor = m[1].trim();
+    const abaixo = [];
+    for (let j = i + 1; j < linhas.length && (/^[ \t]/.test(linhas[j]) || linhas[j].trim() === ''); j++) {
+      if (linhas[j].trim()) abaixo.push(linhas[j].trim());
+    }
+    const aspas = entreAspas(valor);
+    if (aspas !== null) return aspas;
+    // a entre aspas que nao fecha na linha segue nas de baixo, dobrada com espaco como o YAML faz
+    const juntas = /^["']/.test(valor) ? entreAspas([valor].concat(abaixo).join(' ')) : null;
+    if (juntas !== null) return juntas;
+    // o bloco (`>-`, `|`, `>2`, `|+ # nota`) comeca na linha de baixo; o escalar simples pode seguir nela tambem
+    const bloco = /^[>|][1-9]?[+-]?[1-9]?(?:[ \t]+#.*)?$/.test(valor);
+    // o ` # nota` depois do escalar simples e comentario, como depois das aspas
+    const simples = valor.replace(/(?:^|[ \t]+)#.*$/, '');
+    return (bloco || !simples ? [] : [simples]).concat(abaixo).join(' ');
+  }
+  return '';
+}
+
 function lerSkills(cwd) {
   const nomes = ambiente.detectar(cwd).skills;
   return nomes.map(function (nome) {
@@ -70,8 +110,7 @@ function lerSkills(cwd) {
     let texto = '';
     try {
       texto = fs.readFileSync(path.join(cwd, '.claude', 'skills', nome, 'SKILL.md'), 'utf8');
-      const m = texto.match(/^description:\s*(.+)$/im);
-      if (m) descricao = m[1];
+      descricao = descricaoDe(texto);
     } catch (e) { /* skill sem SKILL.md legivel */ }
     return { nome: nome, descricao: descricao, texto: texto };
   });
@@ -88,8 +127,7 @@ function lerSkillsDoPlugin() {
   for (const nome of nomes) {
     try {
       const texto = fs.readFileSync(path.join(PASTA_DO_PLUGIN, nome, 'SKILL.md'), 'utf8');
-      const m = texto.match(/^description:\s*(.+)$/im);
-      saida.push({ nome: 'sworn:' + nome, descricao: m ? m[1] : '' });
+      saida.push({ nome: 'sworn:' + nome, descricao: descricaoDe(texto) });
     } catch (e) { /* pasta sem SKILL.md */ }
   }
   return saida;
@@ -366,5 +404,6 @@ function auditar(cwd, projeto, opcoes) {
 }
 
 module.exports = {
+  descricaoDe,
   VAZIAS, normalizar, termos, sobreposicoes, contradicoes, medirMemoria, auditar, idadeDasMemorias, idadeDasRegras
 };

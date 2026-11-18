@@ -44,6 +44,28 @@ if (process.argv.indexOf('--fatias') !== -1) {
   process.exit(0);
 }
 
+// A4-08: o slug vira o nome da pasta e o name: do frontmatter. Normalizado calado, a pasta saia meu-projeto e o name:
+// ficava "Meu Projeto": o slug que nao e o normalizado e recusado, com o valor aceito.
+// sem slug (ou vazio), a pasta segue "projeto", como antes
+if (valores.slug != null && typeof valores.slug !== 'string') {
+  process.stdout.write('ERRO: o slug nas respostas tem de ser texto (veio ' + (Array.isArray(valores.slug) ? 'lista' :
+    typeof valores.slug) + '). Ponha um nome de letras minusculas, digitos e - e rode de novo.\n');
+  process.exit(1);
+}
+const slugDado = valores.slug ? valores.slug : 'projeto';
+// os hifens repetidos viram um e os das pontas saem: "a--o" e "--" nao sao nome de pasta que se proponha
+const slugAceito = slugDado.replace(/[^a-z0-9-]/gi, '-').toLowerCase().replace(/-+/g, '-').replace(/^-|-$/g, '');
+if (!slugAceito) {
+  process.stdout.write('ERRO: o slug "' + slugDado + '" nao tem letra nem digito sem acento para virar nome de pasta. ' +
+    'Ponha um nome de letras minusculas, digitos e - nas respostas e rode de novo.\n');
+  process.exit(1);
+}
+if (slugDado !== slugAceito) {
+  process.stdout.write('ERRO: o slug "' + slugDado + '" nao serve de nome de pasta e de skill. Use "' + slugAceito +
+    '" (so letras minusculas, digitos e -) nas respostas e rode de novo.\n');
+  process.exit(1);
+}
+
 const cheio = molde.preencher(moldeTexto, valores, projeto);
 const v = molde.validar(cheio);
 
@@ -63,7 +85,7 @@ if (!vr.ok) {
   process.exit(1);
 }
 
-const slug = (valores.slug || 'projeto').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
+const slug = slugAceito;
 const alvo = path.join(cwd, '.claude', 'skills', slug, 'SKILL.md');
 
 if (!gravar) {

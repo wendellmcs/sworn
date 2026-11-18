@@ -252,7 +252,7 @@ test('volta-resumo: montar sem frente, plano, handoff ou git diz que nao achou, 
   assert.ok(linhas.indexOf('(nenhum arquivo mexido no trecho lido)') !== -1);
 });
 
-test('volta-resumo: gravar cria a pasta handoff/ e o mesmo chat no mesmo dia nao duplica o arquivo', () => {
+test('volta-resumo: gravar cria a pasta handoff/ com o .gitignore e o mesmo chat no mesmo dia nao duplica o arquivo', () => {
   const raiz = pasta();
   try {
     const rel = retomar.gravar(raiz, ID, AGORA, 'um');
@@ -262,8 +262,23 @@ test('volta-resumo: gravar cria a pasta handoff/ e o mesmo chat no mesmo dia nao
     assert.strictEqual(rel, '.sworn/handoff/' + dia + '-retomar-d731fc49.md');
     assert.strictEqual(retomar.gravar(raiz, ID, AGORA + MIN, 'dois'), rel);
     const dir = path.join(raiz, '.sworn', 'handoff');
-    assert.deepStrictEqual(fs.readdirSync(dir), [dia + '-retomar-d731fc49.md']);
+    // D869: a pasta ganha o .gitignore '*' na 1a gravacao
+    assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['.gitignore', dia + '-retomar-d731fc49.md']);
+    assert.strictEqual(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'), '*\n');
     assert.strictEqual(fs.readFileSync(path.join(dir, dia + '-retomar-d731fc49.md'), 'utf8'), 'dois');
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
+test('D869: o .gitignore que o dono pos na pasta do handoff fica como esta; protegerPasta nao cria a pasta', () => {
+  const raiz = pasta();
+  try {
+    const dir = path.join(raiz, '.sworn', 'handoff');
+    retomar.protegerPasta(dir);
+    assert.ok(!fs.existsSync(dir), 'protegerPasta criou a pasta');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.gitignore'), '!*.md\n');
+    retomar.gravar(raiz, ID, AGORA, 'um');
+    assert.strictEqual(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'), '!*.md\n');
   } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
 });
 
@@ -536,5 +551,47 @@ test('s338: o marcar-trabalho solta as posses de quem grava um handoff; subagent
     gancho('s4-dddddd', 'PowerShell', null,
       { tool_input: { command: "Set-Content '.sworn/handoff/2026-10-26-frete.md' x" } });
     assert.strictEqual(gancho('s5-eeeeee', 'Read', velho), null, 'o handoff gravado pelo shell nao soltou a posse');
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
+// D869: o handoff que o agente grava com Write deixa a .sworn/handoff com o .gitignore '*'; subagente e arquivo comum nao
+test('D869: o marcar-trabalho poe o .gitignore na .sworn/handoff quando o agente principal grava um handoff', () => {
+  const { spawnSync } = require('node:child_process');
+  const raiz = pasta();
+  const sessoes = path.join(raiz, 'sessoes');
+  fs.mkdirSync(path.join(raiz, '.claude', 'sworn'), { recursive: true });
+  const dir = path.join(raiz, '.sworn', 'handoff');
+  const ignora = path.join(dir, '.gitignore');
+  function gancho(arquivo, extra) {
+    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'marcar-trabalho.js')], {
+      cwd: raiz, encoding: 'utf8',
+      input: JSON.stringify(Object.assign({ session_id: 's1-aaaaaa', cwd: raiz, hook_event_name: 'PostToolUse',
+        tool_name: 'Write', tool_input: { file_path: arquivo } }, extra || {})),
+      env: Object.assign({}, process.env, { SWORN_TMP: sessoes })
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+  }
+  try {
+    const h = path.join(dir, '2026-11-18-frete.md');
+    gancho(path.join(raiz, '.context', 'plans', '2026-11-18-frete-handoff.md'));
+    assert.ok(!fs.existsSync(dir), 'handoff fora da .sworn/handoff criou a pasta');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(h, '# Handoff\n');
+    gancho(path.join(raiz, 'README.md'));
+    assert.ok(!fs.existsSync(ignora), 'o arquivo comum pos o .gitignore');
+    gancho(h, { agent_id: 'sub1' });
+    assert.ok(!fs.existsSync(ignora), 'o subagente pos o .gitignore');
+    // o Write e o Edit do handoff, cada um com a pasta sem .gitignore
+    gancho(h);
+    assert.strictEqual(fs.readFileSync(ignora, 'utf8'), '*\n', 'o Write nao pos o .gitignore');
+    fs.unlinkSync(ignora);
+    gancho(h, { tool_name: 'Edit' });
+    assert.strictEqual(fs.readFileSync(ignora, 'utf8'), '*\n', 'o Edit nao pos o .gitignore');
+    // o .gitignore do dono (ate o vazio) fica como esta quando o agente grava o handoff de novo
+    for (const dele of ['!*.md\n', '']) {
+      fs.writeFileSync(ignora, dele);
+      gancho(h);
+      assert.strictEqual(fs.readFileSync(ignora, 'utf8'), dele);
+    }
   } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
 });

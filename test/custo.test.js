@@ -88,6 +88,26 @@ test('A12-01: fork fora da escada conta como o topo - barrado em marcha rapida, 
   assert.strictEqual(custo.permitido('fork', 'rapida', { marchas: {} }).ok, true, 'sem escada o portao nao opina');
   const comFork = { agentes: { escada: ['fork', 'b', 'c', 'd'] } };
   assert.strictEqual(custo.permitido('fork', 'rapida', comFork).ok, true, 'fork posto na escada pelo dono vale onde ele pos');
+  // L2-s103-19: com maiuscula ou espaco o fork ainda e o fork, fora e dentro da escada
+  for (const v of ['Fork', ' fork', 'FORK\n']) {
+    const rv = custo.permitido(v, 'rapida', PROJETO);
+    assert.strictEqual(rv.ok, false, JSON.stringify(v) + ' fora da escada tinha de contar como o topo');
+    assert.match(rv.motivo, /modelo do agente principal/, JSON.stringify(v) + ': ' + rv.motivo);
+    assert.strictEqual(custo.permitido(v, 'rapida', comFork).ok, true, JSON.stringify(v) + ' tinha de achar o fork da escada');
+  }
+  assert.strictEqual(custo.permitido('forks', 'rapida', PROJETO).ok, true, 'so o fork, nao um nome que comeca por fork');
+  // o fork que o dono escreveu 'Fork' na escada vale onde ele pos, para 'fork' e para ' Fork'
+  const comForkMaiusculo = { agentes: { escada: ['Fork', 'b', 'c', 'd'] } };
+  for (const v of ['fork', ' Fork']) {
+    assert.strictEqual(custo.permitido(v, 'rapida', comForkMaiusculo).ok, true, JSON.stringify(v) + ' tinha de achar o Fork da escada');
+  }
+  // com o Fork posto pelo dono no topo, o motivo nao diz que o fork "conta como o topo": ele esta la de verdade
+  const forkNoTopo = custo.permitido('fork', 'rapida', { agentes: { escada: ['a', 'b', 'c', 'Fork'] } });
+  assert.strictEqual(forkNoTopo.ok, false);
+  assert.ok(!/modelo do agente principal/.test(forkNoTopo.motivo), forkNoTopo.motivo);
+  // tipo que nao e texto fica fora da escada, sem lancar
+  assert.strictEqual(custo.nivelDoAgente({ toString: 1 }, PROJETO), 0);
+  assert.strictEqual(custo.nivelDoAgente(5, { agentes: { escada: ['5', 'b'] } }), 0);
 });
 
 // D678 T2: o que a chamada passa vence o frontmatter do agente (sonda d2/run8); a tabela dos degraus so vale se o
@@ -250,6 +270,41 @@ test('A2 (s193): estado nao gravavel nao libera a chamada fora da tabela dos deg
       { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: arquivo }) });
     assert.ok(/"permissionDecision"\s*:\s*"deny"/.test(r.stdout) && /fora da tabela/.test(r.stdout),
       'tinha de negar com o estado fora do ar; stdout ' + JSON.stringify(r.stdout) + ' stderr ' + r.stderr);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// L2-s103-20: sem subagent_type o harness despacha o general-purpose; o `!tipo` liberava a chamada sem julgamento.
+test('L2-s103-20: a chamada sem subagent_type e julgada como o general-purpose', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-semtipo-'));
+  try {
+    fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+    const gravar = (escada, degrausDoProjeto) => fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
+      JSON.stringify({ marchaPadrao: 'padrao', marchas: { aaa: [], padrao: [], rapida: ['docs/**'] },
+        agentes: { escada, degraus: degrausDoProjeto } }));
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'escopo.md'), '# Escopo\n**Objetivo:** t\n## Dentro\n- docs/**\n');
+    const tmp = path.join(dir, '_sessoes');
+    fs.mkdirSync(tmp, { recursive: true });
+    const rodar = (entrada) => require('./lib/comum.js').ganchoComoProcesso(path.join('scripts', 'portao-agente.js'),
+      { session_id: 'semtipo', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: entrada },
+      { cwd: dir, env: Object.assign({}, process.env, { SWORN_TMP: tmp }) });
+    const nega = (r) => /"permissionDecision"\s*:\s*"deny"/.test(r.stdout);
+    gravar(['busca', 'dev', 'arq', 'general-purpose']);
+    for (const entrada of [{ prompt: 'p' }, { subagent_type: '', prompt: 'p' }, { subagent_type: null, prompt: 'p' }]) {
+      const r = rodar(entrada);
+      assert.ok(nega(r) && /general-purpose/.test(r.stdout), JSON.stringify(entrada) + ': ' + r.stdout + r.stderr);
+    }
+    assert.ok(!nega(rodar({ subagent_type: 'busca', prompt: 'p' })), 'o degrau barato da escada passa');
+    // o tipo que nao e texto e julgado como o seu JSON (fora da escada), sem lancar e cair na liberacao por falha
+    const objeto = rodar({ subagent_type: { toString: 1 }, prompt: 'p' });
+    assert.ok(!nega(objeto) && objeto.stderr === '', 'o tipo objeto lancou: ' + objeto.stdout + objeto.stderr);
+    gravar(['busca', 'dev', 'arq', 'esp']);
+    assert.ok(!nega(rodar({ prompt: 'p' })), 'general-purpose fora da escada segue fora do julgamento');
+    gravar(undefined, [{ agente: 'general-purpose', apelido: 'sonnet' }]);
+    const tabela = rodar({ model: 'opus', prompt: 'p' });
+    assert.ok(nega(tabela) && /fora da tabela/.test(tabela.stdout), 'a tabela dos degraus vale sem o tipo: ' + tabela.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

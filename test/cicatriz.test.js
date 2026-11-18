@@ -221,6 +221,24 @@ test('cicatriz: SEM corpus o relatorio se declara cego, em vez de podar tudo', (
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// A5-17: cego, o relatorio dizia que seria mentir e listava todas como candidatas a poda; agora lista os itens lidos
+// sem julgamento, e o --json traz temCicatriz null e as contas null
+test('A5-17: sem corpus nao sai lista de poda; os itens vem sem julgamento e temCicatriz null', () => {
+  const dir = pasta();
+  try {
+    const r = cicatriz.varrer(manualDeTeste(dir), null);
+    assert.ok(r.itens.length > 0 && r.itens.every((a) => a.temCicatriz === null), JSON.stringify(r.itens));
+    assert.deepStrictEqual([r.resumo.comCicatriz, r.resumo.semCicatriz, r.resumo.porTipo], [null, null, null]);
+    const t = cicatriz.texto(r);
+    assert.ok(!/candidatos a poda|COM cicatriz|SEM cicatriz/.test(t), t);
+    assert.ok(t.includes('Itens de instrucao lidos, sem julgamento de cicatriz (' + r.itens.length + '):'), t);
+    for (const a of r.itens) assert.ok(t.includes('"' + a.arquivo + ':' + a.linha + '"'), a.arquivo);
+    // com o corpus lido, a lista de poda segue
+    const lido = cicatriz.texto(cicatriz.varrer(manualDeTeste(dir), corpusDeTeste(dir)));
+    assert.ok(/SEM cicatriz - candidatos a poda/.test(lido) && !/sem julgamento/.test(lido), lido);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // A5-78: o passo diz o que e o corpus e o que vai na pasta
 test('A5-78: o aviso de corpus nao lido diz o que vai na pasta do --corpus', () => {
   const dir = pasta();
@@ -504,7 +522,7 @@ test('cicatriz: pasta de corpus sem nenhum .md cai no modo degradado, como pasta
     for (const corpus of [vazia, path.join(dir, 'so-texto')]) {
       const r = cicatriz.varrer(manualDeTeste(dir), corpus);
       assert.strictEqual(r.corpusLido, false, corpus);
-      assert.strictEqual(r.resumo.comCicatriz, 0);
+      assert.strictEqual(r.resumo.comCicatriz, null, 'cego, ninguem foi julgado (A5-17)');
       assert.ok(/CORPUS NAO LIDO/.test(cicatriz.texto(r)), 'tem de se declarar cego');
     }
     // controle: pasta COM .md, mas sem nenhuma marca, foi lida (zero cicatriz ali e resposta, nao cegueira)

@@ -50,6 +50,36 @@ test('caminho: arquivo fora do projeto devolve null', () => {
   assert.strictEqual(caminho.relativoAoProjeto(fora, cwd), null);
 });
 
+test('caminho/A2-09: o arquivo que comeca por dois pontos fica dentro do projeto; o .. inteiro sai', () => {
+  const cwd = process.platform === 'win32' ? 'C:\\proj' : '/proj';
+  const sep = process.platform === 'win32' ? '\\' : '/';
+  assert.strictEqual(caminho.relativoAoProjeto(cwd + sep + '..env', cwd), '..env');
+  assert.strictEqual(caminho.relativoAoProjeto(cwd + sep + '..cache' + sep + 'a.js', cwd), '..cache/a.js');
+  assert.strictEqual(caminho.relativoAoProjeto('..env', cwd), '..env', 'o relativo tambem');
+  // controles: o segmento .. inteiro continua saindo
+  assert.strictEqual(caminho.relativoAoProjeto('..' + sep + 'outro.js', cwd), null);
+  assert.strictEqual(caminho.relativoAoProjeto('..', cwd), null);
+  assert.strictEqual(caminho.relativoAoProjeto('src' + sep + '..' + sep + '..' + sep + 'x.js', cwd), null);
+});
+
+test('caminho/A2-09: a barra invertida so separa no Windows; no Linux e letra do nome', () => {
+  assert.strictEqual(caminho.saiDoProjeto('..\\notas', '/'), false, 'no Linux, ..\\notas e um arquivo de dentro');
+  assert.strictEqual(caminho.saiDoProjeto('..\\notas', '\\'), true, 'no Windows, sobe');
+  assert.strictEqual(caminho.saiDoProjeto('../notas', '/'), true);
+  assert.strictEqual(caminho.saiDoProjeto('../notas', '\\'), true, 'a barra normal sobe nos dois');
+  assert.strictEqual(caminho.saiDoProjeto('..', '/'), true);
+  assert.strictEqual(caminho.saiDoProjeto('..env', '\\'), false);
+});
+
+test('caminho/A2-09: dentroPeloCaminhoReal tambem conta o ..env como de dentro', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-a209-'));
+  t.after(() => caminho.apagarPasta(dir));
+  fs.writeFileSync(path.join(dir, '..env'), 'x');
+  assert.strictEqual(caminho.dentroPeloCaminhoReal('..env', dir), true, 'o que existe');
+  assert.strictEqual(caminho.dentroPeloCaminhoReal('..novo', dir), true, 'o que ainda nao existe');
+  assert.strictEqual(caminho.dentroPeloCaminhoReal('../fora', dir), false);
+});
+
 test('caminho: entrada vazia devolve null', () => {
   assert.strictEqual(caminho.relativoAoProjeto(undefined, '/proj'), null);
   assert.strictEqual(caminho.relativoAoProjeto('', '/proj'), null);

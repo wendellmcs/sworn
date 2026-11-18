@@ -33,11 +33,91 @@ test('commit: a marca sem-revisao vale so fora de aspas', () => {
   assert.strictEqual(commit.semRevisao('git commit -m x'), false);
 });
 
+// A2-10 (H1): o git se le pelo leitor de shell comum (estilo-shell.js), nao por regex sobre o texto
+test('A2-10: ehCommit acha o commit com opcao global de valor separado, dentro de bash -c, eval e PowerShell', () => {
+  for (const c of ['git --git-dir .git --work-tree . commit -m x', 'git -c core.x=1 --namespace n commit',
+    'bash -c "git commit -m x"', "sh -c 'cd r && git commit'", 'eval git commit -m x', 'eval "git commit"',
+    'git \\\ncommit -m x', 'sudo git commit -m x', 'GIT_AUTHOR_NAME=x git commit', 'x=$(git commit -m y)',
+    'cmd /c git commit -m x', 'powershell -Command "git commit -m x"',
+    'pwsh -EncodedCommand ' + Buffer.from('git commit -m x', 'utf16le').toString('base64')]) {
+    assert.strictEqual(commit.ehCommit(c), true, c);
+  }
+  // no heredoc, no comentario e como texto de outro programa nao e commit
+  for (const c of ["cat <<'EOF'\ngit commit -m x\nEOF", 'echo ok # git commit', 'git --git-dir commit status',
+    'echo git commit', 'x-git commit', 'git']) {
+    assert.strictEqual(commit.ehCommit(c), false, c);
+  }
+  // a continuacao de linha do PowerShell (crase e quebra) junta o comando, como a barra do bash
+  assert.strictEqual(commit.ehCommit('git `\ncommit -m x', 'PowerShell'), true);
+});
+
+test('A2-10 (L2-s103-08): a ferramenta escolhe o idioma; sem ela, basta uma das leituras achar o commit', () => {
+  // no PowerShell a barra antes da aspa e caminho; no bash ela escapa a aspa, que nao fecha
+  const c = 'git -C "C:\\x\\" commit -m y';
+  assert.strictEqual(commit.ehCommit(c, 'PowerShell'), true);
+  assert.strictEqual(commit.pastaDoComando(c, 'PowerShell'), 'C:\\x\\');
+  assert.strictEqual(commit.ehCommit(c, 'Bash'), false, 'no bash a aspa nao fecha, e o comando nem roda');
+  assert.strictEqual(commit.ehCommit(c), true, 'sem ferramenta, a leitura do PowerShell acha');
+  // no PowerShell, Set-Location (e o apelido sl) troca a pasta como o cd
+  assert.strictEqual(commit.ehCommit("Set-Location 'C:\\r'; git commit -m x", 'PowerShell'), true);
+  assert.strictEqual(commit.pastaDoComando("Set-Location -Path 'C:\\r'; git commit -m x", 'PowerShell'), 'C:\\r');
+  assert.strictEqual(commit.pastaDoComando("sl 'C:\\r'; git commit", 'PowerShell'), 'C:\\r');
+});
+
+test('A2-10: a marca sem-revisao e a do comentario do primeiro nivel; no heredoc ou num bash -c nao vale', () => {
+  assert.strictEqual(commit.semRevisao("git commit -F - <<'EOF'\n# sworn: sem-revisao\nEOF"), false,
+    'o corpo do heredoc e a mensagem, nao comentario');
+  assert.strictEqual(commit.semRevisao("git commit -F - <<'EOF' # sworn: sem-revisao\nmsg\nEOF"), true);
+  assert.strictEqual(commit.semRevisao('bash -c "git commit -m x # sworn: sem-revisao"'), false);
+  assert.strictEqual(commit.semRevisao('git commit -m x; # sworn: sem-revisao'), true);
+  assert.strictEqual(commit.semRevisao('git commit -m x # sworn: sem-revisao', 'PowerShell'), true);
+  assert.strictEqual(commit.semRevisao('git commit -m x#sworn: sem-revisao'), false, 'colada a palavra, nao e comentario');
+  assert.strictEqual(commit.semRevisao(null), false);
+});
+
+test('A2-10 (L2-s103-09/10): os -C se compoem sobre o cd, e o -C vazio nao muda a pasta', () => {
+  assert.strictEqual(commit.pastaDoComando('git -C a -C b commit'), 'a/b');
+  assert.strictEqual(commit.pastaDoComando('git -C a -C /b commit'), '/b');
+  assert.strictEqual(commit.pastaDoComando('git -C "" commit'), null);
+  assert.strictEqual(commit.pastaDoComando('git -C a -C "" commit'), 'a');
+  assert.strictEqual(commit.pastaDoComando('cd x && git -C y commit'), 'x/y');
+  assert.strictEqual(commit.pastaDoComando('cd x/ && git -C y commit'), 'x/y');
+  assert.strictEqual(commit.pastaDoComando('cd x && git -C C:/r commit'), 'C:/r');
+  assert.strictEqual(commit.pastaDoComando('bash -c "cd r && git commit"'), 'r');
+  assert.strictEqual(commit.pastaDoComando('cd -P a && git commit'), 'a', 'a opcao do cd nao e a pasta');
+  assert.strictEqual(commit.pastaDoComando('cd && git commit'), '~', 'cd sem pasta vai ao HOME');
+  assert.strictEqual(commit.pastaDoComando('git status'), null);
+});
+
+test('A2-21: a chave do caminho tira a caixa so no Windows', () => {
+  assert.strictEqual(commit.chave('/x/A.js', 'win32'), commit.chave('/x/a.js', 'win32'));
+  assert.notStrictEqual(commit.chave('/x/A.js', 'linux'), commit.chave('/x/a.js', 'linux'));
+  assert.strictEqual(commit.chave('/x/a.js', 'linux'), path.resolve('/x/a.js'));
+  // sem plataforma, a do processo
+  assert.strictEqual(commit.chave('/x/A.js'), commit.chave('/x/A.js', process.platform));
+});
+
 test('commit: pastaDoComando le o -C e o ultimo cd antes do commit; sem nenhum, null', () => {
   assert.strictEqual(commit.pastaDoComando('git -C "C:/a b/repo" commit -m x'), 'C:/a b/repo');
   assert.strictEqual(commit.pastaDoComando('cd "x y" && git commit -m z'), 'x y');
   assert.strictEqual(commit.pastaDoComando("( cd 'p' && git commit )"), 'p');
-  assert.strictEqual(commit.pastaDoComando('cd a && cd b && git commit'), 'b');
+  // A2-10 (H1): o cd relativo anda a partir do anterior, como no shell
+  assert.strictEqual(commit.pastaDoComando('cd a && cd b && git commit'), 'a/b');
+  assert.strictEqual(commit.pastaDoComando('cd a && cd /b && git commit'), '/b');
+  // `cd -` volta a pasta de antes: a do cd anterior, ou a do shell (null) sem ele; dois `cd -` voltam ao segundo
+  assert.strictEqual(commit.pastaDoComando('cd /a && cd /b && cd - && git commit'), '/a');
+  assert.strictEqual(commit.pastaDoComando('cd /a && cd - && git commit'), null);
+  assert.strictEqual(commit.pastaDoComando('cd /a && cd /b && cd - && cd - && git commit'), '/b');
+  // a aspa sai antes do cd ver o argumento: `cd '-'` tambem volta
+  assert.strictEqual(commit.pastaDoComando("cd /a && cd /b && cd '-' && git commit"), '/a');
+  assert.strictEqual(commit.pastaDoComando('Set-Location /a; Set-Location /b; Set-Location -; git commit', 'PowerShell'), '/a');
+  // o cd sem pasta do bash vai ao HOME e guarda a de antes, como o OLDPWD; o do PowerShell nao muda a pasta
+  assert.strictEqual(commit.pastaDoComando('cd /a && cd && git commit'), '~');
+  assert.strictEqual(commit.pastaDoComando('cd /a; cd; cd -; git commit'), '/a');
+  assert.strictEqual(commit.pastaDoComando('cd /a; Set-Location; git commit', 'PowerShell'), '/a');
+  // no PowerShell o `cd -` anda na historia: o segundo volta mais um passo, nao ao ponto
+  assert.strictEqual(commit.pastaDoComando('cd /a; cd /b; cd -; cd -; git commit', 'PowerShell'), null);
+  assert.strictEqual(commit.pastaDoComando('cd /a; cd /b; cd /c; cd -; cd -; git commit', 'PowerShell'), '/a');
   assert.strictEqual(commit.pastaDoComando('git commit -m x'), null);
   // o cd so citado entre aspas nao muda a pasta; o de verdade, depois dele, vale com o valor original
   assert.strictEqual(commit.pastaDoComando('echo "x; cd /outro" && git commit -m y'), null);
@@ -165,6 +245,50 @@ test('091 #1: commit com codigo mudado sem revisao e negado com a lista, a faixa
     ]));
     const estado = JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'c1.json'), 'utf8'));
     assert.strictEqual(estado.contadores.commit_sem_revisao, 1, 'o balde nao contou');
+  });
+});
+
+// D870 (A2-11): o arquivo mudado pelo shell (sem Write nem Edit) nao entrava em arquivosTocados e passava sem revisao.
+// Com a foto da abertura, o que o git diz mudado e nao estava na foto conta; o que ja estava (outra frente), nao.
+test('D870: com a foto da abertura, o codigo mudado pelo shell depois dela barra o commit; o da foto fica fora', () => {
+  comRepo(function (dir, tmp) {
+    noEstado(tmp, function (s) { s.gitAbertura = ['src/pequeno.js']; });
+    const r = commitar(dir, tmp, 'git commit -m "feat: x"');
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(negou(r), 'o commit passou: ' + JSON.stringify(r.json));
+    assert.strictEqual(motivo(r), motivoDoMock([
+      '  - "src/grande.js"   faixa completa, 10 inspetores',
+      '  - "src/novo.js"     faixa completa, 10 inspetores'
+    ]));
+    // o tocado pelo Write e o mesmo arquivo mudado pelo git sai uma vez so
+    tocar(dir, tmp, 'src/grande.js');
+    const outra = commitar(dir, tmp, 'git commit -m "feat: x"');
+    assert.ok(negou(outra), 'o 2o commit passou: ' + JSON.stringify(outra.json));
+    assert.strictEqual(motivo(outra).split('src/grande.js').length, 2, motivo(outra));
+  });
+});
+
+// D870, ronda 1: a foto e o agora vem do mesmo git status e se comparam com a caixa (no disco que distingue caixa,
+// o Readme.md da foto nao esconde o README.md mexido agora); a foto vazia (arvore limpa na abertura) deixa tudo contar
+test('D870: a foto noutra caixa nao esconde o arquivo; a foto vazia deixa todo mudado contar', () => {
+  for (const foto of [['SRC/Pequeno.js'], []]) {
+    comRepo(function (dir, tmp) {
+      noEstado(tmp, function (s) { s.gitAbertura = foto; });
+      const r = commitar(dir, tmp, 'git commit -m "feat: x"');
+      assert.ok(negou(r), JSON.stringify(foto) + ': o commit passou: ' + JSON.stringify(r.json));
+      for (const nome of ['src/grande.js', 'src/novo.js', 'src/pequeno.js']) {
+        assert.ok(motivo(r).indexOf('"' + nome + '"') !== -1, JSON.stringify(foto) + ' sem ' + nome + ': ' + motivo(r));
+      }
+    });
+  }
+});
+
+test('D870: sem a foto da abertura, so os tocados contam, como antes (o git nao separa esta sessao da outra frente)', () => {
+  comRepo(function (dir, tmp) {
+    noEstado(tmp, function (s) { s.arquivosTocados = []; });
+    const r = commitar(dir, tmp, 'git commit -m "feat: x"');
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(!negou(r), 'sem foto e sem tocados o commit tinha de passar: ' + JSON.stringify(r.json));
   });
 });
 
@@ -375,80 +499,160 @@ test('A9-03: com mais de 5 pendentes, o motivo cita 5 e diz "e mais N"', () => {
 // A2-30 (D721): o `git ... commit` numa fonte so; o pastaDoComando (\bgit) achava "git" dentro de "x-git".
 test('A2-30 (D721): pastaDoComando acha o mesmo git commit que o ehCommit', () => {
   assert.strictEqual(commit.ehCommit('x-git commit'), false);
-  assert.strictEqual(commit.pastaDoComando('cd a && x-git commit; git -C b commit -m y'), 'b');
+  // A2-10 (H1): o -C relativo roda a partir do cd de antes
+  assert.strictEqual(commit.pastaDoComando('cd a && x-git commit; git -C b commit -m y'), 'a/b');
   assert.strictEqual(commit.pastaDoComando('git -c user.name="a b" -C repo commit -m x'), 'repo');
   assert.strictEqual(commit.pastaDoComando('cd "x y" && echo "git -C z commit" && git commit'), 'x y');
 });
 
-// F1h (0.45.0): o pendentes pergunta a raiz e o blob do HEAD num git so por arquivo de codigo; o texto nao gasta git.
-// O git combinado e o `rev-parse --show-toplevel HEAD:./<arq>`; a reserva de antes e o `rev-parse --show-toplevel`
-// sozinho (a raiz por pasta) mais o `cat-file -e` do arquivo. O gravador marca o combinado com ' HEAD:' para os dois
-// nao se confundirem na contagem.
-function ehRaizEBlob(args) {
-  return args[0] === 'rev-parse' && args[1] === '--show-toplevel' && typeof args[2] === 'string' && args[2].startsWith('HEAD:');
-}
-const RAIZ_E_BLOB = 'rev-parse --show-toplevel HEAD:';
+// A2-12 (H1): o pendentes pergunta a raiz uma vez por pasta (`rev-parse --show-toplevel`) e, por repositorio, mede
+// todos os arquivos de uma vez: `ls-tree` (blob do HEAD), `ls-files` (o novo que o git nao ignora) e `diff --numstat`
+// (o tamanho da mudanca). O que o lote nao respondeu se mede um a um, pelo caminho de antes (cat-file, check-ignore,
+// diff). O gravador guarda as duas primeiras palavras de cada git.
 const SO_A_RAIZ = 'rev-parse --show-toplevel';
+const DO_LOTE = ['ls-tree -z', 'ls-files -z', 'diff --numstat'];
+// H1-custo (D868): o texto do HEAD dos JS e TS que diferem dele, para a conta do so-comentario, num git por repositorio
+const DO_SO_COMENTARIO = 'grep -n';
 // `troca(args)`: devolve o resultado falso de um git, ou undefined para o git de verdade.
-function gitsDoPendentes(dir, arquivos, troca, tetos) {
+function gitsDoPendentes(dir, arquivos, troca, tetos, marcas) {
   const cp = require('node:child_process');
   const original = cp.spawnSync;
   const vistos = [];
   cp.spawnSync = function (cmd, args) {
     if (cmd === 'git' && Array.isArray(args)) {
-      vistos.push(ehRaizEBlob(args) ? RAIZ_E_BLOB : args.slice(0, 2).join(' '));
+      vistos.push(args.slice(0, 2).join(' '));
       const falso = troca && troca(args);
       if (falso) return falso;
     }
     return original.apply(this, arguments);
   };
   try {
-    return { lista: commit.pendentes(arquivos, [], dir, null, null, [], tetos), vistos: vistos };
+    return { lista: commit.pendentes(arquivos, [], dir, null, null, marcas || [], tetos), vistos: vistos };
   } finally { cp.spawnSync = original; }
 }
 function quantos(vistos, nome) { return vistos.filter(function (v) { return v === nome; }).length; }
 // O resultado do spawnSync de um git que estourou o prazo.
 const ESTOURO = { status: null, signal: 'SIGTERM', stdout: '', stderr: '',
   error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }) };
+const MEDIDA = function (p) { return [p.rel, p.faixa, p.inspetores]; };
+const ESPERADO = [['src/grande.js', 'completa', 10], ['src/pequeno.js', 'uma', 1], ['src/novo.js', 'completa', 10]];
 
-test('F1h: pendentes gasta um rev-parse de raiz e blob por arquivo de codigo, e a lista sai a mesma', () => {
+test('A2-12: pendentes mede os arquivos de um repositorio num lote (5 gits para 3 arquivos: a raiz, o lote e o so-comentario), e a lista sai a mesma', () => {
   comRepo(function (dir) {
     const arquivos = ['src/grande.js', 'src/pequeno.js', 'src/novo.js', 'LEIA.md'].map(function (r) { return path.join(dir, r); });
     const r = gitsDoPendentes(dir, arquivos);
     const lista = r.vistos.join(' | ');
-    assert.deepStrictEqual(r.lista.map(function (p) { return p.rel; }), ['src/grande.js', 'src/pequeno.js', 'src/novo.js']);
-    assert.strictEqual(quantos(r.vistos, RAIZ_E_BLOB), 3, 'um git de raiz e blob por arquivo de codigo (3), o LEIA.md nenhum: ' + lista);
-    assert.strictEqual(quantos(r.vistos, SO_A_RAIZ), 0, 'sem a pergunta da raiz sozinha, que era da reserva: ' + lista);
-    assert.strictEqual(r.vistos.filter(function (v) { return v.startsWith('cat-file'); }).length, 0,
-      'o blob do HEAD ja diz se o arquivo e novo, sem cat-file: ' + lista);
-    // dois arquivos no HEAD medem pelo diff, o novo pelo check-ignore: 3 + 3 gits, o LEIA.md nenhum
-    assert.strictEqual(r.vistos.length, 6, '3 de raiz e blob mais 3 de medida: ' + lista);
+    assert.deepStrictEqual(r.lista.map(MEDIDA), ESPERADO);
+    assert.deepStrictEqual(r.vistos, [SO_A_RAIZ].concat(DO_LOTE, [DO_SO_COMENTARIO]),
+      'a raiz da pasta src, o lote e um so-comentario para os .js mudados; o LEIA.md nenhum: ' + lista);
   });
 });
 
-test('F1h: o blob do teto sai do mesmo git (sem um rev-parse HEAD:<arquivo> a mais), e o teto segue valendo', () => {
+test('A2-12: mais arquivos no mesmo repositorio nao gastam mais git: um de raiz por pasta, o lote e o so-comentario', () => {
+  comRepo(function (dir) {
+    for (let i = 0; i < 6; i++) fs.writeFileSync(path.join(dir, 'src', 'n' + i + '.js'), 'x\n');
+    fs.mkdirSync(path.join(dir, 'lib'));
+    fs.writeFileSync(path.join(dir, 'lib', 'm.js'), 'y\n');
+    const rels = ['src/grande.js', 'src/pequeno.js', 'lib/m.js'].concat([0, 1, 2, 3, 4, 5].map(function (i) { return 'src/n' + i + '.js'; }));
+    const r = gitsDoPendentes(dir, rels.map(function (x) { return path.join(dir, x); }));
+    assert.deepStrictEqual(r.lista.map(function (p) { return p.rel; }), rels, 'na ordem em que foram tocados');
+    assert.strictEqual(quantos(r.vistos, SO_A_RAIZ), 2, 'uma raiz por pasta (src e lib): ' + r.vistos.join(' | '));
+    assert.strictEqual(r.vistos.length, 6, 'as raizes, o lote e o so-comentario: ' + r.vistos.join(' | '));
+  });
+});
+
+test('A2-12: o lote acerta o ignorado, o igual ao HEAD (so fim de linha) e o binario', () => {
+  comRepo(function (dir) {
+    fs.writeFileSync(path.join(dir, '.gitignore'), 'gerado/\n');
+    fs.mkdirSync(path.join(dir, 'gerado'));
+    fs.writeFileSync(path.join(dir, 'gerado', 'x.js'), 'x\n');
+    // so o fim de linha mudou: igual ao HEAD pelo --ignore-cr-at-eol, como no diff de um a um
+    const pequeno = fs.readFileSync(path.join(dir, 'src', 'pequeno.js'), 'utf8');
+    fs.writeFileSync(path.join(dir, 'src', 'pequeno.js'), pequeno.replace('mudou\n', 'b9\n').replace(/\n/g, '\r\n'));
+    const rels = ['gerado/x.js', 'src/pequeno.js', 'src/novo.js'];
+    const r = gitsDoPendentes(dir, rels.map(function (x) { return path.join(dir, x); }));
+    assert.deepStrictEqual(r.lista.map(function (p) { return p.rel; }), ['src/novo.js'], r.vistos.join(' | '));
+  });
+});
+
+test('A2-12: o git do lote que falha cai no caminho de um a um, e a lista sai a mesma', () => {
+  for (const quebra of DO_LOTE) {
+    comRepo(function (dir) {
+      const arquivos = ['src/grande.js', 'src/pequeno.js', 'src/novo.js'].map(function (r) { return path.join(dir, r); });
+      const falha = { status: 128, signal: null, stdout: '', stderr: 'fatal: x' };
+      const r = gitsDoPendentes(dir, arquivos, function (args) { return args.slice(0, 2).join(' ') === quebra ? falha : undefined; });
+      assert.deepStrictEqual(r.lista.map(MEDIDA), ESPERADO, quebra + ': ' + r.vistos.join(' | '));
+    });
+  }
+  // o estouro do prazo no lote tambem: o arquivo nunca sai da lista porque o git demorou
+  comRepo(function (dir) {
+    const arquivos = ['src/grande.js', 'src/novo.js'].map(function (r) { return path.join(dir, r); });
+    const r = gitsDoPendentes(dir, arquivos, function (args) { return args[0] === 'ls-tree' ? ESTOURO : undefined; });
+    assert.deepStrictEqual(r.lista.map(function (p) { return p.rel; }), ['src/grande.js', 'src/novo.js']);
+    assert.strictEqual(quantos(r.vistos, 'cat-file -e'), 2, 'sem o lote, o HEAD de cada arquivo: ' + r.vistos.join(' | '));
+  });
+});
+
+test('A2-12: o blob do teto sai do lote (sem um rev-parse HEAD:<arquivo> a mais), e o teto segue valendo', () => {
   comRepo(function (dir) {
     const abs = path.join(dir, 'src', 'pequeno.js');
     const tetos = commit.comTeto({}, abs);
     const r = gitsDoPendentes(dir, [abs], null, tetos);
     assert.deepStrictEqual(r.lista.map(function (p) { return [p.rel, p.teto]; }), [['src/pequeno.js', true]]);
-    assert.deepStrictEqual(r.vistos.filter(function (v) { return v.startsWith('rev-parse'); }), [RAIZ_E_BLOB],
-      'um rev-parse so, o de raiz e blob: ' + r.vistos.join(' | '));
+    assert.deepStrictEqual(r.vistos.filter(function (v) { return v.startsWith('rev-parse'); }), [SO_A_RAIZ], r.vistos.join(' | '));
   });
 });
 
-test('F1h: o git de raiz e blob que estoura o prazo cai no caminho de antes, e o arquivo segue na lista', () => {
+test('A2-12: o diff de um arquivo so roda quando ele tem atalho sem gatilho, e as linhas novas seguem certas', () => {
   comRepo(function (dir) {
-    const arquivos = ['src/grande.js', 'src/novo.js'].map(function (r) { return path.join(dir, r); });
-    // so o git combinado estoura; o da reserva responde (os dois estourando: os testes D844 abaixo)
-    const estoura = function (args) { return ehRaizEBlob(args) ? ESTOURO : undefined; };
-    const r = gitsDoPendentes(dir, arquivos, estoura);
-    const lista = r.vistos.join(' | ');
-    assert.deepStrictEqual(r.lista.map(function (p) { return p.rel; }), ['src/grande.js', 'src/novo.js'],
-      'o arquivo nao pode sair da lista porque o git demorou: ' + lista);
-    assert.strictEqual(quantos(r.vistos, RAIZ_E_BLOB), 2, 'o git combinado tentado uma vez por arquivo: ' + lista);
-    assert.strictEqual(quantos(r.vistos, SO_A_RAIZ), 1, 'a reserva pergunta a raiz uma vez para a pasta src: ' + lista);
-    assert.strictEqual(quantos(r.vistos, 'cat-file -e'), 2, 'a reserva confere o HEAD de cada arquivo: ' + lista);
+    const marcas = require('../scripts/lib/atalhos.js').marcas({});
+    const arquivos = ['src/grande.js', 'src/pequeno.js'].map(function (r) { return path.join(dir, r); });
+    const sem = gitsDoPendentes(dir, arquivos, null, null, marcas);
+    assert.strictEqual(quantos(sem.vistos, 'diff --no-color'), 0, 'sem atalho, nenhum diff de um a um: ' + sem.vistos.join(' | '));
+    // o atalho acrescentado sem "trocar quando" sai com a linha dele
+    fs.appendFileSync(path.join(dir, 'src', 'pequeno.js'), '// atalho: x. limite: y.\n');
+    const com = gitsDoPendentes(dir, arquivos, null, null, marcas);
+    assert.deepStrictEqual(com.lista.map(function (p) { return [p.rel, p.atalhos]; }), [['src/grande.js', []], ['src/pequeno.js', [11]]]);
+    assert.strictEqual(quantos(com.vistos, 'diff --no-color'), 1, 'so o pequeno: ' + com.vistos.join(' | '));
+  });
+});
+
+test('A2-12: no lote, so o modo mudado (0 e 0) e igual ao HEAD, e o binario (- e -) e mudanca sem tamanho medido', () => {
+  comRepo(function (dir) {
+    const abs = path.join(dir, 'src', 'pequeno.js');
+    const falso = function (saida) {
+      return function (args) {
+        return args[0] === 'diff' && args[1] === '--numstat' ? { status: 0, signal: null, stdout: saida, stderr: '' } : undefined;
+      };
+    };
+    assert.deepStrictEqual(gitsDoPendentes(dir, [abs], falso('0\t0\tsrc/pequeno.js\0')).lista, []);
+    assert.deepStrictEqual(gitsDoPendentes(dir, [abs], falso('-\t-\tsrc/pequeno.js\0')).lista.map(MEDIDA),
+      [['src/pequeno.js', 'completa', 10]]);
+    assert.deepStrictEqual(gitsDoPendentes(dir, [abs], falso('3\t70\tsrc/pequeno.js\0')).lista.map(MEDIDA),
+      [['src/pequeno.js', 'completa', 10]], 'a faixa sai do maior dos dois lados');
+    assert.deepStrictEqual(gitsDoPendentes(dir, [abs], falso('')).lista, [], 'fora da saida do numstat: igual ao HEAD');
+  });
+});
+
+test('A2-10: no gancho, a ferramenta da o idioma em que o comando se le', () => {
+  comRepo(function (dir, tmp) {
+    tocar(dir, tmp, 'src/grande.js');
+    const rodar = function (ferramenta, comando) {
+      const entrada = { hook_event_name: 'PreToolUse', tool_input: { command: comando } };
+      if (ferramenta) entrada.tool_name = ferramenta;
+      const r = hook('portao-commit.js', dir, tmp, entrada);
+      let json = null;
+      try { json = JSON.parse(r.stdout); } catch (e) { json = null; }
+      return { status: r.status, json: json, stderr: r.stderr };
+    };
+    // no PowerShell a aspa fecha em "C:\x\", e a marca depois dela e comentario
+    const marca = 'git commit -m "C:\\x\\" # sworn: sem-revisao';
+    assert.ok(!negou(rodar('PowerShell', marca)), 'o PowerShell le a marca');
+    assert.ok(negou(rodar('Bash', marca)), 'no bash a aspa nao fecha e a marca e texto dela');
+    // no bash, a mesma aspa deixa o commit sem subcomando (e o bash nem roda o comando); sem ferramenta, as duas leituras
+    const pasta = 'git -C "C:\\x\\" commit -m y';
+    assert.ok(!negou(rodar('Bash', pasta)), 'no bash nao ha git commit');
+    assert.ok(negou(rodar(null, pasta)), 'sem ferramenta, a leitura do PowerShell acha o commit');
   });
 });
 
@@ -456,25 +660,25 @@ test('F1h: o git de raiz e blob que estoura o prazo cai no caminho de antes, e o
 // semResposta e o portao nega com o motivo do git lento, sem contar commit sem revisao nem dar a ordem de revisar.
 const estouraARaiz = function (args) { return args[0] === 'rev-parse' && args[1] === '--show-toplevel' ? ESTOURO : undefined; };
 
-test('D844: o git de raiz e blob e o da reserva estourando o prazo deixam o arquivo como semResposta', () => {
+test('D844: o git de raiz que estoura o prazo deixa os arquivos da pasta como semResposta', () => {
   comRepo(function (dir) {
     const arquivos = ['src/grande.js', 'src/novo.js', 'LEIA.md'].map(function (r) { return path.join(dir, r); });
     const r = gitsDoPendentes(dir, arquivos, estouraARaiz);
     const lista = r.vistos.join(' | ');
     assert.deepStrictEqual(r.lista, [{ rel: 'src/grande.js', semResposta: true }, { rel: 'src/novo.js', semResposta: true }],
       'o arquivo saiu da conta porque o git demorou: ' + lista);
-    assert.strictEqual(quantos(r.vistos, SO_A_RAIZ), 1, 'a reserva pergunta uma vez por pasta, mesmo estourando: ' + lista);
-    assert.strictEqual(r.vistos.filter(function (v) { return v.startsWith('cat-file') || v.startsWith('diff'); }).length, 0,
+    assert.strictEqual(quantos(r.vistos, SO_A_RAIZ), 1, 'a raiz se pergunta uma vez por pasta, mesmo estourando: ' + lista);
+    assert.strictEqual(r.vistos.filter(function (v) { return /^(?:cat-file|diff|grep)/.test(v); }).length, 0,
       'sem o repositorio, nada se mede: ' + lista);
+    assert.strictEqual(r.vistos.filter(function (v) { return DO_LOTE.indexOf(v) !== -1; }).length, 0, 'nem o lote: ' + lista);
   });
 });
 
-test('D844: a reserva que responde "fora do repositorio" (sem prazo estourado) segue deixando o arquivo de fora', () => {
+test('D844: a raiz que responde "fora do repositorio" (sem prazo estourado) segue deixando o arquivo de fora', () => {
   comRepo(function (dir) {
     const abs = path.join(dir, 'src', 'grande.js');
     const fora = { status: 128, signal: null, stdout: '', stderr: 'fatal: not a git repository' };
     const r = gitsDoPendentes(dir, [abs], function (args) {
-      if (ehRaizEBlob(args)) return ESTOURO;
       return args[0] === 'rev-parse' && args[1] === '--show-toplevel' ? fora : undefined;
     });
     assert.deepStrictEqual(r.lista, [], 'so o prazo estourado barra; fora do repositorio nunca conta (D575)');
@@ -856,4 +1060,77 @@ test('F2a (D828.3): o motivo, direto: 5 no teto cabem sem "e mais"; no misto o "
     'repita o commit com "# sworn: sem-revisao" no fim do comando.',
     'So o dono desliga esta parada do commit neste projeto: "portaoCommit": false em .claude/sworn/projeto.json.'
   ].join('\n'));
+});
+
+// H1-custo (D868): o .js que difere do HEAD so em comentario ou espaco sai da lista do portao; o de codigo, o com
+// atalho novo sem gatilho e todos quando o git grep falha seguem nela (fail-closed).
+test('H1-custo: pendentes tira o .js so de comentario ou espaco e segue cobrando o de codigo e o atalho novo', () => {
+  comRepo(function (dir) {
+    const g = function (args) { return spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false }); };
+    const base = 'const a = 1; // um\n/* bloco */\nfunction f(x) { return x / 2; }\nmodule.exports = { a, f };\n';
+    const nomes = ['comentado', 'espaco', 'codigo', 'atalho'];
+    for (const n of nomes) fs.writeFileSync(path.join(dir, 'src', n + '.js'), base);
+    fs.writeFileSync(path.join(dir, 'src', 'vazio.js'), '');
+    g(['add', 'src/vazio.js'].concat(nomes.map(function (n) { return 'src/' + n + '.js'; })));
+    g(['commit', '-qm', 'base']);
+    fs.writeFileSync(path.join(dir, 'src', 'comentado.js'),
+      base.replace('// um', '// o um, explicado').replace('/* bloco */', '/**\n * bloco novo,\n * em tres linhas\n */'));
+    fs.writeFileSync(path.join(dir, 'src', 'espaco.js'),
+      base.split('\n').map(function (l) { return l ? '    ' + l : l; }).join('\r\n') + '\r\n\r\n');
+    fs.writeFileSync(path.join(dir, 'src', 'codigo.js'), base.replace('x / 2', 'x / 3') + '// e um comentario\n');
+    fs.writeFileSync(path.join(dir, 'src', 'atalho.js'), base + '// atalho: sem o gatilho\n');
+    // o arquivo novo (sem HEAD) so de comentario segue pendente: nao ha o antes para comparar
+    fs.writeFileSync(path.join(dir, 'src', 'novo-comentado.js'), '// so comentario\n');
+    // e o que era vazio no HEAD: o grep responde sem linha dele, e a falta do antes nao vira "so comentario"
+    fs.writeFileSync(path.join(dir, 'src', 'vazio.js'), '// so comentario\n');
+    const abs = nomes.concat(['novo-comentado', 'vazio']).map(function (n) { return path.join(dir, 'src', n + '.js'); });
+    const lista = commit.pendentes(abs, [], dir, null, null, ['atalho']).map(function (p) { return p.rel; });
+    assert.deepStrictEqual(lista, ['src/codigo.js', 'src/atalho.js', 'src/novo-comentado.js', 'src/vazio.js']);
+    const todos = abs.map(function (a) { return 'src/' + path.basename(a); });
+    // o grep que falha, o que estoura o prazo e o que nao casa nada deixam todos pendentes
+    for (const [nome, falso] of [['falha', { status: 128, signal: null, stdout: '', stderr: 'fatal: x' }], ['prazo', ESTOURO],
+      ['vazio', { status: 1, signal: null, stdout: '', stderr: '' }]]) {
+      const r = gitsDoPendentes(dir, abs, function (args) { return args[0] === 'grep' ? falso : undefined; }, undefined, ['atalho']);
+      assert.deepStrictEqual(r.lista.map(function (p) { return p.rel; }), todos, 'o grep ' + nome + ': ' + r.vistos.join(' | '));
+    }
+  });
+});
+
+// H1-custo (ronda 1): o nome com quebra de linha nao vai ao git grep (ele forjaria o texto do HEAD de outro arquivo).
+test('H1-custo: o so-comentario deixa fora do grep o nome com quebra, e ele segue pendente', () => {
+  const cp = require('node:child_process');
+  const original = cp.spawnSync;
+  const pedidos = [];
+  cp.spawnSync = function (cmd, args) {
+    if (cmd === 'git' && Array.isArray(args) && args[0] === 'grep') pedidos.push(args.slice());
+    return { status: 1, signal: null, stdout: '', stderr: '' };
+  };
+  // o lote como o commit.lote o monta: `contas` por nome, com `linhas` numerico para o arquivo de texto medido
+  const contas = new Map([['a.js', { linhas: 1 }], ['x\nHEAD:a.js', { linhas: 1 }]]);
+  let fora;
+  try {
+    fora = commit.soComentarioNoLote(os.tmpdir(), { blobs: new Map(), vistos: null, contas: contas }, ['a.js', 'x\nHEAD:a.js']);
+  } finally { cp.spawnSync = original; }
+  assert.strictEqual(pedidos.length, 1, 'um grep');
+  assert.ok(pedidos[0].indexOf(':(literal)a.js') !== -1, 'o a.js vai ao grep');
+  assert.ok(!pedidos[0].some(function (a) { return /[\r\n]/.test(a); }), 'o nome com quebra fica fora: ' + JSON.stringify(pedidos[0]));
+  assert.strictEqual(fora.size, 0, 'nenhum sai do portao: ' + JSON.stringify(Array.from(fora)));
+});
+
+// H1-custo (ronda 1): o erro do leitor deixa o arquivo pendente em vez de derrubar o portao.
+test('H1-custo: se o leitor so-comentario lanca, o arquivo segue pendente', () => {
+  comRepo(function (dir) {
+    const g = function (args) { return spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false }); };
+    fs.writeFileSync(path.join(dir, 'src', 'c.js'), 'f(1);\n');
+    g(['add', 'src/c.js']);
+    g(['commit', '-qm', 'c']);
+    fs.writeFileSync(path.join(dir, 'src', 'c.js'), 'f(1); // so comentario\n');
+    const sc = require('../scripts/lib/so-comentario.js');
+    const leitor = sc.soComentario;
+    sc.soComentario = function () { throw new Error('leitor quebrado'); };
+    let lista;
+    try { lista = commit.pendentes([path.join(dir, 'src', 'c.js')], [], dir, null, null, []); } finally { sc.soComentario = leitor; }
+    assert.deepStrictEqual(lista.map(function (p) { return p.rel; }), ['src/c.js']);
+    assert.deepStrictEqual(commit.pendentes([path.join(dir, 'src', 'c.js')], [], dir, null, null, []), [], 'com o leitor, sai');
+  });
 });

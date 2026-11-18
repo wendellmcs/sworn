@@ -66,7 +66,8 @@ function arg(nome) {
 
 // 0.3.2, item 8: "nao esta em HEAD" (git respondeu com status diferente de zero) e arquivo novo; git que
 // nem respondeu (timeout, falha de spawn) NAO e: tratar como novo deixava o lado antigo vazio e calado.
-// Devolve { texto } (esta em HEAD), { novo: true } (nao esta) ou { erro: <causa> }.
+// Devolve { texto } (esta em HEAD), { novo: true } (nao esta) ou { erro: <causa> }; o que esta no HEAD por outro nome
+// (A3-11, outroNomeNoHead) volta { texto, caixa } ou { texto, antigo }.
 //
 // 0.3.3, item 9: o status do `git show` sozinho nao separa "arquivo novo" de "objeto que nao se le" (fora do
 // HEAD = 128, e em repositorio sem commit tambem 128; morto por sinal = null). Status 0 e o texto; o que nao
@@ -78,15 +79,31 @@ function arg(nome) {
 function rodarGit(cwd, args) {
   return git.rodar(cwd, args, { timeout: 10000 });
 }
+// O git respondeu e deu certo (status 0).
+function gitDeuCerto(r) {
+  return Boolean(r && !r.error && r.status === 0);
+}
+// O git nem respondeu (timeout, falha de spawn, morte por sinal): nao e o mesmo que responder "nao achei".
+function gitSemResposta(r) {
+  return !r || Boolean(r.error) || r.status === null;
+}
+// A3-15 (H1): os caminhos da saida (e do aviso) com barra normal no Windows: o JSON leva cada barra invertida dobrada, e
+// o caminho colado dali num briefing ou num comando saia torto. O Read e o Node aceitam a barra normal no Windows. So
+// la: no Linux e no macOS a barra invertida e um caractere valido de nome, e troca-la levaria a um caminho que nao existe.
+function comBarraNormal(p) {
+  return process.platform === 'win32' ? String(p).replace(/\\/g, '/') : p;
+}
+// A3-11 (H1): o `--` depois do objeto. Sem ele, o nome com [ ] * ? que nao esta no HEAD virava filtro de caminho do
+// `git show HEAD` (status 0, saida vazia), e o arquivo novo saia com um lado antigo vazio de mentira.
 function versaoNoHead(cwd, rel) {
-  const r = rodarGit(cwd, ['show', 'HEAD:./' + rel]);
+  const r = rodarGit(cwd, ['show', 'HEAD:./' + rel, '--']);
   if (!r) return { erro: 'sem resposta do git' };
   if (r.error) return { erro: r.error.code || r.error.message };
-  if (r.status === 0) return { texto: r.stdout };
+  if (gitDeuCerto(r)) return { texto: r.stdout };
   if (r.status === null) return { erro: 'o git terminou por sinal (' + (r.signal || 'desconhecido') + ')' };
   const t = rodarGit(cwd, ['ls-tree', 'HEAD', '--', rel]);
-  if (t && !t.error && t.status === 0) {
-    if (String(t.stdout).trim() === '') return { novo: true };
+  if (gitDeuCerto(t)) {
+    if (String(t.stdout).trim() === '') return outroNomeNoHead(cwd, rel) || { novo: true };
     return { erro: 'o HEAD lista o arquivo mas o git nao consegue ler o objeto (status ' + r.status + ')' };
   }
   const v = rodarGit(cwd, ['rev-parse', '--verify', '-q', 'HEAD']);
@@ -95,6 +112,72 @@ function versaoNoHead(cwd, rel) {
   return { erro: 'o git nao respondeu se o arquivo esta no HEAD (codigos: show ' + r.status + ', ls-tree ' +
     (t ? (t.error ? (t.error.code || 'erro') : t.status) : 'sem resposta') + ', rev-parse ' +
     (v ? (v.error ? (v.error.code || 'erro') : v.status) : 'sem resposta') + ')' };
+}
+
+// A3-11 (H1): o arquivo que nao esta no HEAD pelo caminho exato pode estar la por outro nome. O caminho com outra caixa
+// vale como o nome que o git guarda ({ caixa }) so quando o disco mostra o MESMO arquivo pelos dois nomes (mesmo dev e
+// ino): a plataforma nao diz isso, porque o APFS e a pasta do Windows podem diferenciar a caixa. O renomeado que o git
+// ve (git mv, ou git add dos dois lados) tem lado antigo, o nome de antes no diff -M do HEAD ({ antigo }). O renomeado
+// sem o git saber (mv sem git add) segue arquivo novo. Os dois so custam git no ramo do novo. O git que nao respondeu
+// volta { erro }, como no versaoNoHead.
+function mesmoArquivoNoDisco(cwd, a, b) {
+  try {
+    const x = fs.statSync(path.join(cwd, a), { bigint: true });
+    const y = fs.statSync(path.join(cwd, b), { bigint: true });
+    return x.dev === y.dev && x.ino === y.ino;
+  } catch (e) {
+    return false;
+  }
+}
+function outroNomeNoHead(cwd, rel) {
+  let semResposta = null;
+  const textoNoHead = function (nome) {
+    const s = rodarGit(cwd, ['show', 'HEAD:./' + nome, '--']);
+    if (gitSemResposta(s)) semResposta = semResposta || 'show';
+    return gitDeuCerto(s) ? s.stdout : null;
+  };
+  const nomes = function (args) {
+    const r = rodarGit(cwd, args);
+    if (gitSemResposta(r)) semResposta = semResposta || args[0];
+    return gitDeuCerto(r) ? String(r.stdout).split('\0').filter(Boolean) : [];
+  };
+  const falhou = function () {
+    return { erro: 'o git nao respondeu ao procurar o arquivo por outro nome no HEAD (' + semResposta + ')' };
+  };
+  // literal: o nome com [ ] * ? e o arquivo, nao um padrao que casaria outro.
+  const iguais = nomes(['ls-files', '-z', '--', ':(icase,literal)' + rel]);
+  if (semResposta) return falhou();
+  if (iguais.length === 1 && iguais[0] !== rel && mesmoArquivoNoDisco(cwd, rel, iguais[0])) {
+    const texto = textoNoHead(iguais[0]);
+    if (semResposta) return falhou();
+    if (texto !== null) return { texto: texto, caixa: iguais[0] };
+  }
+  // O indice (--cached) e o que o git sabe da troca: o git mv guarda la o nome novo com o conteudo de antes, e o diff
+  // contra o disco nao pareava o arquivo pequeno ja mudado (a semelhanca ficava abaixo dos 50% do -M).
+  // -z: "R<similaridade>", o nome antigo e o novo, um por campo (sem as aspas do nome com acento).
+  // --relative: os dois nomes saem relativos a pasta atual, como o `rel` (o diffContraHead os le assim).
+  const p = nomes(['diff', '--cached', '--relative', '-M', '--name-status', '--diff-filter=R', '-z', 'HEAD']);
+  if (semResposta) return falhou();
+  for (let i = 0; i + 2 < p.length; i += 3) {
+    if (p[i + 2] !== rel) continue;
+    const texto = textoNoHead(p[i + 1]);
+    if (semResposta) return falhou();
+    if (texto !== null) return { texto: texto, antigo: p[i + 1] };
+  }
+  return null;
+}
+
+// L3-s104-6 (H1): so as flags do USO. O `--completo` (sem o "a") era ignorado calado, e a revisao saia na faixa medida
+// como se a flag tivesse entrado. O argumento logo depois de uma flag de valor e o valor (um arquivo `--x.js` vale).
+for (let i = 2; i < process.argv.length; i++) {
+  const a = process.argv[i];
+  if (FLAGS_DO_USO.indexOf(a) !== -1) {
+    if (a !== '--completa') i++;
+  } else if (a.startsWith('--')) {
+    process.stdout.write('ERRO: ' + a + ' nao e uma opcao deste script; as opcoes estao no uso abaixo. ' +
+      'Nada foi gravado.\n' + USO);
+    process.exit(1);
+  }
 }
 
 const cwd = process.cwd();
@@ -109,30 +192,32 @@ if (!alvo) {
 // D219 (ronda 1 do 8c.5): so dentro da pasta atual. O `..` e o absoluto de fora eram lidos
 // e recebiam o motivo errado ("nao existe em HEAD"), e o inexistente estourava com stack
 // trace. O `..` de subpasta ja nao achava o arquivo em HEAD: a guarda nao tira uso.
-const rel = caminho.relativoAoProjeto(alvo.replace(/\\/g, '/'), cwd);
-if (rel === null) {
+// A3-11: ate o versaoNoHead, o caminho pedido; dali em diante, `rel`, o nome que o git guarda (o mesmo, ou o de outra
+// caixa que o disco mostra como o mesmo arquivo).
+const relPedido = caminho.relativoAoProjeto(alvo.replace(/\\/g, '/'), cwd);
+if (relPedido === null) {
   process.stdout.write('ERRO: ' + alvo + ' fica fora da pasta atual. Rode de uma pasta que o contenha, ' +
     'com o caminho relativo a ela.\n');
   process.exit(1);
 }
 // Pedido 12 (A3-03): a guarda acima e lexica; um link (ou junction) dentro da pasta atual que aponta para fora levaria
 // o conteudo de fora ao pacote, e dele ao inspetor. Pelo caminho real, o mesmo das referencias (mais abaixo).
-if (!caminho.dentroPeloCaminhoReal(rel, cwd)) {
+if (!caminho.dentroPeloCaminhoReal(relPedido, cwd)) {
   process.stdout.write('ERRO: ' + alvo + ' passa por um link que leva para fora da pasta atual, entao nao leio. ' +
     'Nada foi gravado. Revise o arquivo pelo caminho real, de uma pasta que o contenha.\n');
   process.exit(1);
 }
-if (!fs.existsSync(path.join(cwd, rel))) {
-  process.stdout.write('ERRO: ' + rel + ' nao existe no disco. Confira o caminho, relativo a pasta atual.\n');
+if (!fs.existsSync(path.join(cwd, relPedido))) {
+  process.stdout.write('ERRO: ' + relPedido + ' nao existe no disco. Confira o caminho, relativo a pasta atual.\n');
   process.exit(1);
 }
 // 0.3.2, item 9: o arquivo existe mas pode nao ser lido (e uma pasta, sem permissao). Sem o try
 // isso saia como stack trace.
 let atual;
 try {
-  atual = fs.readFileSync(path.join(cwd, rel), 'utf8');
+  atual = fs.readFileSync(path.join(cwd, relPedido), 'utf8');
 } catch (e) {
-  process.stdout.write('ERRO: nao consegui ler ' + rel + ' (causa: ' + textoLib.causaDoErro(e) + '). ' +
+  process.stdout.write('ERRO: nao consegui ler ' + relPedido + ' (causa: ' + textoLib.causaDoErro(e) + '). ' +
     'Confira se e um arquivo que voce pode ler, e nao uma pasta, e rode de novo.\n');
   process.exit(1);
 }
@@ -143,7 +228,7 @@ try {
 // motivo. O `HEAD:./<rel>` do versaoNoHead desconta (0.44.0; antes, o prefixo do git.js).
 // D244/defeito 10: arquivo que nao esta em HEAD e arquivo NOVO. Antes ele era recusado, e o
 // CSS novo da onda 7 ficou sem inspecao nenhuma. Agora o lado antigo e vazio e o pacote diz.
-const doHead = versaoNoHead(cwd, rel);
+const doHead = versaoNoHead(cwd, relPedido);
 // So quando o HEAD nao se leu: fora de um repositorio (ou sem git), o show, o ls-tree e o rev-parse falham juntos, e
 // a causa certa e esta. Perguntar antes gastava um git a mais em toda revisao que da certo.
 if (doHead.erro && git.prefixo(cwd) === null) {
@@ -155,22 +240,26 @@ if (doHead.erro && git.prefixo(cwd) === null) {
 }
 if (doHead.erro === 'ENOBUFS') {
   // 0.3.3, item 12: rodar de novo nao resolve; o arquivo no HEAD e maior que o limite.
-  process.stdout.write('ERRO: ' + rel + ' no HEAD do git passa do limite da revisao cega (' +
+  process.stdout.write('ERRO: ' + relPedido + ' no HEAD do git passa do limite da revisao cega (' +
     (git.SAIDA_PADRAO_BYTES / 1024 / 1024) + ' MiB; causa: ENOBUFS). Nada foi gravado. Revise um arquivo menor, ' +
     'ou divida este.\n');
   process.exit(1);
 }
 if (doHead.erro) {
-  process.stdout.write('ERRO: nao consegui ler ' + rel + ' no HEAD do git (causa: ' + doHead.erro + '). ' +
-    'Nada foi gravado. Rode de novo; se repetir, confira se "git show HEAD:./' + rel +
+  process.stdout.write('ERRO: nao consegui ler ' + relPedido + ' no HEAD do git (causa: ' + doHead.erro + '). ' +
+    'Nada foi gravado. Rode de novo; se repetir, confira se "git show HEAD:./' + relPedido +
     '" responde nesta pasta.\n');
   process.exit(1);
 }
+// A3-11: dai em diante (a base da revisao, o diff, o mapa.json) vale o nome do git.
+const pedidoComOutraCaixa = doHead.caixa ? relPedido : null;
+const rel = doHead.caixa || relPedido;
 const novo = doHead.novo === true;
 const anterior = novo ? '' : doHead.texto;
 // RV-01 (D422): arquivo igual ao HEAD (revisar depois de commitar) nao tem lado antigo.
-// Comparacao normalizada (sem BOM, CRLF -> LF) so para decidir o identico: com core.autocrlf=true o disco
-// tem CRLF e o blob do HEAD tem LF. O conteudo gravado em A.txt/B.txt nao e normalizado.
+// Comparacao normalizada (sem BOM, CRLF -> LF): com core.autocrlf=true o disco tem CRLF e o blob do HEAD tem LF.
+// A3-12a (H1): A.txt e B.txt saem normalizados do mesmo jeito; cru, o lado com CRLF dizia qual era o do disco, e o
+// diff do inspetor mudava em toda linha.
 const normalizado = function (t) { return textoLib.semBom(t).replace(/\r\n/g, '\n'); };
 const identico = !novo && normalizado(anterior) === normalizado(atual);
 
@@ -179,7 +268,7 @@ const identico = !novo && normalizado(anterior) === normalizado(atual);
 const raizProjeto = config.raizDoProjeto(cwd);
 const relNaRaiz = path.relative(raizProjeto, path.join(cwd, rel)).replace(/\\/g, '/');
 // D485: o diff contra o HEAD mora em lib/git.js (plano 091: o portao do commit mede a mesma faixa).
-const diff = novo || identico ? null : git.diffContraHead(cwd, rel);
+const diff = novo || identico ? null : git.diffContraHead(cwd, rel, doHead.antigo);
 const linhasMudadas = identico ? 0 : (diff ? Math.max(diff.removidas, diff.acrescentadas) : null);
 const projetoCfg = config.carregarProjeto(raizProjeto);
 const ehEstilo = design.ehArquivoDeEstilo(relNaRaiz, projetoCfg);
@@ -272,7 +361,8 @@ function oQueFazerComAFalta(codigo) {
 function quaisFaltam(faltam) {
   return 'Referencia que nao consegui ler: ' + faltam.map(function (e) {
     const f = faltaPorEntrada[e];
-    return e + ' (causa: ' + f.causa + '; caminho tentado: "' + f.caminho + '"; ' + oQueFazerComAFalta(f.codigo) + ')';
+    return e + ' (causa: ' + f.causa + '; caminho tentado: "' + comBarraNormal(f.caminho) + '"; ' +
+      oQueFazerComAFalta(f.codigo) + ')';
   }).join(', ') + '.';
 }
 
@@ -280,7 +370,6 @@ function quaisFaltam(faltam) {
 // da 0.3.0 - pasta numerada solta em revisao/ - segue na base unica, para nao partir a revisao ao meio.
 const revisao = path.join(cwd, '.claude', 'sworn', 'revisao');
 const formatoAntigo = cegar.temPastaNumeradaSolta(revisao);
-const base = formatoAntigo ? revisao : cegar.baseDoArquivo(revisao, rel);
 
 // 0.3.3, item 11: a regua e parte do pacote. Le-se ANTES de criar qualquer pasta: ausente (ENOENT) ou sem a
 // secao = sem regua, como antes; outra falha de leitura e ERRO e nao grava nada. O regras.md mora na raiz do
@@ -293,7 +382,7 @@ const textoDoDesign = sistemaDeDesign && typeof sistemaDeDesign === 'object' && 
 
 let secaoRegua = null;
 try {
-  secaoRegua = secaoDaRegua(fs.readFileSync(path.join(config.raizDoProjeto(cwd), '.claude', 'sworn', 'regras.md'), 'utf8'));
+  secaoRegua = secaoDaRegua(fs.readFileSync(path.join(raizProjeto, '.claude', 'sworn', 'regras.md'), 'utf8'));
 } catch (e) {
   if (!e || e.code !== 'ENOENT') {
     process.stdout.write('ERRO: nao consegui ler .claude/sworn/regras.md (causa: ' + (e ? textoLib.causaDoErro(e) : 'desconhecida') +
@@ -420,6 +509,18 @@ if (telaDepois) {
     fotos[lado] = feita;
   }
 }
+
+// A3-12b: a base com o id de antes que ocupa o nome de outro arquivo (a__b.js antigo na pasta de a/b.js) vai para o id
+// novo do arquivo dela antes da escolha, depois de toda conferencia que para sem gravar. O rename que falha para aqui:
+// seguir poria as rondas de um arquivo na conta do outro.
+const movida = formatoAntigo ? null : cegar.migrarBaseAntiga(revisao, rel);
+if (movida && movida.erro) {
+  process.stdout.write('ERRO: a revisao em ' + path.relative(cwd, movida.de).replace(/\\/g, '/') + ' usa o nome antigo da pasta e ' +
+    'precisa ir para ' + path.relative(cwd, movida.para).replace(/\\/g, '/') + ', mas nao consegui mover (causa: ' +
+    textoLib.causaDoErro(movida.erro) + '). Nada foi gravado. Feche o que estiver usando essa pasta e rode de novo.\n');
+  process.exit(1);
+}
+const base = formatoAntigo ? revisao : cegar.baseDoArquivo(revisao, rel);
 
 // 0.3.3, item 2 (decisao do dono, 2026-09-29): base por arquivo que ja tem fechada.json e revisao FECHADA.
 // Preparar de novo nao herda as rondas antigas nem o teto gasto: a base inteira e movida (nada se apaga) para
@@ -560,8 +661,8 @@ const doLado = function (texto, ini, qtd, extras) {
   return cegar.recortarTrecho(texto, blocosDoLado(ini, qtd), cegar.TRECHO_MARGEM, extras);
 };
 const r = cegar.rotular(
-  [{ nome: 'HEAD', conteudo: doLado(anterior, 'antigoIni', 'antigoQtd', contrato ? contrato.extras[0] : undefined) },
-    { nome: 'trabalho', conteudo: doLado(atual, 'novoIni', 'novoQtd', contrato ? contrato.extras[1] : undefined) }],
+  [{ nome: 'HEAD', conteudo: normalizado(doLado(anterior, 'antigoIni', 'antigoQtd', contrato ? contrato.extras[0] : undefined)) },
+    { nome: 'trabalho', conteudo: normalizado(doLado(atual, 'novoIni', 'novoQtd', contrato ? contrato.extras[1] : undefined)) }],
   sementeTexto + '|' + rel
 );
 
@@ -584,7 +685,9 @@ const lentesDaRevisao = faixa === 'completa'
     estilo: ehEstilo,
     risco: textoMudado === null ? undefined : veredito.temRisco(textoMudado, rel),
     grande: novo ? true : (identico || !Number.isInteger(linhasMudadas) ? undefined : linhasMudadas > veredito.FAIXA_DUAS_ATE),
-    fotos: !!(fotos && fotos.trabalho)
+    fotos: !!(fotos && fotos.trabalho),
+    // H1-custo (D868): o arquivo de teste leva so as LENTES_DO_TESTE
+    teste: veredito.ehArquivoDeTeste(relNaRaiz)
   })
   : veredito.lentesDaFaixa(faixa);
 
@@ -612,6 +715,7 @@ try {
   // F2d (c): na completa, a lista das lentes escolhidas pelo risco; o apurar confere que todas votaram
   if (faixa === 'completa') mapaJson.lentes = lentesDaRevisao;
   if (novo) mapaJson.novo = true;
+  if (doHead.antigo) mapaJson.renomeadoDe = doHead.antigo;
   // RV-01 (D422): revisar depois de commitar deixa os dois lados iguais; o apurar le este campo.
   if (identico) mapaJson.identico = true;
   if (degradado) mapaJson.degradado = degradado.trim();
@@ -710,7 +814,8 @@ if (fotos) {
   }
 }
 aviso += pedido ? ' pedido.md vai a lente escopo, com o pedido de ' + origemDoPedido + '.'
-  : ' Sem pedido.md: o escopo em vigor, ' + origemDoPedido + ', nao declara objetivo nem Dentro (veja semPedido).';
+  : ' Sem pedido.md: o escopo em vigor, ' + origemDoPedido + ', nao declara objetivo nem Dentro; o campo semPedido ' +
+    'desta saida diz o que declarar nele.';
 if (arquivada) {
   // 0.3.3, item 2: a saida diz para onde a revisao fechada foi.
   aviso += (arquivadaAberta
@@ -723,12 +828,17 @@ if (arquivada) {
 if (pediuCompleta && faixaMedida !== 'completa') {
   aviso += ' Faixa completa pedida por --completa (a medida do diff dava "' + faixaMedida + '"): A e B sao o arquivo ' +
     'inteiro, e as lentes sao as da tabela de familias.';
+} else if (pediuCompleta) {
+  // L3-s104-7 (H1): quem pediu a completa fica sabendo que ela ja era a da medida (arquivo novo, igual ao HEAD, ou
+  // mudanca grande), e que a flag nao mudou nada.
+  aviso += ' O --completa nao mudou nada: a medida do diff ja dava a faixa completa.';
 }
+// As linhas do contrato a mostra nos vaos, nos dois lados (o aviso e a saida.trecho leem daqui).
+const extras = recorte && contrato ? contrato.extras[0].length + contrato.extras[1].length : 0;
 if (recorte) {
   aviso += ' A e B sao recortes (faixa ' + faixa + '): so o trecho mudado, com ' + cegar.TRECHO_MARGEM + ' linhas de ' +
     'margem; as linhas de fora estao em branco e a primeira de cada vao diz "[fora do trecho: linhas a-b]". ' +
     'Diga isso no briefing de cada inspetor.';
-  const extras = contrato ? contrato.extras[0].length + contrato.extras[1].length : 0;
   if (extras > 0) {
     aviso += ' Nos vaos ficam tambem a mostra o require e a definicao de topo de cada nome que o trecho usa (o contrato ' +
       'do proprio arquivo), nos dois lados.';
@@ -748,6 +858,15 @@ if (recorte) {
 if (novo) {
   aviso += ' E arquivo novo: um dos lados e vazio, entao nao ha lado escondido; julgue o lado cheio pelo que ele e, ' +
     'e diga isso no fecho.';
+}
+// A3-11 (H1): o lado antigo veio por outro nome; quem prepara fica sabendo qual.
+if (doHead.antigo) {
+  aviso += ' O arquivo foi renomeado: o lado antigo e ' + doHead.antigo + ' no HEAD (o git viu a troca de nome); ' +
+    'diga isso no fecho.';
+}
+if (pedidoComOutraCaixa) {
+  aviso += ' O caminho pedido (' + pedidoComOutraCaixa + ') difere do que o git guarda so na caixa das letras: ' +
+    'revisei ' + rel + ', o mesmo arquivo neste disco.';
 }
 if (referencia) {
   // D503/D508: o texto do aviso nomeia R.txt e invertida/; o brief do inspetor (Tarefa 3) diz o que fazer com eles.
@@ -785,13 +904,13 @@ if (tiposSemEste) {
     'compara so A com B. Se este arquivo devia ser comparado, acrescente "' + tipoRef + '": ["<caminho>"] em referencias.';
 }
 if (identico) {
-  // L2-pre-2 (S7, D426): o identico sai da normalizacao; A.txt e B.txt seguem como estao no disco e no HEAD. Se
-  // diferem em fim de linha ou BOM, "o mesmo texto" seria falso e o inspetor ainda distingue os lados por esse resto.
-  const mesmoTexto = anterior === atual
-    ? 'A e B sao o mesmo texto'
-    : 'A e B tem o mesmo texto, mas diferem so no fim de linha ou na marca invisivel do inicio do arquivo, o BOM ' +
-      '(a diferenca nao e do codigo e pode denunciar qual lado e o do disco: ignore-a)';
-  aviso += ' O arquivo esta igual ao HEAD (revisar depois de commitar): nao ha lado antigo, ' + mesmoTexto +
+  // L2-pre-2 (S7, D426): o identico sai da normalizacao, e A.txt e B.txt tambem (A3-12a): sao o mesmo texto, mesmo
+  // quando o disco e o HEAD diferem so no fim de linha ou no BOM.
+  // A3-11: o renomeado sem mudanca (git mv puro) tambem cai aqui; ele nao foi commitado, so mudou de nome.
+  aviso += (doHead.antigo
+    ? ' O conteudo esta igual ao de ' + doHead.antigo + ' no HEAD (so o nome mudou): o lado antigo e o novo sao o ' +
+      'mesmo texto, entao A e B sao iguais'
+    : ' O arquivo esta igual ao HEAD (revisar depois de commitar): nao ha lado antigo, A e B sao o mesmo texto') +
     ' e nao ha lado escondido; o inspetor so pode julgar o arquivo pelo que ele e. O mapa.json leva ' +
     'identico:true e o apurar conta os achados dos dois rotulos como do lado atual.';
 }
@@ -833,9 +952,7 @@ const saida = {
 };
 if (recorte) saida.trecho = { margem: cegar.TRECHO_MARGEM };
 // F2c: com linhas do contrato a mostra nos vaos, quantas (nos dois lados); o briefing diz ao inspetor o que elas sao.
-if (recorte && contrato && contrato.extras[0].length + contrato.extras[1].length > 0) {
-  saida.trecho.extras = contrato.extras[0].length + contrato.extras[1].length;
-}
+if (extras > 0) saida.trecho.extras = extras;
 if (contrato && contrato.texto) saida.contrato = path.join(dir, 'contrato.txt');
 if (referencia) {
   saida.referencia = path.join(dir, 'R.txt');
@@ -877,4 +994,8 @@ if (inventarioJson) {
     'duas fotos' : '') + ') e o que sumiu no trabalho; o apurar-ronda.js diz o "mantido N/N" no fecho. Nao o mostre a ' +
     'nenhum inspetor.';
 }
-process.stdout.write(JSON.stringify(saida, null, 2) + '\n');
+const CAMPOS_DE_CAMINHO = ['base', 'a', 'b', 'regua', 'pedido', 'vereditos', 'contrato', 'referencia', 'arquivada', 'design',
+  'imagem', 'evidencia', 'caminho'];
+process.stdout.write(JSON.stringify(saida, function (chave, v) {
+  return typeof v === 'string' && CAMPOS_DE_CAMINHO.indexOf(chave) !== -1 ? comBarraNormal(v) : v;
+}, 2) + '\n');

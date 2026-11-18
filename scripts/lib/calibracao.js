@@ -9,23 +9,71 @@ const { LIMIARES_PADRAO } = require('./saude.js');
 // mede o custo por faixa de contexto e simula a troca de chat no fim de turno do dono para cada limiar
 // candidato. So numeros saem daqui: nenhum texto de conversa entra no resultado.
 
-// US$ por milhao: entrada, saida, leitura de cache, escrita de 5 min, escrita de 1 h (skill claude-api, tabela
-// de 2026-10-06, a mesma da D464). Modelo fora da tabela nao entra na conta e aparece em `semPreco`.
+const K = 1000;
+
+// US$ por milhao: entrada, saida, leitura de cache, escrita de 5 min, escrita de 1 h. A6-03: a tabela inteira da pagina
+// de precos da Anthropic (platform.claude.com/docs/en/about-claude/pricing), lida em 2026-11-18, com os modelos
+// antigos que ainda aparecem nas transcricoes. Modelo fora da tabela nao entra na conta e aparece em `semPreco`.
 const PRECOS = {
+  'claude-fable-5-2': [8, 40, 0.20, 10, 16],
+  'claude-mythos-5-2': [8, 40, 0.20, 10, 16],
+  'claude-fable-5-1': [10, 50, 0.25, 12.5, 20],
+  'claude-mythos-5-1': [10, 50, 0.25, 12.5, 20],
+  'claude-fable-5': [10, 50, 1, 12.5, 20],
+  'claude-mythos-5': [10, 50, 1, 12.5, 20],
   'claude-opus-5-5': [4, 20, 0.20, 5, 8],
   'claude-opus-5': [5, 25, 0.50, 6.25, 10],
-  'claude-sonnet-5-5': [2, 10, 0.20, 2.5, 4],
+  'claude-opus-4-8': [5, 25, 0.50, 6.25, 10],
+  'claude-opus-4-7': [5, 25, 0.50, 6.25, 10],
+  'claude-opus-4-6': [5, 25, 0.50, 6.25, 10],
+  'claude-opus-4-5': [5, 25, 0.50, 6.25, 10],
+  'claude-opus-4-1': [15, 75, 1.50, 18.75, 30],
+  'claude-opus-4-0': [15, 75, 1.50, 18.75, 30],
+  'claude-opus-4': [15, 75, 1.50, 18.75, 30],
+  'claude-sonnet-5-5': [2, 10, 0.10, 2.5, 4],
   'claude-sonnet-5': [2, 10, 0.20, 2.5, 4],
-  'claude-fable-5-1': [10, 50, 0.25, 12.5, 20],
-  'claude-haiku-5-5': [0.1, 0.5, 0.01, 0.125, 0.2]
+  'claude-sonnet-4-6': [3, 15, 0.30, 3.75, 6],
+  'claude-sonnet-4-5': [3, 15, 0.30, 3.75, 6],
+  'claude-sonnet-4-0': [3, 15, 0.30, 3.75, 6],
+  'claude-sonnet-4': [3, 15, 0.30, 3.75, 6],
+  'claude-haiku-5-5': [0.1, 0.5, 0.01, 0.125, 0.2],
+  'claude-haiku-4-5': [1, 5, 0.10, 1.25, 2]
+};
+// A6-03: o Haiku 5.5 cobra mais pela chamada inteira quando o prompt passa de 100.000 tokens; o prompt conta a
+// entrada, a leitura e a escrita de cache, e cada chamada se mede sozinha (mesma pagina de precos).
+const PRECO_POR_PROMPT = {
+  'claude-haiku-5-5': { acimaDe: 100 * K, preco: [0.5, 2.5, 0.05, 0.625, 1] }
 };
 
-const K = 1000;
+/**
+ * O preco de uma chamada, que depende do `usage` dela (o Haiku 5.5 acima de 100 mil). O id com data no fim
+ * (`claude-haiku-4-5-20251001`) usa o do apelido; modelo sem preco, undefined.
+ */
+function precoDaChamada(modelo, u) {
+  const nome = String(modelo).replace(/-\d{8}$/, '');
+  if (!Object.hasOwn(PRECOS, nome)) return undefined;
+  const faixa = Object.hasOwn(PRECO_POR_PROMPT, nome) ? PRECO_POR_PROMPT[nome] : null;
+  const uso = u || {};
+  const prompt = (uso.input_tokens || 0) + (uso.cache_read_input_tokens || 0) + (uso.cache_creation_input_tokens || 0);
+  return faixa && prompt > faixa.acimaDe ? faixa.preco : PRECOS[nome];
+}
 // a ultima faixa e aberta (500K ou mais)
 const FAIXAS = [0, 50, 100, 150, 200, 300, 500].map(function (x) { return x * K; });
-// de 25K em 25K, de 150K ate abaixo do alarme: acima dele a troca ja e ordem, nao limiar
-const CANDIDATOS = [];
-for (let t = 150 * K; t < LIMIARES_PADRAO.tokensAlarme; t += 25 * K) CANDIDATOS.push(t);
+// de 25K em 25K, de 150K ate abaixo do alarme: acima dele a troca ja e ordem, nao limiar. A6-08: o alarme e o do
+// projeto quando o calibrar.js o passa (o --gravar recusa limiar no alarme ou acima); sem ele, ou com um valor que nao e
+// numero finito acima de zero, o padrao do plugin (o calibrar.js ja descarta o alarme invalido do projeto.json).
+const INICIO_DA_SIMULACAO = 150 * K;
+// a janela de contexto dos modelos de 1M: nenhuma conversa passa dela, e o alarme enorme (ou Infinity, que o
+// JSON.parse de 1e999 da) nao vira milhoes de limiares para simular
+const JANELA_DE_CONTEXTO = 1000 * K;
+function candidatosAbaixoDe(alarme) {
+  const ate = Number.isFinite(alarme) && alarme > 0 ? Math.min(alarme, JANELA_DE_CONTEXTO) : LIMIARES_PADRAO.tokensAlarme;
+  const lista = [];
+  for (let t = INICIO_DA_SIMULACAO; t < ate; t += 25 * K) lista.push(t);
+  return lista;
+}
+// a lista com o alarme padrao do plugin; o calibrar() simula candidatosAbaixoDe(opcoes.alarme), que pode ser outra
+const CANDIDATOS = candidatosAbaixoDe(LIMIARES_PADRAO.tokensAlarme);
 // abaixo disto a simulacao nao diz nada sobre o projeto, e fica o padrao da D749
 const AMOSTRA_MINIMA = { sessoes: 30, conversasNoPadrao: 10, trocasMedidas: 10 };
 // D749 (P11): medido em 104 sessoes do autor, 2026-10-27 a 11-02 (US$ 0,86 por troca em 100 handoffs; o chat novo
@@ -117,13 +165,14 @@ function lerSessao(texto) {
     if (o.type === 'assistant') {
       let k = SEM_CHAMADA;
       if (m.usage && m.model && m.model !== '<synthetic>') {
-        k = porId.has(m.id) ? porId.get(m.id) : AINDA_NAO_VISTA;
+        // A6-06: so o id que existe junta as linhas, como o temId do gasto.js. A mensagem sem id (ou de id vazio) fica
+        // fora do mapa e nao se junta a nenhuma: todas cairiam na mesma chave e virariam uma chamada so.
+        const temId = typeof m.id === 'string' && m.id !== '';
+        k = temId && porId.has(m.id) ? porId.get(m.id) : AINDA_NAO_VISTA;
         if (k === AINDA_NAO_VISTA) {
-          const preco = PRECOS[m.model];
+          const preco = precoDaChamada(m.model, m.usage);
           if (preco) { k = chamadas.length; chamadas.push(novaChamada(m.usage, preco, t)); } else { k = SEM_CHAMADA; semPreco++; }
-          // a mensagem sem id fica fora do mapa e nao se junta a nenhuma: todas cairiam na chave undefined e virariam
-          // uma chamada so
-          if (m.id !== undefined && m.id !== null) porId.set(m.id, k);
+          if (temId) porId.set(m.id, k);
         }
       }
       for (const b of Array.isArray(m.content) ? m.content : []) {
@@ -273,6 +322,10 @@ function escolher(linhas) {
 const r1 = function (x) { return Math.round(x * 10) / 10; };
 const r3 = function (x) { return Math.round(x * 1000) / 1000; };
 
+// a contagem de tokens no texto do motivo, como nas faixas: 150000 vira 150K; o que nao e mil redondo fica como veio,
+// para o alarme de 400 nao aparecer como 0K
+function emK(n) { return n % K === 0 ? n / K + 'K' : String(n); }
+
 function nomeDaFaixa(i) {
   return FAIXAS[i] / K + '-' + (i + 1 < FAIXAS.length ? FAIXAS[i + 1] / K : '+') + 'K';
 }
@@ -294,7 +347,10 @@ function resumoDasParadas(sessoes) {
   };
 }
 
-/** O relatorio inteiro. `opcoes.limiarAtual`: o que o projeto.json do projeto usa hoje (padrao, sem ele). */
+/**
+ * O relatorio inteiro. `opcoes.limiarAtual`: o que o projeto.json do projeto usa hoje (padrao, sem ele).
+ * `opcoes.alarme`: o alarme do projeto, onde a simulacao para (padrao do plugin, sem ele).
+ */
 function calibrar(sessoes, opcoes) {
   const o = opcoes || {};
   const segs = segmentar(sessoes);
@@ -314,7 +370,7 @@ function calibrar(sessoes, opcoes) {
   });
 
   const troca = custoDaTroca(sessoes);
-  const linhas = CANDIDATOS.map(function (T) {
+  const linhas = candidatosAbaixoDe(o.alarme).map(function (T) {
     const x = simular(segs, T, troca.custo, troca.recomeco);
     return { T: T, conversasQueAlcancam: alcance(T), trocas: x.trocas, delta: x.delta };
   });
@@ -322,10 +378,32 @@ function calibrar(sessoes, opcoes) {
   const padrao = LIMIARES_PADRAO.tokensDeContexto;
   const noPadrao = alcance(padrao);
   let sugestao;
-  if (sessoes.length < AMOSTRA_MINIMA.sessoes || noPadrao < AMOSTRA_MINIMA.conversasNoPadrao || !(total > 0)) {
+  const faltas = [];
+  if (sessoes.length < AMOSTRA_MINIMA.sessoes) {
+    faltas.push(sessoes.length + (sessoes.length === 1 ? ' sessao' : ' sessoes') + ', de ' + AMOSTRA_MINIMA.sessoes +
+      ' no minimo');
+  }
+  if (noPadrao < AMOSTRA_MINIMA.conversasNoPadrao) {
+    faltas.push(noPadrao + (noPadrao === 1 ? ' conversa chegou' : ' conversas chegaram') + ' a ' + emK(padrao) + ', de ' +
+      AMOSTRA_MINIMA.conversasNoPadrao + ' no minimo');
+  }
+  if (!linhas.length) {
+    // A6-08: alarme do projeto no inicio da simulacao ou abaixo nao deixa limiar para simular; o reduce do escolher
+    // quebraria. Vem antes da amostra: esperar mais semanas nao resolve, e o passo e subir o alarme.
+    sugestao = { tokensDeContexto: typeof o.limiarAtual === 'number' ? o.limiarAtual : padrao, suficiente: false,
+      motivo: 'o alarme deste projeto (' + emK(o.alarme) + ') nao passa do ponto onde a simulacao comeca (' +
+        emK(INICIO_DA_SIMULACAO) + '): nao ha limiar abaixo dele para comparar e fica o que vale hoje. Para calibrar, ' +
+        'suba limiares.tokensAlarme no projeto.json para acima de ' + INICIO_DA_SIMULACAO };
+  } else if (faltas.length) {
     sugestao = { tokensDeContexto: padrao, suficiente: false,
-      motivo: 'amostra pequena: ' + sessoes.length + ' sessoes (minimo ' + AMOSTRA_MINIMA.sessoes + ') e ' + noPadrao +
-        ' conversas chegaram a ' + padrao + ' (minimo ' + AMOSTRA_MINIMA.conversasNoPadrao + '); fica o padrao do plugin' };
+      motivo: 'amostra pequena: ' + faltas.join('; ') + '. Fica o padrao do plugin. Rode de novo depois de mais ' +
+        'algumas semanas de uso' };
+  } else if (!(total > 0)) {
+    // amostra grande de custo zero: o lerSessao ja tira a chamada sem preco, entao so chega aqui chamada de preco
+    // zero; sem custo, a porcentagem da simulacao dividiria por zero
+    sugestao = { tokensDeContexto: padrao, suficiente: false,
+      motivo: 'as chamadas da amostra somam custo zero, e sem custo nao ha o que comparar. Fica o padrao do plugin. ' +
+        'Confira se as transcricoes da pasta trazem os tokens de cada chamada (o campo usage)' };
   } else {
     sugestao = Object.assign({ suficiente: true }, escolher(linhas));
   }
@@ -367,5 +445,5 @@ function pastaDasTranscricoes(raiz, env, casa) {
 
 module.exports = {
   PRECOS, CANDIDATOS, AMOSTRA_MINIMA, TROCA_PADRAO, QUEDA_DE_COMPACTACAO, PISO_DA_COMPACTACAO, novaChamada, lerSessao, lerPasta,
-  segmentar, custoDaTroca, simular, escolher, calibrar, nomeDaPasta, pastaDasTranscricoes
+  segmentar, custoDaTroca, simular, escolher, calibrar, nomeDaPasta, pastaDasTranscricoes, precoDaChamada, candidatosAbaixoDe
 };
