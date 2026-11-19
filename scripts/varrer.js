@@ -35,6 +35,11 @@ const leituras = [];
 if (leuPackage) leituras.push('o package.json, para achar o script de teste');
 if (projeto) leituras.push('o .claude/sworn/projeto.json, para saber o que o projeto declarou');
 if (doAmbiente.length) leituras.push(emLista(doAmbiente) + ', para detectar o ambiente');
+// H9-3: a frase nomeia as leituras que houve (D423), e o .claude.json da maquina tambem e uma
+const claudeJson = require('./lib/ambiente.js').caminhoDoClaudeJson(process.env);
+const rotuloClaudeJson = require('./lib/ambiente.js').rotuloDoClaudeJson(process.env);
+// a leitura, e nao o existsSync, responde pela frase: a pasta ou o arquivo sem permissao chamados .claude.json nao foram lidos
+if (leuArquivo(path.dirname(claudeJson), path.basename(claudeJson))) leituras.push('o ' + rotuloClaudeJson + ', so os nomes dos servidores MCP');
 leituras.push('os arquivos de instrucao do projeto, so para contar linhas');
 
 const saida = {
@@ -56,7 +61,7 @@ const saida = {
     // abre os arquivos de instrucao para contar linhas. A frase nomeia as leituras que houve.
     observacao: 'a varredura lista caminhos; de conteudo, le ' + emLista(leituras)
   },
-  ambiente: require('./lib/ambiente.js').detectar(cwd),
+  ambiente: require('./lib/ambiente.js').detectar(cwd, { claudeJson: claudeJson, rotuloClaudeJson: rotuloClaudeJson }),
   instrucoes: require('./lib/instrucoes.js').contar(cwd, projeto || {}, projeto ? undefined : inferido.candidatosCanonicos),
   inferido: inferido
 };

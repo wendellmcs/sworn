@@ -2220,3 +2220,193 @@ test('A3-06: pelo CLI, a saida traz achadosAindaAbertos, e o motivo diz quantos 
     assert.deepStrictEqual(rodar(['--sessao', 'aberto0'], cwd, tmp).json.achadosAindaAbertos, []);
   });
 });
+
+// H9-14 (D851, D881): a chave gravidade, desligada por padrao, corta as melhorias acima do teto por ronda
+test('H9-14: pelo CLI, com a chave gravidade ligada, a ronda guarda so as primeiras melhorias; sem ela, todas', () => {
+  const tres = { lente: 'correcao', melhor: 'B', achados: [3, 5, 7].map(function (n) {
+    return { estado: 'confirmado', trecho: 'x', severidade: 'P2', tipo: 'melhoria', arquivo: 'A.txt', linha: n,
+      descricao: 'nome melhor na linha ' + n };
+  }) };
+  comRepo((cwd, tmp) => {
+    gravarNaBaseComFaixa(cwd, 1, 'uma', [tres]);
+    const r = rodar(['--sessao', 'sem', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.strictEqual(r.json.registros.length, 3, r.stdout);
+    assert.strictEqual(r.json.bagatelasCortadas, undefined, 'sem a chave nada muda');
+  });
+  comRepo((cwd, tmp) => {
+    fs.mkdirSync(path.join(cwd, '.claude', 'sworn'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'projeto.json'),
+      JSON.stringify({ gravidade: { ligada: true, bagatelasPorRonda: 1 } }), 'utf8');
+    gravarNaBaseComFaixa(cwd, 1, 'uma', [tres]);
+    const r = rodar(['--sessao', 'com', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.deepStrictEqual(r.json.registros.map(function (a) { return a.linha; }), [3], r.stdout);
+    assert.strictEqual(r.json.bagatelasCortadas, 2);
+    assert.match(r.json.motivo, /2 melhoria\(s\) acima de 1 por ronda ficaram fora dos registros \(contadas em bagatelasCortadas\): para guarda-las, desligue "gravidade" no \.claude\/sworn\/projeto\.json/);
+    assert.ok(r.json.aprovado, 'cortar a bagatela nao muda o veredito');
+  });
+  // desligada, ou torta (no interruptor ou no numero), vale como hoje: nada se corta
+  const comoHoje = [
+    { ligada: false, bagatelasPorRonda: 1 },
+    { ligada: 'sim', bagatelasPorRonda: 1 },
+    { ligada: true, bagatelasPorRonda: 0 },
+    { ligada: true, bagatelasPorRonda: -1 },
+    { ligada: true, bagatelasPorRonda: '1' }
+  ];
+  comoHoje.forEach(function (gravidade, i) {
+    comRepo((cwd, tmp) => {
+      fs.mkdirSync(path.join(cwd, '.claude', 'sworn'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'projeto.json'),
+        JSON.stringify({ gravidade: gravidade }), 'utf8');
+      gravarNaBaseComFaixa(cwd, 1, 'uma', [tres]);
+      const r = rodar(['--sessao', 'hoje' + i, '--arquivo', 'src/a.js'], cwd, tmp);
+      assert.strictEqual(r.status, 0, JSON.stringify(gravidade) + ' ' + r.stdout);
+      assert.strictEqual(r.json.registros.length, 3, JSON.stringify(gravidade) + ' ' + r.stdout);
+      assert.strictEqual(r.json.bagatelasCortadas, undefined, JSON.stringify(gravidade));
+      assert.doesNotMatch(r.json.motivo, /bagatelasCortadas/, JSON.stringify(gravidade));
+    });
+  });
+});
+
+// L3-s105-6: a conferencia depois do teto. Tres rondas com P1 novo cada uma fecham no teto com a lista do que segurou
+// ronda no fechada.json; a ronda 4, com `conferencia` no mapa.json, se apura pelas respostas das lentes.
+function tetoComSeguraram(cwd, tmp) {
+  for (const n of [1, 2, 3]) {
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', n, [{ lente: 'correcao', melhor: 'B', achados: [{ estado: 'confirmado',
+      trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: n * 10, descricao: 'quebra ' + n }] }]);
+  }
+  const r = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+  assert.strictEqual(r.status, 0, r.stdout);
+  const fechada = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+  return { r: r, fechada: fechada };
+}
+function gravarConferencia(cwd, abertos, respostas, ladoA) {
+  const dir = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', '4');
+  fs.mkdirSync(path.join(dir, 'vereditos'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify({ arquivo: 'src/a.js', mapa: { A: 'trabalho', B: 'HEAD' },
+    conferencia: { abertos: abertos, lentes: ['correcao'] } }), 'utf8');
+  fs.writeFileSync(path.join(dir, 'A.txt'), ladoA || 'x\n', 'utf8');
+  if (respostas) {
+    fs.writeFileSync(path.join(dir, 'vereditos', 'correcao.json'),
+      JSON.stringify({ lente: 'correcao', conferencia: respostas }), 'utf8');
+  }
+}
+
+test('L3-s105-6: o teto guarda o que segurou ronda, e a conferencia com tudo corrigido aprova sem contar outro fecho', () => {
+  comTmp((tmp) => {
+    const cwd = comum.repo(comum.pasta('apurar-conf'), { 'src/a.js': 'um\n' });
+    const t = tetoComSeguraram(cwd, tmp);
+    assert.strictEqual(t.r.json.aprovado, false, t.r.stdout);
+    assert.strictEqual(t.fechada.aprovado, false);
+    assert.deepStrictEqual(t.fechada.seguraram.map((a) => [a.ronda, a.linha, a.lente]), [[1, 10, "correcao"], [2, 20, "correcao"], [3, 30, "correcao"]], JSON.stringify(t.fechada));
+    assert.ok(t.fechada.seguraram.every((a) => a.lente === 'correcao' && a.severidade === 'P1' && Number.isInteger(a.ronda)),
+      JSON.stringify(t.fechada.seguraram));
+    assert.strictEqual(t.fechada.conferencia, undefined);
+    const contadas = t.r.json.revisaoFechadaContada.revisao_fechada;
+    const abertos = t.fechada.seguraram.map((a, i) => Object.assign({ id: i + 1 }, a));
+    gravarConferencia(cwd, abertos, abertos.map((a) => ({ id: a.id, corrigido: true })));
+    const c = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(c.status, 0, c.stdout);
+    assert.strictEqual(c.json.aprovado, true, c.stdout);
+    assert.strictEqual(c.json.ronda, 4, c.stdout);
+    assert.match(c.json.motivo, /^conferencia depois do teto: os \d+ achado\(s\) que seguraram ronda estao corrigidos: aprovado$/);
+    assert.strictEqual(c.json.conferencia.corrigidos, abertos.length, c.stdout);
+    assert.deepStrictEqual(c.json.conferencia.seguem, []);
+    const abs = path.resolve(cwd, 'src/a.js');
+    assert.deepStrictEqual(estadoDe(tmp, 'conf').revisadosAprovados, [abs]);
+    assert.deepStrictEqual(estadoDe(tmp, 'conf').revisadosNoTeto || {}, {}, 'a aprovacao tira a marca do teto');
+    assert.strictEqual(c.json.revisaoFechadaContada.revisao_fechada, contadas, 'a conferencia nao conta outro fecho');
+    const fecho = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+    assert.strictEqual(fecho.conferencia, true);
+    assert.strictEqual(fecho.aprovado, true);
+    assert.strictEqual(fecho.seguraram, undefined);
+  });
+});
+
+test('L3-s105-6: na conferencia, o achado que segue aberto (com o trecho no lado novo) nao aprova e fica no fechada.json', () => {
+  comTmp((tmp) => {
+    const cwd = comum.repo(comum.pasta('apurar-conf-segue'), { 'src/a.js': 'um\n' });
+    const t = tetoComSeguraram(cwd, tmp);
+    const abertos = t.fechada.seguraram.map((a, i) => Object.assign({ id: i + 1 }, a));
+    const respostas = abertos.map((a) => ({ id: a.id, corrigido: true }));
+    respostas[0] = { id: 1, corrigido: false, linha: 2, trecho: 'ainda quebra' };
+    gravarConferencia(cwd, abertos, respostas, 'linha um\nainda quebra aqui\nlinha tres\n');
+    const c = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(c.status, 0, c.stdout);
+    assert.strictEqual(c.json.aprovado, false, c.stdout);
+    assert.strictEqual(c.json.encerrar, true, c.stdout);
+    assert.strictEqual(c.json.conferencia.seguem.length, 1, c.stdout);
+    assert.match(c.json.motivo, /^conferencia depois do teto: 1 de \d+ achado\(s\) seguem abertos/);
+    assert.match(c.json.motivo, /"# sworn: sem-revisao"/);
+    assert.strictEqual(estadoDe(tmp, 'conf').revisadosAprovados, undefined, 'segue aberto nao aprova');
+    const fecho = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+    assert.strictEqual(fecho.conferencia, true);
+    assert.strictEqual(fecho.seguraram.length, 1);
+    // o trecho que nao esta perto da linha citada no lado novo e resposta torta: ERRO, nada se apura
+    respostas[0] = { id: 1, corrigido: false, linha: 2, trecho: 'texto que nao existe' };
+    gravarConferencia(cwd, abertos, respostas, 'linha um\nainda quebra aqui\nlinha tres\n');
+    const torta = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(torta.status, 1, torta.stdout);
+    assert.match(torta.stdout, /conferencia incompleta/);
+  });
+});
+
+test('L3-s105-6: a conferencia sem veredito, ou com um id sem resposta, e ERRO e nao mexe no fecho', () => {
+  comTmp((tmp) => {
+    const cwd = comum.repo(comum.pasta('apurar-conf-falta'), { 'src/a.js': 'um\n' });
+    const t = tetoComSeguraram(cwd, tmp);
+    const abertos = t.fechada.seguraram.map((a, i) => Object.assign({ id: i + 1 }, a));
+    gravarConferencia(cwd, abertos, null);
+    const semVeredito = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(semVeredito.status, 1, semVeredito.stdout);
+    assert.match(semVeredito.stdout, /ainda nao tem veredito/);
+    gravarConferencia(cwd, abertos, []);
+    const falta = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(falta.status, 1, falta.stdout);
+    assert.match(falta.stdout, /conferencia incompleta/);
+    const fecho = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+    assert.deepStrictEqual(fecho, t.fechada, 'o ERRO nao regrava o fechada.json');
+  });
+});
+
+test('L3-s105-6: a conferencia sem o fecho no teto, ou sem achado a conferir, e ERRO; a degradada diz DEGRADADO', () => {
+  comTmp((tmp) => {
+    const cwd = comum.repo(comum.pasta('apurar-conf-guarda'), { 'src/a.js': 'um\n' });
+    // so a ronda 1 de lentes, sem fecho: a chave conferencia no mapa.json nao aprova nada
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]);
+    const dir = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', '2');
+    fs.mkdirSync(path.join(dir, 'vereditos'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify({ arquivo: 'src/a.js', mapa: { A: 'trabalho', B: 'HEAD' },
+      conferencia: { abertos: [{ id: 1, lente: 'correcao' }], lentes: ['correcao'] } }), 'utf8');
+    fs.writeFileSync(path.join(dir, 'vereditos', 'correcao.json'),
+      JSON.stringify({ lente: 'correcao', conferencia: [{ id: 1, corrigido: true }] }), 'utf8');
+    const semFecho = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(semFecho.status, 1, semFecho.stdout);
+    assert.match(semFecho.stdout, /e de conferencia, mas .+fechada\.json nao registra o fecho no teto/);
+    // o fechada.json presente e quebrado para com a causa, nao com "nao registra o fecho"
+    const arqFechada = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json');
+    fs.writeFileSync(arqFechada, '{ "ronda": 3, ', 'utf8');
+    const quebrada = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(quebrada.status, 1, quebrada.stdout);
+    assert.match(quebrada.stdout, /fechada\.json ilegivel \(.+\)\. A conferencia .+ apague o fechada\.json/);
+    assert.doesNotMatch(quebrada.stdout, /nao registra o fecho/);
+    assert.strictEqual(fs.readFileSync(arqFechada, 'utf8'), '{ "ronda": 3, ', 'o ERRO nao regrava o fechada.json');
+  });
+  comTmp((tmp) => {
+    const cwd = comum.repo(comum.pasta('apurar-conf-vazia'), { 'src/a.js': 'um\n' });
+    const t = tetoComSeguraram(cwd, tmp);
+    gravarConferencia(cwd, [], [{ id: 1, corrigido: true }], 'x\n');
+    const vazia = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(vazia.status, 1, vazia.stdout);
+    assert.match(vazia.stdout, /nao traz a lista "conferencia\.abertos"/);
+    const abertos = t.fechada.seguraram.map((a, i) => Object.assign({ id: i + 1 }, a));
+    gravarConferencia(cwd, abertos, abertos.map((a) => ({ id: a.id, corrigido: true })), 'x\n');
+    const arq = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', '4', 'mapa.json');
+    fs.writeFileSync(arq, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(arq, 'utf8')), { degradado: 'sem isolamento' })), 'utf8');
+    const deg = rodar(['--sessao', 'conf', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(deg.status, 0, deg.stdout);
+    assert.strictEqual(deg.json.aprovado, true, deg.stdout);
+    assert.match(deg.json.motivo, /^DEGRADADO: sem isolamento\. conferencia depois do teto/);
+  });
+});

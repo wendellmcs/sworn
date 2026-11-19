@@ -184,6 +184,12 @@ serves which role, and how much they are willing to pay. With the facts in hand,
    retire, not verdicts: a 200-day-old rule that still holds is kept with a reason.
 4. **Outside the rubric.** Items that violate `modelos/boa-skill.md` in the mechanical part.
 5. **Delegable.** What another installed plugin already solves and this project reimplemented.
+
+   5b. **MCP servers outside `.mcp.json`.** The `mcpForaDoProjeto` key, names only, from `~/.claude.json`:
+   `usuario` (they load in every project) and `local` (only here). List both: each server's tool list costs context
+   in every session, and one that nothing here uses is a candidate to remove (`claude mcp remove <name> -s user` or
+   `-s local`), never removed by you. An empty list is "none configured there", not "not measured": a file that
+   could not be read shows in its `naoLidos`: say it, then the list is "not measured".
 6. **Scar.** For each instruction item: is there a decision, incident or finding behind it?
    A rule without a scar is opinion, and opinion doesn't survive disagreement.
 

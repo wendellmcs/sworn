@@ -3,7 +3,7 @@
 // codigo inteiros pelo modelo, sem diff; aqui o script cruza os arquivos mudados desde a base com os caminhos e as
 // caixas do plano: o arquivo mudado que o plano nao cita, a caixa feita cujo arquivo nao mudou, e o arquivo que a caixa
 // feita dizia criar e nao existe.
-const { EXTENSAO, virarCerca } = require('./plano-conferir.js');
+const { EXTENSAO, virarCerca, requisitos } = require('./plano-conferir.js');
 
 const CRASE = /`([^`\n]+)`/g;
 const CAIXA = /^(\s*)- \[([ xX])\]\s/;
@@ -52,7 +52,7 @@ function casa(mudado, citado) {
 
 /**
  * O drift: { mudados, noPlano, achados: [{ tipo, valor, linha, motivo }] }; tipos: fora-do-plano (linha null),
- * feita-sem-mudanca, criar-ausente. entrada: { texto, mudados (caminhos do repositorio), existe(caminho), plano }.
+ * feita-sem-mudanca, criar-ausente, requisito-sem-mudanca. entrada: { texto, mudados (caminhos do repositorio), existe(caminho), plano }.
  */
 function drift(entrada) {
   // sem a funcao existe, nada existe: a pasta de cima nao confirma caminho e o "criar" sai ausente
@@ -73,6 +73,18 @@ function drift(entrada) {
     achados.push({ tipo: ausente ? 'criar-ausente' : 'feita-sem-mudanca', valor: c.t, linha: c.linha,
       motivo: ausente ? 'a caixa feita dizia criar o arquivo e ele nao existe: crie o arquivo, ou reabra a caixa'
         : 'a caixa esta feita e o arquivo nao mudou desde a base: reabra a caixa, ou corrija o caminho no plano' });
+  });
+  // H9-13 (D881): o requisito com todos os passos feitos e nenhum arquivo deles mudado desde a base (ou passos feitos
+  // que nao citam arquivo nenhum): feito no papel, sem rastro no codigo
+  const req = requisitos(entrada.texto);
+  Object.keys(req.definidos).forEach(function (n) {
+    const passos = req.caixas.filter(function (c) { return c.refs.indexOf(n) !== -1; });
+    if (!passos.length || passos.some(function (c) { return c.estado !== 'feita'; })) return;
+    const doR = cit.filter(function (c) { return passos.some(function (p) { return p.linha === c.linha && c.caixa; }); });
+    if (doR.some(function (c) { return mudados.some(function (m) { return casa(m, c.t); }); })) return;
+    achados.push({ tipo: 'requisito-sem-mudanca', valor: 'R' + n, linha: req.definidos[n],
+      motivo: 'os passos do requisito estao feitos e nenhum arquivo deles mudou desde a base: cite na caixa o arquivo ' +
+        'que o cumpre, ou reabra a caixa' });
   });
   return { mudados: mudados.length, noPlano: noPlano, achados: achados };
 }

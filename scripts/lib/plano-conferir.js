@@ -94,9 +94,101 @@ function conferirComando(t, raiz) {
   return null;
 }
 
+// H9-13 (D881, curso AI-native SDLC): os requisitos numerados. A definicao e a linha que comeca por "R<n>:" (ou
+// "R<n>." / "R<n> -"), com marcador de lista (tambem numerada), citacao, titulo ou negrito opcionais: "- **R1:** o
+// login expira em 30 min". O "." e o "-" so separam com espaco depois: "R2.0 sai em maio" e "R2-D2" nao definem nada.
+// O passo e a caixa (- [ ] ou - [x]); a citacao e o "R<n>" na linha dela ou na continuacao, fora de crase (o
+// `docs/R2.md` e caminho, nao citacao).
+const DEF_REQUISITO = /^R(\d+)\s*(?:[:—]|[.-](?=\s))\s*\S/;
+// a citacao segue a regra da definicao: "R2.0" e "R2-D2" nao citam o R2; "R2." e "R2," no fim da frase citam, e a
+// faixa "R1-R3" cita as duas pontas
+const CITA_REQUISITO = /\bR(\d+)(?!\w|\.\w|-(?!R\d)\w)/g;
+const CAIXA = /^(\s*)- \[([ xX])\]\s/;
+
+/**
+ * Os requisitos do plano e as caixas que os citam, fora dos blocos de codigo: { definidos: { n: linha }, caixas:
+ * [{ linha, estado: 'aberta' | 'feita', refs: [n] }] }. Usado pela conferencia (R sem passo, passo sem R) e pelo
+ * drift (R com todos os passos feitos e nenhum arquivo deles mudado).
+ */
+function requisitos(texto) {
+  const linhas = String(texto).replace(/\r\n?/g, '\n').split('\n');
+  const definidos = {};
+  const duplicados = [];
+  const caixas = [];
+  // o numero sem zero a esquerda: "R01" e "R1" sao o mesmo requisito
+  const num = function (s) { return String(parseInt(s, 10)); };
+  let cerca = null;
+  let caixa = null;
+  linhas.forEach(function (l, i) {
+    const nova = virarCerca(cerca, l);
+    if (nova !== undefined) { cerca = nova; caixa = null; return; }
+    if (cerca !== null) return;
+    const m = CAIXA.exec(l);
+    if (m) {
+      caixa = { recuo: m[1].length, linha: i + 1, estado: m[2] === ' ' ? 'aberta' : 'feita', refs: [] };
+      caixas.push(caixa);
+    } else if (caixa && (!l.trim() || ITEM.test(l) || l.search(/\S/) <= caixa.recuo)) caixa = null;
+    if (caixa) {
+      let r;
+      const semCrase = l.replace(/`[^`]*`/g, '');
+      CITA_REQUISITO.lastIndex = 0;
+      while ((r = CITA_REQUISITO.exec(semCrase)) !== null) if (caixa.refs.indexOf(num(r[1])) === -1) caixa.refs.push(num(r[1]));
+      return;
+    }
+    const corpo = l.replace(/^\s*(?:>\s*)*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)?/, '').replace(/[*_]/g, '');
+    const d = DEF_REQUISITO.exec(corpo);
+    if (!d) return;
+    // a segunda definicao do mesmo numero nao some calada: vira achado, e a primeira e a que vale
+    if (Object.prototype.hasOwnProperty.call(definidos, num(d[1]))) duplicados.push({ n: num(d[1]), linha: i + 1 });
+    else definidos[num(d[1])] = i + 1;
+  });
+  return { definidos: definidos, duplicados: duplicados, caixas: caixas };
+}
+
+/**
+ * Os achados dos requisitos: plano-sem-requisitos, requisito-duplicado, requisito-sem-passo, passo-sem-requisito,
+ * requisito-inexistente.
+ */
+function conferirRequisitos(texto) {
+  const r = requisitos(texto);
+  const nums = Object.keys(r.definidos);
+  const achados = [];
+  if (!r.caixas.length && !nums.length) return achados;
+  if (!nums.length) {
+    achados.push({ tipo: 'plano-sem-requisitos', valor: 'R<n>', linha: r.caixas[0].linha,
+      motivo: 'o plano nao numera os requisitos: escreva cada um numa linha "R<n>: <o que tem de valer>" e ponha em ' +
+        'cada passo o R<n> do requisito que ele cumpre' });
+    return achados;
+  }
+  r.duplicados.forEach(function (d) {
+    achados.push({ tipo: 'requisito-duplicado', valor: 'R' + d.n, linha: d.linha,
+      motivo: 'o requisito ja foi definido na linha ' + r.definidos[d.n] + ': de outro numero a este, ou junte os dois' });
+  });
+  nums.forEach(function (n) {
+    if (r.caixas.some(function (c) { return c.refs.indexOf(n) !== -1; })) return;
+    achados.push({ tipo: 'requisito-sem-passo', valor: 'R' + n, linha: r.definidos[n],
+      motivo: 'nenhum passo cita o requisito: cite-o na caixa que o cumpre, ou tire-o do plano' });
+  });
+  // o valor e o texto do passo, como no caixa-sem-prova: a linha ja vai no campo linha
+  const linhasDoPlano = String(texto).replace(/\r\n?/g, '\n').split('\n');
+  r.caixas.forEach(function (c) {
+    if (c.estado === 'aberta' && !c.refs.length) {
+      achados.push({ tipo: 'passo-sem-requisito', valor: linhasDoPlano[c.linha - 1].trim(), linha: c.linha,
+        motivo: 'o passo nao diz qual requisito cumpre: ponha o R<n> dele na linha' });
+    }
+    c.refs.forEach(function (n) {
+      if (Object.prototype.hasOwnProperty.call(r.definidos, n)) return;
+      achados.push({ tipo: 'requisito-inexistente', valor: 'R' + n, linha: c.linha,
+        motivo: 'o passo cita um requisito que o plano nao define: defina-o numa linha "R' + n + ': ..." ou corrija o numero' });
+    });
+  });
+  return achados;
+}
+
 /**
  * Confere o plano contra o disco da raiz. { citados, conferidos, achados: [{ tipo, valor, linha, motivo }] }; tipos:
- * caminho-inexistente, simbolo-ausente, comando-sem-script, caixa-sem-prova. O bloco de codigo (```) fica de fora.
+ * caminho-inexistente, simbolo-ausente, comando-sem-script, caixa-sem-prova e os dos requisitos (conferirRequisitos).
+ * O bloco de codigo (```) fica de fora.
  * opcoes: { pasta } (a do plano: o plano irmao citado so pelo nome) e { arquivos } (os do repositorio, para o nome
  * curto como `saude.js` ou o caminho de fixture como `saida/util.js`).
  */
@@ -178,8 +270,9 @@ function conferir(texto, raiz, opcoes) {
         motivo: 'o passo nao traz o comando que o prova: ponha o comando entre crases na linha' });
     }
   });
+  Array.prototype.push.apply(achados, conferirRequisitos(texto));
   achados.sort(function (a, b) { return a.linha - b.linha; });
   return { citados: citados, conferidos: conferidos, achados: achados };
 }
 
-module.exports = { conferir, EXTENSAO, virarCerca };
+module.exports = { conferir, requisitos, EXTENSAO, virarCerca };

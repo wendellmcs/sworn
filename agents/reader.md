@@ -1,6 +1,7 @@
 ---
 name: reader
-description: Read-only agent for /sworn:parallel. Does a single read-only task (read, search, count, run a command that changes nothing) and returns the result with evidence. Opens light, without the project instructions. Use inside /sworn:parallel, never alone.
+description: Read-only agent for /sworn:parallel. Does a single read-only task (read, search, count, run a command that changes nothing) and returns the result with evidence. Opens light, without the project instructions. The task brings the exact paths and the command whose output proves the result. Use inside /sworn:parallel, never alone.
+maxTurns: 15
 tools: Read, Grep, Glob, Bash, PowerShell
 omitClaudeMd: true
 ---

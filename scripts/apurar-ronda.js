@@ -226,6 +226,20 @@ try {
 } catch (err) {
   falhar('ERRO: nao consegui ler as revisoes (' + textoLib.causaDoErro(err) + '). Confira a pasta citada e rode de novo.\n');
 }
+// L3-s105-6 (D872, D881): a ronda de conferencia depois do teto (o mapa.json dela traz `conferencia`) nao e ronda de
+// lentes: sai da lista e se apura a parte, por cima do fecho das rondas do teto.
+// So a ultima pasta pode ser a conferencia (ela e uma so): uma conferencia mais atras fica como ronda de lentes, e o
+// veredito dela, sem "melhor" nem "achados", para a apuracao com ERRO.
+let conferencia = null;
+if (pastas && pastas.length) {
+  const ultima = pastas[pastas.length - 1];
+  // o mapa.json ilegivel ou torto para aqui (lerMapaJson), como o de qualquer ronda
+  const m = lerMapaJson(base, ultima.name);
+  if (m && m.conferencia && typeof m.conferencia === 'object' && !Array.isArray(m.conferencia)) {
+    conferencia = { nome: ultima.name, mapa: m };
+    pastas.pop();
+  }
+}
 // Os caminhos das mensagens, os da base escolhida.
 const baseRel = relDoCwd(base);
 const arquivoRevisado = arquivoDaBase(base, pastas);
@@ -519,12 +533,102 @@ if (r.aprovado === true && descartados.length) {
   r.motivo += ', com ' + descartados.length + ' achado(s) descartado(s) por estar fora do formato: leia ' +
     'vereditosDescartados antes de dar por aprovado';
 }
+// L3-s105-6 (D872, D881): a ronda de conferencia vale por cima do fecho no teto. Cada lente diz, de cada achado que
+// segurou ronda, se o conserto o tirou; todos corrigidos = aprovado. A conferencia e uma so (o preparar recusa a
+// segunda): o que segue aberto volta ao caminho do teto.
+if (conferencia) {
+  const dirC = path.join(base, conferencia.nome);
+  const dirCRel = baseRel + '/' + conferencia.nome;
+  const mapaC = conferencia.mapa;
+  const nConf = parseInt(conferencia.nome, 10);
+  const refazerConf = ' Prepare a conferencia de novo (preparar-revisao.js --conferencia), depois de mover a pasta ' +
+    dirCRel + '/ para fora da base, e rode este comando de novo.\n';
+  // fail-closed: a conferencia so vale por cima do fecho no teto sem aprovar, gravado no fechada.json desta base (ou
+  // por cima dela mesma, ja apurada); sem esse fecho, a chave no mapa.json nao aprova nada
+  let previaC = null;
+  // ausente e "sem fecho" (o ERRO abaixo); presente e ilegivel para com a causa, como no fecho comum: o conselho de
+  // mover a pasta da conferencia seria errado para um fechada.json quebrado
+  const arqFechadaC = path.join(base, 'fechada.json');
+  if (fs.existsSync(arqFechadaC)) {
+    try { previaC = JSON.parse(textoLib.semBom(fs.readFileSync(arqFechadaC, 'utf8'))); } catch (err) {
+      falhar('ERRO: ' + baseRel + '/fechada.json ilegivel (' + err.message + '). A conferencia ' + dirCRel + ' so vale ' +
+        'por cima do fecho no teto que ele registra. Mova a pasta ' + dirCRel + '/ para fora da base, apague o ' +
+        'fechada.json e rode este comando de novo: a ronda do teto grava o fecho outra vez (e o conta outra vez). ' +
+        'Depois prepare a conferencia de novo (preparar-revisao.js --conferencia).\n');
+    }
+  }
+  const jaApurada = !!previaC && previaC.conferencia === true && previaC.ronda === nConf;
+  const doTeto = !!previaC && previaC.conferencia !== true && previaC.aprovado !== true &&
+    Number.isInteger(previaC.ronda) && previaC.ronda >= veredito.TETO && previaC.ronda < nConf;
+  if (!pastas.length || !(jaApurada || doTeto)) {
+    falhar('ERRO: a ronda ' + dirCRel + ' e de conferencia, mas ' + baseRel + '/fechada.json nao registra o fecho no ' +
+      'teto de ' + veredito.TETO + ' rondas sem aprovar que ela confere. Mova a pasta ' + dirCRel + '/ para fora da ' +
+      'base e siga a revisao pelas rondas de lentes.\n');
+  }
+  const abertosC = mapaC.conferencia.abertos;
+  if (!Array.isArray(abertosC) || !abertosC.length) {
+    falhar('ERRO: ' + dirCRel + '/mapa.json nao traz a lista "conferencia.abertos" com os achados a conferir.' + refazerConf);
+  }
+  const rotuloNovo = mapaC.mapa.A === 'trabalho' ? 'A' : mapaC.mapa.B === 'trabalho' ? 'B' : null;
+  if (!rotuloNovo) falhar('ERRO: ' + dirCRel + '/mapa.json nao diz qual lado e o trabalho.' + refazerConf);
+  // B2: a conferencia preparada com --degradado degrada a revisao, como a ronda de lentes
+  if (typeof mapaC.degradado === 'string' && mapaC.degradado.trim()) degradado = mapaC.degradado.trim();
+  let linhasNovas = null;
+  try { linhasNovas = textoLib.semBom(fs.readFileSync(path.join(dirC, rotuloNovo + '.txt'), 'utf8')).split(/\r?\n/); } catch (e) {
+    falhar('ERRO: nao consegui ler ' + dirCRel + '/' + rotuloNovo + '.txt (' + textoLib.causaDoErro(e) + '), o lado novo ' +
+      'onde o trecho do achado que segue aberto se confere.' + refazerConf);
+  }
+  const confere = function (linha, trecho) {
+    const perto = linhasNovas.slice(Math.max(0, linha - 1 - VIZINHAS), linha + VIZINHAS);
+    return semEspaco(perto.join('\n')).indexOf(semEspaco(trecho)) !== -1;
+  };
+  let nomes = [];
+  try { nomes = fs.readdirSync(path.join(dirC, 'vereditos')).filter(function (f) { return f.endsWith('.json'); }); } catch (e) {
+    if (!e || e.code !== 'ENOENT') {
+      falhar('ERRO: nao consegui ler ' + dirCRel + '/vereditos (' + textoLib.causaDoErro(e) + '). Confira essa pasta e ' +
+        'rode este comando de novo.\n');
+    }
+  }
+  if (!nomes.length) {
+    falhar('ERRO: a ronda de conferencia ' + dirCRel + ' ainda nao tem veredito. Grave em ' + dirCRel + '/vereditos/ ' +
+      'o de cada lente que o preparar-revisao.js listou e rode este comando de novo.\n');
+  }
+  const vereditosC = nomes.map(function (f) {
+    try { return JSON.parse(textoLib.semBom(fs.readFileSync(path.join(dirC, 'vereditos', f), 'utf8'))); } catch (e) {
+      return falhar('ERRO: ' + dirCRel + '/vereditos/' + f + ' nao e JSON valido (' + textoLib.causaDoErro(e) + '). ' +
+        'Chame a lente de novo e rode este comando de novo.\n');
+    }
+  });
+  let c;
+  try { c = veredito.apurarConferencia(mapaC.conferencia.abertos, vereditosC, confere); } catch (err) {
+    falhar('ERRO: ' + err.message + '. Chame de novo a lente da resposta que falta ou fora do formato, grave o veredito dela ' +
+      'em ' + dirCRel + '/vereditos/ e rode este comando de novo.\n');
+  }
+  r.ronda = parseInt(conferencia.nome, 10);
+  r.encerrar = true;
+  r.aprovado = c.aprovado;
+  r.conferencia = c;
+  r.novos = [];
+  r.achadosAindaAbertos = [];
+  r.motivo = c.aprovado
+    ? 'conferencia depois do teto: os ' + c.corrigidos + ' achado(s) que seguraram ronda estao corrigidos: aprovado'
+    : 'conferencia depois do teto: ' + c.seguem.length + ' de ' + (c.corrigidos + c.seguem.length) + ' achado(s) ' +
+      'seguem abertos (conferencia.seguem): conserte cada um com um teste que reprova quando o codigo e estragado de ' +
+      'proposito; com a suite inteira verde, o commit sai com "# sworn: sem-revisao" no fim do comando, sem perguntar; ' +
+      'a conferencia nao se repete';
+  // A3-05: o achado descartado das rondas do teto segue dito na aprovacao
+  if (c.aprovado && descartados.length) {
+    r.motivo += ', com ' + descartados.length + ' achado(s) descartado(s) por estar fora do formato: leia ' +
+      'vereditosDescartados antes de dar por aprovado';
+  }
+}
 // A3-17: a aprovacao e o booleano da apuracao, nao a palavra "aprovado" no motivo (texto livre, que o detector, o
 // inventario, os registros e o prefixo da degradada aumentam depois e podem trazer a palavra).
 const aprovou = r.aprovado === true;
 // E3 itens 3 e 4: os arquivos que o preparar-revisao.js grava na ultima ronda e nenhum inspetor abre. Ausente = nada
 // muda; ilegivel ou fora da forma = ERRO, como o refutados.json: o que ele diz nao some calado.
-const ultimaRonda = pastas[pastas.length - 1];
+// L3-s105-6: na conferencia, o detector e o inventario seriam os da ronda do teto, ja ditos no fecho dela
+const ultimaRonda = conferencia ? null : pastas[pastas.length - 1];
 function lerDaRonda(arquivo, ehValido, formato, semEle) {
   const caminho = ultimaRonda ? path.join(base, ultimaRonda.name, arquivo) : null;
   if (!caminho || !fs.existsSync(caminho)) return null;
@@ -565,14 +669,36 @@ if (inventario) {
   const frase = inventarioTela.fraseDoFecho(inventario);
   if (r.encerrar && frase) r.motivo += '; ' + frase;
 }
-// B2: a revisao degradada diz isso antes de tudo; o fecho cobra a mesma linha na resposta (o "aprovou" ja foi lido
-// acima, antes de todo texto acrescentado).
+// H9-14 (D851): com a chave gravidade ligada, cada ronda guarda nos registros so as primeiras melhorias, ate o teto;
+// as de cima saem contadas em `bagatelasCortadas`. A chave torta ou ausente vale como hoje (gravidade() da null).
+let gravidadeDoProjeto = null;
+// fail-open: o projeto.json que nao se le deixa a chave desligada, como sem ela
+try { gravidadeDoProjeto = require('./lib/projeto.js').gravidade(require('./lib/config.js').carregarProjeto(cwd)); } catch (e) { gravidadeDoProjeto = null; }
+if (gravidadeDoProjeto) {
+  const porRonda = {};
+  let cortadas = 0;
+  r.registros = r.registros.filter(function (a) {
+    if (a.registro !== 'melhoria') return true;
+    porRonda[a.ronda] = (porRonda[a.ronda] || 0) + 1;
+    if (porRonda[a.ronda] <= gravidadeDoProjeto.bagatelasPorRonda) return true;
+    cortadas++;
+    return false;
+  });
+  r.bagatelasCortadas = cortadas;
+  if (cortadas) {
+    r.motivo += '; ' + cortadas + ' melhoria(s) acima de ' + gravidadeDoProjeto.bagatelasPorRonda + ' por ronda ficaram ' +
+      'fora dos registros (contadas em bagatelasCortadas): para guarda-las, desligue "gravidade" no ' +
+      '.claude/sworn/projeto.json ou suba "gravidade.bagatelasPorRonda"';
+  }
+}
 // F2a (D828.2/.5): o que nao segurou a ronda (melhoria, achado em linha nova ou, A3-16, fora da mudanca) nao some no
 // fecho: vai para o plano.
 if (r.encerrar && r.registros.length) {
   r.motivo += '; ha ' + r.registros.length + ' achado(s) em "registros" (melhoria, linha nova ou fora da mudanca): ' +
     'copie-os para o registro do plano';
 }
+// B2: a revisao degradada diz isso antes de tudo; o fecho cobra a mesma linha na resposta (o "aprovou" ja foi lido
+// acima, antes de todo texto acrescentado).
 if (degradado) r.motivo = 'DEGRADADO: ' + degradado + '. ' + r.motivo;
 
 /**
@@ -615,8 +741,11 @@ if (r.encerrar) {
       // da o total da sessao pelo saude.acumular, a mesma conta que o gatilho de saude le.
       n = require('./lib/saude.js').acumular(estado.alterar(sessao, function (s) {
         s.contadores = s.contadores || {};
-        s.contadores.revisao_fechada = (s.contadores.revisao_fechada || 0) + 1;
-        if (r.referencia) s.contadores.revisao_referencia_fechada = (s.contadores.revisao_referencia_fechada || 0) + 1;
+        // L3-s105-6: a conferencia e a mesma revisao, ja contada no fecho do teto; nao conta como outra revisao fechada
+        if (!conferencia) {
+          s.contadores.revisao_fechada = (s.contadores.revisao_fechada || 0) + 1;
+          if (r.referencia) s.contadores.revisao_referencia_fechada = (s.contadores.revisao_referencia_fechada || 0) + 1;
+        }
         // Plano 091 (#1, D559): so o "aprovado" (nao o teto) libera o arquivo no portao do commit; o marcar-trabalho.js
         // o tira da lista quando ele e editado de novo.
         // F2a (D828.3): o fecho no teto marca o arquivo (com o blob dele no HEAD de agora) e o portao do commit troca a
@@ -642,12 +771,16 @@ if (r.encerrar) {
       falhar('ERRO: a revisao fechou, mas o fecho nao foi contado (' + err.message + '). Rode este comando de novo.\n');
     }
     try {
-      fs.writeFileSync(arqFechada, JSON.stringify({ ronda: r.ronda, sessao: sessao, motivo: r.motivo,
-        degradado: degradado }, null, 2),
-        'utf8');
+      // L3-s105-6: o fecho sem aprovar guarda o que segurou ronda (no teto) ou o que seguiu aberto (na conferencia),
+      // que o preparar-revisao.js --conferencia le; `conferencia` diz que ela ja rodou, e nao se repete
+      const fecho = { ronda: r.ronda, sessao: sessao, motivo: r.motivo, degradado: degradado, aprovado: aprovou };
+      if (conferencia) fecho.conferencia = true;
+      if (!aprovou) fecho.seguraram = conferencia ? r.conferencia.seguem : (r.seguraram || []);
+      fs.writeFileSync(arqFechada, JSON.stringify(fecho, null, 2), 'utf8');
     } catch (err) {
       falhar('ERRO: o fecho foi contado, mas ' + baseRel + '/fechada.json nao foi gravado (' + err.message + '). ' +
-        'Corrija a gravacao nessa pasta antes de rodar de novo: rodar agora conta o fecho outra vez.\n');
+        'Corrija a gravacao nessa pasta antes de rodar de novo: ' + (conferencia ? 'a conferencia nao conta outro fecho.\n'
+          : 'rodar agora conta o fecho outra vez.\n'));
     }
     contada = { sessao: sessao, revisao_fechada: n };
     // 0.3.3, item 8: sem sessao o fecho cai em "sem-sessao", que nenhuma sessao le. O aviso nao manda rodar
@@ -679,6 +812,10 @@ process.stdout.write(JSON.stringify({
   achadosNovosP0P1: r.novos,
   achadosAindaAbertos: r.achadosAindaAbertos,
   registros: r.registros,
+  // L3-s105-6: so na ronda de conferencia depois do teto ({ aprovado, corrigidos, seguem })
+  conferencia: r.conferencia,
+  // H9-14: so com a chave gravidade ligada (fica de fora sem ela)
+  bagatelasCortadas: r.bagatelasCortadas,
   achadosDoLadoAntigo: r.achadosDoLadoAntigo,
   refutados: r.refutados,
   paresCandidatos: r.paresCandidatos,

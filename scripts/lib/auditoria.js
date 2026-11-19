@@ -377,6 +377,9 @@ function auditar(cwd, projeto, opcoes) {
   const plugin = lerSkillsDoPlugin();
   // plano 0.9.1 (D568): o injetado pelos ganchos, a parte do peso como a memoria; quem acha a transcricao e o auditar.js
   const inj = injetado.medir(opcoes ? opcoes.transcricao : null);
+  const amb = ambiente.detectar(cwd, opcoes && typeof opcoes.claudeJson === 'string'
+    ? { claudeJson: opcoes.claudeJson, rotuloClaudeJson: opcoes.rotuloClaudeJson } : undefined);
+  const rotuloClaudeJson = ambiente.rotuloDe(opcoes);
   return {
     peso: peso,
     pesoEmTokens: pesoEmTokens(peso, plugin, inj),
@@ -387,7 +390,12 @@ function auditar(cwd, projeto, opcoes) {
     regras: lidas.estado,
     idadeDasRegras: idadeDasRegras(cwd, regras, agora),
     foraDaRubrica: foraDaRubrica,
-    delegaveis: ambiente.detectar(cwd).delegaveis,
+    delegaveis: amb.delegaveis,
+    // H9-3: os servidores MCP de fora do .mcp.json (usuario e local), so com `opcoes.claudeJson` (o auditar.js)
+    // e o que nao se leu dele, para a lista vazia nao passar por "nenhum configurado"
+    mcpForaDoProjeto: Object.assign({}, amb.mcpForaDoProjeto, {
+      naoLidos: amb.naoLidos.filter(function (l) { return l.indexOf(rotuloClaudeJson) === 0; })
+    }),
     memoria: memoria,
     // MEMORY.md que nao se mede: as memorias saem com a mesma causa, nunca com outra historia para a mesma entrada.
     memorias: memoria.medida === false

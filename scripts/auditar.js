@@ -45,6 +45,8 @@ const memoriaDada = valor('--memoria');
 const r = auditoria.auditar(cwd, config.carregarProjeto(cwd), {
   memoria: memoriaDada ? path.resolve(process.cwd(), memoriaDada) : memoriaDada,
   transcricao: injetado.localizar(valor('--transcricao'), process.env),
+  claudeJson: require('./lib/ambiente.js').caminhoDoClaudeJson(process.env),
+  rotuloClaudeJson: require('./lib/ambiente.js').rotuloDoClaudeJson(process.env),
   efetivo: true
 });
 process.stdout.write(JSON.stringify(r, null, 2) + '\n');

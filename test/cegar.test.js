@@ -412,6 +412,15 @@ test('A3-12b: o preparar-revisao.js de a/b.js nao herda as rondas de a__b.js da 
     assert.ok(fs.existsSync(path.join(rev, 'sub~005f~005faninhado.txt', '2', 'mapa.json')),
       'as rondas de sub__aninhado.txt foram para o id novo dele');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  // a recusa do --conferencia depois da migracao diz que a pasta mudou de nome, e nao so "Nada foi gravado"
+  const dir2 = repoDeEnsaio();
+  try {
+    const rev = baseDeRevisao(dir2);
+    rondaDeEnsaio(rev, 'sub__aninhado.txt', 1, 'sub__aninhado.txt');
+    const r = rodarCli(dir2, 'sub/aninhado.txt', null, ['--conferencia']);
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /Nada foi gravado; so a pasta da revisao passou do nome antigo \(.*sub__aninhado\.txt\) para o novo \(.*sub~005f~005faninhado\.txt\)/);
+  } finally { fs.rmSync(dir2, { recursive: true, force: true }); }
 });
 
 test('A3-12b: o preparar-revisao.js nao muda a base antiga quando para antes, e para com ERRO se nao consegue muda-la', () => {
@@ -2752,5 +2761,79 @@ test('L3-s104-7: --completa em arquivo novo (ja na completa) avisa que a flag na
     assert.doesNotMatch(s.aviso, /Faixa completa pedida por --completa/);
     const sem = saidaOk(rodarCli(dir, 'novo.txt'));
     assert.doesNotMatch(sem.aviso, /--completa/, 'sem a flag, nada se diz dela');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// L3-s105-6: --conferencia so vale uma vez, depois do fecho no teto sem aprovar e com a lista do que segurou ronda.
+test('L3-s105-6: preparar-revisao --conferencia recusa fora do teto e, no teto, monta a ronda so com os achados e as lentes deles', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const primeira = rodarCli(dir, 'raiz.txt');
+    assert.strictEqual(primeira.status, 0, primeira.stdout);
+    const base = path.dirname(path.dirname(JSON.parse(primeira.stdout).vereditos));
+    const rondas = () => fs.readdirSync(base).filter((n) => /^\d+$/.test(n)).sort();
+    const antes = rondas();
+    const recusa = (re) => {
+      const r = rodarCli(dir, 'raiz.txt', null, ['--conferencia']);
+      assert.strictEqual(r.status, 1, r.stdout);
+      assert.match(r.stdout, /^ERRO: --conferencia /);
+      assert.match(r.stdout, re);
+      assert.match(r.stdout, /Nada foi gravado\.\n$/);
+      assert.deepStrictEqual(rondas(), antes, 'a recusa nao cria ronda');
+    };
+    recusa(/nao tem revisao fechada/);
+    const fechada = path.join(base, 'fechada.json');
+    const seguraram = [
+      { lente: 'correcao', ronda: 3, severidade: 'P1', linha: 1, descricao: 'quebra' },
+      { lente: 'seguranca', ronda: 2, severidade: 'P0', linha: 1, descricao: 'vaza' }
+    ];
+    const gravar = (o) => fs.writeFileSync(fechada, JSON.stringify(Object.assign({ ronda: 3, sessao: 's', motivo: 'm',
+      degradado: null, aprovado: false, seguraram: seguraram }, o)), 'utf8');
+    gravar({ aprovado: true });
+    recusa(/ja fechou aprovada/);
+    gravar({ conferencia: true });
+    recusa(/ja rodou nesta revisao, e nao se repete/);
+    gravar({ ronda: 2 });
+    recusa(/so vale no fecho do teto de 3 rondas/);
+    // a lista vazia, ausente (fecho de versao antiga) ou que nao e lista: a recusa diz que o fechada.json nao a traz
+    for (const s of [[], undefined, 'x']) {
+      gravar({ seguraram: s });
+      recusa(/so vale no fecho do teto de 3 rondas com a lista dos achados que seguraram ronda, e o fechada\.json de raiz\.txt nao a traz.*Prepare a revisao sem a flag/);
+    }
+    fs.writeFileSync(fechada, '{torto', 'utf8');
+    recusa(/nao consegui ler .*fechada\.json \(.*\)\. Confira o arquivo e rode de novo/);
+    // o fechada.json que nao e objeto nao passa por "ja fechou aprovada"; o item torto do seguraram para com a posicao
+    for (const torto of ['null', '42', '[]']) {
+      fs.writeFileSync(fechada, torto, 'utf8');
+      recusa(/o fechada\.json de raiz\.txt nao e um objeto JSON/);
+    }
+    gravar({ seguraram: [seguraram[0], null] });
+    recusa(/o achado 2 da lista "seguraram" nao tem uma lente conhecida/);
+    gravar({ seguraram: [{ descricao: 'sem lente' }, { lente: '__proto__' }] });
+    recusa(/o achado 1, 2 da lista "seguraram" nao tem uma lente conhecida/);
+    gravar({});
+    const r = rodarCli(dir, 'raiz.txt', null, ['--conferencia']);
+    assert.strictEqual(r.status, 0, r.stdout);
+    const s = JSON.parse(r.stdout);
+    assert.deepStrictEqual(s.lentes, ['correcao', 'seguranca']);
+    assert.deepStrictEqual(s.conferencia, {
+      correcao: [{ id: 1, severidade: 'P1', descricao: 'quebra' }],
+      seguranca: [{ id: 2, severidade: 'P0', descricao: 'vaza' }]
+    });
+    assert.match(s.aviso, /This is a re-check round/);
+    assert.ok(fs.existsSync(fechada), 'a conferencia nao arquiva a revisao fechada');
+    assert.strictEqual(rondas().length, antes.length + 1, 'a conferencia e uma ronda nova na mesma base');
+    const mapa = JSON.parse(fs.readFileSync(path.join(path.dirname(s.vereditos), 'mapa.json'), 'utf8'));
+    assert.deepStrictEqual(mapa.conferencia.lentes, ['correcao', 'seguranca']);
+    assert.deepStrictEqual(mapa.conferencia.abertos.map((a) => [a.id, a.lente, a.ronda]), [[1, 'correcao', 3], [2, 'seguranca', 2]]);
+    // a conferencia preparada conta antes do apurar: a segunda chamada recusa e nao abre outra ronda
+    const depois = rondas();
+    const outra = rodarCli(dir, 'raiz.txt', null, ['--conferencia']);
+    assert.strictEqual(outra.status, 1, outra.stdout);
+    assert.match(outra.stdout, /^ERRO: --conferencia ja foi preparada nesta revisao \(ronda \d+\), e nao se repete: grave nela .*apurar-ronda\.js\. Nada foi gravado\.\n$/);
+    assert.deepStrictEqual(rondas(), depois, 'a segunda conferencia nao cria ronda');
+    // sem a flag, nada se diz da conferencia
+    assert.strictEqual(JSON.parse(primeira.stdout).conferencia, undefined);
+    assert.doesNotMatch(JSON.parse(primeira.stdout).aviso, /re-check round/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

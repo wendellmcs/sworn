@@ -85,8 +85,9 @@ test('fiacao: auditar.js enxerga uma skill real e devolve exatamente as chaves d
       // D674 (item 15): idadeDasRegras e memorias, a idade de cada regra e de cada memoria.
       // D706 (escada T5): efetivo, o modelo e o esforco que os subagentes de fato usaram.
       // F4b: pesoEmTokens, o peso em tokens estimados (projeto, skills do plugin, injetado).
-      ['contradicoes', 'delegaveis', 'doPlugin', 'efetivo', 'foraDaRubrica', 'idadeDasRegras', 'injetado', 'memoria', 'memorias',
-        'peso', 'pesoEmTokens', 'regras', 'skills', 'sobreposicoes'],
+      // H9-3: mcpForaDoProjeto, os servidores MCP do usuario e do local que o .mcp.json nao mostra.
+      ['contradicoes', 'delegaveis', 'doPlugin', 'efetivo', 'foraDaRubrica', 'idadeDasRegras', 'injetado', 'mcpForaDoProjeto',
+        'memoria', 'memorias', 'peso', 'pesoEmTokens', 'regras', 'skills', 'sobreposicoes'],
       'as chaves do relatorio mudaram: ' + Object.keys(saida).join(', '));
     // lerSkills() achou a skill, e instrucoes.contar() contou os itens dela.
     assert.deepStrictEqual(saida.skills, ['zelador'], r.stdout);

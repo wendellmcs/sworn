@@ -634,8 +634,28 @@ test('veredito: as lentes de codigo fora seguranca, enxuto e escopo seguem com a
   const hoje = {};
   // D554: a `enxuto` e nova, e tem teste proprio (acima); esta guarda as que ja existiam.
   // D824: a escopo mudou (julga contra o pedido.md) e tem teste proprio (D824, no fim)
-  for (const l of v.LENTES) if (l.chave !== 'seguranca' && l.chave !== 'enxuto' && l.chave !== 'escopo') hoje[l.chave] = l.pergunta;
-  assert.deepStrictEqual(hoje, antes);
+  // H9-1a e H9-4 (D881): correcao e borda ganharam uma frase no fim, e so ela: a pergunta inteira fica presa aqui
+  const fimNovo = {
+    correcao: ' Algum teste foi pulado, apagado ou teve a assercao afrouxada para passar? Cite a linha do diff.',
+    borda: ' Endereco, porta ou chave de desenvolvimento escrito no lugar da configuracao ou do ambiente.'
+  };
+  for (const l of v.LENTES) {
+    if (l.chave === 'seguranca' || l.chave === 'enxuto' || l.chave === 'escopo') continue;
+    hoje[l.chave] = l.pergunta;
+  }
+  assert.deepStrictEqual(hoje, Object.assign({}, antes, {
+    correcao: antes.correcao + fimNovo.correcao, borda: antes.borda + fimNovo.borda }));
+});
+
+test('H9 (D881): a correcao pergunta pelo teste afrouxado, a borda pelo valor de desenvolvimento fixo e a enxuto pela dependencia de uma funcao so', () => {
+  const p = Object.fromEntries(v.LENTES.map((l) => [l.chave, l.pergunta]));
+  assert.match(p.correcao, /teste foi pulado, apagado ou teve a assercao afrouxada para passar\? Cite a linha do diff\.$/);
+  assert.match(p.borda, /Endereco, porta ou chave de desenvolvimento escrito no lugar da configuracao ou do ambiente\.$/);
+  assert.match(p.enxuto, /nunca sao excesso\. A dependencia nova que serve a uma funcao so e excesso\.$/);
+  for (const k of ['correcao', 'borda', 'enxuto']) {
+    assert.ok(!/[^\x00-\x7f]/.test(p[k]), k + ': a pergunta tem de ser ASCII');
+    assert.ok(!/\bD\d{3}\b|\bH9-/.test(p[k]), k + ': codigo de registro nao vai ao inspetor');
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -2190,4 +2210,52 @@ test('A3-16: na ronda 1, com o diff do HEAD, o achado do lado novo longe da muda
   assert.deepStrictEqual(duas.registros.map((a) => [a.ronda, a.linha, a.registro]),
     [[1, 30, 'fora da mudanca'], [2, 31, 'linha nova']]);
   assert.deepStrictEqual(duas.achadosAindaAbertos, []);
+});
+
+// L3-s105-6: cada id da conferencia e respondido uma vez, pela lente dona dele
+test('L3-s105-6: apurarConferencia recusa o id respondido duas vezes e o respondido por outra lente', () => {
+  const abertos = [{ id: 1, lente: 'correcao' }, { id: 2, lente: 'borda' }];
+  const ok = v.apurarConferencia(abertos, [
+    { lente: 'correcao', conferencia: [{ id: 1, corrigido: true }] },
+    { lente: 'borda', conferencia: [{ id: 2, corrigido: true }] }
+  ]);
+  assert.deepStrictEqual(ok, { aprovado: true, corrigidos: 2, seguem: [] });
+  assert.throws(() => v.apurarConferencia(abertos, [
+    { lente: 'correcao', conferencia: [{ id: 1, corrigido: true }, { id: 1, corrigido: false, linha: 1, trecho: 'x' }] },
+    { lente: 'borda', conferencia: [{ id: 2, corrigido: true }] }
+  ]), (e) => e.codigo === v.CONFERENCIA_INCOMPLETA && /o id 1 foi respondido duas vezes/.test(e.message));
+  assert.throws(() => v.apurarConferencia(abertos, [
+    { lente: 'correcao', conferencia: [{ id: 1, corrigido: true }, { id: 2, corrigido: true }] }
+  ]), (e) => e.codigo === v.CONFERENCIA_INCOMPLETA && /o id 2 e da lente borda, e quem respondeu foi correcao/.test(e.message));
+});
+
+// L3-s105-6, ronda 1 da revisao: a entrada torta da conferencia e erro com codigo, nunca aprovacao nem TypeError
+test('L3-s105-6: apurarConferencia recusa lista vazia, item torto, id repetido e veredito sem lente', () => {
+  const incompleta = (re) => (e) => e.codigo === v.CONFERENCIA_INCOMPLETA && re.test(e.message);
+  const resposta = [{ lente: 'correcao', conferencia: [{ id: 1, corrigido: true }] }];
+  assert.throws(() => v.apurarConferencia(undefined, []), incompleta(/nao traz nenhum achado a conferir/));
+  assert.throws(() => v.apurarConferencia([], []), incompleta(/nao traz nenhum achado a conferir/));
+  assert.throws(() => v.apurarConferencia([null], resposta), incompleta(/o achado 1 da conferencia nao tem "id" ou "lente"/));
+  assert.throws(() => v.apurarConferencia([{ lente: 'correcao' }], [{ lente: 'correcao', conferencia: [{ corrigido: true }] }]),
+    incompleta(/nao tem "id" ou "lente"/));
+  assert.throws(() => v.apurarConferencia([{ id: 1, lente: 'correcao' }, { id: 1, lente: 'correcao' }], resposta),
+    incompleta(/o id 1 aparece duas vezes na conferencia/));
+  assert.throws(() => v.apurarConferencia([{ id: 1, lente: 'correcao' }], [{ conferencia: [{ id: 1, corrigido: true }] }]),
+    incompleta(/o veredito 1 da conferencia nao tem "lente".*Chame de novo a lente/));
+  assert.throws(() => v.apurarConferencia([{ id: 1, lente: 'correcao' }], [{ lente: 'correcao', conferencia: {} }]),
+    incompleta(/o veredito 1 da conferencia nao tem a lista "conferencia"/));
+  // a lente do mapa se compara pela forma canonica, e a linha em texto vale
+  const segue = v.apurarConferencia([{ id: 1, lente: 'Correcao' }],
+    [{ lente: 'correcao', conferencia: [{ id: 1, corrigido: false, linha: '42', trecho: 'x' }] }]);
+  assert.strictEqual(segue.aprovado, false);
+  assert.strictEqual(segue.seguem[0].linhaAgora, 42);
+  // a faixa "40-45" vale como no resto do modulo (a menor das pontas); linha 0 e texto torto seguem recusados
+  const faixa = v.apurarConferencia([{ id: 1, lente: 'correcao' }],
+    [{ lente: 'correcao', conferencia: [{ id: 1, corrigido: false, linha: '40-45', trecho: 'x' }] }]);
+  assert.strictEqual(faixa.seguem[0].linhaAgora, 40);
+  for (const linha of [0, '0', 'quarenta', 4.5, null]) {
+    assert.throws(() => v.apurarConferencia([{ id: 1, lente: 'correcao' }],
+      [{ lente: 'correcao', conferencia: [{ id: 1, corrigido: false, linha, trecho: 'x' }] }]),
+      incompleta(/precisa da "linha" e do "trecho"/), JSON.stringify(linha));
+  }
 });

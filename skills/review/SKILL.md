@@ -409,7 +409,7 @@ Three possible outcomes:
 | `motivo` | What you do |
 |---|---|
 | two dry rounds, or round 1 complete with no finding other than a P2 `melhoria` (with a reference: and `referencia.pronta`) | Approved. Close by saying how many agents ran, in how many rounds, and copy `registros`, if any, to the record of the plan |
-| cap of 3 rounds with P0, P1 or P2 `erro` open, or the reference not reached | **Do not ask, and do not open a new review.** Fix what is an error, each fix with a test that fails when the code is broken on purpose. Run the whole suite and wait for green. Then commit with `# sworn: sem-revisao` at the end of the command: the commit gate names the files closed at the cap and asks for that mark. Write what stays open, and `registros`, in the record of the plan |
+| cap of 3 rounds with P0, P1 or P2 `erro` open, or the reference not reached | **Do not ask, and do not open a new review.** Fix what is an error, each fix with a test that fails when the code is broken on purpose. Optional, once per review: after the fixes, `preparar-revisao.js --arquivo <file> --conferencia` prepares one conference round with only the findings that held a round open and only their lenses; each inspector answers per `id`, and `apurar-ronda.js` approves when all are fixed. Run the whole suite and wait for green. Then commit with `# sworn: sem-revisao` at the end of the command: the commit gate names the files closed at the cap and asks for that mark. Write what stays open, and `registros`, in the record of the plan |
 | hasn't ended yet (includes the reference not reached before round 3) | Fix and run the next round, with the lenses the `motivo` lists |
 
 ## Step 6 — what was not inspected

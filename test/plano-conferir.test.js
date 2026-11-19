@@ -32,9 +32,12 @@ test('C2: o plano limpo nao tem achado, e o relatorio conta o que conferiu', () 
     const plano = [
       '# Plano',
       '',
-      '- [ ] Mudar `src/vendas.js` -> `totalComDesconto`: o desconto em porcentagem. Prova: `npm test`',
-      '- [ ] Criar `src/recibo.js` (novo), com o formato em reais. Prova: `node --test`',
+      '- [ ] Mudar `src/vendas.js` -> `totalComDesconto`: o desconto em porcentagem. Prova: `npm test` (R1)',
+      '- [ ] Criar `src/recibo.js` (novo), com o formato em reais. Prova: `node --test` (R2)',
       '- [x] Rodar `node scripts/gerar.js` antes (feito)',
+      '',
+      '- **R1:** o desconto sai em porcentagem.',
+      'R2. O recibo sai em reais.',
       ''
     ].join('\n');
     const r = lib.conferir(plano, raiz);
@@ -48,10 +51,12 @@ test('C2: cada defeito semeado vira o seu achado, com a linha', () => {
   projeto((raiz) => {
     const plano = [
       '# Plano',
-      '- [ ] Mudar `src/vemdas.js` para somar o frete. Prova: `npm test`',
-      '- [ ] Em `src/vendas.js` -> `totalSemDesconto`, tirar o desconto. Prova: `npm test`',
-      '- [ ] Rodar `node scripts/apagar.js`. Prova: `npm run verificar`',
+      '- [ ] Mudar `src/vemdas.js` para somar o frete. Prova: `npm test` (R1)',
+      '- [ ] Em `src/vendas.js` -> `totalSemDesconto`, tirar o desconto. Prova: `npm test` (R1)',
+      '- [ ] Rodar `node scripts/apagar.js`. Prova: `npm run verificar` (R1)',
       '- [ ] Ajustar o README sem dizer como provar',
+      '',
+      'R1: o frete entra no total.',
       ''
     ].join('\n');
     const r = lib.conferir(plano, raiz);
@@ -60,6 +65,7 @@ test('C2: cada defeito semeado vira o seu achado, com a linha', () => {
       'caminho-inexistente:src/vemdas.js',
       'comando-sem-script:node scripts/apagar.js',
       'comando-sem-script:npm run verificar',
+      'passo-sem-requisito:- [ ] Ajustar o README sem dizer como provar',
       'simbolo-ausente:totalSemDesconto'
     ].sort(), JSON.stringify(r.achados));
     const linha = function (tipo) { return r.achados.filter(function (a) { return a.tipo === tipo; })[0].linha; };
@@ -73,7 +79,8 @@ test('C2: cada defeito semeado vira o seu achado, com a linha', () => {
 test('C2: o caminho marcado criar nao e achado; o que nao e caminho fica fora; o bloco de codigo tambem', () => {
   projeto((raiz) => {
     const plano = [
-      '- [ ] Novo arquivo `src/frete.js`, criado do zero. Prova: `npm test`',
+      '- [ ] Novo arquivo `src/frete.js`, criado do zero. Prova: `npm test` (R1)',
+      'R1 - o frete tem arquivo proprio.',
       'A palavra `pronto` e a flag `--seco` nao sao caminhos; nem `https://exemplo.com/a.js`, nem `scripts/**`.',
       '```js',
       'require(\'./src/nao-existe.js\'); // `src/nao-existe.js` dentro do bloco',
@@ -170,10 +177,12 @@ test('C2: a prova da caixa pode vir na linha de continuacao; a caixa feita nao c
   projeto((raiz) => {
     const plano = [
       '- [ ] Mudar `src/vendas.js` para o desconto novo,',
-      '  com prova pelo `npm test` depois da edicao',
+      '  com prova pelo `npm test` depois da edicao, para o R1',
       '- [x] Caixa ja feita, sem prova escrita',
       '- [ ] Outra sem prova',
-      '  e sem comando na continuacao',
+      '  e sem comando na continuacao (R1)',
+      '',
+      '## R1: o desconto novo vale',
       ''
     ].join('\n');
     const r = lib.conferir(plano, raiz);
@@ -186,11 +195,11 @@ test('C2: o comando revisar-plano.js imprime o relatorio e sai com 1 quando ha a
     const plano = path.join(raiz, 'plano.md');
     const cli = (args) => spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'revisar-plano.js')].concat(args),
       { cwd: raiz, encoding: 'utf8' });
-    fs.writeFileSync(plano, '- [ ] Mudar `src/vendas.js`. Prova: `npm test`\n');
+    fs.writeFileSync(plano, '- [ ] Mudar `src/vendas.js`. Prova: `npm test` (R1)\nR1: o desconto vale.\n');
     const limpo = cli([plano]);
     assert.strictEqual(limpo.status, 0, limpo.stdout + limpo.stderr);
     assert.match(limpo.stdout, /nenhum achado/);
-    fs.writeFileSync(plano, '- [ ] Mudar `src/nao.js`. Prova: `npm test`\n');
+    fs.writeFileSync(plano, '- [ ] Mudar `src/nao.js`. Prova: `npm test` (R1)\nR1: o desconto vale.\n');
     const sujo = cli([plano]);
     assert.strictEqual(sujo.status, 1, sujo.stdout);
     assert.match(sujo.stdout, /caminho-inexistente/);
@@ -221,12 +230,71 @@ test('C2: num repositorio git, o nome curto com acento se acha pela lista do git
     // o plano irmao fica fora da lista do git (sem add): so a pasta do plano o acha
     fs.writeFileSync(path.join(raiz, 'docs', 'irmao.md'), '');
     fs.writeFileSync(path.join(raiz, 'docs', 'plano.md'),
-      '- [ ] Revisar `ação.md` e o `irmao.md`. Prova: `npm test`\n');
+      '- [ ] Revisar `ação.md` e o `irmao.md`. Prova: `npm test` (R1)\nR1: a acao esta revisada.\n');
     const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', 'revisar-plano.js'), 'docs/plano.md', '--json'],
       { cwd: raiz, encoding: 'utf8' });
     assert.strictEqual(r.status, 0, r.stdout + r.stderr);
     const j = JSON.parse(r.stdout);
     assert.deepStrictEqual([j.citados, j.conferidos, j.achados.length], [3, 3, 0], r.stdout);
     assert.doesNotMatch(r.stderr, /sem a lista do git/);
+  });
+});
+
+// H9-13 (D881): os requisitos numerados sao obrigatorios no plano com passos
+test('H9-13: R sem passo, passo sem R, R inexistente e plano sem R viram achado, com a linha', () => {
+  projeto((raiz) => {
+    const plano = [
+      '# Plano',
+      '- **R1:** o desconto sai em porcentagem.',
+      '- R2: o recibo sai em reais.',
+      '### R3. O frete entra no total.',
+      '',
+      '- [ ] Mudar `src/vendas.js`. Prova: `npm test` (R1)',
+      '- [ ] Ajustar o recibo. Prova: `npm test`',
+      '- [x] Passo feito que cita o R2',
+      '- [ ] Passo que cita o R9. Prova: `npm test`',
+      '```md',
+      '- [ ] exemplo no bloco, sem R. Prova: `npm test`',
+      'R4: definicao no bloco nao vale',
+      '```',
+      ''
+    ].join('\n');
+    const r = lib.conferir(plano, raiz);
+    const req = r.achados.filter(function (a) { return /requisit/.test(a.tipo); })
+      .map(function (a) { return a.tipo + ':' + a.valor + '@' + a.linha; });
+    assert.deepStrictEqual(req, ['requisito-sem-passo:R3@4', 'passo-sem-requisito:- [ ] Ajustar o recibo. Prova: `npm test`@7', 'requisito-inexistente:R9@9'],
+      JSON.stringify(r.achados));
+    // o R2, citado so pela caixa feita, tem passo e nao sai como sem passo (fora da lista acima); e o bloco de codigo
+    // nao gera achado de outro tipo
+    assert.deepStrictEqual(r.achados.filter(function (a) { return !/requisit/.test(a.tipo); }), [], JSON.stringify(r.achados));
+    // o plano com caixas e sem R nenhum
+    const sem =lib.conferir('# Plano\n\n- [ ] Mudar `src/vendas.js`. Prova: `npm test`\n- [x] Outro\n', raiz);
+    assert.deepStrictEqual(tipos(sem), ['plano-sem-requisitos:R<n>'], JSON.stringify(sem.achados));
+    assert.strictEqual(sem.achados[0].linha, 3, 'o achado aponta a primeira caixa');
+    // texto sem caixa e sem R nao e plano de passos: nada a cobrar
+    assert.deepStrictEqual(lib.conferir('Notas soltas sobre `src/vendas.js`.\n', raiz).achados, []);
+    // "R2D2" e "PR12" nao citam requisito
+    const falso = lib.requisitos('R1: vale\n- [ ] o R2D2 e o PR12 (R1)\n');
+    assert.deepStrictEqual(falso.caixas[0].refs, ['1']);
+    assert.deepStrictEqual(Object.keys(falso.definidos), ['1']);
+    // o R<n> dentro de crase e caminho ou comando, nao citacao
+    assert.deepStrictEqual(lib.requisitos('R1: vale\n- [ ] R1: edite `docs/R2.md` `npm test`\n').caixas[0].refs, ['1']);
+    // "R2.0 ..." e "R2-D2 ..." nao definem o R2; "R3 - ..." e "R4. ..." (com espaco) definem
+    assert.deepStrictEqual(Object.keys(lib.requisitos('R2.0 do modulo sai em maio\nR2-D2 e um robo\nR3 - vale\nR4. vale\n').definidos), ['3', '4']);
+    // a citacao segue a mesma regra: "R2.0" e "R2-D2" nao citam o R2; "R1." e "R3," no fim da frase citam
+    assert.deepStrictEqual(lib.requisitos('R1: vale\n- [ ] subir para R2.0 e o R2-D2, cumpre R1. e R3, `npm test`\n').caixas[0].refs, ['1', '3']);
+    // a faixa "R4-R6" cita as duas pontas (o intervalo nao se expande)
+    assert.deepStrictEqual(lib.requisitos('R1: vale\n- [ ] cobre R4-R6 `npm test`\n').caixas[0].refs, ['4', '6']);
+    // a definicao em lista numerada ou em citacao tambem vale
+    assert.deepStrictEqual(lib.requisitos('1. R1: o login expira\n2) **R2:** o recibo\n> R3: citado\n').definidos, { 1: 1, 2: 2, 3: 3 });
+    // R01 e R1 sao o mesmo requisito, na definicao e na citacao
+    const zero = lib.requisitos('R01: o login expira\n- [ ] cumpre R1 `npm test`\n- [ ] cumpre R001 `npm test`\n');
+    assert.deepStrictEqual(zero.definidos, { 1: 1 });
+    assert.deepStrictEqual(zero.caixas.map((c) => c.refs), [['1'], ['1']]);
+    // a segunda definicao do mesmo numero vira achado, com a linha da primeira no motivo
+    const dup = lib.conferir('# Plano\nR1: o login expira\nR1: exportar CSV\n\n- [ ] Mudar `src/vendas.js`. Prova: `npm test` (R1)\n', raiz);
+    const achDup = dup.achados.filter((a) => a.tipo === 'requisito-duplicado');
+    assert.deepStrictEqual(achDup.map((a) => a.valor + '@' + a.linha), ['R1@3'], JSON.stringify(dup.achados));
+    assert.match(achDup[0].motivo, /definido na linha 2/);
   });
 });

@@ -1,6 +1,7 @@
 ---
 name: drift
 description: Shows where the code moved away from the plan - a script crosses the files changed since the plan's commit with the plan's paths and boxes - a changed file the plan does not cite, a box marked done whose file did not change, and a file a done box said to create that does not exist. Use before closing a stage of a plan, or when the owner asks whether the work followed the plan.
+allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/drift.js" *), PowerShell(node "${CLAUDE_PLUGIN_ROOT}/scripts/drift.js" *)
 ---
 
 # `/sworn:drift` — the code against the plan
@@ -26,6 +27,7 @@ track yet. The plan itself and what sworn and the harness write (`.claude/`, `.s
 | `fora-do-plano` | a file changed and the plan does not cite it | if the change belongs to the task, add the file to the plan with the reason; if not, undo it. A change that widens the task's scope is the owner's call |
 | `feita-sem-mudanca` | a box is marked done and the file on its line did not change since the base | reopen the box, or write on its line why the step needed no change |
 | `criar-ausente` | a done box said to create a file that does not exist | create it, or reopen the box |
+| `requisito-sem-mudanca` | every box that cites a requirement `R<n>` is done, and none of the files on those boxes changed since the base (or they cite no file) | cite on the box the file that meets the requirement, or reopen the box |
 
 A short name in the plan (`saude.js`) covers the file of the repository that ends with it.
 

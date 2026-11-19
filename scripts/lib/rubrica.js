@@ -16,6 +16,10 @@ const RE_SECAO_CRITERIO_6 = /^#{1,6}\s.*\b(o[ \t]+que|what)\b.*(n[aã]o\s+(prome
 // tipografico (U+2019), que o editor poe sozinho.
 const RE_PROIBICAO = /^(nunca|sempre|proibido|n[aã]o\s+fa[cç]a|jamais|never|always|forbidden|do\s+not|must\s+not|don['\u2019]t)\b/i;
 const ONDE_MORA = 'O numero e o do criterio na rubrica de modelos/boa-skill.md.';
+// Criterio 10: as 500 linhas sao as da documentacao de skills do Claude Code; os 500 caracteres da descricao, decisao
+// do dono (D881), abaixo dos 1024 que a documentacao aceita, porque a descricao entra em toda sessao.
+const LINHAS_DA_SKILL = 500;
+const CARACTERES_DA_DESCRICAO = 500;
 
 function conferir(texto) {
   const t = String(texto == null ? '' : texto);
@@ -39,8 +43,27 @@ function conferir(texto) {
       '"## O que NAO promete" ou "## What this skill does NOT do": dito agora, e nao descoberto no fim. ' + ONDE_MORA);
   }
 
-  // Criterio 1: item de lista que parece regra tem de ter gatilho.
+  // Criterio 10 (H9-2, D881, curso Introduction to agent skills): curta, com teto declarado. A descricao pesa em toda
+  // sessao (o Claude Code lista nome e descricao de cada skill desde o comeco); o corpo, cada vez que a skill e chamada.
   const linhas = t.split(/\r?\n/);
+  const quantasLinhas = linhas.length - (linhas[linhas.length - 1] === '' ? 1 : 0);
+  if (quantasLinhas > LINHAS_DA_SKILL) {
+    erros.push('criterio 10: a skill tem ' + quantasLinhas + ' linhas, acima de ' + LINHAS_DA_SKILL + '. Leve o que so ' +
+      'vale num caso para um arquivo em references/ e diga no corpo quando le-lo. ' + ONDE_MORA);
+  }
+  if (d && d[1]) {
+    // conta o valor, nao a marcacao do YAML: sem o indicador de bloco (>, |, >-, |+) e sem as aspas em volta
+    let valor = d[1].replace(/\s+/g, ' ').trim().replace(/^[>|][-+]?\s*/, '');
+    if (/^(["']).*\1$/.test(valor) && valor.length >= 2) valor = valor.slice(1, -1);
+    const caracteres = Array.from(valor).length;
+    if (caracteres > CARACTERES_DA_DESCRICAO) {
+      erros.push('criterio 10: a linha description tem ' + caracteres + ' caracteres, acima de ' +
+        CARACTERES_DA_DESCRICAO + '. Ela pesa em toda sessao: deixe o que a skill faz e quando usar, e leve o resto ' +
+        'para o corpo. ' + ONDE_MORA);
+    }
+  }
+
+  // Criterio 1: item de lista que parece regra tem de ter gatilho.
   for (let i = 0; i < linhas.length; i++) {
     const l = linhas[i].trim();
     if (!/^[-*+]\s+/.test(l)) continue;
@@ -53,4 +76,4 @@ function conferir(texto) {
   return { ok: erros.length === 0, erros: erros };
 }
 
-module.exports = { RE_QUANDO, conferir };
+module.exports = { RE_QUANDO, LINHAS_DA_SKILL, CARACTERES_DA_DESCRICAO, conferir };

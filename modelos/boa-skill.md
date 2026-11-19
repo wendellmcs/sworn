@@ -14,7 +14,7 @@ proposing a rule. **A criterion without a root failure is decoration and does no
 | 7 | **Declares whether it is canonical, derived or historical.** An old document without a stamp is obeyed as living law | what is read becomes what is obeyed |
 | 8 | **Each rule carries its origin pain beside it.** A rule without a scar is opinion, and opinion doesn't survive disagreement | project principle |
 | 9 | **Verifiable.** "Be clear" is not a criterion; "fixed close-out format with four parts" is | decision hidden in a wall of text |
-| 10 | **Short, with a declared cap.** Each instruction competes for attention with all the others | adherence that drops as context grows |
+| 10 | **Short, with a declared cap.** Each instruction competes for attention with all the others. The audit checks two caps: the SKILL.md up to 500 lines, and the description up to 500 characters, because it loads in every session | adherence that drops as context grows |
 | 11 | **Doesn't repeat what a gate already enforces.** Duplication is dead weight that speeds up exactly the disease the harness came to cure | adherence that drops as context grows |
 | 12 | **Owner decision in 3 options, the recommended one marked, with consequence and cost** | decision hidden in a wall of text |
 

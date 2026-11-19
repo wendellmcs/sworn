@@ -106,6 +106,16 @@ function avisou(r, causa) {
   if (causa) assert.ok(causa.test(r.json.systemMessage), String(causa) + ' fora de: ' + r.json.systemMessage);
 }
 
+/** A resposta do tipo errado para a ronda: o aviso manda chamar a lente de novo, nunca gravar a mao a resposta recusada. */
+function avisouChamarDeNovo(r, causa) {
+  semBarrar(r);
+  assert.ok(r.json && typeof r.json.systemMessage === 'string', 'nao gravou e nao avisou: ' + r.stdout);
+  const m = r.json.systemMessage;
+  assert.ok(/\. Chame a lente de novo com o briefing desta ronda; nao grave esta resposta a mao\.$/.test(m), m);
+  assert.ok(!/salve o JSON do inspetor/i.test(m), m);
+  assert.ok(causa.test(m), String(causa) + ' fora de: ' + m);
+}
+
 /** F3-08: o aviso de "ja existe ... outro conteudo" manda comparar e apagar o errado, nao "gravar a mao". */
 function avisouOutroConteudo(r, arquivo) {
   semBarrar(r);
@@ -1038,4 +1048,24 @@ test('F2d: o playbook e a skill dizem a regra nova das rondas, do P2 de erro e d
   assert.match(passo2, /Dispatch every lens in `lentes`/);
   assert.match(passo2, /You can add a lens the script left out, never drop one/);
   assert.match(passo2, /`estados` and `borda`\n? *stay apart/);
+});
+
+// L3-s105-6: a resposta da conferencia ({ lente, conferencia }) so se grava na ronda de conferencia (mapa.json com
+// `conferencia`), e a ronda de conferencia so recebe essa resposta
+test('L3-s105-6: gravar-veredito grava a resposta da conferencia so na ronda de conferencia', () => {
+  const p = projeto();
+  try {
+    const resposta = { lente: 'correcao', conferencia: [{ id: 1, corrigido: true }], vereditos: p.vereditos };
+    avisouChamarDeNovo(rodar(p, stop(p, JSON.stringify(resposta))), /^sworn: nao gravei o veredito da lente correcao: a resposta traz a lista "conferencia", e a ronda .+ nao e de conferencia\./);
+    assert.deepStrictEqual(arquivosEm(p), []);
+    fs.writeFileSync(path.join(p.ronda, 'mapa.json'), JSON.stringify({ arquivo: 'src/a.js', mapa: { A: 'trabalho', B: 'HEAD' },
+      conferencia: { abertos: [{ id: 1, lente: 'correcao' }], lentes: ['correcao'] } }), 'utf8');
+    avisouChamarDeNovo(rodar(p, stop(p, JSON.stringify(veredito(p)))), /e de conferencia, e a resposta nao traz a lista "conferencia"\./);
+    assert.deepStrictEqual(arquivosEm(p), []);
+    // a lista vazia nao confere nada: recusa com o motivo, sem gravar
+    avisou(rodar(p, stop(p, JSON.stringify(Object.assign({}, resposta, { conferencia: [] })))), /a lista "conferencia" veio vazia/);
+    assert.deepStrictEqual(arquivosEm(p), []);
+    calado(rodar(p, stop(p, JSON.stringify(resposta))));
+    assert.deepStrictEqual(lerVeredito(p, 'correcao'), resposta);
+  } finally { limpar(p); }
 });

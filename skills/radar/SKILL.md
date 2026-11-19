@@ -1,6 +1,6 @@
 ---
 name: radar
-description: Searches for public projects similar to what you are building (or to the theme of your request), crosses each one with your project and returns a card with what is worth bringing in, how it fits, how it ends up better than the original, effort, value and license. The list of the week trending on GitHub (github.com/trending?since=weekly) belongs to the plugin maintainer, to improve sworn. When the fit is in doubt, runs a short interview. Only reads and proposes; the chosen one goes in with a test and blind review, only with your yes. Use when you want to know what similar projects bring to yours, when accepting the radar offer after a request for an improvement or a new feature, or when the opening warns that the week's radar has arrived (maintainer).
+description: Searches for public projects similar to yours and returns a card per project: what is worth bringing in, how it fits, effort, value and license; the week's trending list on GitHub is for the plugin maintainer. Only reads and proposes; the chosen one goes in with a test and blind review, only with your yes. Use when you want to know what similar projects bring to yours, when accepting the radar offer after a feature request, or when the opening warns that the week's radar has arrived.
 ---
 
 # `/sworn:radar` — what similar projects bring to this project

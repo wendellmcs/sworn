@@ -227,3 +227,29 @@ test('C2 drift: plano fora do git sem --desde diz como dar a base', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// H9-13 (D881): o requisito feito no papel, sem rastro no codigo
+test('H9-13 drift: o R com todos os passos feitos e nenhum arquivo deles mudado vira achado', () => {
+  const existe = function () { return true; };
+  const plano = [
+    'R1: o desconto vale.',
+    'R2: o recibo sai em reais.',
+    'R3: o frete entra.',
+    'R4: o log sai.',
+    '- [x] Mudar `src/vendas.js` (R1)',
+    '- [x] Mudar `src/recibo.js` (R2)',
+    '- [x] Conferir o frete, sem arquivo (R3)',
+    '- [ ] Mudar `src/log.js` (R4)',
+    '- [x] Mudar `src/cli.js` para o log (R4)',
+    ''
+  ].join('\n');
+  // o src/cli.js do R4 nao mudou: o R4 so fica de fora porque tem passo aberto
+  const r = lib.drift({ texto: plano, mudados: ['src/vendas.js'], existe: existe });
+  const req = r.achados.filter(function (a) { return a.tipo === 'requisito-sem-mudanca'; })
+    .map(function (a) { return a.valor + '@' + a.linha; });
+  // R1 mudou; R2 nao (o arquivo dele ficou parado); R3 feito sem arquivo nenhum; R4 tem passo aberto
+  assert.deepStrictEqual(req, ['R2@2', 'R3@3'], JSON.stringify(r.achados));
+  // o arquivo citado na continuacao da caixa conta para o R dela
+  const cont = lib.drift({ texto: 'R1: vale.\n- [x] Fazer o R1\n  em `src/vendas.js`\n', mudados: ['src/vendas.js'], existe: existe });
+  assert.deepStrictEqual(cont.achados, [], JSON.stringify(cont.achados));
+});

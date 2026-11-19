@@ -19,7 +19,9 @@ const CHAVES = [
 // C7 (D816): `admissao`, o resultado do teste de admissao do modelo (scripts/admissao.js --gravar).
 // F1c (D828): `provaDeCoerencia`, o comando do grupo de coerencia do disco que a prova por arquivo tocado tambem cobra.
 // H3 (D877): `perfil`, o perfil de instalacao (PERFIS abaixo).
-const CHAVES_OPCIONAIS = ['referencias', 'marcaDeAtalho', 'fontesDeConsulta', 'admissao', 'provaDeCoerencia', 'perfil'];
+// H9-14 (D851, D881): `gravidade`, o teto de bagatelas da revisao cega, desligado por padrao (gravidade abaixo).
+const CHAVES_OPCIONAIS = ['referencias', 'marcaDeAtalho', 'fontesDeConsulta', 'admissao', 'provaDeCoerencia', 'perfil',
+  'gravidade'];
 const TIPOS_REFERENCIA = ['tela', 'codigo', 'texto'];
 
 const TRAVAS = ['fecho', 'escopo', 'destrutivo', 'outraFrente'];
@@ -143,6 +145,35 @@ function ehPerfil(nome) {
   return typeof nome === 'string' && Object.prototype.hasOwnProperty.call(PERFIS, nome);
 }
 
+/**
+ * H9-14 (D851, D881): a chave `gravidade` = { ligada, bagatelasPorRonda }. Ligada, o inspetor devolve no maximo
+ * `bagatelasPorRonda` achados de tipo melhoria (a bagatela, que ja nao segura a ronda pela D823) e a apuracao guarda so
+ * esses nos registros de cada ronda. Fica desligada ate a leva de medicao da D851 (achados plantados).
+ */
+const BAGATELAS_POR_RONDA = 3;
+const CHAVES_DA_GRAVIDADE = ['ligada', 'bagatelasPorRonda'];
+function errosDaGravidade(g) {
+  if (!ehObjeto(g)) return ['gravidade tem de ser objeto: { "ligada": false, "bagatelasPorRonda": ' + BAGATELAS_POR_RONDA + ' }'];
+  const erros = [];
+  if (typeof g.ligada !== 'boolean') erros.push('gravidade.ligada tem de ser true ou false');
+  if ('bagatelasPorRonda' in g && !(Number.isInteger(g.bagatelasPorRonda) && g.bagatelasPorRonda >= 1)) {
+    erros.push('gravidade.bagatelasPorRonda tem de ser inteiro de 1 para cima');
+  }
+  // o aviso vai ao texto do gancho (avisosDeTipo): conta as chaves desconhecidas, sem copiar o nome delas, que vem do
+  // arquivo e pode trazer acento ou caractere de controle (D64/R5)
+  const desconhecidas = Object.keys(g).filter(function (k) { return CHAVES_DA_GRAVIDADE.indexOf(k) === -1; }).length;
+  if (desconhecidas) {
+    erros.push('gravidade tem ' + desconhecidas + ' chave(s) que nao conhece: as que valem sao ' + CHAVES_DA_GRAVIDADE.join(', '));
+  }
+  return erros;
+}
+
+/** { bagatelasPorRonda } com a chave ligada e na forma; null desligada, ausente ou torta (torta vale como hoje). */
+function gravidade(projeto) {
+  if (!ehObjeto(projeto) || errosDaGravidade(projeto.gravidade).length || projeto.gravidade.ligada !== true) return null;
+  return { bagatelasPorRonda: projeto.gravidade.bagatelasPorRonda || BAGATELAS_POR_RONDA };
+}
+
 /** O projeto com o perfil aplicado, num objeto novo; sem perfil conhecido (ou no `padrao`), o mesmo objeto. */
 function comPerfil(projeto) {
   if (!ehObjeto(projeto) || !ehPerfil(projeto.perfil) || projeto.perfil === 'padrao') return projeto;
@@ -201,6 +232,7 @@ function avisosDeTipo(projeto) {
     avisos.push('provaDeCoerencia tem de ser texto nao vazio (o comando do grupo de coerencia)');
   }
   if ('perfil' in projeto && !ehPerfil(projeto.perfil)) avisos.push(MOTIVO_PERFIL);
+  if ('gravidade' in projeto) avisos.push.apply(avisos, errosDaGravidade(projeto.gravidade));
   const deQualidade = require('./qualidade.js').avisoDeTipo(projeto);
   if (deQualidade) avisos.push(deQualidade);
   return avisos;
@@ -321,6 +353,8 @@ function validar(obj) {
   if ('provaDeCoerencia' in obj && !ehTexto(obj.provaDeCoerencia)) {
     erros.push('provaDeCoerencia tem de ser texto nao vazio (o comando do grupo de coerencia)');
   }
+
+  if ('gravidade' in obj) erros.push.apply(erros, errosDaGravidade(obj.gravidade));
 
   // C7 (D816): o resultado do teste de admissao, com a forma que o scripts/admissao.js grava.
   if ('admissao' in obj) erros.push.apply(erros, require('./admissao.js').errosDaAdmissao(obj.admissao));
@@ -559,5 +593,6 @@ function motivoInerte(inertes) {
 
 module.exports = {
   AMEACAS, CHAVES, TRAVAS, CHAVES_LIGA_DESLIGA, CHAVES_OPCIONAIS, TIPOS_REFERENCIA, PERFIS, travasDe, comPerfil, avisosDeTipo,
+  BAGATELAS_POR_RONDA, gravidade,
   intocaveisInertes, motivoInerte, validar, montar, atualizar, fundir
 };

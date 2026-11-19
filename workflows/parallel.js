@@ -118,6 +118,8 @@ const RESULTADO = {
     evidencia: { type: 'string' },
     pendente: { type: 'string' },
     ondeFicou: { type: 'string' },
+    // H9-5 (D881, curso Introduction to subagents): o que travou o agente vai a quem o chamou, para o proximo nao travar igual
+    obstaculos: { type: 'string' },
   },
   required: ['feito', 'resumo', 'evidencia'],
 }
@@ -132,6 +134,7 @@ function instrucao(t) {
     '- Do not commit, push, publish or run destructive commands.',
     '- In `evidencia`, paste the command you ran and the output line that proves the result. Without evidence, `feito` is false.',
     '- In `arquivos`, list the paths you changed (empty if you only read).',
+    '- In `obstaculos`, say what got in the way and how you got around it (a command that needed a flag, a quirk of the shell or the environment, a workaround), so the next agent does not hit it again. Leave it out if nothing did.',
   ]
   if (t.papel) partes.unshift('Your role: ' + t.papel + '.')
   if (t.edita) {
@@ -201,8 +204,21 @@ function foraDoDono(t, saida) {
   })
 }
 
+// H9-5 (D881): os obstaculos de todas as tarefas num lugar so, para quem chamou passar adiante no proximo briefing
+// "None", "nenhum", "n/a" e "-" sao o agente dizendo que nao houve obstaculo: nao viram aviso para o proximo briefing
+const SEM_OBSTACULO = /^(none|nenhum|nenhuma|nada|n\/?a|-+)\.?$/i
+const obstaculos = rodam.map((t, i) => ({ n: t.n, saida: saidas[i] }))
+  .filter((o) => o.saida && typeof o.saida.obstaculos === 'string' && o.saida.obstaculos.trim() &&
+    !SEM_OBSTACULO.test(o.saida.obstaculos.trim()))
+  .map((o) => {
+    const texto = o.saida.obstaculos.trim()
+    return { n: o.n, obstaculos: texto.length > MAX_CAUSA ? texto.slice(0, MAX_CAUSA) + '...' : texto }
+  })
+
 return {
-  aviso: 'an agent result is a claim: check the critical part at the source before calling it done',
+  aviso: 'an agent result is a claim: check the critical part at the source before calling it done' +
+    (obstaculos.length ? '; pass each of `obstaculos` on in the briefing of the next agent that does the same kind of task' : ''),
+  obstaculos,
   rodaram: rodam.length,
   naoRodaram: fora.map((t) => ({ n: t.n, tarefa: t.tarefa })),
   resultados: rodam.map((t, i) => resultado(t, saidas[i])),

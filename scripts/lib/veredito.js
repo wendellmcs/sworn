@@ -6,7 +6,9 @@ const diffLinhas = require('./diff-linhas.js');
 // Dez copias acham o mesmo problema dez vezes; dez lentes acham dez classes de problema.
 const LENTES = [
   { chave: 'correcao', titulo: 'Correcao e regressao',
-    pergunta: 'Qual dos dois quebra? Entrada concreta que produz resultado errado, com arquivo:linha.' },
+    // H9-1a (D881, cursos Claude Code 101 e in action): o teste afrouxado para passar e a regressao que nao aparece
+    pergunta: 'Qual dos dois quebra? Entrada concreta que produz resultado errado, com arquivo:linha. ' +
+      'Algum teste foi pulado, apagado ou teve a assercao afrouxada para passar? Cite a linha do diff.' },
   // D824 (D3, do mattpocock/skills, code-review/SKILL.md:72): a lente julga contra o pedido da tarefa (pedido.md)
   { chave: 'escopo', titulo: 'Fidelidade ao pedido',
     pergunta: 'Leia o pedido.md (o objetivo e o Dentro da tarefa) e responda: (a) o que o pedido pede e falta ou ' +
@@ -15,7 +17,9 @@ const LENTES = [
   { chave: 'estados', titulo: 'Estados obrigatorios (codigo)',
     pergunta: 'Erro, vazio, carregando, limite e timeout estao tratados, ou so o caso feliz?' },
   { chave: 'borda', titulo: 'Entrada e borda',
-    pergunta: 'null, string vazia, lista vazia, numero negativo, unicode, caminho com espaco, arquivo enorme.' },
+    // H9-4 (D881, curso Claude Code 101): o valor de desenvolvimento que so funciona na maquina de quem escreveu
+    pergunta: 'null, string vazia, lista vazia, numero negativo, unicode, caminho com espaco, arquivo enorme. ' +
+      'Endereco, porta ou chave de desenvolvimento escrito no lugar da configuracao ou do ambiente.' },
   { chave: 'seguranca', titulo: 'Seguranca e dado sensivel',
     pergunta: 'Segredo em texto, log com dado do usuario, entrada nao validada que vira comando ou caminho. ' +
       'Antes de P0, tres conferencias: (1) os chamadores reais, nao o caminho hipotetico; ' +
@@ -37,9 +41,11 @@ const LENTES = [
     pergunta: 'Cite o token literal ou a tela irmã de referência. Valor cru, gradiente, sombra larga, card aninhado ou tipografia fluida onde o sistema nao os tem. Sem citar token ou coordenada, o veredito nao conta.' },
   // D553/D554 (0.9.0): a ideia do /ponytail-review, texto nosso. Regra de saida no revisar/SKILL.md (como `escopo`).
   { chave: 'enxuto', titulo: 'Codigo que nao precisava existir',
+    // H9-4 (D881, curso Claude Code 101): a dependencia nova de uma funcao so tambem e codigo que sobra
     pergunta: 'O que dava para nao escrever, e o que o substitui? Cite arquivo:linha do que sobra e do que ja faz o ' +
       'mesmo (funcao da linguagem, da plataforma, dependencia ja instalada, codigo do projeto). Validacao na ' +
-      'fronteira, perda de dados, seguranca e acessibilidade nunca sao excesso.' }
+      'fronteira, perda de dados, seguranca e acessibilidade nunca sao excesso. A dependencia nova que serve a uma ' +
+      'funcao so e excesso.' }
 ];
 
 // D121 mediu: 3 exatas, 1 parcial, 4 contra 4 sem contraparte. A causa nao e
@@ -229,6 +235,8 @@ const VOTO_QUE_FALTA = 'VOTO_QUE_FALTA';
 // L3-s104-3: a faixa do mapa.json que nao e nenhuma das que o preparar-revisao.js grava. Como o voto que falta, o
 // erro ja diz o que fazer, e o CLI nao junta a linha da refutacao.
 const FAIXA_DESCONHECIDA = 'FAIXA_DESCONHECIDA';
+// L3-s105-6: a conferencia depois do teto sem a resposta de cada achado; o erro ja diz qual falta.
+const CONFERENCIA_INCOMPLETA = 'CONFERENCIA_INCOMPLETA';
 const FAIXAS = Object.keys(LENTES_DA_FAIXA).concat('completa');
 
 function erroComCodigo(texto, codigo) {
@@ -1241,11 +1249,84 @@ function apurar(rondas, opcoes) {
   return { ronda: ronda, secas: secas, encerrar: fim.encerrar, aprovado: fim.aprovado, motivo: motivo, novos: novosDaUltima, placar: placar,
     achadosDoLadoAntigo: antigosDaUltima, refutados: refutados, paresCandidatos: paresCandidatos, paresFortes: paresFortes,
     provaveisMesmos: provaveisMesmos, referencia: referencia, pendentes: pendentes, trechoNaoConfere: trechoNaoConfere,
-    eixos: eixos, registros: registros, achadosAindaAbertos: achadosAindaAbertos };
+    eixos: eixos, registros: registros, achadosAindaAbertos: achadosAindaAbertos,
+    // L3-s105-6 (D872, D881): cada achado que segurou uma ronda (nao refutado), com a lente e a descricao: a lista que
+    // o modo conferencia depois do teto leva aos inspetores para conferir so o conserto
+    seguraram: Array.from(abertos).map(function (k) { return metas.get(k); }).filter(Boolean).map(function (m) {
+      return { lente: m.lente, ronda: m.ronda, severidade: m.severidade, linha: m.linha, descricao: m.descricao };
+    }) };
+}
+
+/**
+ * L3-s105-6 (D872, D881): a apuracao da ronda de conferencia, depois do teto. `abertos` = [{ id, lente, ... }] (o que o
+ * preparar-revisao gravou no mapa.json); `vereditos` = [{ lente, conferencia: [{ id, corrigido, linha?, trecho? }] }].
+ * Cada lente responde por todos os seus ids, uma vez; o `corrigido: false` cita a linha e o trecho do lado novo onde o
+ * defeito segue (`trechoNoTrabalho(linha, trecho)` confere; sem ela, nao se confere). Lanca com a causa quando falta
+ * resposta; devolve { aprovado, corrigidos, seguem }.
+ */
+function apurarConferencia(abertos, vereditos, trechoNoTrabalho) {
+  // fail-closed: so entram os achados com id proprio e lente; o item torto e o id repetido viram erro, nunca aprovacao
+  const lista = [];
+  const erros = [];
+  (Array.isArray(abertos) ? abertos : []).forEach(function (a, i) {
+    const temId = a && typeof a === 'object' && (typeof a.id === 'string' ? a.id.trim() !== '' : Number.isInteger(a.id));
+    if (!temId || typeof a.lente !== 'string' || !a.lente.trim()) {
+      erros.push('o achado ' + (i + 1) + ' da conferencia nao tem "id" ou "lente"');
+    } else if (lista.some(function (b) { return b.id === a.id; })) {
+      erros.push('o id ' + a.id + ' aparece duas vezes na conferencia');
+    } else lista.push(a);
+  });
+  const respostas = new Map();
+  // fail-closed: sem achado a conferir, nada se aprova pela conferencia
+  if (!lista.length && !erros.length) erros.push('a conferencia nao traz nenhum achado a conferir');
+  (Array.isArray(vereditos) ? vereditos : []).forEach(function (vd, i) {
+    // o lenteCanonica devolve o texto "undefined" para a lente ausente: so texto de verdade vira lente
+    const lente = vd && typeof vd.lente === 'string' && vd.lente.trim() ? lenteCanonica(vd.lente) : null;
+    if (!lente || !Array.isArray(vd.conferencia)) {
+      erros.push('o veredito ' + (i + 1) + ' da conferencia ' + (!lente ? 'nao tem "lente"' : 'nao tem a lista "conferencia"'));
+      return;
+    }
+    for (const c of vd.conferencia) {
+      const id = c && c.id;
+      const dono = lista.filter(function (a) { return a.id === id; })[0];
+      if (!dono) { erros.push('a lente ' + lente + ' respondeu o id ' + JSON.stringify(id) + ', que nao esta na conferencia'); continue; }
+      if (lenteCanonica(dono.lente) !== lente) { erros.push('o id ' + id + ' e da lente ' + dono.lente + ', e quem respondeu foi ' + lente); continue; }
+      if (respostas.has(id)) { erros.push('o id ' + id + ' foi respondido duas vezes'); continue; }
+      if (typeof c.corrigido !== 'boolean') { erros.push('o id ' + id + ' precisa de "corrigido": true ou false'); continue; }
+      if (!c.corrigido) {
+        // a linha em texto ("42") e a faixa ("40-45", vale a menor) valem, pelo mesmo linhaDoAchado do resto do modulo
+        const linha = linhaDoAchado(c.linha);
+        if (linha === null || typeof c.trecho !== 'string' || !c.trecho.trim()) {
+          erros.push('o id ' + id + ' com "corrigido": false precisa da "linha" e do "trecho" do lado novo onde o defeito segue');
+          continue;
+        }
+        if (typeof trechoNoTrabalho === 'function' && trechoNoTrabalho(linha, c.trecho) === false) {
+          erros.push('o trecho do id ' + id + ' nao esta na linha ' + linha + ' do lado novo');
+          continue;
+        }
+        respostas.set(id, Object.assign({}, c, { linha: linha }));
+        continue;
+      }
+      respostas.set(id, c);
+    }
+  });
+  const faltam = lista.filter(function (a) { return !respostas.has(a.id); }).map(function (a) { return a.id + ' (' + a.lente + ')'; });
+  if (faltam.length) erros.push('falta a resposta de: ' + faltam.join(', '));
+  // o mesmo codigo para a resposta que falta e para a resposta torta: nos dois casos a conferencia nao fecha
+  if (erros.length) {
+    throw erroComCodigo('conferencia incompleta ou invalida: ' + erros.join('; ') + '. Chame de novo a lente de cada ' +
+      'id citado, regrave o veredito dela com a lista "conferencia" certa e apure de novo.', CONFERENCIA_INCOMPLETA);
+  }
+  const seguem = lista.filter(function (a) { return respostas.get(a.id).corrigido === false; }).map(function (a) {
+    const c = respostas.get(a.id);
+    return Object.assign({}, a, { linhaAgora: c.linha, trechoAgora: c.trecho });
+  });
+  return { aprovado: seguem.length === 0, corrigidos: lista.length - seguem.length, seguem: seguem };
 }
 
 module.exports = {
   LENTES, LENTES_UI, FAMILIAS, LENTE_DO_PEDIDO, lentesSoTela, SAEM_SO_LOGICA, familiasPara, FAIXA_UMA_ATE,
   FAIXA_DUAS_ATE, faixaDaMudanca, lentesDaFaixa, textoQueInstrui, temRisco, lentesDaCompleta, LENTES_DO_TESTE, ehArquivoDeTeste, TETO, chaveDaLente, errosDoVeredito,
-  validarVeredito, apurar, conferirMesmos, DISTANCIA_PAR, mapaDoTrabalho, VOTO_QUE_FALTA, FAIXA_DESCONHECIDA
+  validarVeredito, apurar, conferirMesmos, DISTANCIA_PAR, mapaDoTrabalho, VOTO_QUE_FALTA, FAIXA_DESCONHECIDA,
+  apurarConferencia, CONFERENCIA_INCOMPLETA
 };

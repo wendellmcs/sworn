@@ -478,3 +478,204 @@ test('A4-75: enabledPlugins, hooks e mcpServers fora da forma de mapa nao viram 
     } finally { fs.rmSync(outro, { recursive: true, force: true }); }
   }
 });
+
+// H9-2 (D881, curso Introduction to agent skills): criterio 10, o teto de linhas do SKILL.md e de caracteres da descricao.
+test('H9-2: a rubrica avisa a skill acima de 500 linhas e a descricao acima de 500 caracteres, e so acima', () => {
+  const r10 = (t) => rubrica.conferir(t).erros.filter((e) => e.startsWith('criterio 10'));
+  const cab = (d) => '---\nname: x\ndescription: ' + d + '\n---\n## O que nao promete\n';
+  const quando = 'Use quando ';
+  const desc = (n) => quando + 'x'.repeat(n - quando.length);
+  assert.deepStrictEqual(r10(cab(desc(500))), [], '500 caracteres cabem');
+  assert.match(r10(cab(desc(501)))[0], /description tem 501 caracteres, acima de 500/);
+  // acento conta como um caractere, nao como dois bytes
+  assert.deepStrictEqual(r10(cab(quando + '\u00e7'.repeat(500 - quando.length))), []);
+  // a marcacao do YAML nao conta: aspas em volta e o indicador de bloco (>, |, >-) ficam fora dos 500
+  assert.deepStrictEqual(r10(cab('"' + desc(500) + '"')), [], 'aspas duplas nao contam');
+  assert.deepStrictEqual(r10(cab("'" + desc(500) + "'")), [], 'aspas simples nao contam');
+  assert.deepStrictEqual(r10(cab('>-\n  ' + desc(500))), [], 'bloco >- nao conta');
+  assert.deepStrictEqual(r10(cab('|\n  ' + desc(500))), [], 'bloco | nao conta');
+  assert.match(r10(cab('"' + desc(501) + '"'))[0], /description tem 501 caracteres/);
+  assert.match(r10(cab('>\n  ' + desc(501)))[0], /description tem 501 caracteres/);
+  const corpo = (n) => { const base = cab('Use quando x.'); const falta = n - base.split('\n').length + 1; return base + 'l\n'.repeat(falta); };
+  assert.deepStrictEqual(r10(corpo(500)), [], '500 linhas cabem');
+  assert.match(r10(corpo(501))[0], /tem 501 linhas, acima de 500/);
+  assert.deepStrictEqual(r10(corpo(500).replace(/\n/g, '\r\n')), [], 'CRLF nao conta linha a mais');
+});
+
+test('H9-2/H9-8: toda descricao de skill e de agente do sworn cabe nos 500 caracteres', () => {
+  const raiz = path.join(__dirname, '..');
+  // a rubrica mede a descricao do frontmatter, tambem a em bloco do YAML (>-), nas skills e nos agentes
+  const longa = (t) => rubrica.conferir(t).erros.filter((x) => /^criterio 10: a linha description/.test(x));
+  let skills = 0;
+  for (const n of fs.readdirSync(path.join(raiz, 'skills'))) {
+    const arq = path.join(raiz, 'skills', n, 'SKILL.md');
+    if (!fs.existsSync(arq)) continue;
+    skills++;
+    assert.deepStrictEqual(longa(fs.readFileSync(arq, 'utf8')), [], 'skills/' + n);
+  }
+  assert.ok(skills > 0, 'nenhuma skill medida');
+  let agentes = 0;
+  for (const n of fs.readdirSync(path.join(raiz, 'agents'))) {
+    if (!n.endsWith('.md')) continue;
+    agentes++;
+    const t = fs.readFileSync(path.join(raiz, 'agents', n), 'utf8');
+    // so o frontmatter conta: um "description:" no corpo do agente nao supre o do cabecalho
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(t);
+    assert.ok(frontmatter, 'agents/' + n + ' sem frontmatter');
+    assert.match(frontmatter[1], /^description:/m, 'agents/' + n + ' sem description no frontmatter');
+    assert.deepStrictEqual(longa(t), [], 'agents/' + n);
+  }
+  assert.ok(agentes > 0, 'nenhum agente medido');
+});
+
+// H9-3 (D881): os servidores MCP de fora do .mcp.json, do ~/.claude.json, so pelos nomes
+function chaveDoProjeto(dir) {
+  const n = dir.replace(/\\/g, '/');
+  return process.platform === 'win32' ? n.toLowerCase() : n;
+}
+
+test('H9-3: le os nomes dos servidores MCP do usuario e do local, nunca os valores, e so quando pedem', () => {
+  const dir = montar({ 'a.js': '' });
+  const conf = montar({});
+  try {
+    const arq = path.join(conf, '.claude.json');
+    fs.writeFileSync(arq, JSON.stringify({
+      mcpServers: { context7: { command: 'npx', env: { CHAVE: 'SEGREDO-ENSAIO-1' } } },
+      projects: {
+        [chaveDoProjeto(dir)]: { mcpServers: { banco: { env: { SENHA: 'SEGREDO-ENSAIO-2' } } } },
+        [chaveDoProjeto(dir) + '-outro']: { mcpServers: { alheio: {} } }
+      }
+    }), 'utf8');
+    const r = ambiente.detectar(dir, { claudeJson: arq });
+    assert.deepStrictEqual(r.mcpForaDoProjeto, { usuario: ['context7'], local: ['banco'] });
+    assert.deepStrictEqual(r.mcp, []);
+    assert.ok(r.delegaveis.some(function (d) { return d.indexOf('context7:') === 0; }), 'o MCP do usuario conta para delegar');
+    assert.ok(!/SEGREDO-ENSAIO/.test(JSON.stringify(r)), 'nenhum valor sai');
+    assert.deepStrictEqual(r.naoLidos, []);
+    // sem a opcao, o arquivo da maquina nao e lido
+    assert.deepStrictEqual(ambiente.detectar(dir).mcpForaDoProjeto, { usuario: [], local: [] });
+    assert.deepStrictEqual(ambiente.detectar(dir).delegaveis, []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(conf, { recursive: true, force: true });
+  }
+});
+
+test('H9-3: .claude.json ausente nao avisa; quebrado ou fora da forma entra em naoLidos sem derrubar', () => {
+  const dir = montar({ 'a.js': '' });
+  // o V8 copia um trecho do texto na mensagem do JSON quebrado ("Unexpected token ..."): o aviso nao a leva
+  const conf = montar({ 'quebrado.json': '{"mcpServers":{"x":{"env":{"K":"SEGREDO-FALSO" oops}}}}', 'lista.json': JSON.stringify({ mcpServers: ['x'], projects: { [chaveDoProjeto(dir)]: { mcpServers: 'y' } } }) });
+  try {
+    const ausente = ambiente.detectar(dir, { claudeJson: path.join(conf, 'nao-existe.json') });
+    assert.deepStrictEqual(ausente.mcpForaDoProjeto, { usuario: [], local: [] });
+    assert.deepStrictEqual(ausente.naoLidos, []);
+    const quebrado = ambiente.detectar(dir, { claudeJson: path.join(conf, 'quebrado.json') });
+    assert.deepStrictEqual(quebrado.mcpForaDoProjeto, { usuario: [], local: [] });
+    assert.deepStrictEqual(quebrado.naoLidos, ['~/.claude.json (nao e JSON valido)']);
+    // o rotulo segue o que o chamador passa (o $CLAUDE_CONFIG_DIR, quando ela muda a pasta)
+    assert.deepStrictEqual(ambiente.detectar(dir, { claudeJson: path.join(conf, 'quebrado.json'), rotuloClaudeJson: '$CLAUDE_CONFIG_DIR/.claude.json' }).naoLidos,
+      ['$CLAUDE_CONFIG_DIR/.claude.json (nao e JSON valido)']);
+    const lista = ambiente.detectar(dir, { claudeJson: path.join(conf, 'lista.json') });
+    assert.deepStrictEqual(lista.mcpForaDoProjeto, { usuario: [], local: [] });
+    assert.deepStrictEqual(lista.naoLidos, ['~/.claude.json (mcpServers nao e um objeto de nomes)',
+      '~/.claude.json, projects deste projeto (mcpServers nao e um objeto de nomes)']);
+    // a entrada do projeto que nao e objeto avisa, em vez de sumir calada
+    fs.writeFileSync(path.join(conf, 'entrada.json'), JSON.stringify({ projects: { [chaveDoProjeto(dir)]: 'z' } }), 'utf8');
+    assert.deepStrictEqual(ambiente.detectar(dir, { claudeJson: path.join(conf, 'entrada.json') }).naoLidos,
+      ['~/.claude.json (projects deste projeto nao e um objeto)']);
+    // duas chaves da mesma pasta (com e sem barra no fim): os servidores das duas, sem repetir
+    fs.writeFileSync(path.join(conf, 'duas.json'), JSON.stringify({ projects: {
+      [chaveDoProjeto(dir)]: { mcpServers: { banco: {}, fila: {} } }, [chaveDoProjeto(dir) + '/']: { mcpServers: { banco: {}, cache: {} } } } }), 'utf8');
+    assert.deepStrictEqual(ambiente.detectar(dir, { claudeJson: path.join(conf, 'duas.json') }).mcpForaDoProjeto,
+      { usuario: [], local: ['banco', 'fila', 'cache'] });
+    fs.writeFileSync(path.join(conf, 'escalar.json'), '5', 'utf8');
+    const escalar = ambiente.detectar(dir, { claudeJson: path.join(conf, 'escalar.json') });
+    assert.deepStrictEqual(escalar.mcpForaDoProjeto, { usuario: [], local: [] });
+    assert.deepStrictEqual(escalar.naoLidos, ['~/.claude.json (nao e um objeto JSON)']);
+    // a chave do projeto gravada com barra no fim tambem e a deste projeto
+    fs.writeFileSync(path.join(conf, 'barra.json'), JSON.stringify({ projects: { [chaveDoProjeto(dir) + '/']: { mcpServers: { banco: {} } } } }), 'utf8');
+    assert.deepStrictEqual(ambiente.detectar(dir, { claudeJson: path.join(conf, 'barra.json') }).mcpForaDoProjeto, { usuario: [], local: ['banco'] });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(conf, { recursive: true, force: true });
+  }
+});
+
+test('H9-3: o .claude.json mora na CLAUDE_CONFIG_DIR quando ela vem; o varrer.js o le e diz que leu', () => {
+  assert.strictEqual(ambiente.caminhoDoClaudeJson({ CLAUDE_CONFIG_DIR: path.join('x', 'conf') }), path.join('x', 'conf', '.claude.json'));
+  assert.strictEqual(ambiente.caminhoDoClaudeJson({}), path.join(os.homedir(), '.claude.json'));
+  assert.strictEqual(ambiente.rotuloDoClaudeJson({ CLAUDE_CONFIG_DIR: 'x' }), '$CLAUDE_CONFIG_DIR/.claude.json');
+  assert.strictEqual(ambiente.rotuloDoClaudeJson({}), '~/.claude.json');
+  const dir = montar({ 'a.js': '' });
+  const conf = montar({});
+  try {
+    fs.writeFileSync(path.join(conf, '.claude.json'), JSON.stringify({ mcpServers: { ensaio: {} } }), 'utf8');
+    const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: conf });
+    const r = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'varrer.js'), dir],
+      { encoding: 'utf8', env: env, timeout: 60000 });
+    assert.strictEqual(r.status, 0, r.stderr || String(r.error || r.signal));
+    const saida = JSON.parse(r.stdout);
+    assert.deepStrictEqual(saida.ambiente.mcpForaDoProjeto, { usuario: ['ensaio'], local: [] });
+    assert.match(saida.teto.observacao, /\$CLAUDE_CONFIG_DIR\/\.claude\.json, so os nomes dos servidores MCP/);
+    // a pasta chamada .claude.json nao e lida, e a frase nao diz que foi
+    fs.unlinkSync(path.join(conf, '.claude.json'));
+    fs.mkdirSync(path.join(conf, '.claude.json'));
+    const p = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'varrer.js'), dir],
+      { encoding: 'utf8', env: env, timeout: 60000 });
+    assert.strictEqual(p.status, 0, p.stderr || String(p.error || p.signal));
+    assert.doesNotMatch(JSON.parse(p.stdout).teto.observacao, /\.claude\.json/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(conf, { recursive: true, force: true });
+  }
+});
+
+test('H9-3: a auditoria traz os servidores MCP de fora do .mcp.json e o que nao se leu do ~/.claude.json', () => {
+  const dir = montar({ 'a.js': '' });
+  const conf = montar({ 'quebrado.json': '{ nao e json' });
+  try {
+    const arq = path.join(conf, '.claude.json');
+    fs.writeFileSync(arq, JSON.stringify({ mcpServers: { context7: {} } }), 'utf8');
+    const auditoria = require('../scripts/lib/auditoria.js');
+    const r = auditoria.auditar(dir, null, { claudeJson: arq, agora: 0 });
+    assert.deepStrictEqual(r.mcpForaDoProjeto, { usuario: ['context7'], local: [], naoLidos: [] });
+    assert.ok(r.delegaveis.some(function (d) { return d.indexOf('context7:') === 0; }));
+    const q = auditoria.auditar(dir, null, { claudeJson: path.join(conf, 'quebrado.json'), agora: 0 });
+    assert.deepStrictEqual(q.mcpForaDoProjeto.naoLidos, ['~/.claude.json (nao e JSON valido)']);
+    // com o rotulo da CLAUDE_CONFIG_DIR, o filtro casa o mesmo rotulo
+    const qc = auditoria.auditar(dir, null, { claudeJson: path.join(conf, 'quebrado.json'), rotuloClaudeJson: '$CLAUDE_CONFIG_DIR/.claude.json', agora: 0 });
+    assert.deepStrictEqual(qc.mcpForaDoProjeto.naoLidos, ['$CLAUDE_CONFIG_DIR/.claude.json (nao e JSON valido)']);
+    assert.deepStrictEqual(auditoria.auditar(dir, null, { agora: 0 }).mcpForaDoProjeto, { usuario: [], local: [], naoLidos: [] });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(conf, { recursive: true, force: true });
+  }
+});
+
+// H9-17 (D881): allowed-tools estreito so no drift, no review-plan e no shortcuts, e so para o script do proprio plugin
+// que o corpo manda rodar. Medido em claude -p (s372): a regra de PowerShell e a que vale no Windows, e um gancho
+// PreToolUse que nega continua negando o comando que casa com ela.
+test('H9-17: allowed-tools so nas tres skills, cada regra presa a um script do plugin que o corpo roda', () => {
+  const raiz = path.join(__dirname, '..');
+  const com = [];
+  for (const n of fs.readdirSync(path.join(raiz, 'skills'))) {
+    const arq = path.join(raiz, 'skills', n, 'SKILL.md');
+    if (!fs.existsSync(arq)) continue;
+    const t = fs.readFileSync(arq, 'utf8');
+    const fm = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(t);
+    const linha = fm && /^allowed-tools:[ \t]*(.*)$/m.exec(fm[1]);
+    if (!linha) continue;
+    com.push(n);
+    const regras = linha[1].split(/,\s*(?=(?:Bash|PowerShell)\()/);
+    const ferramentas = new Set();
+    for (const r of regras) {
+      const m = /^(Bash|PowerShell)\(node "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/([a-z-]+\.js)"(?: \*)?\)$/.exec(r.trim());
+      assert.ok(m, n + ': regra fora do padrao estreito: ' + r);
+      ferramentas.add(m[1]);
+      assert.ok(fs.existsSync(path.join(raiz, 'scripts', m[2])), n + ': o script ' + m[2] + ' nao existe');
+      assert.ok(t.indexOf('node "${CLAUDE_PLUGIN_ROOT}/scripts/' + m[2] + '"') !== -1, n + ': o corpo nao roda ' + m[2]);
+    }
+    assert.deepStrictEqual(Array.from(ferramentas).sort(), ['Bash', 'PowerShell'], n + ': as duas ferramentas de shell');
+  }
+  assert.deepStrictEqual(com.sort(), ['drift', 'review-plan', 'shortcuts']);
+});

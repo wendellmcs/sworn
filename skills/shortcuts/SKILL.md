@@ -1,6 +1,7 @@
 ---
 name: shortcuts
 description: Lists the repository's deliberate shortcuts - comments with the atalho: mark (or ponytail:, shortcut:) that say what was simplified, how far it holds and when to replace it - and points out those with no replacement trigger. Use when you want to know what simplification debt the code carries, before a release or when the owner asks.
+allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/atalhos.js"), Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/atalhos.js" *), PowerShell(node "${CLAUDE_PLUGIN_ROOT}/scripts/atalhos.js"), PowerShell(node "${CLAUDE_PLUGIN_ROOT}/scripts/atalhos.js" *)
 ---
 
 # `/sworn:shortcuts` — what was simplified on purpose

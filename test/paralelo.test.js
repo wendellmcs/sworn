@@ -265,3 +265,43 @@ test('paralelo: mensagem de erro enorme entra cortada em 300 caracteres', async 
   assert.strictEqual(r.resultados[0].motivo, 'the agent stopped on an error ("😀' + 'x'.repeat(299) +
     '...");' + SEM_AJUDA);
 });
+
+// H9-5 (D881, curso Introduction to subagents): o contrato do leitor e o que travou cada agente.
+test('H9-5: o briefing pede os obstaculos, o resultado os junta e o aviso manda passa-los adiante', async () => {
+  const { r, chamadas } = await rodar([{ tarefa: 'a' }, { tarefa: 'b' }, { tarefa: 'c' }], (prompt, opts, n) => (
+    n === 1 ? { feito: true, resumo: 'ok', evidencia: 'x', obstaculos: '  o heredoc comeu a barra; usei o Write  ' }
+      : n === 2 ? { feito: true, resumo: 'ok', evidencia: 'x', obstaculos: '   ' }
+        : { feito: true, resumo: 'ok', evidencia: 'x' }));
+  for (const c of chamadas) {
+    assert.match(c.prompt, /In `obstaculos`, say what got in the way and how you got around it/);
+    assert.strictEqual(c.opts.schema.properties.obstaculos.type, 'string');
+    assert.ok(!c.opts.schema.required.includes('obstaculos'), 'obstaculos e opcional');
+  }
+  assert.deepStrictEqual(r.obstaculos, [{ n: 1, obstaculos: 'o heredoc comeu a barra; usei o Write' }]);
+  assert.match(r.aviso, /pass each of `obstaculos` on in the briefing of the next agent/);
+  const sem = await rodar([{ tarefa: 'a' }]);
+  assert.deepStrictEqual(sem.r.obstaculos, []);
+  assert.strictEqual(sem.r.aviso, 'an agent result is a claim: check the critical part at the source before calling it done');
+});
+
+test('H9-5: "None", "nenhum", "n/a" e "-" nao viram obstaculo, e o obstaculo enorme entra cortado em 300', async () => {
+  const vazios = ['None', 'none.', 'Nenhum', 'nenhuma', 'nada', 'N/A', 'na', '-', '---'];
+  const { r } = await rodar(vazios.map((v) => ({ tarefa: v })), (prompt, opts, n) => (
+    { feito: true, resumo: 'ok', evidencia: 'x', obstaculos: ' ' + vazios[n - 1] + ' ' }));
+  assert.deepStrictEqual(r.obstaculos, []);
+  assert.strictEqual(r.aviso, 'an agent result is a claim: check the critical part at the source before calling it done');
+  const longo = await rodar([{ tarefa: 'a' }], () => ({ feito: true, resumo: 'ok', evidencia: 'x', obstaculos: 'y'.repeat(500) }));
+  assert.deepStrictEqual(longo.r.obstaculos, [{ n: 1, obstaculos: 'y'.repeat(300) + '...' }]);
+  const frase = await rodar([{ tarefa: 'a' }], () => ({ feito: true, resumo: 'ok', evidencia: 'x', obstaculos: 'nenhum arquivo abria; usei o Read' }));
+  assert.deepStrictEqual(frase.r.obstaculos, [{ n: 1, obstaculos: 'nenhum arquivo abria; usei o Read' }]);
+});
+
+test('H9-5: o leitor tem teto de turnos e a descricao diz o que a tarefa traz', () => {
+  const t = fs.readFileSync(path.join(__dirname, '..', 'agents', 'reader.md'), 'utf8');
+  const fm = t.match(/^﻿?---\r?\n([\s\S]*?)\r?\n---/);
+  assert.ok(fm, 'agents/reader.md sem frontmatter');
+  // o checkout com CRLF deixa o \r no fim de cada linha do cabecalho
+  const cab = fm[1];
+  assert.ok(/^maxTurns: 15\r?$/m.test(cab), 'falta maxTurns: 15');
+  assert.ok(/^description: .*exact paths and the command whose output proves the result/m.test(cab));
+});

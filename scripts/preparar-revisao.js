@@ -48,7 +48,7 @@ function secaoDaRegua(texto) {
 }
 
 const USO = 'uso: preparar-revisao.js --arquivo <caminho relativo> [--completa] [--degradado <motivo>] ' +
-  '[--semente <texto>] [--tela-depois <endereco> [--tela-antes <endereco>]]\n';
+  '[--semente <texto>] [--tela-depois <endereco> [--tela-antes <endereco>]] [--conferencia]\n';
 
 // 0.3.2, item 10: flag presente sem valor (ultima da linha) ou seguida de outra flag ("--arquivo
 // --semente x") deixava o alvo virar "--semente", ou a semente cair calada no pid. Agora e erro de uso
@@ -56,7 +56,8 @@ const USO = 'uso: preparar-revisao.js --arquivo <caminho relativo> [--completa] 
 //
 // 0.3.3, itens 13 e 14: so e "valor que falta" quando o proximo argumento e outra flag do USO (um arquivo
 // chamado `--x.js` vale) ou quando e vazio (`--semente ''` caia no pid, calado).
-const FLAGS_DO_USO = ['--arquivo', '--semente', '--completa', '--degradado', '--tela-antes', '--tela-depois'];
+const FLAGS_DO_USO = ['--arquivo', '--semente', '--completa', '--degradado', '--tela-antes', '--tela-depois',
+  '--conferencia'];
 function arg(nome) {
   return flags.valor(process.argv, '--' + nome, FLAGS_DO_USO, function (msg) {
     process.stdout.write('ERRO: ' + msg + '\n' + USO);
@@ -172,7 +173,7 @@ function outroNomeNoHead(cwd, rel) {
 for (let i = 2; i < process.argv.length; i++) {
   const a = process.argv[i];
   if (FLAGS_DO_USO.indexOf(a) !== -1) {
-    if (a !== '--completa') i++;
+    if (a !== '--completa' && a !== '--conferencia') i++;
   } else if (a.startsWith('--')) {
     process.stdout.write('ERRO: ' + a + ' nao e uma opcao deste script; as opcoes estao no uso abaixo. ' +
       'Nada foi gravado.\n' + USO);
@@ -575,10 +576,80 @@ function abertaVencida() {
   // commit com data de commit mais velha que a base (um pull de commit feito antes).
   return gravou > 0 && segundos > Math.floor(gravou / 1000);
 }
+// L3-s105-6 (D872, D881): a conferencia depois do teto. So vale com a revisao fechada no teto sem aprovar, uma vez por
+// revisao, e com a lista do que segurou ronda no fechada.json; a ronda nova sai na mesma base (nada se arquiva), so com
+// esses achados e so com as lentes deles.
+let conferenciaPedida = null;
+if (process.argv.indexOf('--conferencia') !== -1) {
+  // a base do id de antes ja foi para o id novo (A3-12b, acima): a recusa diz isso, e nao que nada mudou no disco
+  const recusar = function (porque) {
+    process.stdout.write('ERRO: --conferencia ' + porque + (movida
+      ? ' Nada foi gravado; so a pasta da revisao passou do nome antigo (' +
+        path.relative(cwd, movida.de).replace(/\\/g, '/') + ') para o novo (' +
+        path.relative(cwd, movida.para).replace(/\\/g, '/') + ').\n'
+      : ' Nada foi gravado.\n'));
+    process.exit(1);
+  };
+  const arqFechada = path.join(base, 'fechada.json');
+  if (formatoAntigo || !fs.existsSync(arqFechada)) {
+    recusar('so vale depois do fecho no teto, e ' + rel + ' nao tem revisao fechada: prepare a revisao sem a flag.');
+  }
+  let previa = null;
+  try { previa = JSON.parse(textoLib.semBom(fs.readFileSync(arqFechada, 'utf8'))); } catch (e) {
+    recusar('nao vale: nao consegui ler ' + path.relative(cwd, arqFechada).replace(/\\/g, '/') + ' (' +
+      textoLib.causaDoErro(e) + '). Confira o arquivo e rode de novo, ou prepare a revisao sem a flag.');
+  }
+  if (!previa || typeof previa !== 'object' || Array.isArray(previa)) {
+    recusar('nao vale: o fechada.json de ' + rel + ' nao e um objeto JSON (nao registra fecho nenhum). Prepare a ' +
+      'revisao sem a flag.');
+  }
+  if (previa.aprovado === true) {
+    recusar('nao vale: a revisao de ' + rel + ' ja fechou aprovada.');
+  }
+  if (previa.conferencia === true) {
+    recusar('ja rodou nesta revisao, e nao se repete: corrija cada achado que segue aberto com um teste e faca o ' +
+      'commit com a linha "# sworn: sem-revisao".');
+  }
+  if (!Number.isInteger(previa.ronda) || previa.ronda < veredito.TETO || !Array.isArray(previa.seguraram) ||
+      !previa.seguraram.length) {
+    recusar('so vale no fecho do teto de ' + veredito.TETO + ' rondas com a lista dos achados que seguraram ronda, e o ' +
+      'fechada.json de ' + rel + ' nao a traz (fechou antes do teto, ou numa versao de antes da conferencia). ' +
+      'Prepare a revisao sem a flag.');
+  }
+  // a marca "conferencia" do fechada.json so chega no apurar: ate la, a ronda cujo mapa.json traz a conferencia e a
+  // ja preparada, e uma segunda abriria outra. O mapa ilegivel nao conta (fail-open: a recusa e so contra repetir)
+  const jaPreparada = fs.readdirSync(base).filter(function (nome) { return /^\d+$/.test(nome); })
+    .map(Number).sort(function (x, y) { return x - y; }).filter(function (r) {
+      try {
+        const m = JSON.parse(textoLib.semBom(fs.readFileSync(path.join(base, String(r), 'mapa.json'), 'utf8')));
+        return !!m && typeof m.conferencia === 'object' && m.conferencia !== null;
+      } catch (e) { return false; }
+    })[0];
+  if (jaPreparada !== undefined) {
+    recusar('ja foi preparada nesta revisao (ronda ' + jaPreparada + '), e nao se repete: grave nela o veredito de ' +
+      'cada lente e rode o apurar-ronda.js.');
+  }
+  // fail-closed: cada achado precisa de uma lente conhecida, que escolhe o inspetor e vira chave do briefing; o item
+  // torto para aqui, com a posicao, em vez de virar inspetor de lente nenhuma
+  const tortos = [];
+  previa.seguraram.forEach(function (a, i) {
+    if (!a || typeof a !== 'object' || !veredito.chaveDaLente(a.lente)) tortos.push(i + 1);
+  });
+  if (tortos.length) {
+    recusar('nao vale: no fechada.json de ' + rel + ', o achado ' + tortos.join(', ') + ' da lista "seguraram" nao ' +
+      'tem uma lente conhecida. Prepare a revisao sem a flag.');
+  }
+  const abertos = previa.seguraram.map(function (a, i) {
+    return { id: i + 1, lente: veredito.chaveDaLente(a.lente), severidade: a.severidade, descricao: a.descricao,
+      ronda: a.ronda, linha: a.linha };
+  });
+  conferenciaPedida = { abertos: abertos, lentes: abertos.map(function (a) { return a.lente; })
+    .filter(function (l, i, todas) { return todas.indexOf(l) === i; }) };
+}
 let arquivada = null;
 let arquivadaAberta = false;
 const fechadaAntes = !formatoAntigo && fs.existsSync(path.join(base, 'fechada.json'));
-if (fechadaAntes || abertaVencida()) {
+if (!conferenciaPedida && (fechadaAntes || abertaVencida())) {
   arquivadaAberta = !fechadaAntes;
   const pai = path.join(path.dirname(revisao), 'revisao-fechada', path.basename(base));
   const d = new Date();
@@ -721,6 +792,8 @@ try {
   // RV-01 (D422): revisar depois de commitar deixa os dois lados iguais; o apurar le este campo.
   if (identico) mapaJson.identico = true;
   if (degradado) mapaJson.degradado = degradado.trim();
+  // L3-s105-6: a ronda de conferencia leva os achados a conferir; o apurar-ronda.js a apura a parte por esta chave
+  if (conferenciaPedida) mapaJson.conferencia = conferenciaPedida;
   // D503/D508: a referencia e o terceiro arquivo, nomeado (R nao e cego: e a peca de topo). A 2a passada troca A e B
   // dentro do mesmo pacote (E3): outra pasta numerada seria contada como ronda e gastaria o teto.
   if (referencia) {
@@ -801,6 +874,15 @@ try {
 }
 
 let aviso = 'mapa.json revela os lados. Nao o abra, e nao o mostre a nenhum inspetor.';
+if (conferenciaPedida) {
+  // o briefing em ingles, como o do inspetor; os achados vao por lente, cada um com o id que a resposta repete
+  aviso += ' Ronda de CONFERENCIA depois do teto: chame um inspetor por lente de `lentes` (so elas) e ponha no ' +
+    'briefing de cada um o bloco "conferencia" dela, de `conferencia`, com esta ordem: "This is a re-check round: ' +
+    'judge only whether each finding below is still present in A or B. Return a JSON object with the fields lente ' +
+    '(your lens) and conferencia, a list with one entry per id: { id, corrigido: true } when the finding is gone, or ' +
+    '{ id, corrigido: false, linha, trecho } with the line and its text on the side where it remains. Nothing else: ' +
+    'a new defect is not reported here." O apurar-ronda.js aprova quando todos voltam corrigidos.';
+}
 if (fotos) {
   const comFoto = ['A', 'B'].filter(function (rotulo) { return fotos[r.mapa[rotulo]]; });
   aviso += comFoto.length === 2
@@ -856,6 +938,14 @@ if (recorte) {
     aviso += ' Ficaram sem as linhas a mostra, pelo teto de ' + contratoLib.TETO_EXTRAS + ' linhas a mais por lado: ' +
       contrato.cortadosDoProprio.join(', ') + '.';
   }
+}
+// H9-14 (D851): com a chave gravidade ligada, o teto de bagatelas vai ao briefing de cada inspetor; a apuracao corta
+// o que passar dele
+const gravidadeLigada = require('./lib/projeto.js').gravidade(projetoCfg);
+if (gravidadeLigada) {
+  aviso += ' A chave gravidade do projeto.json esta ligada: ponha no briefing de cada inspetor a linha "Report at ' +
+    'most ' + gravidadeLigada.bagatelasPorRonda + ' findings with tipo melhoria, the ones that matter most; leave the ' +
+    'rest out."';
 }
 if (novo) {
   aviso += ' E arquivo novo: um dos lados e vazio, entao nao ha lado escondido; julgue o lado cheio pelo que ele e, ' +
@@ -948,10 +1038,18 @@ const saida = {
   vereditos: path.join(dir, 'vereditos'),
   // D485: as lentes da faixa; na completa (F2d), as que veredito.lentesDaCompleta escolheu pelo risco.
   faixa: faixa,
-  lentes: lentesDaRevisao,
+  lentes: conferenciaPedida ? conferenciaPedida.lentes : lentesDaRevisao,
   linhasMudadas: linhasMudadas,
   aviso: aviso
 };
+// L3-s105-6: os achados a conferir, por lente (o briefing de cada inspetor leva so os dele)
+if (conferenciaPedida) {
+  saida.conferencia = Object.create(null);
+  for (const a of conferenciaPedida.abertos) {
+    (saida.conferencia[a.lente] = saida.conferencia[a.lente] || []).push({ id: a.id, severidade: a.severidade,
+      descricao: a.descricao });
+  }
+}
 if (recorte) saida.trecho = { margem: cegar.TRECHO_MARGEM };
 // F2c: com linhas do contrato a mostra nos vaos, quantas (nos dois lados); o briefing diz ao inspetor o que elas sao.
 if (extras > 0) saida.trecho.extras = extras;

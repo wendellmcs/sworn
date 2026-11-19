@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.83.0 — conferência depois do teto, requisitos no plano e o inventário dos servidores MCP
+
+**Novo**
+
+- **Depois do teto de 3 rondas, uma ronda de conferência confere só o conserto** (`scripts/preparar-revisao.js`,
+  `scripts/apurar-ronda.js`, `scripts/lib/veredito.js`, `scripts/gravar-veredito.js`): o fecho no teto sem aprovar
+  guarda no `fechada.json` os achados que seguraram ronda. Com `--conferencia`, o `preparar-revisao.js` monta uma
+  ronda só com esses achados e só com as lentes deles; cada inspetor diz, de cada um, se o conserto o tirou, e o que
+  segue aberto vem com a linha (um número, ou a faixa `40-45`, como nos achados) e o trecho do lado novo, que o
+  script confere. Tudo corrigido aprova o arquivo; o que segue aberto vai pelo caminho do teto de sempre. A
+  conferência roda uma vez por revisão (a segunda chamada recusa desde o preparo da primeira, antes do apurar) e não
+  conta como outra revisão fechada. O `fechada.json` ilegível ou fora da forma recusa a flag e diz o que fazer, e a resposta sem lente
+  ou sem a lista da conferência aponta qual veredito refazer.
+- **O plano com caixas declara os requisitos, e cada passo diz qual atende** (`scripts/lib/plano-conferir.js`,
+  `scripts/lib/drift.js`): o `/sworn:review-plan` acusa o plano sem nenhuma linha `R<n>: <o que tem de valer>`, o
+  requisito que nenhum passo cita, o passo aberto que não cita requisito, o passo que cita um requisito que não existe e
+  o número definido duas vezes (o zero à esquerda não conta: `R<n>` com zeros na frente é o mesmo número). A definição vale em lista com marcador ou numerada, em título
+  e em citação; o `R<n>` entre crases é caminho ou comando, não citação; o achado do passo sem requisito traz o texto do passo. O `/sworn:drift` acusa o requisito cujos passos estão todos marcados sem que nenhum arquivo deles tenha mudado.
+- **O `/sworn:audit` lista os servidores MCP de fora do `.mcp.json`** (`scripts/lib/ambiente.js`,
+  `scripts/lib/auditoria.js`, `scripts/auditar.js`, `scripts/varrer.js`): os do usuário e os locais do projeto, que
+  moram no `~/.claude.json` (ou na pasta da `CLAUDE_CONFIG_DIR`, quando ela vem). Só os nomes: o arquivo guarda
+  credencial, e nenhum valor é lido para a saída. O arquivo ausente não é erro; o ilegível ou fora da forma sai em
+  `naoLidos`, sem a mensagem do leitor de JSON, que copia um trecho do arquivo. O `varrer.js` só diz que leu o
+  `~/.claude.json` quando a leitura deu certo.
+- **Teto declarado para a skill** (`scripts/lib/rubrica.js`, `modelos/boa-skill.md`): o critério novo da rubrica
+  acusa a skill com mais de 500 linhas e a descrição com mais de 500 caracteres, que pesa em toda sessão; conta o
+  valor, sem as aspas e sem o `>` ou o `|` do YAML.
+- **Chave `gravidade`, desligada por padrão** (`scripts/lib/projeto.js`, `scripts/preparar-revisao.js`,
+  `scripts/apurar-ronda.js`): ligada, cada ronda leva no máximo 3 achados de melhoria (ou o número que a chave diz) aos
+  registros, e o briefing pede ao inspetor só as que mais importam.
+- **O agente do `/sworn:parallel` devolve o que o travou** (`workflows/parallel.js`, `agents/reader.md`): o campo
+  `obstaculos` junta numa lista o que cada agente contornou, para o próximo briefing não tropeçar igual (o "None",
+  "nenhum" ou "-" não entra, e cada um entra cortado em 300 caracteres); o leitor
+  ganhou um teto de 15 turnos.
+
+**Correções**
+
+- **As lentes perguntam pelo que escapava** (`scripts/lib/veredito.js`): a de correção, pelo teste pulado, apagado ou
+  afrouxado para passar; a de borda, pelo endereço, porta ou chave de desenvolvimento escrito no código; a de enxuto,
+  pela dependência nova que serve a uma função só.
+- **`/sworn:drift`, `/sworn:review-plan` e `/sworn:shortcuts` rodam o próprio script sem pedir permissão**
+  (`skills/drift/SKILL.md`, `skills/review-plan/SKILL.md`, `skills/shortcuts/SKILL.md`): o `allowed-tools` delas libera
+  só o script do plugin, no Bash e no PowerShell; outro comando segue pedindo, e o gancho que nega ainda nega.
+
 ## 0.82.0 — perfil de instalação, revisão mais barata e o Monitor nos portões do shell
 
 **Mais barato, sem perder o que a revisão acha**

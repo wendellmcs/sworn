@@ -605,7 +605,7 @@ test('D442/5: re-init aceita as chaves de liga/desliga em vez de ignorar', () =>
 // nada muda. Por tipo (tela, codigo, texto), cada um uma lista de caminho ou URL - por isso fora de conferirCaminhos.
 test('D503: referencias e opcional e aceita listas de caminho ou URL por tipo', () => {
   assert.deepStrictEqual(projeto.CHAVES_OPCIONAIS, ['referencias', 'marcaDeAtalho', 'fontesDeConsulta', 'admissao',
-    'provaDeCoerencia', 'perfil']);
+    'provaDeCoerencia', 'perfil', 'gravidade']);
   assert.deepStrictEqual(projeto.TIPOS_REFERENCIA, ['tela', 'codigo', 'texto']);
   assert.strictEqual(projeto.CHAVES.indexOf('referencias'), -1, 'opcional nao entra nas obrigatorias');
   const com = copia({ referencias: { tela: ['docs/ref.png', 'https://exemplo.com/painel'], codigo: [], texto: ['README.md'] } });
@@ -970,4 +970,35 @@ test('H3: o re-init que troca de perfil troca as travas pelas respondidas agora;
   }
   // o antigo nao muda
   assert.deepStrictEqual(antigo.travas, { fecho: true, escopo: true, destrutivo: true, outraFrente: true });
+});
+
+// H9-14 (D851, D881): a chave gravidade e opcional, desligada por padrao, e a forma torta e erro na validacao
+test('H9-14: a chave gravidade valida a forma e so liga com ligada: true', () => {
+  assert.ok(projeto.CHAVES_OPCIONAIS.indexOf('gravidade') !== -1, 'o re-init ignoraria a chave');
+  assert.deepStrictEqual(projeto.gravidade({ gravidade: { ligada: true } }), { bagatelasPorRonda: projeto.BAGATELAS_POR_RONDA });
+  assert.deepStrictEqual(projeto.gravidade({ gravidade: { ligada: true, bagatelasPorRonda: 5 } }), { bagatelasPorRonda: 5 });
+  assert.strictEqual(projeto.gravidade({ gravidade: { ligada: false, bagatelasPorRonda: 5 } }), null);
+  assert.strictEqual(projeto.gravidade({}), null);
+  assert.strictEqual(projeto.gravidade(null), null);
+  assert.strictEqual(projeto.gravidade({ gravidade: { ligada: true, bagatelasPorRonda: 0 } }), null, 'torta vale como hoje');
+  const tortas = [
+    [[], /gravidade tem de ser objeto/],
+    [{ bagatelasPorRonda: 2 }, /gravidade\.ligada tem de ser true ou false/],
+    [{ ligada: true, bagatelasPorRonda: 1.5 }, /bagatelasPorRonda tem de ser inteiro de 1 para cima/],
+    [{ ligada: true, bagatelasPorRonda: 0 }, /bagatelasPorRonda tem de ser inteiro de 1 para cima/],
+    [{ ligada: true, bagatelasPorRonda: -1 }, /bagatelasPorRonda tem de ser inteiro de 1 para cima/],
+    [{ ligada: true, bagatelasPorRonda: '5' }, /bagatelasPorRonda tem de ser inteiro de 1 para cima/],
+    [{ ligada: true, gerados: ['dist/**'] }, /gravidade tem 1 chave\(s\) que nao conhece: as que valem sao ligada, bagatelasPorRonda/]
+  ];
+  for (const [g, re] of tortas) {
+    assert.ok(projeto.avisosDeTipo({ gravidade: g }).some(function (a) { return re.test(a); }), JSON.stringify(g));
+    // e erro na validacao, nao so aviso
+    const v = projeto.validar(copia({ gravidade: g }));
+    assert.strictEqual(v.ok, false, JSON.stringify(g));
+    assert.ok(v.erros.some(function (e) { return re.test(e); }), JSON.stringify(g) + ' ' + JSON.stringify(v.erros));
+  }
+  // o nome da chave desconhecida vem do arquivo e nao vai ao texto do gancho (acento e controle, D64/R5)
+  const forjada = projeto.avisosDeTipo({ gravidade: { ligada: false, 'ligadá\n[forjado]': 1 } });
+  assert.ok(forjada.every(function (a) { return a.indexOf('forjado') === -1 && a.indexOf('á') === -1; }), JSON.stringify(forjada));
+  assert.ok(projeto.avisosDeTipo({ gravidade: [] }).some(function (a) { return a.indexOf('"bagatelasPorRonda": ' + projeto.BAGATELAS_POR_RONDA) !== -1; }));
 });

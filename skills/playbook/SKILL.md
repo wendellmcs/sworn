@@ -1,6 +1,6 @@
 ---
 name: playbook
-description: Portable execution manual for any project. Use at the start of every task that is not pure conversation - implement, fix a bug, plan, review, audit, touch UI, write docs, version, publish, run a long plan. Defines the rigor gear (Fast/Standard/AAA), the inspection lenses (ten for code and eight for screens), the blind-judgment loop with a round cap, the countable chat-switch triggers, the mandatory owner-decision format and what a "done" must prove. Adapts to the project through a declared adapter; without one, it runs in degraded mode and states what it cannot verify. Overrides improvisation; never the user's explicit request.
+description: Portable execution manual for any project: the rigor gear (Fast/Standard/AAA), the inspection lenses, the blind review with a round cap, the chat-switch triggers, the owner-decision format and what a "done" must prove. Use at the start of every task that is not pure conversation - implement, fix a bug, plan, review, audit, touch UI, write docs, version, publish, run a long plan. Overrides improvisation; never the user's explicit request.
 ---
 
 # Universal AAA Standard
@@ -382,6 +382,9 @@ opening of every session; to turn it off: `"paralelismo": false` in `projeto.jso
 - **Two or more agents editing at the same time: each one isolated** (`isolation: worktree`), otherwise one
   overwrites the other. An agent that only reads needs no isolation.
 - **An agent's report is a claim**, not a fact: check the critical part at the source before calling it done.
+- **Keep the task in the main conversation when what happens along the way matters:** a test run whose whole
+  output you must read, a step that depends on what the previous one found, a debug where the next command comes
+  from the last output. The agent returns only its summary, and the detail you needed stays in its context.
 - **Cost brake:** the cheapest model that solves the task (the project's model map rules);
   at most 8 agents per dispatch. Rigor remains an axis separate from cost.
 - **3 or more independent tasks: run `/sworn:parallel` directly**, without asking, and say in one

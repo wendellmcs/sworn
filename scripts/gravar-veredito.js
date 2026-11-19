@@ -89,7 +89,14 @@ function pastaDaRonda(campo, raiz) {
     return { erro: 'a pasta invertida de "' + campo.trim() + '" nao fica numa ronda com referencia (a pasta numerada ' +
       'da ronda, com A.txt, B.txt e R.txt), entao nao parece a 2a passada de uma ronda' };
   }
-  return { pasta: abs, comReferencia: comReferencia };
+  // L3-s105-6: a ronda de conferencia depois do teto (o mapa.json dela traz `conferencia`) recebe a resposta da
+  // conferencia, nao o veredito de lentes. fail-closed: mapa ilegivel = ronda comum, e a resposta de conferencia e recusada
+  let conferencia = false;
+  try {
+    const m = JSON.parse(texto.semBom(fs.readFileSync(path.join(daRonda, 'mapa.json'), 'utf8')));
+    conferencia = !naInvertida && !!m && typeof m === 'object' && !!m.conferencia && typeof m.conferencia === 'object';
+  } catch (e) { conferencia = false; }
+  return { pasta: abs, comReferencia: comReferencia, conferencia: conferencia };
 }
 
 /** O que fazer quando o hook nao gravou: o arquivo (ou o molde dele), como manda a skill revisar, Passo 2. */
@@ -124,13 +131,30 @@ function avisoDaGravacao(mensagem, raiz, gravado) {
   if (typeof mensagem !== 'string' || mensagem.trim() === '') return aviso('a resposta do inspetor veio vazia');
   const vd = extrairJson(mensagem);
   if (!vd) return aviso('nao achei o JSON do veredito na resposta do inspetor');
-  const erros = veredito.errosDoVeredito(vd);
+  // L3-s105-6: a resposta da conferencia ({ lente, conferencia: [...] }) nao tem melhor nem achados; quem confere cada
+  // resposta e o apurar-ronda.js, que recusa a conferencia incompleta
+  const daConferencia = Array.isArray(vd.conferencia);
+  // a lista vazia nao confere nada: recusa aqui, com o motivo, em vez de gravar e o apurar-ronda.js recusar depois
+  // (fail-closed)
+  if (daConferencia && !vd.conferencia.length) {
+    return aviso('a lista "conferencia" veio vazia: responda cada id da conferencia', typeof vd.lente === 'string' ? vd.lente : null);
+  }
+  const erros = daConferencia ? [] : veredito.errosDoVeredito(vd);
   if (erros.length) return aviso('veredito invalido (' + erros.join('; ') + ')', typeof vd.lente === 'string' ? vd.lente : null);
   const lente = chaveDaLente(vd.lente);
   if (!lente) return aviso('lente desconhecida: "' + String(vd.lente).slice(0, 60) + '"');
   const onde = pastaDaRonda(vd.vereditos, raiz);
   if (onde.erro) return aviso(onde.erro, lente);
-  if (onde.comReferencia) {
+  if (daConferencia !== onde.conferencia) {
+    const ronda = String(vd.vereditos).slice(0, 120);
+    // a resposta e do tipo errado para a ronda: gravar a mao a mesma resposta contornaria a recusa, entao o passo e
+    // chamar a lente de novo com o briefing desta ronda
+    return 'sworn: nao gravei o veredito da lente ' + lente + ': ' + (daConferencia
+      ? 'a resposta traz a lista "conferencia", e a ronda de "' + ronda + '" nao e de conferencia'
+      : 'a ronda de "' + ronda + '" e de conferencia, e a resposta nao traz a lista "conferencia"') +
+      '. Chame a lente de novo com o briefing desta ronda; nao grave esta resposta a mao.';
+  }
+  if (onde.comReferencia && !daConferencia) {
     const daReferencia = veredito.errosDoVeredito(vd, { comReferencia: true });
     if (daReferencia.length) return aviso('veredito invalido (' + daReferencia.join('; ') + ')', lente, onde.pasta);
   }

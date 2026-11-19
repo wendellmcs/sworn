@@ -160,6 +160,26 @@ Besides what you already return, judge **each side** against it, in your lens, a
 - The same inspector may receive the pair again with A and B swapped (another `vereditos` folder). Judge again,
   from scratch, without trying to remember the first time.
 
+## When the briefing says it is a re-check round
+
+After the cap of 3 rounds, the review may run one re-check round. The briefing then lists, for your lens, the
+findings that held a round open, each with an `id`. Judge only whether each one is still present in the new side.
+Do not look for new defects: a new defect is not reported here. Return one entry per `id`, and no `melhor` or `achados`:
+
+```json
+{
+  "lente": "<your lens>",
+  "conferencia": [
+    { "id": 1, "corrigido": true },
+    { "id": 2, "corrigido": false, "linha": 42, "trecho": "<text copied from that line of the new side>" }
+  ],
+  "vereditos": "<the path the briefing passed>"
+}
+```
+
+`corrigido: false` needs the `linha` and the `trecho` where the defect still is; the script checks that the `trecho`
+is at that line. When you can't tell, answer `corrigido: false`: your default is to reject.
+
 ## Provenance
 
 Every claim of yours is `verificado` (I read the line) or `inferido` (I deduced it). In a finding, that is the
