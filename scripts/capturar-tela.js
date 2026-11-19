@@ -31,6 +31,13 @@ const PRAZO_DO_FECHO = 5000;
 // Teto de cada comando ao navegador: nenhum passo espera para sempre, nem os que vem depois da carga.
 const PRAZO_DO_COMANDO = 60000;
 const PASSO = 100;
+// H10-3: a rede quieta por 500 ms conta como assentada; o teto da espera e 5 s (os numeros do Playwright MCP).
+const QUIETO = 500;
+const TETO_DA_REDE = 5000;
+// Os dialogos guardados na evidencia; a pagina que abre um atras do outro so soma na contagem.
+const TETO_DE_DIALOGOS = 100;
+// Os tipos que desenham a tela; WebSocket e EventSource ficam abertos de proposito e nao contam.
+const TIPOS_QUE_ASSENTAM = new Set(['Document', 'Script', 'XHR', 'Fetch', 'Stylesheet', 'Font']);
 const TENTE_DE_NOVO = 'Rode de novo; se repetir, feche outras janelas do navegador ou aponte SWORN_NAVEGADOR para ' +
   'outro Chrome ou Edge.';
 // O fim de todo erro do enviar: as leituras do estilo e do layout o tiram (ali a foto ja esta tirada, e rodar de novo
@@ -125,8 +132,35 @@ async function fotografar(cdp, o) {
   let carregou = false;
   let avisarCarga = null;
   let status = null;
+  // H10-2 (Playwright MCP, o "modal state" de backend/tool.ts:70-87): o dialogo da pagina segura a carga; ele se fecha
+  // sozinho pelo "cancelar" (como o Playwright: a foto so le a pagina, nunca confirma um confirm()) e fica registrado,
+  // ate TETO_DE_DIALOGOS; os de alem do teto so se contam.
+  const dialogos = [];
+  let dialogosForaDoTeto = 0;
+  let dialogoPreso = null;
+  // H10-3 (Playwright MCP, backend/utils.ts:20-57): as requisicoes em voo que a foto espera terminar.
+  const emVoo = new Set();
+  let ultimaRede = Date.now();
   cdp.ouvir(function (m) {
     if (m.sessionId !== s) return;
+    if (m.method === 'Page.javascriptDialogOpening') {
+      const p = m.params || {};
+      const tipo = String(p.type || '');
+      if (dialogos.length < TETO_DE_DIALOGOS) dialogos.push({ tipo: tipo, mensagem: String(p.message || '') });
+      else dialogosForaDoTeto++;
+      // o dialogo conta como preso ate o navegador confirmar o fechamento: recusado ou sem resposta, a pagina segue
+      // presa e o erro da carga diz o porque
+      dialogoPreso = tipo || 'dialogo';
+      cdp.enviar('Page.handleJavaScriptDialog', { accept: false }, s, 'fechar o dialogo da pagina')
+        .then(function () { dialogoPreso = null; }, function () {});
+    } else if (m.method === 'Network.requestWillBeSent' && m.params && TIPOS_QUE_ASSENTAM.has(m.params.type)) {
+      emVoo.add(m.params.requestId);
+      ultimaRede = Date.now();
+    } else if ((m.method === 'Network.loadingFinished' || m.method === 'Network.loadingFailed') && m.params &&
+      emVoo.has(m.params.requestId)) {
+      emVoo.delete(m.params.requestId);
+      ultimaRede = Date.now();
+    }
     if (m.method === 'Runtime.consoleAPICalled') consoleLista.push(captura.entradaDeConsole(m.params));
     else if (m.method === 'Runtime.exceptionThrown') erros.push(captura.erroDaPagina(m.params));
     else if (m.method === 'Log.entryAdded' && m.params && m.params.entry && m.params.entry.level === 'error') {
@@ -150,8 +184,17 @@ async function fotografar(cdp, o) {
   const nav = await comPrazo(cdp.enviar('Page.navigate', { url: o.url }, s, 'abrir a pagina'), restante(),
     'a pagina nao respondeu em ' + o.tempoMax + ' ms: confira se o servidor esta no ar, ou ' + maisTempo);
   if (nav.errorText) throw new Error('a pagina nao abriu (' + nav.errorText + '): confira o endereco e se o servidor esta no ar');
-  await comPrazo(new Promise(function (r) { if (carregou) r(); else avisarCarga = r; }), restante(),
-    'a pagina nao terminou de carregar em ' + o.tempoMax + ' ms; ' + maisTempo + ' ou espere um seletor com --esperar');
+  try {
+    await comPrazo(new Promise(function (r) { if (carregou) r(); else avisarCarga = r; }), restante(),
+      'a pagina nao terminou de carregar em ' + o.tempoMax + ' ms; ' + maisTempo + ' ou espere um seletor com --esperar');
+  } catch (e) {
+    // o dialogo que o navegador nao deixou fechar segura a carga: mais tempo nao resolve, e o erro diz isso
+    if (dialogoPreso) {
+      throw new Error('a pagina abriu um dialogo (' + dialogoPreso + ') que o navegador nao fechou, e a carga ' +
+        'parou nele; ' + TENTE_DE_NOVO.charAt(0).toLowerCase() + TENTE_DE_NOVO.slice(1));
+    }
+    throw e;
+  }
 
   if (o.esperar) {
     const expressao = '!!document.querySelector(' + JSON.stringify(o.esperar) + ')';
@@ -171,6 +214,18 @@ async function fotografar(cdp, o) {
       await dormir(Math.min(PASSO, restante()));
     }
   }
+  // H10-3: a rede assenta (nada em voo por QUIETO ms) antes da foto, ate o teto; passou dele, a foto sai e a evidencia
+  // diz quantas ficaram em voo (nunca corta calado).
+  const inicioDaRede = Date.now();
+  // o --tempo-max quase no fim encurta a espera: so entao mais --tempo-max ajuda (o teto de 5 s e fixo)
+  const redeEncurtada = restante() < TETO_DA_REDE;
+  const tetoDaRede = inicioDaRede + Math.min(TETO_DA_REDE, restante());
+  // o silencio conta a partir da carga: o fetch que a pagina dispara logo depois dela entra na espera
+  ultimaRede = inicioDaRede;
+  while ((emVoo.size > 0 || Date.now() - ultimaRede < QUIETO) && Date.now() < tetoDaRede) await dormir(PASSO);
+  const requisicoesPendentes = emVoo.size;
+  // a espera de fato (o --tempo-max quase no fim a encurta), que o aviso cita
+  const esperaDaRede = Date.now() - inicioDaRede;
   // Dois quadros de desenho depois da carga: o que a pagina pinta no primeiro quadro entra na foto.
   await cdp.enviar('Runtime.evaluate', { expression: 'new Promise(function (r) { requestAnimationFrame(function () { ' +
     'requestAnimationFrame(function () { r(true); }); }); })', awaitPromise: true }, s, 'esperar a pagina desenhar');
@@ -193,7 +248,8 @@ async function fotografar(cdp, o) {
   const { estilo, layout } = await lerEstiloELayout(cdp, s, o.largura);
   return { bytes: Buffer.from(imagem.data, 'base64'), foto, alturaDaPagina: Math.ceil(Number(tamanho.height) || 0),
     console: consoleLista, erros, acessibilidade: captura.resumirAcessibilidade(arvore.nodes), estilo, layout,
-    urlFinal: local.result && local.result.value, navegador: versao.product, duracaoMs: Date.now() - inicio, status };
+    urlFinal: local.result && local.result.value, navegador: versao.product, duracaoMs: Date.now() - inicio, status,
+    dialogos, dialogosForaDoTeto, requisicoesPendentes, esperaDaRede, redeEncurtada };
 }
 
 // Roda uma expressao de leitura na pagina: { valor } (o que ela devolveu), ou { motivo } de nao ter lido.
@@ -337,13 +393,19 @@ function gravarEvidencia(dados, o, saida, conferencia) {
   const acessibilidade = { itens: dados.acessibilidade.itens.map(function (i) {
     return { papel: i.papel, nome: captura.textoParaODisco(i.nome) };
   }), cortada: dados.acessibilidade.cortada };
+  const dialogos = dados.dialogos.map(function (d) {
+    return { tipo: d.tipo, mensagem: captura.textoParaODisco(d.mensagem) };
+  });
   const evidencia = {
+    textoDaPagina: captura.TEXTO_DA_PAGINA, // H10-1: o aviso antes do texto da pagina
     url: captura.semSegredo(o.url), urlFinal: dados.urlFinal ? captura.semSegredo(dados.urlFinal) : null,
     status: dados.status, hora: new Date().toISOString(), navegador: dados.navegador,
     largura: o.largura, altura: dados.foto.altura, alturaDaPagina: dados.alturaDaPagina, cortada: dados.foto.cortada,
     imagem: 'tela.png', sha256, console: limpos.console, erros: limpos.erros, acessibilidade,
-    duracaoMs: dados.duracaoMs, estilo: dados.estilo, layout: dados.layout,
+    duracaoMs: dados.duracaoMs, estilo: dados.estilo, layout: dados.layout, dialogos,
   };
+  if (dados.dialogosForaDoTeto > 0) evidencia.dialogosForaDoTeto = dados.dialogosForaDoTeto;
+  if (dados.requisicoesPendentes > 0) evidencia.requisicoesPendentes = dados.requisicoesPendentes;
   if (conferencia) evidencia.estiloForaDoSistema = conferencia;
   const caminhoDaEvidencia = path.join(saida, 'evidencia.json');
   fs.writeFileSync(caminhoDaEvidencia, JSON.stringify(evidencia, null, 2) + '\n');
@@ -359,6 +421,20 @@ function gravarEvidencia(dados, o, saida, conferencia) {
   if (dados.status >= 400) {
     fim.aviso = 'o servidor respondeu ' + dados.status + ': a foto e da pagina de erro; confira o endereco (ou o login, ' +
       'se a pagina pede um) e capture de novo';
+  }
+  const quantosDialogos = dialogos.length + (dados.dialogosForaDoTeto || 0);
+  if (quantosDialogos) {
+    fim.dialogosCancelados = quantosDialogos;
+    fim.aviso = captura.juntarAvisos(fim.aviso, 'a pagina abriu ' + quantosDialogos + ' dialogo(s) (alert, confirm, ' +
+      'prompt) e a captura respondeu "cancelar" a cada um: a foto mostra a pagina depois disso; o texto deles esta em ' +
+      'evidencia.json');
+  }
+  if (dados.requisicoesPendentes > 0) {
+    fim.aviso = captura.juntarAvisos(fim.aviso, 'a pagina ainda carregava ' + dados.requisicoesPendentes +
+      ' recurso(s) depois de ' + (Math.round((dados.esperaDaRede || 0) / 100) / 10) + ' s de espera: a foto pode ter ' +
+      'saido antes do conteudo; ' + (dados.redeEncurtada
+        ? 'o --tempo-max acabou antes da espera da rede: aumente --tempo-max'
+        : 'a espera da rede vai ate ' + (TETO_DA_REDE / 1000) + ' s; espere o que falta com --esperar <seletor>'));
   }
   return fim;
 }

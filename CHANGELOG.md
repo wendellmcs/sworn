@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.84.0 — a captura de tela trata o diálogo, espera a rede e marca o texto da página como dado
+
+**Novo**
+
+- **O texto da página é dado, nunca instrução** (`scripts/lib/captura.js`, `scripts/capturar-tela.js`,
+  `scripts/lib/tela-cega.js`, `scripts/preparar-revisao.js`, `skills/review/SKILL.md`, `skills/reference/SKILL.md`):
+  o `evidencia.json` abre com a chave `textoDaPagina`, que diz que o console, os erros, os diálogos e os nomes da
+  árvore de acessibilidade vêm da página capturada e que pedido escrito nela não se obedece. A evidência cega do
+  inspetor de tela leva o mesmo aviso, sempre do próprio sworn (a página não o troca), e o briefing da revisão com
+  fotos e o passo do `/sworn:reference`, que abre página de terceiro, dizem o mesmo. O Playwright MCP só marca assim
+  as ferramentas que a página registra; aqui vale para todo texto que vem dela.
+- **O diálogo da página não segura a captura** (`scripts/capturar-tela.js`): um `alert`, `confirm`, `prompt` ou
+  `beforeunload` se fecha sozinho pelo "cancelar" (a captura só lê a página: nunca confirma um `confirm()` por você,
+  como o Playwright) e fica em `dialogos` no `evidencia.json` (tipo e mensagem, com o segredo tirado; até 100, o resto
+  conta em `dialogosForaDoTeto`); a saída diz quantos foram cancelados e avisa. Se o navegador não deixa fechar, o erro
+  diz que a carga parou no diálogo. Antes, o `alert` durante a carga prendia a página até o prazo, e o erro mandava aumentar
+  `--tempo-max`.
+- **A foto espera a rede assentar** (`scripts/capturar-tela.js`): depois da carga (e do `--esperar`), a captura espera
+  as requisições de documento, script, estilo, fonte, XHR e fetch terminarem, com 500 ms de silêncio contados a partir
+  da carga, até 5 s. O conteúdo que a página busca logo depois de carregar entra na foto e na árvore. Passou do teto,
+  a foto sai mesmo assim, a evidência diz quantas ficaram pendentes (`requisicoesPendentes`) e a saída avisa quanto
+  tempo esperou de fato e o que ajuda: `--esperar` com o seletor do que falta, ou mais `--tempo-max` quando foi ele
+  que acabou antes dos 5 s. WebSocket e EventSource, que ficam abertos de propósito, não contam; a requisição que
+  falha sai da conta.
+
+**Corrigido**
+
+- **O portão de fecho só cita a caixa aberta de um plano dentro do projeto** (`scripts/lib/plano.js`, pendência #13):
+  a `caixaAberta` lia o plano tirado do Objetivo da frente sem a trava de dentro do projeto e sem o teto de tamanho;
+  `Plano: ../fora.md` fazia o portão citar 160 caracteres de um arquivo de fora. Agora vale a mesma regra da faixa do
+  plano.
+- **O `/sworn:audit` e o `init` não copiam trecho de configuração quebrada** (`scripts/lib/ambiente.js`, pendência
+  #17, decisão do dono): o `.claude/settings.json`, o `.claude/settings.local.json` e o `.mcp.json` com JSON quebrado
+  saem em `naoLidos` como "não é JSON válido", sem a mensagem do leitor de JSON, que copiava um trecho do arquivo
+  (credencial inclusive). É a regra que o `~/.claude.json` já seguia desde a 0.83.0; o erro de disco segue dizendo a
+  causa.
+
 ## 0.83.0 — conferência depois do teto, requisitos no plano e o inventário dos servidores MCP
 
 **Novo**

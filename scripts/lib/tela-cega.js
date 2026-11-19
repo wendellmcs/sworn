@@ -138,7 +138,9 @@ function evidenciaCega(ev, rotulo) {
   const acess = objetoOuVazio(e.acessibilidade);
   const doConsole = soObjetos(e.console);
   const dosErros = soObjetos(e.erros);
-  return {
+  const dosDialogos = soObjetos(e.dialogos);
+  const out = {
+    textoDaPagina: captura.TEXTO_DA_PAGINA, // H10-1: da constante, nunca da evidencia (a pagina nao troca o aviso)
     imagem: rotulo + '.png',
     sha256: textoOuNulo(e.sha256),
     status: statusOuNulo(e.status),
@@ -150,12 +152,21 @@ function evidenciaCega(ev, rotulo) {
     erros: dosErros.slice(0, ENTRADAS_DO_INSPETOR).map(function (x) {
       return { texto: tirar(x.texto), url: tirar(x.url), linha: numeroOuNulo(x.linha), coluna: numeroOuNulo(x.coluna) };
     }),
-    // Quantas entradas ficaram fora do teto, em cada lista (0 quando cabem todas).
+    // Quantas entradas ficaram fora do teto, em cada lista (0 quando cabem todas); nos dialogos, somam os que a
+    // captura ja so contou (dialogosForaDoTeto).
     foraDoTeto: { console: Math.max(0, doConsole.length - ENTRADAS_DO_INSPETOR),
-      erros: Math.max(0, dosErros.length - ENTRADAS_DO_INSPETOR) },
+      erros: Math.max(0, dosErros.length - ENTRADAS_DO_INSPETOR),
+      dialogos: Math.max(0, dosDialogos.length - ENTRADAS_DO_INSPETOR) + (numeroOuNulo(e.dialogosForaDoTeto) || 0) },
     acessibilidade: { itens: soObjetos(acess.itens).map(function (i) { return { papel: tirar(i.papel || ''), nome: tirar(i.nome) }; }),
       cortada: acess.cortada === true },
+    // H10-2: o dialogo que a pagina abriu, sem o endereco e sem o segredo
+    dialogos: dosDialogos.slice(0, ENTRADAS_DO_INSPETOR).map(function (d) {
+      return { tipo: tirar(d.tipo || ''), mensagem: tirar(d.mensagem) };
+    }),
   };
+  // H10-3: as requisicoes ainda em voo na hora da foto (a tela pode estar pela metade)
+  if (numeroOuNulo(e.requisicoesPendentes) > 0) out.requisicoesPendentes = e.requisicoesPendentes;
+  return out;
 }
 
 /** O que vai para o mapa.json e volta no fecho: de onde e quando veio a foto, e o que ela registrou. */

@@ -10,12 +10,18 @@ const LIMITES = (function () {
   catch (e) { return { delegaveisConhecidos: [] }; }
 })();
 
+// pendencia #17 (dono, 2026-11-19): o JSON quebrado sai sem a mensagem do V8, que copia um trecho do texto (credencial
+// inclusive); o erro de leitura segue com a causa. Decide pela etapa: um erro de leitura sem code nao vira "JSON".
+function causaDaLeitura(r) {
+  return r.etapa === 'json' ? 'nao e JSON valido' : texto.causaDoErro(r.erro);
+}
+
 // A4-01: sem o semBom, o settings.json gravado com BOM (PowerShell 5.1) voltava null e o ambiente saia vazio, calado.
 // A4-amb-2 (pedido 12), estados: so ENOENT e ausente; quebrado, ilegivel ou que nao e objeto entra em `naoLidos`
 // (`rel (causa)`) - antes era ausente, calado, e o init dizia "nada" de um projeto que configura.
 function lerObjeto(cwd, rel, naoLidos) {
   const r = jsonio.ler(path.join(cwd, rel), { objeto: true });
-  if (r.erro) naoLidos.push(rel + ' (' + texto.causaDoErro(r.erro) + ')');
+  if (r.erro) naoLidos.push(rel + ' (' + causaDaLeitura(r) + ')');
   else if (r.etapa === 'forma') naoLidos.push(rel + ' (nao e um objeto JSON)');
   return r.valor;
 }
@@ -61,7 +67,7 @@ function mcpForaDoProjeto(cwd, claudeJson, rotulo, naoLidos) {
   // trecho do texto ("Unexpected token ..., "<texto>" is not valid JSON"): no arquivo de credencial, so o codigo do
   // erro de leitura sai, nunca a mensagem do parser.
   if (r.erro) {
-    naoLidos.push(rotulo + ' (' + (r.erro.code ? texto.causaDoErro(r.erro) : 'nao e JSON valido') + ')');
+    naoLidos.push(rotulo + ' (' + causaDaLeitura(r) + ')');
     return vazio;
   }
   if (r.etapa === 'forma') { naoLidos.push(rotulo + ' (nao e um objeto JSON)'); return vazio; }

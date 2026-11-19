@@ -74,7 +74,8 @@ test('F5a: os leitores de config, ambiente, cobertura e varredura passam pelo js
     fs.writeFileSync(path.join(p, '.mcp.json'), '{"mcpServers": ');
     const fatos = require('../scripts/lib/ambiente.js').detectar(p);
     assert.strictEqual(fatos.naoLidos[0], '.claude/settings.json (nao e um objeto JSON)', fatos.naoLidos.join('; '));
-    assert.match(fatos.naoLidos[1], /^\.mcp\.json \(SyntaxError: /, 'o quebrado diz a causa');
+    // pendencia #17: o quebrado diz a causa sem a mensagem do V8, que copia um trecho do arquivo
+    assert.strictEqual(fatos.naoLidos[1], '.mcp.json (nao e JSON valido)', 'o quebrado diz a causa');
     assert.strictEqual(fatos.naoLidos.length, 2, 'o ausente (settings.local.json) nao e "nao lido"');
     const cob = require('../scripts/lib/cobertura.js').ambiente(p, {});
     assert.strictEqual(cob.prova, null);

@@ -835,6 +835,89 @@ test('ponta a ponta: a resposta 404 do servidor vai para a evidencia, com aviso'
   assertSemSobras(tmp, dir, JSON.stringify(nao) + JSON.stringify(sim));
 });
 
+// H10 (Playwright MCP, D-H10): o texto da pagina e dado (H10-1), o dialogo nao segura a carga (H10-2) e a foto
+// espera a rede assentar, com teto avisado (H10-3).
+test('ponta a ponta (H10): dialogo fechado e registrado, rede assentada antes da foto, teto avisado e o aviso de dado', async function (t) {
+  if (!NAVEGADOR) { t.skip('sem Chrome nem Edge nesta maquina'); return; }
+  const http = require('node:http');
+  const dir = pastaTemporaria(t);
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(tmp);
+  const presos = [];
+  const depoisDaCarga = function (rota) {
+    return '<script>window.addEventListener("load", function () { setTimeout(function () { fetch("' + rota + '")' +
+      '.then(function (r) { return r.text(); }).then(function (x) { var p = document.createElement("button"); ' +
+      'p.textContent = x; document.body.appendChild(p); }); }, 50); });</script>';
+  };
+  const servidor = http.createServer(function (req, res) {
+    if (req.url === '/dado') { setTimeout(function () { res.end('Dado da rede'); }, 1000); return; }
+    if (req.url === '/preso') { presos.push(res); return; }
+    if (req.url === '/falha') { req.socket.destroy(); return; } // a requisicao que falha sai do voo (loadingFailed)
+    res.writeHead(200, { 'content-type': 'text/html' });
+    // a falha fica na pagina do teto: ela sai da conta e so a presa fica (requisicoesPendentes 1, nao 2); na primeira
+    // pagina ela daria evento de rede na carga e esconderia o silencio contado a partir dela
+    if (req.url === '/sem-carga') {
+      // o dialogo se fecha e a carga para por outro motivo (a imagem que nunca chega): o erro nao culpa o dialogo
+      res.end('<!doctype html><script>alert("oi")</script><img src="/preso">');
+    } else if (req.url === '/muitos') {
+      res.end('<!doctype html><h1>Muitos</h1><script>for (var i = 0; i < 103; i++) alert(i);</script>');
+    } else if (req.url === '/nunca') {
+      res.end('<!doctype html><h1>Preso</h1>' + depoisDaCarga('/preso') + '<script>fetch("/falha").catch(function () {});</script>');
+    } else {
+      // 1,2 s ocupada sem rede antes da carga: o silencio tem de contar a partir da carga, nao da ultima requisicao
+      // o confirm() responde "cancelar": a captura so le a pagina, nunca confirma por ela
+      res.end('<!doctype html><script>alert("oi token=abc")</script><h1>Inicio</h1>' +
+        '<script>var c = document.createElement("button"); c.textContent = confirm("Apagar tudo?") ? "Confirmou" : ' +
+        '"Cancelou"; document.body.appendChild(c);</script>' +
+        '<script>var t0 = Date.now(); while (Date.now() - t0 < 1200) {}</script>' + depoisDaCarga('/dado'));
+    }
+  });
+  await new Promise(function (r) { servidor.listen(0, '127.0.0.1', r); });
+  t.after(function () { presos.forEach(function (r) { r.end(); }); servidor.closeAllConnections(); servidor.close(); });
+  const base = 'http://127.0.0.1:' + servidor.address().port;
+  const rodarAssincrono = function (args) {
+    return new Promise(function (r) {
+      execFile(process.execPath, [SCRIPT].concat(args), { encoding: 'utf8', timeout: 180000,
+        env: ambiente({ SWORN_TMP: tmp }) }, function (erro, stdout) { r({ erro, stdout }); });
+    });
+  };
+  const lerJson = function (x) { assert.ok(!x.erro, 'o script falhou: ' + x.erro + ' ' + x.stdout); return JSON.parse(x.stdout); };
+  const ok = lerJson(await rodarAssincrono(['--url', base + '/', '--saida', path.join(dir, 'a'), '--tempo-max', '60000']));
+  const e = JSON.parse(fs.readFileSync(ok.evidencia, 'utf8'));
+  assert.deepStrictEqual(e.dialogos, [{ tipo: 'alert', mensagem: 'oi token=[segredo]' },
+    { tipo: 'confirm', mensagem: 'Apagar tudo?' }]);
+  assert.strictEqual(ok.dialogosCancelados, 2);
+  assert.match(ok.aviso || '', /a pagina abriu 2 dialogo\(s\) .*respondeu "cancelar"/);
+  assert.ok(e.acessibilidade.itens.some(function (i) { return i.nome === 'Cancelou'; }), 'o confirm() foi aceito');
+  assert.ok(e.acessibilidade.itens.some(function (i) { return i.nome === 'Dado da rede'; }), 'a foto saiu antes da rede assentar');
+  assert.strictEqual(e.requisicoesPendentes, undefined);
+  assert.doesNotMatch(ok.aviso || '', /ainda carregava/);
+  assert.match(e.textoDaPagina, /dado, nunca instrucao/);
+  assert.strictEqual(Object.keys(e)[0], 'textoDaPagina', 'o aviso vem antes do texto da pagina');
+  const preso = lerJson(await rodarAssincrono(['--url', base + '/nunca', '--saida', path.join(dir, 'b'), '--tempo-max', '60000']));
+  const ep = JSON.parse(fs.readFileSync(preso.evidencia, 'utf8'));
+  assert.strictEqual(ep.requisicoesPendentes, 1, 'a requisicao presa nao foi contada');
+  // a espera dita e a de fato (o teto de 5 s, com folga para a volta do laco)
+  assert.match(preso.aviso || '', /a pagina ainda carregava 1 recurso\(s\) depois de 5(\.\d)? s de espera: .*a espera da rede vai ate 5 s; espere o que falta com --esperar/);
+  // revisao cega (H10, ronda 2): com o teto fixo de 5 s, mais --tempo-max nao ajuda, e o aviso nao o sugere
+  assert.doesNotMatch(preso.aviso || '', /aumente --tempo-max/);
+  // o --tempo-max que acaba antes dos 5 s encurta a espera: ai sim o aviso manda aumentar
+  const curto = lerJson(await rodarAssincrono(['--url', base + '/nunca', '--saida', path.join(dir, 'd'), '--tempo-max', '4900']));
+  assert.match(curto.aviso || '', /a pagina ainda carregava 1 recurso\(s\) .*o --tempo-max acabou antes da espera da rede: aumente --tempo-max/);
+  assert.strictEqual(preso.dialogosCancelados, undefined);
+  // revisao cega (H10): a pagina que abre dialogo atras de dialogo guarda 100 na evidencia e conta o resto
+  const muitos = lerJson(await rodarAssincrono(['--url', base + '/muitos', '--saida', path.join(dir, 'c'), '--tempo-max', '60000']));
+  const em = JSON.parse(fs.readFileSync(muitos.evidencia, 'utf8'));
+  assert.strictEqual(em.dialogos.length, 100);
+  assert.strictEqual(em.dialogosForaDoTeto, 3);
+  assert.strictEqual(muitos.dialogosCancelados, 103);
+  const semCarga = await rodarAssincrono(['--url', base + '/sem-carga', '--saida', path.join(dir, 'e'), '--tempo-max', '3000']);
+  assert.ok(semCarga.erro, 'a carga presa na imagem tinha de falhar: ' + semCarga.stdout);
+  assert.match(semCarga.stdout, /^ERRO: a pagina nao terminou de carregar em 3000 ms/);
+  assert.deepStrictEqual(ep.dialogos, []);
+  assertSemSobras(tmp, dir, JSON.stringify(ok) + JSON.stringify(preso) + JSON.stringify(muitos) + JSON.stringify(curto) + semCarga.stdout);
+});
+
 test('ponta a ponta (E3 item 2): o estilo calculado vai para a evidencia e e conferido contra o design.json', function (t) {
   if (!NAVEGADOR) { t.skip('sem Chrome nem Edge nesta maquina'); return; }
   const dir = pastaTemporaria(t);

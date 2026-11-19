@@ -410,9 +410,17 @@ test('A4-amb-2: arquivo de configuracao que nao se le vai a naoLidos com a causa
   try {
     const r = ambiente.detectar(dir);
     assert.strictEqual(r.naoLidos.length, 2, JSON.stringify(r.naoLidos));
-    assert.ok(/^\.claude\/settings\.json \(SyntaxError: /.test(r.naoLidos[0]), r.naoLidos[0]);
+    // pendencia #17 (dono, 2026-11-19): o JSON quebrado sai sem a mensagem do V8, que copia um trecho do texto
+    assert.strictEqual(r.naoLidos[0], '.claude/settings.json (nao e JSON valido)');
     assert.ok(/^\.mcp\.json \(e uma pasta \(EISDIR\)\)$/.test(r.naoLidos[1]), r.naoLidos[1]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const segredo = montar({ '.claude/settings.local.json': '{ "env": { "TOKEN": "sk-segredo-123" ',
+    '.mcp.json': '{ "mcpServers": { "x": { "headers": { "Authorization": "Bearer sk-segredo-456" } } x' });
+  try {
+    const r = ambiente.detectar(segredo);
+    assert.deepStrictEqual(r.naoLidos, ['.claude/settings.local.json (nao e JSON valido)', '.mcp.json (nao e JSON valido)']);
+    assert.ok(!JSON.stringify(r).includes('sk-segredo'), 'o trecho do arquivo foi para a saida');
+  } finally { fs.rmSync(segredo, { recursive: true, force: true }); }
   const limpo = montar({ 'a.js': '', '.claude/settings.json': '[1]' });
   try {
     assert.deepStrictEqual(ambiente.detectar(limpo).naoLidos, ['.claude/settings.json (nao e um objeto JSON)']);

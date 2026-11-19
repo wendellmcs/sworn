@@ -942,11 +942,16 @@ function caixaAberta(cwd, frente) {
   if (ativo && typeof ativo.arquivo === 'string' && ativo.arquivo) arquivo = ativo.arquivo;
   if (!arquivo) {
     const achado = acharPlanoDaFrente(cwd, frente || null);
-    if (achado && achado.arquivo && !achado.semVinculo) arquivo = achado.arquivo;
+    // pendencia #13: o plano tirado do Objetivo so dentro do projeto, como na linhaDoPlanoDaSessao (P2 #6, D512)
+    if (achado && achado.arquivo && !achado.semVinculo && dentroDoProjeto(cwd, achado.arquivo)) arquivo = achado.arquivo;
   }
   if (!arquivo) return null;
   let texto;
-  try { texto = fs.readFileSync(caminhoDoPlano(cwd, arquivo), 'utf8'); } catch (e) { return null; }
+  try {
+    const abs = caminhoDoPlano(cwd, arquivo);
+    if (fs.statSync(abs).size > TETO_DO_PLANO) return null; // pendencia #13: o teto da faixa vale aqui (p7-2)
+    texto = fs.readFileSync(abs, 'utf8');
+  } catch (e) { return null; }
   // a caixa de exemplo dentro de bloco de codigo nao e tarefa; a mesma regra de cerca dos leitores do plano
   const linhas = semBom(texto).split(/\r?\n/);
   const naCerca = linhasNaCerca(linhas);

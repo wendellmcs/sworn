@@ -525,6 +525,26 @@ test('caixaAberta tira o BOM: a cerca da 1a linha segue cerca', () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// Pendencia #13 (R1 do H1z): a caixaAberta lia o plano do Objetivo sem a trava de dentro do projeto e sem o teto; o
+// portao-fecho citava a 1a caixa de um arquivo fora. Agora a mesma regra da linhaDoPlanoDaSessao.
+test('pendencia #13: caixaAberta nao le o plano da frente fora do projeto nem acima do teto', () => {
+  const frente = (p) => '# Escopo\n**Objetivo:** b. Plano: `' + p + '`\n## Dentro\n- x/**\n';
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-caixa-'));
+  const dir = path.join(base, 'proj');
+  const escrever = (rel, txt) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), txt); };
+  try {
+    escrever('docs/2026-01-02-b-plano.md', '### Tarefa 1: so\n- [ ] dentro\n');
+    escrever('.claude/sworn/escopos/b.md', frente('docs/2026-01-02-b-plano.md'));
+    assert.deepStrictEqual(plano.caixaAberta(dir, 'b'), { arquivo: 'docs/2026-01-02-b-plano.md', caixa: 'dentro' });
+    fs.writeFileSync(path.join(base, '2026-01-02-fora-plano.md'), '- [ ] segredo de fora\n');
+    escrever('.claude/sworn/escopos/b.md', frente('../2026-01-02-fora-plano.md'));
+    assert.strictEqual(plano.caixaAberta(dir, 'b'), null, 'citou a caixa de um arquivo fora do projeto');
+    escrever('.claude/sworn/escopos/b.md', frente('docs/2026-01-02-b-plano.md'));
+    escrever('docs/2026-01-02-b-plano.md', '- [ ] grande\n' + 'x'.repeat(plano.TETO_DO_PLANO));
+    assert.strictEqual(plano.caixaAberta(dir, 'b'), null, 'leu o plano acima do teto');
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
+});
+
 test('s45-3: a barra no fim da linha da tabela sem a divisa final fica na celula', () => {
   const itens = plano.parseItens('| Etapa | X |\n|---|---|\n| P0 | barra \\|');
   assert.deepStrictEqual(itens.map((x) => [x.id, x.titulo]), [['P0', 'barra |']]);
