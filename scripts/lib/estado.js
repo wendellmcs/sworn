@@ -209,6 +209,9 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   'leiturasAvisadas',
   // V3 (D846): a hora da abertura (abertura.js); a trava 5b compara com ela o toque de outra sessao (lib/toques.js).
   'inicioMs',
+  // D875: a impressao do codigo em cada lancamento da prova (impressao-codigo.js); a prova e o commit vem em turnos
+  // diferentes, entao vale a sessao inteira.
+  'impressoesDaProva',
   // Plano 091 (#7): a ordem do init sai uma vez por sessao; sem isto, o fecho do turno a apagava e o compact repetia.
   'ordemDoInit',
   // Plano 091 (#6): o manual carregado vale a sessao inteira; sem isto, o portao do manual negava de novo a cada turno.

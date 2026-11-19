@@ -3266,6 +3266,27 @@ test('D785/2.4: portao-destrutivo deixa apagar arquivo nomeado no escopo e barra
       ['cmd /c del /q src\\a.js', 'PowerShell']]) {
       assert.strictEqual(chamar(c, f), 'passa', 'sem -f, dentro do escopo: ' + c);
     }
+    // A2-07: na worktree do subagente isolado (.claude/worktrees/<nome>), o apagar vale pelo caminho de dentro dela;
+    // o .claude/ da propria worktree segue guardado
+    const wt = path.join(dir, '.claude', 'worktrees', 'agent-x');
+    for (const f of ['src/a.js', 'fora.txt', '.claude/sworn/escopo.md']) {
+      fs.mkdirSync(path.dirname(path.join(wt, f)), { recursive: true });
+      fs.writeFileSync(path.join(wt, f), 'x', 'utf8');
+    }
+    assert.strictEqual(chamar('rm src/a.js', 'Bash', wt), 'passa', 'A2-07: dentro do escopo, na worktree');
+    assert.strictEqual(chamar('rm -f src/nada.js', 'Bash', wt), 'passa', 'A2-07: o inexistente de dentro, na worktree');
+    for (const c of ['rm fora.txt', 'rm -f .claude/sworn/escopo.md']) {
+      assert.match(chamar(c, 'Bash', wt), /siga por outro caminho/, 'A2-07, fora na worktree: ' + c);
+    }
+    // a foto da abertura e do git do projeto principal: o src/a.js sujo nela barra o do principal, nao a copia da worktree
+    const qEstado = path.join(tmp, 'sworn', 's24.json');
+    let estadoS24 = {};
+    try { estadoS24 = JSON.parse(fs.readFileSync(qEstado, 'utf8')); } catch (err) { estadoS24 = {}; }
+    fs.mkdirSync(path.dirname(qEstado), { recursive: true });
+    fs.writeFileSync(qEstado, JSON.stringify(Object.assign({}, estadoS24, { gitAbertura: ['src/a.js'] })), 'utf8');
+    assert.notStrictEqual(chamar('rm src/a.js'), 'passa', 'A2-07: a foto barra o src/a.js do principal');
+    assert.strictEqual(chamar('rm src/a.js', 'Bash', wt), 'passa', 'A2-07: a foto do principal nao barra a worktree');
+    fs.writeFileSync(qEstado, JSON.stringify(estadoS24), 'utf8'); // de volta sem a foto: o A4 abaixo a quer ausente
     // A5d (s369, leva 13 do luna: barrado no Remove-Item, apagou pelo [System.IO.File]::Delete): o apagar por API do
     // sistema no shell nao tem nome que se confira; com escopo declarado, barra e diz para apagar pelo nome
     for (const [c, f] of [["[System.IO.File]::Delete((Join-Path (Get-Location) 'fora.txt'))", 'PowerShell'],

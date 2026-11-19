@@ -2527,7 +2527,8 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
       // Colheita lote 5, item 12 (D846): o aviso de leitura grande, que nunca nega
       ['Read', 'aviso-leitura.js 5'],
       // F3a (D828): os tres portoes do shell (destrutivo, estilo, commit) num processo so
-      ['Bash|PowerShell', 'portao-shell.js 40'],
+      // P14 (A1-06): o Monitor roda shell do Bash e passa pelos mesmos portoes
+      ['Bash|PowerShell|Monitor', 'portao-shell.js 40'],
       ['Task|Agent', 'portao-agente.js 10', 'portao-apelido.js 10', 'portao-juiz.js 10'],
       ['AskUserQuestion', 'portao-decisao.js 10']
     ],

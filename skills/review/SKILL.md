@@ -90,7 +90,8 @@ The lenses of each band are in `scripts/lib/veredito.js` → `lentesDaFaixa`.
 |---|---|---|
 | `uma` | up to 3 changed lines: only a comment, a number or a short phrase | **1**: `correcao` |
 | `duas` | up to 40 lines of logic, with a red test and mutation already run | **2**: `correcao` and `borda` |
-| `texto` | text (`.md`, `.markdown`, `.txt`) with more than 3 changed lines | **2**: `correcao` and `microcopy` |
+| `texto` | text (`.md`, `.markdown`, `.txt`) the model reads as instructions (skill, agent, command, rule, hook, prompt, `CLAUDE.md` and kin) or the README, with more than 3 changed lines | **2**: `correcao` and `microcopy` |
+| `doc` | any other text (changelog, guide, docs) with more than 3 changed lines: the check is the facts against the code | **1**: `correcao` |
 | `completa` | new file, more than 40 lines of logic, style, equal to HEAD or unmeasured | the table of families, below |
 
 The script measures lines, not meaning. **You can move up a band, never down:** 3 lines that change logic go up to

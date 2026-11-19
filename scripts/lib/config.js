@@ -20,9 +20,10 @@ function lerObjeto(cwd, nome) {
   return jsonio.ler(caminhoEmSworn(cwd, nome), { objeto: true }).valor;
 }
 
-/** Le <projeto>/.claude/sworn/projeto.json. */
+/** Le <projeto>/.claude/sworn/projeto.json. H3 (D877): com o perfil de instalacao aplicado (a chave escrita vence);
+ *  o require fica aqui dentro para o config.js nao carregar o projeto.js de quem so le o design. */
 function carregarProjeto(cwd) {
-  return lerObjeto(cwd, 'projeto.json');
+  return require('./projeto.js').comPerfil(lerObjeto(cwd, 'projeto.json'));
 }
 
 /** Le <projeto>/.claude/sworn/design.json. */

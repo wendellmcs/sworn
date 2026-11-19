@@ -375,6 +375,21 @@ test('091 #1: a marca sem-revisao, o "portaoCommit": false e comando que nao e c
   });
 });
 
+test('H3 (D877): o perfil leve desliga o portao do commit; o portaoCommit escrito e o estrito seguem barrando', () => {
+  comRepo(function (dir, tmp) {
+    tocar(dir, tmp, 'src/grande.js');
+    const arq = path.join(dir, '.claude', 'sworn', 'projeto.json');
+    fs.writeFileSync(arq, JSON.stringify({ perfil: 'leve' }));
+    assert.ok(!negou(commitar(dir, tmp, 'git commit -m x')), 'o perfil leve nao desligou o portao do commit');
+    fs.writeFileSync(arq, JSON.stringify({ perfil: 'leve', portaoCommit: true }));
+    assert.ok(negou(commitar(dir, tmp, 'git commit -m x')), 'o portaoCommit escrito nao venceu o perfil');
+    fs.writeFileSync(arq, JSON.stringify({ perfil: 'estrito' }));
+    assert.ok(negou(commitar(dir, tmp, 'git commit -m x')), 'o estrito desligou o portao do commit');
+    fs.writeFileSync(arq, JSON.stringify({ perfil: 'Leve' }));
+    assert.ok(negou(commitar(dir, tmp, 'git commit -m x')), 'perfil com a caixa errada valeu como leve');
+  });
+});
+
 test('091 #1: sem projeto.json, sem arquivo tocado ou com o arquivo ja igual ao HEAD, passa', () => {
   comRepo(function (dir, tmp) {
     assert.ok(!negou(commitar(dir, tmp, 'git commit -m x')), 'sem arquivo tocado foi negado');
@@ -810,6 +825,51 @@ test('F1d: com provaPorArquivoTocado, o commit espera a suite inteira verde depo
     // "portaoCommit": false desliga o portao inteiro, a cobranca da suite tambem
     projeto({ provaPorArquivoTocado: true, portaoCommit: false });
     passou(tentar(transcrito([edita('e')])), 'portaoCommit false');
+  });
+});
+
+// D875: o .js gravado fora do projeto depois da suite (o script auxiliar do scratchpad) so pede a suite de novo se o
+// codigo do repositorio mudou desde o lancamento dela; o lancamento grava a impressao pelo PreToolUse deste portao.
+test('D875: a edicao fora do projeto depois da suite passa o commit enquanto o codigo do repositorio nao mudar', () => {
+  comRepo(function (dir, tmp) {
+    const PROVA = 'node --test test/*.test.js';
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'),
+      JSON.stringify({ provaDePronto: PROVA, provaPorArquivoTocado: true }));
+    const fora = path.join(tmp, 'auxiliar.js');
+    const t = path.join(tmp, 't.jsonl');
+    fs.writeFileSync(t, [
+      { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'a', name: 'Bash', input: { command: PROVA } }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'a', content: '# pass 9\n# fail 0' }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'w', name: 'Write', input: { file_path: fora } }] } }
+    ].map(function (l) { return JSON.stringify(l); }).join('\n') + '\n');
+    const tentar = function () { return commitar(dir, tmp, 'git commit -m "x"', t); };
+    const NAO_RODOU = /A suite inteira nao rodou depois da ultima edicao de codigo\./;
+    // sem a impressao gravada no lancamento: a edicao de fora conta como antes
+    const antes = tentar();
+    assert.ok(negou(antes) && NAO_RODOU.test(motivo(antes)), 'sem impressao: ' + JSON.stringify(antes.json));
+    // o lancamento da suite pelo gancho grava a impressao (outro comando nao grava)
+    const lancar = function (id, comando) {
+      return hook('portao-commit.js', dir, tmp, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: id,
+        tool_input: { command: comando } });
+    };
+    assert.strictEqual(lancar('z', 'ls').status, 0);
+    const semEstado = !fs.existsSync(path.join(tmp, 'sworn', 'c1.json'));
+    assert.ok(semEstado || lerEstado(tmp).impressoesDaProva === undefined, 'o ls nao e a prova');
+    assert.strictEqual(lancar('a', PROVA).status, 0);
+    assert.deepStrictEqual(lerEstado(tmp).impressoesDaProva.map(function (x) { return [x.id, x.comando]; }), [['a', PROVA]]);
+    const r = tentar();
+    assert.ok(!negou(r), 'impressao igual: o commit passa; motivo: ' + (r.json ? motivo(r) : ''));
+    // o git add nao muda a impressao
+    const add = spawnSync('git', ['add', '-A'], { cwd: dir, shell: false, encoding: 'utf8' });
+    assert.strictEqual(add.status, 0, 'git add: ' + add.stderr);
+    assert.ok(!negou(tentar()), 'depois do git add, ainda igual');
+    // a prova lancada junto do push (ou do commit) tambem grava, qualquer que seja a resposta do portao ao push
+    lancar('p', PROVA + ' && git push');
+    assert.deepStrictEqual(lerEstado(tmp).impressoesDaProva.map(function (x) { return x.id; }), ['a', 'p'], 'junto do push');
+    // o codigo mudado sem ferramenta de edicao (como o sed -i ou o script que grava no repositorio) muda a impressao
+    fs.writeFileSync(path.join(dir, 'src', 'pequeno.js'), 'mudou pelo shell\n');
+    const depois = tentar();
+    assert.ok(negou(depois) && NAO_RODOU.test(motivo(depois)), 'codigo mudado: ' + JSON.stringify(depois.json));
   });
 });
 

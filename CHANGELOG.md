@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.82.0 — perfil de instalação, revisão mais barata e o Monitor nos portões do shell
+
+**Mais barato, sem perder o que a revisão acha**
+
+- **O texto que só descreve (changelog, guia, docs) vai à revisão com 1 lente, e não 2** (`scripts/lib/veredito.js`,
+  `scripts/preparar-revisao.js`): fica a de correção, que confere se o texto diz o que o código faz. Medido na 0.81.0:
+  nesse texto, a lente de redação gastou metade dos inspetores e só achou estilo; os erros de fato vieram da de
+  correção. O texto que o modelo lê como instrução (skill, agente, comando, regra, gancho, prompt, `CLAUDE.md`,
+  `AGENTS.md` e afins) e o README seguem com as 2, porque neles a palavra muda o que acontece.
+- **O script gravado fora do projeto depois da suíte não pede a suíte de novo, se o código não mudou**
+  (`scripts/lib/impressao-codigo.js`, `scripts/lib/saude.js`, `scripts/portao-commit.js`, `scripts/portao-fecho.js`):
+  quando a prova de pronto é lançada, o portão guarda a impressão do código do repositório (caminho, tamanho e horas de
+  cada arquivo de código que o git lista). Depois, um `.js` gravado fora do projeto (o script auxiliar do scratchpad)
+  só deixa a prova pendente se a impressão de agora for outra: o script que mudou um arquivo de código do repositório
+  ao rodar pede a suíte; o que só leu, ou só mudou texto, não pede. O `git add` e o commit não mudam a impressão. Medido na 0.81.0: 9 das 63 rodadas da suíte
+  vieram só disso. A edição dentro do projeto segue pedindo a prova como antes.
+
+**Novo**
+
+- **Perfil de instalação: `leve`, `padrao` ou `estrito`, numa chave só** (`scripts/lib/projeto.js`,
+  `scripts/lib/config.js`): `"perfil": "leve"` no `projeto.json` instala o sworn só com a revisão que se pede à mão e
+  a trava do comando destrutivo, sem ligar e desligar cada portão; `estrito` cobra a revisão de todo arquivo de código,
+  de qualquer marcha. O perfil dá o padrão do que o arquivo não escreve, e a chave escrita no arquivo vence, também
+  dentro de `travas` (que, com perfil, pode vir em parte). O `/sworn:init` grava o perfil quando você pede uma
+  instalação leve ou estrita.
+- **O `/sworn:diagnose` fecha com a regra que o tropeço repetido pede** (`skills/diagnose/SKILL.md`): o mesmo erro em
+  duas sessões, ou três vezes na mesma, sai no relatório com a regra no formato do `/sworn:learn`, gravada só com o seu
+  sim.
+
+**Correções**
+
+- **O comando lançado pelo Monitor passa pelos portões do shell** (`hooks/hooks.json`, `scripts/portao-shell.js`): o
+  Monitor do Claude Code roda o comando no mesmo shell da ferramenta Bash, mas o gancho do shell só olhava Bash e
+  PowerShell, então um apagar lançado por ele não passava pela trava do comando destrutivo nem pelo portão de commit.
+  Agora passa, e o comando é lido como Bash também no Windows.
+- **O subagente isolado numa worktree consegue editar e apagar dentro do escopo** (`scripts/portao-escopo.js`,
+  `scripts/portao-destrutivo.js`, `scripts/lib/caminho.js`): o Claude Code cria a worktree dentro do projeto, em
+  `.claude/worktrees/<nome>`, sem a pasta `.claude/sworn/` (o git a ignora). O portão achava o projeto acima dela e lia
+  o arquivo como `.claude/worktrees/<nome>/src/a.js`, então todo arquivo caía fora do escopo, até o de dentro, e o
+  agente que o paralelo manda isolar ficava barrado. Agora valem as regras do projeto pelo caminho de dentro da
+  worktree, e o `.claude/` da própria worktree segue guardado.
+
 ## 0.81.0 — o leitor do plano ignora os blocos de código e não abre um plano que não existe
 
 **Mais barato, sem perder o que a revisão acha**

@@ -2185,6 +2185,44 @@ test('D634 (8) e D785: prova que nao rodou depois da ultima edicao de codigo bar
   });
 });
 
+// D875: a edicao fora do projeto (o script auxiliar do scratchpad) depois da prova so barra se o codigo do repositorio
+// mudou desde o lancamento dela (a impressao que o portao-commit.js grava no lancamento).
+test('D875: no fecho, a edicao fora do projeto depois da prova so barra se o codigo mudou desde o lancamento', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'd875', { provaDePronto: 'npm test' });
+    assert.strictEqual(spawnSync('git', ['init', '-q'], { cwd: dir, shell: false }).status, 0);
+    // o estado do sworn no projeto nao entra na impressao
+    fs.writeFileSync(path.join(dir, '.gitignore'), '.claude/\n');
+    fs.writeFileSync(path.join(dir, 'a.js'), 'const a = 1;\n');
+    const imp = require('../scripts/lib/impressao-codigo.js');
+    const fora = path.join(tmp, 'auxiliar.js');
+    const t = linhasDoTranscript(tmp, 'd875', [usoBash('a', 'npm test'), resultado('a', '# fail 0'), usoEdit('e', fora)]);
+    const marcar = (id) => rodar('marcar-trabalho.js', { session_id: id, cwd: dir, tool_name: 'Write',
+      tool_input: { file_path: fora } }, tmp);
+    const semear = (id) => {
+      const f = path.join(tmp, 'sworn', id + '.json');
+      const s = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : {};
+      s.impressoesDaProva = [{ id: 'a', comando: 'npm test', impressao: imp.impressao(dir) }];
+      fs.writeFileSync(f, JSON.stringify(s), 'utf8');
+    };
+    const barrou = (r, caso) => assert.ok(r.json && r.json.decision === 'block' && /prova de pronto/.test(r.json.reason),
+      caso + ': ' + r.stdout);
+    // sem a impressao gravada: barra como antes
+    marcar('d875a');
+    barrou(fecho(tmp, 'd875a', dir, ENTREGA, { transcript_path: t }), 'sem impressao');
+    // com a impressao do codigo de agora gravada no lancamento: passa
+    marcar('d875b');
+    semear('d875b');
+    const passou = fecho(tmp, 'd875b', dir, ENTREGA, { transcript_path: t });
+    assert.strictEqual(passou.json, null, passou.stdout);
+    // com o codigo mudado (sem ferramenta de edicao) desde o lancamento: barra
+    marcar('d875c');
+    semear('d875c');
+    fs.writeFileSync(path.join(dir, 'a.js'), 'const a = 2; // mudado pelo shell\n');
+    barrou(fecho(tmp, 'd875c', dir, ENTREGA, { transcript_path: t }), 'codigo mudado');
+  });
+});
+
 // ------------------------------- D785 (2.1): o laco da prova
 
 test('D785: com prova declarada e codigo editado no turno, a pendente barra sem alegacao e o vermelho com ressalva', () => {

@@ -18,7 +18,8 @@ const CHAVES = [
 // D732 (fila D687): `fontesDeConsulta`, as fontes canonicas que saem do peso de instrucao da auditoria.
 // C7 (D816): `admissao`, o resultado do teste de admissao do modelo (scripts/admissao.js --gravar).
 // F1c (D828): `provaDeCoerencia`, o comando do grupo de coerencia do disco que a prova por arquivo tocado tambem cobra.
-const CHAVES_OPCIONAIS = ['referencias', 'marcaDeAtalho', 'fontesDeConsulta', 'admissao', 'provaDeCoerencia'];
+// H3 (D877): `perfil`, o perfil de instalacao (PERFIS abaixo).
+const CHAVES_OPCIONAIS = ['referencias', 'marcaDeAtalho', 'fontesDeConsulta', 'admissao', 'provaDeCoerencia', 'perfil'];
 const TIPOS_REFERENCIA = ['tela', 'codigo', 'texto'];
 
 const TRAVAS = ['fecho', 'escopo', 'destrutivo', 'outraFrente'];
@@ -113,6 +114,47 @@ function travasDe(projeto) {
   return (t && typeof t === 'object' && !Array.isArray(t)) ? t : {};
 }
 
+/**
+ * H3 (D877, R-ECC: perfis minimal, standard, strict). O perfil de instalacao da o padrao das chaves que o
+ * projeto.json nao escreve; a chave escrita no arquivo vence, tambem dentro de `travas`. `leve` deixa o apagar
+ * (trava 5) e a revisao que se pede a mao: desliga os portoes que barram a entrega ou o commit e as ofertas por conta
+ * propria; o escopo (que so barra com escopo declarado: `travas.escopo` nao tem leitor, D104), a pergunta ao dono, o
+ * handoff e o guia do modelo seguem. `padrao` e o de hoje. `estrito` cobra a revisao de todo arquivo de codigo, de
+ * qualquer marcha.
+ */
+const PERFIS = {
+  leve: {
+    travas: { fecho: false, outraFrente: false },
+    portaoRevisao: false, portaoReferencia: false, portaoManual: false, portaoCommit: false,
+    sugerirAprender: false, oferecerRadar: false, auditarNaAbertura: false, atalhosNaAbertura: false
+  },
+  padrao: {},
+  estrito: { revisaoTodoCodigo: true }
+};
+
+const MOTIVO_PERFIL = 'perfil tem de ser um de: ' + Object.keys(PERFIS).join(', ');
+
+/** A resposta de perfil que conta: nem ausente, nem texto vazio ou so de espaco (o Enter num prompt). */
+function respondeuPerfil(v) {
+  return v !== undefined && !(typeof v === 'string' && v.trim() === '');
+}
+
+function ehPerfil(nome) {
+  return typeof nome === 'string' && Object.prototype.hasOwnProperty.call(PERFIS, nome);
+}
+
+/** O projeto com o perfil aplicado, num objeto novo; sem perfil conhecido (ou no `padrao`), o mesmo objeto. */
+function comPerfil(projeto) {
+  if (!ehObjeto(projeto) || !ehPerfil(projeto.perfil) || projeto.perfil === 'padrao') return projeto;
+  const p = PERFIS[projeto.perfil];
+  const r = fundir(p, projeto);
+  // a `travas` torta fica como veio: o aviso de tipo a mostra, e as travas seguem ligadas (fail-closed)
+  if (p.travas && (projeto.travas === undefined || ehObjeto(projeto.travas))) {
+    r.travas = fundir(p.travas, projeto.travas);
+  }
+  return r;
+}
+
 /** X2a. Aviso de tipo, estreito (D101): recebe o objeto JA CARREGADO - sem um
  *  segundo readFileSync - e devolve so o que muda decisao de portao.
  *  NENHUM valor do arquivo e interpolado, so nomes de campo de lista fixa: nao
@@ -158,6 +200,7 @@ function avisosDeTipo(projeto) {
   if ('provaDeCoerencia' in projeto && !ehTexto(projeto.provaDeCoerencia)) {
     avisos.push('provaDeCoerencia tem de ser texto nao vazio (o comando do grupo de coerencia)');
   }
+  if ('perfil' in projeto && !ehPerfil(projeto.perfil)) avisos.push(MOTIVO_PERFIL);
   const deQualidade = require('./qualidade.js').avisoDeTipo(projeto);
   if (deQualidade) avisos.push(deQualidade);
   return avisos;
@@ -235,10 +278,15 @@ function validar(obj) {
   }
   conferirCaminhos(obj, erros);
   // `obj.travas &&` deixava passar null; e {} nao tem trava nenhuma dentro.
+  // H3 (D877): com perfil, a trava que falta vem dele (ou fica ligada, se ele nao a muda); a que vem e booleana.
+  const comPerfilValido = ehPerfil(obj.perfil);
+  if ('perfil' in obj && !comPerfilValido) erros.push(MOTIVO_PERFIL);
   if (!ehObjeto(obj.travas)) {
-    erros.push('travas tem de ser objeto com as quatro chaves');
+    erros.push(comPerfilValido ? 'travas tem de ser objeto: {} ou so as travas que mudam o perfil'
+      : 'travas tem de ser objeto com as quatro chaves');
   } else {
     for (const t of TRAVAS) {
+      if (comPerfilValido && !(t in obj.travas)) continue;
       if (typeof obj.travas[t] !== 'boolean') erros.push('travas.' + t + ' tem de ser true ou false');
     }
   }
@@ -340,9 +388,12 @@ function montar(inferido, respostas) {
     // Default LIGADO. A resposta do dono so vale se for booleano de verdade - e se
     // ele desligou, fica desligado: religar calado seria a mentira que este plugin
     // existe para impedir.
-    travas[t] = (r.travas && typeof r.travas[t] === 'boolean') ? r.travas[t] : true;
+    // H3 (D877): com perfil escolhido, so a trava respondida se grava; a que falta vem do perfil ao carregar, ou fica
+    // ligada, se ele nao a muda.
+    if (r.travas && typeof r.travas[t] === 'boolean') travas[t] = r.travas[t];
+    else if (!ehPerfil(r.perfil)) travas[t] = true;
   }
-  return {
+  const montado = {
     versaoConfig: 1,
     geradoEm: hoje,
     plataforma: i.plataforma || { so: process.platform, shell: process.platform === 'win32' ? 'powershell' : 'bash' },
@@ -367,6 +418,9 @@ function montar(inferido, respostas) {
     // Sem resposta, preserva-se o que ja vinha: configuracao antiga nao se reescreve sozinha.
     agentes: r.degraus !== undefined ? degrausLib.paraProjeto(r.degraus) : (r.agentes || { escada: [] })
   };
+  // a resposta que nao e perfil vai como veio, e o validar() a recusa (o dono ve o erro em vez de cair no padrao)
+  if (respondeuPerfil(r.perfil)) montado.perfil = r.perfil;
+  return montado;
 }
 
 /**
@@ -395,6 +449,15 @@ function atualizar(antigo, respostas, hoje) {
     delete novas.degraus;
   }
 
+  // H3 (D877): o re-init que troca de perfil troca as travas pelas respondidas agora (`{}` sem nenhuma), sem fundir:
+  // as do arquivo antigo, que o init gravava todas `true` sem perfil, venceriam o perfil novo.
+  // O arquivo sem perfil (ou com um torto) vale o `padrao`: responder `padrao` a ele nao e troca.
+  const perfilAtual = ehPerfil(base.perfil) ? base.perfil : 'padrao';
+  const trocouPerfil = ehPerfil(novas.perfil) && novas.perfil !== perfilAtual;
+  if (trocouPerfil && novas.travas === undefined) novas.travas = {};
+  // o Enter vazio nao e resposta de perfil (a convencao do escolher), aqui e no montar
+  if (!respondeuPerfil(novas.perfil)) delete novas.perfil;
+
   const mudou = [];
   const ignoradas = [];
   for (const chave of Object.keys(novas)) {
@@ -408,7 +471,8 @@ function atualizar(antigo, respostas, hoje) {
     // apagava as chaves que a entrevista nao repetiu (regra unica: o que nao se perguntou, preserva).
     let valor = novas[chave];
     const vazioSubstitui = VAZIO_SUBSTITUI.indexOf(chave) !== -1 && ehObjeto(valor) && Object.keys(valor).length === 0;
-    if (FUNDE_POR_CHAVE.indexOf(chave) !== -1 && ehObjeto(valor) && ehObjeto(base[chave]) && !vazioSubstitui) {
+    if (FUNDE_POR_CHAVE.indexOf(chave) !== -1 && ehObjeto(valor) && ehObjeto(base[chave]) && !vazioSubstitui &&
+        !(chave === 'travas' && trocouPerfil)) {
       valor = fundir(base[chave], valor);
     }
     if (JSON.stringify(base[chave]) === JSON.stringify(valor)) continue;
@@ -494,6 +558,6 @@ function motivoInerte(inertes) {
 }
 
 module.exports = {
-  AMEACAS, CHAVES, TRAVAS, CHAVES_LIGA_DESLIGA, CHAVES_OPCIONAIS, TIPOS_REFERENCIA, travasDe, avisosDeTipo,
+  AMEACAS, CHAVES, TRAVAS, CHAVES_LIGA_DESLIGA, CHAVES_OPCIONAIS, TIPOS_REFERENCIA, PERFIS, travasDe, comPerfil, avisosDeTipo,
   intocaveisInertes, motivoInerte, validar, montar, atualizar, fundir
 };

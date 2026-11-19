@@ -134,3 +134,21 @@ test('H-3: projeto.json e design.json que sao LISTA JSON valida nao sao objeto: 
   }
   comProjeto('{}', (cwd) => assert.deepStrictEqual(config.carregarProjeto(cwd), {}, 'controle: objeto vazio segue objeto'));
 });
+
+// H3 (D877): todo portao le o projeto.json por carregarProjeto, e o perfil vale ali.
+test('config H3: carregarProjeto aplica o perfil, e a chave escrita vence', () => {
+  const travasDe = require('../scripts/lib/projeto.js').travasDe;
+  comProjeto(JSON.stringify({ perfil: 'leve' }), (cwd) => {
+    const obj = config.carregarProjeto(cwd);
+    assert.strictEqual(travasDe(obj).fecho, false);
+    assert.strictEqual(obj.portaoCommit, false);
+  });
+  comProjeto(JSON.stringify({ perfil: 'leve', travas: { fecho: true }, portaoCommit: true }), (cwd) => {
+    const obj = config.carregarProjeto(cwd);
+    assert.strictEqual(travasDe(obj).fecho, true);
+    assert.strictEqual(obj.portaoCommit, true);
+  });
+  comProjeto(JSON.stringify({ perfil: 'turbo', nome: 'x' }), (cwd) => {
+    assert.deepStrictEqual(config.carregarProjeto(cwd), { perfil: 'turbo', nome: 'x' });
+  });
+});

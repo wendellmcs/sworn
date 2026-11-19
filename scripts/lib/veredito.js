@@ -124,15 +124,31 @@ function familiasPara(tocaCodigo, tocaTela) {
 // tecnica da s108, nao da D485. Sem medida, identico ao HEAD (nao ha diff para medir) ou estilo: a completa.
 const FAIXA_UMA_ATE = 3;
 const FAIXA_DUAS_ATE = 40;
-const LENTES_DA_FAIXA = { uma: ['correcao'], duas: ['correcao', 'borda'], texto: ['correcao', 'microcopy'] };
+// D875 (H1 medido em 2026-11-18): no texto que so descreve (changelog, guia, docs), a `microcopy` gastou metade dos
+// inspetores e achou so redacao; os erros de fato (o texto diz o que o codigo nao faz) vieram da `correcao`. Esse
+// texto vai a faixa `doc`, so com ela; o que instrui o modelo e o README seguem na `texto`, com as duas.
+const LENTES_DA_FAIXA = { uma: ['correcao'], duas: ['correcao', 'borda'], texto: ['correcao', 'microcopy'],
+  doc: ['correcao'] };
 
 function faixaDaMudanca(m) {
   const o = m || {};
   const n = o.linhasMudadas;
   if (o.novo || o.identico || o.estilo || !Number.isInteger(n) || n < 0) return 'completa';
   if (n <= FAIXA_UMA_ATE) return 'uma';
-  if (o.texto) return 'texto';
+  // so `instrucao: false` desce a `doc`: sem saber, o texto fica com as duas lentes
+  if (o.texto) return o.instrucao === false ? 'doc' : 'texto';
   return n <= FAIXA_DUAS_ATE ? 'duas' : 'completa';
+}
+
+// D875: o texto que o modelo le como instrucao (skill, agente, comando, regra, gancho, prompt, o CLAUDE.md e afins) e o
+// README, a porta do projeto: neles a palavra muda o que acontece, e a `microcopy` fica. Caminho relativo a raiz.
+const PASTA_QUE_INSTRUI = /(?:^|\/)(?:skills|agents|commands|prompts|rules|hooks|\.claude|\.codex|\.cursor|\.windsurf|\.github)\//i;
+const NOME_QUE_INSTRUI = /(?:^|\/)(?:CLAUDE|AGENTS|GEMINI|README|SKILL|CONVENTIONS)(?:\.[\w-]+)?\.(?:md|markdown|txt)$|\.prompt\.(?:md|txt)$/i;
+
+/** D875: `rel` (relativo a raiz) e texto que instrui o modelo, ou o README. Na duvida (sem caminho), sim. */
+function textoQueInstrui(rel) {
+  const r = String(rel || '').replace(/\\/g, '/');
+  return r === '' || PASTA_QUE_INSTRUI.test(r) || NOME_QUE_INSTRUI.test(r);
 }
 
 /** As chaves das lentes da faixa (copia), ou null na completa: ai vale a tabela de familias. */
@@ -1230,6 +1246,6 @@ function apurar(rondas, opcoes) {
 
 module.exports = {
   LENTES, LENTES_UI, FAMILIAS, LENTE_DO_PEDIDO, lentesSoTela, SAEM_SO_LOGICA, familiasPara, FAIXA_UMA_ATE,
-  FAIXA_DUAS_ATE, faixaDaMudanca, lentesDaFaixa, temRisco, lentesDaCompleta, LENTES_DO_TESTE, ehArquivoDeTeste, TETO, chaveDaLente, errosDoVeredito,
+  FAIXA_DUAS_ATE, faixaDaMudanca, lentesDaFaixa, textoQueInstrui, temRisco, lentesDaCompleta, LENTES_DO_TESTE, ehArquivoDeTeste, TETO, chaveDaLente, errosDoVeredito,
   validarVeredito, apurar, conferirMesmos, DISTANCIA_PAR, mapaDoTrabalho, VOTO_QUE_FALTA, FAIXA_DESCONHECIDA
 };

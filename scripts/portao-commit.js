@@ -18,7 +18,10 @@ function suiteAntesDoCommit(e, projeto, raiz) {
   const prova = typeof projeto.provaDePronto === 'string' ? projeto.provaDePronto.trim() : '';
   if (!prova || !e.transcript_path) return null;
   const saude = require('./lib/saude.js');
-  const t = saude.testesDoTranscript(e.transcript_path, saude.provasEquivalentes(prova, raiz), false, { raiz: raiz });
+  // D875: o .js gravado fora do projeto depois da suite so a pede de novo se o codigo do repositorio mudou desde ela
+  const mesmo = require('./lib/impressao-codigo.js').mesmoCodigoDesde(e.session_id, raiz);
+  const t = saude.testesDoTranscript(e.transcript_path, saude.provasEquivalentes(prova, raiz), false,
+    { raiz: raiz, mesmoCodigoDaProva: mesmo });
   if (!t) return null;
   let estadoDaSuite = null;
   if (t.provaRodando) estadoDaSuite = 'A suite inteira ainda roda (foi lancada em segundo plano e nao terminou).';
@@ -35,6 +38,21 @@ function suiteAntesDoCommit(e, projeto, raiz) {
     '',
     'Rode-a (pode ser em segundo plano), espere o fim verde e repita o commit.'
   ].join('\n');
+}
+
+/**
+ * D875: o comando que roda a prova de pronto do projeto grava, antes de rodar, a impressao do codigo do repositorio
+ * (lib/impressao-codigo.js), que o portao de commit e o de fecho comparam depois. So com projeto.json e prova declarada.
+ */
+function gravarLancamentoDaProva(e) {
+  try {
+    const raiz = config.raizDoProjeto(e.cwd || process.cwd());
+    const projeto = config.carregarProjeto(raiz);
+    const prova = projeto && typeof projeto.provaDePronto === 'string' ? projeto.provaDePronto.trim() : '';
+    if (!prova) return;
+    const saude = require('./lib/saude.js');
+    require('./lib/impressao-codigo.js').gravarSeForAProva(e, saude.provasEquivalentes(prova, raiz), raiz);
+  } catch (err) { /* sem gravar */ } // fail-closed: sem a impressao gravada, a edicao fora do projeto pede a prova como antes
 }
 
 /**
@@ -61,7 +79,7 @@ function cartaoDoPush(comando, cwd, raiz, projeto, ferramenta) {
 }
 
 // Plano 091 (#1, D558, D559): PreToolUse em Bash|PowerShell. So o comando que roda `git commit` ou `git push` paga o
-// git; o resto passa direto. So com projeto.json lido e sem `"portaoCommit": false`; a marca de commit sem revisao passa
+// git; o resto passa direto, menos a prova de pronto, que grava a impressao do codigo (D875). So com projeto.json lido e sem `"portaoCommit": false`; a marca de commit sem revisao passa
 // o commit, e a do push visto, o push.
 io.blindar(function () {
   io.lerEntrada(function (e) {
@@ -70,6 +88,8 @@ io.blindar(function () {
     const ferramenta = e.tool_name;
     const ehCommit = commit.ehCommit(comando, ferramenta);
     const ehPush = push.ehPush(comando, ferramenta);
+    // tambem no `npm test && git push`: a prova lancada junto do commit ou do push grava a impressao
+    gravarLancamentoDaProva(e);
     if (!ehCommit && !ehPush) return io.permitir();
     const cwd = e.cwd || process.cwd();
     const raiz = config.raizDoProjeto(cwd);

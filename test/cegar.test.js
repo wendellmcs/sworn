@@ -1770,7 +1770,7 @@ test('RV-04: mapa.json do formato antigo com BOM ainda diz o id da revisao antig
 });
 
 // D485 (s106): a revisao e proporcional ao diff. O preparar-revisao.js mede as linhas mudadas contra o HEAD e diz a
-// faixa (uma, duas, texto, completa) e as lentes dela; na completa, as lentes pelo risco (veredito.lentesDaCompleta).
+// faixa (uma, duas, texto, doc, completa) e as lentes dela; na completa, as lentes pelo risco (veredito.lentesDaCompleta).
 function linhas(n, prefixo) {
   return Array.from({ length: n }, (_, i) => prefixo + ' ' + (i + 1)).join('\n') + '\n';
 }
@@ -1792,6 +1792,7 @@ function repoDeFaixas() {
   g(['config', 'core.autocrlf', 'false']);
   fs.writeFileSync(path.join(dir, 'logica.js'), linhas(200, 'const x ='), 'utf8');
   fs.writeFileSync(path.join(dir, 'texto.md'), linhas(200, 'frase'), 'utf8');
+  fs.writeFileSync(path.join(dir, 'README.md'), linhas(200, 'frase'), 'utf8');
   fs.writeFileSync(path.join(dir, 'estilo.css'), linhas(20, '.a { color: red; }'), 'utf8');
   g(['add', '-A']);
   g(['commit', '-qm', 'base']);
@@ -1819,7 +1820,10 @@ test('D485: preparar-revisao diz a faixa e as lentes pelo tamanho do diff', () =
     assert.deepStrictEqual(faixaDe(dir, 'logica.js'), { faixa: 'completa', lentes: SEM_SEGURANCA, linhasMudadas: 45 });
     const md = fs.readFileSync(path.join(dir, 'texto.md'), 'utf8');
     fs.writeFileSync(path.join(dir, 'texto.md'), trocar(md, 60, 10), 'utf8');
-    assert.deepStrictEqual(faixaDe(dir, 'texto.md'), { faixa: 'texto', lentes: ['correcao', 'microcopy'], linhasMudadas: 60 });
+    // D875: o texto que so descreve leva so a correcao; o README (e o que instrui o modelo) segue com as duas
+    assert.deepStrictEqual(faixaDe(dir, 'texto.md'), { faixa: 'doc', lentes: ['correcao'], linhasMudadas: 60 });
+    fs.writeFileSync(path.join(dir, 'README.md'), trocar(md, 60, 10), 'utf8');
+    assert.deepStrictEqual(faixaDe(dir, 'README.md'), { faixa: 'texto', lentes: ['correcao', 'microcopy'], linhasMudadas: 60 });
     fs.writeFileSync(path.join(dir, 'texto.md'), trocar(md, 1, 10), 'utf8');
     assert.deepStrictEqual(faixaDe(dir, 'texto.md'), { faixa: 'uma', lentes: ['correcao'], linhasMudadas: 1 });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

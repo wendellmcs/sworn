@@ -168,3 +168,17 @@ test('#10 apagarPasta: nenhum script apaga pasta pelo rmSync direto, so pelo cam
   });
   assert.deepStrictEqual(achados, [], 'rmSync de pasta fora do caminho.apagarPasta (deixa a pasta com acento no Windows)');
 });
+
+// A2-07: o caminho da worktree do subagente isolado vira o caminho de dentro dela; o .claude/ dela, a pasta sozinha, a
+// caixa trocada (a pasta do usuario no Linux) e o que nao e worktree nao se trocam
+test('caminho A2-07: naWorktreeDoClaude separa a pasta da worktree do caminho de dentro', () => {
+  assert.deepStrictEqual(caminho.naWorktreeDoClaude('.claude/worktrees/agent-x/src/a.js'),
+    { pasta: '.claude/worktrees/agent-x', rel: 'src/a.js' });
+  assert.strictEqual(caminho.naWorktreeDoClaude('.claude/worktrees/agent-x/.claude/sworn/escopo.md'), null);
+  assert.strictEqual(caminho.naWorktreeDoClaude('.claude/worktrees/agent-x/.CLAUDE/x'), null);
+  assert.strictEqual(caminho.naWorktreeDoClaude('.claude/worktrees/agent-x'), null);
+  assert.strictEqual(caminho.naWorktreeDoClaude('.claude/worktrees/agent-x/'), null);
+  assert.strictEqual(caminho.naWorktreeDoClaude('.Claude/Worktrees/agent-x/src/a.js'), null);
+  assert.strictEqual(caminho.naWorktreeDoClaude('src/.claude/worktrees/x/a.js'), null);
+  assert.strictEqual(caminho.naWorktreeDoClaude(undefined), null);
+});

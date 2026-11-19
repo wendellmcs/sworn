@@ -203,6 +203,35 @@ test('toques: de ponta, o Write no arquivo que outra sessao mudou depois da aber
   liberou(portao(dir, 'A', 'docs/nova.md', env));
 });
 
+// A2-07: na worktree do subagente (.claude/worktrees/<nome>), o "segue sem commit" e a foto da abertura sao do git da
+// propria worktree, nao do projeto principal: a foto (git do principal) nao barra a copia da worktree, e o toque nela
+// barra enquanto a worktree o tem sem commit, mesmo com o principal limpo.
+test('toques A2-07: na worktree do subagente, o git que conta e o da worktree', () => {
+  const tmp = comum.temporaria('sworn-toq-');
+  const env = comum.ambiente({ SWORN_TMP: tmp });
+  const dir = comum.repo(comum.temporaria('sworn-toq-wt-'), {
+    '.gitignore': '.claude/\n', 'docs/nota.md': 'a\n', 'docs/outra.md': 'a\n'
+  });
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify(PROJETO));
+  const wt = path.join(dir, '.claude', 'worktrees', 'w1');
+  comum.git(dir, ['worktree', 'add', '-q', wt]);
+  try {
+    gravarSessao(tmp, 'A', { inicioMs: Date.now() - 60000, gitAbertura: ['docs/nota.md'] });
+    // a foto da abertura lista docs/nota.md (sujo no principal): a copia da worktree e outra, e passa
+    liberou(portao(wt, 'A', 'docs/nota.md', env));
+    // B muda docs/outra.md na worktree e nao commita; o principal segue limpo: A e barrada
+    fs.writeFileSync(path.join(wt, 'docs', 'outra.md'), 'mudado por B\n');
+    escreveu(wt, 'B', 'docs/outra.md', env);
+    const r = portao(wt, 'A', 'docs/outra.md', env);
+    assert.ok(negou(r), 'a sessao A devia ser barrada pelo toque de B na worktree');
+    assert.ok(motivoDe(r).includes('O arquivo docs/outra.md foi alterado por outra sessao'), motivoDe(r));
+  } finally {
+    // a limpeza que falha nao troca o erro do assert pelo dela
+    try { comum.git(dir, ['worktree', 'remove', '--force', wt]); } catch (err) { /* so a limpeza */ }
+  }
+});
+
 test('toques: fora de um repositorio git, o toque vale sozinho', () => {
   const tmp = comum.temporaria('sworn-toq-');
   const env = comum.ambiente({ SWORN_TMP: tmp });

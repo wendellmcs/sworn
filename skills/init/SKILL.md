@@ -540,11 +540,17 @@ code is what counts. Seven values required there **come from no question at all*
 - `comandosBloqueados` and `comandosLiberados`: empty lists — no question in this script
   fills them. **In a re-init, keep the values of the current `projeto.json`** (Step 0b);
 - `travas`: its four keys (`TRAVAS`), `true` by default. In a re-init, also keep those of the current `projeto.json`.
-  Four keys, not "the eight locks" the guide counts: the guide also counts gates that have no key here;
+  Four keys, not "the eight locks" the guide counts: the guide also counts gates that have no key here.
+  **Exception, the install profile** (it wins over the re-init rule above): when the owner, on their own, asks for a
+  light or a strict install (for example "só revisar", "leve", "estrito"), write the optional `perfil` (`leve`,
+  `padrao` or `estrito`, from `CHAVES_OPCIONAIS`) and, in `travas`, only the locks the owner named in that request
+  (`{}` when they named none): each missing one comes from the profile. In a re-init that changes the profile, the
+  current file's locks give way to those named now; in a re-init with no profile request, keep the current `perfil`
+  and `travas` as they are. Do not ask about the profile as a seventh question;
 - `limiares`: `{}` — no question fills it, and an empty object leaves every threshold at the plugin's default
   (`/sworn:calibrate` writes it later). In a re-init, keep the current one.
 
-Outside `CHAVES`, the optional `referencias` (the `CHAVES_OPCIONAIS` list) goes in only through the answer at the end of Step 4b:
+Outside `CHAVES`, besides `perfil` (above), the optional `referencias` (the `CHAVES_OPCIONAIS` list) goes in only through the answer at the end of Step 4b:
 the paths by type, or `{}` for "never"; with "leave it for later", do not write the key. **In a re-init, start from the
 current `projeto.json`'s `referencias`**: the type the owner did not change stays as it is (the per-type merge of
 Step 4b), "never" writes `{}` in its place, and "leave it for later" keeps the current key — the `Write` rewrites the whole file

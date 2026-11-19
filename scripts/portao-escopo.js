@@ -126,8 +126,13 @@ io.blindar(function () {
     const cwd = config.raizDoProjeto(e.cwd || process.cwd());
     const entrada = e.tool_input || {};
     // A12-02: o NotebookEdit traz o arquivo em `notebook_path`, nao em `file_path`.
-    const alvo = caminhoLib.relativoAoProjeto(entrada.file_path || entrada.notebook_path, cwd);
-    if (!alvo) return io.permitir();
+    const bruto = caminhoLib.relativoAoProjeto(entrada.file_path || entrada.notebook_path, cwd);
+    if (!bruto) return io.permitir();
+    // A2-07: na worktree do subagente isolado, as regras sao as do projeto (o escopo, o projeto.json) e o caminho e o
+    // de dentro dela; o disco (o arquivo de antes, o parecido, o toque) se le na worktree, a `base`
+    const naWorktree = caminhoLib.naWorktreeDoClaude(bruto);
+    const alvo = naWorktree ? naWorktree.rel : bruto;
+    const base = naWorktree ? path.join(cwd, naWorktree.pasta) : cwd;
 
     // Escopo por frente: o arquivo de UMA frente tem o mesmo passe livre do
     // escopo.md (logo abaixo) e vincula a sessao a ela. Nome fora da classe
@@ -194,7 +199,7 @@ io.blindar(function () {
         ? catraca.afrouxou(entrada.old_string, entrada.new_string) : [];
       if (!frouxo.length) {
         // fail-open: o arquivo que nao existe ou nao se le nao se compara inteiro (so o trecho do Edit, acima)
-        const atual = lerMedido(path.join(cwd, alvo), BYTES_COMPARADOS);
+        const atual = lerMedido(path.join(base, alvo), BYTES_COMPARADOS);
         if (atual === GRANDE) {
           // fail-closed: acima da medida o arquivo inteiro nao se compara, e o trecho sozinho nao basta (A2-02)
           incrementar(e.session_id, 'catraca_afrouxada');
@@ -226,7 +231,7 @@ io.blindar(function () {
       // medida), nada desconta: o lado estrito.
       let antes;
       if (typeof entrada.content === 'string' || typeof entrada.new_source === 'string') {
-        const atual = lerMedido(path.join(cwd, alvo), BYTES_COMPARADOS);
+        const atual = lerMedido(path.join(base, alvo), BYTES_COMPARADOS);
         if (typeof atual === 'string') antes = typeof entrada.new_source === 'string' ? antesDaCelula(atual, entrada) : atual;
       } else if (typeof entrada.old_string === 'string') {
         antes = entrada.old_string;
@@ -284,8 +289,9 @@ io.blindar(function () {
     // arquivo ao dono - e la o nome tem de ser o que esta no disco.
     // X2b: com a trava desligada a 5b nao dispara, e o fluxo SEGUE para os
     // passos 3-5 - nao vira `permitir`. Trava nenhuma pode virar bypass.
+    // A2-07: a foto da abertura e o git do projeto principal; a worktree e outra copia, que ela nao descreve
     const alvoBaixo = alvo.toLowerCase();
-    const deOutraFrente = travas.outraFrente !== false &&
+    const deOutraFrente = travas.outraFrente !== false && !naWorktree &&
       Array.isArray(s.gitAbertura) && s.gitAbertura.some(function (p) {
       return String(p).toLowerCase() === alvoBaixo;
     });
@@ -299,11 +305,11 @@ io.blindar(function () {
     if (travas.outraFrente !== false && !deOutraFrente && !escopoLib.dentro(alvo, esc)) {
       let toque = null;
       try {
-        toque = require('./lib/toques.js').deOutraSessao(cwd, path.resolve(cwd, alvo), e.session_id, s.inicioMs);
+        toque = require('./lib/toques.js').deOutraSessao(cwd, path.resolve(base, alvo), e.session_id, s.inicioMs);
       } catch (err) { toque = null; } // fail-open: o registro que nao se le so tira este aviso; a foto da abertura vale
       if (toque) {
         let sujos = null;
-        try { sujos = require('./lib/git.js').modificados(cwd); } catch (err) { sujos = null; } // fail-closed: sem o git status o toque vale
+        try { sujos = require('./lib/git.js').modificados(base); } catch (err) { sujos = null; } // fail-closed: sem o git status o toque vale
         const segueSujo = !Array.isArray(sujos) || sujos.some(function (p) { return String(p).toLowerCase() === alvoBaixo; });
         if (segueSujo) {
           incrementar(e.session_id, 'outra_frente');
@@ -369,10 +375,10 @@ io.blindar(function () {
     // 6. C9: arquivo NOVO exige ter procurado antes. Editar o que ja existe nao,
     // porque quem edita ja achou. Vem depois do escopo de proposito: "fora do
     // escopo" e a resposta mais especifica, e tem de ganhar quando as duas valem.
-    if (!existe(cwd, alvo) && !s.buscouNesteTurno && !buscaLib.nomeadoNoEscopo(alvo, esc)) {
+    if (!existe(base, alvo) && !s.buscouNesteTurno && !buscaLib.nomeadoNoEscopo(alvo, esc)) {
       // F3c (D828): a trava procura sozinha os arquivos de mesmo nome; sem nenhum, a criacao segue. Achou algum, ou a
       // busca falhou (sem git): nega como antes, com a lista do que achou.
-      const achados = buscaLib.parecidos(cwd, alvo);
+      const achados = buscaLib.parecidos(base, alvo);
       if (!achados || achados.length) {
         incrementar(e.session_id, 'criou_sem_buscar');
         return negar(buscaLib.motivo(alvo, achados));

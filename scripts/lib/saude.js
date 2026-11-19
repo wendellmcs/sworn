@@ -222,6 +222,31 @@ function provaFocada(editados, corridas, desde, raiz) {
 }
 
 /**
+ * A funcao que diz se um comando roda a prova (`prova`: o comando ou a lista de formas de provasEquivalentes), ou null
+ * sem prova. A regua do testesDoTranscript; o lancamento da prova (impressao-codigo.js) usa a mesma.
+ */
+function casaComAProva(prova) {
+  const rodouTeste = require('./medicao-travas.js').rodouTeste;
+  const formas = [].concat(prova).filter(function (p) { return typeof p === 'string' && p.trim(); });
+  // Forma sem pedaco (so separadores) sai: o every da lista vazia casaria com qualquer comando.
+  const listas = formas.map(function (f) { return pedacosDaProva(semIsolamento(f)); })
+    .filter(function (ps) { return ps.length > 0; });
+  if (!listas.length) return null;
+  return function (comando) {
+    const c = semIsolamento(String(comando));
+    return listas.some(function (ps) {
+      return ps.every(function (p) { return rodouTeste([c], p) && !soEmOutroScript(c, p); });
+    });
+  };
+}
+
+/** D875: `arquivo` fica fora de `raiz` (o script auxiliar do scratchpad), pela regua do caminhoComparavel. */
+function foraDoProjeto(arquivo, raiz) {
+  const rel = path.relative(caminhoComparavel(raiz, raiz), caminhoComparavel(arquivo, raiz));
+  return rel.split(/[\\/]/)[0] === '..' || path.isAbsolute(rel);
+}
+
+/**
  * D634 (7b/8): na cauda do transcript, o ultimo teste que rodou (`{ comando, falhou }` ou null) e se a provaDePronto
  * nao rodou depois da ultima edicao de codigo (`provaPendente`; sem prova declarada, false). Falhou = saida diferente
  * de 0 (is_error, medido na s129) ou saida que mostra falha (o pipe zera o codigo). Teste sem resultado na cauda nao
@@ -233,6 +258,8 @@ function provaFocada(editados, corridas, desde, raiz) {
  * tocado e o de commit cobrar a suite inteira; sem ela, os dois campos nao aparecem.
  * F1c (D828): com `opcoes.raiz` e `opcoes.coerencia` (o comando do grupo de coerencia do disco, ou as formas dele), o
  * resultado traz `coerenciaVerde`: a ultima rodada do grupo depois da ultima edicao de codigo passou.
+ * D875: com `opcoes.raiz` e `opcoes.mesmoCodigoDaProva(id, comando)`, a edicao de codigo fora da raiz depois da ultima
+ * prova so deixa a prova pendente quando a funcao nao responde true (lib/impressao-codigo.js).
  */
 function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
   const t = transcricoes.ler(caminho);
@@ -240,18 +267,8 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
   // Tardios de proposito: saude.js carrega em quase todo gancho, e estes dois (com o que puxam) so servem ao fecho.
   const rodouTeste = require('./medicao-travas.js').rodouTeste;
   const { textoMostraFalha, saidaBarradaPeloSandbox } = require('./evidencia.js');
-  const formas = [].concat(prova).filter(function (p) { return typeof p === 'string' && p.trim(); });
-  // Forma sem pedaco (so separadores) sai: o every da lista vazia casaria com qualquer comando.
-  const listas = formas.map(function (f) { return pedacosDaProva(semIsolamento(f)); })
-    .filter(function (ps) { return ps.length > 0; });
-  const pedacos = listas.length ? listas : null;
-  const ehProva = function (comando) {
-    const c = semIsolamento(comando);
-    return pedacos !== null &&
-      pedacos.some(function (ps) {
-        return ps.every(function (p) { return rodouTeste([c], p) && !soEmOutroScript(c, p); });
-      });
-  };
+  const casa = casaComAProva(prova);
+  const ehProva = function (comando) { return casa !== null && casa(comando); };
   // F1c (D828): o grupo de coerencia do disco (`opcoes.coerencia`, o comando ou a lista de formas dele), casado como a
   // prova; sem grupo, null.
   const listasDaCoerencia = [].concat((opcoes && opcoes.coerencia) || [])
@@ -271,6 +288,11 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
   let ultimoTeste = null;
   let ultimaEdicao = -1;
   let ultimaProva = -1;
+  // D875: o id e o comando do lancamento da ultima prova (o que o impressao-codigo.js gravou nele)
+  let idDaProva = null;
+  let comandoDaProva = null;
+  let ultimaEdicaoFora = -1;
+  const editadosFora = Object.create(null);
   const raiz = opcoes && typeof opcoes.raiz === 'string' ? opcoes.raiz : null;
   const editados = Object.create(null);   // F1d: caminho comparavel -> { pos da ultima edicao, caminho, nome }
   const corridas = [];                    // F1d: cada teste com resultado, na ordem
@@ -313,7 +335,7 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
       if (ev.id && CONFERENCIA_DA_TELA.test(lido)) {
         conferencias[ev.id] = { comando: entrada.command, lido: lido, fundo: fundo, pos: ev.pos };
       }
-      if (daProva && !fundo) ultimaProva = ev.pos;
+      if (daProva && !fundo) { ultimaProva = ev.pos; idDaProva = ev.id || null; comandoDaProva = entrada.command; }
       if (ev.id && (daProva || rodouTeste([entrada.command], COMANDOS_DE_TESTE))) {
         pendentes[ev.id] = entrada.command;
         if (fundo) emFundo[ev.id] = { pos: ev.pos, daProva: daProva };
@@ -321,10 +343,13 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
     } else if (ev.tipo === 'chamada' && FERRAMENTAS_DE_EDICAO.indexOf(ev.nome) !== -1) {
       const arquivo = entrada.file_path || entrada.notebook_path;
       if (ehArquivoDeCodigo(arquivo)) {
-        ultimaEdicao = ev.pos;
-        if (raiz) {
-          const c = caminhoComparavel(arquivo, raiz);
-          editados[c] = { pos: ev.pos, caminho: c, nome: path.basename(String(arquivo)) };
+        const c = raiz ? caminhoComparavel(arquivo, raiz) : null;
+        const ed = { pos: ev.pos, caminho: c, nome: path.basename(String(arquivo)) };
+        // D875: com a raiz, o arquivo de fora do projeto conta a parte (veja o perdao depois do laco)
+        if (raiz && foraDoProjeto(arquivo, raiz)) { ultimaEdicaoFora = ev.pos; editadosFora[c] = ed; }
+        else {
+          ultimaEdicao = ev.pos;
+          if (raiz) editados[c] = ed;
         }
       }
     } else if (ev.tipo === 'resultado' && ev.id in pendentes && !(ev.id in emFundo && LANCADO.test(ev.saida || ''))) {
@@ -337,9 +362,20 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
       // Sem saida legivel, so o status e o codigo decidem; parado (killed) ou falho nao passou.
       anotar(pendentes[ev.id], ev.status !== 'completed' || (ev.codigo !== null && ev.codigo !== 0),
         typeof ev.arquivo === 'string' && ev.arquivo ? transcricoes.caudaDoTranscript(ev.arquivo) : null, ev.pos, f.pos);
-      if (f.daProva && f.pos > ultimaProva) ultimaProva = f.pos;
+      if (f.daProva && f.pos > ultimaProva) { ultimaProva = f.pos; idDaProva = ev.id; comandoDaProva = pendentes[ev.id]; }
     }
   });
+  // D875: a edicao de codigo fora do projeto, depois da ultima prova, so a deixa pendente se o codigo do repositorio
+  // mudou desde o lancamento dela: `opcoes.mesmoCodigoDaProva(id, comando)` (impressao-codigo.js) diz true so com a
+  // impressao gravada nele igual a de agora. Sem a funcao, sem prova ou com erro, a edicao conta como antes.
+  let perdoada = false;
+  if (ultimaEdicaoFora > ultimaProva && ultimaProva >= 0 && opcoes && typeof opcoes.mesmoCodigoDaProva === 'function') {
+    try { perdoada = opcoes.mesmoCodigoDaProva(idDaProva, comandoDaProva) === true; } catch (e) { perdoada = false; } // fail-closed: sem resposta, a edicao conta
+  }
+  if (!perdoada) {
+    ultimaEdicao = Math.max(ultimaEdicao, ultimaEdicaoFora);
+    Object.keys(editadosFora).forEach(function (c) { editados[c] = editadosFora[c]; });
+  }
   // Roda: prova lancada em segundo plano, sem aviso de fim, depois da ultima edicao e da ultima prova que terminou.
   const provaRodando = Object.keys(emFundo).some(function (id) {
     return emFundo[id].daProva && emFundo[id].pos >= ultimaEdicao && emFundo[id].pos > ultimaProva;
@@ -351,8 +387,8 @@ function testesDoTranscript(caminho, prova, comPosicoes, opcoes) {
     const c = conferencias[id];
     if (c.fundo && c.pos > posDaUltimaConferencia && (rodandoId === undefined || c.pos > conferencias[rodandoId].pos)) rodandoId = id;
   });
-  const r = { ultimoTeste: ultimoTeste, provaPendente: pedacos !== null && ultimaEdicao > ultimaProva,
-    provaRodando: pedacos !== null && provaRodando };
+  const r = { ultimoTeste: ultimoTeste, provaPendente: casa !== null && ultimaEdicao > ultimaProva,
+    provaRodando: casa !== null && provaRodando };
   // so aparece quando ha uma rodando, como a ultimaConferencia
   if (rodandoId !== undefined) { r.conferenciaRodando = true; r.comandoDaConferenciaRodando = conferencias[rodandoId].comando; }
   // R2b: so aparece quando alguma conferencia da tela terminou na cauda lida.
@@ -1145,4 +1181,5 @@ function motivoParadaSemDono(caixa, anuncia, pedeChat) {
 module.exports = { LIMIARES_PADRAO, BALDES_DE_BLOQUEIO, contextoDoTranscript, ultimaChamadaDoTranscript, testesDoTranscript, limiaresValidos, medir, acumular, avaliar, avisoDeSaude, instrucaoAoModelo, perguntaSobreSaude,
   INSTRUCAO_DA_PERGUNTA, ONDE_GRAVAR_O_HANDOFF, ehArquivoDeHandoff, handoffGravadoPeloShell,
   ehArquivoDeCodigo, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT, MOTIVO_PARADA_NO_HANDOFF, motivoParadaSemDono,
-  SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, linhaDeSituacao, instrucaoDaPergunta, provasEquivalentes };
+  SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, linhaDeSituacao, instrucaoDaPergunta, provasEquivalentes,
+  casaComAProva, foraDoProjeto };

@@ -27,6 +27,23 @@ function saiDoProjeto(rel, sep) {
   return rel === '..' || rel.startsWith('../') || rel.startsWith('..' + s);
 }
 
+// A2-07: a worktree do subagente isolado (isolation: worktree) que o Claude Code cria dentro do projeto. Sem /i: o
+// Claude Code a cria em minusculas, e a pasta `.Claude/Worktrees/` do usuario (Linux) nao vira o caminho de dentro dela
+const WORKTREE_DO_CLAUDE = /^(\.claude\/worktrees\/[^/]+)\/(.+)$/;
+
+/**
+ * A2-07: o caminho relativo `rel` (barra normal) de um arquivo dentro de uma worktree do Claude Code
+ * (`.claude/worktrees/<nome>/...`) -> `{ pasta, rel }`: a pasta da worktree e o caminho dentro dela, que e o mesmo
+ * do arquivo no projeto. A worktree nao leva o `.claude/sworn/` (o git o ignora), e o portao acha o projeto acima dela:
+ * sem isto, todo arquivo da worktree caia fora do escopo. O que fica no `.claude/` da propria worktree nao se troca
+ * (o escopo dela nao e o que vale), e o resto devolve null.
+ */
+function naWorktreeDoClaude(rel) {
+  const m = WORKTREE_DO_CLAUDE.exec(typeof rel === 'string' ? rel : '');
+  if (!m || /^\.claude(\/|$)/i.test(m[2])) return null;
+  return { pasta: m[1], rel: m[2] };
+}
+
 /**
  * F2-21 (D334): o arquivo esta dentro do projeto pelo caminho REAL? Resolve o link dos dois lados
  * (`realpath` do arquivo e do cwd) quando o arquivo existe: um link dentro do projeto que aponta para
@@ -80,4 +97,4 @@ function apagarItemPorItem(alvo) {
   }
 }
 
-module.exports = { relativoAoProjeto, dentroPeloCaminhoReal, saiDoProjeto, apagarPasta };
+module.exports = { relativoAoProjeto, naWorktreeDoClaude, dentroPeloCaminhoReal, saiDoProjeto, apagarPasta };

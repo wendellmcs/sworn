@@ -569,8 +569,10 @@ function lerTranscript(e, prova, projeto) {
   if (!lidos.has(chave)) {
     const raiz = config.raizDoProjeto(e.cwd);
     const coerencia = coerenciaDe(projeto);
+    // D875: a edicao fora do projeto depois da prova so a pede de novo se o codigo do repositorio mudou desde ela
+    const mesmo = require('./lib/impressao-codigo.js').mesmoCodigoDesde(e.session_id, raiz);
     const t = saude.testesDoTranscript(e.transcript_path, saude.provasEquivalentes(prova, raiz), true,
-      { raiz: raiz, coerencia: coerencia || null });
+      { raiz: raiz, coerencia: coerencia || null, mesmoCodigoDaProva: mesmo });
     // A suite inteira vermelha antes das edicoes de agora nao se apaga com a prova focada delas. F1c: com o grupo de
     // coerencia declarado, ele tambem tem de ter rodado verde depois da ultima edicao.
     const focada = Boolean(t && projeto && projeto.provaPorArquivoTocado === true && t.provaPendente && t.provaFocada &&

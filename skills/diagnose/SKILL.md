@@ -98,6 +98,10 @@ Write `.claude/sworn/diagnose/<id>/relatorio.md`, show it and give its path. In 
 5. **Discarded** — how many, and their reasons, so the owner sees what the analysts claimed without proof.
 6. **What was not read** — files or ranges left out, a dimension "not analysed", a session still running (and the
    line it was read up to), what the owner should check by hand.
+7. **The rule a repeated stumble calls for** — for each confirmed finding of `tropecos` or `repetido` that repeats
+   across two of the sessions read, or three times in one: the rule that would have prevented it, in the
+   `/sworn:learn` form (trigger -> action), with the `path:line` of each repeat, marked as a proposal. It is written
+   only through `/sworn:learn`, with the owner's yes. None repeats: "none".
 
 The report says what happened; it does not decide what to change. A change to sworn or to the project goes to the
 owner as a decision, in 3 options, after the report.

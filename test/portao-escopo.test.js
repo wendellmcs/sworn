@@ -111,6 +111,41 @@ test('portao-escopo: arquivo FORA do escopo declarado e negado (C8)', () => {
   });
 });
 
+// A2-07: o subagente isolado (isolation: worktree) edita em <projeto>/.claude/worktrees/<nome>, uma worktree que nao leva
+// o .claude/sworn/ (o git o ignora). O portao achava o projeto acima dela e lia `.claude/worktrees/<nome>/src/a.js`: todo
+// arquivo caia fora do escopo, ate o de dentro. Agora valem as regras do projeto com o caminho de dentro da worktree, e o
+// disco (o arquivo que ja existe) se le na worktree.
+test('portao-escopo A2-07: na worktree do subagente, o escopo do projeto vale pelo caminho de dentro dela', () => {
+  comTmp((tmp) => {
+    const dir = montarProjeto();
+    comum.repo(dir, { '.gitignore': '.claude/\n', 'src/a.js': 'a\n', 'lib/dup.js': 'd\n' });
+    escrever(dir, '.claude/sworn/escopo.md', '## Dentro\n- src/**\n');
+    const wt = path.join(dir, '.claude', 'worktrees', 'agent-x');
+    const add = spawnSync('git', ['-C', dir, 'worktree', 'add', '-q', wt], { encoding: 'utf8' });
+    try {
+      assert.strictEqual(add.status, 0, add.stderr);
+      const naWt = (rel) => ({ session_id: 's1', cwd: wt, hook_event_name: 'PreToolUse', tool_name: 'Write',
+        tool_input: { file_path: path.join(wt, rel), content: 'x' } });
+      liberou(rodar(naWt('src/a.js'), tmp));
+      const fora = rodar(naWt('outro/b.js'), tmp);
+      assert.strictEqual(negou(fora), true);
+      const motivo = fora.json.hookSpecificOutput.permissionDecisionReason;
+      assert.ok(motivo.includes('outro/b.js') && !motivo.includes('worktrees'), motivo);
+      // o arquivo que so existe na worktree ja existe: nao e criacao (no projeto ele nao existe, e o lib/dup.js de mesmo
+      // nome barraria a criacao sem busca)
+      escrever(wt, 'src/dup.js', 'd\n');
+      liberou(rodar(naWt('src/dup.js'), tmp));
+      // o .claude/ da propria worktree nao vira o do projeto: o projeto.json dela segue fora do escopo
+      const proprio = rodar(naWt('.claude/sworn/projeto.json'), tmp);
+      assert.strictEqual(negou(proprio), true);
+      assert.ok(proprio.json.hookSpecificOutput.permissionDecisionReason.includes('.claude/worktrees/agent-x/.claude/'));
+    } finally {
+      spawnSync('git', ['-C', dir, 'worktree', 'remove', '--force', wt], { encoding: 'utf8' });
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 test('portao-escopo: intocavel e negado mesmo estando no escopo (C10)', () => {
   comTmp((tmp) => {
     const dir = montarProjeto();

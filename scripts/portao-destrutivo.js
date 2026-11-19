@@ -84,11 +84,15 @@ function apagaSoNoEscopo(e, comando, raiz, projeto) {
       ? fotoDaAbertura(s, raiz).map(function (p) { return String(p).toLowerCase(); }) : [];
     const base = e.cwd || process.cwd();
     const raizReal = fs.realpathSync.native(raiz);
-    const passa = function (alvo) {
+    const passa = function (bruto) {
+      // A2-07: o arquivo da worktree do subagente isolado vale pelo caminho de dentro dela (lib/caminho.js)
+      const naWorktree = caminho.naWorktreeDoClaude(bruto);
+      const alvo = naWorktree ? naWorktree.rel : bruto;
       if (!alvo || /^\.claude(\/|$)|(^|\/)\.git(\/|$)/i.test(alvo)) return false;
       if (glob.casaAlgum(projeto.intocaveis, alvo) || escopoLib.declaradoFora(alvo, esc)) return false;
       if (!escopoLib.dentro(alvo, esc)) return false;
-      return deOutraFrente.indexOf(alvo.toLowerCase()) === -1;
+      // a foto da abertura e o git do projeto principal; a worktree e outra copia, que ela nao descreve
+      return !!naWorktree || deOutraFrente.indexOf(alvo.toLowerCase()) === -1;
     };
     return nomes.every(function (nome) {
       const abs = path.resolve(base, nome);
@@ -159,7 +163,9 @@ function nomeadosNaAbertura(e, comando, raiz, ab) {
   const caminho = require('./lib/caminho.js');
   const esc = { dentro: ab.dentro, fora: Array.isArray(ab.fora) ? ab.fora : [] };
   return nomes.every(function (nome) {
-    const rel = caminho.relativoAoProjeto(path.resolve(e.cwd || process.cwd(), nome), raiz);
+    const bruto = caminho.relativoAoProjeto(path.resolve(e.cwd || process.cwd(), nome), raiz);
+    const naWorktree = caminho.naWorktreeDoClaude(bruto);
+    const rel = naWorktree ? naWorktree.rel : bruto;
     return !!rel && escopoLib.dentro(rel, esc) && !escopoLib.declaradoFora(rel, esc);
   });
 }

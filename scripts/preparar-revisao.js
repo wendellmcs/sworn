@@ -275,7 +275,9 @@ const ehEstilo = design.ehArquivoDeEstilo(relNaRaiz, projetoCfg);
 const faixaMedida = veredito.faixaDaMudanca({
   novo: novo, identico: identico, linhasMudadas: linhasMudadas,
   estilo: ehEstilo,
-  texto: /\.(md|markdown|txt)$/i.test(rel)
+  texto: /\.(md|markdown|txt)$/i.test(rel),
+  // D875: o texto que so descreve (changelog, guia) vai a faixa `doc`, so com a `correcao`
+  instrucao: veredito.textoQueInstrui(relNaRaiz)
 });
 // L3 (A3-04): o revisar manda subir de faixa por julgamento (mudanca que monta tela, duas sem teste vermelho); sem a
 // flag o pacote seguia recortado. --completa sobe a completa (arquivo inteiro); descer nao tem flag.

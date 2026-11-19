@@ -1331,6 +1331,74 @@ test('s353: a ordem de rodar o handoff diz a skill fora do Claude Code e a pasta
   assert.strictEqual(saude.instrucaoAoModelo(g, true).indexOf('sworn-handoff'), -1);
 });
 
+// D875: a edicao de codigo fora do projeto depois da prova so a deixa pendente quando o mesmoCodigoDaProva nao diz true.
+test('D875: testesDoTranscript perdoa a edicao fora do projeto so com o codigo igual ao do lancamento da prova', () => {
+  const raiz = fsT.mkdtempSync(pathT.join(osT.tmpdir(), 'sworn-fora-'));
+  const outra = fsT.mkdtempSync(pathT.join(osT.tmpdir(), 'sworn-fora-aux-'));
+  try {
+    const PROVA = 'node --test test/*.test.js';
+    const fora = pathT.join(outra, 'auxiliar.js');
+    const dentro = pathT.join(raiz, 'src', 'x.js');
+    const chamadas = [];
+    const sim = function (id, comando) { chamadas.push([id, comando]); return true; };
+    const ver = function (linhas, opcoes) {
+      return comTranscript(linhas, (f) => saude.testesDoTranscript(f, PROVA, false, opcoes));
+    };
+    const suite = [cmd('a', PROVA), res('a', '# pass 3\n# fail 0')];
+    // sem a funcao, a edicao de fora conta como antes
+    assert.strictEqual(ver(suite.concat([edita('e', fora)]), { raiz: raiz }).provaPendente, true, 'sem a funcao');
+    // com o codigo igual, perdoada; a funcao recebe o id e o comando do lancamento
+    assert.strictEqual(ver(suite.concat([edita('e', fora, 'Write')]), { raiz: raiz, mesmoCodigoDaProva: sim }).provaPendente,
+      false, 'codigo igual');
+    assert.deepStrictEqual(chamadas, [['a', PROVA]]);
+    // com o codigo mudado, ou com a funcao que lanca, conta
+    assert.strictEqual(ver(suite.concat([edita('e', fora)]), { raiz: raiz, mesmoCodigoDaProva: () => false }).provaPendente,
+      true, 'codigo mudado');
+    assert.strictEqual(ver(suite.concat([edita('e', fora)]), { raiz: raiz, mesmoCodigoDaProva: () => { throw new Error('x'); } })
+      .provaPendente, true, 'funcao que lanca');
+    // so o true perdoa
+    assert.strictEqual(ver(suite.concat([edita('e', fora)]), { raiz: raiz, mesmoCodigoDaProva: () => 1 }).provaPendente,
+      true, 'valor que nao e true');
+    // a edicao de dentro do projeto conta sempre, mesmo com o codigo igual
+    assert.strictEqual(ver(suite.concat([edita('e', fora), edita('d', dentro)]), { raiz: raiz, mesmoCodigoDaProva: sim })
+      .provaPendente, true, 'dentro do projeto');
+    assert.strictEqual(ver(suite.concat([edita('d', 'src/x.js')]), { raiz: raiz, mesmoCodigoDaProva: sim }).provaPendente,
+      true, 'caminho relativo e de dentro');
+    // sem a raiz nao ha como separar: conta
+    assert.strictEqual(ver(suite.concat([edita('e', fora)]), { mesmoCodigoDaProva: sim }).provaPendente, true, 'sem raiz');
+    assert.strictEqual(ver(suite.concat([edita('e', fora)]), { raiz: '', mesmoCodigoDaProva: sim }).provaPendente, true,
+      'raiz vazia');
+    // a pasta irma com o nome da raiz como prefixo, e o relativo que sobe, ficam fora (a regua e o path.relative)
+    assert.strictEqual(ver(suite.concat([edita('e', raiz + '-copia/a.js')]), { raiz: raiz, mesmoCodigoDaProva: sim })
+      .provaPendente, false, 'pasta irma com o mesmo prefixo');
+    assert.strictEqual(ver(suite.concat([edita('e', '../fora.js')]), { raiz: raiz, mesmoCodigoDaProva: sim }).provaPendente,
+      false, 'relativo que sobe');
+    // sem prova nenhuma antes, nao ha lancamento para comparar: conta
+    assert.strictEqual(ver([edita('e', fora)], { raiz: raiz, mesmoCodigoDaProva: sim }).provaPendente, true, 'sem prova');
+    // a edicao de fora ANTES da prova nao pede nada, nem pergunta
+    chamadas.length = 0;
+    assert.strictEqual(ver([edita('e', fora)].concat(suite), { raiz: raiz, mesmoCodigoDaProva: sim }).provaPendente, false,
+      'edicao de fora antes da prova');
+    assert.deepStrictEqual(chamadas, [], 'nao pergunta sem edicao de fora depois da prova');
+    // a prova em segundo plano: o id do lancamento vai a funcao
+    chamadas.length = 0;
+    const verde = pathT.join(outra, 'verde.output');
+    fsT.writeFileSync(verde, '# tests 3\n# pass 3\n# fail 0\n');
+    const fundo = [emFundo('b', PROVA), lancado('b'),
+      fimDoFundo('b', 'completed', 'Background command "suite" completed (exit code 0)', verde)];
+    assert.strictEqual(ver(fundo.concat([edita('e', fora)]), { raiz: raiz, mesmoCodigoDaProva: sim }).provaPendente, false,
+      'segundo plano, codigo igual');
+    assert.deepStrictEqual(chamadas, [['b', PROVA]], 'segundo plano: o id e o comando do lancamento');
+    assert.strictEqual(ver(fundo.concat([edita('e', fora)]), { raiz: raiz }).provaPendente, true, 'segundo plano, sem funcao');
+    // a prova ainda rodando nao e prova: a edicao de fora (de antes ou depois do lancamento) nao e perdoada
+    assert.strictEqual(ver([edita('x', dentro), emFundo('b', PROVA), lancado('b'), edita('e', fora)],
+      { raiz: raiz, mesmoCodigoDaProva: sim }).provaPendente, true, 'segundo plano ainda rodando');
+  } finally {
+    fsT.rmSync(raiz, { recursive: true, force: true });
+    fsT.rmSync(outra, { recursive: true, force: true });
+  }
+});
+
 // F1d (D828.4): a prova focada - cada arquivo de codigo editado depois da ultima prova declarada tem, depois da propria
 // ultima edicao, um teste verde que o cobre (o teste e o proprio arquivo ou o cita pelo nome); e a prova vermelha.
 test('F1d: testesDoTranscript ve a prova focada por arquivo tocado e a ultima prova declarada vermelha', () => {

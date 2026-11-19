@@ -126,16 +126,36 @@ test('D485: faixaDaMudanca - os cortes de linhas, com texto e sem texto', () => 
   assert.strictEqual(v.faixaDaMudanca({ texto: true, linhasMudadas: 3 }), 'uma');
   assert.strictEqual(v.faixaDaMudanca({ texto: true, linhasMudadas: 4 }), 'texto');
   assert.strictEqual(v.faixaDaMudanca({ texto: true, linhasMudadas: 500 }), 'texto');
+  // D875: so `instrucao: false` desce a `doc`; ausente ou outro valor fica na `texto`
+  assert.strictEqual(v.faixaDaMudanca({ texto: true, instrucao: false, linhasMudadas: 4 }), 'doc');
+  assert.strictEqual(v.faixaDaMudanca({ texto: true, instrucao: false, linhasMudadas: 3 }), 'uma');
+  assert.strictEqual(v.faixaDaMudanca({ texto: true, instrucao: true, linhasMudadas: 4 }), 'texto');
+  assert.strictEqual(v.faixaDaMudanca({ texto: true, instrucao: 0, linhasMudadas: 4 }), 'texto');
+  assert.strictEqual(v.faixaDaMudanca({ instrucao: false, linhasMudadas: 30 }), 'duas', 'codigo nao vira doc');
+  assert.strictEqual(v.faixaDaMudanca({ novo: true, texto: true, instrucao: false, linhasMudadas: 9 }), 'completa');
+});
+
+test('D875: textoQueInstrui - skill, agente, regra, CLAUDE.md e README ficam; changelog, guia e docs nao', () => {
+  for (const r of ['skills/review/SKILL.md', 'agents/inspector.md', 'commands/x.md', '.claude/sworn/regras.md',
+    'CLAUDE.md', 'pkg/AGENTS.md', 'README.md', 'README.pt-BR.md', 'readme.md', 'docs/x.prompt.md', 'a\\skills\\b.md',
+    '.github/copilot-instructions.md', 'GEMINI.md', '']) {
+    assert.strictEqual(v.textoQueInstrui(r), true, r);
+  }
+  for (const r of ['CHANGELOG.md', 'GUIA.md', 'docs/decisoes.md', 'notas.txt', 'docs/skills.md', 'meu-README-velho.md',
+    'askills/x.md', 'CLAUDE.md.bak', 'docs/READMEx.md']) {
+    assert.strictEqual(v.textoQueInstrui(r), false, r);
+  }
 });
 
 test('D485: lentesDaFaixa - as lentes de cada faixa existem em LENTES; a completa devolve null (tabela de familias)', () => {
   assert.deepStrictEqual(v.lentesDaFaixa('uma'), ['correcao']);
   assert.deepStrictEqual(v.lentesDaFaixa('duas'), ['correcao', 'borda']);
   assert.deepStrictEqual(v.lentesDaFaixa('texto'), ['correcao', 'microcopy']);
+  assert.deepStrictEqual(v.lentesDaFaixa('doc'), ['correcao']);
   assert.strictEqual(v.lentesDaFaixa('completa'), null);
   assert.strictEqual(v.lentesDaFaixa('outra'), null);
   const chaves = new Set(v.LENTES.map((l) => l.chave));
-  for (const f of ['uma', 'duas', 'texto']) {
+  for (const f of ['uma', 'duas', 'texto', 'doc']) {
     v.lentesDaFaixa(f).forEach((k) => assert.ok(chaves.has(k), 'lente da faixa ' + f + ' nao existe: ' + k));
   }
   // a lista devolvida e copia: quem mexe nela nao muda a regra
@@ -1837,7 +1857,7 @@ const vazios = (lentes) => lentes.map((l) => veredito(l, []));
 
 test('F2b: a ronda 1 com todas as lentes da faixa e sem achado nenhum aprova em 1 ronda', () => {
   for (const [faixa, lentes] of [['uma', ['correcao']], ['duas', ['correcao', 'borda']], ['texto', ['correcao', 'microcopy']],
-    ['completa', OITO]]) {
+    ['doc', ['correcao']], ['completa', OITO]]) {
     const r = v.apurar([vazios(lentes)], { faixas: [faixa], mapas: [{ A: 'trabalho', B: 'HEAD' }] });
     assert.deepStrictEqual([r.encerrar, r.motivo, r.ronda, r.secas], [true, UMA_RONDA, 1, 1], faixa);
     assert.deepStrictEqual([r.novos, r.registros, r.pendentes], [[], [], []], faixa);
@@ -1991,7 +2011,7 @@ test('L3-s104-3: a faixa da ronda 1 que nao e conhecida para com erro, e nao cai
     .map((l) => veredito(l, []));
   for (const faixa of ['', 'xyz', 'Completa', ' uma']) {
     assert.throws(() => v.apurar([oito], { faixas: [faixa] }), (e) => e.codigo === v.FAIXA_DESCONHECIDA &&
-      e.message.indexOf('faixa ' + JSON.stringify(faixa)) !== -1 && /uma, duas, texto ou completa/.test(e.message) &&
+      e.message.indexOf('faixa ' + JSON.stringify(faixa)) !== -1 && /uma, duas, texto, doc ou completa/.test(e.message) &&
       /Passo 1 do \/sworn:review/.test(e.message), 'faixa ' + JSON.stringify(faixa));
   }
   // controle: as conhecidas passam com as lentes delas

@@ -220,7 +220,7 @@ test('projeto: validar nao estoura com valor hostil que sobrevive a JSON.parse',
   }
 });
 
-test('projeto: travas so passa com as quatro chaves booleanas', () => {
+test('projeto: travas so passa com as quatro chaves booleanas (sem perfil; com ele, ver H3)', () => {
   for (const ruim of [null, undefined, {}, [], 'sim', 1, true,
                       { fecho: true, escopo: true, destrutivo: true },
                       { fecho: true, escopo: true, destrutivo: true, outraFrente: 'sim' }]) {
@@ -374,7 +374,7 @@ test('projeto: a CLI le o mesmo arquivo que os portoes leem, BOM inclusive', () 
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-cli-'));
   fs.mkdirSync(path.join(base, '.claude', 'sworn'), { recursive: true });
   const arq = path.join(base, '.claude', 'sworn', 'projeto.json');
-  const roda = () => spawnSync(process.execPath, [cli, base], { encoding: 'utf8', shell: false });
+  const roda = () => spawnSync(process.execPath, [cli, base], { encoding: 'utf8', shell: false, timeout: 60000 });
 
   fs.writeFileSync(arq, '\uFEFF' + JSON.stringify(VALIDO), 'utf8');
   let r = roda();
@@ -605,7 +605,7 @@ test('D442/5: re-init aceita as chaves de liga/desliga em vez de ignorar', () =>
 // nada muda. Por tipo (tela, codigo, texto), cada um uma lista de caminho ou URL - por isso fora de conferirCaminhos.
 test('D503: referencias e opcional e aceita listas de caminho ou URL por tipo', () => {
   assert.deepStrictEqual(projeto.CHAVES_OPCIONAIS, ['referencias', 'marcaDeAtalho', 'fontesDeConsulta', 'admissao',
-    'provaDeCoerencia']);
+    'provaDeCoerencia', 'perfil']);
   assert.deepStrictEqual(projeto.TIPOS_REFERENCIA, ['tela', 'codigo', 'texto']);
   assert.strictEqual(projeto.CHAVES.indexOf('referencias'), -1, 'opcional nao entra nas obrigatorias');
   const com = copia({ referencias: { tela: ['docs/ref.png', 'https://exemplo.com/painel'], codigo: [], texto: ['README.md'] } });
@@ -745,7 +745,7 @@ test('A4-23: todo ERRO do validar.js termina com o passo seguinte', () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-cli-'));
   const dir = path.join(base, '.claude', 'sworn');
   const passo = '\nCorrija o que esta acima e rode a validacao de novo.\n';
-  const roda = () => spawnSync(process.execPath, [cli, base], { encoding: 'utf8', shell: false });
+  const roda = () => spawnSync(process.execPath, [cli, base], { encoding: 'utf8', shell: false, timeout: 60000 });
   try {
     let r = roda();
     assert.ok(r.status === 1 && r.stdout.endsWith(passo) &&
@@ -863,4 +863,111 @@ test('A4-76: o validador que lanca sai como defeito do sworn, e o passo manda av
       avisar), m.stdout);
     assert.strictEqual(m.stdout.split('Corrija').length, 2, m.stdout);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
+});
+
+// H3 (D877, R-ECC): o perfil de instalacao da o padrao das chaves que o arquivo nao escreve; a chave escrita vence.
+test('H3: comPerfil aplica leve e estrito, a chave escrita vence, e entrada torta ou sem perfil sai como entrou', () => {
+  assert.deepStrictEqual(Object.keys(projeto.PERFIS), ['leve', 'padrao', 'estrito']);
+  const leve = projeto.comPerfil({ perfil: 'leve' });
+  assert.strictEqual(leve.travas.fecho, false);
+  assert.strictEqual(leve.travas.outraFrente, false);
+  assert.notStrictEqual(projeto.travasDe(leve).destrutivo, false, 'o leve nao desliga o apagar');
+  assert.notStrictEqual(projeto.travasDe(leve).escopo, false, 'o leve nao mexe em travas.escopo');
+  for (const k of ['portaoRevisao', 'portaoReferencia', 'portaoManual', 'portaoCommit', 'sugerirAprender',
+    'oferecerRadar', 'auditarNaAbertura', 'atalhosNaAbertura']) assert.strictEqual(leve[k], false, k);
+  const escrito = projeto.comPerfil({ perfil: 'leve', travas: { fecho: true }, portaoCommit: true });
+  assert.strictEqual(escrito.travas.fecho, true, 'a trava escrita vence o perfil');
+  assert.strictEqual(escrito.travas.outraFrente, false, 'a trava nao escrita vem do perfil');
+  assert.strictEqual(escrito.portaoCommit, true, 'a chave escrita vence o perfil');
+  assert.strictEqual(projeto.comPerfil({ perfil: 'estrito' }).revisaoTodoCodigo, true);
+  assert.strictEqual(projeto.comPerfil({ perfil: 'estrito', revisaoTodoCodigo: false }).revisaoTodoCodigo, false);
+  // sem perfil, perfil padrao ou perfil que nao existe: o objeto sai como entrou (o mesmo objeto)
+  for (const p of [{}, { perfil: 'padrao' }, { perfil: 'turbo' }, { perfil: 'LEVE' }, { perfil: 'toString' },
+    { perfil: '__proto__' }, { perfil: 3 }]) {
+    const antes = JSON.stringify(p);
+    assert.strictEqual(projeto.comPerfil(p), p, JSON.stringify(p));
+    assert.strictEqual(JSON.stringify(p), antes, JSON.stringify(p));
+  }
+  assert.strictEqual(projeto.comPerfil(null), null);
+  // a entrada nao muda
+  const entrada = { perfil: 'leve', travas: { destrutivo: true } };
+  projeto.comPerfil(entrada);
+  assert.deepStrictEqual(entrada, { perfil: 'leve', travas: { destrutivo: true } });
+  // travas que nao e objeto fica como veio (o aviso de tipo a mostra; as travas seguem ligadas); o resto do perfil vale
+  const torta = projeto.comPerfil({ perfil: 'leve', travas: 'sim' });
+  assert.strictEqual(torta.travas, 'sim');
+  assert.strictEqual(torta.portaoCommit, false);
+  assert.strictEqual(projeto.comPerfil({ perfil: 'leve', travas: null }).travas, null);
+  const lista = [];
+  assert.strictEqual(projeto.comPerfil({ perfil: 'leve', travas: lista }).travas, lista);
+  assert.strictEqual(projeto.comPerfil(undefined), undefined);
+});
+
+test('H3: validar aceita o perfil, recusa o que nao existe, e com perfil as travas podem vir em parte', () => {
+  assert.strictEqual(projeto.validar(copia({ perfil: 'leve' })).ok, true);
+  assert.strictEqual(projeto.validar(copia({ perfil: 'leve', travas: {} })).ok, true);
+  assert.strictEqual(projeto.validar(copia({ perfil: 'estrito', travas: { destrutivo: false } })).ok, true);
+  const torto = projeto.validar(copia({ perfil: 'turbo' }));
+  assert.strictEqual(torto.ok, false);
+  assert.ok(torto.erros.indexOf('perfil tem de ser um de: leve, padrao, estrito') !== -1, JSON.stringify(torto.erros));
+  // o nome torto reprova e nao solta as travas: com `travas: {}`, sai tambem o erro de cada trava
+  for (const p of ['toString', '__proto__', 'LEVE', '', 3, null]) {
+    const v = projeto.validar(copia({ perfil: p, travas: {} }));
+    assert.ok(v.erros.indexOf('perfil tem de ser um de: leve, padrao, estrito') !== -1, JSON.stringify(p));
+    assert.ok(v.erros.indexOf('travas.fecho tem de ser true ou false') !== -1, JSON.stringify(p));
+    assert.ok(projeto.avisosDeTipo({ perfil: p }).indexOf('perfil tem de ser um de: leve, padrao, estrito') !== -1,
+      JSON.stringify(p));
+  }
+  assert.strictEqual(projeto.validar(copia({ travas: {} })).ok, false, 'sem perfil, as quatro travas seguem obrigatorias');
+  assert.deepStrictEqual(projeto.validar(copia({ perfil: 'leve', travas: null })).erros,
+    ['travas tem de ser objeto: {} ou so as travas que mudam o perfil']);
+  assert.deepStrictEqual(projeto.validar(copia({ travas: null })).erros, ['travas tem de ser objeto com as quatro chaves']);
+  assert.strictEqual(projeto.validar(copia({ perfil: 'leve', travas: { fecho: 'nao' } })).ok, false);
+  assert.ok(projeto.avisosDeTipo({ perfil: 'turbo' }).indexOf('perfil tem de ser um de: leve, padrao, estrito') !== -1);
+  assert.deepStrictEqual(projeto.avisosDeTipo({ perfil: 'leve' }), []);
+});
+
+test('H3: montar grava o perfil escolhido e, com ele, so as travas respondidas', () => {
+  const p = projeto.montar({}, { perfil: 'leve', modeloDeAmeaca: 'interno', quemDecide: 'Ana' });
+  assert.strictEqual(p.perfil, 'leve');
+  assert.deepStrictEqual(p.travas, {});
+  assert.strictEqual(projeto.validar(p).ok, true, JSON.stringify(projeto.validar(p).erros));
+  assert.deepStrictEqual(projeto.montar({}, { perfil: 'leve', travas: { destrutivo: false } }).travas, { destrutivo: false });
+  // o perfil torto vai como veio, e o validar o recusa: o dono ve o erro em vez de cair no padrao calado
+  const torto = projeto.montar({}, { perfil: 'strict', modeloDeAmeaca: 'interno', quemDecide: 'Ana' });
+  assert.strictEqual(torto.perfil, 'strict');
+  assert.deepStrictEqual(torto.travas, { fecho: true, escopo: true, destrutivo: true, outraFrente: true });
+  assert.ok(projeto.validar(torto).erros.indexOf('perfil tem de ser um de: leve, padrao, estrito') !== -1);
+  assert.strictEqual('perfil' in projeto.montar({}, {}), false);
+});
+
+test('H3: o re-init que troca de perfil troca as travas pelas respondidas agora; sem troca, funde como antes', () => {
+  const antigo = copia();
+  assert.deepStrictEqual(projeto.atualizar(antigo, { perfil: 'leve' }, '2026-11-19').config.travas, {});
+  const r = projeto.atualizar(antigo, { perfil: 'leve', travas: { destrutivo: false } }, '2026-11-19');
+  assert.deepStrictEqual(r.config.travas, { destrutivo: false });
+  assert.ok(r.mudou.indexOf('travas') !== -1 && r.mudou.indexOf('perfil') !== -1, JSON.stringify(r.mudou));
+  // o mesmo perfil de novo: as travas escritas a mao ficam, e a resposta parcial funde
+  const comLeve = copia({ perfil: 'leve', travas: { fecho: true } });
+  assert.deepStrictEqual(projeto.atualizar(comLeve, { perfil: 'leve' }, '2026-11-19').config.travas, { fecho: true });
+  assert.deepStrictEqual(projeto.atualizar(comLeve, { travas: { destrutivo: false } }, '2026-11-19').config.travas,
+    { fecho: true, destrutivo: false });
+  // perfil torto nao troca nada
+  assert.deepStrictEqual(projeto.atualizar(antigo, { perfil: 'turbo' }, '2026-11-19').config.travas, antigo.travas);
+  // o arquivo sem perfil vale o padrao: responder padrao nao apaga a trava que o dono desligou
+  const desligou = copia({ travas: { fecho: false, escopo: true, destrutivo: true, outraFrente: true } });
+  const padrao = projeto.atualizar(desligou, { perfil: 'padrao' }, '2026-11-19').config;
+  assert.deepStrictEqual(padrao.travas, desligou.travas);
+  assert.strictEqual(padrao.perfil, 'padrao');
+  // do leve de volta ao padrao e troca: as travas viram as respondidas agora
+  assert.deepStrictEqual(projeto.atualizar(comLeve, { perfil: 'padrao' }, '2026-11-19').config.travas, {});
+  // o Enter vazio nao e resposta: nada muda, e o perfil nao se grava
+  for (const vazio of ['', '  ']) {
+    const r2 = projeto.atualizar(comLeve, { perfil: vazio }, '2026-11-19').config;
+    assert.strictEqual(r2.perfil, 'leve', JSON.stringify(vazio));
+    assert.deepStrictEqual(r2.travas, { fecho: true });
+    assert.strictEqual('perfil' in projeto.montar({}, { perfil: vazio }), false, JSON.stringify(vazio));
+  }
+  // o antigo nao muda
+  assert.deepStrictEqual(antigo.travas, { fecho: true, escopo: true, destrutivo: true, outraFrente: true });
 });

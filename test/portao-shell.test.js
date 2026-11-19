@@ -180,6 +180,33 @@ test('pendencia #6: no portao-shell.js o comando liberado para o portao, sem mar
   assert.match(corrigido.hookSpecificOutput.additionalContext || '', /cd solto/i, JSON.stringify(corrigido));
 });
 
+// P14 (A1-06): o Monitor do Claude Code roda o `command` no shell da ferramenta Bash, e o matcher do shell nao o
+// casava: o apagar pelo Monitor nao passava pela trava 5. Agora casa, e os portoes o leem como Bash, tambem no Windows.
+test('P14: o Monitor passa pelos portoes do shell, lido como Bash', () => {
+  const hooks = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'hooks', 'hooks.json'), 'utf8')).hooks;
+  const doShell = hooks.PreToolUse.find((g) => (g.hooks || []).some((h) => /portao-shell\.js$/.test((h.args || [])[0])));
+  assert.ok(doShell, 'nenhum grupo PreToolUse chama o portao-shell.js');
+  assert.ok(doShell.matcher.split('|').includes('Monitor'), doShell.matcher);
+  const dir = pasta('portao-shell-monitor');
+  const tmp = pasta('portao-shell-monitor-tmp');
+  fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'projeto.json'), JSON.stringify({
+    plataforma: { so: 'win32', shell: 'powershell' } }));
+  const monitor = (entradaDaFerramenta) => {
+    const r = rodar('scripts/portao-shell.js', [], { cwd: dir, env: { SWORN_TMP: tmp },
+      entrada: { session_id: 'p14', cwd: dir, hook_event_name: 'PreToolUse', tool_name: 'Monitor',
+        tool_input: Object.assign({ description: 'ensaio', timeout_ms: 1000 }, entradaDaFerramenta) } });
+    assert.strictEqual(r.status, 0, r.stderr);
+    return r.stdout.trim() ? JSON.parse(r.stdout) : null;
+  };
+  const apagar = ['rm', '-rf', '/'].join(' ');
+  assert.match(motivoDe(monitor({ command: apagar })) || '', /^sworn - comando destrutivo barrado \(trava 5\)/);
+  // a armadilha do Bash (o grep -c antes do &&) vale no Monitor; lido como PowerShell, nao seria conferida
+  assert.match(motivoDe(monitor({ command: 'grep -c x a.txt && ls' })) || '', /grep -c/);
+  assert.strictEqual(monitor({ command: 'ls && pwd' }), null, 'no Windows, o && do Bash nao e erro do PowerShell');
+  assert.strictEqual(monitor({ ws: { url: 'wss://ensaio.invalid/x' } }), null, 'o Monitor de WebSocket passa');
+});
+
 test('F3a: depois-do-shell.js da o mesmo que o marcar-trabalho e o conferir-depois sozinhos, e os dois rodam', () => {
   const dir = repo(pasta('depois-shell'), { 'src/b.js': 'b\n', 'fora.txt': 'f\n' });
   const tmp = pasta('depois-shell-tmp');
