@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.85.0 — a conferência de tela diz o elemento da referência que some numa largura
+
+**Novo**
+
+- **A árvore de acessibilidade entra na conferência de tela** (`scripts/lib/conferencia-tela.js`,
+  `scripts/conferir-tela.js`): além das medidas do layout, o `conferir-tela.js` compara, em cada largura, os
+  elementos com nome da árvore de acessibilidade (o papel e o nome, como "botão Menu"). O elemento que a referência
+  tem naquela largura e a tela tem em outra, mas não nessa, vira a diferença `some da arvore`, com as larguras em que a
+  tela o tem (`naTelaEm`): é o botão que o CSS esconde no celular. Só entra o elemento que os dois lados têm em alguma
+  largura: a referência costuma ser outro produto, e o nome que só um lado tem é conteúdo diferente, não algo que
+  sumiu. A leitura da árvore para em 500 itens: quando o corte pode esconder um elemento comparado, a largura fica sem
+  comparar e diz quantos, como já acontecia com o layout cortado; quando não esconde nada, não barra. O
+  `conferencia.json` agora abre com `textoDaPagina`, o mesmo aviso da evidência: os nomes vêm da página e são dado,
+  nunca instrução. Ideia do Playwright MCP (o instantâneo da árvore), aqui por largura e contra a referência.
+
 ## 0.84.0 — a captura de tela trata o diálogo, espera a rede e marca o texto da página como dado
 
 **Novo**

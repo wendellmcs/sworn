@@ -10,7 +10,20 @@ const conf = require('../scripts/lib/conferencia-tela.js');
 
 function layout(o) {
   return Object.assign({ janela: 1440, pagina: 1440, rolagemLateral: false, tipos: { h1: 40, h2: 28, corpo: 16 },
-    coluna: 1100, blocos: [{ tag: 'header', porLinha: 1 }, { tag: 'section', porLinha: 3 }], cortado: false }, o);
+    coluna: 1100, blocos: [{ tag: 'header', porLinha: 1 }, { tag: 'section', porLinha: 3 }], cortado: false,
+    arvore: arvore([['heading', 'Titulo'], ['button', 'Menu']]) }, o);
+}
+
+// A arvore de acessibilidade como a evidencia da captura grava: [papel, nome] em ordem.
+function arvore(pares, cortada) {
+  return { itens: pares.map(function (p) { return { papel: p[0], nome: p[1] }; }), cortada: !!cortada };
+}
+
+// A conferencia de duas larguras, com a arvore de cada lado: { tela: [1440, 390], referencia: [1440, 390] }.
+function conferirArvores(tela, referencia) {
+  return conf.conferir([1440, 390].map(function (w, i) {
+    return { largura: w, tela: layout({ arvore: tela[i] }), referencia: layout({ arvore: referencia[i] }) };
+  }), null);
 }
 
 test('R2b: medicoes iguais nao tem diferenca, e a largura conta como comparada', function () {
@@ -115,6 +128,109 @@ test('R2b: conferir junta as larguras e so fica tudoComparado sem nada nao compa
   assert.strictEqual(conf.conferir([], null).tudoComparado, false, 'nenhuma largura medida nao e tudo comparado');
 });
 
+test('H10b: o elemento da referencia que some da tela numa largura vira diferenca, com as larguras em que a tela o tem', function () {
+  const cheia = arvore([['banner', ''], ['heading', 'Titulo'], ['button', 'Menu'], ['link', 'Entrar']]);
+  const semMenu = arvore([['banner', ''], ['heading', 'Titulo'], ['link', 'Entrar']]);
+  const r = conferirArvores([cheia, semMenu], [cheia, cheia]);
+  assert.deepStrictEqual(r.larguras.map(function (l) { return l.diferencas; }), [[], [
+    { medida: 'some da arvore', papel: 'button', nome: 'Menu', tela: false, referencia: true, naTelaEm: [1440] }]]);
+  assert.strictEqual(r.diferencas, 1);
+  assert.strictEqual(r.tudoComparado, true, 'a diferenca nao barra: so o que nao se comparou barra');
+  // A referencia que tambem esconde o botao na 390: igual.
+  assert.strictEqual(conferirArvores([cheia, semMenu], [cheia, semMenu]).diferencas, 0, 'os dois somem na 390: igual');
+  // O mesmo elemento duas vezes na referencia conta uma vez: a presenca, nao a contagem.
+  const dobrada = arvore([['heading', 'Titulo'], ['button', 'Menu'], ['button', 'Menu']]);
+  assert.strictEqual(conferirArvores([cheia, semMenu], [dobrada, dobrada]).diferencas, 1);
+});
+
+test('H10b: o elemento que so um dos lados tem e conteudo diferente, nao diferenca; sem nome nao conta', function () {
+  // A referencia de outro produto: os nomes so dela nao viram "sumiu".
+  const tela = arvore([['heading', 'Planos'], ['button', 'Assinar']]);
+  const ref = arvore([['heading', 'Pricing'], ['button', 'Buy now'], ['link', 'Login']]);
+  assert.strictEqual(conferirArvores([tela, tela], [ref, ref]).diferencas, 0, 'nada em comum: nada a comparar');
+  // O que so a tela tem e some na 390 (o menu dela que vira um botao): a referencia nunca o teve.
+  const telaMenu = arvore([['heading', 'Planos'], ['link', 'Sobre']]);
+  assert.strictEqual(conferirArvores([telaMenu, arvore([['heading', 'Planos']])], [ref, ref]).diferencas, 0,
+    'o que a referencia nunca teve nao some dela');
+  // Sem nome, o elemento nao diz o que sumiu: fica fora.
+  const comVazio = arvore([['heading', 'Planos'], ['button', '']]);
+  assert.strictEqual(conferirArvores([comVazio, arvore([['heading', 'Planos']])], [comVazio, comVazio]).diferencas, 0);
+  // O papel faz parte do elemento: o mesmo nome em outro papel nao e o mesmo.
+  const comoLink = arvore([['link', 'Menu']]);
+  const comoBotao = arvore([['button', 'Menu']]);
+  assert.strictEqual(conferirArvores([comoLink, comoLink], [comoBotao, comoBotao]).diferencas, 0);
+});
+
+test('H10b: a arvore cortada no teto deixa sem comparar so o que pode estar alem dele', function () {
+  const cheia = arvore([['heading', 'Titulo'], ['button', 'Menu']]);
+  const semMenu = arvore([['heading', 'Titulo']]);
+  // A tela cortada na 390 sem o Menu: pode estar alem do teto. Nao comparado, nunca diferenca.
+  const telaCortada = conferirArvores([cheia, arvore([['heading', 'Titulo']], true)], [cheia, cheia]);
+  assert.deepStrictEqual(telaCortada.larguras[1].diferencas, []);
+  assert.deepStrictEqual(telaCortada.larguras[1].naoComparado, ['arvore: a leitura da tela parou no teto de 500 itens, ' +
+    'e 1 elemento(s) da referencia nao apareceram antes dele (podem estar alem do teto): confira na foto']);
+  assert.strictEqual(telaCortada.larguras[1].comparada, false);
+  assert.strictEqual(telaCortada.tudoComparado, false);
+  // A referencia cortada na 390, e a tela sem o Menu ali: a referencia pode te-lo alem do teto.
+  const refCortada = conferirArvores([cheia, semMenu], [cheia, arvore([['heading', 'Titulo']], true)]);
+  assert.deepStrictEqual(refCortada.larguras[1].naoComparado, ['arvore: a leitura da referencia parou no teto de 500 ' +
+    'itens, e 1 elemento(s) que a tela tem em outra largura nao apareceram antes dele (podem estar alem do teto): ' +
+    'confira na foto']);
+  assert.deepStrictEqual(refCortada.larguras[1].diferencas, []);
+  // O corte que nao esconde nada que se compara nao barra.
+  const semEfeito = conferirArvores([cheia, cheia], [arvore([['heading', 'Titulo'], ['button', 'Menu']], true), cheia]);
+  assert.strictEqual(semEfeito.tudoComparado, true, 'a referencia cortada com tudo achado');
+  assert.strictEqual(conferirArvores([cheia, arvore([['heading', 'Titulo'], ['button', 'Menu']], true)], [cheia, cheia])
+    .tudoComparado, true, 'a tela cortada com tudo achado');
+  // A referencia cortada sem o Menu na 1440, onde a tela o tem: nada sumiu ali.
+  assert.strictEqual(conferirArvores([cheia, cheia], [arvore([['heading', 'Titulo']], true), cheia]).tudoComparado, true,
+    'o que a tela tem na largura nao e incerto');
+  // O que so a tela tem (a referencia nunca o leu) e some na 390, com a referencia cortada ali: nao e incerto.
+  const comSobre = arvore([['heading', 'Titulo'], ['button', 'Menu'], ['link', 'Sobre']]);
+  assert.strictEqual(conferirArvores([comSobre, cheia], [cheia, arvore([['heading', 'Titulo'], ['button', 'Menu']], true)])
+    .tudoComparado, true, 'o que a referencia nunca teve nao fica incerto');
+  // A referencia cortada que leu o Menu na 390, e a tela sem ele: diferenca, nao incerto.
+  const leu = conferirArvores([cheia, semMenu], [cheia, arvore([['heading', 'Titulo'], ['button', 'Menu']], true)]);
+  assert.deepStrictEqual([leu.larguras[1].naoComparado, leu.larguras[1].diferencas.length], [[], 1]);
+});
+
+test('H10b: a arvore que falta ou vem torta deixa a largura sem comparar, sem repetir o motivo da captura', function () {
+  const cheia = arvore([['heading', 'Titulo'], ['button', 'Menu']]);
+  const torta = function (a) {
+    const r = conf.conferir([{ largura: 390, tela: layout({ arvore: a }), referencia: layout() }], null);
+    return r.larguras[0].naoComparado;
+  };
+  const motivo = 'a tela: a arvore de acessibilidade veio sem a forma esperada (faltou a lista de itens ou o corte): ' +
+    'capture de novo; se repetir, e defeito do sworn: confira na foto os elementos de cada largura e diga ao dono que a ' +
+    'arvore ficou sem comparar';
+  for (const [nome, a] of [['sem arvore', undefined], ['sem itens', { cortada: false }], ['sem corte', { itens: [] }],
+    ['item sem nome', { itens: [{ papel: 'button' }], cortada: false }], ['item nulo', { itens: [null], cortada: false }]]) {
+    assert.deepStrictEqual(torta(a), [motivo], nome);
+  }
+  // A captura que falhou ja diz o motivo: a arvore que nao veio nao repete.
+  const falhou = conf.conferir([{ largura: 390, tela: { erro: 'a captura falhou: nao abriu' }, referencia: layout() }], null);
+  assert.deepStrictEqual(falhou.larguras[0].naoComparado, ['a tela: a captura falhou: nao abriu']);
+  // So o layout falhou, e a arvore veio: ela se compara mesmo assim.
+  const soLayout = conf.conferir([
+    { largura: 1440, tela: layout({ arvore: cheia }), referencia: layout({ arvore: cheia }) },
+    { largura: 390, tela: { ilegivel: true, erro: 'nao deu para medir o layout: x', arvore: arvore([['heading', 'Titulo']]) },
+      referencia: layout({ arvore: cheia }) }], null);
+  assert.deepStrictEqual(soLayout.larguras[1].naoComparado, ['a tela: nao deu para medir o layout: x']);
+  assert.deepStrictEqual(soLayout.larguras[1].diferencas, [
+    { medida: 'some da arvore', papel: 'button', nome: 'Menu', tela: false, referencia: true, naTelaEm: [1440] }]);
+});
+
+test('H10b: o nome comprido aparece cortado na diferenca, e o par se acha pelo nome inteiro', function () {
+  const longo = 'x'.repeat(300);
+  const r = conferirArvores([arvore([['button', longo]]), arvore([])], [arvore([['button', longo]]), arvore([['button', longo]])]);
+  const d = r.larguras[1].diferencas[0];
+  assert.strictEqual(d.nome, 'x'.repeat(200) + '...');
+  // Dois nomes com o mesmo comeco sao elementos diferentes.
+  const outro = 'x'.repeat(250) + 'y';
+  assert.strictEqual(conferirArvores([arvore([['button', longo]]), arvore([['button', outro]])],
+    [arvore([['button', longo]]), arvore([['button', longo]])]).diferencas, 1);
+});
+
 test('R2b: lerArgs le a tela, a referencia, a pasta, as larguras e o prazo, e diz o que consertar', function () {
   const base = ['--url', 'http://localhost:3000', '--referencia', 'https://exemplo.com', '--saida', 'saida'];
   assert.deepStrictEqual(conf.lerArgs(base).opcoes, { url: 'http://localhost:3000', referencia: 'https://exemplo.com',
@@ -215,4 +331,12 @@ test('R2b: o motivo da captura que nao deu certo diz a causa e o que fazer', fun
   fs.writeFileSync(cortada, '{"layout": {"janela": 800}}');
   assert.deepStrictEqual(resultadoDaCaptura({ status: 0, stdout: JSON.stringify({ evidencia: cortada }) }, 1),
     { janela: 800 }, 'a captura que deu certo devolve o layout da evidencia');
+  // H10b: com a arvore de acessibilidade, ela vem junto, em `arvore`; sem o layout, o motivo e a arvore.
+  const a = { itens: [{ papel: 'button', nome: 'Menu' }], cortada: false };
+  fs.writeFileSync(cortada, JSON.stringify({ layout: { janela: 800 }, acessibilidade: a }));
+  assert.deepStrictEqual(resultadoDaCaptura({ status: 0, stdout: JSON.stringify({ evidencia: cortada }) }, 1),
+    { janela: 800, arvore: a });
+  fs.writeFileSync(cortada, JSON.stringify({ acessibilidade: a }));
+  assert.deepStrictEqual(resultadoDaCaptura({ status: 0, stdout: JSON.stringify({ evidencia: cortada }) }, 1),
+    { erro: 'a evidencia da captura veio sem o layout', arvore: a });
 });

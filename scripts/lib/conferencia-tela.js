@@ -2,7 +2,7 @@
 // R2b: a conferencia da tela contra a referencia, largura por largura. Sem nota de parecenca (a do original, o
 // craft-anything, e generosa com o layout: website.rs:704): a lista do que difere e do que nao se comparou. O que falta
 // de um lado nunca conta como igual ("Missing evidence never counts as alike", workspace.rs:271). As medidas sao as do
-// `layout` que a captura grava no evidencia.json (captura.resumirLayout).
+// `layout` que a captura grava no evidencia.json (captura.resumirLayout), e a arvore de acessibilidade dela (H10b).
 
 const design = require('./design.js');
 const captura = require('./captura.js');
@@ -71,8 +71,8 @@ function compararLargura(largura, tela, referencia, sistema) {
     });
   }
   medir('coluna', tela.coluna, referencia.coluna, FOLGA_DA_COLUNA);
-  // Os blocos se pareiam pela tag, na ordem da pagina (o original pareia tambem pelo titulo, que o sworn nao guarda: o
-  // texto da pagina nao vai para o disco). Com a leitura cortada de um lado, a lista dele pode estar incompleta.
+  // Os blocos se pareiam pela tag, na ordem da pagina (o original pareia tambem pelo titulo, que o layout nao guarda:
+  // ele so leva numeros e tags). Com a leitura cortada de um lado, a lista dele pode estar incompleta.
   const cortados = [['da tela', tela], ['da referencia', referencia]].filter(function (x) { return x[1].cortado; });
   if (cortados.length) {
     for (const c of cortados) naoComparado.push('blocos: a leitura ' + c[0] + ' parou antes do fim (a pagina passou do teto de elementos lidos): ' +
@@ -95,10 +95,95 @@ function compararLargura(largura, tela, referencia, sistema) {
   return { largura, comparada: naoComparado.length === 0, diferencas, naoComparado };
 }
 
-// As medicoes de cada largura ([{ largura, tela, referencia }]) -> { larguras, diferencas, naoComparado,
-// tudoComparado }. Sem nenhuma largura medida, nada foi comparado.
+// H10b (H10-5; Playwright MCP, ideia 1): a arvore de acessibilidade comparada por largura. O elemento e o par (papel,
+// nome) com nome: sem nome, ele nao diz o que sumiu. So se compara o elemento que os dois lados tem em alguma largura:
+// a referencia costuma ser outro produto (a ficha do /sworn:reference), e o nome que so um lado tem e conteudo
+// diferente, nao algo que sumiu. Diferenca: a referencia tem o elemento naquela largura e a tela, que o tem em outra,
+// nao. A presenca conta, nao a contagem. O nome mostrado se corta em NOME_NA_DIFERENCA; o par se acha pelo inteiro.
+// atalho: o "tem em alguma largura" de um lado sai so do que a leitura dele alcancou. limite: a arvore cortada no teto
+// (ITENS_MAXIMOS) em todas as larguras pode esconder um elemento comum, que entao nao se compara. trocar quando: a
+// captura gravar a arvore inteira, ou o corte em todas as larguras aparecer numa conferencia real.
+const NOME_NA_DIFERENCA = 200;
+const SEPARADOR = '\u0000';
+
+// A arvore valida de um lado: { itens: [{ papel, nome }], cortada } ou null.
+function arvoreDe(m) {
+  const a = m && m.arvore;
+  if (!a || !Array.isArray(a.itens) || typeof a.cortada !== 'boolean') return null;
+  const valido = a.itens.every(function (i) { return i && typeof i.papel === 'string' && typeof i.nome === 'string'; });
+  return valido ? a : null;
+}
+
+// Os elementos com nome, na ordem da arvore, sem repetir: chave (papel + SEPARADOR + nome) -> o item.
+function chavesDe(a) {
+  const chaves = new Map();
+  for (const i of a.itens) if (i.nome) chaves.set(i.papel + SEPARADOR + i.nome, i);
+  return chaves;
+}
+
+// As medicoes de cada largura -> por largura, { diferencas, naoComparado } da arvore. A arvore que falta ou vem torta
+// so e motivo quando o resto do lado veio: a captura que falhou ja disse o motivo dela (motivoDoLado).
+function compararArvores(medicoes) {
+  const lados = medicoes.map(function (m) {
+    const tela = arvoreDe(m.tela);
+    const referencia = arvoreDe(m.referencia);
+    return { tela, referencia, chavesTela: tela && chavesDe(tela), chavesRef: referencia && chavesDe(referencia) };
+  });
+  // Em que larguras a tela tem cada elemento (naTela), e se a referencia o tem em alguma (naRef).
+  const naTela = new Map();
+  const naRef = new Set();
+  lados.forEach(function (l, i) {
+    if (l.chavesTela) for (const k of l.chavesTela.keys()) naTela.set(k, (naTela.get(k) || []).concat(medicoes[i].largura));
+    if (l.chavesRef) for (const k of l.chavesRef.keys()) naRef.add(k);
+  });
+  return lados.map(function (l, i) {
+    const m = medicoes[i];
+    const diferencas = [];
+    const naoComparado = [];
+    for (const [rotulo, lado, arv] of [['a tela', m.tela, l.tela], ['a referencia', m.referencia, l.referencia]]) {
+      if (!arv && !motivoDoLado(rotulo, lado)) {
+        naoComparado.push(rotulo + ': a arvore de acessibilidade veio sem a forma esperada (faltou a lista de itens ou o ' +
+          'corte): capture de novo; se repetir, e defeito do sworn: confira na foto os elementos de cada largura e diga ' +
+          'ao dono que a arvore ficou sem comparar');
+      }
+    }
+    if (!l.tela || !l.referencia) return { diferencas, naoComparado };
+    let incertosDaTela = 0;
+    for (const [k, item] of l.chavesRef) {
+      if (l.chavesTela.has(k) || !naTela.has(k)) continue;
+      if (l.tela.cortada) { incertosDaTela++; continue; }
+      diferencas.push({ medida: 'some da arvore', papel: item.papel, nome: captura.cortar(item.nome, NOME_NA_DIFERENCA),
+        tela: false, referencia: true, naTelaEm: naTela.get(k) });
+    }
+    if (incertosDaTela) {
+      naoComparado.push('arvore: a leitura da tela parou no teto de ' + captura.ITENS_MAXIMOS + ' itens, e ' +
+        incertosDaTela + ' elemento(s) da referencia nao apareceram antes dele (podem estar alem do teto): confira na foto');
+    }
+    if (l.referencia.cortada) {
+      // O elemento comum que a tela nao tem aqui e a leitura da referencia nao alcancou: ela pode te-lo alem do teto.
+      let incertosDaRef = 0;
+      for (const k of naTela.keys()) if (naRef.has(k) && !l.chavesTela.has(k) && !l.chavesRef.has(k)) incertosDaRef++;
+      if (incertosDaRef) {
+        naoComparado.push('arvore: a leitura da referencia parou no teto de ' + captura.ITENS_MAXIMOS + ' itens, e ' +
+          incertosDaRef + ' elemento(s) que a tela tem em outra largura nao apareceram antes dele (podem estar alem do ' +
+          'teto): confira na foto');
+      }
+    }
+    return { diferencas, naoComparado };
+  });
+}
+
+// As medicoes de cada largura ([{ largura, tela, referencia }], cada lado com a `arvore` da captura) -> { larguras,
+// diferencas, naoComparado, tudoComparado }. Sem nenhuma largura medida, nada foi comparado.
 function conferir(medicoes, sistema) {
-  const larguras = medicoes.map(function (m) { return compararLargura(m.largura, m.tela, m.referencia, sistema); });
+  const arvores = compararArvores(medicoes);
+  const larguras = medicoes.map(function (m, i) {
+    const l = compararLargura(m.largura, m.tela, m.referencia, sistema);
+    l.diferencas.push(...arvores[i].diferencas);
+    l.naoComparado.push(...arvores[i].naoComparado);
+    l.comparada = l.naoComparado.length === 0;
+    return l;
+  });
   const soma = function (campo) { return larguras.reduce(function (n, l) { return n + l[campo].length; }, 0); };
   const naoComparado = soma('naoComparado');
   return { larguras, diferencas: soma('diferencas'), naoComparado, tudoComparado: larguras.length > 0 && naoComparado === 0 };
@@ -154,7 +239,8 @@ function lerArgs(argv) {
 }
 
 // O aviso da saida: o que fazer com o que nao se comparou (barra o "pronto") e com o que difere. Cada item de
-// naoComparado e um motivo: uma largura inteira que nao se mediu, ou uma medida que a leitura cortada nao alcancou.
+// naoComparado e um motivo: uma largura inteira que nao se mediu, uma medida que a leitura cortada nao alcancou, ou a
+// arvore de acessibilidade torta ou cortada antes de um elemento comparado.
 function avisoDaConferencia(r) {
   const avisos = [];
   if (!r.larguras || !r.larguras.length) {
@@ -173,5 +259,5 @@ function avisoDaConferencia(r) {
 }
 
 module.exports = {
-  USO, compararLargura, conferir, tokenDoTamanho, lerArgs, avisoDaConferencia
+  USO, compararLargura, compararArvores, conferir, tokenDoTamanho, lerArgs, avisoDaConferencia
 };

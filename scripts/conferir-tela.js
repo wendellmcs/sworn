@@ -74,7 +74,9 @@ function resultadoDaCaptura(r, prazo) {
     return { erro: 'nao deu para ler a evidencia da captura em ' + captura.textoParaODisco(fim.evidencia) + ' (' +
       captura.textoParaODisco(e.message) + '): rode de novo; se repetir, abra o arquivo e veja se ele esta inteiro' };
   }
-  return evidencia.layout || { erro: 'a evidencia da captura veio sem o layout' };
+  const layout = evidencia.layout || { erro: 'a evidencia da captura veio sem o layout' };
+  // H10b: a arvore de acessibilidade vai junto, para a conferencia por largura.
+  return evidencia.acessibilidade === undefined ? layout : Object.assign({}, layout, { arvore: evidencia.acessibilidade });
 }
 
 function main(argv) {
@@ -92,9 +94,10 @@ function main(argv) {
   const sistema = config.carregarDesign(process.cwd());
   const r = conferencia.conferir(medicoes, sistema);
   const caminho = path.join(o.saida, 'conferencia.json');
-  // O endereco vai limpo de segredo, como na evidencia da captura.
+  // O endereco vai limpo de segredo, como na evidencia da captura. Os nomes da arvore nas diferencas vem da pagina: o
+  // arquivo abre com o mesmo aviso da evidencia (H10-1).
   try {
-    fs.writeFileSync(caminho, JSON.stringify(Object.assign({ url: captura.semSegredo(o.url),
+    fs.writeFileSync(caminho, JSON.stringify(Object.assign({ textoDaPagina: captura.TEXTO_DA_PAGINA, url: captura.semSegredo(o.url),
       referencia: captura.semSegredo(o.referencia), hora: new Date().toISOString(), comDesign: !!sistema }, r), null, 2) + '\n');
   } catch (e) {
     return { erro: 'nao deu para gravar ' + caminho + ' (' + (e.code || e.message) + '): as capturas ficaram na pasta' };

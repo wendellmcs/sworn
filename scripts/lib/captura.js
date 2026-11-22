@@ -692,7 +692,7 @@ module.exports = {
   saidaDoScript, juntarAvisos, TEXTO_DA_PAGINA,
   ALTURA_MAXIMA, TETO_DA_LARGURA, TETO_DO_TEMPO, ITENS_MAXIMOS, TEXTO_MAXIMO, PADRAO, USO,
   lerArgs, candidatosDoNavegador, acharNavegador, enderecoDoArquivo, entradaDeConsole, erroDaPagina, erroDoLog,
-  resumirAcessibilidade, alturaDaFoto, semSegredo, textoParaODisco, consoleEErrosSemSegredo, TEXTO_BRUTO,
+  resumirAcessibilidade, alturaDaFoto, semSegredo, textoParaODisco, consoleEErrosSemSegredo, TEXTO_BRUTO, cortar,
   EXPRESSAO_DO_ESTILO, resumirEstilo, ELEMENTOS_DO_ESTILO, VALORES_DO_ESTILO,
   EXPRESSAO_DO_LAYOUT, resumirLayout, BLOCOS_DO_LAYOUT,
 };

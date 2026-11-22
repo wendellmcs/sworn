@@ -71,7 +71,8 @@ to), run, from the project root:
 
 It captures both pages at 1440, 768 and 390 px (`--larguras` changes the list) and writes `conferencia.json`: for each
 width, what differs (horizontal scroll, the h1, h2 and body text size beyond 2 px, the main column beyond 8 px, how many
-blocks sit side by side) and what could not be compared. With `.claude/sworn/design.json`, a type difference also names
+blocks sit side by side, and `some da arvore`: an accessibility element, role and name, that the reference has at that
+width and the work loses there while having it at another width) and what could not be compared. With `.claude/sworn/design.json`, a type difference also names
 the system size closest to the reference's. It exits 0 when everything was compared and 1 otherwise: what was not
 compared never counts as alike, and the stop gate blocks "done" while the last run exited 1. Differences alone do not make it exit
 1: fix each one, or tell the owner why it is on purpose. What was not compared: fix its cause (the address, the server,

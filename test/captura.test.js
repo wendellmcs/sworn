@@ -1201,16 +1201,18 @@ test('ponta a ponta (R2b): a conferencia mede a tela e a referencia em cada larg
   const tmp = path.join(dir, 'tmp');
   fs.mkdirSync(tmp);
   const cartao = '<div style="width:30%;height:50px;background:#eee"></div>';
-  const pagina = function (nome, secao) {
+  // H10b: o botao Menu some da tela abaixo de 500 px e fica na referencia; o botao Ajuda so a referencia tem (outro
+  // conteudo, nao diferenca).
+  const pagina = function (nome, secao, extra) {
     const p = path.join(dir, nome);
     fs.writeFileSync(p, '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>C</title></head>' +
       '<body style="margin:0;font-size:16px"><header style="height:60px">topo</header>' +
       '<main><h1 style="font-size:32px;margin:0">Titulo</h1><section style="' + secao + '">' + cartao + cartao + cartao +
-      '</section></main></body></html>');
+      '</section></main><button class="m">Menu</button>' + extra + '</body></html>');
     return pathToFileURL(p).href;
   };
-  const tela = pagina('tela.html', 'display:block');
-  const referencia = pagina('referencia.html', 'display:flex');
+  const tela = pagina('tela.html', 'display:block', '<style>@media (max-width:500px){.m{display:none}}</style>');
+  const referencia = pagina('referencia.html', 'display:flex', '<button>Ajuda</button>');
   const conferir = function (args) {
     return spawnSync(process.execPath, [CONFERIR].concat(args), { encoding: 'utf8', timeout: 600000, cwd: dir,
       env: ambiente({ SWORN_TMP: tmp }) });
@@ -1221,14 +1223,17 @@ test('ponta a ponta (R2b): a conferencia mede a tela e a referencia em cada larg
   assert.strictEqual(r.status, 0, 'a conferencia saiu com ' + r.status + ', algo ficou sem comparar: ' + r.stdout + r.stderr);
   const fim = JSON.parse(r.stdout);
   assert.strictEqual(fim.tudoComparado, true);
-  assert.strictEqual(fim.diferencas, 4, 'duas por largura');
-  assert.match(fim.aviso, /^4 diferenca\(s\) com a referencia/);
+  assert.strictEqual(fim.diferencas, 5, 'duas por largura e o botao que some na 400');
+  assert.match(fim.aviso, /^5 diferenca\(s\) com a referencia/);
   const c = JSON.parse(fs.readFileSync(path.join(saida, 'conferencia.json'), 'utf8'));
   assert.strictEqual(c.comDesign, false);
+  assert.strictEqual(Object.keys(c)[0], 'textoDaPagina', 'o aviso do texto da pagina abre o conferencia.json');
   assert.deepStrictEqual(c.larguras.map(function (l) { return [l.largura, l.comparada, l.diferencas]; }), [800, 400].map(function (w) {
     return [w, true, [{ medida: 'blocos lado a lado', tag: 'main', ordem: 1, tela: 1, referencia: 3 },
-      { medida: 'blocos lado a lado', tag: 'section', ordem: 1, tela: 1, referencia: 3 }]];
-  }), 'os cartoes empilhados na tela e lado a lado na referencia (o main conta o que tem dentro)');
+      { medida: 'blocos lado a lado', tag: 'section', ordem: 1, tela: 1, referencia: 3 }].concat(w === 400 ?
+      [{ medida: 'some da arvore', papel: 'button', nome: 'Menu', tela: false, referencia: true, naTelaEm: [800] }] : [])];
+  }), 'os cartoes empilhados na tela e lado a lado na referencia (o main conta o que tem dentro); o Menu some da tela ' +
+    'na 400 e o Ajuda, que so a referencia tem, nao conta');
   for (const pasta of ['tela-800', 'referencia-800', 'tela-400', 'referencia-400']) {
     assert.ok(fs.existsSync(path.join(saida, pasta, 'evidencia.json')), 'falta a evidencia da captura de ' + pasta);
   }
