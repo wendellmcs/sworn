@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.86.0 — a captura de tela segue um roteiro: clica, digita, espera e confere antes da foto
+
+**Novo**
+
+- **Roteiro de passos na captura** (`scripts/capturar-tela.js --passos <roteiro.json>`, `scripts/lib/roteiro.js`):
+  depois da carga, a captura clica, digita, espera e confere pela árvore de acessibilidade, com o papel e o nome que o
+  `evidencia.json` já lista (`{ "acao": "clicar", "papel": "button", "nome": "Entrar" }`), e só então tira a foto. O
+  roteiro é `{ "passos": [ ... ] }`; cada passo espera até 5 s (ou o `tempoMax` dele) o elemento aparecer, habilitado,
+  na janela e sem nada por cima; com dois elementos iguais, o `ordem` diz qual, e sem ele o passo não escolhe sozinho.
+  `digitar` troca o que o campo tinha pelo texto, como uma pessoa digitando (a página recebe o evento de digitação).
+  `esperar` e `conferir` aceitam o texto visível da página (`"texto"`) ou o elemento, com o `valor` do campo ou a marca
+  da caixa (`true`/`false`). Clicar, digitar ou esperar que falham param o roteiro; a conferência que falha fica no
+  rastro e o roteiro segue. Depois de cada ação a rede assenta, como depois da carga. A evidência leva o rastro em
+  `roteiro` (cada passo com o resultado, o tempo, o motivo da falha, o valor obtido e os diálogos que ele abriu) e o
+  hash do roteiro; o texto digitado nunca vai ao disco, só quantos caracteres. A saída leva a soma em `passos`
+  (rodados, conferências certas e as que falharam, o passo que parou) e sai 1, com o JSON, quando o roteiro parou ou
+  uma conferência falhou; o roteiro errado para antes de abrir o navegador, dizendo o passo e o que consertar (o JSON
+  quebrado diz a linha e a coluna). O botão e o campo dentro de um shadow root aberto (um web component) valem como os
+  outros, e o roteiro salvo em UTF-16 pelo `>` do PowerShell 5 é lido. Ideia do Playwright MCP (as ações por papel e
+  nome e as asserções), aqui com o rastro e as conferências somados por script.
+
 ## 0.85.0 — a conferência de tela diz o elemento da referência que some numa largura
 
 **Novo**

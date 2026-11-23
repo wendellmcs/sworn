@@ -8,13 +8,19 @@
 //
 //   node scripts/capturar-tela.js --url <endereco> --saida <pasta> [--largura 1280] [--altura 800]
 //                                 [--esperar <seletor CSS>] [--tempo-max 30000] [--arquivo <arquivo que desenha a tela>]
+//                                 [--passos <roteiro.json>]
+//
+// H10c: com --passos, depois da carga a captura clica, digita, espera e confere pela arvore de acessibilidade (o
+// formato do roteiro esta em scripts/lib/roteiro.js) e so entao tira a foto. A evidencia leva o rastro em `roteiro`;
+// a saida leva a soma em `passos` e sai 1 (com o JSON) quando o roteiro parou ou uma conferencia falhou.
 //
 // E3 item 2: a evidencia leva o estilo calculado do que se ve (`estilo`) e, com .claude/sworn/design.json na pasta
 // onde roda, o que dele ficou fora do sistema (`estiloForaDoSistema`, os desvios do --arquivo valendo). R2b: leva
 // tambem as medidas do layout (`layout`), que o conferir-tela.js compara com a referencia; a leitura que falha sai
 // com o motivo em `layout.erro`, repetido na saida em `layoutNaoLido`.
 //
-// Saida 0 com o JSON; saida 1 com uma linha "ERRO: <o que houve e o que fazer>".
+// Saida 0 com o JSON; saida 1 com uma linha "ERRO: <o que houve e o que fazer>", ou com o JSON quando o roteiro de
+// --passos parou ou uma conferencia dele falhou.
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -24,6 +30,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const captura = require('./lib/captura.js');
 const config = require('./lib/config.js');
 const design = require('./lib/design.js');
+const roteiro = require('./lib/roteiro.js');
 const { apagarPasta } = require('./lib/caminho.js'); // pendencia #10: o rmSync deixava a pasta com acento
 
 const PRAZO_DA_PORTA = 15000;
@@ -121,7 +128,8 @@ function conectar(endereco) {
   });
 }
 
-// Abre a pagina, espera a carga (e o seletor, se pedido) e devolve a foto e o que a pagina disse. Nao grava nada.
+// Abre a pagina, espera a carga (e o seletor, se pedido), roda o roteiro de --passos (que clica e digita na pagina) e
+// devolve a foto e o que a pagina disse. Nao grava nada.
 async function fotografar(cdp, o) {
   const { targetId } = await cdp.enviar('Target.createTarget', { url: 'about:blank' }, null, 'abrir uma aba');
   const { sessionId: s } = await cdp.enviar('Target.attachToTarget', { targetId, flatten: true }, null, 'abrir uma aba');
@@ -214,18 +222,24 @@ async function fotografar(cdp, o) {
       await dormir(Math.min(PASSO, restante()));
     }
   }
-  // H10-3: a rede assenta (nada em voo por QUIETO ms) antes da foto, ate o teto; passou dele, a foto sai e a evidencia
-  // diz quantas ficaram em voo (nunca corta calado).
-  const inicioDaRede = Date.now();
+  // H10-3: a rede assenta (nada em voo por QUIETO ms) ate `teto` ms; passou dele, segue, e quem chama diz quantas
+  // ficaram em voo (nunca corta calado). O silencio conta a partir do comeco da espera: o fetch que a pagina dispara
+  // logo depois da carga (ou do clique do roteiro) entra nela. Devolve as pendentes e a espera de fato.
+  const esperarRede = async function (teto) {
+    const comeco = Date.now();
+    ultimaRede = comeco;
+    while ((emVoo.size > 0 || Date.now() - ultimaRede < QUIETO) && Date.now() < comeco + teto) await dormir(PASSO);
+    return { pendentes: emVoo.size, espera: Date.now() - comeco };
+  };
   // o --tempo-max quase no fim encurta a espera: so entao mais --tempo-max ajuda (o teto de 5 s e fixo)
   const redeEncurtada = restante() < TETO_DA_REDE;
-  const tetoDaRede = inicioDaRede + Math.min(TETO_DA_REDE, restante());
-  // o silencio conta a partir da carga: o fetch que a pagina dispara logo depois dela entra na espera
-  ultimaRede = inicioDaRede;
-  while ((emVoo.size > 0 || Date.now() - ultimaRede < QUIETO) && Date.now() < tetoDaRede) await dormir(PASSO);
-  const requisicoesPendentes = emVoo.size;
+  const rede = await esperarRede(Math.min(TETO_DA_REDE, restante()));
+  const requisicoesPendentes = rede.pendentes;
   // a espera de fato (o --tempo-max quase no fim a encurta), que o aviso cita
-  const esperaDaRede = Date.now() - inicioDaRede;
+  const esperaDaRede = rede.espera;
+  // H10c: o roteiro de passos roda na pagina pronta, antes da foto: a foto e a evidencia sao do ponto onde ele parou.
+  const rastro = o.roteiro ? await rodarRoteiro(cdp, s, o, { esperarRede,
+    dialogos: function () { return dialogos.length + dialogosForaDoTeto; } }) : null;
   // Dois quadros de desenho depois da carga: o que a pagina pinta no primeiro quadro entra na foto.
   await cdp.enviar('Runtime.evaluate', { expression: 'new Promise(function (r) { requestAnimationFrame(function () { ' +
     'requestAnimationFrame(function () { r(true); }); }); })', awaitPromise: true }, s, 'esperar a pagina desenhar');
@@ -249,7 +263,192 @@ async function fotografar(cdp, o) {
   return { bytes: Buffer.from(imagem.data, 'base64'), foto, alturaDaPagina: Math.ceil(Number(tamanho.height) || 0),
     console: consoleLista, erros, acessibilidade: captura.resumirAcessibilidade(arvore.nodes), estilo, layout,
     urlFinal: local.result && local.result.value, navegador: versao.product, duracaoMs: Date.now() - inicio, status,
-    dialogos, dialogosForaDoTeto, requisicoesPendentes, esperaDaRede, redeEncurtada };
+    dialogos, dialogosForaDoTeto, requisicoesPendentes, esperaDaRede, redeEncurtada, rastro };
+}
+
+// ---------------------------------------------------------------- H10c: o roteiro de passos (--passos)
+
+// Os objetos que o roteiro pede a pagina ficam neste grupo, que se solta a cada passo.
+const GRUPO_DO_ROTEIRO = 'sworn-roteiro';
+// A tentativa de um passo que comeca no fim do prazo dele ainda tem este tempo para o navegador responder.
+const TENTATIVA_MINIMA = 1000;
+
+// Rodam na pagina (o navegador recebe o texto da funcao). O elemento do ponto do clique e o alvo ou um filho dele (o
+// icone dentro do botao): outro, e algo cobre o alvo. O documento so ve o hospedeiro de um shadow root aberto: o
+// elemento de verdade e procurado dentro dele, e o parentesco sobe pelo hospedeiro.
+function recebeOClique(x, y) {
+  var e = document.elementFromPoint(x, y);
+  while (e && e.shadowRoot) {
+    var dentro = e.shadowRoot.elementFromPoint(x, y);
+    if (!dentro || dentro === e) break;
+    e = dentro;
+  }
+  for (var n = e; n; n = n.parentNode || n.host) if (n === this) return true;
+  return false;
+}
+// Foca o campo e seleciona o que ele tinha: o texto digitado entra no lugar (como o fill do Playwright).
+function focarESelecionar() {
+  this.focus();
+  if (typeof this.select === 'function') {
+    this.select();
+  } else {
+    var r = document.createRange();
+    r.selectNodeContents(this);
+    var s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  }
+  var a = document.activeElement;
+  while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+  for (var n = a; n; n = n.parentNode || n.host) if (n === this) return true;
+  return false;
+}
+// O texto visivel da pagina (o innerText, sem o escondido) tem o texto, com os espacos juntados nos dois lados.
+function temOTexto(t) {
+  var b = document.body;
+  return !!b && b.innerText.replace(/\s+/g, ' ').indexOf(t) !== -1;
+}
+
+function semDeNovo(e) { return String(e && e.message ? e.message : e).replace(DE_NOVO, ''); }
+
+// Tenta ate dar certo ou o prazo do passo acabar: a pagina que ainda desenha, navega ou espera a rede tem esse tempo.
+// Devolve o resultado da ultima tentativa: sem `motivo`, deu certo.
+async function tentarAte(prazo, tentativa) {
+  const fim = Date.now() + prazo;
+  for (;;) {
+    let r;
+    try {
+      r = await comPrazo(tentativa(), Math.max(fim - Date.now(), TENTATIVA_MINIMA), 'o navegador nao respondeu ao ' +
+        'passo dentro do "tempoMax" dele (' + prazo + ' ms): aumente o "tempoMax" do passo');
+    } catch (e) { r = { motivo: semDeNovo(e) }; }
+    if (!r.motivo || Date.now() >= fim) return r;
+    await dormir(Math.min(PASSO, Math.max(1, fim - Date.now())));
+  }
+}
+
+// Os nos da arvore de acessibilidade com o papel e o nome do passo (exatos, como o Chrome os calcula), sem os ignorados
+// (o escondido por display:none ou visibility:hidden).
+async function acharNaArvore(cdp, s, passo) {
+  const doc = await cdp.enviar('Runtime.evaluate', { expression: 'document', objectGroup: GRUPO_DO_ROTEIRO }, s,
+    'procurar o elemento do passo');
+  const id = doc.result && doc.result.objectId;
+  if (!id) return { motivo: 'a pagina ainda nao tem documento' };
+  const pedido = { objectId: id, role: passo.papel };
+  if (passo.nome) pedido.accessibleName = passo.nome;
+  const r = await cdp.enviar('Accessibility.queryAXTree', pedido, s, 'procurar o elemento do passo');
+  return { nos: (r.nodes || []).filter(function (n) { return n && !n.ignored; }) };
+}
+
+// O elemento unico (ou o da ordem) do clique ou da digitacao, habilitado e com no na pagina: { no, objeto } ou { motivo }.
+async function acharAlvo(cdp, s, passo) {
+  const achado = await acharNaArvore(cdp, s, passo);
+  if (achado.motivo) return achado;
+  const escolha = roteiro.escolherNo(achado.nos, passo);
+  if (escolha.motivo) return escolha;
+  if (roteiro.desabilitado(escolha.no)) return { motivo: 'o elemento esta desabilitado' };
+  const id = escolha.no.backendDOMNodeId;
+  if (!id) return { motivo: 'o elemento da arvore nao tem um no na pagina' };
+  const r = await cdp.enviar('DOM.resolveNode', { backendNodeId: id, objectGroup: GRUPO_DO_ROTEIRO }, s, 'achar o elemento');
+  if (!r.object || !r.object.objectId) return { motivo: 'o elemento da arvore nao tem um no na pagina' };
+  return { no: escolha.no, id, objeto: r.object.objectId };
+}
+
+// O clique pronto para sair: o elemento rolado ate a janela, o ponto dentro dele e nada por cima. { ponto } ou { motivo }.
+async function prepararClique(cdp, s, passo, o) {
+  const alvo = await acharAlvo(cdp, s, passo);
+  if (alvo.motivo) return alvo;
+  await cdp.enviar('DOM.scrollIntoViewIfNeeded', { backendNodeId: alvo.id }, s, 'rolar ate o elemento');
+  const caixa = await cdp.enviar('DOM.getContentQuads', { backendNodeId: alvo.id }, s, 'medir o elemento');
+  const ponto = roteiro.pontoDoClique(caixa.quads, o.largura, o.altura);
+  if (!ponto) return { motivo: 'o elemento nao aparece na janela (nao tem area para o clique)' };
+  const recebe = await cdp.enviar('Runtime.callFunctionOn', { objectId: alvo.objeto, functionDeclaration: recebeOClique.toString(),
+    arguments: [{ value: ponto.x }, { value: ponto.y }], returnByValue: true }, s, 'conferir o ponto do clique');
+  if (!recebe.result || recebe.result.value !== true) {
+    return { motivo: 'outro elemento cobre o ponto do clique (um aviso, um menu ou uma camada por cima)' };
+  }
+  return { ponto };
+}
+
+// O campo pronto para receber o texto: editavel, focado e com o que tinha selecionado. {} ou { motivo }.
+async function prepararDigitacao(cdp, s, passo) {
+  const alvo = await acharAlvo(cdp, s, passo);
+  if (alvo.motivo) return alvo;
+  if (!roteiro.editavel(alvo.no)) return { motivo: 'o elemento nao e um campo de texto (a arvore nao o marca como editavel)' };
+  if (roteiro.soLeitura(alvo.no)) return { motivo: 'o campo e so de leitura' };
+  const focou = await cdp.enviar('Runtime.callFunctionOn', { objectId: alvo.objeto,
+    functionDeclaration: focarESelecionar.toString(), returnByValue: true }, s, 'focar o campo');
+  if (!focou.result || focou.result.value !== true) return { motivo: 'o campo nao recebeu o foco' };
+  return {};
+}
+
+// O clique de uma pessoa: o mouse chega, aperta e solta no ponto. Sai uma vez so, depois da tentativa que deu certo.
+async function clicarNoPonto(cdp, s, p) {
+  await cdp.enviar('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y }, s, 'clicar');
+  await cdp.enviar('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x, y: p.y, button: 'left', buttons: 1,
+    clickCount: 1 }, s, 'clicar');
+  await cdp.enviar('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0,
+    clickCount: 1 }, s, 'clicar');
+}
+
+// esperar e conferir: o texto visivel, a presenca do elemento (o da ordem, se pedida) ou o valor dele. {} ou { motivo,
+// obtido? }.
+async function conferirNaPagina(cdp, s, passo) {
+  if (!passo.papel) {
+    const t = passo.texto.replace(/\s+/g, ' ').trim();
+    const r = await cdp.enviar('Runtime.evaluate', { expression: '(' + temOTexto.toString() + ')(' + JSON.stringify(t) + ')',
+      returnByValue: true }, s, 'procurar o texto');
+    return r.result && r.result.value === true ? {} : { motivo: 'o texto nao esta no texto visivel da pagina' };
+  }
+  const achado = await acharNaArvore(cdp, s, passo);
+  if (achado.motivo) return achado;
+  if (passo.valor === undefined) {
+    return achado.nos.length >= (passo.ordem || 1) ? {} : { motivo: roteiro.escolherNo(achado.nos, passo).motivo };
+  }
+  const escolha = roteiro.escolherNo(achado.nos, passo);
+  if (escolha.motivo) return escolha;
+  const obtido = roteiro.valorDoNo(escolha.no);
+  return obtido === passo.valor ? {} : { motivo: 'o valor do elemento nao e o esperado', obtido };
+}
+
+// Roda os passos na ordem e devolve o rastro, um item por passo que rodou. Clicar, digitar e esperar que falham param
+// o roteiro; a conferencia que falha fica no rastro e o roteiro segue. Depois de cada acao, a rede assenta (como depois
+// da carga). `ctx`: { esperarRede(teto), dialogos() -> quantos a pagina ja abriu }.
+async function rodarRoteiro(cdp, s, o, ctx) {
+  const rastro = [];
+  for (let i = 0; i < o.roteiro.passos.length; i++) {
+    const passo = o.roteiro.passos[i];
+    const inicio = Date.now();
+    const dialogosAntes = ctx.dialogos();
+    let r;
+    if (passo.acao === 'clicar' || passo.acao === 'digitar') {
+      r = await tentarAte(passo.tempoMax, function () {
+        return passo.acao === 'clicar' ? prepararClique(cdp, s, passo, o) : prepararDigitacao(cdp, s, passo);
+      });
+      if (!r.motivo) {
+        try {
+          if (passo.acao === 'clicar') await clicarNoPonto(cdp, s, r.ponto);
+          else await cdp.enviar('Input.insertText', { text: passo.texto }, s, 'digitar o texto');
+          r = {};
+          const rede = await ctx.esperarRede(TETO_DA_REDE);
+          if (rede.pendentes) r.requisicoesPendentes = rede.pendentes;
+        } catch (e) { r = { motivo: semDeNovo(e) }; }
+      }
+    } else {
+      r = await tentarAte(passo.tempoMax, function () { return conferirNaPagina(cdp, s, passo); });
+    }
+    try { await cdp.enviar('Runtime.releaseObjectGroup', { objectGroup: GRUPO_DO_ROTEIRO }, s, 'soltar os objetos do passo'); }
+    catch (e) { /* a pagina que navegou ja soltou os dela */ }
+    const item = Object.assign({ n: i + 1 }, passo, { ok: !r.motivo, ms: Date.now() - inicio });
+    if (r.motivo) item.motivo = r.motivo;
+    if (r.obtido !== undefined) item.obtido = r.obtido;
+    if (passo.acao === 'digitar') item.caracteres = Array.from(passo.texto).length;
+    if (r.requisicoesPendentes) item.requisicoesPendentes = r.requisicoesPendentes;
+    const novos = ctx.dialogos() - dialogosAntes;
+    if (novos) item.dialogos = novos;
+    rastro.push(item);
+    if (r.motivo && passo.acao !== 'conferir') break;
+  }
+  return rastro;
 }
 
 // Roda uma expressao de leitura na pagina: { valor } (o que ela devolveu), ou { motivo } de nao ter lido.
@@ -406,6 +605,9 @@ function gravarEvidencia(dados, o, saida, conferencia) {
   };
   if (dados.dialogosForaDoTeto > 0) evidencia.dialogosForaDoTeto = dados.dialogosForaDoTeto;
   if (dados.requisicoesPendentes > 0) evidencia.requisicoesPendentes = dados.requisicoesPendentes;
+  // H10c: o rastro do roteiro e a soma dele; o hash diz qual roteiro rodou
+  const resumo = dados.rastro ? roteiro.somarPassos(dados.rastro, o.roteiro.passos.length) : null;
+  if (resumo) evidencia.roteiro = { sha256: o.roteiro.sha256, resumo, passos: roteiro.rastroParaODisco(dados.rastro) };
   if (conferencia) evidencia.estiloForaDoSistema = conferencia;
   const caminhoDaEvidencia = path.join(saida, 'evidencia.json');
   fs.writeFileSync(caminhoDaEvidencia, JSON.stringify(evidencia, null, 2) + '\n');
@@ -435,6 +637,13 @@ function gravarEvidencia(dados, o, saida, conferencia) {
       'saido antes do conteudo; ' + (dados.redeEncurtada
         ? 'o --tempo-max acabou antes da espera da rede: aumente --tempo-max'
         : 'a espera da rede vai ate ' + (TETO_DA_REDE / 1000) + ' s; espere o que falta com --esperar <seletor>'));
+  }
+  if (resumo) {
+    // o roteiro que parou ou a conferencia que falhou: ok false, e a saida sai 1 (saidaDoScript)
+    fim.ok = resumo.ok;
+    fim.passos = resumo;
+    const avisoDosPassos = roteiro.avisoDoRoteiro(resumo, dados.rastro);
+    if (avisoDosPassos) fim.aviso = captura.juntarAvisos(fim.aviso, avisoDosPassos);
   }
   return fim;
 }
@@ -551,6 +760,12 @@ async function main() {
   const lido = captura.lerArgs(process.argv.slice(2));
   if (lido.erro) return { erro: lido.erro };
   const o = lido.opcoes;
+  // H10c: o roteiro errado para aqui, antes de abrir o navegador
+  if (o.passos) {
+    const lidoRoteiro = roteiro.lerArquivoDoRoteiro(o.passos);
+    if (lidoRoteiro.erro) return { erro: lidoRoteiro.erro };
+    o.roteiro = lidoRoteiro;
+  }
   if (typeof WebSocket !== 'function') {
     return { erro: 'a captura precisa do Node 22 ou mais novo (este e o ' + process.version + '): atualize o Node' };
   }

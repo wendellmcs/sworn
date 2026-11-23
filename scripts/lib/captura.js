@@ -27,7 +27,7 @@ const PAPEIS_VAZIOS = new Set(['generic', 'none', 'presentation', 'InlineTextBox
 
 const USO = 'uso: node capturar-tela.js --url <http(s)://... ou file:///...> --saida <pasta> ' +
   '[--largura 1280] [--altura 800] [--esperar <seletor CSS>] [--tempo-max 30000] ' +
-  '[--arquivo <caminho a partir da raiz do projeto, ex.: src/checkout/tela.css>]';
+  '[--arquivo <caminho a partir da raiz do projeto, ex.: src/checkout/tela.css>] [--passos <roteiro.json>]';
 
 // E3 item 2 (camada 2): o estilo calculado dos elementos visiveis, lido na propria pagina. A pagina devolve cada par
 // (propriedade, valor) uma vez, com quantos elementos o usam e um exemplo (tag#id.classe); os tetos seguram pagina
@@ -361,9 +361,9 @@ function inteiroNoIntervalo(flag, v, teto, unidade) {
 
 // Le os argumentos. Devolve { erro } com o que consertar na chamada, ou { opcoes }.
 function lerArgs(argv) {
-  const opcoes = Object.assign({ url: null, saida: null, esperar: null, arquivo: null }, PADRAO);
+  const opcoes = Object.assign({ url: null, saida: null, esperar: null, arquivo: null, passos: null }, PADRAO);
   const nomes = { '--url': 'url', '--saida': 'saida', '--esperar': 'esperar', '--largura': 'largura',
-    '--altura': 'altura', '--tempo-max': 'tempoMax', '--arquivo': 'arquivo' };
+    '--altura': 'altura', '--tempo-max': 'tempoMax', '--arquivo': 'arquivo', '--passos': 'passos' };
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i];
     const chave = Object.hasOwn(nomes, flag) ? nomes[flag] : null; // "constructor" nao e argumento
@@ -385,6 +385,11 @@ function lerArgs(argv) {
           '(exemplo: src/checkout/tela.css), ou tire a opcao' };
       }
       opcoes.arquivo = arquivo;
+    } else if (chave === 'passos') {
+      // H10c: o roteiro de passos; o arquivo se le e se valida no capturar-tela.js, antes de abrir o navegador
+      const roteiro = v.trim();
+      if (!roteiro) return { erro: '--passos veio vazio: diga o caminho do roteiro.json, ou tire a opcao' };
+      opcoes.passos = roteiro;
     } else {
       opcoes[chave] = v;
     }
@@ -624,7 +629,7 @@ function pareceCredencial(t) {
   return t.length >= 8 && (/[\d.~+/=_-]/.test(t) || (/[a-z]/.test(t) && /[A-Z]/.test(t.slice(1))));
 }
 // Em qualquer texto (endereco, console, pilha de erro, nome na arvore): usuario:senha@ sai; o valor de nome=valor
-// secreto (no comeco, depois de espaco ou de ? & # ;) vira [segredo]; o "nome": "valor" secreto de um JSON tambem; e
+// secreto (no comeco, depois de espaco, de aspa ou de ? & # ;) vira [segredo]; o "nome": "valor" secreto de um JSON tambem; e
 // o que vem depois de Bearer ou Basic. Na pilha de um erro o endereco vem seguido de :linha:coluna, que nao faz parte
 // do valor e fica.
 function semSegredo(texto) {
@@ -647,7 +652,8 @@ function semSegredo(texto) {
         if (!nomeSecreto(nome) || !deveApagarValor(nome, valor)) return m;
         return aspa + nome + aspa + meio + (aspa2 ? aspa2 + '[segredo]' + aspa2 : '"[segredo]"');
       })
-    .replace(/(^|[?&#;\s])([\w.-]+)=([^&#;\s"'<>]*?)(?=:\d+:\d+(?![\w.])|[&#;\s"'<>]|$)/g, function (m, sep, nome, valor) {
+    // pendencia #19 (D889): a aspa tambem separa ("token=..." no console), como o espaco
+    .replace(/(^|[?&#;\s"'])([\w.-]+)=([^&#;\s"'<>]*?)(?=:\d+:\d+(?![\w.])|[&#;\s"'<>]|$)/g, function (m, sep, nome, valor) {
       return nomeSecreto(nome) && deveApagarValor(nome, valor) ? sep + nome + '=[segredo]' : m;
     });
 }
@@ -681,11 +687,13 @@ function juntarAvisos(atual, novo) {
   return atual ? atual + '; ' + novo : novo;
 }
 
-// O que o script imprime e com que codigo sai: o JSON (0), ou "ERRO: ..." e, se houver, o aviso na linha seguinte (1).
+// O que o script imprime e com que codigo sai: o JSON (0, ou 1 com ok: false), ou "ERRO: ..." e, se houver, o aviso na
+// linha seguinte (1).
 function saidaDoScript(resultado) {
   const r = resultado || { erro: 'a captura parou sem resultado: rode de novo, e se repetir confira o navegador (SWORN_NAVEGADOR)' };
   if (r.erro) return { texto: 'ERRO: ' + r.erro + '\n' + (r.aviso ? 'aviso: ' + r.aviso + '\n' : ''), codigo: 1 };
-  return { texto: JSON.stringify(r) + '\n', codigo: 0 };
+  // H10c: o roteiro que parou ou a conferencia que falhou (ok: false) leva o JSON inteiro e sai 1, como o conferir-tela
+  return { texto: JSON.stringify(r) + '\n', codigo: r.ok === false ? 1 : 0 };
 }
 
 module.exports = {

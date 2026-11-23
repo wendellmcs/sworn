@@ -16,12 +16,13 @@ const SCRIPT = path.join(__dirname, '..', 'scripts', 'capturar-tela.js');
 
 test('lerArgs: o basico e os valores padrao', function () {
   const r = captura.lerArgs(['--url', 'https://exemplo.com/a', '--saida', 'out']);
-  assert.deepStrictEqual(r.opcoes, { url: 'https://exemplo.com/a', saida: 'out', esperar: null, arquivo: null, largura: 1280,
-    altura: 800, tempoMax: 30000 });
+  assert.deepStrictEqual(r.opcoes, { url: 'https://exemplo.com/a', saida: 'out', esperar: null, arquivo: null, passos: null,
+    largura: 1280, altura: 800, tempoMax: 30000 });
   const r2 = captura.lerArgs(['--url', 'file:///C:/x/p.html', '--saida', 'o', '--largura', '390', '--altura', '844',
-    '--esperar', '#app .pronto', '--tempo-max', '5000']);
-  assert.deepStrictEqual(r2.opcoes, { url: 'file:///C:/x/p.html', saida: 'o', esperar: '#app .pronto', arquivo: null, largura: 390,
-    altura: 844, tempoMax: 5000 });
+    '--esperar', '#app .pronto', '--tempo-max', '5000', '--passos', ' roteiro.json ']);
+  assert.deepStrictEqual(r2.opcoes, { url: 'file:///C:/x/p.html', saida: 'o', esperar: '#app .pronto', arquivo: null,
+    passos: 'roteiro.json', largura: 390, altura: 844, tempoMax: 5000 });
+  assert.match(captura.USO, /\[--passos <roteiro\.json>\]/);
 });
 
 test('lerArgs: cada chamada errada diz o que consertar', function () {
@@ -46,6 +47,8 @@ test('lerArgs: cada chamada errada diz o que consertar', function () {
     [['--url', 'nao e url', '--saida', 'o'], /nao e um endereco valido: "nao e url" \(exemplo: http:\/\/localhost:3000\)$/],
     [['--url', 'ftp://u:s3' + '@h/?token=abc', '--saida', 'o'], /e veio "ftp:\/\/h\/\?token=\[segredo\]"$/],
     [['--url', 'http://[ruim?token=abc', '--saida', 'o'], /nao e um endereco valido: "http:\/\/\[ruim\?token=\[segredo\]"/],
+    [['--url', 'https://a.b', '--saida', 'o', '--passos', ' '], /^--passos veio vazio: diga o caminho do roteiro\.json/],
+    [['--url', 'https://a.b', '--saida', 'o', '--passos'], /--passos veio sem valor/],
   ];
   for (const [argv, re] of casos) {
     const r = captura.lerArgs(argv);
@@ -153,6 +156,11 @@ test('semSegredo: tira usuario e senha e troca o valor de parametro secreto, em 
     'client_secret', 'db-password']) {
     assert.strictEqual(captura.semSegredo('https://a.example/?' + nome + '=v'), 'https://a.example/?' + nome + '=[segredo]', nome);
   }
+  // pendencia #19 (D889): logo depois de uma aspa, o nome=valor secreto tambem sai; a aspa de fechamento fica
+  assert.strictEqual(captura.semSegredo('o valor e "token=abc123def456"'), 'o valor e "token=[segredo]"');
+  assert.strictEqual(captura.semSegredo("x 'senha=s3nh4' y"), "x 'senha=[segredo]' y");
+  assert.strictEqual(captura.semSegredo('a="api_key=zzz"'), 'a="api_key=[segredo]"');
+  assert.strictEqual(captura.semSegredo('"busca=livro"'), '"busca=livro"', 'o nome que nao e secreto fica');
 });
 
 test('semSegredo: cabecalho Authorization, camelCase, JSON com aspa escapada e numero, code de PIN', function () {
@@ -190,6 +198,10 @@ test('consoleEErrosSemSegredo: o segredo sai do console e da pilha dos erros, e 
 
 test('saidaDoScript: JSON com 0; ERRO com 1, e o aviso na linha de baixo quando existe', function () {
   assert.deepStrictEqual(captura.saidaDoScript({ ok: true, a: 1 }), { texto: '{"ok":true,"a":1}\n', codigo: 0 });
+  // H10c: o roteiro que parou ou a conferencia que falhou sai com o JSON inteiro e o codigo 1
+  assert.deepStrictEqual(captura.saidaDoScript({ ok: false, a: 1 }), { texto: '{"ok":false,"a":1}\n', codigo: 1 });
+  // sem a chave ok (a captura sem roteiro), o JSON sai com 0
+  assert.deepStrictEqual(captura.saidaDoScript({ a: 1 }), { texto: '{"a":1}\n', codigo: 0 });
   assert.deepStrictEqual(captura.saidaDoScript({ erro: 'x' }), { texto: 'ERRO: x\n', codigo: 1 });
   assert.deepStrictEqual(captura.saidaDoScript({ erro: 'x', aviso: 'perfil preso' }),
     { texto: 'ERRO: x\naviso: perfil preso\n', codigo: 1 });
@@ -313,7 +325,7 @@ test('E3 item 2: lerArgs aceita o --arquivo aparado e diz o que fazer quando ele
   assert.strictEqual(captura.lerArgs(['--url', 'http://x', '--saida', 's', '--arquivo', ' src/a.css ']).opcoes.arquivo, 'src/a.css');
   assert.strictEqual(captura.lerArgs(['--url', 'http://x', '--saida', 's', '--arquivo', ' ']).erro, '--arquivo veio vazio: diga o ' +
     'caminho do arquivo que desenha a tela, a partir da raiz do projeto (exemplo: src/checkout/tela.css), ou tire a opcao');
-  assert.match(captura.lerArgs(['--url', 'http://x', '--saida', 's', '--arquivo']).erro, /^--arquivo veio sem valor\. uso: .*\[--arquivo <caminho a partir da raiz do projeto, ex\.: src\/checkout\/tela\.css>\]$/);
+  assert.match(captura.lerArgs(['--url', 'http://x', '--saida', 's', '--arquivo']).erro, /^--arquivo veio sem valor\. uso: .*\[--arquivo <caminho a partir da raiz do projeto, ex\.: src\/checkout\/tela\.css>\] \[--passos <roteiro\.json>\]$/);
 });
 
 test('E3 item 2: o aviso do estilo diz o que fazer, e o desvio so vale com --arquivo', function () {
@@ -916,6 +928,183 @@ test('ponta a ponta (H10): dialogo fechado e registrado, rede assentada antes da
   assert.match(semCarga.stdout, /^ERRO: a pagina nao terminou de carregar em 3000 ms/);
   assert.deepStrictEqual(ep.dialogos, []);
   assertSemSobras(tmp, dir, JSON.stringify(ok) + JSON.stringify(preso) + JSON.stringify(muitos) + JSON.stringify(curto) + semCarga.stdout);
+});
+
+test('ponta a ponta (H10c): o roteiro clica, digita, espera e confere pela arvore, e a soma diz o que falhou', async function (t) {
+  if (!NAVEGADOR) { t.skip('sem Chrome nem Edge nesta maquina'); return; }
+  const http = require('node:http');
+  const dir = pastaTemporaria(t);
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(tmp);
+  const recebidos = [];
+  const servidor = http.createServer(function (req, res) {
+    if (req.url === '/entrar') {
+      let corpo = '';
+      req.on('data', function (c) { corpo += c; });
+      // a resposta demora: o passo seguinte so acha o Painel se a rede assentar ou ele esperar
+      req.on('end', function () { recebidos.push(corpo); setTimeout(function () { res.end('ok'); }, 300); });
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    if (req.url === '/tarde') { setTimeout(function () { res.end('Carregado'); }, 300); return; }
+    // o ultimo passo abre um alert e busca o conteudo: a foto so o tem se a rede assentar depois do passo
+    if (req.url === '/segunda') {
+      res.end('<!doctype html><h1>Segunda</h1><button onclick="alert(1); fetch(\'/tarde\').then(function (r) { ' +
+        'return r.text(); }).then(function (x) { var b = document.createElement(\'button\'); b.textContent = x; ' +
+        'document.body.appendChild(b); })">Carregar</button>');
+      return;
+    }
+    // o eco vem do evento input: o texto digitado chega a pagina como o de uma pessoa, nao so no value
+    res.end('<!doctype html><form id=f><label>E-mail <input id=e value="velho@x"></label>' +
+      '<label>Senha <input id=s type=password></label><button>Entrar</button></form>' +
+      '<label><input type=checkbox id=l> Lembrar</label>' +
+      '<button onclick="document.getElementById(\'r\').textContent=\'Editou 1\'">Editar</button>' +
+      '<button onclick="document.getElementById(\'r\').textContent=\'Editou 2\'">Editar</button>' +
+      '<p id=r></p><button disabled>Bloqueado</button><p>Rua A<br>Centro</p><p hidden>Escondido</p>' +
+      '<input readonly aria-label="Fixo" value="f">' +
+      // o Atrasado aparece sem rede, 800 ms depois do clique: so a nova tentativa do passo o acha
+      '<button onclick="setTimeout(function () { var h = document.createElement(\'h3\'); h.textContent = \'Atrasado\'; ' +
+      'document.body.appendChild(h); }, 800)">Mostrar</button>' +
+      '<div style="position:relative"><button>Coberto</button>' +
+      '<div style="position:absolute;inset:0;background:#fff"></div></div><span id=eco></span>' +
+      // o botao e o campo dentro de um shadow root aberto (um web component): o documento so ve o hospedeiro
+      '<div id=hs></div>' +
+      // o botao que e o proprio hospedeiro, com o miolo no shadow dele: o ponto do clique cai no miolo
+      '<div id=hb role=button aria-label="Hospedeiro" style="display:inline-block"></div>' +
+      // o link fica abaixo da janela: o clique rola ate ele
+      '<div style="height:2000px"></div><a href="/segunda">Ir</a>' +
+      '<script>var hs = document.getElementById("hs").attachShadow({ mode: "open" });' +
+      'hs.innerHTML = \'<button>Sombra</button><input aria-label="Campo sombra">\';' +
+      'hs.querySelector("button").addEventListener("click", function () { document.getElementById("r").textContent = ' +
+      '"Sombra clicada"; });' +
+      'var hb = document.getElementById("hb"); hb.attachShadow({ mode: "open" }).innerHTML = \'<span>Miolo</span>\';' +
+      'hb.addEventListener("click", function () { document.getElementById("r").textContent = "Hospedeiro clicado"; });' +
+      'var eco = ""; document.getElementById("e").addEventListener("input", function (ev) { eco = ev.target.value; });' +
+      'document.getElementById("f").addEventListener("submit", function (ev) { ev.preventDefault();' +
+      'fetch("/entrar", { method: "POST", body: document.getElementById("e").value + "|" + document.getElementById("s").value })' +
+      '.then(function () { var h = document.createElement("h2"); h.textContent = "Painel"; document.body.appendChild(h);' +
+      'var p = document.createElement("p"); p.textContent = "Bem-vindo, " + eco; document.body.appendChild(p); }); });</script>');
+  });
+  await new Promise(function (r) { servidor.listen(0, '127.0.0.1', r); });
+  t.after(function () { servidor.closeAllConnections(); servidor.close(); });
+  const base = 'http://127.0.0.1:' + servidor.address().port;
+  const rodarRoteiro = function (nome, passos) {
+    const arquivo = path.join(dir, nome + '.json');
+    fs.writeFileSync(arquivo, JSON.stringify({ passos: passos }));
+    return new Promise(function (r) {
+      execFile(process.execPath, [SCRIPT, '--url', base + '/', '--saida', path.join(dir, nome), '--tempo-max', '60000',
+        '--passos', arquivo], { encoding: 'utf8', timeout: 180000, env: ambiente({ SWORN_TMP: tmp }) },
+      function (erro, stdout) { r({ codigo: erro ? erro.code : 0, stdout: stdout, arquivo: arquivo }); });
+    });
+  };
+  const senha = 's3nh4-' + 'secreta';
+  const certo = await rodarRoteiro('certo', [
+    { acao: 'digitar', papel: 'textbox', nome: 'E-mail', texto: 'ana@exemplo.com' },
+    { acao: 'digitar', papel: 'textbox', nome: 'Senha', texto: senha },
+    { acao: 'clicar', papel: 'button', nome: 'Entrar' },
+    { acao: 'esperar', papel: 'heading', nome: 'Painel' },
+    { acao: 'conferir', texto: 'Bem-vindo, ana@exemplo.com' },
+    { acao: 'conferir', papel: 'textbox', nome: 'E-mail', valor: 'ana@exemplo.com' },
+    { acao: 'clicar', papel: 'checkbox', nome: 'Lembrar' },
+    { acao: 'conferir', papel: 'checkbox', nome: 'Lembrar', valor: true },
+    { acao: 'clicar', papel: 'button', nome: 'Editar', ordem: 2 },
+    { acao: 'conferir', texto: 'Editou 2' },
+    { acao: 'clicar', papel: 'button', nome: 'Sombra' },
+    { acao: 'conferir', texto: 'Sombra clicada' },
+    { acao: 'digitar', papel: 'textbox', nome: 'Campo sombra', texto: 'na sombra' },
+    { acao: 'conferir', papel: 'textbox', nome: 'Campo sombra', valor: 'na sombra' },
+    { acao: 'clicar', papel: 'button', nome: 'Hospedeiro' },
+    { acao: 'conferir', texto: 'Hospedeiro clicado' },
+    { acao: 'clicar', papel: 'button', nome: 'Mostrar' },
+    { acao: 'esperar', papel: 'heading', nome: 'Atrasado' },
+    // a quebra de linha da pagina e a do roteiro viram um espaco
+    { acao: 'conferir', texto: 'Rua A\nCentro' },
+    { acao: 'clicar', papel: 'link', nome: 'Ir' },
+    { acao: 'esperar', papel: 'heading', nome: 'Segunda' },
+    { acao: 'clicar', papel: 'button', nome: 'Carregar' },
+  ]);
+  assert.strictEqual(certo.codigo, 0, certo.stdout);
+  const saida = JSON.parse(certo.stdout);
+  assert.deepStrictEqual(saida.passos, { ok: true, total: 22, rodados: 22, conferencias: 8, conferenciasOk: 8,
+    conferenciasFalhas: [], parouNo: null });
+  assert.strictEqual(saida.ok, true);
+  // o texto digitado trocou o que o campo tinha e chegou a pagina como digitado
+  assert.deepStrictEqual(recebidos, ['ana@exemplo.com|' + senha]);
+  const textoDaEvidencia = fs.readFileSync(saida.evidencia, 'utf8');
+  const e = JSON.parse(textoDaEvidencia);
+  assert.ok(!textoDaEvidencia.includes(senha), 'a senha digitada foi para o disco');
+  assert.strictEqual(e.roteiro.sha256, crypto.createHash('sha256').update(fs.readFileSync(certo.arquivo)).digest('hex'));
+  assert.deepStrictEqual(e.roteiro.resumo, saida.passos);
+  assert.strictEqual(e.roteiro.passos.length, 22);
+  assert.strictEqual(e.roteiro.passos[21].dialogos, 1, 'o alert do ultimo passo nao entrou no rastro dele');
+  assert.deepStrictEqual(e.roteiro.passos.slice(0, 21).filter(function (p) { return p.dialogos !== undefined; })
+    .map(function (p) { return p.n; }), [], 'passos antes do ultimo com dialogo no rastro');
+  assert.ok(e.acessibilidade.itens.some(function (i) { return i.nome === 'Carregado'; }),
+    'a foto saiu antes da rede assentar depois do ultimo passo');
+  assert.strictEqual(e.roteiro.passos[1].caracteres, senha.length);
+  assert.deepStrictEqual(e.roteiro.passos.filter(function (p) { return p.ok !== true || !Number.isInteger(p.ms); })
+    .map(function (p) { return p.n; }), [], 'passos sem ok ou sem ms no rastro');
+  // a foto e a arvore sao da pagina onde o roteiro terminou
+  assert.match(e.urlFinal, /\/segunda$/);
+  assert.ok(e.acessibilidade.itens.some(function (i) { return i.papel === 'heading' && i.nome === 'Segunda'; }));
+
+  const errado = await rodarRoteiro('errado', [
+    { acao: 'conferir', texto: 'Nao existe', tempoMax: 300 },
+    { acao: 'conferir', papel: 'textbox', nome: 'E-mail', valor: 'outro', tempoMax: 300 },
+    // o escondido nao e texto visivel; a ordem 3 de dois botoes nao existe
+    { acao: 'conferir', texto: 'Escondido', tempoMax: 300 },
+    { acao: 'conferir', papel: 'button', nome: 'Editar', ordem: 3, tempoMax: 300 },
+    { acao: 'clicar', papel: 'button', nome: 'Bloqueado', tempoMax: 300 },
+    { acao: 'conferir', papel: 'heading', nome: 'X' },
+  ]);
+  assert.strictEqual(errado.codigo, 1, 'a conferencia que falhou e o roteiro que parou saem 1: ' + errado.stdout);
+  const r = JSON.parse(errado.stdout);
+  assert.strictEqual(r.ok, false);
+  assert.deepStrictEqual(r.passos, { ok: false, total: 6, rodados: 5, conferencias: 4, conferenciasOk: 0,
+    conferenciasFalhas: [1, 2, 3, 4], parouNo: 5 });
+  assert.match(r.aviso, /o roteiro parou no passo 5 \(clicar button "Bloqueado"\): o elemento esta desabilitado; os 1 passo\(s\) seguinte\(s\) nao rodaram/);
+  assert.match(r.aviso, /4 de 4 conferencia\(s\) falharam \(passo\(s\) 1, 2, 3, 4\)/);
+  assert.ok(fs.statSync(r.imagem).size > 0, 'a foto saiu mesmo com o roteiro parado');
+  const er = JSON.parse(fs.readFileSync(r.evidencia, 'utf8'));
+  assert.strictEqual(er.roteiro.passos[0].motivo, 'o texto nao esta no texto visivel da pagina');
+  assert.deepStrictEqual([er.roteiro.passos[1].motivo, er.roteiro.passos[1].obtido],
+    ['o valor do elemento nao e o esperado', 'velho@x']);
+
+  const coberto = await rodarRoteiro('coberto', [{ acao: 'clicar', papel: 'button', nome: 'Coberto', tempoMax: 300 }]);
+  assert.strictEqual(coberto.codigo, 1, coberto.stdout);
+  assert.match(JSON.parse(coberto.stdout).aviso, /parou no passo 1 \(clicar button "Coberto"\): outro elemento cobre o ponto do clique/);
+  // cada roteiro que parou sai 1, com o aviso do passo e do motivo
+  const parou = function (rodada, aviso) {
+    assert.strictEqual(rodada.codigo, 1, rodada.stdout);
+    let lido;
+    try { lido = JSON.parse(rodada.stdout); } catch (erro) { assert.fail('a saida nao e um JSON: ' + rodada.stdout); }
+    assert.match(lido.aviso, aviso);
+    return lido;
+  };
+  const botao = await rodarRoteiro('botao', [{ acao: 'digitar', papel: 'button', nome: 'Entrar', texto: 'x', tempoMax: 300 }]);
+  parou(botao, /parou no passo 1 \(digitar button "Entrar"\): o elemento nao e um campo de texto/);
+  const leitura = await rodarRoteiro('leitura', [{ acao: 'digitar', papel: 'textbox', nome: 'Fixo', texto: 'x', tempoMax: 300 }]);
+  parou(leitura, /parou no passo 1 \(digitar textbox "Fixo"\): o campo e so de leitura/);
+  // a espera que estoura o tempo e o elemento que nao existe param o roteiro: o passo seguinte nao roda
+  const espera = await rodarRoteiro('espera', [{ acao: 'esperar', texto: 'Nunca aparece', tempoMax: 300 },
+    { acao: 'clicar', papel: 'button', nome: 'Entrar' }]);
+  const esperaLida = parou(espera,
+    /parou no passo 1 \(esperar o texto "Nunca aparece"\): o texto nao esta no texto visivel da pagina/);
+  assert.deepStrictEqual([esperaLida.passos.rodados, recebidos.length], [1, 1], 'o clique depois da espera rodou');
+  const sumido = await rodarRoteiro('sumido', [{ acao: 'clicar', papel: 'button', nome: 'Inexistente', tempoMax: 300 }]);
+  parou(sumido, /parou no passo 1 \(clicar button "Inexistente"\): nenhum elemento com esse papel e nome/);
+
+  // o roteiro errado para antes de abrir o navegador (numa pasta propria: os perfis dos outros nao contam)
+  const ruim = path.join(dir, 'ruim.json');
+  const tmpRuim = path.join(dir, 'tmp-ruim');
+  fs.mkdirSync(tmpRuim);
+  fs.writeFileSync(ruim, JSON.stringify({ passos: [{ acao: 'arrastar' }] }));
+  const antes = rodar(['--url', base + '/', '--saida', path.join(dir, 'ruim'), '--passos', ruim], { SWORN_TMP: tmpRuim });
+  assert.strictEqual(antes.status, 1);
+  assert.match(antes.stdout, /^ERRO: --passos: passo 1: "acao" e clicar, digitar, esperar ou conferir/);
+  assert.deepStrictEqual(fs.readdirSync(tmpRuim), [], 'o roteiro errado abriu o navegador');
+  assertSemSobras(tmp, dir, certo.stdout + errado.stdout + coberto.stdout + botao.stdout + leitura.stdout + espera.stdout +
+    sumido.stdout);
 });
 
 test('ponta a ponta (E3 item 2): o estilo calculado vai para a evidencia e e conferido contra o design.json', function (t) {

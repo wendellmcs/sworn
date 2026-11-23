@@ -1087,6 +1087,19 @@ limpeza. O Claude roda o script sozinho
 quando precisa; para rodar à mão: `node scripts/capturar-tela.js --url <endereço> --saida <pasta>`, que grava
 `tela.png` e `evidencia.json` nessa pasta.
 
+Desde a 0.86.0, a captura também segue um roteiro antes da foto: `--passos roteiro.json`, com
+`{ "passos": [ { "acao": "digitar", "papel": "textbox", "nome": "E-mail", "texto": "ana@exemplo.com" },
+{ "acao": "clicar", "papel": "button", "nome": "Entrar" }, { "acao": "conferir", "texto": "Bem-vindo" } ] }`. O
+papel e o nome são os da lista do `evidencia.json` (`acessibilidade`), escritos iguais; com dois elementos iguais,
+`"ordem": 2` diz qual. As ações são `clicar`, `digitar` (troca o que o campo tinha), `esperar` e `conferir` (o texto
+visível da página, a presença do elemento, ou o `valor` dele: o texto do campo, ou `true`/`false` numa caixa de
+marcar; um número vai entre aspas, como o campo o mostra: `"1.50"`). Cada passo espera até 5 s
+(`"tempoMax"`, em milissegundos, muda: `10000` são 10 s). Clicar, digitar ou esperar que não dão certo param o roteiro, e
+a foto mostra a página nesse ponto; a conferência que falha só fica anotada e o roteiro segue. O `evidencia.json` leva
+o rastro em `roteiro`, sem o texto digitado (só quantos caracteres); a saída soma os passos e termina com o código 1
+quando o roteiro parou ou alguma conferência falhou. Um clique que abre outra aba, um `confirm()` que precisa de "sim"
+(a captura responde "cancelar") e o que está dentro de uma página embutida (iframe) ficam fora.
+
 O `evidencia.json` também traz o estilo que a tela mostra de fato, do jeito que o navegador o calculou (já com as
 variáveis de estilo e as regras herdadas resolvidas): a cor do texto, do fundo e da borda, o arredondamento dos
 cantos, a fonte e o tamanho dela, de até 3000 elementos visíveis. Com o `.claude/sworn/design.json` na pasta onde a
