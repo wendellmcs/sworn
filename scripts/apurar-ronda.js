@@ -12,6 +12,8 @@ const diffLinhas = require('./lib/diff-linhas.js');
 const detectorCego = require('./lib/detector-cego.js');
 const inventarioTela = require('./lib/inventario-tela.js');
 const flags = require('./lib/flags.js');
+const refutador = require('./lib/refutador.js');
+const herdadosLib = require('./lib/herdados.js');
 
 // F2-01: so e "valor que falta" quando o proximo argumento e outra flag do USO deste script (como o
 // FLAGS_DO_USO do preparar-revisao.js): um arquivo chamado `--x.js` vale como caminho.
@@ -245,6 +247,7 @@ const baseRel = relDoCwd(base);
 const arquivoRevisado = arquivoDaBase(base, pastas);
 const mapas = [];
 const faixas = [];
+const hashes = [];
 const lentesDoMapa = [];
 const semMapa = [];
 // B2: o motivo da revisao degradada (o da ultima ronda que o trouxe); null = revisao com isolamento. Uma ronda
@@ -258,6 +261,7 @@ const ilegiveis = [];
 const invalidos = [];
 // D503 (E8): a 2a passada (ordem A/B trocada) de cada ronda com referencia; null na ronda sem ela.
 const invertidas = [];
+const porRonda = {};
 
 /**
  * Os vereditos de uma pasta da ronda: `partes` e o caminho dela a partir da base (['1', 'vereditos'] ou
@@ -360,6 +364,10 @@ const rondas = pastas
     mapas.push(mapa);
     // L3 (A3-03): a faixa que o preparar-revisao.js gravou; com a da ronda 1, o apurar confere as lentes.
     faixas.push(mj && typeof mj.faixa === 'string' ? mj.faixa : null);
+    // H6e1 (15.0): o sha-256 do arquivo que a ronda julgou; o da ultima prende a aprovacao a esse conteudo.
+    hashes.push(mj && typeof mj.hashDoTrabalho === 'string' ? mj.hashDoTrabalho : null);
+    // H6e2 (D898): o lado de cada rotulo, por numero de ronda, para a refutacao de P0/P1 que pede o refutador
+    porRonda[Number(e.name)] = { comMarca: !!(mj && typeof mj.hashDoTrabalho === 'string'), mapa: mapa, invertida: mapaInv };
     // F2d (c): as lentes da faixa completa que o preparar escolheu pelo risco; sem elas, vale o minimo de antes
     lentesDoMapa.push(mj && Array.isArray(mj.lentes) ? mj.lentes : null);
     const pass1 =lerVereditos(e.name, [e.name, 'vereditos'], mapaInv !== null);
@@ -498,11 +506,48 @@ const diffDoHead = (function () {
   return head && novo ? diffLinhas.blocos(head, novo) : null;
 })();
 
+// H6e2 (D898, RA7): o P0/P1 do lado do trabalho so sai da conta pela refutacao quando o sworn:refuter, que le o codigo
+// vivo, respondeu "refutado". A ronda preparada antes da 0.87.0 (sem hashDoTrabalho no mapa.json) segue como antes;
+// a ronda sem mapa conta como trabalho (fail-closed); a ronda que nao existe nao tem achado a refutar.
+const semRefutador = refutador.faltas(refutados, function (ref) {
+  const info = Object.prototype.hasOwnProperty.call(porRonda, ref.ronda) ? porRonda[ref.ronda] : null;
+  if (!info || !info.comMarca) return false;
+  const mapa = ref.passada === 2 ? info.invertida : info.mapa;
+  return !mapa || mapa[veredito.rotuloDoArquivo(ref.arquivo)] === 'trabalho';
+}, function (nome) {
+  const arq = path.join(base, 'refutacoes', nome);
+  if (!fs.existsSync(arq)) return null;
+  return JSON.parse(textoLib.semBom(fs.readFileSync(arq, 'utf8')));
+});
+if (semRefutador.length) {
+  falhar(semRefutador.map(function (m) { return 'ERRO: ' + m + '\n'; }).join('') + 'A refutacao fica em ' + baseRel +
+    '/refutados.json; a resposta do refutador, em ' + baseRel + '/refutacoes/ (o gancho a grava).\n');
+}
+
+// H6e3 (D900): o P2 que a revisao anterior deste arquivo descartou com motivo. O preparar-revisao.js grava o
+// herdados.json na ronda 1 quando arquiva a revisao fechada; o que nao se le ou sai da forma para, como o
+// refutados.json. A prova com "simbolo" e conferida de novo no repositorio de hoje: a que nao confere mais nao herda.
+let herdados = [];
+const arqHerdados = path.join(base, '1', herdadosLib.ARQUIVO);
+if (fs.existsSync(arqHerdados)) {
+  try {
+    herdados = herdadosLib.conferir(JSON.parse(textoLib.semBom(fs.readFileSync(arqHerdados, 'utf8'))));
+  } catch (err) {
+    falhar('ERRO: ' + baseRel + '/1/' + herdadosLib.ARQUIVO + ' (' + err.message + '). O preparar-revisao.js o grava ' +
+      'ao arquivar a revisao fechada: apague o arquivo para revisar sem os descartes herdados, e rode este comando ' +
+      'de novo.\n');
+  }
+  herdados = herdados.filter(function (e) { return veredito.provaConfere(e, provaNoRepo); });
+}
+function herdado(indice, rotulo, linha, passada, lente) {
+  return herdadosLib.achar(herdados, lente, herdadosLib.janela(linhasDoArquivo(indice, rotulo, passada), linha));
+}
+
 let r;
 try {
   r = veredito.apurar(rondas, { mapas: mapas, refutados: refutados, mesmos: mesmos, textoDaLinha: textoDaLinha,
     trechoNoArquivo: trechoNoArquivo, provaNoRepo: provaNoRepo, invertidas: invertidas, faixas: faixas,
-    lentesDoMapa: lentesDoMapa, mudancas: mudancas, diffDoHead: diffDoHead });
+    lentesDoMapa: lentesDoMapa, mudancas: mudancas, diffDoHead: diffDoHead, herdado: herdado });
 } catch (err) {
   // 0.3.3, item 7: o erro diz o defeito; a linha seguinte diz onde corrigir e o que fazer depois.
   // L3 (A3-03): o voto que falta ja diz o que fazer; a linha da refutacao nao e com ele. L3-s104-3: nem a faixa
@@ -691,11 +736,11 @@ if (gravidadeDoProjeto) {
       '.claude/sworn/projeto.json ou suba "gravidade.bagatelasPorRonda"';
   }
 }
-// F2a (D828.2/.5): o que nao segurou a ronda (melhoria, achado em linha nova ou, A3-16, fora da mudanca) nao some no
-// fecho: vai para o plano.
+// F2a (D828.2/.5): o que nao segurou a ronda (melhoria, achado em linha nova, A3-16 fora da mudanca ou H6e3 descartado
+// antes) nao some no fecho: vai para o plano.
 if (r.encerrar && r.registros.length) {
-  r.motivo += '; ha ' + r.registros.length + ' achado(s) em "registros" (melhoria, linha nova ou fora da mudanca): ' +
-    'copie-os para o registro do plano';
+  r.motivo += '; ha ' + r.registros.length + ' achado(s) em "registros" (melhoria, linha nova, fora da mudanca ou ' +
+    'descartado antes): copie-os para o registro do plano';
 }
 // B2: a revisao degradada diz isso antes de tudo; o fecho cobra a mesma linha na resposta (o "aprovou" ja foi lido
 // acima, antes de todo texto acrescentado).
@@ -757,6 +802,12 @@ if (r.encerrar) {
         if (arquivoRevisado && aprovou) {
           const abs = path.resolve(process.cwd(), arquivoRevisado);
           s.revisadosAprovados = commit.comAprovado(s.revisadosAprovados, abs);
+          // H6e1 (15.0): sem a marca na ultima ronda (preparada antes da 0.87.0), a antiga sai e vale o caminho. Na
+          // conferencia, vale o hash dela: ela julgou o arquivo ja consertado depois do teto, nao o da ronda 3
+          const hashJulgado = conferencia
+            ? (typeof conferencia.mapa.hashDoTrabalho === 'string' ? conferencia.mapa.hashDoTrabalho : null)
+            : hashes[hashes.length - 1];
+          s.revisadosHash = commit.comHash(s.revisadosHash, abs, hashJulgado);
           s.revisadosNoTeto = commit.semTeto(s.revisadosNoTeto, abs);
           // B2: a aprovacao degradada fica marcada (o fecho cobra a linha DEGRADADO); a sem degradar desmarca.
           const antes = s.revisoesDegradadas;
@@ -776,6 +827,15 @@ if (r.encerrar) {
       const fecho = { ronda: r.ronda, sessao: sessao, motivo: r.motivo, degradado: degradado, aprovado: aprovou };
       if (conferencia) fecho.conferencia = true;
       if (!aprovou) fecho.seguraram = conferencia ? r.conferencia.seguem : (r.seguraram || []);
+      // H6e4 (15.0, §5.6): o que cada lente achou e virou conserto, refutacao, descarte herdado ou aberto; o
+      // /sworn:audit soma os fechos (scripts/lib/aproveitamento.js). A medida e secundaria: se ela falhar, o fecho e
+      // gravado sem `porLente` (o somar o conta em `semMedida`), nunca perdido
+      try {
+        fecho.porLente = require('./lib/aproveitamento.js').daApuracao(r, aprovou);
+      } catch (errMedida) {
+        process.stderr.write('aviso: o aproveitamento por lente nao foi medido neste fecho (' + errMedida.message +
+          '); o fechada.json sai sem porLente e o /sworn:audit o conta em semMedida.\n');
+      }
       fs.writeFileSync(arqFechada, JSON.stringify(fecho, null, 2), 'utf8');
     } catch (err) {
       falhar('ERRO: o fecho foi contado, mas ' + baseRel + '/fechada.json nao foi gravado (' + err.message + '). ' +

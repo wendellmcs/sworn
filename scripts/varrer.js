@@ -32,7 +32,7 @@ function emLista(itens) {
 const doAmbiente = ['.claude/settings.json', '.claude/settings.local.json', '.mcp.json']
   .filter(function (rel) { return leuArquivo(cwd, rel); });
 const leituras = [];
-if (leuPackage) leituras.push('o package.json, para achar o script de teste');
+if (leuPackage) leituras.push('o package.json, para achar o script de teste e o knip');
 if (projeto) leituras.push('o .claude/sworn/projeto.json, para saber o que o projeto declarou');
 if (doAmbiente.length) leituras.push(emLista(doAmbiente) + ', para detectar o ambiente');
 // H9-3: a frase nomeia as leituras que houve (D423), e o .claude.json da maquina tambem e uma
@@ -65,6 +65,8 @@ const saida = {
   instrucoes: require('./lib/instrucoes.js').contar(cwd, projeto || {}, projeto ? undefined : inferido.candidatosCanonicos),
   inferido: inferido
 };
+// H6j (D906): o kit da linguagem que o init recomenda, do mesmo ambiente detectado acima
+saida.kit = require('./lib/kit.js').daPasta(cwd, saida.ambiente);
 
 // D98: estima o que ESTE comando imprime. Antes media `r.arquivos.join`, uma lista
 // que a saida nunca contem - o numero era 14x maior que o texto real.

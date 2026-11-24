@@ -279,10 +279,13 @@ test('pagina: a escalada que a descricao da figura dos ganchos cita tambem esta 
     const desc = (svg.match(/<desc[^>]*>([^<]*)<\/desc>/) || [])[1] || '';
     const linhas = Array.from(svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)).map((m) => m[1]);
     assert.ok((desc.match(/escala/gi) || []).length >= 2, fig + ': a <desc> nao cita a escalada no subagente e no Stop');
-    for (const evento of ['PostToolUse · SubagentStart · SubagentStop', 'Stop']) {
+    // H6i (D905): o StopFailure (o subagente parado no limite de uso) entrou na linha dos eventos de subagente
+    for (const evento of ['PostToolUse · PostToolUseFailure · SubagentStart · SubagentStop · StopFailure', 'Stop']) {
       const i = linhas.indexOf(evento);
       assert.ok(i !== -1, fig + ': sumiu o titulo do evento ' + evento);
-      assert.ok(/escala/i.test(linhas[i + 2] || ''), fig + ': a linha visivel de ' + evento + ' nao cita a escalada: ' + linhas[i + 2]);
+      // H6a: a frase do evento e a 1a linha depois do titulo que nao lista script (os scripts podem ocupar duas)
+      const frase = linhas.slice(i + 1).find((l) => !/\.js\b/.test(l)) || '';
+      assert.ok(/escala/i.test(frase), fig + ': a linha visivel de ' + evento + ' nao cita a escalada: ' + frase);
     }
   }
 });

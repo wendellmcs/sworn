@@ -141,6 +141,19 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/recibo-da-prova.js"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "SubagentStart": [
       {
         "hooks": [
@@ -161,7 +174,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^sworn:inspector$",
+        "matcher": "^sworn:(inspector|refuter)$",
         "hooks": [
           {
             "type": "command",
@@ -190,6 +203,31 @@
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/portao-fecho.js"],
             "timeout": 90
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "rate_limit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/escalar.js"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/antes-do-compact.js"],
+            "timeout": 15
           }
         ]
       }

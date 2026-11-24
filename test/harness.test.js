@@ -590,6 +590,11 @@ test('harness: no agy e no dsh o fim do subagente vem no send_message ao pai (D7
     const e = unica(h, bruta('PostToolUse', vd), 'PostToolUse');
     assert.deepStrictEqual([e.tool_name, e.agent_type, e.agent_id, e.tool_input.message, e.session_id],
       ['SubagentHandback', 'sworn:inspector', 'filho', vd, 'filho'], h);
+    // H6e2 (D898): o JSON do refutador traz o campo refutacoes (sem vereditos) e volta como sworn:refuter
+    const rf = '{"refutacoes":".claude/sworn/revisao/r/refutacoes","ronda":1,"veredito":"refutado"}';
+    assert.strictEqual(unica(h, bruta('PostToolUse', rf), 'PostToolUse').agent_type, 'sworn:refuter', h);
+    assert.strictEqual(unica(h, bruta('PostToolUse', 'oi, "refutacoes" sem dois-pontos'), 'PostToolUse').agent_type,
+      undefined, h);
     // O agy e o dsh nao dizem o papel do filho: so o JSON do inspetor traz o campo vereditos (o briefing manda).
     const outro = unica(h, bruta('PostToolUse', 'oi, "vereditos" sem dois-pontos'), 'PostToolUse');
     assert.deepStrictEqual([outro.tool_name, outro.agent_type, outro.agent_id], ['SubagentHandback', undefined,
@@ -608,6 +613,10 @@ test('harness: no agy e no dsh o fim do subagente vem no send_message ao pai (D7
 
 test('harness: matcher de agente sai do harness (a ponte refiltra pelo nome do Claude Code); lista ganha o par', () => {
   for (const h of harness.HARNESSES) assert.strictEqual(harness.matcherDoHarness(h, '^sworn:inspector$'), undefined);
+  // H6e2 (D898): o matcher que tambem pega o refutador sai do harness do mesmo jeito
+  for (const h of harness.HARNESSES) {
+    assert.strictEqual(harness.matcherDoHarness(h, '^sworn:(inspector|refuter)$'), undefined, h);
+  }
   assert.strictEqual(harness.matcherDoHarness('codex', 'SubagentHandback'),
     'SubagentHandback|multi_agent_v1wait_agent');
   assert.strictEqual(harness.matcherDoHarness('codex', 'Task|Agent'), 'Task|Agent|spawn_agent');

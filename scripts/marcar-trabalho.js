@@ -158,6 +158,11 @@ io.blindar(function () {
           if (Array.isArray(s.revisadosAprovados)) s.revisadosAprovados = require('./lib/commit.js').semAprovado(s.revisadosAprovados, arquivo);
           // D785 (2.1): marca do TURNO; o laco da prova do portao do fecho so cobra o turno que editou codigo.
           if (saude.ehArquivoDeCodigo(arquivo)) s.editouCodigo = true;
+          // H6f (15.9): o teste que o agente principal edita pede um vermelho antes do pronto (lib/vermelho-antes.js).
+          if (!e.agent_id) {
+            s.testesSemVermelho = require('./lib/vermelho-antes.js').comEdicao(s.testesSemVermelho,
+              typeof e.cwd === 'string' && e.cwd ? e.cwd : process.cwd(), arquivo);
+          }
           // D412: marca do TURNO (arquivosTocados e da sessao): o fecho cobra o prompt no chat.
           // Hoje so Write e Edit chegam aqui com file_path: e o matcher do hooks.json que garante
           // (o Read saiu acima, como so leitura). Ferramenta nova no matcher com file_path tambem marca.

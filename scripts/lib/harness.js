@@ -351,11 +351,14 @@ const RESULTADO_DO_TASK = /<task\b[^>]*?\bid="([^"]*)"[^>]*>[\s\S]*?<task_result
 // traz o texto, com o session_id dele. Nenhum dos dois diz o papel do filho; so o JSON do inspetor traz o campo
 // vereditos, que o briefing manda copiar. Sem ele, o handback segue sem tipo, e o gravar-veredito nao o le.
 const DO_INSPETOR = /"vereditos"\s*:/;
+// H6e2 (D898): o JSON do refutador traz o campo refutacoes, que o briefing tambem manda copiar.
+const DO_REFUTADOR = /"refutacoes"\s*:/;
 
 function doFilho(base) {
   const msg = base.tool_input && typeof base.tool_input === 'object' ? base.tool_input.message : undefined;
-  return Object.assign(base, { agent_id: base.session_id,
-    agent_type: typeof msg === 'string' && DO_INSPETOR.test(msg) ? 'sworn:inspector' : undefined });
+  const tipo = typeof msg !== 'string' ? undefined
+    : DO_INSPETOR.test(msg) ? 'sworn:inspector' : DO_REFUTADOR.test(msg) ? 'sworn:refuter' : undefined;
+  return Object.assign(base, { agent_id: base.session_id, agent_type: tipo });
 }
 
 /**

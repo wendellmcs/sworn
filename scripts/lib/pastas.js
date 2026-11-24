@@ -313,7 +313,10 @@ function executaNoEstudo(comando, cwd, env) {
   const noEstudo = function (p) {
     return estudos.find(function (e) { return chave(e) === chave(p) || dentroDe(p, e); }) || null;
   };
-  let pasta = real(cwd || process.cwd()) || path.resolve(cwd || process.cwd());
+  // D899: o cwd torto da entrada do gancho (numero, objeto) vale a pasta do processo; o path.resolve dele estourava,
+  // e o io.blindar do portao destrutivo virava o estouro em permitir
+  const base = typeof cwd === 'string' && cwd ? cwd : process.cwd();
+  let pasta = real(base) || path.resolve(base);
   // o & sozinho tambem separa: segundo plano no bash, sequencia no cmd
   for (const trecho of comando.split(/&&|\|\||[;|&\n]/)) {
     const ps = palavras(trecho);

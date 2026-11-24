@@ -109,7 +109,7 @@ Everything the plugin installs, by the problem it answers: what sworn does, and 
 guide has each piece in full.
 
 <p align="center">
-  <img src="assets/ganchos-en.svg" alt="Where sworn hooks into a session: eight moments, from the session opening to its end, each with the scripts that run there and what they guard" width="720">
+  <img src="assets/ganchos-en.svg" alt="Where sworn hooks into a session: from the session opening to its end, each with the scripts that run there and what they guard" width="720">
 </p>
 
 ### The eight gates
@@ -134,7 +134,7 @@ more, the main agent closes saying what still fails, with the output, instead of
 | 2 | **Blind A/B review by distinct lenses**<br>Blocks: nothing; `/sworn:review` tallies by script.<br>Why: The author is the worst judge of the work; the inspector does not know which side is new. |
 | 3 | **Done without evidence**<br>Blocks: the end of the turn when the reply claims success without pasting output (or pastes only failing output), when the last test run failed, when the project's proof command did not run after the last code edit, or when a plan step is called finished with a box still open.<br>Why: "Done" with nothing pasted is the most common false claim. Saying what did not run always passes. |
 | 4 | **File outside the declared scope**<br>Blocks: the write, when the target is not in the scope file, is listed as out of scope, or is untouchable.<br>Why: A fix that wanders into files nobody asked about is how a regression ships. |
-| 5 | **Destructive command and concurrent session**<br>Blocks: the command that deletes (deleting named files inside the scope passes; a blocked plain delete lists what it would remove), the stray `cd`, the wrong shell syntax for the tool, the shell trap that would do something else (a heredoc that eats the backslash, `grep -c` before `&&`, `grep -P` in Git Bash without a UTF-8 locale in front, such as `LC_ALL=C.UTF-8`), and writes to files another session touched.<br>Why: Lost work cannot be reviewed back. |
+| 5 | **Destructive command and concurrent session**<br>Blocks: the command that deletes (deleting named files inside the scope passes; a blocked plain delete lists what it would remove), the stray `cd`, the wrong shell syntax for the tool, the shell trap that would do something else (a heredoc that eats the backslash, `grep -c` before `&&`, `grep -P` in Git Bash without a UTF-8 locale in front, such as `LC_ALL=C.UTF-8`, a backtick inside the double-quoted code of `node -e`, and, in Git Bash, `sed -i` without `-b`, which rewrites CRLF as LF, and a `/c/...` or `/tmp` path inside the code of `node -e`), and writes to files another session touched.<br>Why: Lost work cannot be reviewed back. |
 | 6 | **Expensive agent, wrong model or effort, dropped request to move up**<br>Blocks:<br>• dispatching an agent from the more expensive half of the ladder, rounded down (with 2 or 3 agents, the top; with 4 or 5, the top two; with 6 or 7, the top three) when the scope only has fast-gear paths;<br>• calling a ladder agent with a model or an effort other than the one the ladder records (except the top's second dispatch below, which goes with maximum effort);<br>• ending the turn while a subagent's request to move up has not been dispatched. This block fires once per request.<br>Each block tells the main agent what to do instead, without stopping to ask you: when the top of the ladder asks for one above, it is dispatched again with maximum effort; if it asks again, the main agent closes saying what still fails, with the output.<br>Why: Cost does not hurt whoever picks the model, so the ladder picks it: no expensive agent on light work, the model and effort the ladder records, and the next rung when a subagent says the task is beyond its role. |
 | 7 | **Creating without searching**<br>Blocks: a new file when nothing was searched in the turn and the project already has a file of the same name (`utils2.js` finds `utils.js`); sworn searches by itself and lists it. Without git, any new file, as before.<br>Why: `utils2.js` next to `utils.js` is a duplicate nobody will clean up. |
 | 8 | **Loosened ratchet**<br>Blocks: the edit that raises a ceiling or lowers a floor.<br>Why: Lowering the bar is the easy way to make a test pass; loosening is a human decision. |
@@ -263,8 +263,9 @@ Also installed: `playbook`, the execution manual the agent loads at the start of
 command); `effort-low` and `effort-high`, two skills outside the menu that the playbook calls by gear, at
 the start of each turn of the task, to set how hard the main conversation thinks in that turn (only the
 effort: the model changes only when you type `/model`); the `/sworn:parallel` workflow, which runs 3 or more independent tasks at once with a cap on
-agents, the cheapest model that solves and an isolated copy for whoever edits; and three agents:
-`inspector` and `dedupe-judge` for the blind review, `reader` for light reading in parallel.
+agents, the cheapest model that solves and an isolated copy for whoever edits; and four agents:
+`inspector`, `dedupe-judge` and `refuter` for the blind review (the `refuter` checks a P0/P1 against the live code
+before it can be refuted), `reader` for light reading in parallel.
 
 ## Caught in real use
 

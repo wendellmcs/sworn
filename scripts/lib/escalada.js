@@ -26,6 +26,9 @@ const { entreAspas } = require('./texto.js');
  * vezes ou mais no despacho (`contarNegacoes`, na transcricao do subagente que o escalar.js le) e voltou sem a prova
  * verde sobe ja nesse retorno; o pedido leva `automatico: true` e `causa: 'negacoes'` (CAUSA_NEGACOES), que escolhe o
  * texto fixo dele. Sem `causa`, o texto e o do B5.
+ * H6i (s376, D905): o terceiro gatilho - o subagente da escada que o Claude Code encerrou no limite de uso da API
+ * (`StopFailure` com `error: "rate_limit"`, `aoLimite`) sobe ja, com `causa: 'limite'` (CAUSA_LIMITE). O topo nessa
+ * hora nao e despachado de novo (`para` null): bateria no mesmo limite.
  */
 
 // Os ultimos subagentes lidos: o handback e o fim do mesmo subagente dao um pedido so.
@@ -38,8 +41,8 @@ const LIDOS_GUARDADOS = 20;
 const LINHA = /^[ \t>*_`]*(?:ESCALAR|ESCALATE):[ \t*_]*["'`]?([^\s"'`*_][^\s"'`*]*)["'`]?[ \t]+[-–—][ \t]+(\S.*)$/gm;
 const MOTIVO_MAX = 300;
 // B5 (s369, D748 T6, P20): quantos retornos seguidos sem prova sobem a tarefa sozinhos, e o que o texto diz deles. O
-// texto e sempre um fixo (este, ou o MOTIVO_NEGACOES do C4, pela `causa`), nunca o motivo lido do estado: o estado
-// editado com `automatico: true` nao injeta texto cru.
+// texto e sempre um fixo (este, o MOTIVO_NEGACOES do C4 ou o MOTIVO_LIMITE do H6i, pela `causa`), nunca o motivo lido
+// do estado: o estado editado com `automatico: true` nao injeta texto cru.
 const RETORNOS_SEM_PROVA = 2;
 const MOTIVO_AUTOMATICO = 'voltou ' + RETORNOS_SEM_PROVA + ' vezes seguidas dizendo que terminou, sem a saida do ' +
   'teste que passa (ou com ela mostrando falha)';
@@ -51,6 +54,12 @@ const MOTIVO_NEGACOES = 'foi barrado ' + NEGACOES_PRESO + ' vezes ou mais pelas 
   'sem a saida do teste que passa';
 // O tool_result que o Claude Code grava quando um gancho PreToolUse do sworn nega a chamada (transcricao conferida).
 const NEGACAO = /^PreToolUse:[\w.-]+ hook error: sworn\b/;
+// H6i (s376, D905): o subagente encerrado no limite de uso. Medido no Claude Code 2.1.328 (sonda com a API falsa
+// devolvendo 429): ele dispara o StopFailure com agent_id, agent_type e `error: "rate_limit"`, e o SubagentStop nao
+// dispara; o texto tambem e fixo (`causa: 'limite'`).
+const CAUSA_LIMITE = 'limite';
+const MOTIVO_LIMITE = 'parou no limite de uso da API (erro rate_limit)';
+const CAUSAS = new Set([CAUSA_NEGACOES, CAUSA_LIMITE]);
 
 function aparar(motivo) { return motivo.slice(0, MOTIVO_MAX).replace(/[ \t*_`]+$/, ''); }
 
@@ -122,11 +131,16 @@ function contarNegacoes(texto) {
 
 /** O texto fixo de uma subida automatica, pela causa (nunca o motivo lido do estado). */
 function oQueHouve(p) {
-  return p.causa === CAUSA_NEGACOES ? MOTIVO_NEGACOES : MOTIVO_AUTOMATICO;
+  if (p.causa === CAUSA_NEGACOES) return MOTIVO_NEGACOES;
+  return p.causa === CAUSA_LIMITE ? MOTIVO_LIMITE : MOTIVO_AUTOMATICO;
 }
 
-// aoFechar e aoAbrir devolvem o proprio `s.escalada` (ate undefined) quando nada muda: o escalar.js so grava o estado
-// quando muda, e a sessao sem escalada nao ganha o campo.
+function daEscada(projeto) {
+  return projeto && projeto.agentes && Array.isArray(projeto.agentes.escada) ? projeto.agentes.escada : [];
+}
+
+// aoFechar, aoLimite e aoAbrir devolvem o proprio `s.escalada` (ate undefined) quando nada muda: o escalar.js so
+// grava o estado quando muda, e a sessao sem escalada nao ganha o campo.
 
 /**
  * Fim do subagente `tipo` (`id` = agent_id) com a `mensagem` dele: devolve a escalada nova, ou o proprio `s.escalada`
@@ -136,7 +150,7 @@ function oQueHouve(p) {
 function aoFechar(s, tipo, id, mensagem, projeto, negacoes) {
   const atual = s ? s.escalada : undefined;
   const e = copia(s);
-  const escada = projeto && projeto.agentes && Array.isArray(projeto.agentes.escada) ? projeto.agentes.escada : [];
+  const escada = daEscada(projeto);
   if (escada.length < degraus.MINIMO || escada.indexOf(tipo) === -1 || typeof id !== 'string' ||
     e.lidos.indexOf(id) !== -1) return atual;
   // O fim do subagente encerra a cadeia dele, com ou sem pedido: a lista nao cresce na sessao.
@@ -184,6 +198,28 @@ function aoFechar(s, tipo, id, mensagem, projeto, negacoes) {
 }
 
 /**
+ * H6i (s376, D905): o subagente `tipo` (`id` = agent_id) encerrado no limite de uso da API (StopFailure rate_limit).
+ * Devolve a escalada nova, ou o proprio `s.escalada` quando nada muda (agente fora da escada, id ja lido). Sobe ja ao
+ * degrau seguinte, como o C4; o topo vai sem destino (`para` null, nunca `deNovo`): o mesmo agente bateria no mesmo
+ * limite. A conta do B5 do degrau recomeca.
+ */
+function aoLimite(s, tipo, id, projeto) {
+  const atual = s ? s.escalada : undefined;
+  const e = copia(s);
+  const escada = daEscada(projeto);
+  if (escada.length < degraus.MINIMO || escada.indexOf(tipo) === -1 || typeof id !== 'string' ||
+    e.lidos.indexOf(id) !== -1) return atual;
+  const subida = e.subidas[id] || 0;
+  delete e.subidas[id];
+  e.refeitos = e.refeitos.filter(function (r) { return r !== id; });
+  delete e.semProva[tipo];
+  // `refeito` true: no topo, o registrar da `para` null em vez do re-despacho
+  registrar(e, escada, tipo, id, { agente: tipo, automatico: true, causa: CAUSA_LIMITE, motivo: MOTIVO_LIMITE },
+    subida + 1, true);
+  return e;
+}
+
+/**
  * A2-68: o pedido entra em `e.pendentes` (o que o fecho cobra) e liga o destino a cadeia, na subida `n`. Destino fora
  * da escada, abaixo ou igual vira o degrau seguinte; o topo pede o proprio topo de novo (`deNovo`), e o topo ja
  * re-despachado (`refeito`) pede sem destino (`para` null).
@@ -195,7 +231,7 @@ function registrar(e, escada, tipo, id, pedido, n, refeito) {
   const para = deNovo ? tipo : acima;
   e.pendentes.push(Object.assign({ id: id, de: tipo, para: para, motivo: pedido.motivo, n: n },
     deNovo ? { deNovo: true } : {}, pedido.automatico === true ? { automatico: true } : {},
-    pedido.causa === CAUSA_NEGACOES ? { causa: CAUSA_NEGACOES } : {}));
+    CAUSAS.has(pedido.causa) ? { causa: pedido.causa } : {}));
   // atalho: a ligacao da cadeia e por destino, nao por pedido. limite: dois pedidos ao mesmo destino ao mesmo tempo
   // dividem uma ligacao (vale o n do ultimo); e o despacho que nao vem deixa a ligacao (e a marca `refazer`) para a
   // proxima abertura do destino, mesmo sem relacao (A2-63): o n so conta, e a marca gasta o re-despacho do topo
@@ -239,6 +275,12 @@ function umPedido(p) {
   const auto = p.automatico === true;
   const houve = oQueHouve(p);
   // D785 (2.2): nenhum ramo para no usuario; sem o jargao da escada (degrau, subida, topo), como no A2-58.
+  if (p.para === null && p.causa === CAUSA_LIMITE) {
+    return [quem + ' e o ultimo da escada de agentes (agentes.escada no projeto.json)',
+      '  e ' + houve + ': despachar de novo bate no mesmo limite.',
+      '  Sem perguntar ao usuario: feche dizendo o que ficou por fazer e que o limite de uso parou',
+      '  o agente. Nao pergunte ao usuario o que fazer.'];
+  }
   if (p.para === null) {
     return [quem + ' e o ultimo da escada de agentes (agentes.escada no projeto.json), ja foi despachado de novo',
       auto ? '  e ' + houve + '.' : '  e pediu um acima outra vez: ' + motivo + '.',
@@ -258,7 +300,9 @@ function umPedido(p) {
   // A2-57: o que vai no prompt fica em texto, fora da chamada (o molde do custo.js), e nada sai para copiar literal.
   // B5: a subida automatica nao foi pedida pelo agente; o texto diz o que houve, em linha propria (a linha do
   // fecho tem ate 120 caracteres).
-  return (auto ? [quem + (p.causa === CAUSA_NEGACOES ? ' ficou preso nas travas' : ' voltou sem prova') +
+  const porque = p.causa === CAUSA_NEGACOES ? ' ficou preso nas travas'
+    : p.causa === CAUSA_LIMITE ? ' foi encerrado pelo Claude Code' : ' voltou sem prova';
+  return (auto ? [quem + porque +
       ' e o sworn sobe a tarefa para ' + para + ':', '  ' + houve + '.']
     : [quem + ' parou e pediu ' + para + ': ' + motivo + '.']).concat([
     '  Despache agora: Agent({ subagent_type: ' + para +
@@ -307,6 +351,11 @@ function paraReinjetar(s) {
         : entreAspas(ascii(p.motivo).slice(0, MOTIVO_MAX)) + ' (pedido por ' + de + ')'));
     } else if (p.para === null) {
       // a escada esgotada nao despacha: a ordem e o fecho honesto, como no motivoDoFecho
+      if (p.causa === CAUSA_LIMITE) {
+        fechar.push('- o agente ' + de + ' e o ultimo da escada de agentes e parou no limite de uso da API: feche' +
+          ' dizendo o que ficou por fazer e que o limite de uso parou o agente.');
+        continue;
+      }
       fechar.push('- o agente ' + de + ' e o ultimo da escada de agentes e ja foi despachado de novo: feche dizendo' +
         ' o que segue falhando, com a saida do teste ou do comando que falha num bloco ``` .');
     }
@@ -323,4 +372,5 @@ function paraReinjetar(s) {
     .join('\n');
 }
 
-module.exports = { marcador, contarNegacoes, aoFechar, aoAbrir, deNovo, semPendentes, motivoDoFecho, paraReinjetar };
+module.exports = { marcador, contarNegacoes, aoFechar, aoLimite, aoAbrir, deNovo, semPendentes, motivoDoFecho,
+  paraReinjetar };

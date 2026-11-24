@@ -287,7 +287,16 @@ is the screen evidence of the close-out, so keep it in the answer that closes th
   `escopo` and `correcao` lenses: a missing piece of the request, or a regression in a caller of what changed, may
   sit where nothing changed. The script measures the change itself, comparing
   the new side of the round with the one before (in round 1, with the HEAD side); when it cannot measure it, the
-  finding holds the round as usual. None of these kinds holds the round or counts as open. When the review closes
+  finding holds the round as usual. `descartado antes` is a P2 `erro` on the new side that an earlier, closed
+  review of the same file refuted, from the same lens, on the same lines (the cited line and 2 around it, unchanged).
+  When Step 1 archives a closed review, it writes those refutations to `1/herdados.json` of the new one, and its
+  output field `herdados` gives how many. The finding carries `descartadoAntes`, with the proof and where it came
+  from. A P0/P1, a gap or the `escopo` lens is never inherited. The proof is checked again at each tally: when it no
+  longer checks (the cited symbol left the file), that entry is dropped and the P2 holds the round as before. A
+  `herdados.json` out of form (not JSON, not a list, or an entry outside the form) stops the tally with `ERRO`,
+  which says what is wrong, and for an entry its position and the form it needs: fix it, or delete the file to
+  review without the inherited refutations. None of these kinds holds the
+  round or counts as open. When the review closes
   with any, the `motivo` says how many: copy each one to the record of the plan in the close-out.
 - **What held a round and came back the same is still open.** A finding that held an earlier round and comes back
   with the same key (same severity, lens and line, on the same side of the change: work or HEAD as `mapa.json` says,
@@ -319,6 +328,24 @@ is the screen evidence of the close-out, so keep it in the answer that closes th
   refutation whose proof does not check stops the tally with `ERRO`: fix the cited line or the `simbolo` in
   `refutados.json`, or remove the refutation if the source does not prove it, and run the tally again. The output
   lists the refuted ones for the owner to check.
+- **A P0/P1 of the work needs the refuter before it is refuted** (since 0.87.0, a round prepared on 0.87.0 or later).
+  For each P0/P1 of `achadosNovosP0P1` you want to refute, dispatch **one** `sworn:refuter` subagent, all in the
+  same burst, with this briefing:
+
+  > Check this finding against the live code. `arquivo real`: `<arquivo of the output>`, `linha`: `<linha>`.
+  > `descricao`: <descricao>. `comoFalha`: <comoFalha>.
+  > Copy back, untouched: `ronda` <ronda>, `lente` `<lente>`, `arquivo` `<A.txt or B.txt>`, `linha` <linha>,
+  > `severidade` `<P0 or P1>` (and `passada` 2, when the finding has it).
+  > `refutacoes`: `<base>/refutacoes`. Don't open it: copy the path, untouched, into the `refutacoes` field.
+  > Why the author wants to refute it: <your reason, citing arquivo:linha>.
+  > Don't open `mapa.json`, `detector.json`, `inventario.json` or any `vereditos` folder. Return only the JSON of
+  > your format.
+
+  The hook writes the answer to `<base>/refutacoes/`, named after the finding's fields. The tally counts the
+  refutation in `refutados.json` only when that answer says `refutado`; with no answer, it stops with `ERRO` and tells
+  you to dispatch the refuter. `inconclusivo` and `confirmado` keep the finding (in doubt, the finding stays): take
+  the refutation out of `refutados.json` and fix the finding. A gap (`"lacuna": true`) and a P2 don't need the refuter.
+  A finding on the HEAD side and a round prepared before 0.87.0 don't need it either.
 - **With a reference**, the output brings `referencia` (without it, `null`): `lentes`, each with `ordem1`, `ordem2` and
   `resultado` (`vence`, `empata`, `perde` or `incompleta`, by the last round that called it); `lacunas` of the new
   side; `lentesAtras` (those that lose, are incomplete or have a P0/P1 gap); and `pronta`. A finding of the 2nd pass

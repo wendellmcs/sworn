@@ -384,6 +384,22 @@ test('varrer.js: a CLI nao mente na observacao e estima o que imprime', () => {
     const desvio = Math.abs(saida.teto.tokensEstimados - tokensReais) / tokensReais;
     assert.ok(desvio < 0.05, 'estimado ' + saida.teto.tokensEstimados + ' x real ' + tokensReais);
     assert.strictEqual(saida.teto.incompleta, false);
+    // H6j (D906): o kit da linguagem sai do mesmo ambiente, e a observacao diz que o package.json tambem procura o knip
+    assert.strictEqual(saida.kit.linguagem, 'node');
+    assert.deepStrictEqual(saida.kit.itens.map(function (i) { return i.chave; }), ['lsp', 'context7', 'gitleaks', 'semgrep', 'knip']);
+    assert.match(saida.teto.observacao, /package\.json, para achar o script de teste e o knip/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('varrer.js: o plugin de linguagem ligado no settings do projeto aparece visto no kit', () => {
+  const dir = montar({
+    'go.mod': 'module x\n',
+    '.claude/settings.json': JSON.stringify({ enabledPlugins: { 'gopls-lsp@claude-plugins-official': true } })
+  });
+  try {
+    const lsp = rodarVarrer(dir).kit.itens.filter(function (i) { return i.chave === 'lsp'; })[0];
+    assert.strictEqual(lsp.nome, 'gopls-lsp');
+    assert.strictEqual(lsp.visto, true);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

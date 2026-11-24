@@ -312,7 +312,21 @@ test('F4c handoff: monta as secoes do disco (plano, topologia, caixa, pendencias
   for (const marca of ['<<ONDE:', '<<DECISOES:', '<<ERROS:', '<<TERCEIROS:']) assert.ok(t.indexOf(marca) !== -1, 'falta ' + marca);
   const secao1 = t.slice(t.indexOf('## 1.'), t.indexOf('## 2.'));
   assert.ok(secao1.indexOf(path.join(dir, pend.ARQUIVO).replace(/\\/g, '/')) !== -1, 'o PENDENCIAS na ordem de leitura');
+  // H6d (D896): o plano se le pela fatia, com o comando pronto
+  assert.match(secao1, /pelo node "[^"]*\/scripts\/plano\.js" --fatia --plano "docs\/plano\.md"\)/);
   assert.ok(!/[^\x00-\x7f]/.test(t.split(dir.replace(/\\/g, '/')).join('')), 'o texto fixo e ASCII (chega a terminal de qualquer pagina de codigo)');
+});
+
+test('H6d handoff (revisao R1, borda): plano com caractere que o shell expande fica fora do comando da fatia', () => {
+  const dir = projeto({
+    '.claude/sworn/escopos/frente-x.md': '# Escopo\n**Objetivo:** fazer x. Plano: `docs/p$HOME!.md`\n## Dentro\n- `a.js`\n',
+    'docs/p$HOME!.md': '# Plano\n- [ ] T1 agora\n'
+  });
+  const t = hc.montar(dir, { slug: 'x', hoje: HOJE, frente: 'frente-x' }).texto;
+  const secao1 = t.slice(t.indexOf('## 1.'), t.indexOf('## 2.'));
+  assert.match(secao1, /docs\/p\$HOME!\.md \(o plano: so o cabecalho e o item da secao 3, pelo node "[^"]*\/scripts\/plano\.js" --fatia\)/, secao1);
+  assert.ok(secao1.indexOf('--plano') === -1, 'o caminho nao vai para o comando: ' + secao1);
+  assert.ok(t.indexOf('- [ ] T1 agora') !== -1, 'o plano foi lido: ' + t);
 });
 
 test('F4c handoff: sem PENDENCIAS, sem handoff anterior e com o plano todo marcado, cada secao diz o que falta', () => {

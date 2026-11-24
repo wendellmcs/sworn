@@ -274,6 +274,10 @@ function ganchoCapturado(script, entrada, opcoes) {
   const o = opcoes || {};
   const io = require(path.join(RAIZ, 'scripts', 'lib', 'io.js'));
   const alvo = require.resolve(path.resolve(RAIZ, script));
+  if (RODA_OUTROS.test(fs.readFileSync(alvo, 'utf8'))) {
+    throw new Error('comum.ganchoEmProcesso: ' + script + ' roda outros ganchos (io.rodarJuntos) e so roda por processo: ' +
+      'use o comum.ganchoComoProcesso');
+  }
   // as chaves mudam no proprio process.env: no Windows ele nao separa PATH de Path, e um objeto comum separaria
   const envAntes = Object.assign({}, process.env);
   const cwdAntes = process.cwd();
@@ -309,6 +313,18 @@ const FALHOU_E_LIBEROU = /sworn: portao falhou e liberou por seguranca/;
 const SAI_POR_EXIT = /\bprocess\.exit\(/;
 
 /**
+ * H6b: o script que roda outros ganchos pelo io.rodarJuntos (portao-shell.js, depois-do-shell.js). Em processo, o
+ * rodarJuntos de dentro zera o modo embutido do de fora: a saida vai direto ao stdout do node:test, que some, e o
+ * arquivo de teste passa calado com "tests 1"; e os ganchos de dentro, no cache do require, so rodariam na 1a chamada.
+ * O `ganchoComoProcesso` o manda por processo; o `ganchoEmProcesso` recusa com erro. Le-se o texto cru, com os
+ * comentarios: um `rodarJuntos(` so num comentario tambem conta (de proposito: e o caso que o test/comum.test.js usa
+ * para provar a recusa sem aninhar de verdade). O `ganchoComoProcesso` o roda por processo, com o mesmo resultado; o
+ * `ganchoEmProcesso` recusa, e a mensagem diz o que usar. Errar para o lado do processo e o lado seguro: o aninhado em
+ * processo passa calado.
+ */
+const RODA_OUTROS = /\brodarJuntos\(/;
+
+/**
  * A ultima linha do stdout (a saida que o io.js escreve no fim, numa linha so): `{ json }`, com null quando ela nao
  * abre com `{` (sem opiniao); a que abre com `{` e nao e JSON (saida cortada) volta com `quebrado`, a linha.
  */
@@ -336,7 +352,8 @@ function ganchoComoProcesso(script, entrada, opcoes) {
   const o = opcoes || {};
   const alvo = require.resolve(path.resolve(RAIZ, script));
   const env = o.env || ambiente();
-  if (typeof entrada === 'string' || SAI_POR_EXIT.test(fs.readFileSync(alvo, 'utf8'))) {
+  const codigo = fs.readFileSync(alvo, 'utf8');
+  if (typeof entrada === 'string' || SAI_POR_EXIT.test(codigo) || RODA_OUTROS.test(codigo)) {
     const p = processoComPrazo('comum.ganchoComoProcesso', script, alvo, [],
       { cwd: o.cwd, entrada: entrada == null ? {} : entrada }, env);
     const fim = jsonDoFim(p.stdout);

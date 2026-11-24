@@ -6,7 +6,8 @@ const io = require('./lib/io.js');
 // F3a (D828): o PostToolUse de Bash|PowerShell num processo so (antes, dois: marcar-trabalho e conferir-depois). A
 // entrada se le uma vez e os dois rodam aqui, em fila, com a mesma entrada; as saidas se juntam (io.juntarSaidas).
 // Nas outras ferramentas o marcar-trabalho segue no gancho dele. R1: a limpeza das pastas do sworn depois do push.
-const GANCHOS = ['marcar-trabalho.js', 'conferir-depois.js', 'limpar-depois-do-push.js'];
+// H6a (D891): o recibo da prova e a saida enxuta (o PostToolUseFailure o chama sozinho).
+const GANCHOS = ['marcar-trabalho.js', 'conferir-depois.js', 'limpar-depois-do-push.js', 'recibo-da-prova.js'];
 
 io.blindar(function () {
   io.lerEntrada(function (entrada) {

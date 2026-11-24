@@ -9,8 +9,19 @@ const TEXTO_JS = require('path').join(__dirname, 'texto.js');
 let embutido = null;
 const PARADA = { swornParada: true };
 
+// H6a2 (D892): o que o gancho pede para rodar antes da saida (a abertura solta o stdout que juntou), na decisao e na
+// falha. Roda uma vez: a lista se esvazia antes de chamar, e o que lanca nao impede os outros nem a saida.
+let antes = [];
+function antesDeSair(fn) { if (typeof fn === 'function') antes.push(fn); }
+function rodarAntes() {
+  const fila = antes;
+  antes = [];
+  for (const fn of fila) { try { fn(); } catch (e) { /* a saida segue */ } }
+}
+
 /** Escreve a decisao e sai; no modo embutido, so a registra. */
 function sair(saida) {
+  rodarAntes();
   if (embutido) {
     // a 1a decisao vale, como o process.exit do gancho sozinho: um catch do gancho que engula a PARADA nao a troca
     if (!embutido.decidiu) { embutido.saida = saida || null; embutido.decidiu = true; }
@@ -81,6 +92,7 @@ function segurarMensagem(motivo) {
  * nao duplicar o bloco entre os dois pontos de captura de blindar().
  */
 function liberarPorFalha(e) {
+  rodarAntes();
   // A5-27/A5-29 (D735): o valor lancado pode nao ser Error (texto, null); o causaDoErro cobre os dois. Quebra final.
   // O tratador de falha nao pode falhar: objeto sem prototipo faz o String() lancar.
   let causa;
@@ -134,6 +146,7 @@ function rodarJuntos(entrada, scripts) {
     } catch (e) {
       if (e !== PARADA) liberarPorFalha(e);
     }
+    rodarAntes();
     saidas.push(embutido.saida);
     embutido = null;
   }
@@ -144,8 +157,8 @@ function rodarJuntos(entrada, scripts) {
  * F3a: junta as saidas de varios ganchos do mesmo evento numa so, como o Claude Code junta as de ganchos paralelos: a
  * primeira negacao (`permissionDecision: deny`) volta sozinha; sem negacao, havendo um `decision: block`, a saida
  * bloqueia com os motivos de todos os bloqueios somados; `systemMessage` e `additionalContext` se somam; o
- * `updatedInput` e o do primeiro que o traz. Outros campos (nenhum dos ganchos juntados os usa) nao passam. Sem nada a
- * dizer, null.
+ * `updatedInput` e o `updatedToolOutput` (H6a) sao os do primeiro que os traz. Outros campos (nenhum dos ganchos
+ * juntados os usa) nao passam. Sem nada a dizer, null.
  */
 function juntarSaidas(saidas, evento) {
   const validas = saidas.filter(function (s) { return s && typeof s === 'object'; });
@@ -168,6 +181,8 @@ function juntarSaidas(saidas, evento) {
     const h = s.hookSpecificOutput || {};
     somar(especifico, 'additionalContext', h.additionalContext);
     if (h.updatedInput && !especifico.updatedInput) especifico.updatedInput = h.updatedInput;
+    // H6a (D891): a saida enxuta do recibo-da-prova.js (PostToolUse); um gancho so a troca
+    if (h.updatedToolOutput && !especifico.updatedToolOutput) especifico.updatedToolOutput = h.updatedToolOutput;
   }
   if (Object.keys(especifico).length) junta.hookSpecificOutput = Object.assign({ hookEventName: evento }, especifico);
   return Object.keys(junta).length ? junta : null;
@@ -179,4 +194,4 @@ function embutidoAtivo() {
 }
 
 module.exports = { lerEntrada, permitir, negarFerramenta, bloquearFecho, segurarMensagem, blindar, rodarJuntos,
-  juntarSaidas, embutidoAtivo };
+  juntarSaidas, embutidoAtivo, antesDeSair };

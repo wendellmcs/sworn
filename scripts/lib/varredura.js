@@ -247,4 +247,5 @@ function inferir(arquivos, cwd, sinal) {
   };
 }
 
-module.exports = { IGNORAR, LIMITE_PADRAO, PROFUNDIDADE, listar, inferir };
+// H6j (D906): o indiceDoTopo, o detectarLinguagem e o lerPacote servem tambem ao lib/kit.js.
+module.exports = { IGNORAR, LIMITE_PADRAO, PROFUNDIDADE, listar, inferir, indiceDoTopo, detectarLinguagem, lerPacote };

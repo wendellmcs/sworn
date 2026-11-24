@@ -690,3 +690,103 @@ test('C4: escalar.js le a transcricao do subagente e sobe o degrau preso nas tra
     }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// ---------------------------------------------------------------- H6i: o limite de uso
+
+// H6i (s376, D905): o subagente da escada encerrado no limite de uso da API (StopFailure `error: "rate_limit"`, medido
+// no Claude Code 2.1.328: o SubagentStop dele nao dispara) sobe ja ao degrau seguinte; o topo nao e despachado de novo.
+test('H6i: aoLimite sobe o degrau com a causa do limite, e a cadeia chega ao topo sem re-despacho', () => {
+  const s = novo();
+  s.escalada = escalada.aoLimite(s, 'tarefas-simples', 'l1', PROJETO);
+  const p = s.escalada.pendentes[0];
+  assert.deepStrictEqual([s.escalada.pendentes.length, p.de, p.para, p.n, p.automatico, p.causa, p.deNovo],
+    [1, 'tarefas-simples', 'desenvolvedor', 1, true, 'limite', undefined], JSON.stringify(s.escalada));
+  assert.match(p.motivo, /limite de uso da API/);
+  assert.deepStrictEqual(s.escalada.aguardando, { desenvolvedor: 1 });
+  const fecho = escalada.motivoDoFecho(s);
+  assert.ok(/foi encerrado pelo Claude Code e o sworn sobe a tarefa para "desenvolvedor"/.test(fecho) &&
+    /parou no limite de uso da API/.test(fecho) && /Agent\(\{ subagent_type: "desenvolvedor"/.test(fecho), fecho);
+  assert.ok(!/pedi/i.test(fecho) && !/voltou sem prova|preso nas travas/.test(fecho), fecho);
+  assert.ok(!/degrau|subida|topo da escada/i.test(fecho), 'sem o jargao da escada, como no A2-58: ' + fecho);
+  for (const linha of fecho.split('\n')) assert.ok(linha.length <= 120, 'linha longa: ' + linha);
+  assert.match(escalada.paraReinjetar(s), /despache "desenvolvedor": "parou no limite de uso da API/);
+  // o despacho do desenvolvedor segue a cadeia; no limite dele, sobe ao arquiteto na subida 2
+  s.escalada = escalada.aoAbrir(s, 'desenvolvedor', 'l2');
+  s.escalada = escalada.aoLimite(s, 'desenvolvedor', 'l2', PROJETO);
+  assert.deepStrictEqual(s.escalada.pendentes.map((x) => [x.para, x.n, x.causa]), [['arquiteto', 2, 'limite']]);
+  assert.ok(!Object.hasOwn(s.escalada.subidas, 'l2'), 'a cadeia do l2 terminou: ' + JSON.stringify(s.escalada));
+  // o topo no limite, na primeira vez, vai sem destino: despachar de novo bate no mesmo limite
+  s.escalada = escalada.aoAbrir(s, 'arquiteto', 'l3');
+  s.escalada = escalada.aoLimite(s, 'arquiteto', 'l3', PROJETO);
+  const topo = s.escalada.pendentes[0];
+  assert.deepStrictEqual([s.escalada.pendentes.length, topo.para, topo.n, topo.deNovo, topo.causa],
+    [1, null, 3, undefined, 'limite'], JSON.stringify(s.escalada));
+  assert.deepStrictEqual([s.escalada.refazer, s.escalada.aguardando], [{}, {}], 'nada a re-despachar');
+  assert.strictEqual(escalada.deNovo(s, 'arquiteto'), false);
+  const fim = escalada.motivoDoFecho(s);
+  assert.ok(/bate no mesmo limite/.test(fim) && /o que ficou por fazer/.test(fim), fim);
+  assert.ok(!/ja foi despachado de novo|Agent\(|Se a tarefa nao precisa/.test(fim), 'o topo no limite nao despacha: ' + fim);
+  assert.ok(!/pedi|degrau|subida|topo da escada/i.test(fim), fim);
+  for (const linha of fim.split('\n')) assert.ok(linha.length <= 120, 'linha longa: ' + linha);
+  const lembrete = escalada.paraReinjetar(s);
+  assert.ok(/"arquiteto" e o ultimo da escada de agentes e parou no limite de uso da API/.test(lembrete) &&
+    !/ja foi despachado de novo|despache/.test(lembrete), lembrete);
+  assert.ok(/^[\x20-\x7E\n]+$/.test(fim + '\n' + lembrete), 'ASCII: ' + fim + lembrete);
+});
+
+test('H6i: aoLimite fora da escada, id repetido ou torto nao muda nada; o limite zera a conta do B5', () => {
+  for (const [tipo, id, proj] of [['general-purpose', 'k1', PROJETO], ['tarefas-simples', 7, PROJETO],
+    ['tarefas-simples', undefined, PROJETO], ['tarefas-simples', 'k2', { agentes: { escada: ['tarefas-simples'] } }],
+    ['tarefas-simples', 'k3', null]]) {
+    const s = novo();
+    assert.strictEqual(escalada.aoLimite(s, tipo, id, proj), undefined, tipo + ' ' + id);
+  }
+  // o mesmo subagente lido duas vezes (ou o fim dele depois do limite) da um pedido so
+  const s = novo();
+  s.escalada = escalada.aoLimite(s, 'tarefas-simples', 'k4', PROJETO);
+  const antes = s.escalada;
+  assert.strictEqual(escalada.aoLimite(s, 'tarefas-simples', 'k4', PROJETO), antes, 'o id repetido');
+  assert.strictEqual(escalada.aoFechar(s, 'tarefas-simples', 'k4', 'Parei.\nESCALAR: arquiteto - x', PROJETO, 0), antes,
+    'o fim do mesmo subagente');
+  // a conta do B5 que ja vinha recomeca: o limite subiu o degrau
+  const u = novo();
+  u.escalada = escalada.aoFechar(u, 'desenvolvedor', 'k5', 'Pronto.', PROJETO, 0);
+  assert.strictEqual(u.escalada.semProva.desenvolvedor, 1);
+  u.escalada = escalada.aoLimite(u, 'desenvolvedor', 'k6', PROJETO);
+  assert.deepStrictEqual([u.escalada.pendentes.map((x) => x.causa), u.escalada.semProva.desenvolvedor],
+    [['limite'], undefined]);
+  // o topo ja re-despachado (refeitos) que para no limite sai da lista e vai sem destino
+  const r = { escalada: { refeitos: ['k7'], subidas: { k7: 4 } } };
+  r.escalada = escalada.aoLimite(r, 'arquiteto', 'k7', PROJETO);
+  assert.deepStrictEqual([r.escalada.refeitos, r.escalada.subidas, r.escalada.pendentes.map((x) => [x.para, x.n])],
+    [[], {}, [[null, 5]]]);
+});
+
+test('H6i: escalar.js no StopFailure rate_limit do subagente sobe o degrau, e o fecho cobra o despacho', () => {
+  const dir = temp();
+  try {
+    projeto(dir);
+    const limpo = (r, nome) => assert.deepStrictEqual([r.status, r.stdout, r.stderr], [0, '', ''], nome);
+    // a entrada como a sonda da s376 a mediu (Claude Code 2.1.328)
+    const falha = (sid, extra) => Object.assign({ session_id: sid, cwd: dir, hook_event_name: 'StopFailure',
+      agent_id: 'f1', agent_type: 'tarefas-simples', error: 'rate_limit',
+      last_assistant_message: 'API Error: Request rejected (429) · This request would exceed your account rate limit.' },
+    extra);
+    limpo(rodar('escalar.js', dir, falha('h1')), 'h1');
+    const p = sessao(dir, 'h1').escalada.pendentes;
+    assert.deepStrictEqual(p.map((x) => [x.para, x.causa]), [['desenvolvedor', 'limite']], JSON.stringify(p));
+    const stop = rodar('portao-fecho.js', dir, { session_id: 'h1', cwd: dir, hook_event_name: 'Stop',
+      last_assistant_message: 'O agente parou.' });
+    assert.strictEqual(stop.status, 0, stop.stderr);
+    const saida = JSON.parse(stop.stdout);
+    assert.strictEqual(saida.decision, 'block', stop.stdout);
+    assert.ok(/limite de uso da API/.test(saida.reason) && saida.reason.includes('Agent({ subagent_type: "desenvolvedor"'),
+      saida.reason);
+    // outro erro (o 529 e passageiro), a sessao principal (sem agent_id) e o agente fora da escada nao sobem
+    for (const [sid, extra] of [['h2', { error: 'server_error' }], ['h3', { agent_id: undefined }],
+      ['h4', { agent_type: 'general-purpose' }]]) {
+      limpo(rodar('escalar.js', dir, falha(sid, extra)), sid);
+      assert.strictEqual(sessao(dir, sid).escalada, undefined, sid + ': ' + JSON.stringify(sessao(dir, sid)));
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

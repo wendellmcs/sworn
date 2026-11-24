@@ -1,5 +1,156 @@
 # Changelog
 
+## 0.87.0 — o teste deixa recibo, a saída verde chega enxuta, e o bloco colado tem de ter saído de verdade
+
+**Novo**
+
+- **Recibo da prova** (`scripts/recibo-da-prova.js`, nos ganchos `PostToolUse` e `PostToolUseFailure` do `Bash` e do
+  `PowerShell`). Cada comando de teste deixa no estado da sessão o comando, se saiu verde, o código de saída e, quando
+  houve corte, onde está a saída inteira. A sessão guarda os 50 recibos mais novos. O teste que falha também deixa
+  recibo, com o código que o harness informa, e chega ao Claude inteiro.
+- **Saída enxuta** (`scripts/lib/saida-enxuta.js`, `modelos/resumidores.json`). No Claude Code, a saída verde de mais
+  de 2 mil caracteres de um comando de teste simples chega ao Claude só com o resumo do executor (até 40 linhas) e o
+  caminho da saída inteira, em `.sworn/provas/`. A pasta tem um `.gitignore` próprio e guarda os 20 logs mais novos.
+  Os resumidores cobrem `node --test`, jest, vitest, pytest, `go test`, `cargo test`, `dotnet test`, maven, gradle e
+  mocha. Não há corte com executor desconhecido, com qualquer marca de falha, com pipe, `;`, `||`, redirecionamento ou
+  segundo plano, nem pela ponte dos outros harnesses. A chave nova `saidaEnxuta` vem ligada, e `false` desliga o corte.
+- **O bloco colado precisa de recibo** (`scripts/lib/evidencia.js`, trava 3). A alegação de sucesso com bloco de saída
+  barra quando o bloco não confere com nenhuma saída de ferramenta da sessão (o transcript, mais o resumo dos
+  recibos cortados): uma mesma saída tem de trazer uma linha do bloco e cada linha de contagem dele (`tests 12`,
+  `1 failed`), e a linha real não libera a contagem inventada ao lado. A linha resumida em pedaços
+  (`tests 12 | pass 12 | fail 0`) vale quando cada pedaço aparece nessa saída. Sem o transcript legível, ou com o
+  bloco só de pedaços curtos, vale a regra de antes. O teste vermelho, a tela e a prova em segundo plano seguem com o motivo
+  deles, que é mais específico.
+- **O handoff se refaz antes da compactação** (`scripts/antes-do-compact.js`, no gancho novo `PreCompact`, só no
+  Claude Code). Logo antes de compactar, o handoff que esta sessão gravou refaz do disco a topologia (`HEAD` e
+  `git status`), o próximo item do plano (quando a seção 3 ainda abre com o bloco que o `handoff-curto.js` copiou) e as
+  pendências. As seções de julgamento ficam como estavam, e uma linha no topo diz quando o arquivo foi refeito. Antes,
+  a releitura depois da compactação mandava seguir um `HEAD` e um item que já eram outros. Qualquer falha deixa o
+  arquivo como estava, e a compactação segue.
+- **Pacote novo antes de instalar** (`scripts/portao-pacote.js`, o quarto portão do `scripts/portao-shell.js`, com a
+  tabela em `scripts/lib/pacote-novo.js`). O comando que instala pacote (`npm i`, `pnpm add`, `yarn add`, `bun add`,
+  `pip install`, `pipx install`, `uv add`, `poetry add`, `cargo add`, `go get`, `dotnet add package`, `gem install`,
+  `bundle add`, `composer require`) tem cada nome procurado no manifesto e no lockfile do projeto. O que não está em
+  nenhum chega ao Claude com o comando que confere o nome no registro (`npm view`, `pip index versions`,
+  `cargo info`...): modelo inventa nome de pacote, e quem registra o nome inventado recebe a instalação. O portão não
+  consulta a rede e não nega: o comando segue. Caminho, endereço, git e variável não contam como nome de pacote.
+- **Segredo no commit** (`scripts/lib/segredo-commit.js`, pelo `scripts/portao-commit.js`). Antes, só o cartão do
+  push via o segredo, e o commit já o tinha gravado no histórico local. Agora o `git commit` é negado quando a classe
+  "segredo, chave ou token" da sanitação acha algo nas linhas que ele vai levar: as do índice; com `git add` no mesmo
+  comando, ou com `-a`, `--all`, `-p` ou caminho, também as dos rastreados mudados; com `git add`, também os não
+  rastreados fora do `.gitignore` (sem binário, sem link, até 1 MB cada e 32 MB no total). O git que passa de 15 s
+  somados deixa o resto sem varrer e o commit passa, sem aviso: o cartão do push varre de novo antes de publicar. A
+  mensagem cita arquivo, linha e classe, nunca o texto achado. O falso positivo passa com `# sworn: segredo-visto` no
+  comando; a chave nova `segredoNoCommit` vem ligada (`false` desliga).
+- **Plano por fatia** (`scripts/plano.js --fatia [<id>] [--plano <caminho>]`, `scripts/lib/fatia.js`). Imprime só o
+  cabeçalho do plano e um item (sem id, o próximo sem marcar), com as linhas do arquivo e teto de 16 mil caracteres
+  por pedaço. O handoff e a reabertura depois da compactação passam a dar esse comando em vez de mandar ler o plano
+  inteiro: o plano único deste repositório tem 327 KB, e a fatia do item de agora, 5 KB. Sem `plano-ativo.json`, a
+  reabertura também acha o plano pela linha `Plano:` do escopo da sessão. O corte diz o teto, as linhas de fora e o
+  `offset` do Read; id repetido diz onde estão as outras ocorrências. O bloco de código segue a regra do CommonMark
+  (mesmo caractere, comprimento igual ou maior, nada depois; ```` ```x``` ```` no começo da linha não abre bloco). Na
+  reabertura, o plano todo marcado não manda rodar a fatia, e o caminho com caractere que o shell expande fica fora
+  do comando; na pasta de instalação do sworn, o mesmo caractere tira o comando inteiro.
+- **A aprovação da revisão fica presa ao conteúdo revisado** (`scripts/lib/commit.js`, `scripts/preparar-revisao.js`,
+  `scripts/apurar-ronda.js`). Antes, o portão do commit liberava o arquivo aprovado só pelo caminho, e um arquivo
+  mudado depois da revisão por fora do Edit (shell, script, outro editor) seguia aprovado. Agora a preparação de cada
+  ronda grava o sha-256 dos bytes do arquivo, a aprovação guarda o da última ronda (na conferência depois do teto, o
+  da conferência), e o portão devolve a "sem revisão aprovada" o arquivo cujo conteúdo mudou, ou que não se lê na
+  hora do commit. A revisão aprovada antes da 0.87.0, sem hash, segue valendo pelo caminho.
+- **Refutador independente dos P0/P1** (`agents/refuter.md`, `scripts/lib/refutador.js`, pelo
+  `scripts/apurar-ronda.js` e pelo `scripts/gravar-veredito.js`). Antes, quem escreveu o conserto podia tirar da conta
+  um P0/P1 da própria obra só com a prova no `refutados.json`. Agora o `/sworn:review` despacha, para cada P0/P1 do
+  trabalho que se quer refutar, um agente `refuter` que só lê. Ele confere o achado no código vivo e responde
+  `confirmado`, `refutado` ou `inconclusivo`, citando `arquivo:linha`. O gancho grava a resposta em `refutacoes/`, na
+  base do arquivo, sem sobrescrever. A apuração só aceita a refutação que tem a resposta `refutado`; sem resposta,
+  ela para com `ERRO`. Com `inconclusivo` ou `confirmado`, o achado fica. Lacuna, P2, achado do lado do HEAD e ronda
+  preparada antes da 0.87.0 seguem como antes. O agente não declara modelo: herda o da sessão.
+- **O P2 descartado vale na revisão seguinte** (`scripts/lib/herdados.js`, pelo `scripts/preparar-revisao.js` e pelo
+  `scripts/apurar-ronda.js`). Antes, o P2 refutado com motivo numa revisão voltava a segurar a ronda quando o mesmo
+  arquivo voltava à revisão. Agora, ao arquivar a revisão fechada, o preparar grava em `1/herdados.json` da revisão
+  nova cada P2 que ela refutou do lado do trabalho, com a linha citada e 2 vizinhas de cada lado, e os que ela mesma
+  já herdara. Fica só o que ainda está igual no arquivo. Na apuração, a mesma lente que achar um P2 sobre essas
+  mesmas linhas não segura a ronda: o achado vai a `registros` como `descartado antes`, com a prova e a origem. A prova
+  é conferida de novo a cada apuração. P0/P1, lacuna e a lente `escopo` não herdam.
+- **Quanto cada lente da revisão rende** (`scripts/lib/aproveitamento.js`, pelo `scripts/apurar-ronda.js` e pelo
+  `/sworn:audit`). Antes, não havia número para saber se uma lente achava defeito ou só ruído. Agora o `fechada.json`
+  de cada revisão fechada guarda `porLente`: por lente, quantos achados viraram conserto, quantos foram refutados,
+  quantos vieram como `descartado antes` e quantos ficaram abertos no teto ou na conferência. O `/sworn:audit` soma os
+  fechos do projeto na chave `aproveitamento`, com a conta conserto ÷ (conserto + descarte + refutação) de cada lente.
+  A skill nunca tira uma lente sozinha: leva a decisão ao dono. A rodada automática da abertura não mede, e a revisão
+  fechada antes da 0.87.0 conta como `semMedida`.
+- **Vermelho antes de verde** (`scripts/lib/vermelho-antes.js`, pelo `scripts/marcar-trabalho.js`, pelo
+  `scripts/recibo-da-prova.js` e pelo `scripts/portao-fecho.js`, trava 3). Antes, o Claude podia editar um teste e
+  dizer pronto sem nunca o ver falhar, e o teste que nunca falhou pode não provar nada. Agora cada arquivo de teste
+  editado na sessão (pelo nome: `*.test.js`, `test_*.py`, `*_test.go`, `*_spec.rb` e afins) entra numa lista, e o
+  recibo de um comando de teste que falha depois da edição tira dela os testes que ele cobre: os que cita, pelo caminho
+  ou por glob, ou todos, quando não cita arquivo de teste. A falha interrompida ou sem código não conta. A alegação de
+  pronto com arquivo ainda na lista barra uma vez no fecho, no balde `teste_sem_vermelho`; a linha
+  `SEM VERMELHO: <motivo>` na resposta libera e limpa a lista. A lista guarda os 50 arquivos mais recentes; quando um
+  sai por esse teto, o fecho barra e avisa até um vermelho que cubra todos. A edição de subagente não entra, e
+  `"vermelhoAntes": false` desliga. No Windows e no macOS o caminho se compara sem a caixa. A ideia é do
+  `nizos/tdd-guard` (MIT), feita sem modelo.
+- **O custo e o uso de cada sessão no disco** (`scripts/lib/custo-da-sessao.js` e `scripts/custo-das-sessoes.js`,
+  pelo `scripts/fim-sessao.js` e pelo `scripts/recibo-da-prova.js`). Antes, nada guardava quanto uma sessão gastou.
+  Agora, ao fechar a sessão, o `SessionEnd` solta um processo à parte (fora do orçamento de 1,5 s) que soma o uso do
+  transcript e dos subagentes dela (os de workflow também), uma vez por mensagem: entrada, saída, cache lido, cache
+  escrito e a estimativa em dólares pela tabela de preço do plugin. A conta é o valor de API, não a cobrança do plano.
+  O registro vai para `.sworn/custo/<sessao>.json`, numa pasta com `.gitignore` próprio, e cada gravação apaga os
+  mais velhos além dos 200 mais novos. Ele traz também quantas vezes a saída enxuta cortou um verde e quantos bytes o Claude deixou de ler. A mensagem de um
+  modelo fora da tabela conta à parte, nunca como zero. `node "<plugin>/scripts/custo-das-sessoes.js"` lista as 10
+  últimas com o total (`--limite N`, `--json`). Só no projeto com o sworn configurado; a sessão que o harness fecha
+  antes do processo terminar fica sem registro.
+- **Mais quatro armadilhas do terminal barradas antes de rodar** (`scripts/lib/armadilhas-shell.js`, trava 5, no
+  `Bash`). Antes, só o heredoc que come a barra, o `grep -c` antes de `&&` e o `grep -P` sem locale paravam. Agora param
+  também, cada um com o conserto no aviso:
+  - a crase dentro das aspas duplas do código de `node -e` ou `node -p`, em qualquer sistema. O bash roda o que está
+    entre as crases antes do node, e a saída entra no código sem aviso: `` node -e "const x = `echo 41`" `` vira
+    `const x = 41`.
+  - nos projetos com a plataforma `win32` declarada, o `sed -i` sem `-b`. O sed do Git Bash regrava o arquivo inteiro
+    sem o `\r`, e o CRLF vira LF em todas as linhas.
+  - também nesses projetos, o caminho do Git Bash (`/c/proj/...`) numa string do código do node. O node não o entende:
+    o `require` dá `MODULE_NOT_FOUND`.
+  - e o `/tmp` numa string do código do node, que vira `\tmp` na raiz do drive (`C:\tmp`) e dá `ENOENT`, ou grava
+    no lugar errado sem aviso quando essa pasta existe.
+
+  A crase solta (`` node -e `cat f` ``), a de aspas simples e a que tem barra antes seguem passando. O texto de um
+  `echo` ou de uma mensagem de commit, o corpo de um heredoc e o argumento de um `node script.js` também passam. A
+  contagem segue no balde `armadilha_shell`.
+- **O agente que para no limite de uso sobe para o seguinte** (`scripts/escalar.js` e `scripts/lib/escalada.js`, no
+  gancho novo `StopFailure` com o erro `rate_limit`, só no Claude Code). Antes, o subagente da escada que o Claude Code
+  encerrava no limite de uso da API sumia sem deixar pedido: o fim normal do subagente não chega nesse caso (medido no
+  Claude Code 2.1.328, com uma API falsa que devolvia 429). Agora o pedido sai sozinho para o agente seguinte, e o fim
+  do turno cobra o despacho, como nos outros três gatilhos. O último da escada não é despachado de novo, porque
+  bateria no mesmo limite: o fim do turno manda dizer o que ficou por fazer. Outro erro da API (servidor fora, 529)
+  não sobe a tarefa, e a sessão principal no limite fica de fora: o Claude Code já mostra o erro.
+- **O `init` e o relatório de cobertura recomendam o kit da linguagem** (`scripts/lib/kit.js`, no `varrer.js` e no
+  `cobertura.js`). São o servidor de linguagem (o plugin oficial de LSP da linguagem do projeto, com o binário que ele
+  pede no PATH), o context7, o gitleaks, o semgrep e, só em projeto Node, o knip. Cada um sai com a marca de visto ou
+  não visto, o lugar onde se procurou e o comando de instalar. O sworn não instala nem embute nenhum deles; quem
+  instala é você. O visto não lê o settings pessoal: olha os settings do projeto, o `.mcp.json`, os servidores MCP do
+  `~/.claude.json` (os globais e os deste projeto) e os arquivos de configuração na raiz. Por isso o plugin ligado só no seu settings pessoal aparece
+  como não visto, e o aviso manda conferir com `claude plugin list`. A lista traz a data em que foi conferida.
+- Para quem mantém o plugin: são **48 baldes** de contador: 30 que negam, 18 que só contam; o novo,
+  `teste_sem_vermelho`, é dos que negam.
+
+**Corrigido**
+
+- **O próximo item do handoff não erra mais depois de um bloco com linguagem** (`caixaAberta`, em
+  `scripts/lib/handoff-curto.js`). Um ```` ```js ```` dentro de um bloco aberto fechava o bloco, e as caixas
+  seguintes eram lidas ao contrário: as de dentro do exemplo contavam, e as de fora, não. Agora a cerca segue a
+  mesma regra do CommonMark da fatia.
+
+- **A reabertura da compactação cabe no que o harness mostra** (`scripts/lib/reabertura-curta.js`). Acima de 10 mil
+  caracteres, o Claude Code guarda a saída do `SessionStart` num arquivo e mostra só o começo, e as regras e os avisos
+  do fim sumiam. Agora, na compactação, o texto inteiro vai para `.sworn/reabertura/<sessão>.md` e a saída, de até
+  9 mil bytes, leva primeiro a ordem de reler ou gravar o handoff, depois o caminho do arquivo e o que couber.
+- **Plano ativo em branco não é "de outra sessão"** (`scripts/lib/plano.js`). Com o campo `arquivo` de
+  `.claude/sworn/plano-ativo.json` vazio ou em branco, a abertura avisava que outra sessão detinha o plano.
+- **O gasto do mês conta o modelo com data no nome** (`custoDoTexto`, em `scripts/lib/gasto.js`). O preço vinha da
+  tabela pelo nome exato, então `claude-haiku-4-5-20251001` ficava sem preço, o Haiku 5.5 acima de 100 mil de prompt
+  saía pelo preço de baixo e um modelo chamado `constructor` deixava o total do mês em `NaN`. Agora o preço vem do
+  `precoDaChamada`, o mesmo do custo da sessão.
+
 ## 0.86.0 — a captura de tela segue um roteiro: clica, digita, espera e confere antes da foto
 
 **Novo**

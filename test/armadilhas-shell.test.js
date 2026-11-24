@@ -1,7 +1,8 @@
 'use strict';
 // F3d (D828): as armadilhas do Bash barradas antes de rodar (scripts/lib/armadilhas-shell.js, chamada no
 // portao-destrutivo.js depois do idioma de shell): heredoc sem aspas que come a barra, grep -c antes de &&, grep -P no
-// Git Bash. E a linha de situacao ao dono no fim do turno com agente de fundo (saude.linhaDeSituacao).
+// Git Bash. H6h (D904): crase nas aspas duplas do node -e, sed -i sem -b, /c/... e /tmp no codigo do node. E a linha
+// de situacao ao dono no fim do turno com agente de fundo (saude.linhaDeSituacao).
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -84,6 +85,93 @@ test('F3d: grep -P so e armadilha no Windows, sem locale UTF-8 na frente e fora 
   assert.deepStrictEqual(tipos('LC_ALL="C" grep -P x f'), ['grep-perl'], 'nem entre aspas');
   assert.deepStrictEqual(tipos("grep -P 'a' f", 'linux'), []);
   assert.deepStrictEqual(tipos("grep -P 'a' f", 'darwin'), []);
+});
+
+test('H6h: sed -i sem -b no Windows e armadilha (regrava o CRLF); com -b, sem -i ou fora do Windows, nao', () => {
+  for (const c of ['sed -i s/a/b/ f', "sed -i 's/a/b/' f", 'sed -i.bak s/a/b/ f', 'sed --in-place s/a/b/ f',
+    'sed --in-place=.bak x f', 'sed -Ei x f', 'sed -ni p f', 'sed -e x -i f', "sed 's/a/b/' -i f", 'X=1 sed -i x f',
+    'cat f && sed -i x f', 'sudo sed -i x f', 'ls; sed -i x f',
+    // no grupo, o i leva o resto como sufixo da copia: `-ib` e sufixo b, nao binario
+    'sed -ib x f',
+    // o valor colado no grupo (-ex) nao leva a palavra seguinte; o -l solto leva a dele
+    'sed -ex -i f', 'sed -l 5 -i x f']) {
+    assert.deepStrictEqual(tipos(c), ['sed-crlf'], c);
+  }
+  for (const c of ['sed -b -i x f', 'sed -i -b x f', 'sed --binary -i x f', 'sed -bi x f', 'sed s/a/b/ f', 'sed -n p f',
+    // o -i que e valor de outra opcao, ou que vem depois do --, nao e o modo no lugar
+    'sed -e -i f', 'sed -f -i f', 'sed -l -i f', 'sed -- -i f', 'sed --expression -i f', 'sed -ei f',
+    // a opcao longa com i no nome nao e o grupo curto
+    'sed --silent p f', 'sed --debug x f',
+    "echo 'sed -i x f'", 'git commit -m "sed -i x"', 'echo sed -i x f', 'cat <<EOF\nsed -i x f\nEOF']) {
+    assert.deepStrictEqual(tipos(c), [], c);
+  }
+  assert.deepStrictEqual(tipos('sed -i x f', 'linux'), []);
+  assert.deepStrictEqual(tipos('sed -i x f', 'darwin'), []);
+  assert.deepStrictEqual(armadilhas.achar('sed -i x f', 'Bash', undefined), [], 'sem plataforma declarada nao se confere');
+});
+
+test('H6h: crase nas aspas duplas do codigo do node -e/-p e armadilha em qualquer sistema', () => {
+  for (const c of ['node -e "const x = `echo 41`; console.log(x)"', 'node -p "`date`.length"', 'node -pe "`a`"',
+    'node --eval "`a`"', 'node --print "`a`"', 'node --input-type=module -e "x(`a`)"', 'node -r foo -e "`a`"',
+    'node.exe -e "`a`"', 'X=1 node -e "`a`"', 'cd x && node -e "`a`" | head', 'node -e "\nconst a = `x`;\n"',
+    // a barra dupla antes da crase e barra literal: a crase segue rodando
+    'node -e "a\\\\`b`"',
+    // o valor da opcao separado (--input-type module), o prefixo, a barra que emenda a linha e o # no meio da palavra
+    'node --input-type module -e "`a`"', 'sudo node -e "`a`"', 'node \\\n  -e "`a`"', 'echo a#b; node -e "`x`"',
+    // a forma colada --eval=/--print= e a barra que emenda com CRLF (o Git Bash emenda tambem)
+    'node --eval="`a`"', 'node --print="`a`"', 'node -r x --eval="f(`a`)"', 'node \\\r\n  -e "`a`"',
+    // outras opcoes do node com o valor na palavra seguinte (medido: o node aceita a forma com espaco)
+    'node --title meuapp -e "`a`"', 'node --env-file .env -e "`a`"', 'node --test-reporter spec -e "`a`"']) {
+    assert.deepStrictEqual(tipos(c, 'linux'), ['node-crase'], c);
+  }
+  assert.strictEqual(armadilhas.achar('node --eval="`a`"', 'Bash', 'linux')[0].trecho, 'node --eval');
+  assert.deepStrictEqual(tipos("node --eval=\"f('/tmp/x')\""), ['node-tmp'], 'a forma colada no Windows');
+  for (const c of ["node -e 'const x = `a`'", 'node -e "x(\\`a\\`)"', 'node -e `cat x.js`', 'node x.js -e "`a`"',
+    'echo "node -e `a`"', 'git commit -m "node -e `x`"', 'node -e "a" && echo "`date`"', 'node -e "a" # "`x`"', 'echo x # ; node -e "`a`"',
+    'node -e "sem crase"', 'node -e', 'node -r -e "`a`"', 'nodejs -e "`a`"', 'cat <<EOF\nnode -e "`a`"\nEOF',
+    "node --eval='`a`'", 'node --eval="a"', 'node x.js --eval="`a`"']) {
+    assert.deepStrictEqual(tipos(c, 'linux'), [], c);
+  }
+});
+
+test('H6h: caminho do Git Bash e /tmp numa string do codigo do node sao armadilha so no Windows', () => {
+  for (const c of ["node -e \"require('/c/proj/x/a.js')\"", "node -e 'require(\"/c/proj/x\")'",
+    'node -p "fs.existsSync(\\"/d/proj\\")"']) {
+    assert.deepStrictEqual(tipos(c), ['node-caminho-bash'], c);
+  }
+  assert.deepStrictEqual(tipos("node -e \"fs.readFileSync(`/c/x`)\""), ['node-crase', 'node-caminho-bash'],
+    'a crase tambem abre string do codigo');
+  for (const c of ["node -e \"require('C:/proj/x')\"", "node -e \"s.replace(/c/g, '')\"", "node -e \"require('./c/x')\"",
+    'node x.js /c/Users', "node -e \"'/c/'\"", "echo \"require('/c/Users')\""]) {
+    assert.deepStrictEqual(tipos(c), [], c);
+  }
+  for (const c of ["node -e \"fs.writeFileSync('/tmp/x', 'a')\"", "node -e 'path.join(\"/tmp\", \"x\")'",
+    "node -e \"fs.readdirSync('/tmp')\"", 'node -e "f(\\"/tmp/a\\")"']) {
+    assert.deepStrictEqual(tipos(c), ['node-tmp'], c);
+  }
+  for (const c of ["node -e \"fs.writeFileSync(os.tmpdir() + '/x')\"", "node -e \"'/tmpx'\"", "node -e \"'/var/tmp/x'\"",
+    'node x.js /tmp/a', "echo \"'/tmp/x'\""]) {
+    assert.deepStrictEqual(tipos(c), [], c);
+  }
+  const tres = "node -e \"require('/c/x/a'); fs.writeFileSync('/tmp/y', `z`)\"";
+  assert.deepStrictEqual(tipos(tres), ['node-crase', 'node-caminho-bash', 'node-tmp']);
+  assert.deepStrictEqual(tipos(tres, 'linux'), ['node-crase'], 'fora do Windows so a crase');
+});
+
+test('H6h: o aviso das armadilhas novas traz o conserto de cada uma, em ASCII', () => {
+  const c = "sed -i x f; node -e \"require('/c/x/a'); f('/tmp/y', `z`)\"";
+  const achadas = armadilhas.achar(c, 'Bash', 'win32');
+  assert.deepStrictEqual(achadas.map((a) => a.tipo), ['node-crase', 'node-caminho-bash', 'node-tmp', 'sed-crlf']);
+  assert.deepStrictEqual(achadas.map((a) => a.trecho), ['node -e', 'node -e', 'node -e', 'sed -i x f']);
+  const m = armadilhas.motivo(c, achadas);
+  assert.ok(/^[\n\x20-\x7E]*$/.test(m), 'ASCII (R5)');
+  assert.match(m, /Conserto: -b junto do -i \(sed -b -i \.\.\.\)/);
+  assert.match(m, /Conserto: aspas simples em volta do codigo \(node -e '\.\.\.'\)/);
+  assert.match(m, /Conserto: escreva o caminho do Windows no codigo \(C:\/proj\/\.\.\.\)/);
+  assert.match(m, /Conserto: require\('os'\)\.tmpdir\(\) no codigo/);
+  assert.match(m, /o node le \\tmp na raiz do drive atual \(C:\\tmp, por exemplo\)/);
+  assert.match(m, /da ENOENT, ou grava no lugar errado sem aviso/);
+  assert.match(m, /sem o \\r \(o CRLF vira LF/);
 });
 
 test('F3d: so a ferramenta Bash e so comando em texto', () => {

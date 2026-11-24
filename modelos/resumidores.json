@@ -1,0 +1,77 @@
+{
+  "_leia": "Os resumidores da saida enxuta, por executor de teste (scripts/lib/saida-enxuta.js). `comandos`: os pedacos do comando que dizem que e este executor; espacos seguidos contam como um so (`go  test` casa com `go test`). `padroes` (opcional): regex contra o comando inteiro, para a forma com algo no meio (`mvn clean test`). O npm test e o comando de pronto do projeto (a chave provaDePronto do projeto.json) tentam todos os executores. Cada linha da saida (sem a cor do terminal e sem o \\r) e testada contra as regex: `resumo` diz as linhas que ficam, `verde` tem de casar em alguma linha para cortar, e `vermelho` em qualquer linha impede o corte. Executor fora desta tabela nao corta nada: para cortar o seu, acrescente aqui um item com nome, comandos, resumo, verde e vermelho.",
+  "executores": [
+    {
+      "nome": "node --test",
+      "comandos": ["node --test"],
+      "resumo": ["^(?:ℹ|#) (?:tests|suites|pass|fail|cancelled|skipped|todo|duration_ms) [0-9.]+$"],
+      "verde": ["^(?:ℹ|#) fail 0$"],
+      "vermelho": ["^(?:ℹ|#) (?:fail|cancelled) [1-9]"]
+    },
+    {
+      "nome": "jest",
+      "comandos": ["jest"],
+      "resumo": ["^(?:Test Suites|Tests|Snapshots|Time):\\s"],
+      "verde": ["^Tests:\\s.*\\bpassed\\b.*\\btotal$"],
+      "vermelho": ["^(?:Test Suites|Tests):\\s.*\\b[1-9]\\d* failed\\b"]
+    },
+    {
+      "nome": "vitest",
+      "comandos": ["vitest"],
+      "resumo": ["^\\s*(?:Test Files|Tests|Duration)\\s{2,}\\S"],
+      "verde": ["^\\s*Tests\\s{2,}.*\\bpassed\\b"],
+      "vermelho": ["^\\s*(?:Test Files|Tests)\\s{2,}.*\\b[1-9]\\d* failed\\b"]
+    },
+    {
+      "nome": "pytest",
+      "comandos": ["pytest", "py.test"],
+      "resumo": ["^=+ .*\\bin [0-9.]+s\\b.*=+$"],
+      "verde": ["^=+ .*\\b\\d+ passed\\b.*\\bin [0-9.]+s\\b"],
+      "vermelho": ["^=+ .*\\b[1-9]\\d* (?:failed|errors?)\\b"]
+    },
+    {
+      "nome": "go test",
+      "comandos": ["go test"],
+      "resumo": ["^(?:ok|FAIL|\\?)\\s+\\S+\\s+(?:[0-9.]+s|\\(cached\\)|\\[no test files\\])"],
+      "verde": ["^ok\\s+\\S+\\s+(?:[0-9.]+s|\\(cached\\))"],
+      "vermelho": ["^(?:--- )?FAIL\\b"]
+    },
+    {
+      "nome": "cargo test",
+      "comandos": ["cargo test"],
+      "resumo": ["^test result: "],
+      "verde": ["^test result: ok\\. \\d+ passed; 0 failed;"],
+      "vermelho": ["^test result: FAILED", "\\b[1-9]\\d* failed;"]
+    },
+    {
+      "nome": "dotnet test",
+      "comandos": ["dotnet test"],
+      "resumo": ["^(?:Passed!|Failed!)\\s+- Failed:", "^Test summary: total:", "^Test Run (?:Successful|Failed)\\.", "^Total tests: \\d+"],
+      "verde": ["^Passed!\\s+- Failed:\\s+0,", "^Test summary: total: \\d+, failed: 0,", "^Test Run Successful\\."],
+      "vermelho": ["^Failed!", "^Test Run Failed\\.", "\\bfailed: [1-9]", "\\bFailed:\\s+[1-9]"]
+    },
+    {
+      "nome": "maven",
+      "comandos": ["mvn test", "mvn verify", "mvnw test", "mvnw verify"],
+      "padroes": ["\\bmvnw?(?:\\.cmd)?\\s(?:[^|;&]*\\s)?(?:test|verify)(?=\\s|$)"],
+      "resumo": ["^\\[(?:INFO|WARNING)\\] Tests run: \\d+, Failures: \\d+, Errors: \\d+, Skipped: \\d+$", "^\\[INFO\\] BUILD SUCCESS$", "^\\[INFO\\] Total time:"],
+      "verde": ["^\\[INFO\\] BUILD SUCCESS$"],
+      "vermelho": ["BUILD FAILURE", "\\bFailures: [1-9]", "\\bErrors: [1-9]"]
+    },
+    {
+      "nome": "gradle",
+      "comandos": ["gradle test", "gradlew test", "gradle check", "gradlew check"],
+      "padroes": ["\\bgradlew?(?:\\.bat)?\\s(?:[^|;&]*\\s)?(?:test|check)(?=\\s|$)"],
+      "resumo": ["^BUILD (?:SUCCESSFUL|FAILED) in ", "^\\d+ actionable tasks?:"],
+      "verde": ["^BUILD SUCCESSFUL in "],
+      "vermelho": ["^BUILD FAILED", "^FAILURE: "]
+    },
+    {
+      "nome": "mocha",
+      "comandos": ["mocha"],
+      "resumo": ["^\\s*\\d+ (?:passing|pending|failing)\\b"],
+      "verde": ["^\\s*\\d+ passing \\("],
+      "vermelho": ["^\\s*[1-9]\\d* failing\\b"]
+    }
+  ]
+}

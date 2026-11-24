@@ -569,11 +569,12 @@ function painelNaoLeu(arquivo, daFrente) {
 
 /**
  * F17: outra sessao detem este plano - o plano-ativo.json tem sessionId e ele nao e o desta sessao. Sem plano ativo,
- * ou com plano ativo sem sessionId (gravado a mao), o plano conta como livre (false). Sessao sem id vale 'sem-sessao',
- * o mesmo que abrir() grava.
+ * com plano ativo sem sessionId (gravado a mao) ou com "arquivo" que nao aponta plano (vazio, em branco ou que nao e
+ * texto, H6a2, D892), o plano conta como livre (false). Sessao sem id vale 'sem-sessao', o mesmo que abrir() grava.
  */
 function donoOutro(ativo, sessionId) {
   if (!ativo || !ativo.sessionId) return false;
+  if (typeof ativo.arquivo !== 'string' || !ativo.arquivo.trim()) return false;
   return ativo.sessionId !== String(sessionId || 'sem-sessao');
 }
 

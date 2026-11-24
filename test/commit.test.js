@@ -419,6 +419,20 @@ test('091 #1: revisao aprovada libera o arquivo; editar de novo o devolve a list
   });
 });
 
+// H6e1 (15.0): pelo gancho, o aprovado mudado pelo shell (sem Edit, entao sem o marcar-trabalho.js) e negado.
+test('H6e1: pelo portao, o aprovado com o hash do conteudo passa; mudado pelo shell depois, e negado', () => {
+  comRepo(function (dir, tmp) {
+    tocar(dir, tmp, 'src/pequeno.js');
+    const abs = path.join(dir, 'src', 'pequeno.js');
+    noEstado(tmp, function (s) { s.revisadosAprovados = [abs]; s.revisadosHash = { [abs]: commit.hashDoArquivo(abs) }; });
+    assert.ok(!negou(commitar(dir, tmp, 'git commit -m x')), 'o aprovado com o mesmo conteudo foi negado');
+    fs.appendFileSync(abs, '// sed -i\n');
+    const r = commitar(dir, tmp, 'git commit -m x');
+    assert.ok(negou(r), 'mudado pelo shell depois de aprovado passou: ' + JSON.stringify(r.json));
+    assert.match(motivo(r), /"src\/pequeno\.js" .*\(a revisao aprovada julgou outro conteudo: o arquivo mudou depois dela, fora do Edit\)/);
+  });
+});
+
 // Plano 091, Tarefa 6: o ciclo da ordem do commit nos contadores do turno - negado (dada, uma vez por pendencia), a
 // skill do revisar rodou (cumprida) e o commit com a marca sem-revisao depois de negado (recusada).
 test('091 T6: commit negado conta a ordem dada uma vez; o revisar a cumpre; a marca sem-revisao a recusa', () => {
@@ -762,6 +776,80 @@ test('A2-31 (D721): item torto na lista de aprovados nao libera o arquivo', () =
       ['src/pequeno.js']);
     assert.deepStrictEqual(commit.pendentes([abs], [abs], dir, null, null, []), [], 'o texto segue aprovando');
   });
+});
+
+// H6e1 (15.0): a aprovacao fica presa ao conteudo que a revisao julgou (revisadosHash). O shell que muda o arquivo
+// depois (o Edit ja tira a aprovacao no marcar-trabalho.js) volta a pender, com `mudou`; sem a marca, vale o caminho.
+test('H6e1: o aprovado que mudou depois da revisao volta a pendente; o mesmo conteudo e o aprovado sem marca passam', () => {
+  comRepo(function (dir) {
+    const abs = path.join(dir, 'src', 'pequeno.js');
+    const marca = { [abs]: commit.hashDoArquivo(abs) };
+    assert.match(marca[abs], /^[0-9a-f]{64}$/, 'o hash e o sha-256 em hexadecimal');
+    assert.deepStrictEqual(commit.pendentes([abs], [abs], dir, null, null, [], undefined, marca), [], 'o conteudo julgado passa');
+    assert.deepStrictEqual(commit.pendentes([abs], [abs], dir, null, null, [], undefined, undefined), [], 'sem marca: o caminho');
+    assert.deepStrictEqual(commit.pendentes([abs], [abs], dir, null, null, [], undefined, { [abs]: 7 }).map(function (p) { return p.mudou; }),
+      ['conteudo'], 'marca que nao e texto (estado torto): volta a pendente, nunca libera');
+    fs.writeFileSync(abs, fs.readFileSync(abs, 'utf8') + '// mudou pelo shell\n');
+    const lista = commit.pendentes([abs], [abs], dir, null, null, [], undefined, marca);
+    assert.deepStrictEqual(lista.map(function (p) { return [p.rel, p.mudou]; }), [['src/pequeno.js', 'conteudo']]);
+    assert.match(commit.motivo(lista), /\n {2}- "src\/pequeno\.js" +faixa \w+, \d+ inspetor(es)? \(a revisao aprovada julgou outro conteudo: o arquivo mudou depois dela, fora do Edit\)\n/);
+    // o arquivo que nao se le nao diz "mudou": diz que a aprovacao nao se confere
+    const ilegivel = commit.motivo([Object.assign({}, lista[0], { mudou: 'ilegivel' })]);
+    assert.match(ilegivel, /"src\/pequeno\.js" .*\(a revisao aprovada nao se confere: o arquivo nao se le agora\)\n/);
+    assert.doesNotMatch(ilegivel, /mudou depois/);
+    assert.deepStrictEqual(commit.pendentes([abs], [abs], dir, null, null, [], undefined, { [abs.toUpperCase()]: marca[abs] })
+      .map(function (p) { return p.mudou; }), process.platform === 'win32' ? ['conteudo'] : [], 'a marca acha o arquivo pela chave');
+    assert.strictEqual(commit.pendentes([abs], [], dir, null, null, [], undefined, marca)[0].mudou, undefined,
+      'sem aprovacao, nao e "mudou": e o pendente de sempre');
+  });
+});
+
+// H6e1 (15.0): o tocado relativo (o git status da) se resolve na raiz, para o aprovado e para o hash; com o cwd do
+// processo noutra pasta, o aprovado de mesmo conteudo passa e o mudado volta a pendente.
+test('H6e1: o tocado relativo se confere na raiz, nao no cwd do processo', () => {
+  comRepo(function (dir) {
+    const abs = path.join(dir, 'src', 'pequeno.js');
+    const marca = { [abs]: commit.hashDoArquivo(abs) };
+    const antes = process.cwd();
+    process.chdir(os.tmpdir());
+    try {
+      assert.deepStrictEqual(commit.pendentes(['src/pequeno.js'], [abs], dir, null, null, [], undefined, marca), [],
+        'o aprovado relativo a raiz foi cobrado');
+      fs.appendFileSync(abs, '// mudou pelo shell\n');
+      assert.deepStrictEqual(commit.pendentes(['src/pequeno.js'], [abs], dir, null, null, [], undefined, marca)
+        .map(function (p) { return p.mudou; }), ['conteudo']);
+    } finally { process.chdir(antes); }
+  });
+});
+
+// H6e1 (15.0): o hash em blocos de 64 KiB e o mesmo da conta inteira (a do preparar-revisao.js), acima de um bloco e vazio.
+test('H6e1: hashDoArquivo em blocos confere com o sha-256 do arquivo inteiro', () => {
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-hash-'));
+  try {
+    const crypto = require('node:crypto');
+    for (const [nome, bytes] of [['grande.bin', crypto.randomBytes(65536 * 2 + 17)], ['vazio.bin', Buffer.alloc(0)]]) {
+      const f = path.join(pasta, nome);
+      fs.writeFileSync(f, bytes);
+      assert.strictEqual(commit.hashDoArquivo(f), crypto.createHash('sha256').update(bytes).digest('hex'), nome);
+    }
+  } finally { fs.rmSync(pasta, { recursive: true, force: true }); }
+});
+
+test('H6e1: comHash troca a marca do arquivo, tira com hash vazio ou torto e ignora mapa torto', () => {
+  const a = path.resolve('x', 'a.js');
+  const b = path.resolve('x', 'b.js');
+  assert.deepStrictEqual(commit.comHash({ [b]: 'hb' }, a, 'ha'), { [b]: 'hb', [a]: 'ha' });
+  assert.deepStrictEqual(commit.comHash({ [a]: 'velho', [b]: 'hb' }, a, 'novo'), { [b]: 'hb', [a]: 'novo' });
+  assert.deepStrictEqual(commit.comHash({ [a]: 'velho' }, a, null), {});
+  assert.deepStrictEqual(commit.comHash({ [a]: 'velho' }, a, ''), {});
+  assert.deepStrictEqual(commit.comHash(['torto'], a, 'ha'), { [a]: 'ha' });
+  assert.strictEqual(commit.hashDoArquivo(path.join(os.tmpdir(), 'sworn-nao-existe-' + process.pid + '.js')), null);
+  assert.strictEqual(commit.mudouDepois(null, a), false);
+  assert.strictEqual(commit.mudouDepois({ [a]: 'qualquer' }, a), 'ilegivel', 'o arquivo que nao se le nao se confere');
+  assert.strictEqual(commit.mudouDepois({ [b]: 'hb' }, a), false, 'sem a marca do arquivo vale o caminho');
+  for (const torta of [null, 7, {}, '']) {
+    assert.strictEqual(commit.mudouDepois({ [a]: torta }, a), 'conteudo', 'marca torta volta a pendente: ' + JSON.stringify(torta));
+  }
 });
 
 // F1d (D828.4): com "provaPorArquivoTocado": true, o portao do commit cobra a suite inteira (a provaDePronto) depois da

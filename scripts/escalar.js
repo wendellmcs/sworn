@@ -12,6 +12,7 @@ const { mensagemDoSubagente } = require('./lib/texto.js');
 // no pedido que tinha aquele agente como destino (lib/escalada.js). Quem cobra e o fecho do turno (portao-fecho.js).
 // NUNCA decide: no SubagentStop, `block` faria o subagente continuar.
 // C4 (s369, D769 g): conta as negacoes das travas do sworn na transcricao do subagente; 3 ou mais sobem o degrau.
+// H6i (s376, D905): no StopFailure rate_limit de um subagente da escada, o degrau sobe (escalada.aoLimite).
 
 // O fim da transcricao basta: as negacoes que prendem o agente sao as do despacho, e o gancho tem 10 s.
 const CAUDA = 4 * 1024 * 1024;
@@ -57,6 +58,13 @@ io.blindar(function () {
     let mudar;
     if (e.hook_event_name === 'SubagentStart') {
       mudar = function (s) { return escalada.aoAbrir(s, e.agent_type, e.agent_id); };
+    } else if (e.hook_event_name === 'StopFailure') {
+      // H6i (s376, D905): o subagente encerrado no limite de uso. Medido no Claude Code 2.1.328: o SubagentStop dele
+      // nao dispara, e a saida deste gancho e descartada; quem cobra o despacho e o fecho do turno. So o rate_limit
+      // sobe (o server_error e passageiro), e so o subagente: a sessao principal vem sem agent_id, e o aoLimite a recusa.
+      if (e.error !== 'rate_limit') return io.permitir();
+      const projeto = config.carregarProjeto(config.raizDoProjeto(typeof e.cwd === 'string' && e.cwd ? e.cwd : process.cwd()));
+      mudar = function (s) { return escalada.aoLimite(s, e.agent_type, e.agent_id, projeto); };
     } else {
       const mensagem = mensagemDoSubagente(e);
       if (typeof mensagem !== 'string') return io.permitir();

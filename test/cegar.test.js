@@ -2135,8 +2135,11 @@ test('D503: sem referencia para o tipo do arquivo, o pacote e o de hoje (regress
       assert.deepStrictEqual(fs.readdirSync(pasta).sort(), ['A.txt', 'B.txt', 'mapa.json', 'vereditos'], nome);
       // L3 (s104, A3-03): o mapa.json leva a faixa desde o L3; o resto do pacote sem referencia segue o de antes.
       // Pendencia #8 (0.47.0): e a marca do arquivo no HEAD que a ronda julgou.
-      assert.deepStrictEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(pasta, 'mapa.json'), 'utf8'))),
-        ['arquivo', 'mapa', 'faixa', 'headDoArquivo'], nome);
+      // H6e1 (15.0): e o sha-256 dos bytes do arquivo que a ronda julgou, a conta do commit.hashDoArquivo.
+      const mapaJson = JSON.parse(fs.readFileSync(path.join(pasta, 'mapa.json'), 'utf8'));
+      assert.deepStrictEqual(Object.keys(mapaJson), ['arquivo', 'mapa', 'faixa', 'headDoArquivo', 'hashDoTrabalho'], nome);
+      assert.strictEqual(mapaJson.hashDoTrabalho, require('node:crypto').createHash('sha256')
+        .update(fs.readFileSync(path.join(dir, 'raiz.txt'))).digest('hex'), nome);
       // D824: o pacote diz o pedido da tarefa (null e semPedido sem escopo declarado)
       assert.deepStrictEqual(Object.keys(s), ['ronda', 'arquivo', 'base', 'a', 'b', 'regua', 'pedido', 'vereditos', 'faixa',
         'lentes', 'linhasMudadas', 'aviso', 'trecho', 'semPedido', 'semRegua'], nome);
@@ -2835,5 +2838,53 @@ test('L3-s105-6: preparar-revisao --conferencia recusa fora do teto e, no teto, 
     // sem a flag, nada se diz da conferencia
     assert.strictEqual(JSON.parse(primeira.stdout).conferencia, undefined);
     assert.doesNotMatch(JSON.parse(primeira.stdout).aviso, /re-check round/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// H6e3 (D900): ao arquivar a revisao fechada, o preparar grava na ronda 1 nova os P2 refutados do lado do trabalho
+// (e os que ela ja herdara), so os de janela que segue igual no arquivo
+test('H6e3: o arquivamento leva os P2 refutados do trabalho a 1/herdados.json, poda a janela que mudou e passa adiante', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const arq = path.join(dir, 'raiz.txt');
+    const oito = ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8'];
+    fs.writeFileSync(arq, oito.join('\n') + '\n', 'utf8');
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual('herdados' in s1, false, 'a primeira revisao nao herda nada');
+    assert.strictEqual(fs.existsSync(path.join(s1.base, '1', 'herdados.json')), false);
+    const mapa = JSON.parse(fs.readFileSync(path.join(s1.base, '1', 'mapa.json'), 'utf8')).mapa;
+    const T = mapa.A === 'trabalho' ? 'A' : 'B';
+    const H = T === 'A' ? 'B' : 'A';
+    const ref = (extra) => Object.assign({ ronda: 1, lente: 'correcao', arquivo: T + '.txt', linha: 3, severidade: 'P2',
+      prova: 'fica assim', foraDoPedido: 'fora do pedido' }, extra);
+    const fechar = (base, refutados) => {
+      fs.writeFileSync(path.join(base, 'fechada.json'), '{"ronda":1,"sessao":"s1"}', 'utf8');
+      fs.writeFileSync(path.join(base, 'refutados.json'), JSON.stringify(refutados), 'utf8');
+    };
+    fechar(s1.base, [ref(), ref({ lente: 'borda', linha: 7 }), ref({ lente: 'estados', arquivo: H + '.txt', linha: 1 }),
+      ref({ lente: 'manutencao', severidade: 'P1', linha: 4 })]);
+    oito[7] = 'MUDOU'; // a janela da linha 7 (t5..t8) muda; a da linha 3 (t1..t5) fica
+    fs.writeFileSync(arq, oito.join('\n') + '\n', 'utf8');
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.ok(s2.arquivada, JSON.stringify(s2));
+    assert.strictEqual(s2.ronda, 1);
+    assert.strictEqual(s2.herdados, 1, JSON.stringify(s2));
+    const h2 = JSON.parse(fs.readFileSync(path.join(s2.base, '1', 'herdados.json'), 'utf8'));
+    assert.strictEqual(h2.length, 1, JSON.stringify(h2));
+    assert.match(h2[0].origem, /^\.claude\/sworn\/revisao-fechada\/raiz\.txt\/[^/]+, ronda 1$/, h2[0].origem);
+    assert.deepStrictEqual(Object.assign({}, h2[0], { origem: undefined }), { lente: 'correcao', severidade: 'P2',
+      janela: 't1\nt2\nt3\nt4\nt5', prova: 'fica assim', foraDoPedido: 'fora do pedido', origem: undefined });
+    // a revisao seguinte, fechada sem refutar nada, passa o herdado adiante enquanto a janela segue igual
+    fechar(s2.base, []);
+    const s3 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s3.herdados, 1, JSON.stringify(s3));
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(s3.base, '1', 'herdados.json'), 'utf8')), h2);
+    fechar(s3.base, []);
+    oito[1] = 'OUTRA';
+    fs.writeFileSync(arq, oito.join('\n') + '\n', 'utf8');
+    const s4 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.ok(s4.arquivada);
+    assert.strictEqual('herdados' in s4, false, 'a janela mudou: nada herda');
+    assert.strictEqual(fs.existsSync(path.join(s4.base, '1', 'herdados.json')), false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

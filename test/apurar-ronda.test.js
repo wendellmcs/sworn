@@ -218,6 +218,44 @@ test('B2: revisao degradada aprova com DEGRADADO no motivo e fica gravada na ses
   });
 });
 
+// H6e1 (15.0): a aprovacao grava em revisadosHash o hashDoTrabalho da ULTIMA ronda (o conteudo que ela julgou); a ronda
+// sem a marca (preparada antes da 0.87.0) tira a marca antiga, e o arquivo segue aprovado pelo caminho.
+test('H6e1: a aprovacao grava o hash da ultima ronda em revisadosHash; sem ele, a marca antiga sai', () => {
+  comTmp((tmp) => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
+    const hashesDe = () => JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'h1.json'), 'utf8')).revisadosHash;
+    const comHash = function (n, hash) {
+      const arq = path.join(cwd, '.claude', 'sworn', 'revisao', String(n), 'mapa.json');
+      const m = JSON.parse(fs.readFileSync(arq, 'utf8'));
+      if (hash !== undefined) m.hashDoTrabalho = hash;
+      fs.writeFileSync(arq, JSON.stringify(m), 'utf8');
+    };
+    try {
+      for (const [n, hash] of [[1, 'h-da-ronda-1'], [2, 'h-da-ronda-2']]) {
+        gravarMapa(cwd, n, { A: 'trabalho', B: 'HEAD' });
+        comHash(n, hash);
+        gravarRonda(cwd, n, [{ lente: 'correcao', melhor: 'A', achados: [] }]);
+      }
+      const r = rodar(['--sessao', 'h1'], cwd, tmp);
+      assert.strictEqual(r.status, 0, r.stdout);
+      assert.match(String(r.json.motivo), /aprovado/);
+      assert.deepStrictEqual(hashesDe(), { [path.resolve(cwd, 'src/a.js')]: 'h-da-ronda-2' }, 'o hash e o da ultima ronda');
+      // revisao nova do mesmo arquivo: a ronda 1 tem a marca e a ultima nao; vale a ultima, entao nenhuma marca fica
+      // (nem a antiga, nem a da ronda 1) e o arquivo segue aprovado pelo caminho
+      fs.rmSync(path.join(cwd, '.claude', 'sworn', 'revisao'), { recursive: true, force: true });
+      for (const n of [1, 2]) {
+        gravarMapa(cwd, n, { A: 'trabalho', B: 'HEAD' });
+        if (n === 1) comHash(n, 'h-da-ronda-1-nova');
+        gravarRonda(cwd, n, [{ lente: 'correcao', melhor: 'A', achados: [] }]);
+      }
+      const r2 = rodar(['--sessao', 'h1'], cwd, tmp);
+      assert.match(String(r2.json.motivo), /aprovado/, r2.stdout);
+      assert.deepStrictEqual(hashesDe(), {}, 'sem a marca na ultima ronda, nenhuma marca fica (nem a antiga, nem a da ronda 1)');
+      assert.deepStrictEqual(aprovadosDe(tmp, 'h1'), [path.resolve(cwd, 'src/a.js')], 'sem a marca, segue aprovado pelo caminho');
+    } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+  });
+});
+
 test('091 #1: revisao aprovada grava o arquivo em revisadosAprovados; o teto nao grava', () => {
   comTmp((tmp) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-repo-'));
@@ -237,6 +275,10 @@ test('091 #1: revisao aprovada grava o arquivo em revisadosAprovados; o teto nao
     try {
       for (const n of [1, 2, 3]) {
         gravarMapa(cwd, n, { A: 'trabalho', B: 'HEAD' });
+        // H6e1: com a marca de hash em cada ronda, o teto tambem nao pode grava-la
+        const arqMapa = path.join(cwd, '.claude', 'sworn', 'revisao', String(n), 'mapa.json');
+        fs.writeFileSync(arqMapa, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(arqMapa, 'utf8')),
+          { hashDoTrabalho: 'h-teto-' + n })), 'utf8');
         gravarRonda(cwd, n, [{ lente: 'correcao', melhor: 'B',
           achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'A.txt', linha: n * 10, descricao: 'quebra ' + n }] }]);
       }
@@ -245,6 +287,10 @@ test('091 #1: revisao aprovada grava o arquivo em revisadosAprovados; o teto nao
       assert.strictEqual(r.json.encerrar, true, 'o teto tinha de encerrar: ' + r.stdout);
       assert.doesNotMatch(String(r.json.motivo), /aprovado/);
       assert.strictEqual(aprovadosDe(tmp, 'ap2'), undefined, 'o teto gravou aprovado');
+      let hashDoTeto;
+      try { hashDoTeto = JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', 'ap2.json'), 'utf8')).revisadosHash; }
+      catch (e) { hashDoTeto = undefined; }
+      assert.strictEqual(hashDoTeto, undefined, 'o teto gravou a marca de hash');
     } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
   });
 });
@@ -1819,8 +1865,8 @@ function gravarLado(cwd, n, rotulo, linhas) {
 const QUARENTA = Array.from({ length: 40 }, (_, i) => 'linha ' + (i + 1));
 const p1Em = (lente, arquivo, linha, trecho) => ({ lente: lente, melhor: 'B', achados: [{ estado: 'confirmado',
   severidade: 'P1', arquivo: arquivo, linha: linha, trecho: trecho, descricao: 'quebra na linha ' + linha }] });
-const SUFIXO_DO_REGISTRO = (n) => '; ha ' + n + ' achado(s) em "registros" (melhoria, linha nova ou fora da ' +
-  'mudanca): copie-os para o registro do plano';
+const SUFIXO_DO_REGISTRO = (n) => '; ha ' + n + ' achado(s) em "registros" (melhoria, linha nova, fora da mudanca ou ' +
+  'descartado antes): copie-os para o registro do plano';
 const estadoDe = (tmp, sessao) => JSON.parse(fs.readFileSync(path.join(tmp, 'sworn', sessao + '.json'), 'utf8'));
 
 test('F2a (D828.2): pelo CLI, o P2 de melhoria sai em registros, nao molha, e o motivo do fecho diz quantos sao', () => {
@@ -2281,11 +2327,12 @@ function tetoComSeguraram(cwd, tmp) {
   const fechada = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
   return { r: r, fechada: fechada };
 }
-function gravarConferencia(cwd, abertos, respostas, ladoA) {
+function gravarConferencia(cwd, abertos, respostas, ladoA, hash) {
   const dir = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', '4');
   fs.mkdirSync(path.join(dir, 'vereditos'), { recursive: true });
-  fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify({ arquivo: 'src/a.js', mapa: { A: 'trabalho', B: 'HEAD' },
-    conferencia: { abertos: abertos, lentes: ['correcao'] } }), 'utf8');
+  const m = { arquivo: 'src/a.js', mapa: { A: 'trabalho', B: 'HEAD' }, conferencia: { abertos: abertos, lentes: ['correcao'] } };
+  if (hash !== undefined) m.hashDoTrabalho = hash;
+  fs.writeFileSync(path.join(dir, 'mapa.json'), JSON.stringify(m), 'utf8');
   fs.writeFileSync(path.join(dir, 'A.txt'), ladoA || 'x\n', 'utf8');
   if (respostas) {
     fs.writeFileSync(path.join(dir, 'vereditos', 'correcao.json'),
@@ -2322,6 +2369,98 @@ test('L3-s105-6: o teto guarda o que segurou ronda, e a conferencia com tudo cor
     assert.strictEqual(fecho.aprovado, true);
     assert.strictEqual(fecho.seguraram, undefined);
   });
+});
+
+// H6e4 (15.0, §5.6): o fecho grava o que cada lente achou e virou conserto, refutacao, descarte ou aberto
+test('H6e4: o fechada.json leva porLente no teto, na conferencia e na aprovacao', () => {
+  comTmp((tmp) => {
+    const cwd = comum.repo(comum.pasta('apurar-porlente'), { 'src/a.js': 'um\n' });
+    const t = tetoComSeguraram(cwd, tmp);
+    assert.deepStrictEqual(t.fechada.porLente, { correcao: { corrigidos: 2, refutados: 0, descartados: 0, abertos: 1 } },
+      'no teto, o P1 novo da ronda 3 segue aberto e os das rondas 1 e 2 foram corrigidos: ' + JSON.stringify(t.fechada));
+    const abertos = t.fechada.seguraram.map((a, i) => Object.assign({ id: i + 1 }, a));
+    const respostas = abertos.map((a) => ({ id: a.id, corrigido: true }));
+    respostas[2] = { id: 3, corrigido: false, linha: 2, trecho: 'ainda quebra' };
+    gravarConferencia(cwd, abertos, respostas, 'linha um\nainda quebra aqui\nlinha tres\n');
+    const conf = rodar(['--sessao', 'pl', '--arquivo', 'src/a.js'], cwd, tmp);
+    assert.strictEqual(conf.json.aprovado, false, conf.stdout);
+    const fecho = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+    assert.deepStrictEqual(fecho.porLente, { correcao: { corrigidos: 2, refutados: 0, descartados: 0, abertos: 1 } },
+      'na conferencia, o que segue fica aberto: ' + JSON.stringify(fecho));
+  });
+  comRepo((cwd, tmp) => {
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [P1_NOVO]);
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [SECO]);
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 3, [SECO]);
+    const r = rodar(['--sessao', 'pla'], cwd, tmp);
+    assert.strictEqual(r.json.aprovado, true, r.stdout);
+    const fecho = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+    assert.deepStrictEqual(fecho.porLente, { correcao: { corrigidos: 1, refutados: 0, descartados: 0, abertos: 0 } }, r.stdout);
+  });
+  // o refutado na fonte conta como refutado, nunca como corrigido
+  comRepo((cwd, tmp) => {
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [P1_NOVO]);
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [SECO]);
+    fs.writeFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'refutados.json'),
+      JSON.stringify([{ ronda: 1, lente: 'correcao', arquivo: 'A.txt', linha: 3, severidade: 'P1', prova: 'a suite passa',
+        comando: 'node --test' }]), 'utf8');
+    const r = rodar(['--sessao', 'plr'], cwd, tmp);
+    assert.strictEqual(r.json.aprovado, true, r.stdout);
+    const fecho = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+    assert.deepStrictEqual(fecho.porLente, { correcao: { corrigidos: 0, refutados: 1, descartados: 0, abertos: 0 } }, r.stdout);
+  });
+  // sem achado nenhum, a medida existe e e vazia: o fecho conta como revisao medida, nao como semMedida
+  comRepo((cwd, tmp) => {
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]);
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [SECO]);
+    const r = rodar(['--sessao', 'plv'], cwd, tmp);
+    assert.strictEqual(r.json.aprovado, true, r.stdout);
+    const fecho = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+    assert.deepStrictEqual(fecho.porLente, {}, r.stdout);
+  });
+});
+
+test('H6e4: se a medida por lente lancar, o fechada.json ainda e gravado, sem porLente, e o stderr avisa', () => {
+  comRepo((cwd, tmp) => {
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [SECO]);
+    gravarNaBase(cwd, 'src__a.js', 'src/a.js', 2, [SECO]);
+    const lib = path.join(__dirname, '..', 'scripts', 'lib', 'aproveitamento.js').split(path.sep).join('/');
+    const preload = path.join(tmp, 'medida-quebra.js');
+    fs.writeFileSync(preload, 'require(' + JSON.stringify(lib) + ').daApuracao = function () { ' +
+      "throw new Error('medida quebrada simulada'); };\n", 'utf8');
+    const env = ambienteDoApurador(tmp, { NODE_OPTIONS: '--require "' + preload.split(path.sep).join('/') + '"' });
+    const r = apuradorPorProcesso(['--sessao', 'medida'], cwd, env);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.strictEqual(JSON.parse(r.stdout).aprovado, true, r.stdout);
+    assert.match(r.stderr, /aproveitamento por lente nao foi medido.*medida quebrada simulada/, r.stderr);
+    const fecho = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', 'fechada.json'), 'utf8'));
+    assert.strictEqual(fecho.aprovado, true, JSON.stringify(fecho));
+    assert.strictEqual(fecho.porLente, undefined, 'sem a medida, o fecho entra no semMedida do somar');
+    assert.strictEqual(contadorDe(tmp, 'medida'), 1, 'o fecho foi contado uma vez');
+  });
+});
+
+// H6e1 (15.0): a conferencia julga o arquivo ja consertado depois do teto; a aprovacao dela fica presa ao hash DELA,
+// nao ao da ronda 3 (que julgou o arquivo de antes do conserto e o devolveria a pendente na hora)
+test('H6e1: a aprovacao pela conferencia grava o hash da conferencia, e sem ele a marca da ronda do teto nao entra', () => {
+  for (const [hashConf, esperado] of [['h-conf', 'h-conf'], [undefined, undefined]]) {
+    comTmp((tmp) => {
+      const cwd = comum.repo(comum.pasta('apurar-conf-hash'), { 'src/a.js': 'um\n' });
+      const t = tetoComSeguraram(cwd, tmp);
+      const m3 = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js', '3', 'mapa.json');
+      fs.writeFileSync(m3, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(m3, 'utf8')), { hashDoTrabalho: 'h-teto' })), 'utf8');
+      const abertos = t.fechada.seguraram.map((a, i) => Object.assign({ id: i + 1 }, a));
+      gravarConferencia(cwd, abertos, abertos.map((a) => ({ id: a.id, corrigido: true })), undefined, hashConf);
+      const c = rodar(['--sessao', 'confh', '--arquivo', 'src/a.js'], cwd, tmp);
+      assert.strictEqual(c.json.aprovado, true, c.stdout);
+      // sem hash na conferencia, vale o caminho (a transicao), nunca o hash da ronda do teto
+      const abs = path.resolve(cwd, 'src/a.js');
+      const caso = hashConf === undefined ? 'conferencia sem hash' : 'conferencia com hash ' + hashConf;
+      assert.strictEqual((estadoDe(tmp, 'confh').revisadosHash || {})[abs], esperado,
+        caso + ': a marca devia ser ' + String(esperado) + ' (nunca a h-teto da ronda 3)');
+      assert.deepStrictEqual(estadoDe(tmp, 'confh').revisadosAprovados, [abs], caso + ': o caminho tinha de ficar aprovado');
+    });
+  }
 });
 
 test('L3-s105-6: na conferencia, o achado que segue aberto (com o trecho no lado novo) nao aprova e fica no fechada.json', () => {
@@ -2408,5 +2547,138 @@ test('L3-s105-6: a conferencia sem o fecho no teto, ou sem achado a conferir, e 
     assert.strictEqual(deg.status, 0, deg.stdout);
     assert.strictEqual(deg.json.aprovado, true, deg.stdout);
     assert.match(deg.json.motivo, /^DEGRADADO: sem isolamento\. conferencia depois do teto/);
+  });
+});
+
+// H6e2 (D898): na ronda preparada na 0.87.0 (mapa.json com hashDoTrabalho), refutar um P0/P1 do lado do trabalho exige
+// a resposta "refutado" do sworn:refuter em <base>/refutacoes/; inconclusivo e confirmado deixam o achado (RA7)
+test('H6e2: pelo CLI, a refutacao de P1 do trabalho so vale com a resposta "refutado" do refutador; ronda antiga e lado HEAD nao exigem', () => {
+  comRepo((cwd, tmp) => {
+    const base = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js');
+    const comMarca = (marca, achado) => {
+      gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [achado || P1_NOVO]);
+      if (marca) {
+        const m = path.join(base, '1', 'mapa.json');
+        fs.writeFileSync(m, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(m, 'utf8')), { hashDoTrabalho: 'h1' })), 'utf8');
+      }
+    };
+    fs.mkdirSync(path.join(cwd, 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'lib', 'guarda.js'), 'um\ndois\nif (!nome) return null;\nquatro\n', 'utf8');
+    const refutar = (arquivo) => fs.writeFileSync(path.join(base, 'refutados.json'), JSON.stringify([{ ronda: 1, lente: 'correcao',
+      arquivo: arquivo || 'A.txt', linha: 3, severidade: 'P1', prova: 'lib/guarda.js:3', simbolo: 'if (!nome)' }]), 'utf8');
+    const resposta = (conteudo) => {
+      fs.mkdirSync(path.join(base, 'refutacoes'), { recursive: true });
+      fs.writeFileSync(path.join(base, 'refutacoes', 'r1-correcao-A-3-P1.json'),
+        typeof conteudo === 'string' ? conteudo : JSON.stringify(conteudo), 'utf8');
+    };
+    const doRefutador = (extra) => Object.assign({ refutacoes: path.join(base, 'refutacoes'), ronda: 1, lente: 'correcao',
+      arquivo: 'A.txt', linha: 3, severidade: 'P1', veredito: 'refutado', prova: 'lib/guarda.js:3 guarda o null' }, extra || {});
+    const apurar = () => rodar(['--sessao', 'rf', '--arquivo', 'src/a.js'], cwd, tmp);
+
+    comMarca(true);
+    refutar();
+    let r = apurar();
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.match(r.stdout, /ERRO: a refutacao do P1 da ronda 1, lente correcao, A\.txt:3 nao tem a resposta do refutador \(refutacoes\/r1-correcao-A-3-P1\.json\)/);
+    assert.match(r.stdout, /despache-o com esse achado/);
+    assert.match(r.stdout, /a resposta do refutador, em .+\/refutacoes\/ \(o gancho a grava\)/);
+    for (const [conteudo, erro] of [
+      [doRefutador({ veredito: 'inconclusivo' }), /o refutador respondeu "inconclusivo" .+: o achado fica \(RA7\)/],
+      [doRefutador({ veredito: 'confirmado' }), /o refutador respondeu "confirmado" .+: o achado fica \(RA7\)/],
+      [doRefutador({ prova: '' }), /esta fora da forma \(falta "prova"/],
+      [doRefutador({ linha: 4 }), /e de outro achado \(ela diz r1-correcao-A-4-P1\.json\)/],
+      ['{ nao e json', /nao se le/]]) {
+      resposta(conteudo);
+      r = apurar();
+      assert.strictEqual(r.status, 1, r.stdout);
+      assert.match(r.stdout, erro, r.stdout);
+    }
+    resposta(doRefutador());
+    r = apurar();
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.deepStrictEqual(r.json.achadosNovosP0P1, [], r.stdout);
+    // a ronda antiga (sem hashDoTrabalho) e a refutacao do lado HEAD seguem sem o refutador
+    fs.renameSync(path.join(base, 'refutacoes'), path.join(cwd, 'refutacoes-fora'));
+    comMarca(false);
+    r = apurar();
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.doesNotMatch(r.stdout, /refutador/);
+    comMarca(true, { lente: 'correcao', melhor: 'A',
+      achados: [{ estado: 'confirmado', trecho: 'x', severidade: 'P1', arquivo: 'B.txt', linha: 3, descricao: 'quebra' }] });
+    refutar('B.txt');
+    r = apurar();
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.deepStrictEqual(r.json.achadosNovosP0P1, [], r.stdout);
+    assert.doesNotMatch(r.stdout, /refutador/, r.stdout);
+  });
+});
+
+// H6e3 (D900): o P2 refutado numa revisao fechada vem em <base>/1/herdados.json (o preparar o grava ao arquivar); a
+// mesma lente sobre a mesma janela do lado do trabalho vai a registros como "descartado antes" e nao molha a ronda
+test('H6e3: pelo CLI, o P2 herdado vira "descartado antes"; P1, outra janela, outra lente e prova que nao confere seguram; herdados.json torto para', () => {
+  comRepo((cwd, tmp) => {
+    const base = path.join(cwd, '.claude', 'sworn', 'revisao', 'src__a.js');
+    const SEIS = ['l1', 'l2', 'l3', 'l4', 'l5', 'l6'];
+    // a lente e do veredito, nao do achado: o extra.lente escolhe o veredito e sai do achado
+    const achado = (extra) => ({ lente: (extra && extra.lente) || 'correcao', melhor: 'A', achados: [Object.assign({
+      estado: 'confirmado', trecho: 'l3', severidade: 'P2', tipo: 'erro', arquivo: 'A.txt', linha: 3, descricao: 'defeito' },
+    extra || {}, { lente: undefined })] });
+    const ronda = (v, linhasA) => {
+      fs.rmSync(path.join(base, '1', 'vereditos'), { recursive: true, force: true }); // so o veredito desta volta
+      gravarNaBase(cwd, 'src__a.js', 'src/a.js', 1, [v]);
+      fs.writeFileSync(path.join(base, '1', 'A.txt'), (linhasA || SEIS).join('\n') + '\n', 'utf8');
+    };
+    const grava = (texto) => fs.writeFileSync(path.join(base, '1', 'herdados.json'), texto, 'utf8');
+    const herda = (extra) => grava(JSON.stringify([Object.assign({ lente: 'correcao', severidade: 'P2',
+      janela: 'l1\nl2\nl3\nl4\nl5', prova: 'fica assim', foraDoPedido: 'fora do pedido',
+      origem: '.claude/sworn/revisao-fechada/src__a.js/x, ronda 1' }, extra || {})]));
+    const apurar = () => rodar(['--sessao', 'hd', '--arquivo', 'src/a.js'], cwd, tmp);
+    // o arquivo que a prova por simbolo cita existe desde o comeco: o caso "prova que nao confere" e o do simbolo
+    // que nao esta nele, nao o do arquivo que falta
+    fs.mkdirSync(path.join(cwd, 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'lib', 'guarda.js'), 'if (!nome) return null;\n', 'utf8');
+
+    ronda(achado());
+    herda();
+    let r = apurar();
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.deepStrictEqual(r.json.achadosNovosP0P1, [], r.stdout);
+    assert.strictEqual(r.json.rondasSecas, 1, r.stdout);
+    assert.deepStrictEqual(r.json.registros.map((x) => [x.registro, x.linha, x.descartadoAntes]), [['descartado antes', 3,
+      { prova: 'fica assim', origem: '.claude/sworn/revisao-fechada/src__a.js/x, ronda 1' }]], r.stdout);
+    for (const [v, linhasA, extra, porque] of [
+      // o herdado e P2 (so o P2 herda) e o achar casa so lente e janela: quem barra o P1 e o portao do veredito
+      [achado({ severidade: 'P1', tipo: undefined }), null, null, 'o P1 nao herda'],
+      [achado(), ['l1', 'l2', 'l3', 'l4', 'MUDOU', 'l6'], null, 'a janela mudou'],
+      [achado({ lente: 'borda' }), null, null, 'outra lente'],
+      // sem foraDoPedido nem comando, a prova precisa conferir no repositorio: lib/guarda.js nao tem o simbolo
+      [achado(), null, { foraDoPedido: undefined, prova: 'lib/guarda.js:1', simbolo: 'nao esta la' }, 'prova que nao confere'],
+      // a lista vazia e forma certa: nao herda nada, e o P2 segura
+      [achado(), null, [], 'herdados.json vazio']]) {
+      ronda(v, linhasA);
+      if (Array.isArray(extra)) grava(JSON.stringify(extra)); else herda(extra);
+      r = apurar();
+      assert.strictEqual(r.status, 0, porque + ': ' + r.stdout);
+      assert.strictEqual(r.json.achadosNovosP0P1.length, 1, porque + ': ' + r.stdout);
+      assert.strictEqual(r.json.rondasSecas, 0, porque);
+    }
+    // a mesma prova por simbolo, com o simbolo no arquivo citado, herda
+    ronda(achado());
+    herda({ foraDoPedido: undefined, prova: 'lib/guarda.js:1', simbolo: 'if (!nome)' });
+    r = apurar();
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.deepStrictEqual(r.json.achadosNovosP0P1, [], r.stdout);
+    // o JSON que nao se le; a entrada completa com a lente do pedido (escopo e lente conhecida, mas o pedido muda a cada
+    // tarefa e nao herda: o preparar nunca a grava); o objeto no lugar da lista
+    for (const [conteudo, erro] of [['{ torto', /herdados\.json \(/],
+      [JSON.stringify([{ lente: 'escopo', severidade: 'P2', janela: 'l1\nl2\nl3\nl4\nl5', prova: 'fica assim',
+        foraDoPedido: 'fora do pedido', origem: 'x, ronda 1' }]), /posicao 1/], ['{}', /nao e uma lista/]]) {
+      grava(conteudo);
+      r = apurar();
+      assert.strictEqual(r.status, 1, r.stdout);
+      assert.match(r.stdout, /ERRO: \.claude\/sworn\/revisao\/src__a\.js\/1\/herdados\.json \(/, r.stdout);
+      assert.match(r.stdout, erro, r.stdout);
+      assert.match(r.stdout, /apague o arquivo para revisar sem os descartes herdados/, r.stdout);
+    }
   });
 });

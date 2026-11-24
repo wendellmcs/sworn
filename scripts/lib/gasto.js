@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { PRECOS } = require('./calibracao.js');
+const { precoDaChamada } = require('./calibracao.js');
 
 // Pedido 31 (plano dos pedidos 30-32, Tarefa 3; D520): o gasto do mes, separado do da sessao. Duas fontes:
 // (1) o cost.usd real de cada sessao com o mod carregado, que o mod soma no $.store (conta inteira) e manda ao
@@ -40,7 +40,8 @@ function custoDoTexto(texto, desdeMs) {
     if (temId && vistos.has(m.id)) continue;
     if (temId) vistos.add(m.id);
     if (!(Date.parse(o.timestamp) >= desdeMs)) continue;
-    const p = PRECOS[m.model];
+    // Pendencia #20: o preco da chamada, como no custo-da-sessao.js (sufixo de data, faixa por prompt, nome herdado)
+    const p = precoDaChamada(m.model, m.usage);
     if (!p) { semPreco++; continue; }
     const u = m.usage;
     const escrita = u.cache_creation_input_tokens || 0;

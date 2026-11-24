@@ -86,7 +86,8 @@ test('fiacao: auditar.js enxerga uma skill real e devolve exatamente as chaves d
       // D706 (escada T5): efetivo, o modelo e o esforco que os subagentes de fato usaram.
       // F4b: pesoEmTokens, o peso em tokens estimados (projeto, skills do plugin, injetado).
       // H9-3: mcpForaDoProjeto, os servidores MCP do usuario e do local que o .mcp.json nao mostra.
-      ['contradicoes', 'delegaveis', 'doPlugin', 'efetivo', 'foraDaRubrica', 'idadeDasRegras', 'injetado', 'mcpForaDoProjeto',
+      // H6e4: aproveitamento, quanto cada lente da revisao rende (o porLente dos fechada.json).
+      ['aproveitamento', 'contradicoes', 'delegaveis', 'doPlugin', 'efetivo', 'foraDaRubrica', 'idadeDasRegras', 'injetado', 'mcpForaDoProjeto',
         'memoria', 'memorias', 'peso', 'pesoEmTokens', 'regras', 'skills', 'sobreposicoes'],
       'as chaves do relatorio mudaram: ' + Object.keys(saida).join(', '));
     // lerSkills() achou a skill, e instrucoes.contar() contou os itens dela.
@@ -2540,10 +2541,16 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
       ['SubagentHandback', 'gravar-veredito.js 10'],
       ['SubagentHandback', 'escalar.js 10']
     ],
+    // H6a (D891): o recibo da rodada de teste que falhou (o codigo diferente de 0 so dispara este evento)
+    PostToolUseFailure: [['Bash|PowerShell', 'recibo-da-prova.js 10']],
     SubagentStart: [['', 'abrir-subagente.js 10', 'escalar.js 10']],
-    SubagentStop: [['^sworn:inspector$', 'gravar-veredito.js 10'], ['', 'escalar.js 10']],
+    SubagentStop: [['^sworn:(inspector|refuter)$', 'gravar-veredito.js 10'], ['', 'escalar.js 10']],
     // D794: o fecho pode rodar a prova de pronto (teto de 60 s) no projeto que o dono ligou
     Stop: [['', 'portao-fecho.js 90']],
+    // H6i (D905): o subagente encerrado no limite de uso sobe o degrau (o SubagentStop dele nao dispara)
+    StopFailure: [['rate_limit', 'escalar.js 10']],
+    // H6a2 (D892): as secoes mecanicas do handoff da sessao se refazem logo antes da compactacao
+    PreCompact: [['', 'antes-do-compact.js 15']],
     SessionEnd: [['', 'fim-sessao.js 10']]
   });
 });

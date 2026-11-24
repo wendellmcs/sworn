@@ -138,6 +138,11 @@ function tocadosDoCommit(s, raiz) {
 /** O portao do commit: o motivo da negacao, ou null quando o commit passa. Grava no estado da sessao: a recusa da
  *  ordem de revisar (marca sem-revisao), o contador commit_sem_revisao e a ordem dada; chamar duas vezes conta duas. */
 function portaoDoCommit(e, comando, cwd, raiz, projeto) {
+  // H6c (D895): o segredo no que o commit leva, antes de tudo; a marca sem-revisao dispensa a revisao, nao isto.
+  if (projeto && projeto.portaoCommit !== false && projeto.segredoNoCommit !== false) {
+    const segredo = require('./lib/segredo-commit.js').motivo(comando, e.tool_name, cwd);
+    if (segredo) return segredo;
+  }
   // `"portaoCommit": false` desliga o portao inteiro (a cobranca da suite e o cartao do push tambem).
   if (projeto && projeto.portaoCommit !== false && projeto.provaPorArquivoTocado === true) {
     const falta = suiteAntesDoCommit(e, projeto, raiz);
@@ -155,7 +160,7 @@ function portaoDoCommit(e, comando, cwd, raiz, projeto) {
   const lista = commit.pendentes(tocadosDoCommit(s, raiz), s.revisadosAprovados, raiz,
     commit.topo(pasta ? path.resolve(cwd, pasta) : cwd),
     function (rel) { return design.ehArquivoDeEstilo(rel, projeto); },
-    require('./lib/atalhos.js').marcas(projeto), s.revisadosNoTeto);
+    require('./lib/atalhos.js').marcas(projeto), s.revisadosNoTeto, s.revisadosHash);
   if (!lista.length) return null;
   // D844: o git que nao respondeu no prazo nega com o motivo dele; nao e commit sem revisao nem ordem de revisar.
   if (lista.some(function (p) { return p.semResposta === true; })) return commit.motivoSemResposta(lista);

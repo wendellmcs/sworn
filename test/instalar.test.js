@@ -302,7 +302,7 @@ test('instalar: Codex, Qwen e OpenCode ganham os agentes do sworn como sworn-<pa
   // O leitor roda comando: no OpenCode, so a escrita e a edicao ficam negadas.
   assert.ok(lerTexto(p.projeto, '.opencode', 'agent', 'sworn-reader.md').includes(
     '\ntools:\n  write: false\n  edit: false\n---\n'));
-  for (const nome of ['inspector', 'dedupe-judge', 'reader']) {
+  for (const nome of ['inspector', 'dedupe-judge', 'refuter', 'reader']) {
     for (const arq of [path.join(p.projeto, '.codex', 'agents', 'sworn-' + nome + '.toml'),
       path.join(p.projeto, '.qwen', 'agents', 'sworn-' + nome + '.md'),
       path.join(p.projeto, '.opencode', 'agent', 'sworn-' + nome + '.md')]) assert.ok(gravados.includes(arq), arq);

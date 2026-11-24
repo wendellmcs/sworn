@@ -50,7 +50,7 @@ if (!dados || Object.keys(dados).length === 0) {
 // o portao-destrutivo.js e o conferir-depois.js (`travas.destrutivo`) e o portao-escopo.js (`travas.outraFrente`).
 // A chave `escopo` nao tem leitor de proposito (D104: o mesmo portao guarda os intocaveis), e nao entra aqui.
 const TRAVA_DO_CONTADOR = {
-  fecho_sem_evidencia: 'fecho', subitem_pendente: 'fecho',
+  fecho_sem_evidencia: 'fecho', subitem_pendente: 'fecho', teste_sem_vermelho: 'fecho',
   comando_destrutivo: 'destrutivo', shell_idioma_errado: 'destrutivo', armadilha_shell: 'destrutivo',
   codigo_do_estudo: 'destrutivo', cd_solto: 'destrutivo', restaurou_fora_do_escopo: 'destrutivo',
   outra_frente: 'outraFrente'

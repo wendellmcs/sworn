@@ -744,8 +744,12 @@ test('fiacao: o hooks.json liga o gravar-veredito no SubagentStop (inspetor) e n
 
   const gs = (hooks.SubagentStop || []).filter(chama);
   assert.strictEqual(gs.length, 1, 'SubagentStop sem o gravar-veredito, ou com ele duas vezes');
-  assert.strictEqual(gs[0].matcher, '^sworn:inspector$');
+  // H6e2 (D898): o mesmo gancho grava a resposta do refutador
+  assert.strictEqual(gs[0].matcher, '^sworn:(inspector|refuter)$');
   assert.ok(new RegExp(gs[0].matcher).test('sworn:inspector'));
+  assert.ok(new RegExp(gs[0].matcher).test('sworn:refuter'));
+  assert.ok(!new RegExp(gs[0].matcher).test('sworn:inspector-x'));
+  assert.ok(!new RegExp(gs[0].matcher).test('sworn:reader'));
   assert.ok(!new RegExp(gs[0].matcher).test('meu-sworn:inspector'));
 
   const gp = (hooks.PostToolUse || []).filter(chama);
@@ -1067,5 +1071,134 @@ test('L3-s105-6: gravar-veredito grava a resposta da conferencia so na ronda de 
     assert.deepStrictEqual(arquivosEm(p), []);
     calado(rodar(p, stop(p, JSON.stringify(resposta))));
     assert.deepStrictEqual(lerVeredito(p, 'correcao'), resposta);
+  } finally { limpar(p); }
+});
+
+// H6e2 (D898): a resposta do sworn:refuter vai para <base>/refutacoes/<nome>, pelo mesmo gancho; o nome sai dos
+// campos do achado, a pasta so vale na base de um arquivo deste projeto com a ronda do achado, e nada se sobrescreve
+function refutacao(p, extra) {
+  return Object.assign({
+    refutacoes: path.join(p.dir, '.claude', 'sworn', 'revisao', 'src__a.js', 'refutacoes'),
+    ronda: 1, lente: 'correcao', arquivo: 'B.txt', linha: 3, severidade: 'P1',
+    veredito: 'refutado', prova: 'src/a.js:3 guarda o null antes', porQue: 'a guarda vem antes da linha'
+  }, extra || {});
+}
+
+function avisouRefutador(r, causa) {
+  semBarrar(r);
+  assert.ok(r.json && typeof r.json.systemMessage === 'string', 'nao gravou e nao avisou: ' + r.stdout);
+  const m = r.json.systemMessage;
+  assert.match(m, /^sworn: nao gravei a resposta do refutador: /, m);
+  assert.ok(!/grave esta lente a mao/i.test(m), 'o refutador nao e lente: ' + m);
+  assert.ok(causa.test(m), String(causa) + ' fora de: ' + m);
+}
+
+function pastaRefutacoes(p) { return path.join(p.dir, '.claude', 'sworn', 'revisao', 'src__a.js', 'refutacoes'); }
+
+test('H6e2: o handback do refutador grava refutacoes/r1-correcao-B-3-P1.json, calado, e a mesma resposta de novo fica calada', () => {
+  const p = projeto();
+  try {
+    const resp = refutacao(p);
+    calado(rodar(p, handback(p, '```json\n' + JSON.stringify(resp) + '\n```', { agent_type: 'sworn:refuter' })));
+    const arq = path.join(pastaRefutacoes(p), 'r1-correcao-B-3-P1.json');
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(arq, 'utf8')), resp);
+    assert.deepStrictEqual(arquivosEm(p), [], 'a resposta do refutador nao e veredito de lente');
+    // o SubagentStop do mesmo agente, depois do handback, nao avisa de novo
+    calado(rodar(p, stop(p, 'pronto', { agent_type: 'sworn:refuter' })));
+    // outro agente com a mesma resposta: o arquivo igual fica, calado
+    calado(rodar(p, stop(p, JSON.stringify(resp), { agent_type: 'sworn:refuter', agent_id: 'outro1' })));
+    // a 2a passada e outro nome
+    calado(rodar(p, stop(p, JSON.stringify(refutacao(p, { passada: 2 })), { agent_type: 'sworn:refuter', agent_id: 'outro2' })));
+    assert.ok(fs.existsSync(path.join(pastaRefutacoes(p), 'r1-correcao-B-3-P1-p2.json')));
+    // outro conteudo para o mesmo achado: nao sobrescreve
+    const r = rodar(p, stop(p, JSON.stringify(refutacao(p, { veredito: 'inconclusivo' })), { agent_type: 'sworn:refuter', agent_id: 'outro3' }));
+    avisouRefutador(r, /ja existe .+r1-correcao-B-3-P1\.json com outro conteudo; nao sobrescrevi/);
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(arq, 'utf8')), resp);
+  } finally { limpar(p); }
+});
+
+test('H6e2: a resposta do refutador fora da forma, fora da base ou sem a ronda nao se grava, e o aviso manda despachar de novo', () => {
+  const p = projeto();
+  try {
+    const casos = [
+      [refutacao(p, { veredito: 'talvez' }), /"veredito" tem de ser confirmado, refutado ou inconclusivo/],
+      [refutacao(p, { prova: 'a guarda vem antes' }), /o "refutado" precisa citar na "prova" o arquivo:linha/],
+      [refutacao(p, { prova: '' }), /falta "prova"/],
+      [refutacao(p, { severidade: 'P2' }), /o achado nao esta na forma/],
+      [refutacao(p, { arquivo: 'src/a.js' }), /o achado nao esta na forma/],
+      [refutacao(p, { linha: 0 }), /o achado nao esta na forma/],
+      [refutacao(p, { passada: 3 }), /o achado nao esta na forma/],
+      [refutacao(p, { lente: 'inventada' }), /o achado nao esta na forma/],
+      [refutacao(p, { refutacoes: '' }), /falta "refutacoes"/],
+      [refutacao(p, { refutacoes: path.join(p.dir, '.claude', 'sworn', 'revisao', 'src__a.js', 'outra') }), /nao e a pasta refutacoes de uma base/],
+      [refutacao(p, { refutacoes: path.join(p.dir, '.claude', 'sworn', 'revisao', 'src__a.js', '1', 'refutacoes') }), /nao e a pasta refutacoes de uma base/],
+      [refutacao(p, { ronda: 2 }), /nao tem a ronda 2 \(a pasta com A\.txt e B\.txt\)/],
+      [refutacao(p, { refutacoes: path.join(p.dir, '.claude', 'sworn', 'revisao', 'src__b.js', 'refutacoes') }), /nao tem a ronda 1/]
+    ];
+    for (const [resp, causa] of casos) {
+      const r = rodar(p, stop(p, JSON.stringify(resp), { agent_type: 'sworn:refuter', agent_id: 'x' + Math.random().toString(36).slice(2) }));
+      avisouRefutador(r, causa);
+      assert.match(r.json.systemMessage, /despache o sworn:refuter de novo com o achado \(skill review, Passo 3\)\.$/);
+    }
+    assert.ok(!fs.existsSync(pastaRefutacoes(p)) || fs.readdirSync(pastaRefutacoes(p)).length === 0, 'gravou resposta recusada');
+    // fora da raiz do projeto: outra pasta temporaria com a mesma forma
+    const fora = projeto();
+    try {
+      const r = rodar(p, stop(p, JSON.stringify(refutacao(fora)), { agent_type: 'sworn:refuter', agent_id: 'fora1' }));
+      avisouRefutador(r, /fica fora da pasta do projeto/);
+      assert.ok(!fs.existsSync(pastaRefutacoes(fora)));
+    } finally { limpar(fora); }
+    avisouRefutador(rodar(p, stop(p, 'sem json nenhum', { agent_type: 'sworn:refuter', agent_id: 'semjson' })), /nao achei o JSON na resposta/);
+  } finally { limpar(p); }
+});
+
+test('H6e2: os avisos do refutador falam do refutador: marca que falha, excecao, arquivo que nao se le, pasta escrita de outro jeito', () => {
+  const p = projeto();
+  try {
+    // a mesma resposta com a pasta relativa (ou com \) e a mesma resposta: calado, sem "outro conteudo"
+    calado(rodar(p, stop(p, JSON.stringify(refutacao(p)), { agent_type: 'sworn:refuter', agent_id: 'abs' })));
+    calado(rodar(p, stop(p, JSON.stringify(refutacao(p, { refutacoes: '.claude/sworn/revisao/src__a.js/refutacoes' })),
+      { agent_type: 'sworn:refuter', agent_id: 'rel' })));
+    // o arquivo que ja esta la e nao se le: diz a causa e nao sobrescreve
+    const torto = path.join(pastaRefutacoes(p), 'r1-correcao-B-9-P1.json');
+    fs.writeFileSync(torto, '{ quebrado', 'utf8');
+    avisouRefutador(rodar(p, stop(p, JSON.stringify(refutacao(p, { linha: 9 })), { agent_type: 'sworn:refuter', agent_id: 'torto' })),
+      /ja existe .+r1-correcao-B-9-P1\.json e nao consegui le-lo \(SyntaxError: .+\); nao sobrescrevi\. Mova esse arquivo/);
+    assert.strictEqual(fs.readFileSync(torto, 'utf8'), '{ quebrado');
+    // excecao inesperada: o aviso e do refutador, sem lente nem "grave a mao"
+    const r = rodarComExcecao(p, stop(p, JSON.stringify(refutacao(p, { linha: 11 })), { agent_type: 'sworn:refuter', agent_id: 'exc' }));
+    avisouRefutador(r, /erro inesperado \(Error: falha de teste\)\. .+despache o sworn:refuter de novo/);
+  } finally { limpar(p); }
+  // a marca do handback nao se grava: o aviso fala do refutador, nao do inspetor nem de lente
+  const q = projeto();
+  try {
+    fs.mkdirSync(q.estado, { recursive: true });
+    fs.writeFileSync(path.join(q.estado, 'sworn'), 'x', 'utf8');
+    const r = rodar(q, handback(q, JSON.stringify(refutacao(q)), { agent_type: 'sworn:refuter' }));
+    semBarrar(r);
+    const m = r.json && r.json.systemMessage;
+    assert.ok(typeof m === 'string', 'gravou, a marca falhou e o hook ficou calado: ' + r.stdout);
+    assert.match(m, /^sworn: gravei a resposta do refutador em .+refutacoes\/r1-correcao-B-3-P1\.json\. Se, quando o refutador terminar/);
+    assert.ok(!/lente|inspetor|marca|subagente/.test(m), m);
+    const r2 = rodar(q, handback(q, 'sem json nenhum', { agent_type: 'sworn:refuter', agent_id: 'semjson' }));
+    assert.match(r2.json.systemMessage, /Este aviso pode se repetir quando o refutador terminar/);
+    assert.ok(!/inspetor/.test(r2.json.systemMessage), r2.json.systemMessage);
+  } finally { limpar(q); }
+});
+
+test('H6e2: a resposta de refutador vinda de um inspetor nao vai para refutacoes/, e o veredito de lente vindo do refutador nao vai para vereditos/', () => {
+  const p = projeto();
+  try {
+    // nos dois sentidos o gancho sai com 0 e avisa: a resposta trocada nunca some calada
+    const r1 = rodar(p, stop(p, JSON.stringify(refutacao(p))));
+    semBarrar(r1);
+    assert.ok(r1.json && typeof r1.json.systemMessage === 'string', 'o inspetor trocado ficou calado: ' + r1.stdout);
+    assert.ok(!/refutador/.test(r1.json.systemMessage), 'o aviso do inspetor fala do refutador: ' + r1.json.systemMessage);
+    assert.ok(!fs.existsSync(pastaRefutacoes(p)), 'o inspetor gravou uma refutacao');
+    avisouRefutador(rodar(p, stop(p, JSON.stringify(veredito(p)), { agent_type: 'sworn:refuter', agent_id: 'r2' })),
+      /resposta fora da forma \(falta "refutacoes"/);
+    assert.deepStrictEqual(arquivosEm(p), [], 'o refutador gravou um veredito de lente');
+    calado(rodar(p, stop(p, JSON.stringify(refutacao(p)), { agent_type: 'sworn:reader', agent_id: 'r3' })));
+    assert.ok(!fs.existsSync(pastaRefutacoes(p)), 'outro agente gravou uma refutacao');
   } finally { limpar(p); }
 });

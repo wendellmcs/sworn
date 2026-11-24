@@ -42,7 +42,7 @@ test('abrir-subagente: agente que escreve codigo recebe o bloco no formato JSON 
 
 test('abrir-subagente: os agentes que so leem nao recebem (saida vazia, exit 0)', () => {
   const cwd = pasta();
-  for (const tipo of ['sworn:inspector', 'sworn:dedupe-judge', 'sworn:reader', 'Explore', 'Plan']) {
+  for (const tipo of ['sworn:inspector', 'sworn:dedupe-judge', 'sworn:refuter', 'sworn:reader', 'Explore', 'Plan']) {
     const r = rodar({ hook_event_name: 'SubagentStart', agent_type: tipo, cwd });
     assert.strictEqual(r.status, 0, tipo);
     assert.strictEqual(r.saida, '', tipo + ' recebeu o bloco');

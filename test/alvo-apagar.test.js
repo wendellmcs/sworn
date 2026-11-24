@@ -281,7 +281,12 @@ test('portao-destrutivo: o rm -rf barrado mostra o que apagaria; o que nao se le
     criar(dir, 'build/a.js', 'abc');
     criar(dir, 'build/b/c.js', 'abcd');
     criar(dir, '.claude/sworn/projeto.json', '{}'); // a raiz do projeto e o dir, tambem com o cwd em build/
-    const env = Object.assign({}, process.env, { SWORN_TMP: tmp });
+    // D899: o registro das pastas de estudo e o do teste, nunca o do ~/.claude de quem roda (com um estudo la, o cwd
+    // torto estourava no pastas.executaNoEstudo e o portao liberava); com um estudo registrado aqui, o caminho roda sempre
+    const env = Object.assign({}, process.env, { SWORN_TMP: tmp, CLAUDE_CONFIG_DIR: path.join(tmp, 'config') });
+    const estudo = path.join(tmp, 'estudo');
+    fs.mkdirSync(estudo);
+    assert.ok(require('../scripts/lib/pastas.js').registrar(estudo, 'estudo', { sessao: 's-v1' }, env).ok);
     const evento = (comando, ferramenta, cwd) => comum.ganchoEmProcesso('scripts/portao-destrutivo.js', {
       session_id: 's-v1', cwd: cwd, tool_name: ferramenta || 'Bash', tool_input: { command: comando } },
     { env: env, cwd: dir });

@@ -1000,6 +1000,9 @@ function fimDaApuracao(c) {
  *                VIZINHAS_DA_VERIFICADA linhas de toda linha mudada vai a `registros` como 'fora da mudanca' (menos o da
  *                lente do pedido). Sem eles, tudo segura como antes.
  *   refutados com "lacuna": true (A3-09) tiram a lacuna do mesmo lugar contra a referencia, e nao o achado.
+ *   herdado(indiceDaRonda, rotulo, linha, passada, lente) -> { prova, origem } | null (H6e3, D900): o P2 de erro do
+ *                lado do trabalho que uma revisao anterior descartou com motivo sobre as mesmas linhas vai a `registros`
+ *                como 'descartado antes' (com `descartadoAntes`), e nao segura. O P0/P1 nunca pergunta.
  * pendentes e trechoNaoConfere saem sempre (listas, vazias quando nao ha), de todas as rondas, com ronda e lente.
  * achadosAindaAbertos (A3-06) sai sempre: o achado que segurou uma ronda antes e voltou igual (a mesma chave) na
  * ultima, sem refutacao nela; nao e novo e nao molha, mas o motivo diz quantos sao.
@@ -1184,19 +1187,25 @@ function apurar(rondas, opcoes) {
           const marcado = passada === 2 ? Object.assign({}, a, { passada: 2 }) : a;
           if (lado === 'HEAD') { antigos.push(marcado); continue; }
           const foiRefutado = refutado(refutados, indice + 1, lenteChave, a, passada);
+          // H6e3 (D900): o P2 do trabalho que uma revisao anterior ja descartou com motivo sobre as mesmas linhas. Nunca
+          // o P0/P1: esse volta ao refutador a cada revisao (RA7). A linha ja vem inteira do validarVeredito.
+          const herdado = !foiRefutado && !ehMelhoria(a) && lado === 'trabalho' && a.severidade === 'P2' &&
+            typeof op.herdado === 'function' ? op.herdado(indice, rotulo, a.linha, passada, lenteChave) || null : null;
           // D823 (R1, dono): o P2 tambem molha a ronda, como o P0 e o P1. F2a (D828.2/.5): menos o P2 de melhoria e,
           // nas rondas 2 e 3 com a mudanca medida, o achado do lado novo longe das linhas verificaveis; os dois vao a
           // `registros`. O refutado nao e registro: a refutacao ja o tirou.
           // A3-16: na ronda 1, o de longe da mudanca contra o HEAD e 'fora da mudanca' (fica entre os vistos, como a
           // melhoria: repetido, segue o mesmo registro).
-          const registro = foiRefutado ? null : ehMelhoria(a) ? 'melhoria'
+          const registro = foiRefutado ? null : ehMelhoria(a) ? 'melhoria' : herdado ? 'descartado antes'
             : soVerifica && lado === 'trabalho' && emLinhaNova(a.linha) ? 'linha nova'
               : foraDaMudanca(a) ? 'fora da mudanca' : null;
           if (registro !== null) {
             // o registro de linha nova nao fica entre os vistos: a linha dele passa a citada, e o mesmo achado que
-            // voltar na ronda seguinte e verificacao e segura. A melhoria fica: repetida, e um registro so.
+            // voltar na ronda seguinte e verificacao e segura. A melhoria e o descartado antes ficam: repetidos, sao um
+            // registro so.
             if (registro === 'linha nova') vistos.delete(k);
-            registros.push(marca(Object.assign({}, a, { registro: registro })));
+            registros.push(marca(Object.assign({}, a, { registro: registro },
+              herdado ? { descartadoAntes: { prova: herdado.prova, origem: herdado.origem } } : {})));
             continue;
           }
           if (grupo) doLadoNovo.push({ meta: meta, grupo: grupo });
@@ -1328,5 +1337,5 @@ module.exports = {
   LENTES, LENTES_UI, FAMILIAS, LENTE_DO_PEDIDO, lentesSoTela, SAEM_SO_LOGICA, familiasPara, FAIXA_UMA_ATE,
   FAIXA_DUAS_ATE, faixaDaMudanca, lentesDaFaixa, textoQueInstrui, temRisco, lentesDaCompleta, LENTES_DO_TESTE, ehArquivoDeTeste, TETO, chaveDaLente, errosDoVeredito,
   validarVeredito, apurar, conferirMesmos, DISTANCIA_PAR, mapaDoTrabalho, VOTO_QUE_FALTA, FAIXA_DESCONHECIDA,
-  apurarConferencia, CONFERENCIA_INCOMPLETA
+  apurarConferencia, CONFERENCIA_INCOMPLETA, rotuloDoArquivo, provaConfere
 };

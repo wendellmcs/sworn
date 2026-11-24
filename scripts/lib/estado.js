@@ -218,6 +218,9 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   'manualCarregado',
   // Plano 091 (#1): os arquivos com revisao aprovada (apurar-ronda.js); o portao do commit os deixa passar.
   'revisadosAprovados',
+  // H6e1 (15.0): o sha-256 do conteudo que a revisao aprovada julgou, { caminho: hash }; o portao do commit cobra de
+  // novo o arquivo que mudou depois.
+  'revisadosHash',
   // B2 (s369): os aprovados com revisao degradada, { caminho: motivo }; o fecho cobra a linha DEGRADADO.
   'revisoesDegradadas',
   // F2a (D828.3): os arquivos com a revisao fechada no teto, { caminho: blob no HEAD daquela hora } (apurar-ronda.js); o
@@ -249,7 +252,16 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   'escopoAmpliadoNoTurno',
   // A5e (D793): a foto da abertura do turno (escopo e arquivos ja sujos), que o conferir-depois.js compara depois de
   // cada comando de shell; vale ate a proxima mensagem do dono, como a marca acima.
-  'aberturaDoTurno'];
+  'aberturaDoTurno',
+  // H6a (D891): os recibos das rodadas de teste (recibo-da-prova.js), os 50 mais novos; o fecho confere neles o bloco
+  // colado, e valem a sessao inteira.
+  'recibos',
+  // H6f (15.9): os arquivos de teste editados sem um vermelho que os cobre depois (lib/vermelho-antes.js); o teste e
+  // o vermelho podem vir em turnos diferentes do pronto.
+  'testesSemVermelho',
+  // H6g (15.6): a saida verde que o H6a cortou, { vezes, bytes poupados } (recibo-da-prova.js); o custo da sessao a
+  // grava no fim (lib/custo-da-sessao.js).
+  'saidaCortada'];
 const CAMPOS_DO_TURNO = ['trabalhoReal', 'bloqueouNesteTurno', 'buscouNesteTurno', 'contadores', 'gravouHandoff',
   // D785 (2.1): a edicao de codigo do turno e a volta do laco da prova (portao-fecho.js).
   'arquivoDoHandoff', 'editouCodigo', 'lacoDaProva',

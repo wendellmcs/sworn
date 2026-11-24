@@ -236,7 +236,7 @@ test('A6-52: os titulos dos portoes falam em palavras comuns, sem codigo interno
  * nenhum modulo do caminho abre conexao. Decisao 14 - quem consulta e a skill.
  */
 test('cobertura: nenhum modulo do caminho do relatorio abre conexao', () => {
-  for (const arq of ['lib/cobertura.js', 'lib/catalogo.js', 'lib/apelidos.js', 'cobertura.js']) {
+  for (const arq of ['lib/cobertura.js', 'lib/catalogo.js', 'lib/apelidos.js', 'lib/kit.js', 'lib/ambiente.js', 'cobertura.js']) {
     const fonte = fs.readFileSync(path.join(RAIZ, 'scripts', arq), 'utf8');
     for (const proibido of ['node:https', 'node:http', 'fetch(', 'XMLHttpRequest', 'node:net']) {
       assert.ok(fonte.indexOf(proibido) === -1, arq + ' abre rede: achei "' + proibido + '"');
@@ -274,6 +274,45 @@ test('cobertura: o script roda e o --json sai parseavel', () => {
   assert.ok(Array.isArray(r.portoes) && r.portoes.length > 0);
   assert.strictEqual(typeof r.resumo.garantidos, 'number');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// H6j (D906): o kit da linguagem sai no relatorio e no texto, fora dos portoes e do resumo.
+test('cobertura: o kit da linguagem sai no relatorio e no texto, sem mudar o resumo', () => {
+  const dir = pasta();
+  try {
+    const p = semear(dir);
+    fs.writeFileSync(path.join(dir, 'package.json'), '{}', 'utf8');
+    fs.writeFileSync(path.join(dir, '.claude', 'settings.json'),
+      JSON.stringify({ enabledPlugins: { 'typescript-lsp@claude-plugins-official': true } }), 'utf8');
+    const r = cobertura.relatorio(dir, p);
+    assert.strictEqual(r.kit.linguagem, 'node');
+    assert.strictEqual(r.kit.itens.filter((i) => i.chave === 'lsp')[0].visto, true);
+    assert.strictEqual(r.resumo.total, r.portoes.length);
+    assert.ok(r.portoes.every((x) => x.chave !== 'lsp' && x.chave !== 'kit'));
+    const t = cobertura.texto(r);
+    assert.match(t, /\n\nKit da linguagem \(node\)/);
+    assert.match(t, /\[x\] Servidor de linguagem \(typescript-lsp\)/);
+    assert.match(t, /\[ \] knip - /);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('cobertura: a CLI le os servidores MCP do .claude.json para o kit', () => {
+  const dir = pasta();
+  const conf = pasta();
+  try {
+    semear(dir);
+    fs.writeFileSync(path.join(conf, '.claude.json'), JSON.stringify({ mcpServers: { context7: { url: 'x' } } }), 'utf8');
+    const c7 = function (env) {
+      const r = spawnSync(process.execPath, [SCRIPT, '--json'], { cwd: dir, encoding: 'utf8', env: Object.assign({}, process.env, env) });
+      assert.strictEqual(r.status, 0, r.stderr);
+      return JSON.parse(r.stdout).kit.itens.filter((i) => i.chave === 'context7')[0].visto;
+    };
+    assert.strictEqual(c7({ CLAUDE_CONFIG_DIR: conf }), true);
+    assert.strictEqual(c7({ CLAUDE_CONFIG_DIR: path.join(conf, 'nada') }), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(conf, { recursive: true, force: true });
+  }
 });
 
 test('cobertura: todo portao tem as cinco chaves, sem excecao', () => {

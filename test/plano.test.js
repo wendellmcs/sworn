@@ -128,6 +128,16 @@ test('plano: sem plano ativo, donoOutro e falso', () => {
   assert.strictEqual(plano.donoOutro(null, 'sessao-A'), false);
 });
 
+// H6a2 (D892, defeito 2; pendencia #18): o plano-ativo.json com "arquivo" em branco (" ", visto na s375) nao tem plano
+// a proteger: a abertura avisava "outra sessao detem o plano ativo" com a linha "Plano:  " vazia.
+test('plano: "arquivo" vazio, em branco ou que nao e texto - donoOutro e falso', () => {
+  for (const arquivo of ['', ' ', '\t\n', undefined, null, 7, ['p.md']]) {
+    assert.strictEqual(plano.donoOutro({ arquivo: arquivo, sessionId: 'sessao-A' }, 'sessao-B'), false,
+      'arquivo ' + JSON.stringify(arquivo));
+  }
+  assert.strictEqual(plano.donoOutro({ arquivo: 'p.md', sessionId: 'sessao-A' }, 'sessao-B'), true, 'controle');
+});
+
 test('plano: proximaDecisao le o maior numero DO DISCO', () => {
   const dir = tmp({ 'd.md': '### D7 · a\n### D23 · b\n### D9 · c\n' });
   try {

@@ -246,8 +246,8 @@ test('evidencia A3-19: a cerca de 4 crases e a de ~~~ sao blocos; a de 3 dentro 
 // P17-22 (H1): todo motivo do portao abre com o mesmo cabecalho.
 test('evidencia P17-22: os motivos abrem com o cabecalho da trava 3 e cabem na largura', () => {
   const x = 'npm test ' + 'x'.repeat(3 * LARGURA_MAX);
-  for (const m of [ev.MOTIVO, ev.MOTIVO_FALHA, ev.MOTIVO_CAUSA, ev.motivoTesteVermelho(x), ev.motivoConferenciaVermelha(x),
-    ev.motivoProvaNaoRodou(x), ev.motivoProvaRodando(x), ev.motivoConferenciaRodando(x), ev.motivoDoLaco('vermelho', x, 1),
+  for (const m of [ev.MOTIVO, ev.MOTIVO_FALHA, ev.MOTIVO_CAUSA, ev.MOTIVO_SEM_RECIBO, ev.motivoTesteVermelho(x),
+    ev.motivoConferenciaVermelha(x), ev.motivoProvaNaoRodou(x), ev.motivoProvaRodando(x), ev.motivoConferenciaRodando(x), ev.motivoDoLaco('vermelho', x, 1),
     ev.motivoDoLaco('vermelho', x, ev.TETO_DO_LACO + 1)]) {
     assert.ok(m.startsWith('sworn - portao de fecho (trava 3)'), m);
     assert.ok(cabe(m), 'linha acima de ' + LARGURA_MAX + ' caracteres: ' + m);
@@ -522,4 +522,50 @@ test('P04: alegar a causa sem o bug reproduzido barra; com bloco de saida, ou co
   assert.strictEqual(ev.deveBloquearPorCausa('A causa é o cache\r\n\r\nTalvez seja outra coisa no deploy'), true);
   assert.match(ev.MOTIVO_CAUSA, /reproduz/);
   assert.ok(/^[\x20-\x7E\n]+$/.test(ev.MOTIVO_CAUSA), 'ASCII (R5)');
+});
+
+// H6a (D891): o bloco colado so vale com uma linha dele numa saida de ferramenta da sessao.
+test('H6a: deveBloquearSemRecibo confere o bloco contra as saidas da sessao', () => {
+  const msg = (bloco) => 'Pronto, os testes passaram.\n```\n' + bloco + '\n```';
+  const spec = 'ℹ tests 12\nℹ suites 0\nℹ pass 12\nℹ fail 0\n';
+  // a linha copiada da saida libera, com as marcas do comeco e a cor do terminal fora da conta
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('ℹ pass 12'), [spec]), false);
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('pass 12'), ['\x1b[32mℹ pass 12\x1b[0m']), false);
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('✔ pass 12'), [spec]), false, 'outra marca no comeco');
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('- pass 12'), [spec]), false);
+  // a linha resumida em pedacos (a regra 5 da resposta): cada pedaco tem de estar na saida
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('tests 12 | pass 12 | fail 0'), [spec]), false);
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('tests 12 | pass 13 | fail 0'), [spec]), true, 'um pedaco inventado');
+  // a borda: "tests 12" nao casa dentro de "tests 120"
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('tests 12'), ['ℹ tests 120\n']), true);
+  // o bloco inventado barra; o pedaco curto ou sem letra nao conta como recibo
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('# pass 3\n# tests 3'), [spec]), true);
+  // a linha real nao libera a contagem inventada ao lado ("fail 0" esta na saida, "pass 3" nao)
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('# pass 3\n# fail 0'), [spec]), true, 'contagem inventada');
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('ℹ tests 12\nℹ fail 0'), ['ℹ tests 12\nℹ fail 2\n']), true,
+    'a falha trocada por fail 0');
+  // a linha que nao e de contagem (o comando ecoado, um titulo) fica fora da conta, se outra linha confere
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('$ node --test test/h6a.test.js\nℹ fail 0'), [spec]), false);
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('$ node --test test/h6a.test.js'), [spec]), true);
+  // os pedacos e as linhas do bloco tem de vir de uma mesma saida, nao de rodadas diferentes
+  const duas = ['ℹ tests 12\nℹ fail 2\n', 'ℹ tests 9\nℹ fail 0\n'];
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('tests 12 | fail 0'), duas), true, 'pedacos de duas saidas');
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('ℹ tests 12\nℹ fail 0'), duas), true, 'linhas de duas saidas');
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('ℹ tests 9\nℹ fail 0'), duas), false);
+  // o bloco so de pedacos curtos nao se confere: vale a regra de antes, sem o motivo do recibo
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('ok\n---'), ['ok\n---\n']), false, 'pedaco curto');
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('ok\n---'), ['tudo certo\n']), false, 'pedaco curto fora da saida');
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('42'), ['42']), false);
+  // sem a lista (transcript ilegivel), com ela vazia ou so com saidas vazias, vale a regra de antes
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('# pass 3'), null), false);
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('# pass 3'), []), false);
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('# pass 3'), ['', null, '  \n']), false);
+  // sem alegacao, ou com a ressalva, nao ha o que conferir
+  assert.strictEqual(ev.deveBloquearSemRecibo('Segue a saida.\n```\n# pass 3\n```', [spec]), false);
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('# pass 3') + '\nNao rodei o lint.', [spec]), false);
+  // basta um bloco com recibo
+  assert.strictEqual(ev.deveBloquearSemRecibo(msg('inventado 99') + '\n```\nℹ fail 0\n```', [spec]), false);
+  assert.match(ev.MOTIVO_SEM_RECIBO, /nao confere com nenhuma saida/);
+  assert.ok(/^[\x20-\x7E\n]+$/.test(ev.MOTIVO_SEM_RECIBO), 'ASCII (R5)');
+  assert.ok(cabe(ev.MOTIVO_SEM_RECIBO));
 });

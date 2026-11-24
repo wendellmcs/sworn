@@ -56,11 +56,10 @@ function caixaAberta(texto, max) {
   if (max === undefined) max = CORTE_DA_CAIXA;
   const linhas = String(texto).split(/\r?\n/);
   const caixas = [];
-  let cerca = null;
+  // a mesma regra de cerca do plano por fatia (fatia.js): o ```js dentro de um ```` nao fecha o bloco
+  const dentro = require('./fatia.js').dentroDeCerca(linhas);
   linhas.forEach(function (l, i) {
-    const f = /^\s*(`{3,}|~{3,})/.exec(l);
-    if (f) { if (!cerca) cerca = f[1][0]; else if (f[1][0] === cerca) cerca = null; return; }
-    if (cerca) return;
+    if (dentro[i]) return;
     const m = /^(\s*)-\s*\[( |x|X)\]/.exec(l);
     if (m) caixas.push({ i: i, recuo: m[1].length, aberta: m[2] === ' ' });
   });
@@ -86,6 +85,7 @@ function caixaAberta(texto, max) {
   return null;
 }
 
+const STATUS_NAO_RESPONDEU = '  git status: nao respondeu; rode git status --short e cole aqui.';
 function topologia(raiz) {
   const head = gitLib.correr(raiz, ['rev-parse', 'HEAD']);
   if (head === null) return ['- ' + barra(raiz) + ': nao e um repositorio git, ou o git nao respondeu; topologia nao lida.'];
@@ -93,7 +93,7 @@ function topologia(raiz) {
   const assunto = (gitLib.correr(raiz, ['log', '-1', '--format=%s']) ?? '').trim();
   const bruto = gitLib.correr(raiz, ['status', '--short']);
   const out = ['- ' + barra(raiz) + ': ' + ramo + ', HEAD ' + head.trim() + (assunto ? ' (' + assunto + ')' : '')];
-  if (bruto === null) { out.push('  git status: nao respondeu; rode git status --short e cole aqui.'); return out; }
+  if (bruto === null) { out.push(STATUS_NAO_RESPONDEU); return out; }
   const status = bruto.split('\n').filter(function (l) { return l.trim(); });
   if (!status.length) out.push('  git status: limpo.');
   else {
@@ -134,6 +134,7 @@ function plano(raiz, frente) {
   return { rel: achado.arquivo, abs: planoLib.caminhoDoPlano(raiz, achado.arquivo), semVinculo: Boolean(achado.semVinculo) };
 }
 
+const PEDIDOS_NAO_LIDOS = '- nao li os pedidos do dono (';
 function secaoPendencias(raiz, frente, p, quantas) {
   const out = [];
   if (p.erro) out.push('- nao li ' + pendencias.ARQUIVO + ': ' + p.erro + '.');
@@ -156,7 +157,7 @@ function secaoPendencias(raiz, frente, p, quantas) {
     (frente && RE_FRENTE_NO_COMANDO.test(frente) ? ' --frente ' + frente : '');
   let pedidos;
   try { pedidos = pedidosLib.abertos(raiz, frente || null); } catch (e) {
-    out.push('- nao li os pedidos do dono (' + textoLib.causaDoErro(e) + '): rode ' + comando + ' para ver os abertos.');
+    out.push(PEDIDOS_NAO_LIDOS + textoLib.causaDoErro(e) + '): rode ' + comando + ' para ver os abertos.');
     return out;
   }
   if (pedidos.length) {
@@ -194,7 +195,12 @@ function montar(raiz, opcoes) {
   const ant = anterior(raiz, caminho);
   const pend = pendencias.ler(raiz);
   const leitura = [];
-  if (pl.abs) leitura.push((leitura.length + 1) + '. ' + barra(pl.abs) + ' (o plano: so o cabecalho e o item da secao 3)' +
+  // H6d (D896): o comando da fatia imprime o cabecalho e o proximo item sem marcar, com as linhas do arquivo. O caminho
+  // com caractere que o shell expande entre aspas ($, crase, aspas, !) fica fora: sem --plano, o plano.js acha o mesmo.
+  // A pasta do sworn com um desses caracteres deixa o comando inteiro de fora (fatia.comandoDaFatia, revisao R2, borda).
+  const cmd = require('./fatia.js').comandoDaFatia(path.join(__dirname, '..', 'plano.js'), barra(pl.rel));
+  if (pl.abs) leitura.push((leitura.length + 1) + '. ' + barra(pl.abs) + ' (o plano: so o cabecalho e o item da secao 3' +
+    (cmd ? ', pelo ' + cmd : '') + ')' +
     (pl.semVinculo ? ' - achado pela unica frente com plano, a sessao nao esta vinculada a ela' : ''));
   if (ant && ant.abs) leitura.push((leitura.length + 1) + '. ' + barra(ant.abs) + ' (o handoff anterior, so se faltar contexto)');
   if (ant && ant.erro) leitura.push((leitura.length + 1) + '. nao li a pasta ' + PASTA + ' (' + ant.erro + '): ache o handoff anterior a mao, se faltar contexto');
@@ -254,6 +260,110 @@ function montar(raiz, opcoes) {
   }
 }
 
+// H6a2 (D892, defeito 3): as linhas que o secaoPendencias escreve; o resto da secao 5 e do modelo e fica.
+// O "- nao li " vai com o que vem depois dele no secaoPendencias: uma linha do modelo que abre por "- nao li " fica.
+// Cada forma vai inteira, como o secaoPendencias escreve: uma linha do modelo que so comeca igual ("  - #7 decidido...")
+// fica.
+const RE_PEDIDOS_GRAVADOS = /^(- pedidos do dono abertos \(\d+\): .*; o texto de cada um, com o comando: |- nenhum pedido do dono aberto\.$)/;
+const RE_PENDENCIA_MECANICA = new RegExp('^(- abertas em \\.sworn/PENDENCIAS\\.md \\(\\d+\\):$|  - #\\d+ \\d{4}-\\d{2}-\\d{2} \\| dono: |' +
+  '  - e mais \\d+ no arquivo\\.$|- nenhuma aberta em \\.sworn/PENDENCIAS\\.md\\.$|- nao li \\.sworn/PENDENCIAS\\.md: |' +
+  '- nao li os pedidos do dono \\(.*\\): rode .* para ver os abertos\\.$|' +
+  '- \\d+ item\\(ns\\) fora do formato \\(sem numero, data ou dono\\), linha\\(s\\) )|' + RE_PEDIDOS_GRAVADOS.source);
+const CABECA_DO_ITEM = 'Proximo item nao marcado do plano (';
+// a secao 3 sem item aberto, como o montar e o refazer a escrevem: uma linha so, que o refazer tambem troca
+const RE_SEM_ITEM = /^O plano .+ nao tem (mais )?item sem marcar( \(lido antes da compactacao\))?: diga abaixo o que vem agora\.$/;
+const RE_REFEITO = /^Refeito pelo gancho PreCompact do sworn em /;
+function dois(n) { return String(n).padStart(2, '0'); }
+function mesmaRaiz(a, b) { return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b; }
+
+/**
+ * H6a2 (D892, defeito 3): refaz, num handoff ja preenchido, so o que o disco sabe, para o gancho PreCompact
+ * (antes-do-compact.js): na secao 2, o bloco deste repo (HEAD, assunto, git status); na 3, o item do plano, quando a
+ * secao ainda abre pelo bloco que o montar escreveu; na 5, as linhas do secaoPendencias. Os outros repos da secao 2,
+ * o paragrafo de julgamento da 3, as linhas do modelo na 5 e as secoes 1, 4, 6, 7 e 8 ficam como estavam. O que o
+ * disco nao responde agora (git, plano, pendencias) deixa o trecho gravado. Passando do TETO com todos os LIMITES, ou
+ * sem as 8 secoes em ordem, volta o texto como veio. `opcoes`: { frente, agora (Date) }. Devolve { texto, mudou }.
+ */
+function refazer(raiz, texto, opcoes) {
+  const o = opcoes || {};
+  const t = String(texto);
+  const igual = { texto: t, mudou: false };
+  const nl = /\r\n/.test(t) ? '\r\n' : '\n';
+  const linhas = t.split(/\r?\n/);
+  const ini = SECOES.map(function (s) { return linhas.findIndex(function (l) { return l.startsWith(s); }); });
+  if (ini.some(function (v, k) { return v === -1 || (k > 0 && v <= ini[k - 1]); })) return igual;
+  const corpo = function (k) { return linhas.slice(ini[k] + 1, k + 1 < ini.length ? ini[k + 1] : linhas.length); };
+
+  const topo = topologia(raiz);
+  // so o HEAD respondeu (o status nao): a secao 2 gravada fica, como quando o git nao responde nada
+  const comGit = topo.length > 1 && topo.indexOf(STATUS_NAO_RESPONDEU) === -1;
+  const pl = plano(raiz, o.frente);
+  let textoDoPlano = null;
+  if (pl.abs) { try { textoDoPlano = fs.readFileSync(pl.abs, 'utf8'); } catch (e) { /* o item gravado fica */ } }
+  const pend = pendencias.ler(raiz);
+
+  function secao2() {
+    const b = corpo(1);
+    if (!comGit) return b;
+    const cabeca = '- ' + barra(raiz) + ':';
+    const i = b.findIndex(function (l) { return mesmaRaiz(l.slice(0, cabeca.length), cabeca); });
+    if (i === -1) return topo.concat(b);
+    let f = i + 1;
+    while (f < b.length && /^ {2}/.test(b[f])) f++; // o "  git status" e as linhas "    " dele
+    return b.slice(0, i).concat(topo, b.slice(f));
+  }
+  function secao3(corte) {
+    const b = corpo(2);
+    let i = 0;
+    while (i < b.length && !b[i].trim()) i++;
+    const semItem = i < b.length && RE_SEM_ITEM.test(b[i]);
+    if (i >= b.length || !(semItem || b[i].startsWith(CABECA_DO_ITEM)) || textoDoPlano === null) return b;
+    let f = i + 1;
+    if (!semItem) {
+      while (f < b.length && !b[f].trim()) f++;
+      while (f < b.length && b[f].trim()) f++;
+    }
+    const c = caixaAberta(textoDoPlano, corte);
+    const novo = c ? [CABECA_DO_ITEM + barra(pl.rel) + ', linha ' + c.linha + ', texto do arquivo):', ''].concat(c.texto.split('\n'))
+      : ['O plano ' + barra(pl.rel) + ' nao tem mais item sem marcar (lido antes da compactacao): diga abaixo o que vem agora.'];
+    return b.slice(0, i).concat(novo, b.slice(f));
+  }
+  function secao5(quantas) {
+    const b = corpo(4);
+    if (pend.erro) return b;
+    const novo = secaoPendencias(raiz, o.frente, pend, quantas);
+    // os pedidos nao se leem agora: a linha deles que ja estava gravada fica no lugar do aviso
+    const gravados = b.filter(function (l) { return RE_PEDIDOS_GRAVADOS.test(l); });
+    const k = novo.findIndex(function (l) { return l.startsWith(PEDIDOS_NAO_LIDOS); });
+    if (k !== -1 && gravados.length) novo.splice(k, 1, ...gravados);
+    return novo.concat(b.filter(function (l) { return !RE_PENDENCIA_MECANICA.test(l); }));
+  }
+  const agora = o.agora instanceof Date && !isNaN(o.agora) ? o.agora : new Date();
+  const refeito = 'Refeito pelo gancho PreCompact do sworn em ' + agora.getFullYear() + '-' + dois(agora.getMonth() + 1) + '-' +
+    dois(agora.getDate()) + ' ' + dois(agora.getHours()) + ':' + dois(agora.getMinutes()) +
+    ': as secoes 2, 3 (o item do plano) e 5 sairam do disco de novo; as de julgamento ficaram como estavam.';
+  function montarCom(lim) {
+    const cabeca = linhas.slice(0, ini[0]).filter(function (l) { return !RE_REFEITO.test(l); });
+    const montado = cabeca.findIndex(function (l) { return l.startsWith('Montado pelo handoff-curto.js'); });
+    if (montado !== -1) cabeca.splice(montado + 1, 0, refeito);
+    else cabeca.splice(cabeca.length && !cabeca[cabeca.length - 1].trim() ? cabeca.length - 1 : cabeca.length, 0, refeito);
+    const partes = cabeca;
+    for (let k = 0; k < SECOES.length; k++) {
+      partes.push(linhas[ini[k]]);
+      const b = k === 1 ? secao2() : k === 2 ? secao3(lim.caixa) : k === 4 ? secao5(lim.pend) : corpo(k);
+      for (const l of b) partes.push(l);
+    }
+    return partes.join(nl);
+  }
+  const semRefeito = function (x) { return x.split(/\r?\n/).filter(function (l) { return !RE_REFEITO.test(l); }).join('\n'); };
+  for (const lim of LIMITES) {
+    const novo = montarCom(lim);
+    if (Buffer.byteLength(novo, 'utf8') > TETO) continue;
+    return semRefeito(novo) === semRefeito(t) ? igual : { texto: novo, mudou: true };
+  }
+  return igual;
+}
+
 /** Confere um handoff ja preenchido. { ok, problemas, bytes }. `caminhoRel` e o caminho do arquivo. */
 function conferir(texto, caminhoRel) {
   const t = String(texto);
@@ -286,4 +396,4 @@ function conferir(texto, caminhoRel) {
   return { ok: problemas.length === 0, problemas: problemas, bytes: bytes };
 }
 
-module.exports = { PASTA, TETO, SECOES, REGRA_DO_SLUG, caixaAberta, montar, conferir };
+module.exports = { PASTA, TETO, SECOES, REGRA_DO_SLUG, caixaAberta, montar, refazer, conferir };

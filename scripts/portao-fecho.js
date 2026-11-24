@@ -600,6 +600,22 @@ function comProvaDoGancho(e, s, t, prova) {
   return Object.assign({}, t, { provaPendente: false, ultimoTeste: ultimoTeste });
 }
 
+/** H6a (D891): a alegacao com bloco de saida, e nenhuma linha dele em saida de ferramenta da sessao (o transcript e
+ *  o resumo dos recibos cortados, que o transcript ja nao tem inteiro). So le o transcript quando ha alegacao com
+ *  bloco e sem dizer que nao rodou (o "ainda falha" nao vale o bloco inventado); a prova que o gancho rodou vale
+ *  como recibo (ela nao entra no transcript). */
+function blocoSemRecibo(e, s, projeto) {
+  const msg = e.last_assistant_message;
+  const a = evidencia.analisar(msg);
+  if (!a.alegaSucesso || !a.temBloco || a.declaraNaoRodou || provaDoGanchoVale(e, s, projeto)) return false;
+  const saidas = saude.saidasDoTranscript(e.transcript_path);
+  if (!saidas || !saidas.length) return false;
+  const dosRecibos = (Array.isArray(s.recibos) ? s.recibos : []).filter(function (r) {
+    return r && Array.isArray(r.resumo);
+  }).map(function (r) { return r.resumo.join('\n'); });
+  return evidencia.deveBloquearSemRecibo(msg, saidas.concat(dosRecibos));
+}
+
 /** D794: a alegacao sem bloco tem a prova do gancho por tras. So le o transcript quando ha a marca. */
 function provaDoGanchoVale(e, s, projeto) {
   const prova = provaDe(projeto);
@@ -813,16 +829,30 @@ io.blindar(function () {
     const semReproducao = !doLaco && !semEvidencia && evidencia.deveBloquearPorCausa(e.last_assistant_message);
     // D634: se a falta de bloco nao barrou, o resultado da prova; conta no mesmo balde (a evidencia nao sustenta a alegacao).
     const semResultado = doLaco || semEvidencia || semReproducao ? null : motivoDoResultado(e, projeto, s);
-    const nada = !doLaco && !semEvidencia && !semReproducao && !semResultado && !semPrompt && !doTurno.length;
+    // H6a (D891): o bloco colado que nao aparece em nenhuma saida de ferramenta da sessao; mesmo balde da falta de
+    // bloco. Depois do resultado: o teste vermelho diz mais que o bloco sem recibo.
+    const semRecibo = !doLaco && !semEvidencia && !semReproducao && !semResultado && blocoSemRecibo(e, s, projeto);
+    // H6f (15.9): o teste editado sem um vermelho depois; balde proprio. A linha "SEM VERMELHO:" libera e limpa a lista.
+    const vermelhoAntes = require('./lib/vermelho-antes.js');
+    if (vermelhoAntes.declarou(e.last_assistant_message) && s.testesSemVermelho !== undefined) s.testesSemVermelho = [];
+    const semVermelho = !doLaco && !semEvidencia && !semReproducao && !semResultado && !semRecibo &&
+      vermelhoAntes.motivoDoFecho(s.testesSemVermelho, e.last_assistant_message, projeto, cwd);
+    const nada = !doLaco && !semEvidencia && !semRecibo && !semReproducao && !semResultado && !semVermelho &&
+      !semPrompt && !doTurno.length;
     if (nada) return encerrarOuSeguir(e, s, projeto, planoIlegivel);
 
     const motivos = [];
     if (planoIlegivel) motivos.push(planoIlegivel);
     if (doLaco) motivos.push(doLaco);
-    else if (semEvidencia || semReproducao || semResultado) {
+    else if (semEvidencia || semRecibo || semReproducao || semResultado) {
       s.contadores = s.contadores || {};
       s.contadores.fecho_sem_evidencia = (s.contadores.fecho_sem_evidencia || 0) + 1;
-      motivos.push(semEvidencia ? evidencia.MOTIVO : semReproducao ? evidencia.MOTIVO_CAUSA : semResultado);
+      motivos.push(semEvidencia ? evidencia.MOTIVO : semReproducao ? evidencia.MOTIVO_CAUSA
+        : semResultado || evidencia.MOTIVO_SEM_RECIBO);
+    } else if (semVermelho) {
+      s.contadores = s.contadores || {};
+      s.contadores.teste_sem_vermelho = (s.contadores.teste_sem_vermelho || 0) + 1;
+      motivos.push(semVermelho);
     }
     barrar(e, s, motivos.concat(doTurno), semPrompt);
   });

@@ -210,3 +210,24 @@ test('R-T20-05: o Passo 5b explica o caminhosDeEstilo com a chave, as extensoes 
   assert.strictEqual(design.ehArquivoDeEstilo('tokens.ts', projeto), true, 'o exemplo nao liga o arquivo');
   assert.strictEqual(design.ehArquivoDeEstilo('src/app.ts', projeto), false, 'controle: o resto nao e estilo');
 });
+
+test('H6j (D906): o paragrafo do kit cita os campos que o kit devolve e diz ao dono o proximo passo', () => {
+  const t = skillInit();
+  const ini = t.indexOf('**The language kit.**');
+  assert.ok(ini !== -1, 'sumiu o paragrafo do kit da linguagem do init');
+  const fim = t.indexOf('\n\n', ini);
+  const texto = t.slice(ini, fim === -1 ? undefined : fim);
+  const k = require('../scripts/lib/kit.js').recomendar({ linguagem: null });
+  for (const campo of ['para', 'visto', 'onde', 'como']) {
+    assert.ok(texto.indexOf('`' + campo + '`') !== -1, 'o paragrafo nao cita o campo ' + campo);
+    assert.ok(Object.prototype.hasOwnProperty.call(k.itens[0], campo), 'o kit nao devolve o campo ' + campo);
+  }
+  for (const campo of ['conferido', 'linguagem']) {
+    assert.ok(texto.indexOf('`kit.' + campo + '`') !== -1, 'o paragrafo nao cita kit.' + campo);
+    assert.ok(Object.prototype.hasOwnProperty.call(k, campo), 'o kit nao devolve ' + campo);
+  }
+  assert.ok(/tell the owner to run `claude plugin list` before installing/.test(texto),
+    'o paragrafo nao manda o dono conferir o plugin pessoal antes de instalar');
+  assert.ok(k.itens.length > 0 && /the other rows of the table stay/.test(texto),
+    'sem linguagem o kit segue com linhas, e o paragrafo tem de dizer isso');
+});

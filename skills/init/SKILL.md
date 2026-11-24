@@ -134,6 +134,15 @@ below the table: what that file declares is missing from it, so "none" there is 
 (brainstorm, plan writing and execution, TDD, debugging) is its own — `sworn` demands proof, it does not
 teach method. If `context7` is installed, library verification is its own.
 
+**The language kit.** Read the `kit` block of the scan and show it to the user in a table, one row per item: the tool,
+what it is for (`para`), whether it was seen here (`visto`, with `onde`) and how to install it (`como`). Recommend each
+item with `visto: false`, and **never install, enable or embed any of them yourself**: installing is the owner's
+decision. Say the two limits with the table. First, `visto` only looks at the project (its settings, `.mcp.json`, the
+MCP servers in `~/.claude.json` and the config files at the root), so a plugin enabled only in the owner's personal
+settings shows as not seen: tell the owner to run `claude plugin list` before installing it. Second, the list was
+checked on the date in `kit.conferido`. With `kit.linguagem` null, say that no language was recognized, so there is no
+language server to recommend; the other rows of the table stay.
+
 **If a hook is already configured in `.claude/settings.json`**, warn: `sworn` adds its own
 hooks and both will run. Ask whether either should go, and **do not turn anything off on your own.**
 

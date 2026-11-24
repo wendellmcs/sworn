@@ -784,6 +784,17 @@ test('ponte: pipe negado (EPERM, o sandbox do dsh) roda o portao com stdio por a
   assert.strictEqual(ponte.executar(eco, entrada, 10), 'eco:' + JSON.stringify(entrada));
 });
 
+test('ponte: H6a, o portao roda com SWORN_PONTE (o recibo-da-prova.js nao troca a saida fora do Claude Code)', (t) => {
+  const ambiente = path.join(TMP, 'ambiente.js');
+  fs.writeFileSync(ambiente, "process.stdin.resume(); process.stdin.on('end', () => " +
+    "{ process.stdout.write(String(process.env.SWORN_PONTE)); });\n");
+  // o pai com outro valor: o '1' so sai se a ponte o puser, nao por heranca do ambiente de quem roda o teste
+  const antes = process.env.SWORN_PONTE;
+  process.env.SWORN_PONTE = '0';
+  t.after(() => { if (antes === undefined) delete process.env.SWORN_PONTE; else process.env.SWORN_PONTE = antes; });
+  assert.strictEqual(ponte.executar(ambiente, { cwd: TMP, hook_event_name: 'PostToolUse' }, 10), '1');
+});
+
 test('ponte: por arquivo, a pasta que nao sai nao troca a saida do portao (o deny ja dado nao se perde)', (t) => {
   const deny = path.join(TMP, 'deny.js');
   fs.writeFileSync(deny, "process.stdout.write('{\"decision\":\"block\"}');\n");

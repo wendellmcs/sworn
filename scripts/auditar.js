@@ -47,7 +47,9 @@ const r = auditoria.auditar(cwd, config.carregarProjeto(cwd), {
   transcricao: injetado.localizar(valor('--transcricao'), process.env),
   claudeJson: require('./lib/ambiente.js').caminhoDoClaudeJson(process.env),
   rotuloClaudeJson: require('./lib/ambiente.js').rotuloDoClaudeJson(process.env),
-  efetivo: true
+  efetivo: true,
+  // H6e4: o aproveitamento por lente (le o fechada.json de cada revisao) tambem so aqui
+  aproveitamento: true
 });
 process.stdout.write(JSON.stringify(r, null, 2) + '\n');
 process.exit(0);

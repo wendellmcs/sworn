@@ -451,7 +451,9 @@ const BALDES_DE_BLOQUEIO = [
   // D678 T2: agente dos degraus chamado com model ou effort fora da tabela.
   'chamada_fora_da_tabela',
   // D694 (T3 da escada): fim do turno com pedido de escalada sem despacho.
-  'escalada_sem_despacho'
+  'escalada_sem_despacho',
+  // H6f (15.9): pronto com arquivo de teste editado sem um vermelho que o cobre depois.
+  'teste_sem_vermelho'
 ];
 
 /**
@@ -1178,8 +1180,26 @@ function motivoParadaSemDono(caixa, anuncia, pedeChat) {
   ].join('\n');
 }
 
+/**
+ * H6a (15.1, D891): as saidas de ferramenta na cauda do transcript, na ordem (o resultado de cada chamada e a cauda do
+ * arquivo de cada fim em segundo plano) - o recibo contra o qual o fecho confere o bloco colado. Sem leitura, null.
+ */
+function saidasDoTranscript(caminho) {
+  const t = transcricoes.ler(caminho);
+  if (t === null) return null;
+  const saidas = [];
+  t.eventos.forEach(function (ev) {
+    if (ev.tipo === 'resultado' && typeof ev.saida === 'string') saidas.push(ev.saida);
+    else if (ev.tipo === 'fim_em_segundo_plano' && typeof ev.arquivo === 'string' && ev.arquivo) {
+      const cauda = transcricoes.caudaDoTranscript(ev.arquivo);
+      if (cauda !== null) saidas.push(cauda);
+    }
+  });
+  return saidas;
+}
+
 module.exports = { LIMIARES_PADRAO, BALDES_DE_BLOQUEIO, contextoDoTranscript, ultimaChamadaDoTranscript, testesDoTranscript, limiaresValidos, medir, acumular, avaliar, avisoDeSaude, instrucaoAoModelo, perguntaSobreSaude,
   INSTRUCAO_DA_PERGUNTA, ONDE_GRAVAR_O_HANDOFF, ehArquivoDeHandoff, handoffGravadoPeloShell,
   ehArquivoDeCodigo, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT, MOTIVO_PARADA_NO_HANDOFF, motivoParadaSemDono,
   SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, linhaDeSituacao, instrucaoDaPergunta, provasEquivalentes,
-  casaComAProva, foraDoProjeto };
+  casaComAProva, foraDoProjeto, RODAR_SCRIPT_TEST, saidasDoTranscript };

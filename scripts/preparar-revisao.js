@@ -17,6 +17,7 @@ const estado = require('./lib/estado.js');
 const escopoLib = require('./lib/escopo.js');
 const telaCega = require('./lib/tela-cega.js');
 const contratoLib = require('./lib/contrato.js');
+const herdadosLib = require('./lib/herdados.js');
 const flags = require('./lib/flags.js');
 
 /**
@@ -215,8 +216,14 @@ if (!fs.existsSync(path.join(cwd, relPedido))) {
 // 0.3.2, item 9: o arquivo existe mas pode nao ser lido (e uma pasta, sem permissao). Sem o try
 // isso saia como stack trace.
 let atual;
+// H6e1 (15.0): o sha-256 dos bytes crus do arquivo inteiro que a ronda julga (A e B saem deles, normalizados e, nas
+// faixas pequenas, recortados), no mapa.json; a aprovacao fica presa a ele (lib/commit.js, mudouDepois), a mesma conta
+// de commit.hashDoArquivo, sem normalizar fim de linha nem BOM.
+let hashDoTrabalho;
 try {
-  atual = fs.readFileSync(path.join(cwd, relPedido), 'utf8');
+  const bytes = fs.readFileSync(path.join(cwd, relPedido));
+  atual = bytes.toString('utf8');
+  hashDoTrabalho = crypto.createHash('sha256').update(bytes).digest('hex');
 } catch (e) {
   process.stdout.write('ERRO: nao consegui ler ' + relPedido + ' (causa: ' + textoLib.causaDoErro(e) + '). ' +
     'Confira se e um arquivo que voce pode ler, e nao uma pasta, e rode de novo.\n');
@@ -648,6 +655,7 @@ if (process.argv.indexOf('--conferencia') !== -1) {
 }
 let arquivada = null;
 let arquivadaAberta = false;
+let herdadosDaFechada = [];
 const fechadaAntes = !formatoAntigo && fs.existsSync(path.join(base, 'fechada.json'));
 if (!conferenciaPedida && (fechadaAntes || abertaVencida())) {
   arquivadaAberta = !fechadaAntes;
@@ -682,6 +690,11 @@ if (!conferenciaPedida && (fechadaAntes || abertaVencida())) {
       process.exit(1);
     }
   }
+}
+// H6e3 (D900): o P2 que a revisao arquivada descartou com motivo, so o que ainda esta, linha a linha, no arquivo de hoje
+if (arquivada) {
+  herdadosDaFechada = herdadosLib.podar(herdadosLib.daRevisaoArquivada(arquivada,
+    path.relative(cwd, arquivada).replace(/\\/g, '/')), normalizado(atual));
 }
 
 const n = cegar.proximaRonda(base);
@@ -783,8 +796,12 @@ try {
   fs.writeFileSync(path.join(dir, 'B.txt'), r.B.conteudo, 'utf8');
   // F2c: o contrato do que o trecho usa de outro arquivo e o mesmo para os dois lados (e para a 2a passada).
   if (contrato && contrato.texto) fs.writeFileSync(path.join(dir, 'contrato.txt'), contrato.texto, 'utf8');
+  // H6e3 (D900): na ronda 1 da base nova, ao lado do mapa.json; o inspetor nao o recebe
+  if (herdadosDaFechada.length) {
+    fs.writeFileSync(path.join(dir, herdadosLib.ARQUIVO), JSON.stringify(herdadosDaFechada, null, 2) + '\n', 'utf8');
+  }
   // L3 (A3-03): a faixa vai no mapa.json; com a da ronda 1, o apurar-ronda.js confere as lentes que votaram.
-  const mapaJson = { arquivo: rel, mapa: r.mapa, faixa: faixa, headDoArquivo: marcaDoHead };
+  const mapaJson = { arquivo: rel, mapa: r.mapa, faixa: faixa, headDoArquivo: marcaDoHead, hashDoTrabalho: hashDoTrabalho };
   // F2d (c): na completa, a lista das lentes escolhidas pelo risco; o apurar confere que todas votaram
   if (faixa === 'completa') mapaJson.lentes = lentesDaRevisao;
   if (novo) mapaJson.novo = true;
@@ -1075,6 +1092,7 @@ if (faltasDaReferencia.length) saida.referenciaQueFalta = faltasDaReferencia;
 if (semPedido) saida.semPedido = semPedido;
 if (arquivada) saida.arquivada = arquivada;
 if (arquivada && arquivadaAberta) saida.arquivadaAberta = true;
+if (herdadosDaFechada.length) saida.herdados = herdadosDaFechada.length;
 if (degradado) {
   saida.degradado = degradado.trim();
   saida.aviso += ' Revisao degradada (--degradado): a aprovacao dela sai com "DEGRADADO: ' + degradado + '", e a ' +

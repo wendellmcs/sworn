@@ -65,7 +65,8 @@ const LISTAS_LIDAS = ['comandosLiberados', 'comandosBloqueados', 'intocaveis'];
 // D674 (item 10): `pedidos` liga por padrao (so `=== false` desliga, pedidos.js).
 // F4e: `guiaDoModelo` liga por padrao (so `=== false` desliga; lido por portao-juiz.js e abertura.js).
 // Lote 5 item 12 (D846): `avisoDeLeitura` liga por padrao (so `=== false` desliga, aviso-leitura.js).
-const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura', 'pedidos', 'juizAcima', 'revisaoTodoCodigo', 'aberturaEnxuta', 'provaPorArquivoTocado', 'guiaDoModelo', 'avisoDeLeitura'];
+// H6c (D895): `segredoNoCommit` liga por padrao (so `=== false` desliga, portao-commit.js); `portaoCommit` false tambem desliga.
+const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura', 'pedidos', 'juizAcima', 'revisaoTodoCodigo', 'aberturaEnxuta', 'provaPorArquivoTocado', 'guiaDoModelo', 'avisoDeLeitura', 'saidaEnxuta', 'segredoNoCommit', 'vermelhoAntes'];
 
 // Padrao que NUNCA casa um alvo relativo: letra de unidade (C: ou C:\) ou esquema
 // (file://). O alvo que chega aos portoes e sempre relativo a raiz do projeto

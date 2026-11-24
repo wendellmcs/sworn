@@ -10,6 +10,7 @@ const config = require('./lib/config.js');
 const glob = require('./lib/glob.js');
 const texto = require('./lib/texto.js');
 const veredito = require('./lib/veredito.js');
+const refutador = require('./lib/refutador.js');
 
 // 0.3.4, item 1 (D264, D287): o veredito do inspetor e gravado por hook, em vez de a mao.
 // Dois pontos de entrada, porque o Claude Code entrega o relatorio do subagente por dois caminhos:
@@ -117,9 +118,10 @@ function avisoOutroConteudo(lente, arquivo) {
     'Compare os dois (o arquivo e o JSON do inspetor) e apague o errado antes de gravar de novo: ' + arquivo + '.';
 }
 
-function semPasta(vd) {
+/** A resposta sem o campo da pasta (`vereditos` do inspetor, `refutacoes` do refutador), para comparar o conteudo. */
+function semPasta(vd, campo) {
   const copia = Object.assign({}, vd);
-  delete copia.vereditos;
+  delete copia[campo || 'vereditos'];
   return copia;
 }
 
@@ -179,6 +181,75 @@ function avisoDaGravacao(mensagem, raiz, gravado) {
   return avisoOutroConteudo(lente, arquivo);
 }
 
+/**
+ * H6e2 (D898): a pasta refutacoes/ vem do JSON do refutador; so vale a da base de um arquivo deste projeto (dentro da
+ * raiz, sem link para fora) cuja ronda do achado existe (a pasta numerada com A.txt e B.txt). Cria a pasta na 1a resposta.
+ */
+function pastaDasRefutacoes(r, raiz) {
+  const campo = r.refutacoes.trim();
+  const abs = path.resolve(raiz, campo);
+  if (!refutador.PASTA.test(glob.normalizar(abs))) {
+    return { erro: '"' + campo + '" nao e a pasta refutacoes de uma base em .claude/sworn/revisao/' };
+  }
+  const dentro = glob.normalizar(path.relative(raiz, abs));
+  if (dentro === '..' || dentro.startsWith('../') || path.isAbsolute(dentro)) {
+    return { erro: '"' + campo + '" fica fora da pasta do projeto (' + raiz + '), entao nao e uma revisao deste projeto' };
+  }
+  const base = path.dirname(abs);
+  if (!caminho.dentroPeloCaminhoReal(base, raiz)) {
+    return { erro: '"' + campo + '" passa por um link que leva para fora da pasta do projeto (' + raiz + '), entao nao gravo la' };
+  }
+  const ronda = path.join(base, String(r.ronda));
+  if (!ehArquivo(path.join(ronda, 'A.txt')) || !ehArquivo(path.join(ronda, 'B.txt'))) {
+    return { erro: 'a base de "' + campo + '" nao tem a ronda ' + r.ronda + ' (a pasta com A.txt e B.txt) do achado' };
+  }
+  try { fs.mkdirSync(abs); } catch (e) {
+    if (!e || e.code !== 'EEXIST') return { erro: 'nao consegui criar ' + abs + ' (' + texto.causaDoErro(e) + ')' };
+  }
+  if (!ehPasta(abs) || !caminho.dentroPeloCaminhoReal(abs, raiz)) {
+    return { erro: '"' + campo + '" nao e uma pasta dentro do projeto (' + raiz + '), entao nao gravo la' };
+  }
+  return { pasta: abs };
+}
+
+function avisoDoRefutador(causa) {
+  return 'sworn: nao gravei a resposta do refutador: ' + causa + '. Sem ela, o apurar-ronda.js nao aceita a ' +
+    'refutacao desse P0/P1: despache o sworn:refuter de novo com o achado (skill review, Passo 3).';
+}
+
+/** Grava a resposta do refutador e devolve o aviso (texto), ou null quando gravou ou ja estava gravada igual. */
+function avisoDaRefutacao(mensagem, raiz, gravado) {
+  if (typeof mensagem !== 'string' || mensagem.trim() === '') return avisoDoRefutador('a resposta veio vazia');
+  const r = extrairJson(mensagem);
+  if (!r) return avisoDoRefutador('nao achei o JSON na resposta');
+  const erros = refutador.errosDaResposta(r);
+  if (erros.length) return avisoDoRefutador('resposta fora da forma (' + erros.join('; ') + ')');
+  const onde = pastaDasRefutacoes(r, raiz);
+  if (onde.erro) return avisoDoRefutador(onde.erro);
+  const nome = refutador.nomeDoArquivo(r);
+  const arquivo = path.join(onde.pasta, nome);
+  try {
+    fs.writeFileSync(arquivo, JSON.stringify(r, null, 2) + '\n', { encoding: 'utf8', flag: 'wx' });
+    if (gravado) { gravado.refutador = true; gravado.arquivo = arquivo; }
+    return null;
+  } catch (e) {
+    if (!e || e.code !== 'EEXIST') return avisoDoRefutador('erro ao escrever ' + arquivo + ' (' + texto.causaDoErro(e) + ')');
+  }
+  let atual;
+  try { atual = JSON.parse(texto.semBom(fs.readFileSync(arquivo, 'utf8'))); } catch (e) {
+    return 'sworn: nao gravei a resposta do refutador: ja existe ' + arquivo + ' e nao consegui le-lo (' +
+      texto.causaDoErro(e) + '); nao sobrescrevi. Mova esse arquivo para fora da base e despache o sworn:refuter de ' +
+      'novo com o achado.';
+  }
+  // a pasta pode vir escrita de outro jeito (relativa, absoluta, com \) na 2a entrega: o que conta e a resposta
+  if (util.isDeepStrictEqual(semPasta(atual, 'refutacoes'), semPasta(r, 'refutacoes'))) {
+    if (gravado) { gravado.refutador = true; gravado.arquivo = arquivo; }
+    return null;
+  }
+  return 'sworn: nao gravei a resposta do refutador: ja existe ' + arquivo + ' com outro conteudo; nao sobrescrevi. ' +
+    'Compare as duas e mova a errada para fora da base antes de despachar o sworn:refuter de novo.';
+}
+
 /** Marca por inspetor, fora do estado da sessao (que tem lista fechada de campos) e fora de vereditos/. */
 function marcaDoInspetor(e) {
   if (typeof e.agent_id !== 'string' || e.agent_id === '') return null;
@@ -189,8 +260,10 @@ function marcaDoInspetor(e) {
 
 // Aviso de quando a marca do handback nao se grava: sem ela o SubagentStop nao sabe que o handback ja avisou.
 // Pedido 12 (A3-04): quem le e o usuario, sem "marca" nem "subagente", e com o que fazer com a repeticao.
-const MARCA_FALHOU = 'Este aviso pode se repetir quando o inspetor terminar (nao consegui guardar que ja avisei): ' +
-  'a repeticao e o mesmo aviso, ignore-a.';
+function marcaFalhou(quem) {
+  return 'Este aviso pode se repetir quando o ' + quem + ' terminar (nao consegui guardar que ja avisei): ' +
+    'a repeticao e o mesmo aviso, ignore-a.';
+}
 
 /** A lente do JSON da resposta, para o aviso de excecao; null quando a resposta nao se le. Nunca lanca. */
 function lenteDaResposta(e) {
@@ -202,7 +275,8 @@ function lenteDaResposta(e) {
 }
 
 function tratar(e) {
-  if (e.agent_type !== AGENTE) return null;
+  const doRefutador = e.agent_type === refutador.AGENTE;
+  if (e.agent_type !== AGENTE && !doRefutador) return null;
   if (e.hook_event_name !== 'SubagentStop' && e.hook_event_name !== 'PostToolUse') return null;
   // A2-16: a mesma forma estrita do texto.mensagemDoSubagente (o matcher do hooks.json ja garante o nome).
   if (e.hook_event_name === 'PostToolUse' && e.tool_name !== 'SubagentHandback') return null;
@@ -215,15 +289,20 @@ function tratar(e) {
 
   const raiz = config.raizDoProjeto(typeof e.cwd === 'string' && e.cwd ? e.cwd : process.cwd());
   const gravado = {};
-  const resultado = avisoDaGravacao(mensagem, raiz, gravado);
+  const resultado = (doRefutador ? avisoDaRefutacao : avisoDaGravacao)(mensagem, raiz, gravado);
 
   if (e.hook_event_name === 'PostToolUse' && marca) {
     try { fs.mkdirSync(path.dirname(marca), { recursive: true }); fs.writeFileSync(marca, '1', 'utf8'); } catch (x) {
       // so perde o silencio: o SubagentStop vai ler de novo. Se ha aviso, diz que ele pode vir duas vezes.
-      if (resultado) return resultado + ' ' + MARCA_FALHOU;
+      if (resultado) return resultado + ' ' + marcaFalhou(doRefutador ? 'refutador' : 'inspetor');
       // F3-07 (D335): o handback GRAVOU e a marca nao se gravou: o SubagentStop vai ler o texto de
       // encerramento, nao achar JSON e avisar "nao achei o JSON". Diz agora, sem ler transcricao, que esse
       // aviso pode ser ignorado.
+      if (gravado.refutador) {
+        return 'sworn: gravei a resposta do refutador em ' + glob.normalizar(path.relative(raiz, gravado.arquivo)) +
+          '. Se, quando o refutador terminar, vier o aviso de que nao achou o JSON na resposta, ignore esse aviso: a ' +
+          'resposta ja esta gravada (nao consegui guardar que este refutador ja foi tratado).';
+      }
       if (gravado.lente) {
         return 'sworn: gravei o veredito da lente ' + gravado.lente + ' em ' +
           glob.normalizar(path.relative(raiz, gravado.arquivo)) + '. Se, quando o inspetor terminar, vier o ' +
@@ -239,10 +318,15 @@ io.blindar(function () {
   io.lerEntrada(function (e) {
     let resultado;
     try { resultado = tratar(e); } catch (erro) {
-      const lente = lenteDaResposta(e);
-      resultado = 'sworn: nao consegui gravar o veredito ' +
-        (lente ? 'da lente ' + lente : '(nao soube qual lente: a resposta do inspetor nao trazia um JSON legivel)') +
-        ' - erro inesperado (' + (erro && erro.message) + '). ' + comoGravar(lente, null);
+      // o refutador nao tem lente nem "grave a mao": o passo e despachar o sworn:refuter de novo
+      if (e && e.agent_type === refutador.AGENTE) {
+        resultado = avisoDoRefutador('erro inesperado (' + texto.causaDoErro(erro) + ')');
+      } else {
+        const lente = lenteDaResposta(e);
+        resultado = 'sworn: nao consegui gravar o veredito ' +
+          (lente ? 'da lente ' + lente : '(nao soube qual lente: a resposta do inspetor nao trazia um JSON legivel)') +
+          ' - erro inesperado (' + (erro && erro.message) + '). ' + comoGravar(lente, null);
+      }
     }
     if (resultado) process.stderr.write(resultado + '\n');
     // A4 (s369): no handback (PostToolUse) o aviso vai tambem ao modelo, que orquestra a revisao - so na tela do dono,

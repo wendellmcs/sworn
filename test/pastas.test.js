@@ -342,6 +342,12 @@ test('R1: rodar codigo de dentro do clone de estudo e reconhecido; ler o clone, 
     assert.strictEqual(pastas.executaNoEstudo(comando, fora, env), null, 'nao devia reconhecer: ' + comando);
   }
   assert.strictEqual(pastas.executaNoEstudo('cat x.js', clone, env), null);
+  // D899: o cwd torto da entrada do gancho (numero, objeto, vazio) vale a pasta do processo, sem estourar: o estouro
+  // virava "liberou por seguranca" no portao destrutivo
+  for (const torto of [7, {}, '', null]) {
+    assert.ok(pastas.executaNoEstudo('node "' + c + '/x.js"', torto, env), 'cwd ' + JSON.stringify(torto));
+    assert.strictEqual(pastas.executaNoEstudo('npm test', torto, env), null, 'cwd ' + JSON.stringify(torto));
+  }
 });
 
 test('R1: o caminho curto do Windows e a forma do Git Bash tambem apontam para o clone', { skip: process.platform !== 'win32' }, function () {

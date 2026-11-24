@@ -321,9 +321,12 @@ test('D396 n. 3: (Join-Path ...) como argumento do PowerShell e o caminho, nao o
     todosPermitidos(dir, [['PowerShell', "Set-Content -Path (Join-Path src 'notas.txt') -Value x"]]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   // o `)` so se procura numa janela: muitos `(Join-Path` sem fechar nao viram conta quadratica
-  const t0 = Date.now();
+  // tempo de CPU deste processo, nao o relogio: a suite cheia em paralelo inflava o relogio (2896 ms) sem conta a mais
+  const t0 = process.cpuUsage();
   assert.ok(Array.isArray(estiloShell.alvosDeEstiloNoShell('x (Join-Path '.repeat(20000), null, { ferramenta: 'PowerShell' })));
-  assert.ok(Date.now() - t0 < 2000, 'demorou ' + (Date.now() - t0) + ' ms');
+  const gasto = process.cpuUsage(t0);
+  const ms = (gasto.user + gasto.system) / 1000;
+  assert.ok(ms < 2000, 'gastou ' + Math.round(ms) + ' ms de CPU');
 });
 
 test('D396 n. 4: -InputObject leva valor e nao e o alvo', () => {
@@ -659,9 +662,10 @@ test('hooks.json: o portao-estilo e o SEGUNDO portao do shell (no portao-shell.j
   // F3a (D828): os tres rodam num processo so, o portao-shell.js, nesta ordem.
   assert.deepStrictEqual(scripts, ['${CLAUDE_PLUGIN_ROOT}/scripts/portao-shell.js']);
   const fila = /const PORTOES = (\[[^\]]*\])/.exec(fs.readFileSync(path.join(RAIZ, 'scripts', 'portao-shell.js'), 'utf8'));
-  // Plano 091 (#1): o portao do commit vem por ultimo (so ele roda git, e so no comando de commit).
+  // Plano 091 (#1): o portao do commit vem por ultimo entre os que negam (so ele roda git, e so no comando de
+  // commit). H6b: o de pacote, que so avisa, vem depois dele.
   assert.deepStrictEqual(JSON.parse(fila[1].replace(/'/g, '"')),
-    ['portao-destrutivo.js', 'portao-estilo.js', 'portao-commit.js']);
+    ['portao-destrutivo.js', 'portao-estilo.js', 'portao-commit.js', 'portao-pacote.js']);
   for (const h of grupo[0].hooks) {
     assert.strictEqual(h.type, 'command');
     assert.strictEqual(h.command, 'node');

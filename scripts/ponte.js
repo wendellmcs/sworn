@@ -162,7 +162,9 @@ function transcricaoDe(harness, sessao, casa) {
 function executar(caminho, entrada, timeout, gerar) {
   const g = gerar || spawnSync;
   const cwd = typeof entrada.cwd === 'string' && pastaExiste(entrada.cwd) ? entrada.cwd : undefined;
-  const opcoes = { cwd: cwd, timeout: (Number(timeout) || 10) * 1000, windowsHide: true };
+  // H6a (D891): o portao sabe que roda pela ponte; o recibo-da-prova.js nao troca a saida fora do Claude Code
+  const opcoes = { cwd: cwd, timeout: (Number(timeout) || 10) * 1000, windowsHide: true,
+    env: Object.assign({}, process.env, { SWORN_PONTE: '1' }) };
   const r = g(NODE, [caminho], Object.assign({ input: JSON.stringify(entrada), encoding: 'utf8' }, opcoes));
   // s284 (Etapa 5): no sandbox do dsh no Windows o processo filho com stdio por pipe da EPERM (o pipe nomeado do
   // libuv pede uma escrita que o token restrito nao tem, dsh-sandbox-windows-acl/README.md); por arquivo, roda.

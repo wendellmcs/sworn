@@ -2062,7 +2062,7 @@ test('D634 (7b): o ultimo teste rodado na sessao falhou -> alegacao barra, mesmo
     gravar(tmp, 'f7b3', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'f7b3', dir, 'Segue o que mudou em a.js.', { transcript_path: tr }).json, null);
     // f7b4: o teste que passou depois do vermelho libera
-    const verde = linhasDoTranscript(tmp, 'f7b4', [usoBash('a', 'npm test'), resultado('a', 'Exit code 1', true), usoBash('b', 'npm test'), resultado('b', '# fail 0')]);
+    const verde = linhasDoTranscript(tmp, 'f7b4', [usoBash('a', 'npm test'), resultado('a', 'Exit code 1', true), usoBash('b', 'npm test'), resultado('b', '# pass 3\n# fail 0')]);
     gravar(tmp, 'f7b4', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'f7b4', dir, ENTREGA, { transcript_path: verde }).json, null);
   });
@@ -2123,10 +2123,87 @@ test('R2b: a ultima conferencia da tela que saiu 1 barra o pronto, mesmo com a s
     gravar(tmp, 'fr2b2', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'fr2b2', dir, 'Pronto. A referencia ainda falha ao abrir: nao rodei a conferencia dela.',
       { transcript_path: tr }).json, null);
+    // H6a (D891): a suite que a ENTREGA cola rodou de verdade; sem ela, o bloco nao tem recibo e barra
     const verde = linhasDoTranscript(tmp, 'fr2b3', [usoBash('a', conf), resultado('a', '{}', true), usoBash('b', conf),
-      resultado('b', '{"ok":true,"diferencas":2}')]);
+      resultado('b', '{"ok":true,"diferencas":2}'), usoBash('c', 'npm test'), resultado('c', '# pass 3\n# fail 0')]);
     gravar(tmp, 'fr2b3', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'fr2b3', dir, ENTREGA, { transcript_path: verde }).json, null);
+  });
+});
+
+// H6a (D891): o bloco colado so vale com uma linha dele numa saida de ferramenta da sessao (ou no resumo de um recibo
+// dela); sem o transcript, ou com ele sem nenhuma saida, vale a regra de antes.
+test('H6a: o bloco inventado barra com o motivo do recibo; o copiado, o do recibo, o de segundo plano e sem saidas passam', () => {
+  comTmp((tmp) => {
+    const dir = projetoCom(tmp, 'rc');
+    const tr = linhasDoTranscript(tmp, 'rc', [usoBash('a', 'npm test'), resultado('a', 'ℹ tests 7\nℹ pass 7\nℹ fail 0')]);
+    gravar(tmp, 'rc1', dir, 'Edit', 'a.js');
+    const r = fecho(tmp, 'rc1', dir, 'Pronto, os testes passaram.\n```\n# pass 3\n```', { transcript_path: tr });
+    assert.ok(r.json && r.json.decision === 'block', r.stdout);
+    assert.match(r.json.reason, /nao confere com nenhuma saida/);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(r.json.reason), 'ASCII (R5)');
+    assert.strictEqual(sessaoDe(tmp, 'rc1').contadores.fecho_sem_evidencia, 1, 'conta no balde do fecho sem evidencia');
+    gravar(tmp, 'rc2', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'rc2', dir, 'Pronto, os testes passaram.\n```\ntests 7 | pass 7 | fail 0\n```',
+      { transcript_path: tr }).json, null, 'a linha copiada');
+    // a contagem inventada ao lado da linha trivial que toda saida verde tem: o 'fail 0' sozinho nao e recibo
+    gravar(tmp, 'rc7', dir, 'Edit', 'a.js');
+    const r7 = fecho(tmp, 'rc7', dir, 'Pronto, os testes passaram.\n```\n# pass 999\n# fail 0\n```', { transcript_path: tr });
+    assert.ok(r7.json && r7.json.decision === 'block', 'pass 999 com fail 0: ' + r7.stdout);
+    // uma linha corrompida antes das saidas: as saidas depois dela ainda contam (barra o inventado, passa o copiado)
+    const corrompido = path.join(tmp, 'rc8.jsonl');
+    fs.writeFileSync(corrompido, '{"type":"user","mess\n' + fs.readFileSync(tr, 'utf8'), 'utf8');
+    gravar(tmp, 'rc8', dir, 'Edit', 'a.js');
+    const r8 = fecho(tmp, 'rc8', dir, 'Pronto, os testes passaram.\n```\n# pass 3\n```', { transcript_path: corrompido });
+    assert.ok(r8.json && r8.json.decision === 'block', 'linha corrompida, bloco inventado: ' + r8.stdout);
+    gravar(tmp, 'rc9', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'rc9', dir, 'Pronto, os testes passaram.\n```\ntests 7 | pass 7 | fail 0\n```',
+      { transcript_path: corrompido }).json, null, 'linha corrompida, bloco copiado');
+    // recibos fora do formato no estado (numero, entrada sem resumo): nao quebram o gancho e nao viram recibo
+    for (const [id, recibos] of [['rc10', 42], ['rc11', [{}]], ['rc12', [{ comando: 'npm test', resumo: 'pass 3' }]]]) {
+      gravar(tmp, id, dir, 'Edit', 'a.js');
+      const arqR = path.join(tmp, 'sworn', id + '.json');
+      const sR = JSON.parse(fs.readFileSync(arqR, 'utf8'));
+      sR.recibos = recibos;
+      fs.writeFileSync(arqR, JSON.stringify(sR), 'utf8');
+      const rR = fecho(tmp, id, dir, 'Pronto, os testes passaram.\n```\n# pass 3\n```', { transcript_path: tr });
+      assert.strictEqual(rR.status, 0, id + ': ' + rR.stderr);
+      assert.ok(rR.json && rR.json.decision === 'block', id + ' recibos ' + JSON.stringify(recibos) + ': ' + rR.stdout);
+    }
+    // a saida cortada: o transcript so tem o resumo trocado; o recibo da sessao guarda o resumo tambem
+    const cortado = linhasDoTranscript(tmp, 'rc3', [usoBash('a', 'npm test'), resultado('a', 'sworn: saida verde cortada')]);
+    gravar(tmp, 'rc3', dir, 'Edit', 'a.js');
+    const arq = path.join(tmp, 'sworn', 'rc3.json');
+    const s = JSON.parse(fs.readFileSync(arq, 'utf8'));
+    s.recibos = [{ comando: 'npm test', verde: true, resumo: ['ℹ pass 41', 'ℹ fail 0'] }];
+    fs.writeFileSync(arq, JSON.stringify(s), 'utf8');
+    assert.strictEqual(fecho(tmp, 'rc3', dir, 'Pronto, os testes passaram.\n```\npass 41\n```',
+      { transcript_path: cortado }).json, null, 'o resumo do recibo');
+    // o transcript sem nenhuma saida de ferramenta (o harness que nao a grava): a regra de antes, mesmo com recibo
+    const semSaidas = linhasDoTranscript(tmp, 'rc5', [usoBash('a', 'npm test')]);
+    gravar(tmp, 'rc5', dir, 'Edit', 'a.js');
+    const arq5 = path.join(tmp, 'sworn', 'rc5.json');
+    const s5 = JSON.parse(fs.readFileSync(arq5, 'utf8'));
+    s5.recibos = [{ comando: 'npm test', verde: true, resumo: ['ℹ pass 41'] }];
+    fs.writeFileSync(arq5, JSON.stringify(s5), 'utf8');
+    assert.strictEqual(fecho(tmp, 'rc5', dir, 'Pronto, os testes passaram.\n```\n# pass 3\n```',
+      { transcript_path: semSaidas }).json, null, 'transcript sem saidas');
+    // a prova em segundo plano: a linha so esta no arquivo de saida que o aviso de fim aponta
+    const saidaBg = path.join(tmp, 'rc6.output');
+    fs.writeFileSync(saidaBg, 'ℹ tests 5\nℹ fail 0\n', 'utf8');
+    const fimBg = { type: 'user', message: { role: 'user', content: '<task-notification>\n<task-id>bxr</task-id>\n' +
+      '<tool-use-id>b</tool-use-id>\n<output-file>' + saidaBg + '</output-file>\n<status>completed</status>\n' +
+      '<summary>Background command "npm test" completed (exit code 0)</summary>\n</task-notification>' } };
+    const bg = linhasDoTranscript(tmp, 'rc6', [{ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'b',
+      name: 'Bash', input: { command: 'npm test', run_in_background: true } }] } },
+      resultado('b', 'Command running in background with ID: bxr. Output is being written to: rc6.output.'), fimBg]);
+    gravar(tmp, 'rc6', dir, 'Edit', 'a.js');
+    const r6 = fecho(tmp, 'rc6', dir, 'Pronto, os testes passaram.\n```\ntests 5 | fail 0\n```', { transcript_path: bg });
+    assert.strictEqual(r6.json, null, 'a saida do segundo plano: ' + r6.stdout);
+    // o transcript que nao existe: a regra de antes
+    gravar(tmp, 'rc4', dir, 'Edit', 'a.js');
+    assert.strictEqual(fecho(tmp, 'rc4', dir, 'Pronto, os testes passaram.\n```\n# pass 3\n```',
+      { transcript_path: path.join(tmp, 'sumiu.jsonl') }).json, null, 'sem transcript, a regra de antes');
   });
 });
 
@@ -2156,7 +2233,7 @@ test('D634 (8) e D785: prova que nao rodou depois da ultima edicao de codigo bar
   comTmp((tmp) => {
     const dir = projetoCom(tmp, 'f8', { provaDePronto: 'npm test' });
     // o transcript em que o teste rodou ANTES da ultima edicao (a prova ficou velha) e o em que rodou depois
-    const testeAntesDaEdicao = linhasDoTranscript(tmp, 'f8', [usoBash('a', 'npm test'), resultado('a', '# fail 0'),
+    const testeAntesDaEdicao = linhasDoTranscript(tmp, 'f8', [usoBash('a', 'npm test'), resultado('a', '# pass 3\n# fail 0'),
       usoEdit('e', path.join(dir, 'a.js'))]);
     gravar(tmp, 'f8', dir, 'Edit', 'a.js');
     const r = fecho(tmp, 'f8', dir, ENTREGA, { transcript_path: testeAntesDaEdicao });
@@ -2175,7 +2252,7 @@ test('D634 (8) e D785: prova que nao rodou depois da ultima edicao de codigo bar
     const alega = fecho(tmp, 'f8f', dir, ENTREGA, { transcript_path: testeAntesDaEdicao });
     assert.ok(alega.json && /declare que nao rodou/.test(alega.json.reason), 'sem edicao no turno, o D634 segue barrando');
     const testeDepoisDaEdicao = linhasDoTranscript(tmp, 'f8c', [usoEdit('e', path.join(dir, 'a.js')), usoBash('a', 'npm test'),
-      resultado('a', '# fail 0')]);
+      resultado('a', '# pass 3\n# fail 0')]);
     gravar(tmp, 'f8c', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'f8c', dir, ENTREGA, { transcript_path: testeDepoisDaEdicao }).json, null);
     // projeto sem prova declarada nao ganha o item 8
@@ -2196,7 +2273,7 @@ test('D875: no fecho, a edicao fora do projeto depois da prova so barra se o cod
     fs.writeFileSync(path.join(dir, 'a.js'), 'const a = 1;\n');
     const imp = require('../scripts/lib/impressao-codigo.js');
     const fora = path.join(tmp, 'auxiliar.js');
-    const t = linhasDoTranscript(tmp, 'd875', [usoBash('a', 'npm test'), resultado('a', '# fail 0'), usoEdit('e', fora)]);
+    const t = linhasDoTranscript(tmp, 'd875', [usoBash('a', 'npm test'), resultado('a', '# pass 3\n# fail 0'), usoEdit('e', fora)]);
     const marcar = (id) => rodar('marcar-trabalho.js', { session_id: id, cwd: dir, tool_name: 'Write',
       tool_input: { file_path: fora } }, tmp);
     const semear = (id) => {
@@ -2242,7 +2319,7 @@ test('D785: com prova declarada e codigo editado no turno, a pendente barra sem 
     assert.ok(v.json && v.json.decision === 'block' && /falhou/.test(v.json.reason), v.stdout);
     // a prova que passou depois da edicao libera
     const verde = linhasDoTranscript(tmp, 'l2b', [usoEdit('e', path.join(dir, 'a.js')), usoBash('a', 'npm test'),
-      resultado('a', '# fail 0')]);
+      resultado('a', '# pass 3\n# fail 0')]);
     gravar(tmp, 'l2b', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'l2b', dir, 'Segue o que mudou.', { transcript_path: verde }).json, null);
   });
@@ -2339,7 +2416,7 @@ test('D785 (2.1b): o npm test que roda a prova declarada vale como ela, no laco 
       return d;
     };
     const rodou = (id, d, cmd) => linhasDoTranscript(tmp, id, [usoEdit('e', path.join(d, 'a.js')), usoBash('a', cmd),
-      resultado('a', '# fail 0')]);
+      resultado('a', '# pass 3\n# fail 0')]);
     const igual = comPacote('l9', 'node --test', 'node --test');
     const npm = rodou('l9', igual, 'npm test');
     gravar(tmp, 'l9', igual, 'Edit', 'a.js');
@@ -2368,7 +2445,7 @@ test('D785: o laco com a saida spawn EPERM manda rodar a prova com --test-isolat
     const r = fecho(tmp, 'l10', dir, 'Segue o que mudou.', { transcript_path: barrado });
     assert.ok(r.json && r.json.decision === 'block' && /node --test --test-isolation=none/.test(r.json.reason), r.stdout);
     const verde = linhasDoTranscript(tmp, 'l11', [usoEdit('e', path.join(dir, 'a.js')),
-      usoBash('a', 'node --test --test-isolation=none test/'), resultado('a', '# fail 0')]);
+      usoBash('a', 'node --test --test-isolation=none test/'), resultado('a', '# pass 3\n# fail 0')]);
     gravar(tmp, 'l11', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'l11', dir, 'Segue o que mudou.', { transcript_path: verde }).json, null);
   });
@@ -2584,7 +2661,7 @@ test('F1d: com provaPorArquivoTocado, a prova focada vale no laco da prova e no 
     fs.mkdirSync(path.join(dir, 'test'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'test', 'a.test.js'), "require('../a.js');\n");
     const focada = linhasDoTranscript(tmp, 'f1', [usoEdit('e', path.join(dir, 'a.js')),
-      usoBash('a', 'node --test test/a.test.js'), resultado('a', '# pass 2\n# fail 0')]);
+      usoBash('a', 'node --test test/a.test.js'), resultado('a', '# pass 3\n# fail 0')]);
     gravar(tmp, 'f1', dir, 'Edit', 'a.js');
     assert.strictEqual(fecho(tmp, 'f1', dir, 'Segue o que mudou em a.js.', { transcript_path: focada }).json, null,
       'o laco aceita a prova focada');
@@ -2617,7 +2694,7 @@ test('F1d: com provaPorArquivoTocado, a prova focada vale no laco da prova e no 
     fs.mkdirSync(path.join(sem, 'test'), { recursive: true });
     fs.writeFileSync(path.join(sem, 'test', 'a.test.js'), "require('../a.js');\n");
     const semChave = linhasDoTranscript(tmp, 'f3', [usoEdit('e', path.join(sem, 'a.js')),
-      usoBash('a', 'node --test test/a.test.js'), resultado('a', '# pass 2\n# fail 0')]);
+      usoBash('a', 'node --test test/a.test.js'), resultado('a', '# pass 3\n# fail 0')]);
     gravar(tmp, 'f3', sem, 'Edit', 'a.js');
     const s = fecho(tmp, 'f3', sem, 'Segue o que mudou.', { transcript_path: semChave });
     assert.ok(s.json && s.json.decision === 'block' && /nao rodou depois/.test(s.json.reason),

@@ -259,8 +259,9 @@ Também vêm instalados: o `playbook`, o manual de execução que o agente carre
 é comando); `effort-low` e `effort-high` (esforço baixo e esforço alto; o nome da skill fica em inglês), duas skills fora do menu que o playbook chama pela marcha, no
 começo de cada turno da tarefa, para ajustar o quanto a conversa principal pensa naquele turno (só o esforço: o modelo só muda quando você digita `/model`);
 o workflow `/sworn:parallel`, que roda 3 ou mais tarefas independentes de uma vez, com teto de
-agentes, o modelo mais barato que resolve e cópia isolada para quem edita; e três agentes: `inspector` e
-`dedupe-judge` da revisão cega, `reader` para leitura leve no paralelo.
+agentes, o modelo mais barato que resolve e cópia isolada para quem edita; e quatro agentes: `inspector`,
+`dedupe-judge` e `refuter` da revisão cega (o `refuter` confere um P0/P1 no código vivo antes que ele possa ser
+refutado), `reader` para leitura leve no paralelo.
 
 ## O que ele já pegou em uso real
 

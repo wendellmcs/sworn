@@ -137,6 +137,65 @@ function deveBloquear(texto) {
   return a.alegaSucesso && !a.temBloco && !a.declaraNaoRodou;
 }
 
+// H6a (15.1, D891): o bloco colado so vale como evidencia se for saida de verdade, conferida contra as saidas de
+// ferramenta desta sessao (o recibo). O bloco tem recibo quando uma mesma saida traz alguma linha dele e todas as linhas
+// de contagem dele ("tests 12", "1 failed"): a linha real nao libera a contagem inventada ao lado, nem se monta a linha
+// com pedacos de rodadas diferentes. A linha juntada pela regra de resposta ("tests 12 | pass 12 | fail 0") casa
+// quando cada pedaco entre | aparece. A comparacao normaliza a linha (normalizarLinha): sem a cor, sem as marcas do
+// comeco (espaco, >, *, bolinha, +, -, |, #, i, os vistos, os xis e o triangulo), com os espacos juntados, sem caixa, e
+// com borda de palavra ("tests 12" nao casa com "tests 120"). Pedaco com menos de 4 caracteres ("ok", "0") nao conta:
+// casaria com qualquer saida; o bloco so de pedacos assim nao se confere, e vale como antes.
+const MARCAS_DO_COMECO = /^[\s>*•+\-|#ℹ✔✓✖×▶]+/;
+const LETRA_OU_DIGITO = /[\p{L}\p{N}]/u;
+const LINHA_DE_CONTAGEM = /\b(?:tests?|suites|pass(?:ed|ing)?|fail(?:ed|ures?|ing)?|errors?|skipped|cancelled|todo)\b[:=\s]{0,3}\d|\d+\s+(?:tests?|pass(?:ed|ing)|fail(?:ed|ures?|ing)|errors?|skipped)\b/i;
+
+function normalizarLinha(linha) {
+  return linha.replace(COR_DO_TERMINAL, '').replace(MARCAS_DO_COMECO, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function pedacosDaLinha(linha) {
+  return linha.split('|').map(normalizarLinha).filter(function (p) { return p.length >= 4 && LETRA_OU_DIGITO.test(p); });
+}
+
+function temComBorda(saida, pedaco) {
+  for (let i = saida.indexOf(pedaco); i !== -1; i = saida.indexOf(pedaco, i + 1)) {
+    if (!LETRA_OU_DIGITO.test(saida.charAt(i - 1)) && !LETRA_OU_DIGITO.test(saida.charAt(i + pedaco.length))) return true;
+  }
+  return false;
+}
+
+/** As linhas do bloco que se conferem, cada uma com os pedacos e se e de contagem. */
+function linhasConferiveis(bloco) {
+  return bloco.split(/\r?\n/).map(function (l) {
+    return { pedacos: pedacosDaLinha(l), contagem: LINHA_DE_CONTAGEM.test(normalizarLinha(l)) };
+  }).filter(function (l) { return l.pedacos.length > 0; });
+}
+
+function blocoTemRecibo(linhas, saidasNormalizadas) {
+  return saidasNormalizadas.some(function (s) {
+    const casa = function (l) { return l.pedacos.every(function (p) { return temComBorda(s, p); }); };
+    return linhas.some(casa) && linhas.every(function (l) { return !l.contagem || casa(l); });
+  });
+}
+
+/**
+ * H6a: barra quando a prosa alega sucesso com bloco de saida, sem ressalva, e nenhum bloco que se confere tem recibo
+ * em `saidas` (as saidas de ferramenta da sessao, saude.saidasDoTranscript). Sem a lista (o transcript nao se le), com
+ * ela vazia ou so com saidas vazias (o harness que nao grava a saida no transcript), ou sem bloco que se confira,
+ * false: o bloco vale como antes.
+ */
+function deveBloquearSemRecibo(texto, saidas) {
+  if (!Array.isArray(saidas)) return false;
+  const saidasNormalizadas = saidas.map(function (s) {
+    return comoTexto(s).split(/\r?\n/).map(normalizarLinha).join('\n');
+  }).filter(function (s) { return s.trim() !== ''; });
+  if (!saidasNormalizadas.length) return false;
+  const a = analisar(texto);
+  if (!a.alegaSucesso || !a.temBloco || a.declaraNaoRodou) return false;
+  const blocos = blocosDeSaida(texto).map(linhasConferiveis).filter(function (ls) { return ls.length > 0; });
+  return blocos.length > 0 && !blocos.some(function (ls) { return blocoTemRecibo(ls, saidasNormalizadas); });
+}
+
 // D634 (7a): saida que mostra falha. Contagem so com numero de 1 para cima ("fail 0" e "0 failed" passam);
 // a linha "not ok" do tap com # TODO ou # SKIP nao e falha.
 const FALHA_NA_SAIDA = [
@@ -435,8 +494,21 @@ const MOTIVO = montar([
   'Nao reescreva a frase para escapar do portao. Rode, ou declare.'
 ]);
 
+// H6a (D891): o bloco colado nao confere com nenhuma saida de ferramenta desta sessao. ASCII (R5).
+const MOTIVO_SEM_RECIBO = montar([
+  'Voce afirmou sucesso, e o bloco que voce colou nao confere com nenhuma saida de ferramenta',
+  'desta sessao: o sworn procura numa mesma saida gravada uma linha do bloco e cada linha de',
+  'contagem dele (tests, pass, fail...). Faca uma destas duas coisas, e responda de novo:',
+  '',
+  '  1. cole, dentro de um bloco ``` , as linhas da saida copiadas como sairam (nao reescritas),',
+  '     ou rode agora o comando que prova o que voce afirmou e cole a saida dele; ou',
+  '  2. declare explicitamente o que NAO rodou, e por que.',
+  '',
+  'Nao reescreva o bloco nem a frase para escapar do portao. Rode, ou declare.'
+]);
+
 module.exports = {
-  NAO_RODOU, semBlocos, analisar, deveBloquear, MOTIVO, textoMostraFalha, deveBloquearPorFalha, declaraRessalva,
+  NAO_RODOU, semBlocos, analisar, deveBloquear, deveBloquearSemRecibo, MOTIVO_SEM_RECIBO, MOTIVO, textoMostraFalha, deveBloquearPorFalha, declaraRessalva,
   declaraSemRevisao, MOTIVO_FALHA, motivoTesteVermelho, motivoConferenciaVermelha, motivoProvaNaoRodou,
   motivoProvaRodando, motivoConferenciaRodando, TETO_DO_LACO, motivoDoLaco, saidaBarradaPeloSandbox, alegaCausa, deveBloquearPorCausa,
   MOTIVO_CAUSA

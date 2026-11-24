@@ -56,7 +56,11 @@ const NUMEROS = {
   'onze': 11, 'doze': 12, 'treze': 13, 'quatorze': 14, 'quinze': 15,
   'dezesseis': 16, 'dezessete': 17, 'dezoito': 18, 'dezenove': 19, 'vinte': 20,
   // F1d (D828): a 21a chave (provaPorArquivoTocado); o numero por extenso tem mais de uma palavra daqui em diante.
-  'vinte e uma': 21, 'vinte e duas': 22, 'vinte e tres': 23, 'vinte e três': 23, 'vinte e quatro': 24
+  'vinte e uma': 21, 'vinte e duas': 22, 'vinte e tres': 23, 'vinte e três': 23, 'vinte e quatro': 24,
+  // H6c (D895): a 25a chave (segredoNoCommit).
+  'vinte e cinco': 25,
+  // H6f (D902): a 26a chave (vermelhoAntes).
+  'vinte e seis': 26
 };
 
 // ── a licenca ────────────────────────────────────────────────────────────
@@ -391,6 +395,8 @@ test('L3: o revisar cita --completa, manda ler vereditosDescartados e diz que o 
 // dizer aqui de que trava e, ou se e modulo.
 const TRAVA_DO_BALDE = {
   fecho_sem_evidencia: 3, subitem_pendente: 3,
+  // H6f (D902): o mesmo portao-fecho da trava 3, quando o teste editado nunca falhou
+  teste_sem_vermelho: 3,
   fora_do_escopo: 4, sem_escopo: 4, intocavel: 4, frente_invalida: 4, fora_declarado: 4,
   comando_destrutivo: 5, shell_idioma_errado: 5, outra_frente: 5, cd_solto: 5, restaurou_fora_do_escopo: 5,
   armadilha_shell: 5,
@@ -784,13 +790,29 @@ test('D387: agents/dedupe-judge.md existe com model haiku e sem Write, e o corpo
 // CLAUDE.md. Lista fechada sem Skill tira as duas listas da abertura (medido: boot 28.5K contra 56.6K);
 // omitClaudeMd tira as instrucoes do projeto. Nenhum dos dois roda comando nem chama skill.
 test('D447: inspetor e juiz-mesmo tem tools fechada so de leitura e omitClaudeMd', () => {
-  for (const nome of ['inspector', 'dedupe-judge']) {
+  for (const nome of ['inspector', 'dedupe-judge', 'refuter']) {
     const cab = ler('agents/' + nome + '.md').match(/^---\r?\n([\s\S]*?)\r?\n---/);
     assert.ok(cab, nome + ': o agente nao tem frontmatter');
     assert.ok(/^tools: Read, Grep, Glob$/m.test(cab[1]), nome + ': tools tem de ser Read, Grep, Glob');
     assert.ok(!/^disallowedTools:/m.test(cab[1]), nome + ': disallowedTools herda a lista inteira (com Skill); use tools');
     assert.ok(/^omitClaudeMd: true$/m.test(cab[1]), nome + ': falta omitClaudeMd: true');
   }
+});
+
+// H6e2 (D898): o refutador so le, nao declara modelo (RA5: herda o da sessao) e copia de volta os campos do achado
+test('H6e2: agents/refuter.md existe sem model nem effort, e o corpo nao nomeia modelo e manda copiar os campos', () => {
+  const t = ler('agents/refuter.md');
+  const cab = t.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  assert.ok(cab, 'o agente nao tem frontmatter');
+  assert.ok(/^name: refuter$/m.test(cab[1]));
+  assert.ok(!/^model:/m.test(cab[1]) && !/^effort:/m.test(cab[1]), 'o refutador herda o modelo e o esforco da sessao');
+  const corpo = t.slice(cab[0].length);
+  assert.ok(!/haiku|sonnet|opus|fable|claude-|\bv?\d+\.\d+\.\d+\b|\$\s?\d/i.test(corpo), 'o corpo nao nomeia modelo, versao nem preco');
+  for (const campo of ['refutacoes', 'ronda', 'lente', 'arquivo', 'linha', 'severidade', 'veredito', 'prova', 'passada']) {
+    assert.ok(corpo.includes('"' + campo + '"'), 'o formato nao traz o campo ' + campo);
+  }
+  assert.match(corpo, /In doubt, `inconclusivo`/);
+  assert.match(corpo, /You don't open `mapa\.json`, `detector\.json`, `inventario\.json` or any `vereditos` folder/);
 });
 
 test('D387: o Passo 3 do revisar manda despachar sworn:dedupe-judge e gravar o mesmos.json', () => {

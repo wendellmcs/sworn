@@ -6,6 +6,8 @@ const agentesLib = require('./agentes.js');
 const apelidosLib = require('./apelidos.js');
 const catalogoLib = require('./catalogo.js');
 const jsonio = require('./jsonio.js');
+const ambienteLib = require('./ambiente.js');
+const kitLib = require('./kit.js');
 
 /**
  * Entrega F: para ESTE ambiente, o que consigo verificar aqui, o que nao, e por
@@ -173,7 +175,11 @@ function portoes(cwd, projeto, a) {
   return lista;
 }
 
-function relatorio(cwd, projeto) {
+/**
+ * `opcoes` vai ao `ambiente.detectar` do kit (H6j, D906): `claudeJson` e `rotuloClaudeJson`, que so a linha de comando
+ * passa. O kit fica fora de `portoes` e do `resumo`: e recomendacao, nao portao.
+ */
+function relatorio(cwd, projeto, opcoes) {
   const a = ambiente(cwd, projeto);
   const lista = portoes(cwd, projeto, a);
   const verificaveis = lista.filter(function (p) { return p.verificavel; });
@@ -181,6 +187,7 @@ function relatorio(cwd, projeto) {
   return {
     ambiente: a,
     portoes: lista,
+    kit: kitLib.daPasta(cwd, ambienteLib.detectar(cwd, opcoes)),
     resumo: {
       total: lista.length,
       verificaveis: verificaveis.length,
@@ -206,6 +213,7 @@ function texto(r) {
   linhas.push('');
   linhas.push('Garantidos por hook: ' + r.resumo.garantidos + '. O resto vive em instrucao,');
   linhas.push('e instrucao pode ser pulada - isto e desenho declarado, nao defeito a consertar.');
+  if (r.kit) linhas.push('', ...kitLib.linhas(r.kit));
   return linhas.join('\n');
 }
 

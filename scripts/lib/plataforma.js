@@ -103,9 +103,9 @@ const PONTOS = [
     chave: 'process_platform',
     classe: SO_NO_SISTEMA,
     titulo: 'Deducao do sistema e do idioma de shell',
-    arquivos: ['scripts/autorizar-paralelo.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/lib/admissao.js', 'scripts/lib/ambiente.js', 'scripts/lib/commit.js', 'scripts/lib/glob.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
+    arquivos: ['scripts/antes-do-compact.js', 'scripts/autorizar-paralelo.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/lib/admissao.js', 'scripts/lib/ambiente.js', 'scripts/lib/commit.js', 'scripts/lib/glob.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
                'scripts/lib/pastas.js', 'scripts/lib/plataforma.js', 'scripts/lib/projeto.js', 'scripts/lib/prova-no-fecho.js', 'scripts/lib/replay.js', 'scripts/lib/saude.js',
-               'scripts/lib/toques.js', 'scripts/lib/varredura.js', 'scripts/marcar-trabalho.js', 'scripts/medir-qualidade.js',
+               'scripts/lib/toques.js', 'scripts/lib/varredura.js', 'scripts/lib/vermelho-antes.js', 'scripts/marcar-trabalho.js', 'scripts/medir-qualidade.js',
                'scripts/preparar-revisao.js'],
     comoSeProva: 'rodando a suite naquele sistema: quem responde e o proprio Node',
     ressalva: 'a CONSEQUENCIA da deducao e injetavel e esta exercitada - ver tabela_de_plataforma ' +
@@ -150,8 +150,8 @@ const PONTOS = [
     classe: SO_NO_SISTEMA,
     titulo: 'Chamada de processo externo sem shell (o git; o navegador da captura de tela)',
     // F5a: todo git passa pelo scripts/lib/git.js (o rodar); quem so chama o git por ele saiu desta lista
-    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/conferir-tela.js', 'scripts/lib/git.js',
-               'scripts/lib/pastas.js', 'scripts/lib/prova-no-fecho.js',
+    arquivos: ['scripts/admissao.js', 'scripts/capturar-tela.js', 'scripts/conferir-tela.js', 'scripts/fim-sessao.js',
+               'scripts/lib/git.js', 'scripts/lib/pastas.js', 'scripts/lib/prova-no-fecho.js',
                'scripts/medir-qualidade.js', 'scripts/medir-travas.js', 'scripts/ponte.js', 'scripts/lib/tela-cega.js'],
     comoSeProva: 'rodando naquele sistema com git instalado (e o Chrome ou o Edge, para a captura de tela)',
     ressalva: 'com shell:false o Node nao consulta PATHEXT: um git empacotado como .cmd ou .bat ' +
@@ -163,7 +163,7 @@ const PONTOS = [
     chave: 'caminho_especifico',
     classe: SO_NO_SISTEMA,
     titulo: 'Caminho relativo remontado pelo separador do sistema',
-    arquivos: ['scripts/apurar-ronda.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/drift.js', 'scripts/lib/alvo-apagar.js', 'scripts/lib/cicatriz.js',
+    arquivos: ['scripts/antes-do-compact.js', 'scripts/apurar-ronda.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/drift.js', 'scripts/lib/alvo-apagar.js', 'scripts/lib/cicatriz.js',
                'scripts/lib/busca.js', 'scripts/lib/caminho.js', 'scripts/lib/citacao.js', 'scripts/lib/commit.js', 'scripts/lib/contrato.js', 'scripts/lib/replay.js', 'scripts/medir-qualidade.js',
                'scripts/medir-travas.js', 'scripts/vigentes.js'],
     comoSeProva: 'rodando a suite naquele sistema: o separador e o do proprio Node',
@@ -175,12 +175,12 @@ const PONTOS = [
     classe: INJETAVEL,
     titulo: 'Caminho do Windows normalizado para barra normal',
     arquivos: [
-      'scripts/abertura.js', 'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/handoff-curto.js',
-      'scripts/lib/alvo-apagar.js', 'scripts/lib/ambiente.js', 'scripts/lib/cegar.js',
+      'scripts/abertura.js', 'scripts/antes-do-compact.js', 'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/handoff-curto.js',
+      'scripts/lib/alvo-apagar.js', 'scripts/lib/ambiente.js', 'scripts/lib/cegar.js', 'scripts/lib/fatia.js',
       'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
       'scripts/lib/guias-modelo.js', 'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
-      'scripts/lib/projeto.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',
-      'scripts/lib/toques.js', 'scripts/lib/veredito.js', 'scripts/modelos.js', 'scripts/preparar-revisao.js'
+      'scripts/lib/projeto.js', 'scripts/lib/reabertura-curta.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',
+      'scripts/lib/toques.js', 'scripts/lib/veredito.js', 'scripts/lib/vermelho-antes.js', 'scripts/modelos.js', 'scripts/preparar-revisao.js', 'scripts/recibo-da-prova.js'
     ],
     comoSeProva: 'e trabalho de string puro: a entrada com barra invertida se passa de qualquer maquina',
     ressalva: 'no Linux e no macOS a barra invertida e caractere LEGAL em nome de arquivo, ' +

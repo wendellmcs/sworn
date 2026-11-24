@@ -413,6 +413,37 @@ test('regras (A): auditar.js tambem traz a chave regras', () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// H6e4 (15.0, §5.6): o /sworn:audit mede o aproveitamento por lente; a rodada automatica, nao
+test('aproveitamento (H6e4): auditar.js soma o porLente dos fechada.json do projeto', () => {
+  const dir = pasta('aproveitamento-cli');
+  try {
+    const base = path.join(dir, '.claude', 'sworn', 'revisao', 'src__a.js');
+    fs.mkdirSync(base, { recursive: true });
+    fs.writeFileSync(path.join(base, 'fechada.json'), JSON.stringify({ ronda: 2, aprovado: true,
+      porLente: { correcao: { corrigidos: 1, refutados: 1, descartados: 0, abertos: 0 } } }), 'utf8');
+    const r = comum.rodar(SCRIPT, [], { cwd: dir });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.deepStrictEqual(JSON.parse(r.stdout).aproveitamento, { revisoes: 1, semMedida: 0, ilegiveis: 0,
+      porLente: { correcao: { corrigidos: 1, refutados: 1, descartados: 0, abertos: 0, aproveitamento: 0.5 } } });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('aproveitamento (H6e4): se a soma lancar, so essa chave sai como nao medida e o relatorio segue', () => {
+  const apr = require('../scripts/lib/aproveitamento.js');
+  const original = apr.somar;
+  const dir = pasta('aproveitamento-quebra');
+  apr.somar = function () { throw new Error('soma quebrada simulada'); };
+  try {
+    const rel = aud.auditar(dir, {}, { aproveitamento: true });
+    assert.strictEqual(rel.aproveitamento.medido, false, JSON.stringify(rel.aproveitamento));
+    assert.match(rel.aproveitamento.motivo, /^nao medido: .*soma quebrada simulada/, rel.aproveitamento.motivo);
+    assert.ok(rel.memorias && rel.injetado !== undefined, 'o resto do relatorio saiu');
+  } finally {
+    apr.somar = original;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('memoria (F): a dica do erro depende do codigo (caminho, pasta, permissao)', () => {
   const dir = pasta('dica');
   try {

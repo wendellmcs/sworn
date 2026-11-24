@@ -159,6 +159,23 @@ serves which role, and how much they are willing to pay. With the facts in hand,
    count, so the last model shown may be older than the real one. If `medido: false` comes, say
    "effective model not measured" and the `motivo`; the automatic round never measures it (it reads every subagent
    transcript in the window, too slow for the session opening).
+
+   1e. **What each review lens is worth.** The `aproveitamento` key, summed from the closed blind reviews of this
+   project (each `fechada.json` under `.claude/sworn/revisao/` and `.claude/sworn/revisao-fechada/`). One line per lens
+   in `porLente`: `corrigidos` (findings that held a round and were fixed), `refutados` (refuted at the source),
+   `descartados` (dropped because an earlier review of the same lines refuted them with a reason), `abertos` (still
+   open at the cap) and `aproveitamento` = corrigidos / (corrigidos + descartados + refutados). A low value is
+   measured noise: that lens costs inspectors and mostly brings findings that do not become fixes. Never cut or
+   change a lens yourself: show the lowest ones and ask the owner, in 3 options, whether to keep, narrow or drop them.
+   The lens lists live in the plugin, in `scripts/lib/veredito.js` (`LENTES`, `SAEM_SO_LOGICA`, `LENTES_DO_TESTE`):
+   narrowing or dropping a lens is a change there and ships in a new sworn version, so outside the plugin's own
+   repository the owner takes the decision to whoever maintains sworn.
+   `aproveitamento: null` means no finding of that lens was fixed, refuted or dropped yet: say "not measured yet",
+   never 0. Say `revisoes` (how many closed reviews were summed); `semMedida` counts the closed reviews written before
+   this count existed (sworn 0.87.0), so a small `revisoes` next to a large `semMedida` means the measure is still
+   young. If `ilegiveis` is above zero, say how many `fechada.json` could not be read: they are out of the sum. If
+   `medido: false` comes, say "lens yield not measured" and the `motivo`, which names the cause; the automatic round
+   never measures it.
 2. **Overlaps.** Pairs of skills whose triggers compete for the same situation. Two skills that
    fire at the same moment mean that **neither of the two fires reliably.**
 

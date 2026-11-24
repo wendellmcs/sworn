@@ -207,6 +207,19 @@ test('082 T6 (p6-1): mensagens sem id contam cada uma; o id que existe segue con
   assert.strictEqual(Math.round(gasto.custoDoTexto(texto, Date.UTC(2026, 9, 1)).usd), 20);
 });
 
+// Pendencia #20: o preco vem do calibracao.precoDaChamada, como no custo-da-sessao.js: o sufixo de data sai do nome,
+// a faixa acima de 100 mil de prompt do Haiku 5.5 vale, e um nome herdado do Object nao vira preco.
+test('pendencia #20: custoDoTexto tira o sufixo de data, aplica a faixa por prompt e recusa nome herdado', () => {
+  const texto = [
+    linha('a', 'claude-haiku-4-5-20251001', U, OUT), // US$ 1 por milhao de entrada
+    linha('b', 'claude-haiku-5-5', U, OUT), // 1 milhao de prompt: a faixa de cima, US$ 0,50
+    linha('c', 'constructor', U, OUT)
+  ].join('\n');
+  const r = gasto.custoDoTexto(texto, Date.UTC(2026, 9, 1));
+  assert.strictEqual(Math.round(r.usd * 100), 150, JSON.stringify(r));
+  assert.strictEqual(r.semPreco, 1);
+});
+
 // p6-2: a transcricao que nao se le valia zero calada; agora conta em `ilegiveis`, fora do cache (a proxima medida tenta).
 // p6-3: o `semPreco` chega ao gastoDoMes e fica no cache (o arquivo do cache seguia somando o seu).
 test('082 T6 (p6-2, p6-3): ilegiveis e semPreco saem do estimarMes, do cache e do gastoDoMes', () => {

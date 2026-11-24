@@ -349,7 +349,7 @@ token, e um modelo julgando se houve evidência é o mesmo modelo que inventou a
 portão nega, a mensagem diz o motivo e as saídas possíveis — o agente lê e corrige o rumo no mesmo
 turno.
 
-O plugin se pendura em treze pontos do ciclo de uma sessão:
+O plugin se pendura em dezesseis pontos do ciclo de uma sessão:
 
 | Quando | Script | O que faz |
 |---|---|---|
@@ -357,15 +357,18 @@ O plugin se pendura em treze pontos do ciclo de uma sessão:
 | você manda um pedido | `scripts/abrir-turno.js` | zera as marcas do turno anterior: trabalho feito, busca feita, bloqueio; se você perguntar se o contexto está bom, manda o Claude gravar o handoff (o texto de continuação do trabalho) e seguir na mesma conversa; se você corrigir o jeito dele trabalhar ("eu já te disse", "da próxima vez…"), manda o Claude rodar o `/sworn:learn` na mesma resposta e perguntar a você, em 3 opções, se grava; quando o pedido é de melhoria ou função nova, oferece o `/sworn:radar`, uma vez por sessão; grava o seu pedido na lista numerada de `.claude/sworn/pedidos/`; numa conversa de 200 mil tokens ou mais parada há mais de 1 hora, segura a primeira mensagem, grava o resumo do chat em `.sworn/handoff/` e mostra quanto custa continuar (a mensagem seguinte passa); com 5 turnos de trabalho sem o plano mudar, pede a nota de progresso no plano |
 | antes de `Write` e `Edit` | `scripts/portao-escopo.js` | intocáveis, outra frente, "Fora", marcha, escopo, criar sem buscar, catraca (régua que só aperta: teto que não sobe e piso que não desce) e, com design system declarado, token fora do sistema |
 | antes de `Read` | `scripts/aviso-leitura.js` | arquivo de texto acima de 64 KB lido inteiro, sem `offset` nem `limit`: avisa uma vez por arquivo na sessão, com o tamanho e o lembrete de ler só o trecho; nunca nega |
-| antes de `Bash` e `PowerShell` | `scripts/portao-shell.js`, que roda num processo só o `scripts/portao-destrutivo.js` · `scripts/portao-estilo.js` · `scripts/portao-commit.js` | comando destrutivo, idioma de shell errado e `cd` solto (no `Bash`, corrige sozinho: o comando roda num subshell); avisa, sem negar, quando a tabela de idioma do PowerShell não se lê. Com design system declarado, nega arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`. Nega o `git commit` com código mudado na sessão sem revisão aprovada, e o `git push` com o cartão do que ele publicaria |
+| antes de `Bash` e `PowerShell` | `scripts/portao-shell.js`, que roda num processo só o `scripts/portao-destrutivo.js` · `scripts/portao-estilo.js` · `scripts/portao-commit.js` · `scripts/portao-pacote.js` | comando destrutivo, idioma de shell errado e `cd` solto (no `Bash`, corrige sozinho: o comando roda num subshell); avisa, sem negar, quando a tabela de idioma do PowerShell não se lê. Com design system declarado, nega arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`. Nega o `git commit` com código mudado na sessão sem revisão aprovada ou com segredo no que ele vai levar, e o `git push` com o cartão do que ele publicaria. Avisa o Claude, sem negar, do pacote instalado que não está no manifesto nem no lockfile, com o comando que confere o nome no registro |
 | antes de `Task` e `Agent` | `scripts/portao-agente.js` · `scripts/portao-apelido.js` · `scripts/portao-juiz.js` | agente caro em marcha rápida e chamada com modelo ou esforço fora da tabela da escada; `model:` e `effort:` do agente contra o apelido e o esforço gravados no projeto; o inspetor da revisão cega um degrau acima do modelo da sessão; o guia oficial do modelo no pedido de cada agente do `sworn` |
 | antes de `AskUserQuestion` | `scripts/portao-decisao.js` | barra pergunta ao dono sem exatamente 3 opções ou sem a recomendada em primeiro; pergunta de fato (sintoma, dado que só você tem) passa com `(fato)` no título curto (`header`); desliga com `"portaoDecisao": false` no `projeto.json` |
 | depois de `Write`, `Edit`, `NotebookEdit`, `Grep`, `Glob`, `Read`, `AskUserQuestion` e `Skill` (no `Bash` e no `PowerShell`, pelo `scripts/depois-do-shell.js`) | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; anota no registro do projeto o arquivo que a sessão escreveu (a trava 5 das outras sessões lê dele); conta as decisões suas respondidas e os commits que passaram |
-| depois de `Bash` e `PowerShell` | `scripts/depois-do-shell.js`, que roda num processo só o `scripts/marcar-trabalho.js` e o `scripts/conferir-depois.js` | o arquivo versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável) volta pelo git, e o Claude é avisado; sem escopo declarado, nada muda |
-| um subagente abre | `scripts/abrir-subagente.js` · `scripts/escalar.js` | entrega a ele o bloco "menos código" (o da abertura não chega ao subagente); os que só leem (`inspector`, `dedupe-judge`, `reader`, `Explore`, `Plan`) ficam de fora; `"menosCodigo": false` desliga. Se ele é o agente que um degrau da escada pediu, dá baixa no pedido |
-| um subagente termina | `scripts/gravar-veredito.js` · `scripts/escalar.js` | o inspetor da revisão cega: grava o veredito dele em `vereditos/<lente>.json` da ronda; não barra nada, não sobrescreve, e avisa o que não gravou (essa lente volta a ser gravada à mão). Um agente da escada que termina com a linha `ESCALAR: <agente> - <motivo>`: guarda o pedido do degrau de cima. Sem a linha, o pedido sai sozinho quando o agente volta pela segunda vez seguida dizendo que terminou sem a saída do teste que passa, ou quando as travas do sworn o barraram 3 vezes ou mais no mesmo despacho e ele voltou sem essa saída (lido na transcrição do subagente; só no Claude Code) |
+| depois de `Bash` e `PowerShell` | `scripts/depois-do-shell.js`, que roda num processo só o `scripts/marcar-trabalho.js`, o `scripts/conferir-depois.js` e o `scripts/recibo-da-prova.js` | o arquivo versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável) volta pelo git, e o Claude é avisado; sem escopo declarado, nada muda. O comando de teste deixa recibo no estado da sessão, e a saída verde e longa chega ao Claude só com o resumo (ver "Recibo da prova e saída enxuta") |
+| `Bash` ou `PowerShell` sai com erro | `scripts/recibo-da-prova.js` | o comando de teste que falhou deixa recibo no estado da sessão, com o código de saída; a saída chega ao Claude inteira |
+| um subagente abre | `scripts/abrir-subagente.js` · `scripts/escalar.js` | entrega a ele o bloco "menos código" (o da abertura não chega ao subagente); os que só leem (`inspector`, `dedupe-judge`, `refuter`, `reader`, `Explore`, `Plan`) ficam de fora; `"menosCodigo": false` desliga. Se ele é o agente que um degrau da escada pediu, dá baixa no pedido |
+| um subagente termina | `scripts/gravar-veredito.js` · `scripts/escalar.js` | o inspetor da revisão cega: grava o veredito dele em `vereditos/<lente>.json` da ronda; o refutador: grava a resposta dele em `refutacoes/` na base do arquivo; não barra nada, não sobrescreve, e avisa o que não gravou (esse arquivo volta a ser gravado à mão). Um agente da escada que termina com a linha `ESCALAR: <agente> - <motivo>`: guarda o pedido do degrau de cima. Sem a linha, o pedido sai sozinho quando o agente volta pela segunda vez seguida dizendo que terminou sem a saída do teste que passa, ou quando as travas do sworn o barraram 3 vezes ou mais no mesmo despacho e ele voltou sem essa saída (lido na transcrição do subagente; só no Claude Code) |
+| a conversa vai ser compactada (só no Claude Code) | `scripts/antes-do-compact.js` | no handoff que esta sessão gravou, refaz do disco o `HEAD`, o `git status`, o próximo item do plano e as pendências; o que o Claude escreveu de julgamento fica como estava; nunca barra a compactação |
+| um subagente para no limite de uso da API (só no Claude Code) | `scripts/escalar.js` | o agente da escada que o Claude Code encerrou no limite de uso (erro `rate_limit`): o pedido sai sozinho para o agente seguinte; o último da escada não é despachado de novo, porque bateria no mesmo limite, e o fim do turno manda dizer o que ficou por fazer. Outro erro da API e a sessão principal no limite ficam de fora |
 | o turno termina | `scripts/portao-fecho.js` | cobra evidência, barra etapa com subitem aberto, barra o turno que gravou um handoff sem colar o prompt em bloco de código na resposta final, barra uma vez o turno que deixou sem despacho o degrau que um agente pediu, grava os contadores, avisa quando é hora do handoff |
-| a sessão fecha | `scripts/fim-sessao.js` | apaga os arquivos de sessão parados há mais de 7 dias, nunca o da sessão que está fechando; o orçamento é de 1,5 s (o `timeout` do `hooks.json` não o aumenta), e a limpeza para antes disso: o que sobrar sai na próxima |
+| a sessão fecha | `scripts/fim-sessao.js` | apaga os arquivos de sessão parados há mais de 7 dias, nunca o da sessão que está fechando; o orçamento é de 1,5 s (o `timeout` do `hooks.json` não o aumenta), e a limpeza para antes disso: o que sobrar sai na próxima. Solta também, fora desse orçamento, a conta do custo e do uso da sessão, gravada em `.sworn/custo/` (ver "Custo de cada sessão") |
 
 Cinco coisas acontecem sem você pedir:
 
@@ -397,6 +400,19 @@ Cinco coisas acontecem sem você pedir:
   `session_id` que os hooks recebem, igual ao nome do arquivo `<id>.jsonl` da conversa, na pasta
   `.claude/projects/` da sua pasta pessoal. Sem a flag, o plano fica registrado como `sem-sessao`, e
   toda sessão recebe o aviso.
+- **Plano longo se lê por fatia.** `node "<plugin>/scripts/plano.js" --fatia [<id>] [--plano <caminho>]` imprime
+  só o cabeçalho do plano (o que vem antes da seção da 1ª caixa: decisões, restrições, mapa) e um item, com as
+  linhas do arquivo. Sem id, sai o próximo item sem marcar; com id, a caixa que começa por ele (`- [ ] H6d`, com ou
+  sem negrito), senão o título que o tem como palavra (a seção inteira), senão a linha de tabela cuja 1ª célula
+  começa por ele. Cada pedaço tem teto de 16 mil caracteres, e o corte diz quais linhas ficaram de fora e o
+  `offset` para lê-las com Read; uma linha que sozinha passa do teto sai cortada nele, com aviso. Id que abre mais
+  de uma caixa (ou título, ou linha de tabela) traz a primeira e diz em que linhas estão as outras. Caixa dentro de
+  bloco de código (``` ou ~~~, pela regra do CommonMark) não conta, nem aqui nem no próximo item do handoff. Sem
+  `--plano`, vale o `plano-ativo.json`, senão a linha `Plano:` do escopo da sessão. O handoff e a reabertura depois
+  da compactação já trazem esse comando, em vez de mandar ler o plano inteiro; plano todo marcado sai dito assim, e
+  um caminho com caractere que o shell expande (`$`, crase, aspas, `!`) fica fora do comando (passe `--plano` à
+  mão); com um deles na pasta onde o sworn está instalado, o comando inteiro fica de fora (a reabertura diz por quê). Id
+  que o plano não tem e plano que não se acha saem com erro e o motivo.
 - **Correção vira regra proposta.** Quando você corrige o jeito de o Claude trabalhar, ele atende o pedido,
   roda o `/sworn:learn` na mesma resposta e pergunta em 3 opções: gravar, ajustar o texto ou não gravar.
   Só grava com o seu sim.
@@ -726,7 +742,7 @@ burocracia onde não há risco.
 |---|---|---|---|
 | 1 | Entrevista → configuração sob medida | Nada. Gera a configuração do projeto pelo comando `/sworn:init`. | tokens 1× por projeto, com teto declarado |
 | 2 | Revisão cega A/B por lentes distintas | Nada. Apura por script, pelo comando `/sworn:review`. | tokens só quando invocado |
-| 3 | Fecho sem evidência | O fim do turno, quando a resposta alega sucesso sem colar a saída, ou colando só saída que mostra falha; quando o último teste rodado na sessão falhou; ou quando a prova de pronto do projeto (`provaDePronto`) não rodou depois da última edição de código. Declarar o que não rodou, ou que a falha segue, sempre libera. Hook `Stop`. | zero |
+| 3 | Fecho sem evidência | O fim do turno, quando a resposta alega sucesso sem colar a saída, ou colando só saída que mostra falha, ou um bloco que não confere com nenhuma saída de ferramenta da sessão; quando o último teste rodado na sessão falhou; ou quando a prova de pronto do projeto (`provaDePronto`) não rodou depois da última edição de código. Declarar o que não rodou, ou que a falha segue, sempre libera. Hook `Stop`. | zero |
 | 4 | Arquivo fora do escopo declarado | A escrita, quando o alvo não está no `.claude/sworn/escopo.md` (ou, com a sessão vinculada a uma frente, em `.claude/sworn/escopos/<frente>.md`). Hook `PreToolUse` em `Write` e `Edit`. | zero |
 | 5 | Comando destrutivo e sessão concorrente | O comando que apaga, o `cd` solto (a pasta muda para o comando seguinte; no `Bash` o comando é corrigido para rodar num subshell, no `PowerShell` é negado), a armadilha do shell no `Bash` (o comando que faria outra coisa do que parece) e a escrita em arquivo que outra frente já mexeu: o que já vinha modificado na foto do `git status` da abertura, ou o que outra sessão do sworn escreveu depois que esta abriu e segue sem commit (a edição feita à mão, fora do chat, não conta). Hook `PreToolUse` em `Bash` e em `Write`/`Edit`. `travas.destrutivo: false` desliga o comando que apaga, o `cd` solto e a armadilha do shell juntos. | zero |
 | 6 | Agente caro, modelo ou esforço trocado, pedido de subida esquecido | • O despacho de um agente da metade mais cara da escada, arredondada para baixo (com 2 ou 3 agentes, o topo; com 4 ou 5, os dois de cima), quando o escopo declarado só tem caminhos de marcha `rapida`.<br>• A chamada de um agente da escada com `model` ou `effort` diferente do que `agentes.degraus` grava, negada com a chamada certa escrita.<br>• Uma vez por pedido, o fim do turno com um pedido `ESCALAR:` de subagente ainda não despachado.<br>Os dois primeiros pelo hook `PreToolUse` em `Task`/`Agent`; o terceiro pelo hook `Stop`. Conta **todo** despacho, inclusive os que permite. | zero |
@@ -776,7 +792,47 @@ O que os portões leem, além do que a tabela diz:
   grep sai com erro e o resto da cadeia não roda; troque o `&&` por `;`); e o `grep -P` (não o `git grep -P`, que não depende disso) num projeto com a
   plataforma `win32` declarada no `projeto.json` (o grep do Git Bash sai com erro sem a configuração de idioma
   UTF-8; escreva `LC_ALL=C.UTF-8 grep -P ...`, ou use `grep -E`). Na procura do `grep`, o texto entre aspas, como a
-  mensagem de um commit, e o corpo de um heredoc não contam. Conta no balde `armadilha_shell`.
+  mensagem de um commit, e o corpo de um heredoc não contam. Desde a 0.87.0, mais quatro casos:
+  - a crase dentro das aspas duplas do código de `node -e`/`-p`, em qualquer sistema. O bash roda o que está entre as
+    crases antes do node; use aspas simples em volta do código, ou barra antes da crase. A crase solta passa, porque
+    aí a substituição é de propósito.
+  - com `win32` declarada, o `sed -i` sem `-b`, que regrava o arquivo sem o `\r`; use `sed -b -i`.
+  - com `win32`, o caminho do Git Bash (`/c/...`) numa string do código do node, que o node não entende; escreva
+    `C:/...`.
+  - com `win32`, o `/tmp` numa string do código do node, que vira `\tmp` na raiz do drive (`C:\tmp`); use
+    `require('os').tmpdir()`.
+
+  Conta no balde `armadilha_shell`.
+- **Recibo da prova e saída enxuta** (desde a 0.87.0). Cada comando de teste rodado no `Bash` ou no `PowerShell`
+  deixa um recibo no estado da sessão: o comando, se saiu verde, o código de saída e, quando houve corte, onde está a
+  saída inteira. Os executores conhecidos estão em `modelos/resumidores.json`: `node --test`, jest, vitest, pytest,
+  `go test`, `cargo test`, `dotnet test`, maven, gradle e mocha. O teste que falha chega ao Claude inteiro, sempre. No
+  Claude Code, a saída verde de mais de 2 mil caracteres, de um comando simples (sem `|`, `;`, `||`, redirecionamento
+  nem segundo plano), chega ao Claude só com as linhas do resumo do executor (até 40) e o caminho da saída inteira,
+  gravada em `.sworn/provas/`. A pasta tem um `.gitignore` próprio, que a deixa fora do git, e guarda os 20 logs mais
+  novos. Na trava 3, o bloco colado com a alegação de sucesso só vale se uma mesma saída de ferramenta da sessão (ou o
+  resumo de um recibo) traz uma linha dele, copiada como saiu, e cada linha de contagem dele (`tests 12`, `1 failed`).
+  A linha resumida em pedaços (`tests 12 | pass 12 | fail 0`) vale quando cada pedaço aparece nessa saída. Sem o
+  transcript legível, ou com o bloco só de pedaços curtos, vale a regra de antes.
+  `"saidaEnxuta": false` desliga o corte; o recibo e a conferência do bloco seguem.
+- **Custo de cada sessão** (desde a 0.87.0). Ao fechar a sessão, num projeto com o sworn configurado, um processo à
+  parte soma o uso do transcript e dos subagentes dela (os de workflow também), uma vez por mensagem, e grava
+  `.sworn/custo/<sessao>.json`: entrada, saída, cache lido e escrito, a estimativa em dólares pela tabela de preço do
+  plugin (o valor de API, não a cobrança do plano) e quantas vezes a saída enxuta cortou um verde, com os bytes que o
+  Claude deixou de ler. A mensagem de um modelo fora da tabela conta à parte, nunca como zero. A pasta tem um
+  `.gitignore` próprio e guarda os 200 registros mais novos. A sessão retomada regrava o mesmo arquivo; a que o
+  harness fecha antes do processo terminar fica sem registro. Para ler, `node "<plugin>/scripts/custo-das-sessoes.js"`
+  (na tabela das ferramentas de linha de comando).
+- **Vermelho antes de verde** (desde a 0.87.0, trava 3). O arquivo de teste que o Claude edita (pelo nome:
+  `*.test.js`, `*.spec.ts`, `test_*.py`, `*_test.go`, `*_spec.rb` e afins; o ajudante e a fixture da pasta de teste não
+  contam) precisa aparecer falhando depois da edição. O recibo de um comando de teste que falha com o código do
+  executor, ou cuja saída mostra falha, tira da lista os testes que ele cobre: os que ele cita, pelo caminho ou por glob
+  (`test/*.test.js`), ou todos, quando não cita nenhum arquivo de teste (a suíte, a pasta, o filtro por nome). A falha
+  interrompida, ou sem código (o tempo do shell que acabou), não conta. A alegação de pronto com teste editado sem esse
+  vermelho barra uma vez no fecho; editar o teste de novo pede outro vermelho. O teste que já falhou antes, ou que só
+  mudou texto, passa com uma linha da resposta que abre com `SEM VERMELHO: <motivo>`, que também limpa a lista. A edição
+  de um subagente não entra. Conta no balde `teste_sem_vermelho`. `"vermelhoAntes": false` desliga. É a ideia do
+  `nizos/tdd-guard` (MIT), feita sem modelo.
 - **Estado.** Se a pasta onde o plugin guarda o estado não aceita escrita, nada que estaria barrado passa por causa
   disso. E o `projeto.json` que existe mas não é um JSON válido é dito como inválido, e não como ausente, também
   na abertura.
@@ -964,6 +1020,7 @@ um módulo opcional, ou têm a própria chave. Cada um abaixo diz o que faz e co
 | Decisão (`scripts/portao-decisao.js`, antes de `AskUserQuestion`) | barra a pergunta ao dono que não tem exatamente 3 opções, ou cuja primeira não traz a marca `(Recomendado)` (valem também `(Recomendada)`, `(Recommended)` e `(Recom.)`, em qualquer caixa), ou que marca a recomendada em mais de uma opção | `"portaoDecisao": false` |
 | Apelido (`scripts/portao-apelido.js`, antes de `Task` e `Agent`) | confere o `model:` e o `effort:` de cada agente do projeto contra o apelido e o esforço gravados em `agentes.degraus`; se divergir, **avisa e deixa passar**, uma vez por sessão, a você e ao Claude, com o conserto em três opções (corrigir o arquivo do agente, corrigir o mapa do `projeto.json`, ou não mexer agora) | não há chave: sem a pasta `.claude/agents` ou sem `agentes.degraus` gravados ele não tem com o que comparar e fica calado |
 | Estilo (`scripts/portao-estilo.js`, antes de `Bash` e `PowerShell`) | com `.claude/sworn/design.json` declarado, nega o arquivo de estilo escrito por comando de shell e manda usar `Write` ou `Edit`, que o portão de escopo confere | não ter o `design.json` (módulo opcional, sem trava) |
+| Pacote novo (`scripts/portao-pacote.js`, antes de `Bash` e `PowerShell`) | no comando que instala pacote (`npm i`, `pnpm add`, `yarn add`, `bun add`, `pip install`, `pipx install`, `uv add`, `uv pip install`, `poetry add`, `cargo add`, `go get`, `dotnet add package`, `gem install`, `bundle add`, `composer require`), procura cada nome no manifesto e no lockfile da raiz do projeto e da pasta do comando; o que não está em nenhum chega ao Claude com o comando que confere o nome no registro (`npm view`, `pip index versions`...), contra o pacote inventado. Não consulta a rede e não nega: o comando segue, e quem confere é o Claude | não desliga: só avisa, e só no comando de instalação |
 | Prompt do handoff (`scripts/portao-fecho.js`, no fim do turno) | no turno que gravou um arquivo de handoff e não colou o prompt na resposta final, mostra a você o prompt do arquivo; barra só quando o arquivo não tem um prompt legível | `"portaoHandoff": false` (ver "Como desligar uma trava") |
 | Referência de topo (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo mudado na sessão é da marcha AAA, o tipo dele tem `referencias` declarada e nenhuma revisão contra ela fechou na sessão; a mensagem diz o comando, `/sworn:review <arquivo>` | `"portaoReferencia": false` (ver "Como desligar uma trava") |
 | Revisão aprovada (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo de código mudado na sessão é da marcha AAA (de qualquer marcha, com `"revisaoTodoCodigo": true`) e não tem revisão aprovada (a mesma que libera o commit), com ou sem `referencias`; a mensagem cita os arquivos e o comando, `/sworn:review <arquivo>` | `"portaoRevisao": false` (ver "Como desligar uma trava") |
@@ -1008,7 +1065,7 @@ sworn: ATENCAO - valor de tipo errado em .claude/sworn/projeto.json: portaoDecis
 ~~~
 
 E a conferência final do `/sworn:init` (`scripts/validar.js`) reprova o arquivo com a mesma frase, `<chave> tem
-de ser true ou false`. O `vigia`, o `revisaoTodoCodigo`, o `aberturaEnxuta` e o `provaPorArquivoTocado` são o contrário (só `true` liga), e `"true"` entre aspas também não liga. A lista das vinte e três chaves, com o padrão de cada uma, está em "O `projeto.json` chave por chave".
+de ser true ou false`. O `vigia`, o `revisaoTodoCodigo`, o `aberturaEnxuta` e o `provaPorArquivoTocado` são o contrário (só `true` liga), e `"true"` entre aspas também não liga. A lista das vinte e seis chaves, com o padrão de cada uma, está em "O `projeto.json` chave por chave".
 
 ---
 
@@ -1210,7 +1267,7 @@ então, o mínimo que funciona. Nunca se corta validação na fronteira, perda d
 Vale para código; texto de documento fica fora. São 714 caracteres em toda abertura.
 
 O mesmo bloco chega aos subagentes que podem escrever código, pelo gancho `SubagentStart` (o texto da abertura fica
-só na conversa principal). Os que só leem não recebem: `inspector`, `dedupe-judge` e `reader` do sworn, `Explore` e
+só na conversa principal). Os que só leem não recebem: `inspector`, `dedupe-judge`, `refuter` e `reader` do sworn, `Explore` e
 `Plan` do Claude Code.
 
 Atalho de propósito leva o comentário `atalho: <o que>. limite: <até onde vale>. trocar quando: <gatilho>.`, e o
@@ -1373,7 +1430,7 @@ dispara no evento dele.
 | Skill-manual | `playbook` | não é comando: o manual de execução que o agente carrega no começo da tarefa (marchas, lentes, loop de revisão, decisão em três opções, o que um "pronto" precisa provar). Traz as seis referências listadas mais abaixo |
 | Skills de esforço | `sworn:effort-low`, `sworn:effort-high` | não são comando: o agente chama sozinho pela marcha, no começo de cada turno da tarefa (a Rápida baixa o esforço da conversa principal naquele turno, a AAA sobe); só o esforço muda, o modelo não (ver o parágrafo depois da tabela de comandos) |
 | Workflow | `sworn:parallel` | tarefas independentes em paralelo, com teto de agentes, modelo barato e cópia isolada para quem edita; o Claude roda direto com 3 ou mais tarefas independentes (ver "Trabalho em paralelo") |
-| Agentes | `inspector`, `dedupe-judge`, `reader` | `inspector` e `dedupe-judge` são da revisão cega; `reader` é o agente de leitura leve do paralelo (ver "Por dentro de cada comando" e "Trabalho em paralelo") |
+| Agentes | `inspector`, `dedupe-judge`, `refuter`, `reader` | `inspector`, `dedupe-judge` e `refuter` são da revisão cega; `reader` é o agente de leitura leve do paralelo (ver "Por dentro de cada comando" e "Trabalho em paralelo") |
 | Ganchos | um script por evento | scripts `node` que o Claude Code roda em momentos fixos; a tabela seguinte lista evento por evento |
 | Painéis | `/sworn-session`, `/sworn-plan`, `/sworn-review`, `/sworn-replay` | o medidor da sessão, o painel do plano, o andamento da revisão cega e o que o último turno mudou (ver "Ver os números a qualquer hora", na seção "Como funciona") |
 
@@ -1385,15 +1442,18 @@ Os ganchos, um por evento, com o que cada um deixa na sua tela:
 | `UserPromptSubmit` | `scripts/abrir-turno.js` | zera as marcas do turno; reconhece a sua pergunta sobre o contexto e a correção do jeito de ele trabalhar; oferece o `/sworn:radar` ao pedido de melhoria; grava o pedido em `.claude/sworn/pedidos/`; segura a primeira mensagem depois de mais de 1 hora parado numa conversa de 200 mil tokens ou mais, e grava o resumo do chat em `.sworn/handoff/` | a conta da volta, quando segura a mensagem; fora isso, nada na tela: o Claude recebe a ordem de gravar o handoff e seguir, de rodar o `/sworn:learn` ou de oferecer o radar |
 | `PreToolUse` em `Write` e `Edit` | `scripts/portao-escopo.js` | escopo, intocáveis, outra frente, "Fora", criar sem buscar, catraca e design | a escrita volta negada, com o motivo e as saídas |
 | `PreToolUse` em `Read` | `scripts/aviso-leitura.js` | a leitura inteira de um arquivo de texto acima de 64 KB, uma vez por arquivo na sessão | a leitura segue; o Claude recebe o tamanho e o lembrete de achar a linha com o Grep e ler com `offset` e `limit` |
-| `PreToolUse` em `Bash` e `PowerShell` | `scripts/portao-shell.js`, que roda num processo só o `scripts/portao-destrutivo.js`, o `scripts/portao-estilo.js` e o `scripts/portao-commit.js` | comando destrutivo, idioma de shell, `cd` solto, estilo escrito por shell, commit sem revisão e push sem o cartão visto | o comando volta negado com o motivo; o `cd` solto no `Bash` roda corrigido, e o Claude fica sabendo |
+| `PreToolUse` em `Bash` e `PowerShell` | `scripts/portao-shell.js`, que roda num processo só o `scripts/portao-destrutivo.js`, o `scripts/portao-estilo.js`, o `scripts/portao-commit.js` e o `scripts/portao-pacote.js` | comando destrutivo, idioma de shell, `cd` solto, estilo escrito por shell, commit sem revisão ou com segredo, push sem o cartão visto e pacote fora do manifesto e do lockfile | o comando volta negado com o motivo; o `cd` solto no `Bash` roda corrigido, e o Claude fica sabendo; o pacote novo passa, com o aviso ao Claude |
 | `PreToolUse` em `Task` e `Agent` | `scripts/portao-agente.js`, `scripts/portao-apelido.js`, `scripts/portao-juiz.js` | agente caro em marcha rápida e chamada fora da tabela da escada; `model:` e `effort:` do agente contra o gravado; o modelo do inspetor da revisão cega; o guia do modelo no pedido de cada agente do sworn | o primeiro nega com o motivo e, na chamada fora da tabela, com a chamada certa; o segundo só avisa, uma vez por sessão, a você e ao Claude; o terceiro troca o modelo do inspetor da revisão cega pelo degrau acima do modelo da sessão (Haiku vira Sonnet, Sonnet vira Opus) na ronda 1 e, nas rondas 2 e 3, pelo degrau abaixo desse (a ronda sai do caminho de vereditos do briefing), põe no fim do pedido de cada agente do `sworn` a parte "How to ask" do guia oficial do modelo que vai rodá-lo, e não decide permissão |
 | `PreToolUse` em `AskUserQuestion` | `scripts/portao-decisao.js` | a pergunta ao dono: 3 opções, a recomendada em primeiro | a pergunta volta negada, e a mensagem diz o que refazer |
 | `PostToolUse` em `Write`, `Edit`, `NotebookEdit`, `Grep`, `Glob`, `Read`, `AskUserQuestion` e `Skill` (no `Bash` e no `PowerShell`, pelo `scripts/depois-do-shell.js`) | `scripts/marcar-trabalho.js` | marca trabalho real, busca feita e arquivos tocados; anota no registro do projeto o arquivo que a sessão escreveu (a trava 5 das outras sessões lê dele); conta as decisões suas respondidas e os commits que passaram | nada na tela: alimenta os contadores do aviso de troca de chat |
-| `PostToolUse` em `Bash` e `PowerShell` | `scripts/depois-do-shell.js`, que roda num processo só o `scripts/marcar-trabalho.js` e o `scripts/conferir-depois.js` | o versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável) | volta pelo git, e o Claude recebe a lista do que foi restaurado |
+| `PostToolUse` em `Bash` e `PowerShell` | `scripts/depois-do-shell.js`, que roda num processo só o `scripts/marcar-trabalho.js`, o `scripts/conferir-depois.js` e o `scripts/recibo-da-prova.js` | o versionado que o comando mudou ou apagou fora do escopo do começo do turno (ou intocável); a saída de um comando de teste | volta pelo git, e o Claude recebe a lista do que foi restaurado; o recibo da prova no estado da sessão e, na saída verde e longa, só o resumo com o caminho do log inteiro |
+| `PostToolUseFailure` em `Bash` e `PowerShell` | `scripts/recibo-da-prova.js` | o comando de teste que saiu com erro | nada na tela: o recibo da falha, com o código, no estado da sessão |
 | `SubagentStart` (menos os que só leem) | `scripts/abrir-subagente.js` | injeta o bloco "menos código" no subagente que pode escrever código | nada na tela; o subagente recebe o bloco antes do primeiro pedido |
-| `SubagentStop` (só do agente `inspector`) e `PostToolUse` em `SubagentHandback` | `scripts/gravar-veredito.js` | grava o veredito do inspetor em `vereditos/<lente>.json` da ronda | nada quando grava; se algo não foi gravado, uma mensagem diz o quê e por quê |
+| `SubagentStop` (só dos agentes `inspector` e `refuter`) e `PostToolUse` em `SubagentHandback` | `scripts/gravar-veredito.js` | grava o veredito do inspetor em `vereditos/<lente>.json` da ronda e a resposta do refutador em `refutacoes/` na base do arquivo | nada quando grava; se algo não foi gravado, uma mensagem diz o quê e por quê |
+| `PreCompact` (só no Claude Code) | `scripts/antes-do-compact.js` | refaz no handoff desta sessão as seções que vêm do disco (topologia, item do plano, pendências) | nada na tela; depois da compactação, o Claude relê o handoff com o disco de agora |
+| `StopFailure` com o erro `rate_limit` (só no Claude Code) | `scripts/escalar.js` | o subagente da escada encerrado no limite de uso da API (o `SubagentStop` dele não chega) | nada na tela: o pedido de subida no estado da sessão, que o fim do turno cobra |
 | `Stop` | `scripts/portao-fecho.js` | cobra evidência, etapa com subitem aberto e o prompt do handoff; barra uma vez o fim do turno com pedido `ESCALAR:` de subagente ainda não despachado (trava 6); grava os contadores | o turno volta com o motivo, ou fecha, com o aviso do handoff quando um gatilho cruzou |
-| `SessionEnd` | `scripts/fim-sessao.js` | apaga os arquivos de sessão parados há mais de 7 dias | nada |
+| `SessionEnd` | `scripts/fim-sessao.js` | apaga os arquivos de sessão parados há mais de 7 dias; solta a conta do custo e do uso da sessão (`scripts/custo-das-sessoes.js --gravar`) | nada na tela: o registro em `.sworn/custo/<sessao>.json` |
 
 Os portões que nomeiam uma chave de liga/desliga estão em "Os portões que não são travas"; as chaves, em "O
 `projeto.json` chave por chave".
@@ -1596,6 +1656,14 @@ código: o turno que grava um handoff sem isso é barrado no fim (o portão do p
 "Como desligar uma trava"). E se o turno já gravou o handoff e colou o bloco, o aviso do handoff
 não manda rodar nem colar de novo: só apontar para o bloco acima.
 
+O handoff pode ter sido gravado horas antes da compactação. Logo antes dela (o evento `PreCompact`, só no Claude
+Code), o `scripts/antes-do-compact.js` refaz no handoff desta sessão as seções que vêm do disco: a topologia com o
+`HEAD` e o `git status`, o item do plano (se a seção 3 ainda abre com o bloco que o script copiou) e as pendências.
+As de julgamento ficam como estavam, e uma linha no topo diz quando foi refeito. Depois da compactação, a reabertura
+que passa do que o harness mostra (acima de 10 mil caracteres ele guarda a saída num arquivo e mostra só o começo)
+vai inteira para `.sworn/reabertura/<sessão>.md`, e a resposta leva primeiro a ordem de reler o handoff, depois o
+caminho desse arquivo e o que couber.
+
 **O que passa de um chat ao outro sem depender de memória:**
 
 - **A lista dos seus pedidos.** Cada mensagem sua que chega ao Claude vira uma linha numerada, com data e hora, em
@@ -1732,16 +1800,22 @@ chat; decisão do dono sempre em exatamente três opções, a recomendada marcad
 precisa provar. Sem adaptador do projeto, ele roda em modo degradado e **declara** o que não
 consegue verificar.
 
-### Os agentes `inspector` e `dedupe-judge`
+### Os agentes `inspector`, `dedupe-judge` e `refuter`
 
 O `inspector` é quem o `review` despacha, um por lente. Só lê (`Read`, `Grep`, `Glob`: sem `Write`, `Edit`,
-comando ou skill), recebe só os dois artefatos e a régua, e devolve veredito em JSON. Desde a 0.6.2 os dois agentes
-abrem sem a lista de skills e sem as instruções do projeto (`omitClaudeMd`, que pede o Claude Code 2.1.271 ou mais
+comando ou skill), recebe só os dois artefatos e a régua, e devolve veredito em JSON. Desde a 0.6.2 o `inspector` e
+o `dedupe-judge` (e o `refuter`, desde a 0.87.0) abrem sem a lista de skills e sem as instruções do projeto (`omitClaudeMd`, que pede o Claude Code 2.1.271 ou mais
 novo): abertura menor, custo menor por inspetor. O `dedupe-judge` entra no Passo 3 do `review`,
 quando a apuração lista pares de achados vizinhos: lê só as descrições e diz se cada par é o mesmo
-defeito. É aviso: a contagem da ronda não muda. São os dois únicos arquivos do plugin que declaram
+defeito. É aviso: a contagem da ronda não muda. O `inspector` e o `dedupe-judge` são os dois únicos arquivos do plugin que declaram
 modelo e esforço — para que toda revisão não saia no modelo mais caro da sessão —, e essa exceção
 está declarada nos limites, mais abaixo.
+
+O `refuter` (desde a 0.87.0) entra no Passo 3 do `review` quando se quer refutar um P0/P1 do lado do trabalho: um
+por achado, com o arquivo real e a linha. Só lê, como os outros dois, mas abre o código vivo, e responde
+`confirmado`, `refutado` ou `inconclusivo`, citando `arquivo:linha`. O `apurar-ronda.js` só aceita a refutação desse
+P0/P1 no `refutados.json` quando a resposta, que o gancho grava em `refutacoes/` na base do arquivo, diz
+`refutado`; na dúvida o achado fica. Ele não declara modelo: herda o da sessão.
 
 ---
 
@@ -1845,8 +1919,9 @@ dois lugares, como na tabela.
 | Rodar | O que devolve |
 |---|---|
 | `node "<plugin>/scripts/uso.js"` | quantas vezes cada trava disparou neste projeto |
+| `node "<plugin>/scripts/custo-das-sessoes.js" [--limite N] [--json]` | o custo e o uso das últimas sessões deste projeto (10 sem `--limite`), das gravadas em `.sworn/custo/`, e o total: estimativa pela tabela de preço, valor de API, não cobrança. Sem registro, diz que o `SessionEnd` grava cada sessão ao fechar |
 | `node "<plugin>/scripts/agentes-rodando.js" [--transcricao <caminho do .jsonl>]` | os agentes em segundo plano desta sessão que ainda rodam, um por linha: o `/sworn:handoff` roda antes de escrever o handoff, que só sai com todos terminados. Lê a transcrição da sessão do ambiente (`CLAUDE_CODE_SESSION_ID`), ou a de `--transcricao`; sem as duas, diz "nao medidos", a causa e o passo. Saída 0 sempre |
-| `node "<plugin>/scripts/cobertura.js"` | quais portões este ambiente consegue verificar, quais não, e por quê |
+| `node "<plugin>/scripts/cobertura.js"` | quais portões este ambiente consegue verificar, quais não, e por quê; no fim, o kit da linguagem (servidor de linguagem, context7, gitleaks, semgrep e, em projeto Node, knip), com o que se viu no projeto e o comando de instalar cada um. O sworn não instala nenhum deles |
 | `node "<plugin>/scripts/cicatriz.js" --manual <pasta ou arquivo do seu manual> --corpus <pasta com o seu histórico em .md>` | para cada regra do seu manual: existe decisão, incidente ou achado atrás dela? Sem `--corpus` o script avisa que não leu histórico e não separa nada; sem `--manual` mede as skills do próprio plugin |
 | `node "<plugin>/scripts/plataforma.js" --raiz "<plugin>"` | em que sistemas cada trecho dependente de plataforma foi de fato exercitado |
 | `node "<plugin>/scripts/medir-travas.js" --congelar <pasta>`, depois `--gerar --modelo <nome> --destino <pasta>` e `--apurar <pasta da rodada>` | a medição de antes/depois das travas: quantas vezes o agente diz "pronto" com o teste vermelho, sem o plugin e com ele, cada tarefa num projeto de brinquedo novo. O `--congelar` grava antes o sha256 das tarefas, da apuração e do instrumento; o `--apurar` só dá veredito (saída 0) com o congelado conferindo e a rodada completa, e sai 2 sem ele. Cada execução é uma sessão paga do `claude` |
@@ -1965,7 +2040,7 @@ Há um sétimo, menor, que vale dizer junto porque surpreende: **a auditoria de 
 regra e histórico por palavra exata.** `publicar` não casa `publicado`. A lista de "sem cicatriz"
 que ela devolve é pergunta, não sentença.
 
-**E duas exceções, declaradas.** O plugin não guarda nome de modelo, com duas exceções. Os agentes
+**E duas exceções, declaradas.** O plugin não guarda nome de modelo, com duas exceções. Dois dos agentes
 que o `/sworn:review` despacha — o `inspector` e o `dedupe-judge` — declaram no próprio arquivo um
 apelido de modelo e um esforço, para que toda revisão não saia no modelo mais caro da sessão. E o
 `workflows/parallel.js`, o roteiro do `/sworn:parallel`, aceita os apelidos `haiku`, `sonnet` e `opus`
@@ -2117,7 +2192,7 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 | `portaoRevisao` | o portão da revisão aprovada: barra a entrega com arquivo de código da marcha AAA mudado na sessão sem revisão aprovada | ligado; `false` desliga |
 | `revisaoTodoCodigo` | o portão da revisão aprovada cobra todo arquivo de código mudado na sessão, de qualquer marcha, como o portão do commit | desligado; `true` liga |
 | `portaoManual` | o portão do manual: nega editar arquivo da marcha AAA enquanto o manual de execução (skill com "padrao" no nome) não foi carregado na sessão | ligado; `false` desliga |
-| `portaoCommit` | o portão do commit (`scripts/portao-commit.js`): nega o `git commit` enquanto um arquivo de código mudado na sessão não tem revisão aprovada; diz a faixa e quantos inspetores cada um pede, e aponta o atalho novo sem "trocar quando:". Do arquivo cuja revisão fechou no teto de 3 rondas ele não pede revisão nova: pede o commit com `# sworn: sem-revisao`, depois dos consertos com teste e da suíte inteira verde. Antes do `git push`, nega com o cartão do que ele publicaria: o destino (o endereço sai sem usuário nem senha), os commits que o remoto não tem pelo que este repositório sabe dele (um `git fetch` antes atualiza a conta), os arquivos, os autores, a sanitação de autores, mensagens e conteúdo dos arquivos (a classe e o lugar de cada achado, nunca o texto achado), e o aviso do `--force`, do `--delete` e do `--all`. Com o sim do dono, o mesmo push com `# sworn: push-visto` no fim do comando passa | ligado; `false` desliga, o cartão do push junto |
+| `portaoCommit` | o portão do commit (`scripts/portao-commit.js`): nega o `git commit` enquanto um arquivo de código mudado na sessão não tem revisão aprovada; diz a faixa e quantos inspetores cada um pede, e aponta o atalho novo sem "trocar quando:". Do arquivo cuja revisão fechou no teto de 3 rondas ele não pede revisão nova: pede o commit com `# sworn: sem-revisao`, depois dos consertos com teste e da suíte inteira verde. Antes do `git push`, nega com o cartão do que ele publicaria: o destino (o endereço sai sem usuário nem senha), os commits que o remoto não tem pelo que este repositório sabe dele (um `git fetch` antes atualiza a conta), os arquivos, os autores, a sanitação de autores, mensagens e conteúdo dos arquivos (a classe e o lugar de cada achado, nunca o texto achado), e o aviso do `--force`, do `--delete` e do `--all`. Com o sim do dono, o mesmo push com `# sworn: push-visto` no fim do comando passa | ligado; `false` desliga, o cartão do push e o segredo no commit (`segredoNoCommit`) junto |
 | `paralelismo` | as regras de trabalho em paralelo que a abertura injeta | ligado; `false` desliga |
 | `avisoDeVolta` | o aviso antes de gastar: a 1ª mensagem num chat de 200 mil tokens ou mais, parado há mais de 1 hora, é parada com a conta de continuar contra abrir um chat novo e o resumo do chat gravado para o chat novo; mandada de novo, passa | ligado; `false` desliga |
 | `avisoDeLeitura` | o aviso de leitura grande: antes do Read de um arquivo de texto acima de 64 KB sem `offset` nem `limit`, o Claude recebe o tamanho e o lembrete de ler só o trecho (Grep, depois `offset` e `limit`); avisa uma vez por arquivo na sessão e nunca nega | ligado; `false` desliga |
@@ -2126,9 +2201,12 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 | `guiaDoModelo` | o guia oficial do modelo (em `modelos/claude/`): a parte "How to ask" entra no fim do pedido de cada agente do sworn, a do modelo que vai rodá-lo, e a abertura traz a do modelo da sessão, exceto na abertura enxuta | ligado; `false` desliga |
 | `menosCodigo` | o bloco "menos código" que a abertura injeta: a escada de 7 degraus antes de escrever código e o formato do comentário de atalho | ligado; `false` desliga |
 | `aberturaEnxuta` | a abertura enxuta, para modelo de contexto curto: as regras do projeto inteiras e os blocos de paralelo, menos paradas, qualidade de resposta e menos código numa linha de resumo cada (perto de 2,3 mil caracteres a menos), e sem o guia do modelo da sessão | desligado; `true` liga |
+| `segredoNoCommit` | o segredo no commit (`scripts/lib/segredo-commit.js`, pelo portão do commit): antes do `git commit`, a classe "segredo, chave ou token" da sanitação (`sk-`, `ghp_`, `gho_`, `ghs_`, `ghu_`, `github_pat_`, `AKIA`, `xox`, `AIza`, `npm_`, JWT, `Bearer` com valor, chave privada) varre as linhas acrescentadas do que está no índice; com `git add` no mesmo comando, ou com `git commit -a`, `--all`, `-p` ou caminho, também as dos arquivos rastreados mudados fora do índice; com `git add`, também os arquivos não rastreados fora do `.gitignore` (sem binário, sem link, sem arquivo acima de 1 MB e até 32 MB lidos no total); o git que passa de 15 s somados deixa o resto sem varrer. Nega com o arquivo, a linha e a classe, nunca o texto achado. Falso positivo (exemplo, isca de teste) passa com `# sworn: segredo-visto` no comando; a marca `# sworn: sem-revisao` não dispensa isto. O cartão do push segue varrendo de novo antes de publicar | ligado; `false` desliga; `"portaoCommit": false` desliga junto |
 | `provaPorArquivoTocado` | a prova de cada turno passa a ser a dos arquivos de código mexidos: o teste que cita o arquivo pelo nome (ou é o próprio arquivo), rodado depois da última edição dele e verde. A suíte inteira (a `provaDePronto`) passa a ser cobrada pelo portão do commit, antes de cada commit; com `"portaoCommit": false`, essa cobrança sai junto | desligado; `true` liga |
 | `vigia` | a novidade da semana e, do radar da semana, quantos candidatos e quantos para adotar, na abertura (só para quem mantém o plugin) | desligado, menos no repositório do próprio plugin; `true` liga, `false` desliga |
 | `modoContinuo` | o modo contínuo: troca de chat só por tamanho (aviso a 250 mil), decisão técnica sem parar | ligado, com ou sem `projeto.json`; `false` desliga |
+| `saidaEnxuta` | a saída enxuta: no Claude Code, a saída verde e longa de um comando de teste chega ao Claude só com o resumo do executor e o caminho da saída inteira, em `.sworn/provas/` (ver "Recibo da prova e saída enxuta"); o recibo e a conferência do bloco na trava 3 seguem com ela desligada | ligado; `false` desliga |
+| `vermelhoAntes` | o vermelho antes de verde: o pronto com arquivo de teste editado na sessão, sem um comando de teste que o cobre ter falhado depois, barra no fecho (ver "Vermelho antes de verde") | ligado; `false` desliga |
 
 **As opcionais.** Podem faltar sem erro; quando vêm, o validar as confere.
 

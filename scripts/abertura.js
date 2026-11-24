@@ -154,6 +154,15 @@ io.blindar(function () {
     // raizDoProjeto abaixo so procura a nova. Mesma segunda rede da auditoria.
     // L5-s107-7: so o cwd que e texto vale (como no abrir-subagente.js); outro valor cai no da pasta do processo.
     const cwdDaEntrada = typeof e.cwd === 'string' && e.cwd ? e.cwd : process.cwd();
+    // H6a2 (D892, defeito 1): na compactacao o stdout se junta ate a saida (ou a falha, pelo io.antesDeSair); o que
+    // passa do que o harness mostra vai inteiro para .sworn/reabertura/ e sai a previa, com as ordens na frente.
+    let raizDaReabertura = cwdDaEntrada;
+    let ordensDaReabertura = null;
+    if (e.source === 'compact') {
+      const curta = require('./lib/reabertura-curta.js');
+      curta.juntar();
+      io.antesDeSair(function () { curta.soltar(raizDaReabertura, e.session_id, ordensDaReabertura); });
+    }
     try {
       const migrou = require('./lib/migracao.js').migrarProjeto(cwdDaEntrada);
       if (migrou) process.stdout.write(migrou + '\n\n');
@@ -161,6 +170,7 @@ io.blindar(function () {
       process.stdout.write('sworn: migracao da pasta antiga nao rodou (' + causa(erro) + '). O resto da abertura segue igual.\n\n');
     }
     const cwd = config.raizDoProjeto(cwdDaEntrada);
+    raizDaReabertura = cwd;
     // A5-05: o estado que nao grava (pasta que nao se cria, disco cheio) nao cala a abertura - o io.blindar engolia o
     // erro e nada saia. A reinjecao nao depende do estado; uma linha diz o que ficou de fora (molde da auditoria).
     let semEstado = null;
@@ -220,6 +230,8 @@ io.blindar(function () {
           'saude, grave o handoff com /sworn:handoff antes de seguir.\n';
       }
     }
+    // as ordens se leem antes do montar e da marca zerada abaixo, que as consome
+    if (e.source === 'compact') ordensDaReabertura = require('./lib/reinjecao.js').ordensDoCompact(cwd, e.session_id);
     const texto = require('./lib/reinjecao.js').montar(cwd, e.session_id, e.source);
     if (texto) process.stdout.write(texto);
     if (semEstado) process.stdout.write((texto ? '\n' : '') + semEstado);

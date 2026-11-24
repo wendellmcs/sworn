@@ -7,8 +7,8 @@ const estado = require('./lib/estado.js');
 const flags = require('./lib/flags.js');
 
 const USO = 'uso: plano.js [--abrir <caminho do plano>] [--proxima-decisao <arquivo de decisoes>] [--texto] ' +
-  '[--sessao <id>]\n';
-const FLAGS_DO_USO = ['--abrir', '--proxima-decisao', '--texto', '--sessao'];
+  '[--sessao <id>] [--fatia [<id do item>] [--plano <caminho do plano>]]\n';
+const FLAGS_DO_USO = ['--abrir', '--proxima-decisao', '--texto', '--sessao', '--fatia', '--plano'];
 
 // A7 (pedido 12, R1 :14/:15): flag sem valor (ultima da linha, vazia ou seguida de outra flag do USO) caia calada no
 // painel ou no JSON. O molde e o arg() do gerar-skill.js.
@@ -28,6 +28,83 @@ const abrirEm = abrirDado && !path.isAbsolute(abrirDado) && path.resolve(process
   ? path.relative(cwd, path.resolve(process.cwd(), abrirDado)) : abrirDado;
 const decisoes = arg('proxima-decisao');
 const sessaoDaFlag = arg('sessao');
+const planoDado = arg('plano');
+
+// H6d (15.2, D896): --fatia [<id>] imprime so o cabecalho do plano e um item (lib/fatia.js), com as linhas do arquivo;
+// sem id, o proximo item sem marcar. O id e opcional, entao nao passa pelo flags.valor (que exige valor).
+const iFatia = process.argv.indexOf('--fatia');
+// Revisao R1 (correcao, borda, estados, escopo, manutencao): --plano fora do --fatia era aceito e ignorado calado.
+if (planoDado && iFatia === -1) {
+  process.stderr.write('ERRO: --plano so vale junto de --fatia; o painel e o JSON leem o plano ativo ou o da frente.\n' + USO);
+  process.exit(1);
+}
+if (iFatia !== -1) {
+  const sair = function (msg) { process.stderr.write('sworn: ' + msg + '\n'); process.exit(1); };
+  if (process.argv.indexOf('--fatia', iFatia + 1) !== -1) sair('--fatia aparece mais de uma vez; passe-a uma vez so.\n' + USO.trimEnd());
+  // Revisao R1 (escopo): o --fatia sai antes do --abrir e do --proxima-decisao, que ficavam sem rodar e sem aviso.
+  const junto = ['--abrir', '--proxima-decisao', '--texto'].filter(function (fl) { return process.argv.indexOf(fl) !== -1; });
+  if (junto.length) sair('--fatia nao se combina com ' + junto.join(' nem ') + '; rode cada um num comando.');
+  const prox = process.argv[iFatia + 1];
+  if (typeof prox === 'string' && prox.trim() === '') {
+    sair('o id depois de --fatia veio vazio; passe o id do item, ou nada (sem id, sai o proximo item sem marcar).');
+  }
+  const id = typeof prox === 'string' && FLAGS_DO_USO.indexOf(prox) === -1 && prox.charAt(0) !== '-' ? prox.trim() : null;
+  // Revisao R1 (correcao, borda, manutencao): o que nao e flag do USO, valor dela nem o id logo apos o --fatia ficava
+  // calado ("--fatia --plano p.md 3" largava o 3; "--fatia --sesao x" virava o id "--sesao").
+  const COM_VALOR = ['--abrir', '--proxima-decisao', '--sessao', '--plano'];
+  for (let i = 2; i < process.argv.length; i++) {
+    const tok = process.argv[i];
+    if (COM_VALOR.indexOf(tok) !== -1) { i++; continue; }
+    if (tok === '--fatia') { if (id !== null) i++; continue; }
+    sair(tok + ' sobrou na linha: nao e opcao do plano.js, e o id do item vai logo depois de --fatia (--fatia <id> --plano <caminho>).\n' + USO.trimEnd());
+  }
+  const alvo = planoDaFatia(sair);
+  let textoDoPlano;
+  try { textoDoPlano = fs.readFileSync(alvo.abs, 'utf8'); }
+  catch (e) {
+    sair('nao consegui ler o plano ' + alvo.rel + ': ' + planoLib.causaDoDisco(e) + '. ' + (planoDado
+      ? 'Confira o caminho: o --plano e relativo a pasta de onde voce rodou.'
+      : 'Confira o arquivo, ou passe outro: --fatia [<id>] --plano <caminho do plano>.'));
+  }
+  const fatiaLib = require('./lib/fatia.js');
+  const f = fatiaLib.fatiar(textoDoPlano, id);
+  if (!f.item && id !== null) {
+    sair('nenhuma caixa (- [ ] ' + id + '), titulo nem linha de tabela do plano ' + alvo.rel + ' comeca com o id ' + id +
+      '. Confira o id no plano (sem id, sai o proximo item sem marcar).');
+  }
+  process.stdout.write(fatiaLib.texto(alvo.rel, f, id));
+  process.exit(0);
+}
+
+/** O plano da fatia: o --plano dado (relativo a pasta de onde rodou); senao o plano-ativo.json; senao o da frente da
+ *  sessao, como no painel (--texto). O que nao da um plano so sai com o motivo e o --plano que resolve. */
+function planoDaFatia(sair) {
+  if (planoDado) return { rel: planoDado, abs: path.resolve(process.cwd(), planoDado) };
+  const passe = ' Passe o plano: --fatia [<id>] --plano <caminho do plano>.';
+  if (fs.existsSync(path.join(cwd, planoLib.ATIVO))) {
+    const at = planoLib.lerAtivo(cwd);
+    if (!(at && typeof at.arquivo === 'string' && at.arquivo.trim())) sair('.claude/sworn/plano-ativo.json existe mas nao diz o plano (campo "arquivo").' + passe);
+    // Revisao R1 (borda): o teste aparava e o caminho nao; o abrir() grava por path.relative, sem espaco nas pontas.
+    const arq = at.arquivo.trim();
+    if (!planoLib.dentroDoProjeto(cwd, arq)) sair('o plano ativo ' + arq + ' fica fora do projeto e nao foi lido.' + passe);
+    return { rel: arq, abs: planoLib.caminhoDoPlano(cwd, arq) };
+  }
+  const sessao = sessaoDaFlag || process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || null;
+  const achado = planoLib.acharPlanoDaFrente(cwd, sessao ? estado.ler(sessao).frente : null);
+  // Revisao R1 (microcopy, correcao): a lista das frentes e a causa de cada caso, como o painel (--texto) ja dizia.
+  if (achado && achado.varias) {
+    sair('mais de uma frente tem plano (' + achado.varias.map(function (v) { return v.arquivo || v.ilegivel + ' (escopo ilegivel)'; }).join(', ') +
+      ') e esta sessao nao esta ligada a nenhuma.' + passe);
+  }
+  if (achado && achado.ilegivel) sair('nao consegui ler o escopo ' + achado.ilegivel + ', onde fica a linha Plano:.' + passe);
+  if (achado && !achado.arquivo) {
+    sair((achado.frente ? 'a frente ' + achado.frente : 'o escopo ' + achado.escopo) +
+      ' nao tem a linha Plano: no Objetivo.' + passe);
+  }
+  if (!achado) sair('nenhum plano achado na raiz do projeto (nem .claude/sworn/plano-ativo.json, nem a linha Plano: de um escopo).' + passe);
+  if (!planoLib.dentroDoProjeto(cwd, achado.arquivo)) sair('o plano ' + achado.arquivo + ' fica fora do projeto e nao foi lido.' + passe);
+  return { rel: achado.arquivo, abs: planoLib.caminhoDoPlano(cwd, achado.arquivo) };
+}
 
 if (decisoes) {
   // D460: ausente segue dando 1 (projeto sem decisao ainda), mas avisa: caminho errado gravava "D1" calado

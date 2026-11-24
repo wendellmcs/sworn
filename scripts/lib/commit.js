@@ -354,6 +354,54 @@ function noTeto(tetos, abs, blob) {
 }
 
 /**
+ * H6e1 (15.0): o sha-256 dos bytes de `abs` no disco, ou null quando ele nao se le. Le em blocos de 64 KiB: o arquivo
+ * grande nao entra inteiro na memoria do gancho.
+ */
+function hashDoArquivo(abs) {
+  let fd = null;
+  try {
+    fd = fs.openSync(String(abs), 'r');
+    const h = require('node:crypto').createHash('sha256');
+    const buf = Buffer.alloc(65536);
+    let n;
+    while ((n = fs.readSync(fd, buf, 0, buf.length, null)) > 0) h.update(buf.subarray(0, n));
+    return h.digest('hex');
+  } catch (e) {
+    return null; // fail-closed: quem chama trata o null como ilegivel, nunca como igual
+  } finally {
+    if (fd !== null) try { fs.closeSync(fd); } catch (e) { /* ja fechado */ }
+  }
+}
+
+/**
+ * H6e1 (15.0): os hashes da revisao aprovada ({ caminho: sha-256 do que a ultima ronda julgou }) com o de `arquivo`
+ * (absoluto). Hash que nao e texto so tira a marca antiga. Entrada torta = sem marca nenhuma.
+ */
+function comHash(hashes, arquivo, hash) {
+  const novo = semTeto(hashes, arquivo); // o mapa sem a chave de `arquivo`, a mesma regra das marcas de teto
+  if (typeof hash === 'string' && hash !== '') novo[path.resolve(String(arquivo))] = hash;
+  return novo;
+}
+
+/**
+ * H6e1 (15.0): o arquivo aprovado mudou depois da revisao? O Edit tira a aprovacao (marcar-trabalho.js), mas o shell
+ * (`sed -i`, um script que grava) nao passa por ele. So com a marca: a ronda preparada antes da 0.87.0 nao a tem, e o
+ * arquivo dela segue aprovado pelo caminho, como antes. Devolve false (igual, ou sem marca), 'conteudo' (os bytes
+ * mudaram) ou 'ilegivel' (o arquivo nao se le agora, entao a aprovacao nao se confere: volta a pendente tambem).
+ */
+function mudouDepois(hashes, abs) {
+  if (!ehMapa(hashes)) return false;
+  const k = chave(abs);
+  const c = Object.keys(hashes).find(function (x) { return chave(x) === k; });
+  if (c === undefined) return false;
+  // marca presente e torta (estado corrompido) nao prova o conteudo julgado: volta a pendente, nunca libera
+  if (typeof hashes[c] !== 'string' || hashes[c] === '') return 'conteudo';
+  const agora = hashDoArquivo(abs);
+  if (agora === null) return 'ilegivel';
+  return agora === hashes[c] ? false : 'conteudo';
+}
+
+/**
  * Os arquivos que barram o commit, na ordem em que foram tocados: [{ rel, faixa, inspetores, atalhos, teto }]. So os do
  * repositorio do commit (`topoDoCommit`; null = todos) e fora dos `aprovados`. `ehEstilo(rel)` diz se o arquivo e de
  * tela. `marcas` (lista do atalhos.js; sem ela, nenhuma) da as linhas dos atalhos novos sem gatilho em `atalhos`.
@@ -364,16 +412,22 @@ function noTeto(tetos, abs, blob) {
  * todos os arquivos dele de uma vez); o que o lote nao respondeu se mede um a um, como antes.
  * H1-custo (D868): o JS ou TS que difere do HEAD so em comentario ou espaco (soComentarioNoLote) fica fora, salvo com
  * atalho novo sem gatilho.
+ * H6e1 (15.0): `hashes` (o `revisadosHash` do estado) prende a aprovacao ao conteudo julgado: o aprovado cujo arquivo
+ * mudou depois volta a pendente, com `mudou` ('conteudo' ou 'ilegivel', o retorno do mudouDepois).
  */
-function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas, tetos) {
+function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas, tetos, hashes) {
   if (!Array.isArray(arquivos)) return [];
   const glob = require('./glob.js');
   const itens = [];
   // o memo vive so nesta chamada (o repositorio nao muda nela)
   const topos = new Map();
   for (const a of arquivos) {
-    if (typeof a !== 'string' || aprovado(aprovados, a)) continue;
+    if (typeof a !== 'string') continue;
     const abs = path.resolve(raiz, a);
+    // o aprovado e o hash olham o mesmo arquivo: o de `raiz`, nao o do cwd do processo
+    const ok = aprovado(aprovados, abs);
+    const mudou = ok ? mudouDepois(hashes, abs) : false;
+    if (ok && !mudou) continue;
     // F1h: texto e arquivo que nao existe o medir nunca conta, entao nao gastam git
     if (ehTexto(abs) || !fs.existsSync(abs)) continue;
     const rel = glob.normalizar(path.relative(raiz, abs));
@@ -387,7 +441,7 @@ function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas, te
     if (t.lento) { itens.push({ rel: rel, semResposta: true }); continue; }
     // D575: fora de qualquer repositorio (instrumento do scratchpad) nunca conta, mesmo com topoDoCommit null (`cd "$D"`).
     if (!t.raiz || (topoDoCommit && chave(t.raiz) !== chave(topoDoCommit))) continue;
-    itens.push({ rel: rel, abs: abs, topo: t.raiz, doTopo: dentroDoTopo(t.raiz, abs) });
+    itens.push({ rel: rel, abs: abs, topo: t.raiz, doTopo: dentroDoTopo(t.raiz, abs), mudou: mudou });
   }
   // os relativos de cada repositorio, numa passada; depois um lote por repositorio
   const porTopo = new Map();
@@ -425,7 +479,9 @@ function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas, te
     const atalhos = Array.isArray(marcas) && marcas.length ? atalhosNovos(it.abs, m.novas, marcas) : [];
     // H1-custo (D868): o diff so de comentario ou espaco nao pede revisao, salvo o atalho novo sem gatilho
     if (soComentario && !atalhos.length) continue;
-    lista.push({ rel: it.rel, faixa: m.faixa, inspetores: m.inspetores, atalhos: atalhos, teto: noTeto(tetos, it.abs, blob) });
+    const item = { rel: it.rel, faixa: m.faixa, inspetores: m.inspetores, atalhos: atalhos, teto: noTeto(tetos, it.abs, blob) };
+    if (it.mudou) item.mudou = it.mudou;
+    lista.push(item);
   }
   return lista;
 }
@@ -524,7 +580,9 @@ function motivo(lista) {
   const largura = citados.reduce(function (n, c) { return Math.max(n, c.nome.length); }, 0) + 3;
   const linhas = citados.map(function (c) {
     return '  - ' + c.nome.padEnd(largura) + 'faixa ' + c.p.faixa + ', ' + c.p.inspetores +
-      (c.p.inspetores === 1 ? ' inspetor' : ' inspetores');
+      (c.p.inspetores === 1 ? ' inspetor' : ' inspetores') +
+      (c.p.mudou === 'conteudo' ? ' (a revisao aprovada julgou outro conteudo: o arquivo mudou depois dela, fora do Edit)'
+        : c.p.mudou === 'ilegivel' ? ' (a revisao aprovada nao se confere: o arquivo nao se le agora)' : '');
   });
   if (semRevisaoFeita.length > MAX_CITADOS) linhas.push('  - e mais ' + (semRevisaoFeita.length - MAX_CITADOS));
   if (noTetoDaLista.length) {
@@ -590,4 +648,5 @@ function comAprovado(aprovados, arquivo) {
 }
 
 module.exports = { MARCA, ehCommit, semRevisao, pastaDoComando, chamadaGit, temMarca, inspetores, topo, pendentes, motivo,
-  motivoSemResposta, semAprovado, comAprovado, ehTexto, aprovado, comTeto, semTeto, noTeto, chave, soComentarioNoLote };
+  motivoSemResposta, semAprovado, comAprovado, ehTexto, aprovado, comTeto, semTeto, noTeto, chave, soComentarioNoLote,
+  hashDoArquivo, comHash, mudouDepois };

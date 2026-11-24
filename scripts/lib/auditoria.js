@@ -180,6 +180,15 @@ function naoMedida(causa, motivo, caminho) {
   return m;
 }
 
+// H6e4: o aproveitamento e uma chave do relatorio, nao o relatorio; se a soma falhar, so ela sai como nao medida.
+function somarAproveitamento(cwd) {
+  try {
+    return require('./aproveitamento.js').somar(cwd);
+  } catch (e) {
+    return { medido: false, motivo: 'nao medido: a soma dos fechada.json falhou (' + textoLib.causaDoErro(e) + ')' };
+  }
+}
+
 // A dica do erro de leitura depende do codigo: "confira o caminho" so serve a quem errou o caminho.
 function dicaDeLeitura(codigo) {
   if (codigo === 'ENOENT' || codigo === 'ENOTDIR') return 'confira o caminho passado em --memoria';
@@ -402,6 +411,12 @@ function auditar(cwd, projeto, opcoes) {
       ? naoMedida(memoria.causa, memoria.motivo.replace(/^nao medida:/, 'nao medidas:'), memoria.caminho)
       : idadeDasMemorias(path.resolve(cwd, pedida), agora),
     injetado: inj,
+    // H6e4 (15.0, §5.6): o aproveitamento de cada lente da revisao cega, somado nos fechada.json deste projeto. So com
+    // `opcoes.aproveitamento` (o auditar.js): 1,2 s em 2.137 fechos neste repositorio, e a rodada automatica roda no
+    // SessionStart, que tem 15 s (D706)
+    aproveitamento: opcoes && opcoes.aproveitamento === true
+      ? somarAproveitamento(cwd)
+      : { medido: false, motivo: 'nao medido: so o /sworn:audit mede (le o fechada.json de cada revisao)' },
     // D678 T5: o modelo e o esforco que responderam, da pasta da mesma transcricao, contra agentes.degraus. So com
     // `opcoes.efetivo` (o auditar.js): le todas as transcricoes de subagente da janela (23,4 s em 4.732 arquivos num
     // projeto real), e a rodada automatica roda no SessionStart, que tem 15 s (D706).

@@ -503,6 +503,23 @@ test('F1 ganchoComoProcesso: o gancho que sai por process.exit roda como process
   assert.match(c.stderr, /\[comum\.ganchoComoProcesso\] a ultima linha do stdout abre com \{ e nao e JSON: \{"systemMessage": "cort$/);
 });
 
+test('H6b ganchoComoProcesso: o gancho que roda outros (io.rodarJuntos) vai por processo; o ganchoEmProcesso recusa', () => {
+  // em processo, o rodarJuntos de dentro zerava o modo embutido de fora e o arquivo de teste passava calado ("tests 1")
+  const dentro = gancho('roda-dentro', ["io.permitir({ systemMessage: 'de dentro ' + e.x });"]);
+  const fora = gancho('roda-outros', ['const s = io.rodarJuntos(e, [' + JSON.stringify(dentro) + ']);',
+    "io.permitir(io.juntarSaidas(s, 'PreToolUse'));"]);
+  for (let i = 0; i < 2; i++) {
+    const p = comum.ganchoComoProcesso(fora, { x: 'v' + i }, { env: comum.ambiente() });
+    assert.strictEqual(p.porProcesso, true, 'o rodarJuntos aninhado derrubaria o runner: foi por processo');
+    assert.strictEqual(p.status, 0, p.stderr);
+    assert.deepStrictEqual(p.json, { systemMessage: 'de dentro v' + i }, 'o gancho de dentro roda a cada chamada');
+  }
+  // a recusa se prova com o rodarJuntos( so num comentario: sem a recusa, este rodaria em processo sem derrubar o runner
+  const citado = gancho('cita-rodar', ['// io.rodarJuntos( so neste comentario', 'io.permitir();']);
+  assert.throws(function () { comum.ganchoEmProcesso(citado, {}, { env: comum.ambiente() }); },
+    /roda outros ganchos \(io\.rodarJuntos\) e so roda por processo: use o comum\.ganchoComoProcesso/);
+});
+
 // F1g (s372, 0.42.0): a abertura.js termina pelo io.permitir, nao por process.exit: roda no processo do teste e
 // responde o mesmo que o processo de verdade (o texto da abertura, sem JSON, status 0).
 test('F1g: a abertura.js roda no processo do teste e escreve o mesmo texto que por processo', () => {

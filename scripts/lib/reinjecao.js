@@ -410,18 +410,38 @@ function ordemDoHandoff(cwd, s) {
   ].join('\n');
 }
 
+/**
+ * As ordens do compact, na ordem em que abrem o texto: a do handoff e a escalada pendente (B5, s369, D748 T6, P21: a
+ * escalada pedida e sem despacho nao se perde na compactacao). Sem nenhuma, null. A previa da reabertura
+ * (lib/reabertura-curta.js, H6a2) as poe na frente.
+ */
+function ordensDoCompact(cwd, sessionId) {
+  const s = estado.ler(sessionId);
+  return [ordemDoHandoff(cwd, s), require('./escalada.js').paraReinjetar(s)].filter(Boolean).join('\n') || null;
+}
+
+/** H6d (D896): o comando que le so o cabecalho do plano e a tarefa (scripts/plano.js --fatia), em vez do plano inteiro. */
+function linhaDaFatia(arquivo) {
+  // O caminho so entra no comando se o umaLinha o deixa intacto (sem corte nem \uXXXX) e so com caracteres que o shell
+  // nao expande entre aspas duplas (fatia.comandoDaFatia): senao o comando apontaria outro arquivo, ou rodaria o $(...)
+  // do nome. Sem --plano, o plano.js acha o mesmo plano (plano-ativo.json ou o escopo). A pasta do sworn com um desses
+  // caracteres deixa o comando inteiro de fora (revisao R2, borda).
+  const s = String(arquivo);
+  const cmd = require('./fatia.js').comandoDaFatia(path.join(__dirname, '..', 'plano.js'), umaLinha(s) === s ? s : null);
+  if (cmd === null) return 'Leia so o cabecalho do plano e a tarefa sem marcar; o comando da fatia ficou fora: a pasta ' +
+    'do sworn tem caractere que o shell expande entre aspas.';
+  const cabe = cmd.indexOf(' --plano "') !== -1;
+  return 'Leia so o cabecalho e a tarefa: ' + cmd + ' (sem id, o proximo item sem marcar; outro: --fatia <id>' +
+    (cabe ? ' --plano ...' : '') + ').';
+}
+
 function montar(cwd, sessionId, origem) {
   const partes = [];
 
   // D786 passo 3: a ordem do handoff abre o texto. Acima de 10 mil caracteres o harness guarda o resto em arquivo e
   // mostra so o comeco.
-  const ordem = String(origem) === 'compact' ? ordemDoHandoff(cwd, estado.ler(sessionId)) : null;
-  if (ordem) partes.push(ordem);
-  // B5 (s369, D748 T6, P21): a escalada pedida e sem despacho nao se perde na compactacao (o pedido ja cobrado no fecho
-  // segue aguardando o despacho, e o modelo compactado nao lembra dele)
-  const escaladaPendente = String(origem) === 'compact'
-    ? require('./escalada.js').paraReinjetar(estado.ler(sessionId)) : null;
-  if (escaladaPendente) partes.push(escaladaPendente);
+  const ordens = String(origem) === 'compact' ? ordensDoCompact(cwd, sessionId) : null;
+  if (ordens) partes.push(ordens);
 
   const regras = nucleo(cwd);
   if (regras) partes.push(regras.replace(/\s*$/, ''));
@@ -481,6 +501,7 @@ function montar(cwd, sessionId, origem) {
         linhas.push('Tarefa aberta: Tarefa ' + aberta.n + ' - ' + umaLinha(aberta.titulo));
         linhas.push('Passos por marcar: ' + aberta.abertos + ' de ' + aberta.total);
         linhas.push('RELEIA o texto dessa tarefa NO ARQUIVO antes de continuar. Nao de memoria.');
+        linhas.push(linhaDaFatia(ativo.arquivo));
       } else {
         linhas.push('Todas as tarefas com os passos marcados.');
       }
@@ -491,6 +512,22 @@ function montar(cwd, sessionId, origem) {
         'Plano: ' + umaLinha(ativo.arquivo),
         'O plano nao se leu (' + causaDoErro(e) + '): confira se o arquivo existe e se le, ou abra o plano de novo.'
       ]));
+    }
+  } else if (!fs.existsSync(path.join(cwd, planoLib.ATIVO))) {
+    // H6d (D896): sem plano-ativo.json, o plano da frente desta sessao (o mesmo do handoff e da faixa: sem o de outra
+    // frente, D541), so o ponteiro e o comando da fatia; o que falhar ao procurar deixa o bloco de fora.
+    let achado = null;
+    try { achado = planoLib.acharPlanoDaFrente(cwd, frente || null); } catch (e) { achado = null; }
+    if (achado && achado.arquivo && !achado.semVinculo && planoLib.dentroDoProjeto(cwd, achado.arquivo)) {
+      // O comando da fatia so quando ha item sem marcar (o mesmo que o --fatia sem id acha); plano todo feito diz isso.
+      const linhas = ['Plano: ' + umaLinha(achado.arquivo)];
+      try {
+        const f = require('./fatia.js').fatiar(fs.readFileSync(path.resolve(cwd, achado.arquivo), 'utf8'), null);
+        linhas.push(f.item ? linhaDaFatia(achado.arquivo) : 'O plano nao tem item sem marcar.');
+      } catch (e) {
+        linhas.push('O plano nao se leu (' + causaDoErro(e) + '): confira se o arquivo existe e se le.');
+      }
+      estadoPartes.push(bloco('ESTADO - plano em execucao', linhas));
     }
   }
 
@@ -523,6 +560,6 @@ function montar(cwd, sessionId, origem) {
 }
 
 module.exports = {
-  contexto, nucleo, ordemDoHandoff, NEGACOES_DA_ORDEM, ordemDoCompact, cruzouSemAviso, cobrarOrdem,
-  comandoCitaHandoff, motivoDaOrdem, montar
+  contexto, nucleo, ordemDoHandoff, ordensDoCompact, handoffDaOrdem, NEGACOES_DA_ORDEM, ordemDoCompact, cruzouSemAviso, cobrarOrdem,
+  comandoCitaHandoff, motivoDaOrdem, montar, linhaDaFatia
 };
