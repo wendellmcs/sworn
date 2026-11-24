@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.88.0 — a ficha de segunda que ninguém conferia, a versão velha na sessão, e o `cd /c/` do Git Bash
+
+**Novo**
+
+- **A busca do vigia tenta de novo e avisa no mesmo dia** (`scripts/vigia-puxar.js`, `scripts/lib/vigia-local.js`).
+  O `git fetch` da ficha semanal que falha repete até 3 vezes, com espera entre as tentativas (`--espera`, de 0 a 600
+  segundos). A abertura diz a falha registrada no mesmo dia, uma vez por dia. Antes, ela só aparecia junto do aviso de
+  ficha velha, 14 dias depois.
+- **A ficha que chegou fica pendente até ser triada** (`scripts/vigia-triar.js`). A abertura repete, uma vez por dia,
+  que a ficha da semana do vigia ou do radar chegou e não foi triada, com o comando que grava a marca de triada no
+  `visto.json`. O comando recusa a semana que não é a do disco, a falta de ficha e o `--como` vazio ou copiado do
+  exemplo. O Passo 6 do radar e a triagem do vigia no `GUIA.md` passam a rodá-lo. Antes, a ficha aparecia uma vez e
+  ficava marcada como vista sem que ninguém a triasse.
+- **A sessão que roda o sworn velho com o novo instalado** (`scripts/lib/versao-carregada.js`, na abertura). A
+  abertura compara a versão que roda nesta sessão com a mais nova instalada e diz, numa linha, que só um chat novo
+  carrega a nova, porque o `/clear` não recarrega o plugin.
+- **Segredo no handoff barrado antes de gravar** (`scripts/portao-escopo.js`). O Write ou o Edit em
+  `.sworn/handoff/**` cujo texto traz um token do GitHub, uma chave da Anthropic ou da AWS, ou uma chave privada é
+  negado. A mensagem diz o padrão e a linha, sem repetir o valor.
+- **O subagente que não gravou o arquivo pedido é cobrado no fim do turno** (`scripts/conferir-entrega.js`, no gancho
+  `SubagentStop`, e `scripts/lib/entrega-pedida.js`). O gancho lê o briefing do subagente, tira os caminhos que ele
+  manda gravar e anota os que não existem. O `Stop` de quem despachou cobra a lista e a limpa. Ficam fora da
+  conferência o caminho que começa com `~`, o caminho com espaço, o de rede e o endereço com esquema (`https://`). Só
+  no Claude Code: as pontes dos outros harnesses não trazem a transcrição do subagente.
+
+**Corrigido**
+
+- **O `cd /c/...` do Git Bash antes do `git push` e do `git commit`** (`scripts/lib/commit.js`,
+  `scripts/portao-commit.js`). O portão de commit e o cartão do push resolviam a pasta do `cd` como `C:\c\...`, que não
+  existe. Com isso o cartão dizia que o remoto não era deste repositório e negava todo push, e o portão de commit olhava
+  o repositório errado. A pasta agora passa pela mesma conversão de caminho do shell que o resto do sworn já usa.
+
+**Medido e não adotado**
+
+- **`engines["claude-code"]` no `plugin.json`.** Toda versão do Claude Code que lê o campo já tem os 11 eventos de
+  gancho que o sworn usa, e o campo faria as versões 2.0.15 a 2.1.75 recusarem o manifesto. O teste da fiação diz
+  quando declarar: no primeiro evento ou campo de gancho que nascer depois da 2.1.323.
+- **`onFailure: "block"` nos ganchos de trava.** Toda exceção de gancho do sworn já sai liberando a chamada, e o bloqueio só
+  pegaria a instalação quebrada e o tempo estourado, travando então toda escrita, todo shell ou todo prompt da sessão.
+  O teste da fiação reprova gancho com `onFailure`.
+
 ## 0.87.0 — o teste deixa recibo, a saída verde chega enxuta, e o bloco colado tem de ter saído de verdade
 
 **Novo**

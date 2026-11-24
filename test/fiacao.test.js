@@ -2509,6 +2509,10 @@ test('D503 T6: controles - com a chave (ate vazia), sem projeto.json ou com proj
 // Revisao completa, L1 (A9-01): a fiacao inteira do hooks.json - evento, matcher, scripts na ordem e timeout. Antes so
 // alguns elos eram presos (portao-estilo.test.js, gravar-veredito.test.js...); trocar o script do SessionStart, tirar o
 // `Agent` do `Task|Agent` ou o `Skill` do marcador passava pela suite inteira (mutantes da A9).
+// H11d (D911): evento novo aqui pede conferir no CHANGELOG do Claude Code a versao em que ele nasceu; depois da
+// 2.1.323 (a primeira que le o campo), declarar `engines["claude-code"]` no plugin.json com essa versao.
+// H11e (D912): nenhum gancho leva `onFailure` - o R6 (portao que falha, libera) ja vira excecao em saida 0, e o
+// "block" so pegaria o script ausente e o tempo estourado, barrando toda ferramenta da sessao.
 test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e o timeout de hoje', () => {
   const hooks = JSON.parse(fs.readFileSync(path.join(RAIZ, 'hooks', 'hooks.json'), 'utf8')).hooks;
   const mapa = {};
@@ -2516,6 +2520,7 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
     mapa[evento] = hooks[evento].map(function (g) {
       return [g.matcher || ''].concat(g.hooks.map(function (h) {
         assert.strictEqual(h.type + ' ' + h.command, 'command node', evento);
+        assert.strictEqual(h.onFailure, undefined, evento + ' ' + h.args[0] + ': onFailure contra o R6 (D912)');
         assert.ok(fs.existsSync(h.args[0].replace('${CLAUDE_PLUGIN_ROOT}', RAIZ)), h.args[0]);
         return path.basename(h.args[0]) + ' ' + h.timeout;
       }));
@@ -2544,7 +2549,8 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
     // H6a (D891): o recibo da rodada de teste que falhou (o codigo diferente de 0 so dispara este evento)
     PostToolUseFailure: [['Bash|PowerShell', 'recibo-da-prova.js 10']],
     SubagentStart: [['', 'abrir-subagente.js 10', 'escalar.js 10']],
-    SubagentStop: [['^sworn:(inspector|refuter)$', 'gravar-veredito.js 10'], ['', 'escalar.js 10']],
+    // H12c (D914): o arquivo pedido no briefing e conferido no fim do subagente, no grupo sem matcher
+    SubagentStop: [['^sworn:(inspector|refuter)$', 'gravar-veredito.js 10'], ['', 'escalar.js 10', 'conferir-entrega.js 10']],
     // D794: o fecho pode rodar a prova de pronto (teto de 60 s) no projeto que o dono ligou
     Stop: [['', 'portao-fecho.js 90']],
     // H6i (D905): o subagente encerrado no limite de uso sobe o degrau (o SubagentStop dele nao dispara)

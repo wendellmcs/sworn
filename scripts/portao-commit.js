@@ -68,7 +68,7 @@ function cartaoDoPush(comando, cwd, raiz, projeto, ferramenta) {
   try {
     let classes = null;
     try { classes = require('./lib/sanitacao.js').classes(raiz); } catch (err) { /* segue sem */ } // fail-open: sem as classes, o cartao diz que a sanitacao nao foi conferida
-    r = push.levantar(pasta ? path.resolve(cwd, pasta) : cwd, comando, classes, ferramenta);
+    r = push.levantar(commit.pastaNoDisco(pasta, cwd), comando, classes, ferramenta);
   } catch (err) { // fail-closed: o levantamento que lanca ainda nega, com o cartao que diz o erro
     let avisos = [];
     try { avisos = push.ler(comando, ferramenta).avisos; } catch (e2) { /* sem avisos */ } // fail-closed: o cartao sai igual, sem a lista de avisos
@@ -158,7 +158,7 @@ function portaoDoCommit(e, comando, cwd, raiz, projeto) {
   const pasta = commit.pastaDoComando(comando, e.tool_name);
   const design = require('./lib/design.js');
   const lista = commit.pendentes(tocadosDoCommit(s, raiz), s.revisadosAprovados, raiz,
-    commit.topo(pasta ? path.resolve(cwd, pasta) : cwd),
+    commit.topo(commit.pastaNoDisco(pasta, cwd)),
     function (rel) { return design.ehArquivoDeEstilo(rel, projeto); },
     require('./lib/atalhos.js').marcas(projeto), s.revisadosNoTeto, s.revisadosHash);
   if (!lista.length) return null;

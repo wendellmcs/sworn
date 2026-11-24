@@ -222,6 +222,19 @@ ask through `AskUserQuestion`:
 2. **Keep the card without applying** — "The card stays; nothing changes in the project."
 3. **Deepen another** — "I read one from the triage that was left out in depth." Go back to Step 3 with it.
 
+**In maintainer mode, record the triage once the owner has chosen option 1 or 2** (option 3 goes back to Step 3, and
+the mark waits for the next pass through this step). Until the mark, the session opening repeats, once a day, that the
+week's card arrived and was not triaged. Run, with the `semana:` of the card on disk:
+
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/vigia-triar.js" --radar --semana <AAAA-MM-DD> --como "<opção N: repo or nada a adotar; D### if a decision was recorded>"
+
+The `--como` is one line in the owner's language: the option number, the repo taken (or "nada a adotar") and the
+decision number when there is one, e.g. `opção 2: nada a adotar` or `opção 1: dono/repo, D###`. Exit 0 means the
+mark is written. Exit 1 says why nothing was written (no card, a week that is not the card's on disk, a `--como`
+without letters): fix what it names and run once more; a second exit 1, or "no card", stops here: tell the owner the
+reason and that the reminder goes on. Exit 2 is a command typed wrong: fix the command. This step marks only the
+radar card; the vigia's weekly news is triaged on its own, when the owner reads it (`--vigia` with that news's week).
+
 Once a candidate is chosen, **study it through `/sworn:reference` before the proposal** — only it, not the
 others on the card: its layers (what is seen, texts with `arquivo:linha` of the commit read) give the
 proposal the evidence the triage doesn't have, and the card that comes out can, with the owner's yes, become the

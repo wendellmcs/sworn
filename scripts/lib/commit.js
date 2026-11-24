@@ -148,6 +148,14 @@ function pastaDoComando(comando, ferramenta, sub) {
   return g ? g.pasta : null;
 }
 
+/**
+ * A `pasta` do comando (a do `pastaDoComando`) no disco, a partir do `cwd`; sem ela, o proprio `cwd`. H12d: o `/c/...`
+ * do Git Bash e `C:/...` no projeto num disco do Windows; o path.resolve sozinho o leria como `C:\c\...`.
+ */
+function pastaNoDisco(pasta, cwd) {
+  return pasta ? path.resolve(cwd, shell.caminhoDoShell(pasta, cwd)) : cwd;
+}
+
 /** Quantos inspetores a faixa pede: a das faixas pequenas, ou a familia inteira na completa (estilo = tela, com a
  *  lente do pedido, D825). */
 function inspetores(faixa, estilo) {
@@ -647,6 +655,6 @@ function comAprovado(aprovados, arquivo) {
   return semAprovado(aprovados, arquivo).concat([path.resolve(String(arquivo))]);
 }
 
-module.exports = { MARCA, ehCommit, semRevisao, pastaDoComando, chamadaGit, temMarca, inspetores, topo, pendentes, motivo,
+module.exports = { MARCA, ehCommit, semRevisao, pastaDoComando, pastaNoDisco, chamadaGit, temMarca, inspetores, topo, pendentes, motivo,
   motivoSemResposta, semAprovado, comAprovado, ehTexto, aprovado, comTeto, semTeto, noTeto, chave, soComentarioNoLote,
   hashDoArquivo, comHash, mudouDepois };

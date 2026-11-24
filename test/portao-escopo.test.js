@@ -1248,3 +1248,59 @@ test('L2-s103-07: escopo.md acima de 1 MB conta vazio; regrava-lo igual conta am
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
+
+// H12b (D913): o handoff vai para o proximo chat e, com o push, para o repositorio; o segredo que entra nele nega no
+// Write ou no Edit, com o padrao e a linha, sem o valor no motivo (o motivo vai para a conversa). Os segredos de teste
+// sao montados por concatenacao para o proprio arquivo nao disparar a varredura de segredos do repositorio.
+test('H12b: handoff com token do GitHub nega com o padrao e a linha, sem ecoar o valor; limpo passa', () => {
+  comTmp((tmp) => {
+    const dir = montarProjeto();
+    try {
+      const token = 'gh' + 'p_' + 'a1B2c3D4e5'.repeat(3) + 'f6G7h8';
+      const rel = '.sworn/handoff/2026-11-24-x.md';
+      const sujo = rodar(escritaInteira(dir, rel, '# Handoff\n\nlinha limpa\ntoken: ' + token + '\n', 'h12b-1'), tmp);
+      assert.ok(negou(sujo), 'o handoff com token tinha de ser negado');
+      assert.match(motivoDeNegacao(sujo), /linha 4\b/);
+      assert.match(motivoDeNegacao(sujo), /segredo, chave ou token/);
+      assert.ok(!/a1B2c3D4e5|gh[p]_/.test(motivoDeNegacao(sujo)), 'o motivo nao pode ecoar o valor, nem um pedaco dele');
+      liberou(rodar(escritaInteira(dir, rel, '# Handoff\n\nlinha limpa\n', 'h12b-2'), tmp));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+test('H12b: o Edit do handoff que acrescenta chave privada nega; o mesmo texto fora do handoff nao e desta trava', () => {
+  comTmp((tmp) => {
+    const dir = montarProjeto();
+    try {
+      const chave = '-----BEGIN ' + 'RSA PRIVATE KEY-----';
+      // a caixa trocada de proposito: o Windows nao diferencia, e .Sworn/Handoff/ e o mesmo handoff
+      escrever(dir, '.Sworn/Handoff/2026-11-24-y.md', '# Handoff\nfim\n');
+      const r = rodar(editar(dir, '.Sworn/Handoff/2026-11-24-y.md', 'fim', 'fim\n' + chave, 'h12b-3'), tmp);
+      assert.ok(negou(r), 'o Edit com chave privada no handoff tinha de ser negado');
+      // linha 2 do trecho novo ('fim' + chave), nao do arquivo (onde a chave cai na linha 3): o portao so ve o new_string
+      assert.match(motivoDeNegacao(r), /linha 2\b.*no trecho novo/);
+      assert.match(motivoDeNegacao(r), /segredo, chave ou token/);
+      assert.ok(!/PRIVATE KEY|BEGIN RSA|-----/.test(motivoDeNegacao(r)), 'o motivo do Edit nao pode ecoar o valor');
+      const celula = rodar(editarCelula(dir, '.sworn/handoff/x.ipynb', 'c1', 'x = 1\n' + chave, 'h12b-3b'), tmp);
+      assert.ok(negou(celula), 'o NotebookEdit com chave privada no handoff tinha de ser negado');
+      // o motivo prova que foi esta trava (o new_source lido), e nao outra que negasse o caminho
+      assert.match(motivoDeNegacao(celula), /segredo, chave ou token/);
+      assert.ok(!/PRIVATE KEY|BEGIN RSA|-----/.test(motivoDeNegacao(celula)), 'o motivo do NotebookEdit nao pode ecoar o valor');
+      escrever(dir, 'docs/nota.md', 'fim\n');
+      liberou(rodar(editar(dir, 'docs/nota.md', 'fim', 'fim\n' + chave, 'h12b-4'), tmp));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+test('H12b: sem projeto.json o segredo no handoff nega do mesmo jeito', () => {
+  comTmp((tmp) => {
+    const dir = comum.temporaria('sworn-sem-proj-');
+    try {
+      const chave = 'AK' + 'IA' + 'ABCDEFGHIJ012345';
+      const r = rodar(escritaInteira(dir, '.sworn/handoff/2026-11-24-z.md', 'aws ' + chave + '\n', 'h12b-5'), tmp);
+      assert.ok(negou(r), 'sem projeto.json o handoff com chave da AWS tinha de ser negado');
+      assert.match(motivoDeNegacao(r), /linha 1\b/);
+      assert.ok(!/AKIA|ABCDEFGHIJ/.test(motivoDeNegacao(r)), 'sem projeto.json o motivo tambem nao ecoa o valor');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});

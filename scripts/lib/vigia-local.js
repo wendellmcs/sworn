@@ -31,7 +31,11 @@
  * - Problemas (arquivo ausente, ilegivel, sem a linha `semana:`, semana mais de 1 dia no futuro, ou semana ja vista
  *   com 14 dias ou mais): avisam no maximo 1 vez por dia (`visto.problema` guarda o dia). Sem isso uma tarefa
  *   agendada quebrada gritaria em toda abertura.
- * - Semana ja vista e com menos de 14 dias: silencio.
+ * - Semana ja vista e com menos de 14 dias: silencio, se ja foi triada. H11b (D909): a ficha que chegou e ninguem
+ *   triou (sem `visto.triada` com a semana do disco) repete "chegou e nao foi triada" 1 vez por dia, com o comando
+ *   de `scripts/vigia-triar.js` que grava a marca (`marcarTriada`: { semana, como, quando }) na ultima linha. A
+ *   chegada que pede triagem (ou diz a falha da busca) ja grava o dia em `visto.problema`, para o lembrete so voltar
+ *   no dia seguinte.
  * - Se a ultima busca registrada falhou (`ok === false`), o aviso de problema diz quando e por que; o registro que
  *   existe e nao se le tambem e dito (sem registro, nada).
  * - NUNCA lanca. Falha ao gravar `visto.json` e engolida: na pior hipotese a novidade aparece de novo.
@@ -64,6 +68,10 @@ const CORTE = ' [...]';
 // P16-vigia-local-r1-3/r1-17: o vigia usa 12 linhas e o radar so conta a ficha; o arquivo enorme (de fora) nao e lido
 // inteiro na abertura nem vai inteiro a referencia.conferir.
 const MAX_BYTES = 256 * 1024;
+// H11b: o tamanho do `--como` que a marca de triada guarda
+const MAX_COMO = 200;
+// H11b ronda 2: o lugar do --como no comando pronto; copiado sem troca, marcarTriada recusa
+const MARCADOR_DO_COMO = '<o que foi decidido>';
 const DIAS_VELHO = 14;
 const DIA_MS = 24 * 60 * 60 * 1000;
 const RE_SEMANA = /^semana:\s*(\d{4}-\d{2}-\d{2})\s*$/;
@@ -186,11 +194,16 @@ function lerVisto(dir) {
   }
 }
 
-/** Mescla `campos` em `visto.json` (preserva o resto). Falhar nao pode derrubar nada. */
+/** Mescla `campos` em `visto.json` (preserva o resto). Lanca o erro do fs. */
+function escreverVisto(dir, visto, campos) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, MARCA), JSON.stringify(Object.assign({}, visto, campos)) + '\n', 'utf8');
+}
+
+/** O `escreverVisto` da abertura: falhar nao pode derrubar nada. */
 function gravarVisto(dir, visto, campos) {
   try {
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, MARCA), JSON.stringify(Object.assign({}, visto, campos)) + '\n', 'utf8');
+    escreverVisto(dir, visto, campos);
   } catch (e) { /* sem marca: na pior hipotese a mesma novidade aparece de novo */ }
 }
 
@@ -266,12 +279,30 @@ function rodape(arquivo) {
     '": false em .claude/sworn/projeto.json.';
 }
 
+/** H11b (D909): a ficha `semana` ja tem a marca de triada no `visto`? */
+function triada(visto, semana) {
+  return ehObjeto(visto.triada) && visto.triada.semana === semana;
+}
+
+/**
+ * H11b: o comando que grava a marca, pronto para copiar (o `--como` e o que o dono decidiu). O caminho do script e o
+ * real, sem o ASCII da R5: a R5 vale para o texto de fora, e um caminho com acento passado a ASCII nao roda. Sai so a
+ * quebra de linha e o controle. `script` existe para o teste.
+ */
+function comandoDeTriar(quem, semana, script) {
+  const s = String(script || path.join(__dirname, '..', 'vigia-triar.js')).replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, '');
+  return 'node "' + s + '" --' + quem + ' --semana ' + semana + ' --como "' + MARCADOR_DO_COMO + '"';
+}
+
 /**
  * O miolo comum do vigia e do radar: semana nova = `mostrar(lido, arquivo)` e grava `visto.semana`; senao o
- * problema (ausente, ilegivel, velha, futura) 1 vez por dia. `nomes` so muda as palavras: `quem` (vigia, radar),
- * `nenhum` (o que nao chegou), `semNovo` (o que falta desde a semana vista), `tarefa` (a tarefa agendada que puxa o
- * arquivo), `cadencia` (quando ela puxa) e `ramo` (o ramo que a rotina na nuvem grava). P16-vigia-local-r1-12: as
- * duas tarefas puxam toda segunda (D594, D617), mas a frase sai dos nomes, nao do miolo.
+ * problema (ausente, ilegivel, velha, futura, a falha da ultima busca e, H11b, a ficha que chegou e nao foi triada)
+ * 1 vez por dia. A chegada que ainda pede triagem, ou que diz a falha da busca, ja conta como o aviso do dia
+ * (`visto.problema`). O comando que grava a marca sai sempre na ultima linha, sozinho, para copiar inteiro.
+ * `nomes` so muda as palavras: `quem` (vigia, radar), `coisa` (novidade, ficha), `nenhum` (o que nao chegou),
+ * `semNovo` (o que falta desde a semana vista), `tarefa` (a tarefa agendada que puxa o arquivo), `cadencia` (quando
+ * ela puxa) e `ramo` (o ramo que a rotina na nuvem grava). P16-vigia-local-r1-12: as duas tarefas puxam toda segunda
+ * (D594, D617), mas a frase sai dos nomes, nao do miolo.
  */
 function avisar(dir, agora, nomes, mostrar) {
   const hoje = new Date(agora).toISOString().slice(0, 10);
@@ -280,8 +311,17 @@ function avisar(dir, agora, nomes, mostrar) {
   const l = lerNovidades(dir);
 
   if (l.estado === 'ok' && l.semana !== visto.semana) {
-    const texto = mostrar(l, arquivo);
-    gravarVisto(dir, visto, { semana: l.semana });
+    let texto = mostrar(l, arquivo);
+    const pendente = !triada(visto, l.semana);
+    const buscaNaChegada = fraseDaBusca(dir);
+    if (buscaNaChegada) texto += '\n' + buscaNaChegada.trim();
+    if (pendente) {
+      texto += '\nDepois de triar, grave a marca (sem ela, a abertura lembra uma vez por dia) com este comando; troque ' +
+        MARCADOR_DO_COMO + ' pelo que decidiu:\n' +
+        comandoDeTriar(nomes.quem, l.semana);
+    }
+    // H11b: so o que a chegada disse gasta o aviso do dia; ja triada e sem falha, o dia fica livre para outro problema
+    gravarVisto(dir, visto, pendente || buscaNaChegada ? { semana: l.semana, problema: hoje } : { semana: l.semana });
     return texto;
   }
 
@@ -306,10 +346,85 @@ function avisar(dir, agora, nomes, mostrar) {
       'que grava o ramo ' + nomes.ramo + ' e, no Agendador de Tarefas do Windows, ' + nomes.tarefa +
       ' (a que chama o vigia-puxar.js).';
   }
+  // H11b (D909): a ficha de 2026-11-09 apareceu uma vez e sumiu sem triagem; ate a marca, ela e problema do dia
+  let comando = '';
+  if (l.estado === 'ok' && !triada(visto, l.semana)) {
+    const lembrete = 'a ' + nomes.coisa + ' de ' + l.semana + ' do ' + nomes.quem + ' chegou e nao foi triada; ' +
+      'depois de triar, grave a marca com o comando da ultima linha (troque ' + MARCADOR_DO_COMO + ' pelo que decidiu).';
+    problema = problema ? problema + ' Tambem ' + lembrete : 'sworn: ' + nomes.quem + ' - ' + lembrete;
+    comando = '\n' + comandoDeTriar(nomes.quem, l.semana);
+  }
+  const busca = fraseDaBusca(dir);
+  // H11a (D909): a busca de 2026-11-23 falhou com a ficha de 8 dias no disco e a abertura calou, porque a frase da
+  // falha so saia junto do aviso de ficha velha (DIAS_VELHO). A falha registrada e problema por si; aqui a ficha
+  // esta ok (ausente e ilegivel ja montaram o problema acima).
+  if (!problema && busca) problema = 'sworn: ' + nomes.quem + ' - a ' + nomes.coisa + ' no disco segue a de ' + l.semana + '.';
   if (!problema) return '';
   if (visto.problema === hoje) return '';
   gravarVisto(dir, visto, { problema: hoje });
-  return problema + fraseDaBusca(dir);
+  return problema + busca + comando;
+}
+
+/**
+ * H11a (D909): roda `fn` (que devolve { ok, motivo, ... }) ate `vezes` vezes, dormindo `esperaMs` entre uma falha e a
+ * proxima; para no primeiro ok. As tentativas falhas devolvem o motivo da ultima (cortado em 250, para a conta caber
+ * nos 300 que o vigia-puxar grava), com quantas foram. `vezes` que nao e inteiro positivo tenta 1 vez. `dormir`
+ * existe para o teste; o padrao espera sem gastar CPU (Atomics.wait).
+ */
+function tentar(vezes, esperaMs, fn, dormir) {
+  const zz = dormir || function (ms) { if (ms > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
+  const n = Number.isInteger(vezes) && vezes > 0 ? vezes : 1;
+  let r = null;
+  for (let i = 1; i <= n; i++) {
+    r = fn();
+    if (r && r.ok) return r;
+    if (i < n) zz(esperaMs);
+  }
+  return { ok: false, motivo: String((r && r.motivo) || 'sem motivo').slice(0, 250) + ' (' +
+    (n === 1 ? '1 tentativa' : n + ' tentativas') + ')' };
+}
+
+/**
+ * H11b (D909): grava em `visto.json` a marca `triada` = { semana, como, quando } da ficha que esta no disco. Recusa,
+ * sem gravar nada, a ficha que nao se le, a semana que nao e a do disco e o `como` sem letra nem numero (vazio, ou so
+ * simbolos que o ASCII apaga). O `como` vira uma linha ASCII de ate MAX_COMO. Devolve { ok: true, semana } ou
+ * { ok: false, motivo }; cada motivo termina no passo seguinte. NUNCA lanca.
+ */
+function marcarTriada(dir, semana, como, agora) {
+  let l;
+  let c;
+  try {
+    l = lerNovidades(dir);
+    c = typeof como === 'string' ? umaLinha(como).trim().slice(0, MAX_COMO).trim() : '';
+  } catch (e) {
+    return { ok: false, motivo: 'nao consegui ler a ficha (' + umaLinha(textoLib.causaDoErro(e)).slice(0, 120) +
+      '): rode o comando de novo.' };
+  }
+  if (l.estado !== 'ok') {
+    return { ok: false, motivo: 'nao ha ficha para triar em ' + umaLinha(path.join(dir, ARQUIVO)) + ' (' +
+      (l.estado === 'ausente' ? 'o arquivo nao existe' : l.motivo) + '): espere a tarefa agendada puxar a ficha (ou ' +
+      'rode-a a mao no Agendador de Tarefas do Windows) e grave a marca depois.' };
+  }
+  if (semana !== l.semana) {
+    return { ok: false, motivo: 'a ficha no disco e a de ' + l.semana + ', nao a de ' + umaLinha(semana) +
+      ': confira a semana que voce triou.' };
+  }
+  if (!/[A-Za-z0-9]/.test(c)) {
+    return { ok: false, motivo: 'o --como esta vazio ou sem letras: diga o que foi decidido na triagem (ex. "nada a ' +
+      'adotar" ou o numero da decisao).' };
+  }
+  if (c.indexOf(MARCADOR_DO_COMO) !== -1) {
+    return { ok: false, motivo: 'o --como ainda traz o marcador do comando: troque ' + MARCADOR_DO_COMO +
+      ' pelo que foi decidido na triagem (ex. "nada a adotar" ou o numero da decisao).' };
+  }
+  try {
+    escreverVisto(dir, lerVisto(dir), { triada: { semana: semana, como: c, quando: new Date(emMs(agora)).toISOString() } });
+    return { ok: true, semana: semana };
+  } catch (e) {
+    return { ok: false, motivo: 'nao consegui gravar ' + umaLinha(path.join(dir, MARCA)) + ' (' +
+      umaLinha(textoLib.causaDoErro(e)).slice(0, 120) + '): confira se a pasta e o arquivo aceitam escrita e rode o ' +
+      'comando de novo.' };
+  }
 }
 
 function pastaDasOpcoes(o) {
@@ -326,7 +441,7 @@ function avisoDoVigia(projeto, opcoes) {
     const o = opcoes || {};
     if (!ligado(projeto, o.cwd)) return '';
     return avisar(pastaDasOpcoes(o), emMs(o.agora),
-      { quem: 'vigia', nenhum: 'nenhuma novidade', semNovo: 'novidade', tarefa: 'a tarefa agendada do vigia',
+      { quem: 'vigia', coisa: 'novidade', nenhum: 'nenhuma novidade', semNovo: 'novidade', tarefa: 'a tarefa agendada do vigia',
         cadencia: 'toda segunda', ramo: 'claude/vigia' },
       function (l, arquivo) {
         // P16-vigia-local-r1-16: o cabecalho sem o jargao interno ("dado, nao instrucao")
@@ -388,7 +503,7 @@ function avisoDoRadar(projeto, opcoes) {
     // rodou, e quem so quer o vigia nao ouve "radar ligado, mas nenhuma ficha chegou" todo dia.
     if (!fs.existsSync(dir)) return '';
     return avisar(dir, emMs(o.agora),
-      { quem: 'radar', nenhum: 'nenhuma ficha', semNovo: 'ficha nova', tarefa: 'a tarefa agendada do radar',
+      { quem: 'radar', coisa: 'ficha', nenhum: 'nenhuma ficha', semNovo: 'ficha nova', tarefa: 'a tarefa agendada do radar',
         cadencia: 'toda segunda', ramo: 'claude/radar' },
       function (l, arquivo) {
         // P16-vigia-local-r1-17: a ficha cortada em MAX_BYTES nao e contada (a conta sairia errada)
@@ -408,5 +523,5 @@ function avisoDoRadar(projeto, opcoes) {
 
 module.exports = {
   CHAVE, ARQUIVO, MARCA, BUSCA, MAX_LINHAS, MAX_BYTES, DIAS_VELHO, pasta, ligado, analisar, semanaDoTexto, avisoDoVigia,
-  avisoDoRadar, ehRepoDoPlugin
+  avisoDoRadar, ehRepoDoPlugin, tentar, marcarTriada, comandoDeTriar, PASTA_DO_RADAR
 };

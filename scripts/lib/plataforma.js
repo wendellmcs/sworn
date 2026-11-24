@@ -103,7 +103,7 @@ const PONTOS = [
     chave: 'process_platform',
     classe: SO_NO_SISTEMA,
     titulo: 'Deducao do sistema e do idioma de shell',
-    arquivos: ['scripts/antes-do-compact.js', 'scripts/autorizar-paralelo.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/lib/admissao.js', 'scripts/lib/ambiente.js', 'scripts/lib/commit.js', 'scripts/lib/glob.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
+    arquivos: ['scripts/antes-do-compact.js', 'scripts/autorizar-paralelo.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/lib/admissao.js', 'scripts/lib/ambiente.js', 'scripts/lib/commit.js', 'scripts/lib/entrega-pedida.js', 'scripts/lib/glob.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/harness.js', 'scripts/lib/marcha.js',
                'scripts/lib/pastas.js', 'scripts/lib/plataforma.js', 'scripts/lib/projeto.js', 'scripts/lib/prova-no-fecho.js', 'scripts/lib/replay.js', 'scripts/lib/saude.js',
                'scripts/lib/toques.js', 'scripts/lib/varredura.js', 'scripts/lib/vermelho-antes.js', 'scripts/marcar-trabalho.js', 'scripts/medir-qualidade.js',
                'scripts/preparar-revisao.js'],
@@ -137,7 +137,8 @@ const PONTOS = [
     titulo: 'Onde o claude grava a transcricao da sessao',
     arquivos: ['scripts/admissao.js', 'scripts/autorizar-paralelo.js', 'scripts/instalar.js', 'scripts/lib/ambiente.js', 'scripts/lib/calibracao.js',
                'scripts/lib/gasto.js', 'scripts/lib/injetado.js', 'scripts/lib/migracao.js',
-               'scripts/lib/prova-no-fecho.js', 'scripts/lib/vigia-local.js', 'scripts/medir-qualidade.js',
+               'scripts/lib/prova-no-fecho.js', 'scripts/lib/versao-carregada.js', 'scripts/lib/vigia-local.js',
+               'scripts/medir-qualidade.js',
                'scripts/ponte.js'],
     comoSeProva: 'a pasta pessoal entra por parametro, ou uma variavel a sobrepoe (CLAUDE_CONFIG_DIR, SWORN_VIGIA, ' +
                  'ou HOME e USERPROFILE, que o Node le para achar a pasta pessoal); o teste de cada modulo roda ' +

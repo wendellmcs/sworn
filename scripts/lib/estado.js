@@ -236,6 +236,8 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   'notaViva',
   // D694 (T3 da escada): o pedido de escalada chega no fim do subagente e e cobrado num turno seguinte (lib/escalada.js).
   'escalada',
+  // D914 (H12c): o arquivo que o subagente nao gravou chega no fim dele e e cobrado no fecho (lib/entrega-pedida.js).
+  'entregaFaltando',
   // D794: a prova que o gancho do fecho rodou vale nos turnos seguintes ate a proxima edicao (portao-fecho.js); a que
   // passou do teto nao roda de novo na sessao.
   'provaDoGancho', 'provaDoGanchoEstourou',

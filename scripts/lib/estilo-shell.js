@@ -682,4 +682,4 @@ function motivoShell(alvos) {
 }
 
 // A2-20 (H1): o leitor de shell e um so; o commit.js e o push.js leem o git por ele.
-module.exports = { alvosDeEstiloNoShell, motivoShell, lerShell, comandosSimples, programa, nomeDoPrograma };
+module.exports = { alvosDeEstiloNoShell, motivoShell, lerShell, comandosSimples, programa, nomeDoPrograma, caminhoDoShell };

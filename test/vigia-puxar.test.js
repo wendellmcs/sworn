@@ -114,7 +114,7 @@ test('opcoes --remote, --ramo e --arquivo mudam de onde se puxa', () => {
   try {
     git(c.dono, ['remote', 'rename', 'backup', 'outro']);
     // com os padroes falha (nao ha remote backup); com as opcoes funciona
-    assert.strictEqual(puxar(['--repo', c.dono, '--destino', c.dest]).status, 1);
+    assert.strictEqual(puxar(['--repo', c.dono, '--destino', c.dest, '--espera', '0']).status, 1);
     const r = puxar(['--repo', c.dono, '--destino', c.dest, '--remote', 'outro', '--ramo', 'claude/vigia', '--arquivo', 'vigia/novidades.md']);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(fs.readFileSync(path.join(c.dest, 'novidades.md'), 'utf8'), RELATORIO);
@@ -126,7 +126,7 @@ test('ramo inexistente: exit 1, ultima-busca ok:false, novidades.md anterior int
   try {
     fs.mkdirSync(c.dest, { recursive: true });
     fs.writeFileSync(path.join(c.dest, 'novidades.md'), 'semana: 2026-09-28\n\nantiga\n', 'utf8');
-    const r = puxar(['--repo', c.dono, '--destino', c.dest]);
+    const r = puxar(['--repo', c.dono, '--destino', c.dest, '--espera', '0']);
     assert.strictEqual(r.status, 1, r.stdout + r.stderr);
     // A7 (pedido 12, R1 :78 microcopy): a falha diz o que ficou como estava e o passo, nao so o motivo do git
     assert.ok(/^vigia: busca falhou \(.+\)\. A novidade que ja estava no disco nao mudou; corrija a causa e rode de novo\.\r?\n$/
@@ -136,6 +136,8 @@ test('ramo inexistente: exit 1, ultima-busca ok:false, novidades.md anterior int
     const b = lerBusca(c.dest);
     assert.strictEqual(b.ok, false);
     assert.ok(typeof b.motivo === 'string' && b.motivo.length > 0, JSON.stringify(b));
+    // H11a (D909): o fetch que falha tentou 3 vezes antes de desistir, e o motivo diz
+    assert.ok(/ \(3 tentativas\)$/.test(b.motivo), b.motivo);
     assert.strictEqual(b.semana, null);
   } finally { fs.rmSync(c.base, { recursive: true, force: true }); }
 });
@@ -162,6 +164,19 @@ test('arquivo inexistente no ramo: exit 1 sem criar novidades.md', () => {
     assert.ok(!fs.existsSync(path.join(c.dest, 'novidades.md')));
     assert.strictEqual(lerBusca(c.dest).ok, false);
   } finally { fs.rmSync(c.base, { recursive: true, force: true }); }
+});
+
+test('H11a: --espera fora de 0 a 600 e erro de uso, exit 2, nada gravado', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-vigiapx-espera-'));
+  try {
+    const dest = path.join(base, 'destino');
+    for (const v of ['601', '-1', '1.5', 'x', '1000', '1e2', '0x10', '']) {
+      const r = puxar(['--repo', base, '--destino', dest, '--espera', v]);
+      assert.strictEqual(r.status, 2, v + ': ' + r.stdout + r.stderr);
+      assert.ok(/--espera/.test(r.stderr), r.stderr);
+    }
+    assert.ok(!fs.existsSync(dest), 'criou o destino com --espera invalido');
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 
 test('sem --repo: uso no stderr, exit 2, nada gravado', () => {

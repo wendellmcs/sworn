@@ -7,6 +7,7 @@ const config = require('./lib/config.js');
 const projetoLib = require('./lib/projeto.js');
 const saude = require('./lib/saude.js');
 const escaladaLib = require('./lib/escalada.js');
+const entregaLib = require('./lib/entrega-pedida.js');
 const provaNoFecho = require('./lib/prova-no-fecho.js');
 
 function avisoDeAmpliacao(contadores) {
@@ -729,12 +730,16 @@ io.blindar(function () {
       s.contadores = s.contadores || {};
       s.contadores.escalada_sem_despacho = (s.contadores.escalada_sem_despacho || 0) + 1;
     }
-    const motivosDaEscalada = daEscalada ? [daEscalada] : [];
+    // H12c (D914): o arquivo que o briefing pediu e o subagente nao gravou, no mesmo lugar e cobrado uma vez, como a
+    // escalada: a saida do SubagentStop nao chega a quem despachou (lib/entrega-pedida.js).
+    const daEntrega = entregaLib.motivoDoFecho(s);
+    if (daEntrega) s.entregaFaltando = [];
+    const motivosDosSubagentes = (daEscalada ? [daEscalada] : []).concat(daEntrega ? [daEntrega] : []);
 
     // Nao houve trabalho real: conversa passa direto. Custo zero. s366 (F11): menos a ordem do compact pendente (a
     // escrita negada pelo portao nao marca trabalho); a cobranca muda o `s`, gravado aqui como no barrar.
     if (!s.trabalhoReal) {
-      if (motivosDaEscalada.length) return barrar(e, s, motivosDaEscalada, false);
+      if (motivosDosSubagentes.length) return barrar(e, s, motivosDosSubagentes, false);
       if (!s.ordemDoCompact) return io.permitir();
       const daOrdem = cobrancaDaOrdem(e, s);
       estado.gravar(e.session_id, s);
@@ -790,8 +795,9 @@ io.blindar(function () {
       s.contadores = s.contadores || {};
       s.contadores.parada_no_handoff = (s.contadores.parada_no_handoff || 0) + 1;
     }
-    // A escalada antes dos da revisao, que seguem depois dos outros motivos do turno.
-    const doTurno = motivosDaEscalada.concat(parouNoHandoff ? [saude.MOTIVO_PARADA_NO_HANDOFF] : [], daRevisao);
+    // Os dos subagentes (a escalada e a entrega que faltou) antes dos da revisao, que seguem depois dos outros
+    // motivos do turno.
+    const doTurno = motivosDosSubagentes.concat(parouNoHandoff ? [saude.MOTIVO_PARADA_NO_HANDOFF] : [], daRevisao);
     if (travas.fecho === false) {
       return doTurno.length || semPrompt ? barrar(e, s, doTurno, semPrompt) : encerrarOuSeguir(e, s, projeto);
     }

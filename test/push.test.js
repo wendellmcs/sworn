@@ -261,3 +261,33 @@ test('push: o commit e o push no mesmo comando passam pelos dois portoes, o do c
   assert.ok(motivoDe(soPush).includes('cartao antes do push'), motivoDe(soPush));
   passou(portao(dir, 'git commit -q -m x # sworn: sem-revisao\ngit push origin main # sworn: push-visto', env), 'as duas marcas');
 });
+
+/** A forma que o Git Bash escreve para uma pasta do Windows: `C:\a\b` vira `/c/a/b`. So pasta com letra de disco. */
+function doGitBash(p) {
+  assert.match(p, /^[A-Za-z]:\\/, 'doGitBash so converte pasta com letra de disco: ' + p);
+  return '/' + p[0].toLowerCase() + p.slice(2).replace(/\\/g, '/');
+}
+
+// H12d: o `cd /c/...` do Git Bash e a pasta do Windows; o path.resolve sozinho a lia como `C:\c\...`, e o cartao dizia
+// que o remoto nao existia, e o portao do commit procurava o repositorio na pasta errada.
+test('push: o cd do Git Bash (/c/...) antes do push e do commit e a pasta do Windows', { skip: process.platform !== 'win32' && 'so no Windows' }, () => {
+  const tmp = comum.temporaria('sworn-push-tmp-');
+  const env = comum.ambiente({ SWORN_TMP: tmp });
+  const { dir } = montar('ensaio@users.noreply.github.com', [['b.txt', 'b\n', 'segundo']]);
+  comProjeto(dir);
+  const outro = montar('ensaio@users.noreply.github.com', [['c.txt', 'c\n', 'terceiro']]).dir;
+
+  // com aspas: a temporaria do sistema pode ter espaco (o perfil do usuario)
+  const doCd = motivoDe(portao(dir, 'cd "' + doGitBash(outro) + '"; git push -q origin main', env));
+  assert.ok(doCd.includes('  - c.txt') && !doCd.includes('  - b.txt'), doCd);
+  assert.ok(!doCd.includes('nao e um remoto deste repositorio'), doCd);
+
+  // o portao do commit cobra so o arquivo tocado no repositorio do cd, nao o do repositorio da pasta do processo
+  fs.writeFileSync(path.join(outro, 'x.js'), 'x\n');
+  fs.writeFileSync(path.join(dir, 'y.js'), 'y\n');
+  fs.mkdirSync(path.join(tmp, 'sworn'), { recursive: true });
+  fs.writeFileSync(path.join(tmp, 'sworn', 'P.json'), JSON.stringify({ arquivosTocados: [path.join(outro, 'x.js'), path.join(dir, 'y.js')] }));
+  const commit = portao(dir, 'cd "' + doGitBash(outro) + '"; git add x.js && git commit -q -m x', env);
+  assert.ok(negou(commit), 'o commit no repositorio do cd devia cobrar a revisao do x.js');
+  assert.ok(motivoDe(commit).includes('/x.js"') && !motivoDe(commit).includes('y.js'), motivoDe(commit));
+});

@@ -9,15 +9,17 @@
  * le o que este script deixou na pasta.
  *
  * Uso: node vigia-puxar.js --repo <pasta do clone> [--remote backup] [--ramo claude/vigia]
- *                          [--arquivo vigia/novidades.md] [--destino <pasta>]
+ *                          [--arquivo vigia/novidades.md] [--destino <pasta>] [--espera 30]
  * Destino padrao: a pasta do vigia (SWORN_VIGIA ou ~/.claude/sworn/vigia).
  *
- * Passos: `git fetch` do ramo (sem prompt de credencial, 60 s de limite) e `git show FETCH_HEAD:<arquivo>`.
+ * Passos: `git fetch` do ramo (sem prompt de credencial, 60 s de limite) e `git show FETCH_HEAD:<arquivo>`. O fetch que
+ * falha tenta de novo, 3 tentativas com `--espera` segundos entre elas (padrao 30, de 0 a 600; H11a, D909: o de
+ * 2026-11-23 bateu os 60 s uma vez e a semana ficou sem ficha).
  * So grava se o conteudo tiver a linha `semana: AAAA-MM-DD` valida (mesmo parser da abertura): arquivo
  * quebrado nunca sobrescreve a ultima novidade boa. A gravacao e atomica (temporario + rename). Toda
  * tentativa, boa ou ruim, deixa `ultima-busca.json` = { quando, ok, motivo, semana } para a abertura poder
  * dizer por que nada chegou. Exit 0 = gravou; 1 = falhou; 2 = faltou --repo, uma flag veio sem valor ou o --remote
- * ou o --ramo comeca com "-" (nada e gravado).
+ * ou o --ramo comeca com "-", ou o --espera nao e inteiro de 0 a 600 (nada e gravado).
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -27,7 +29,7 @@ const escopoLib = require('./lib/escopo.js');
 const textoLib = require('./lib/texto.js');
 
 const USO = 'uso: node vigia-puxar.js --repo <pasta do clone> [--remote backup] [--ramo claude/vigia] ' +
-  '[--arquivo vigia/novidades.md] [--destino <pasta>]';
+  '[--arquivo vigia/novidades.md] [--destino <pasta>] [--espera 30]';
 
 function erroDeUso(texto) {
   process.stderr.write('vigia: ' + texto + '\n' + USO + '\n');
@@ -92,8 +94,12 @@ const remote = valor('--remote', true) || 'backup';
 const ramo = valor('--ramo', true) || 'claude/vigia';
 const arquivo = valor('--arquivo') || 'vigia/novidades.md';
 const destino = valor('--destino') ? path.resolve(valor('--destino')) : vigia.pasta(process.env);
+const esperaTexto = valor('--espera');
+if (esperaTexto !== null && !/^[0-9]{1,3}$/.test(esperaTexto)) erroDeUso('--espera pede um inteiro de 0 a 600 (segundos).');
+const espera = esperaTexto === null ? 30 : Number(esperaTexto);
+if (espera > 600) erroDeUso('--espera pede um inteiro de 0 a 600 (segundos).');
 
-const busca = git(repo, ['fetch', '--quiet', remote, ramo], 60000);
+const busca = vigia.tentar(3, espera * 1000, function () { return git(repo, ['fetch', '--quiet', remote, ramo], 60000); });
 if (!busca.ok) falhar(destino, busca.motivo);
 const lido = git(repo, ['show', 'FETCH_HEAD:' + arquivo], 60000);
 if (!lido.ok) falhar(destino, lido.motivo);

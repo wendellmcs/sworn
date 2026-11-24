@@ -134,6 +134,21 @@ io.blindar(function () {
     const alvo = naWorktree ? naWorktree.rel : bruto;
     const base = naWorktree ? path.join(cwd, naWorktree.pasta) : cwd;
 
+    // H12b (D913): o handoff vai para o proximo chat; o segredo no texto novo nega antes de qualquer passe livre, com
+    // ou sem projeto.json. O motivo diz o padrao e a linha, nunca o valor (o motivo vai para a conversa).
+    const textoNovo = typeof entrada.content === 'string' ? entrada.content
+      : typeof entrada.new_string === 'string' ? entrada.new_string : entrada.new_source;
+    if (/^\.sworn\/handoff\//i.test(alvo) && typeof textoNovo === 'string') {
+      const sanitacao = require('./lib/sanitacao.js');
+      const achado = sanitacao.varrerTexto(textoNovo, alvo,
+        sanitacao.CLASSES_GENERICAS.filter(function (c) { return c.chave === 'segredo'; }))[0];
+      if (achado) {
+        return negar('sworn: o texto novo de ' + alvo + ' traz um ' + achado.nome + ' na linha ' + achado.linha +
+          ' do que entra (no Edit, contada no trecho novo, nao no arquivo). O handoff vai para o proximo chat: tire ' +
+          'o valor (ou troque por "<omitido>") e grave de novo.');
+      }
+    }
+
     // Escopo por frente: o arquivo de UMA frente tem o mesmo passe livre do
     // escopo.md (logo abaixo) e vincula a sessao a ela. Nome fora da classe
     // [a-zA-Z0-9_-] e negado sem gravar nada: sem isto o arquivo seria escrito

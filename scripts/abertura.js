@@ -447,6 +447,10 @@ io.blindar(function () {
     avisoSeguro('radar', 'Rode /sworn:radar a mao, ' + desligarVigia, function () {
       return require('./lib/vigia-local.js').avisoDoRadar(projeto, { cwd: cwdDaEntrada });
     });
+    // H12a (D913): a sessao que roda o sworn velho com o novo ja instalado (o /clear nao recarrega o plugin).
+    avisoSeguro('a conferencia da versao carregada', 'Compare a mao a versao do plugin.json com a do /plugin.', function () {
+      return require('./lib/versao-carregada.js').aviso();
+    });
     const planoLib = require('./lib/plano.js');
     const ativo = planoLib.lerAtivo(cwd);
     if (planoLib.donoOutro(ativo, e.session_id)) {
