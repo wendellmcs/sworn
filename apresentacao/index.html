@@ -1,0 +1,1007 @@
+<!doctype html>
+<!-- Gerado por scripts/apresentacao.js a partir de apresentacao/fonte/: nao edite aqui, edite a fonte e rode --gravar. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sworn: a IA sob juramento</title>
+<meta name="description" content="Tudo o que o plugin sworn faz, explicado sem jargão: as travas, o automático, a revisão cega, os ganhos medidos e como usar no seu projeto.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400..700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400..700&amp;display=swap">
+<style>
+:root {
+  --paper: #FBFAF6;
+  --paper2: #F1ECDF;
+  --card: #FFFEFA;
+  --line: #E3DDCD;
+  --ink: #1F2937;
+  --soft: #4B5563;
+  --mute: #6B7280;
+  --amber: #B45309;
+  --amber-bg: #FBEBD3;
+  --blue: #1F4E79;
+  --blue-bg: #DCE8F3;
+  --green: #2F6F4E;
+  --green-bg: #DDEEE3;
+  --night: #0D1117;
+  --night2: #161B22;
+  --night-line: #30363D;
+  --night-text: #F3F4F6;
+  --night-soft: #B8C0CC;
+  --gold: #F59E0B;
+}
+
+body { font-family: 'DM Sans', Arial, sans-serif; color: var(--ink); }
+
+section {
+  background: var(--paper);
+  color: var(--ink);
+  padding: 128px;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  font-size: 30px;
+  line-height: 1.4;
+}
+section.alt { background: var(--paper2); }
+section.dark { background: var(--night); color: var(--night-text); }
+
+.eyebrow { font-size: 24px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--amber); }
+.dark .eyebrow { color: var(--gold); }
+
+.title { font-family: 'Fraunces', Georgia, serif; font-size: 64px; font-weight: 600; line-height: 1.1; color: var(--ink); letter-spacing: -0.5px; }
+.dark .title { color: var(--night-text); }
+
+.lead { font-size: 32px; line-height: 1.4; color: var(--soft); }
+.dark .lead { color: var(--night-soft); }
+
+.small { font-size: 24px; line-height: 1.4; color: var(--mute); }
+.dark .small { color: var(--night-soft); }
+
+.hero { font-family: 'Fraunces', Georgia, serif; font-size: 120px; font-weight: 600; line-height: 1.05; letter-spacing: -2px; }
+.statement { font-family: 'Fraunces', Georgia, serif; font-size: 80px; font-weight: 500; line-height: 1.15; letter-spacing: -1px; }
+.statement .hl, .hero .hl { color: var(--amber); }
+.dark .statement .hl, .dark .hero .hl { color: var(--gold); }
+
+.row { display: flex; gap: 32px; }
+.col { display: flex; flex-direction: column; gap: 20px; }
+.grow { flex: 1; }
+.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 36px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 4px 24px rgba(31,41,55,.05); }
+.alt .card { background: #FFFDF7; }
+.dark .card { background: var(--night2); border: 1px solid var(--night-line); box-shadow: none; }
+.card h3 { font-family: 'DM Sans', Arial, sans-serif; font-size: 34px; font-weight: 700; line-height: 1.2; color: var(--ink); }
+.dark .card h3 { color: var(--night-text); }
+.card p { font-size: 26px; line-height: 1.4; color: var(--soft); }
+.dark .card p { color: var(--night-soft); }
+.card .k { font-size: 24px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--amber); }
+.dark .card .k { color: var(--gold); }
+.card.tight { padding: 28px; gap: 8px; }
+.card.tight h3 { font-size: 30px; }
+.card.tight p { font-size: 24px; }
+
+.num, .card .num { font-family: 'Fraunces', Georgia, serif; font-size: 112px; font-weight: 600; line-height: 1; color: var(--amber); letter-spacing: -2px; }
+.dark .num, .dark .card .num { color: var(--gold); }
+.card .num.mid { font-size: 80px; }
+.card .cap { font-size: 26px; line-height: 1.35; color: var(--soft); }
+.dark .card .cap { color: var(--night-soft); }
+
+.pill { font-size: 24px; font-weight: 700; padding: 6px 18px; border-radius: 999px; align-self: flex-start; }
+.pill.blq { background: var(--amber-bg); color: #8A3F06; }
+.pill.dev { background: #F6E0D6; color: #8B2E13; }
+.pill.avi { background: var(--blue-bg); color: var(--blue); }
+.pill.aut { background: var(--green-bg); color: var(--green); }
+.pill.cmd { background: #E7E5F4; color: #3B3486; }
+
+.badge { width: 72px; height: 72px; border-radius: 50%; background: var(--ink); color: var(--paper); font-family: 'Fraunces', Georgia, serif; font-size: 36px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.dark .badge { background: var(--gold); color: var(--night); }
+
+.tbl { font-size: 26px; color: var(--ink); width: 100%; }
+.dark .tbl { color: var(--night-text); }
+
+.term { background: var(--night); border-radius: 20px; padding: 36px 44px; display: flex; flex-direction: column; gap: 6px; }
+.term p { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 24px; line-height: 1.45; color: #E5E7EB; }
+.term .user { color: #9CA3AF; }
+.term .agent { color: #F3F4F6; }
+.term .gate { color: var(--gold); }
+.term .note { color: #8B949E; }
+
+.ic { width: 56px; height: 56px; color: var(--amber); }
+.dark .ic { color: var(--gold); }
+
+.src { font-size: 24px; color: var(--mute); }
+.dark .src { color: var(--night-soft); }
+
+.rise { animation: rise 600ms ease-out both; animation-delay: calc(var(--i, 0) * 110ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } }
+.fadein { animation: fadein 700ms ease-out both; animation-delay: calc(var(--i, 0) * 120ms); }
+@keyframes fadein { from { opacity: 0; } }
+html, body { margin: 0; height: 100%; background: #0D1117; }
+body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+#visor { position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: pointer; }
+#palco { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; font: 32px/1.2 sans-serif; }
+#palco * { margin: 0; }
+#palco h3 { font-size: 44px; font-weight: 600; }
+#palco p, #palco li, #palco h3 { overflow-wrap: break-word; text-wrap: pretty; }
+#palco > section { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; box-sizing: border-box; overflow: hidden; }
+#palco > section:not(.on) { display: none; }
+#palco aside { display: none; }
+#notas { flex: none; max-height: 34vh; overflow-y: auto; box-sizing: border-box; padding: 14px 16px; background: #161B22; color: #E5E7EB; border-top: 1px solid #30363D; font: 17px/1.5 'DM Sans', Arial, sans-serif; }
+#notas[hidden] { display: none; }
+#barra { flex: none; display: flex; align-items: center; gap: 8px; box-sizing: border-box; padding: 6px 12px; background: #0D1117; color: #F3F4F6; border-top: 1px solid #30363D; font: 15px/1.2 'DM Sans', Arial, sans-serif; }
+#barra button { min-width: 44px; min-height: 44px; padding: 0 12px; border: 1px solid #30363D; border-radius: 10px; background: #161B22; color: #F3F4F6; font: inherit; cursor: pointer; }
+#barra button:hover { border-color: #F59E0B; }
+#barra button:focus-visible { outline: 3px solid #F59E0B; outline-offset: 2px; }
+#barra button[aria-pressed="true"] { background: #F59E0B; border-color: #F59E0B; color: #0D1117; }
+#contador { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+#secao { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #B8C0CC; }
+@media (max-width: 480px) { #secao { visibility: hidden; } #b-tela { display: none; } }
+@media (prefers-reduced-motion: reduce) { #palco * { animation: none !important; } }
+@media print {
+  @page { size: 1920px 1080px; margin: 0; }
+  html, body { height: auto; overflow: visible; display: block; background: none; }
+  #barra, #notas { display: none !important; }
+  #visor { overflow: visible; }
+  #palco { position: static; transform: none !important; height: auto; }
+  #palco > section { display: flex !important; position: relative; break-after: page; }
+  #palco * { animation: none !important; }
+}
+</style>
+</head>
+<body>
+<main id="visor" aria-label="Apresentação: use as setas ou deslize para trocar de slide; um toque no terço esquerdo volta, no resto avança">
+<div id="palco">
+<section id="cover" class="dark" style="justify-content:center; gap:40px">
+  <div style="position:absolute; right:-160px; top:140px; width:800px; height:800px; border-radius:50%; border:2px solid #30363D"></div>
+  <div style="position:absolute; right:-40px; top:260px; width:560px; height:560px; border-radius:50%; border:2px solid #3A3F47"></div>
+  <div style="position:absolute; right:80px; top:380px; width:320px; height:320px; border-radius:50%; background:#F59E0B; display:flex; align-items:center; justify-content:center">
+    <p style="font-family:'Fraunces', Georgia, serif; font-size:44px; font-weight:600; line-height:1.1; color:#0D1117; text-align:center; width:240px">sob<br>juramento</p>
+  </div>
+  <p class="eyebrow rise" style="--i:0">Um plugin para o Claude Code · versão 0.89.0</p>
+  <p class="hero rise" style="--i:1; width:1100px">sworn</p>
+  <p class="statement rise" style="--i:2; font-size:64px; width:1100px">A IA trabalha rápido. O sworn <span class="hl">exige a prova</span> antes do “pronto”.</p>
+  <p class="lead rise" style="--i:3; width:1000px">Tudo o que ele faz, explicado sem jargão: cada passo vigiado, o que acontece sozinho, os comandos e as evidências.</p>
+  <aside>Abertura. O nome sworn vem do inglês “sob juramento”: a IA só pode dizer que terminou se mostrar a prova, como uma testemunha que jurou dizer a verdade. A apresentação explica, para quem não programa, tudo o que o plugin faz, do começo ao fim de uma sessão de trabalho.</aside>
+</section>
+<section id="uma-frase" style="gap:48px">
+  <p class="eyebrow">Em uma frase</p>
+  <p class="statement rise" style="--i:0; width:1560px">Pense na IA como um estagiário <span class="hl">brilhante e apressado</span>. O sworn é o supervisor que confere cada passo.</p>
+  <div style="flex:1"></div>
+  <div class="row">
+    <div class="card grow rise" style="--i:1">
+      <p class="k">O que é</p>
+      <h3>Um complemento do Claude Code</h3>
+      <p>O Claude Code é a IA que escreve programas. O sworn se instala nele, como um app dentro do app.</p>
+    </div>
+    <div class="card grow rise" style="--i:2">
+      <p class="k">Como age</p>
+      <h3>Vigia os momentos-chave</h3>
+      <p>Antes de mexer num arquivo, antes de rodar um comando e quando a IA diz que terminou.</p>
+    </div>
+    <div class="card grow rise" style="--i:3">
+      <p class="k">O que muda</p>
+      <h3>“Pronto” só vale com prova</h3>
+      <p>Sem o resultado do teste à vista, a IA volta ao trabalho. Não basta dizer: tem de mostrar.</p>
+    </div>
+  </div>
+  <aside>A metáfora que guia a apresentação: a IA é um estagiário muito rápido e muito confiante, que às vezes diz que terminou sem ter conferido. O sworn é o supervisor: não trava o trabalho, mas confere nos momentos em que o erro custa caro, e só aceita o “pronto” com a prova na mesa.</aside>
+</section>
+<section id="agenda" class="alt" style="gap:28px">
+  <p class="eyebrow">O roteiro</p>
+  <p class="title">Treze paradas, do problema ao seu projeto</p>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:0; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">1</div><div class="col" style="gap:2px"><h3 style="font-size:28px">O que é</h3><p style="font-size:24px">a ideia em uma frase</p></div></div>
+    <div class="card tight rise" style="--i:1; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">2</div><div class="col" style="gap:2px"><h3 style="font-size:28px">O problema</h3><p style="font-size:24px">11 vícios da IA</p></div></div>
+    <div class="card tight rise" style="--i:2; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">3</div><div class="col" style="gap:2px"><h3 style="font-size:28px">Como funciona</h3><p style="font-size:24px">o porteiro de cada passo</p></div></div>
+    <div class="card tight rise" style="--i:3; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">4</div><div class="col" style="gap:2px"><h3 style="font-size:28px">Travas e portões</h3><p style="font-size:24px">o que é barrado</p></div></div>
+    <div class="card tight rise" style="--i:4; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">5</div><div class="col" style="gap:2px"><h3 style="font-size:28px">O automático</h3><p style="font-size:24px">o que ele faz sozinho</p></div></div>
+    <div class="card tight rise" style="--i:5; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">6</div><div class="col" style="gap:2px"><h3 style="font-size:28px">A revisão cega</h3><p style="font-size:24px">juízes sem saber de quem é</p></div></div>
+    <div class="card tight rise" style="--i:6; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">7</div><div class="col" style="gap:2px"><h3 style="font-size:28px">Comandos e painéis</h3><p style="font-size:24px">o que você pode pedir</p></div></div>
+    <div class="card tight rise" style="--i:7; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">8</div><div class="col" style="gap:2px"><h3 style="font-size:28px">Na prática</h3><p style="font-size:24px">8 casos de uso</p></div></div>
+    <div class="card tight rise" style="--i:8; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">9</div><div class="col" style="gap:2px"><h3 style="font-size:28px">Custo e desempenho</h3><p style="font-size:24px">quanto custa, quanto poupa</p></div></div>
+    <div class="card tight rise" style="--i:9; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">10</div><div class="col" style="gap:2px"><h3 style="font-size:28px">As evidências</h3><p style="font-size:24px">medição, testes, casos</p></div></div>
+    <div class="card tight rise" style="--i:10; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">11</div><div class="col" style="gap:2px"><h3 style="font-size:28px">De onde vêm as ideias</h3><p style="font-size:24px">radar, cursos, o dono</p></div></div>
+    <div class="card tight rise" style="--i:11; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">12</div><div class="col" style="gap:2px"><h3 style="font-size:28px">Ganhos e novidades</h3><p style="font-size:24px">e o que chegou agora</p></div></div>
+    <div class="card tight rise" style="--i:12; flex-direction:row; align-items:center; gap:18px; padding:18px 24px"><div class="badge" style="flex:none">13</div><div class="col" style="gap:2px"><h3 style="font-size:28px">No seu projeto</h3><p style="font-size:24px">como usar, que ganhos esperar</p></div></div>
+  </div>
+  <aside>O percurso: o problema que o sworn resolve, como ele funciona por dentro, o que barra, o que faz sozinho e como revisa. Depois, o que você pode pedir, casos do dia a dia, quanto custa e quanto economiza, as provas de que funciona e de onde veio cada ideia: o radar, os cursos oficiais e os pedidos do dono. No fim, os ganhos, as novidades da versão e como usar o sworn no seu projeto, com os ganhos que dá para esperar.</aside>
+</section>
+<section id="problema" style="gap:28px">
+  <p class="eyebrow">O problema</p>
+  <p class="title" style="font-size:56px">Toda IA que programa pega os mesmos 11 vícios</p>
+  <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:14px 40px; margin-top:8px">
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">1</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Diz “pronto, os testes passam” sem ter testado</p><p class="small">→ devolve a vez até ela mostrar o resultado</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">2</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Conserta uma coisa e mexe em três que ninguém pediu</p><p class="small">→ proíbe mexer fora do combinado</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">3</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Roda um comando que apaga trabalho “para limpar”</p><p class="small">→ barra o comando antes de ele rodar</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">4</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Afrouxa a régua quando o teste reprova</p><p class="small">→ nega a mudança que afrouxa o limite</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">5</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Cria um arquivo repetido sem procurar o que já existe</p><p class="small">→ exige procurar antes de criar</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">6</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Escreve o comando no “idioma” errado do terminal</p><p class="small">→ barra a sintaxe errada antes de rodar</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">7</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Mexe no arquivo que outra sessão está editando</p><p class="small">→ protege o trabalho da outra sessão</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">8</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Usa o modelo mais caro para um erro de digitação</p><p class="small">→ barra o gasto desproporcional</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">9</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Grava no histórico código que ninguém revisou</p><p class="small">→ exige revisão cega aprovada antes</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">10</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Pede sua decisão no meio de uma muralha de texto</p><p class="small">→ exige 3 opções, a recomendada primeiro</p></div></div>
+    <div class="row" style="gap:18px; align-items:flex-start"><p class="pill blq">11</p><div class="col" style="gap:2px"><p style="font-size:24px; font-weight:700">Perde o fio quando a conversa fica longa</p><p class="small">→ avisa a hora de trocar e entrega a continuação</p></div></div>
+  </div>
+  <aside>Nenhum desses vícios aparece no primeiro dia. Eles surgem com o uso, e cada um custa tempo ou dinheiro: um “pronto” falso vira retrabalho, um comando que apaga vira perda, um modelo caro mal usado vira conta alta. Em cada linha, à esquerda o vício e, depois da seta, a resposta do sworn.</aside>
+</section>
+<section id="antes-depois" class="alt">
+  <p class="eyebrow">Um pedido simples, duas histórias</p>
+  <p class="title">“Corrija o botão de salvar”</p>
+  <div class="row" style="margin-top:8px; align-items:stretch">
+    <div class="card grow rise" style="--i:0; background:#FFFFFF">
+      <p class="pill dev">Sem o sworn</p>
+      <p style="font-size:28px">1. A IA corrige o botão e, de passagem, mexe em outras três telas.</p>
+      <p style="font-size:28px">2. Um teste reprova; ela afrouxa o teste para ele passar.</p>
+      <p style="font-size:28px">3. Diz “pronto, tudo testado”, sem ter rodado nada.</p>
+      <p style="font-size:28px">4. Você descobre dias depois, quando algo quebra em produção.</p>
+    </div>
+    <div class="card grow rise" style="--i:1; border:2px solid #B45309">
+      <p class="pill aut">Com o sworn</p>
+      <p style="font-size:28px">1. As três telas fora do pedido: escrita negada na hora.</p>
+      <p style="font-size:28px">2. O teste afrouxado: mudança negada, o limite fica.</p>
+      <p style="font-size:28px">3. O “pronto” sem resultado: a IA volta ao trabalho e roda o teste.</p>
+      <p style="font-size:28px">4. Você recebe o botão corrigido, com a saída do teste à vista.</p>
+    </div>
+  </div>
+  <aside>Exemplo do dia a dia. Do lado esquerdo, o que acontece quando a IA trabalha sozinha: ela é rápida, mas toma atalhos. Do lado direito, cada atalho encontra um portão. Nada disso depende de a IA “lembrar” uma regra: o portão é um programa que roda sempre no mesmo ponto.</aside>
+</section>
+<section id="como-funciona">
+  <p class="eyebrow">Como funciona</p>
+  <p class="title">Um porteiro em cada porta</p>
+  <p class="lead" style="width:1500px">Regra escrita num pedido se perde numa conversa longa. Por isso o sworn não pede: ele instala <b>ganchos</b>, pequenos programas que o Claude Code chama sozinho em momentos fixos.</p>
+  <div class="row" style="align-items:center; gap:28px; margin-top:12px">
+    <div class="card rise" style="--i:0; width:380px; align-items:center; text-align:center"><p class="k">1</p><h3>A IA quer agir</h3><p>escrever, rodar, perguntar, encerrar</p></div>
+    <p style="font-size:56px; color:#B45309">→</p>
+    <div class="card rise" style="--i:1; width:440px; align-items:center; text-align:center; background:#1F2937; border:none"><p class="k" style="color:#F59E0B">2</p><h3 style="color:#F3F4F6">O gancho confere</h3><p style="color:#B8C0CC">um programa fixo, em segundos</p></div>
+    <p style="font-size:56px; color:#B45309">→</p>
+    <div class="col grow rise" style="--i:2; gap:14px">
+      <p class="pill blq">Bloqueia: a ação não acontece</p>
+      <p class="pill dev">Devolve: a IA volta ao trabalho</p>
+      <p class="pill avi">Avisa: lembra e deixa seguir</p>
+      <p class="pill aut">Faz sozinho: registra, corrige, mede</p>
+    </div>
+  </div>
+  <div style="flex:1"></div>
+  <p class="small">O porteiro não é outra IA: é uma regra fixa. A mesma situação dá sempre a mesma resposta, e as travas não gastam nada de IA para rodar.</p>
+  <aside>O conceito central. Um gancho (hook, em inglês) é como um porteiro numa porta: o Claude Code é obrigado a passar por ele antes de certas ações. O porteiro tem quatro respostas possíveis: barrar a ação, devolver a vez para a IA corrigir, só avisar, ou fazer algo sozinho, como guardar um registro. Como ele é um programa comum, e não outra IA, ele não se cansa, não esquece e não pode ser convencido.</aside>
+</section>
+<section id="jornada" class="alt" style="gap:28px">
+  <p class="eyebrow">A jornada de uma sessão</p>
+  <p class="title" style="font-size:56px">Cada passo da sessão tem um porteiro</p>
+  <div class="grid4" style="gap:18px">
+    <div class="card tight rise" style="--i:0; border-top:6px solid #2F6F4E"><p class="k">Ao abrir</p><p>Lê o estado do projeto e relembra as regras.</p></div>
+    <div class="card tight rise" style="--i:1; border-top:6px solid #1F4E79"><p class="k">Sua mensagem</p><p>Anota o pedido; propõe regra se você corrigiu.</p></div>
+    <div class="card tight rise" style="--i:2; border-top:6px solid #B45309"><p class="k">Antes de escrever</p><p>Confere se o arquivo está no combinado.</p></div>
+    <div class="card tight rise" style="--i:3; border-top:6px solid #1F4E79"><p class="k">Antes de ler</p><p>Avisa quando um arquivo enorme será lido.</p></div>
+    <div class="card tight rise" style="--i:4; border-top:6px solid #B45309"><p class="k">Antes do comando</p><p>Barra o que apaga ou pula a revisão.</p></div>
+    <div class="card tight rise" style="--i:5; border-top:6px solid #B45309"><p class="k">Antes da ajuda</p><p>Barra o ajudante caro demais para a tarefa.</p></div>
+    <div class="card tight rise" style="--i:6; border-top:6px solid #B45309"><p class="k">Antes de perguntar</p><p>Exige 3 opções, a recomendada primeiro.</p></div>
+    <div class="card tight rise" style="--i:7; border-top:6px solid #2F6F4E"><p class="k">Depois do comando</p><p>Guarda o recibo do teste; desfaz estrago.</p></div>
+    <div class="card tight rise" style="--i:8; border-top:6px solid #2F6F4E"><p class="k">Ajudante entra e sai</p><p>Passa as regras, grava o parecer, cobra a entrega.</p></div>
+    <div class="card tight rise" style="--i:9; border-top:6px solid #8B2E13"><p class="k">Quando diz “pronto”</p><p>Sem prova, revisão ou teste: volta ao trabalho.</p></div>
+    <div class="card tight rise" style="--i:10; border-top:6px solid #2F6F4E"><p class="k">Antes de resumir</p><p>Salva o estado real antes de compactar.</p></div>
+    <div class="card tight rise" style="--i:11; border-top:6px solid #2F6F4E"><p class="k">Ao fechar</p><p>Faz a faxina e anota o custo da sessão.</p></div>
+  </div>
+  <div class="row" style="gap:20px; align-items:center">
+    <p class="pill blq">bloqueia</p><p class="pill dev">devolve</p><p class="pill avi">avisa</p><p class="pill aut">automático</p>
+    <div style="flex:1"></div>
+    <p class="small">11 eventos do Claude Code · 29 programas pendurados neles</p>
+  </div>
+  <aside>O Claude Code tem onze eventos em que pode chamar um programa, e o sworn usa todos, com 29 programas no total. Os cinco cartões que começam com “antes” são o mesmo evento (antes de usar uma ferramenta), separados pelo tipo de ação para ficar claro. A cor no topo do cartão diz o tipo de resposta: âmbar bloqueia, vermelho devolve a vez para a IA, azul avisa, verde faz sozinho.</aside>
+</section>
+<section id="custo-zero" class="dark">
+  <p class="eyebrow">Por que isso é barato</p>
+  <p class="title">Programas comuns, não outra IA</p>
+  <p class="lead" style="width:1500px">Quem confere é um script fixo. Ele responde em segundos, sempre igual, e não cobra por pensamento.</p>
+  <div style="flex:1"></div>
+  <div class="grid3">
+    <div class="card rise" style="--i:0"><p class="num">0</p><p class="cap">tokens de IA gastos pelas travas 3 a 8: só a entrevista inicial e a revisão cega usam IA</p></div>
+    <div class="card rise" style="--i:1"><p class="num">29</p><p class="cap">programas vigiando os 11 momentos da sessão, todos com tempo-limite de segundos</p></div>
+    <div class="card rise" style="--i:2"><p class="num">26</p><p class="cap">chaves de liga e desliga: o projeto escolhe quais avisos e portões opcionais quer</p></div>
+  </div>
+  <aside>Ponto importante para quem se preocupa com custo: a maior parte do sworn não usa IA nenhuma. As travas 3 a 8 são programas comuns que leem o que a IA quer fazer e respondem sim ou não. Só duas peças gastam IA: a entrevista inicial do projeto, uma vez, e a revisão cega, só quando é pedida. Os avisos e portões opcionais têm chaves de liga e desliga; os de segurança, como a senha no handoff, não desligam.</aside>
+</section>
+<section id="travas" style="gap:28px">
+  <p class="eyebrow">As 8 travas</p>
+  <p class="title" style="font-size:56px">O coração do sworn</p>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:0"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">1</div><h3>Entrevista inicial</h3></div><p>Conhece o projeto: varre os arquivos, faz as perguntas que a varredura não responde e grava as regras.</p><p class="pill aut">uma vez por projeto</p></div>
+    <div class="card tight rise" style="--i:1"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">2</div><h3>Revisão cega</h3></div><p>Juízes independentes avaliam o trabalho sem saber quem o fez nem qual é a versão nova.</p><p class="pill cmd">quando pedida</p></div>
+    <div class="card tight rise" style="--i:2"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">3</div><h3>Sem prova, sem “pronto”</h3></div><p>Disse que terminou sem mostrar o resultado, ou o teste falhou? A IA volta ao trabalho.</p><p class="pill dev">devolve</p></div>
+    <div class="card tight rise" style="--i:3"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">4</div><h3>Fora do combinado</h3></div><p>Só se escreve nos arquivos que a tarefa declarou. O resto fica intocado.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:4"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">5</div><h3>Comando perigoso</h3></div><p>Barra o que apaga trabalho e protege o arquivo que outra sessão está editando.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:5"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">6</div><h3>Ajudante caro</h3></div><p>Barra o modelo caro em tarefa leve e cobra a troca de modelo que ficou esquecida.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:6"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">7</div><h3>Criar sem procurar</h3></div><p>Antes de criar um arquivo, é preciso procurar se já existe um igual.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:7"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">8</div><h3>Régua afrouxada</h3></div><p>Um limite de qualidade nunca é afrouxado para o teste passar. Não há exceção.</p><p class="pill blq">bloqueia</p></div>
+  </div>
+  <aside>As oito travas são o núcleo. A primeira é a entrevista que ensina ao sworn como o projeto funciona: sem ela, só as travas 3 e 5 agem. A segunda é a revisão cega, que tem uma seção própria mais adiante. Da terceira à oitava, são porteiros que agem sozinhos, sem custo de IA. A trava 8 é a mais rígida: nem com decisão registrada ela deixa a IA afrouxar um limite.</aside>
+</section>
+<section id="portoes-a" class="alt" style="gap:28px">
+  <p class="eyebrow">Portões extras · 1 de 2</p>
+  <p class="title" style="font-size:56px">Antes de gravar, publicar e te perguntar</p>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:0"><h3>Commit sem revisão</h3><p>Nada entra no histórico do projeto sem revisão cega aprovada.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:1"><h3>Aprovação presa ao conteúdo</h3><p>Aprovou e depois mudou? A aprovação se perde.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:2"><h3>Senha no commit</h3><p>Uma chave ou senha no código barra a gravação.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:3"><h3>Senha no handoff</h3><p>O texto de continuação vai a outro chat: senha não entra nele.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:4"><h3>Cartão do envio</h3><p>Antes de publicar, mostra o resumo do que vai subir.</p><p class="pill blq">até ver</p></div>
+    <div class="card tight rise" style="--i:5"><h3>Decisão em 3 opções</h3><p>Pergunta a você com 3 opções, a recomendada primeiro.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:6"><h3>Pacote inventado</h3><p>Avisa ao instalar algo que o projeto nunca declarou.</p><p class="pill avi">avisa</p></div>
+    <div class="card tight rise" style="--i:7"><h3>Estilo fora do padrão</h3><p>Com design system declarado, estilo gravado por comando é barrado.</p><p class="pill blq">bloqueia</p></div>
+  </div>
+  <aside>Além das oito travas, há 31 portões menores. Este slide mostra os que agem antes de gravar e publicar o trabalho, e antes de a IA te fazer uma pergunta. O “commit” é a gravação de uma versão no histórico do projeto; o “handoff” é o texto que permite continuar o trabalho em outra conversa. Os portões que só fazem coisas sozinhos aparecem na seção do automático.</aside>
+</section>
+<section id="portoes-b" style="gap:28px">
+  <p class="eyebrow">Portões extras · 2 de 2</p>
+  <p class="title" style="font-size:56px">Antes de dizer “pronto”</p>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:0"><h3>Revisão aprovada</h3><p>Código escrito só fecha com revisão cega aprovada.</p><p class="pill dev">devolve</p></div>
+    <div class="card tight rise" style="--i:1"><h3>Vermelho antes do verde</h3><p>O teste precisa falhar antes da correção.</p><p class="pill dev">devolve</p></div>
+    <div class="card tight rise" style="--i:2"><h3>Prova que confere</h3><p>A saída colada tem de ter saído na sessão.</p><p class="pill dev">devolve</p></div>
+    <div class="card tight rise" style="--i:3"><h3>Continuação legível</h3><p>Handoff sem prompt pronto não fecha.</p><p class="pill dev">devolve</p></div>
+    <div class="card tight rise" style="--i:4"><h3>Referência de topo</h3><p>Cobra o melhor produto do tipo como régua.</p><p class="pill dev">devolve</p></div>
+    <div class="card tight rise" style="--i:5"><h3>Manual no rigor máximo</h3><p>Arquivo crítico pede o manual carregado.</p><p class="pill blq">bloqueia</p></div>
+    <div class="card tight rise" style="--i:6"><h3>Entrega do ajudante</h3><p>Ajudante não gravou o pedido? É cobrado.</p><p class="pill dev">cobra</p></div>
+    <div class="card tight rise" style="--i:7"><h3>Armadilhas do shell</h3><p>Barra comandos que falham calados no Windows.</p><p class="pill blq">bloqueia</p></div>
+  </div>
+  <div style="flex:1"></div>
+  <p class="small">31 portões ao todo, além das 8 travas. Os que agem sozinhos, sem barrar nada, estão nas próximas três telas.</p>
+  <aside>Estes portões agem na hora em que a IA quer encerrar dizendo que terminou. O “vermelho antes do verde” é uma regra de teste: primeiro se prova que o teste pega o defeito, falhando; só depois se corrige. A “prova que confere” compara o resultado que a IA colou na resposta com o que realmente rodou na sessão, para pegar resultado inventado. A referência de topo é o melhor produto do mesmo tipo, usado como régua na revisão.</aside>
+</section>
+<section id="auto-contexto" class="alt" style="gap:28px">
+  <p class="eyebrow">O automático · 1 de 3 · memória e custo</p>
+  <p class="title" style="font-size:56px">Ele cuida do tamanho da conversa</p>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:0; border-top:6px solid #2F6F4E"><p class="k">Regras de volta</p><p>Ao abrir e após resumir, relembra o combinado.</p></div>
+    <div class="card tight rise" style="--i:1; border-top:6px solid #1F4E79"><p class="k">Hora de trocar</p><p>Aos 175 mil tokens, avisa que trocar compensa.</p></div>
+    <div class="card tight rise" style="--i:2; border-top:6px solid #2F6F4E"><p class="k">Volta a chat parado</p><p>Chat grande parado 1 hora? Grava um resumo.</p></div>
+    <div class="card tight rise" style="--i:3; border-top:6px solid #1F4E79"><p class="k">Arquivo enorme</p><p>Avisa antes de ler texto acima de 64 KB.</p></div>
+    <div class="card tight rise" style="--i:4; border-top:6px solid #2F6F4E"><p class="k">Antes de resumir</p><p>Salva o estado real antes da compactação.</p></div>
+    <div class="card tight rise" style="--i:5; border-top:6px solid #2F6F4E"><p class="k">Plano por fatia</p><p>Lê 5 KB do plano, não os 327 KB inteiros.</p></div>
+    <div class="card tight rise" style="--i:6; border-top:6px solid #1F4E79"><p class="k">Nota do plano</p><p>A cada 5 turnos, relembra onde o plano está.</p></div>
+    <div class="card tight rise" style="--i:7; border-top:6px solid #1F4E79"><p class="k">Modo contínuo</p><p>Trabalho longo: aviso a 250 mil, alarme a 450 mil.</p></div>
+  </div>
+  <div style="flex:1"></div>
+  <div class="card rise" style="--i:8; flex-direction:row; align-items:center; gap:36px; padding:28px 36px">
+    <p class="num mid" style="font-size:80px">US$ 119</p>
+    <p class="lead" style="font-size:28px">foi o custo de voltar a chats grandes parados em 44 dias. Como chat novo, seriam cerca de <b>US$ 23</b>. Nas 64 voltas com mais de 1 hora, o cache tinha esfriado em todas.</p>
+  </div>
+  <aside>Conversa longa custa caro: cada mensagem reenvia tudo o que veio antes. O sworn mede o tamanho e avisa na hora certa de começar outro chat, levando um resumo. O limite de 175 mil tokens não foi chutado: é o menor ponto em que trocar não sai mais caro que continuar, medido em 444 sessões. O número de baixo vem das conversas do próprio autor: voltar a um chat grande depois de uma hora custa caro porque o cache, a memória barata do provedor, já expirou.</aside>
+</section>
+<section id="auto-qualidade" style="gap:28px">
+  <p class="eyebrow">O automático · 2 de 3 · jeito de trabalhar</p>
+  <p class="title" style="font-size:56px">Ele educa a IA sem você repetir</p>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:0; border-top:6px solid #2F6F4E"><p class="k">Respostas diretas</p><p>Seis regras de resposta, a cada abertura.</p></div>
+    <div class="card tight rise" style="--i:1; border-top:6px solid #2F6F4E"><p class="k">Menos código</p><p>Escada de 7 degraus antes de escrever código.</p></div>
+    <div class="card tight rise" style="--i:2; border-top:6px solid #2F6F4E"><p class="k">Em paralelo</p><p>Até 8 ajudantes, com um leitor leve e barato.</p></div>
+    <div class="card tight rise" style="--i:3; border-top:6px solid #1F4E79"><p class="k">Aprender</p><p>Sua correção vira proposta de regra nova.</p></div>
+    <div class="card tight rise" style="--i:4; border-top:6px solid #2F6F4E"><p class="k">Pedidos anotados</p><p>Cada pedido seu é numerado e cobrado.</p></div>
+    <div class="card tight rise" style="--i:5; border-top:6px solid #1F4E79"><p class="k">Seu idioma</p><p>Responde no idioma em que você escreveu.</p></div>
+    <div class="card tight rise" style="--i:6; border-top:6px solid #2F6F4E"><p class="k">Recibo do teste</p><p>Guarda a prova do teste e enxuga a saída.</p></div>
+    <div class="card tight rise" style="--i:7; border-top:6px solid #1F4E79"><p class="k">Modelo trocado</p><p>Avisa se o ajudante usa outro modelo.</p></div>
+  </div>
+  <div style="flex:1"></div>
+  <div class="grid2" style="gap:20px">
+    <div class="card rise" style="--i:8; flex-direction:row; align-items:center; gap:28px; padding:28px 36px"><p class="num mid">12 a 0</p><p class="cap">as regras de resposta contra o modo ultrarresumido, em 12 perguntas congeladas</p></div>
+    <div class="card rise" style="--i:9; flex-direction:row; align-items:center; gap:28px; padding:28px 36px"><p class="num mid">−25%</p><p class="cap">de texto nas respostas, com a mesma qualidade da resposta padrão</p></div>
+  </div>
+  <aside>Estas peças não barram nada: elas lembram a IA de como trabalhar bem. A “escada de 7 degraus” é uma sequência de perguntas antes de escrever código novo, começando por “isso precisa existir?”. A lista de pedidos garante que nenhum pedido seu se perde numa conversa longa. Os números de baixo são de um teste com 12 perguntas fixas, só no modelo Sonnet: as respostas ficaram com cerca de um quarto a menos de texto (22.888 tokens contra 30.462), com a mesma qualidade da resposta padrão, e as regras do sworn venceram as 12 comparações contra o modo ultrarresumido.</aside>
+</section>
+<section id="auto-rotina" class="alt" style="gap:18px">
+  <p class="eyebrow">O automático · 3 de 3 · rotina e saúde</p>
+  <p class="title" style="font-size:56px">Ele lembra o que ninguém lembraria</p>
+  <div class="grid4" style="gap:16px">
+    <div class="card tight rise" style="--i:0; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Faxina de regras</p><p>A cada 7 dias, mostra regras a cortar.</p></div>
+    <div class="card tight rise" style="--i:1; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Atalhos</p><p>A cada 30 dias, lista as simplificações.</p></div>
+    <div class="card tight rise" style="--i:2; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Calibrar</p><p>Com 30 conversas, sugere medir o limite.</p></div>
+    <div class="card tight rise" style="--i:3; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Sem entrevista</p><p>Projeto sem configuração? Oferece a entrevista.</p></div>
+    <div class="card tight rise" style="--i:4; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Sem referência</p><p>Cobra régua ausente ou parada há 180 dias.</p></div>
+    <div class="card tight rise" style="--i:5; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Proteção vazia</p><p>Avisa a proteção que não pega arquivo algum.</p></div>
+    <div class="card tight rise" style="--i:6; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Plano de outro chat</p><p>Avisa antes de pisar no plano de outra sessão.</p></div>
+    <div class="card tight rise" style="--i:7; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Dois chats, um handoff</p><p>Avisa se outro chat o leu nas últimas 24 h.</p></div>
+    <div class="card tight rise" style="--i:8; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Versão velha</p><p>A versão nova só vale num chat novo: avisa.</p></div>
+    <div class="card tight rise" style="--i:9; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Configuração errada</p><p>Alerta quando um valor tem o tipo errado.</p></div>
+    <div class="card tight rise" style="--i:10; border-top:6px solid #2F6F4E; padding:20px 26px; gap:6px"><p class="k">Custo da sessão</p><p>Ao fechar, anota quanto a sessão custou.</p></div>
+    <div class="card tight rise" style="--i:11; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Ideias de fora</p><p>Num pedido de melhoria, oferece o radar.</p></div>
+  </div>
+  <div style="flex:1"></div>
+  <p class="small"><b>E ainda:</b> subida de modelo no limite de uso · kit por linguagem · o radar semanal.</p>
+  <aside>São lembretes de rotina que, numa equipe, dependeriam de alguém anotar na agenda. A “proteção vazia” é um caso sutil: o projeto diz “não mexa nesta pasta”, mas o nome está errado e a regra não protege nada; o sworn avisa. Os avisos de “dois chats” e “plano de outro chat” evitam que duas conversas trabalhem em cima da mesma coisa. Tudo aqui só avisa ou anota; nada bloqueia.</aside>
+</section>
+<section id="revisao-cega" class="dark">
+  <p class="eyebrow">Revisão cega · 1 de 2</p>
+  <p class="title">Quem escreveu não julga</p>
+  <p class="lead" style="width:1560px">Quem escreve tende a achar o próprio trabalho bom. Por isso o trabalho vai a juízes independentes em duas cópias, <b>A</b> e <b>B</b>, sem dizer qual é a nova. Cada juiz olha por uma lente só.</p>
+  <div class="row" style="align-items:center; gap:24px; margin-top:8px">
+    <div class="col rise" style="--i:0; gap:16px; width:200px">
+      <div class="card" style="align-items:center; padding:20px; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">A</p></div>
+      <div class="card" style="align-items:center; padding:20px; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">B</p></div>
+    </div>
+    <p style="font-size:56px; color:#F59E0B">→</p>
+    <div class="card grow rise" style="--i:1; background:#161B22; border-color:#30363D; gap:18px">
+      <p class="k" style="color:#F59E0B">10 lentes de código · 8 de tela</p>
+      <div class="row" style="flex-wrap:wrap; gap:12px">
+        <p class="pill cmd">Correção</p><p class="pill cmd">Fidelidade ao pedido</p><p class="pill cmd">Estados</p><p class="pill cmd">Entrada e borda</p><p class="pill cmd">Segurança</p><p class="pill cmd">Manutenção</p><p class="pill cmd">Texto</p><p class="pill cmd">Medidor</p><p class="pill cmd">Design</p><p class="pill cmd">Enxuto</p>
+      </div>
+    </div>
+    <p style="font-size:56px; color:#F59E0B">→</p>
+    <div class="card rise" style="--i:2; width:340px; background:#F59E0B; border:none"><h3 style="color:#0D1117">Um script conta</h3><p style="color:#0D1117">os votos. Nunca o modelo que fez o trabalho.</p></div>
+  </div>
+  <div style="flex:1"></div>
+  <p class="small" style="color:#B8C0CC">Todo achado cita o arquivo e a linha; voto sem evidência não conta. Mudança que mexe em código e tela chama as duas famílias: até 18 juízes.</p>
+  <aside>A revisão cega existe porque a IA, revisando o próprio trabalho, repete o raciocínio que produziu o erro. O sworn entrega duas versões, a antiga e a nova, com rótulos neutros. Cada juiz recebe uma única pergunta, como “isso trata a entrada estranha?” ou “o texto que o usuário lê está claro?”. Os juízes não podem abrir o projeto, para não descobrir qual é a versão nova. Quem soma os votos é um programa, não a IA.</aside>
+</section>
+<section id="revisao-rondas" style="gap:26px">
+  <p class="eyebrow">Revisão cega · 2 de 2</p>
+  <p class="title" style="font-size:56px">Rodadas com teto: no máximo três</p>
+  <div class="grid3" style="gap:20px">
+    <div class="card tight rise" style="--i:0"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">1</div><h3>Descobre</h3></div><p>O tamanho da mudança decide quantos juízes: 1, 2 ou a banca completa.</p></div>
+    <div class="card tight rise" style="--i:1"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">2</div><h3>Confere</h3></div><p>Só volta quem achou erro, num modelo mais barato. Duas rodadas limpas aprovam.</p></div>
+    <div class="card tight rise" style="--i:2"><div class="row" style="gap:14px; align-items:center"><div class="badge" style="width:56px; height:56px; font-size:28px">3</div><h3>Teto</h3></div><p>Ainda há erro? Corrige com teste e grava marcado como “sem revisão”.</p></div>
+  </div>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:3; border-top:6px solid #8B2E13"><p class="k" style="color:#8B2E13">P0</p><p>Quebra uma função ou vaza segredo. Barra a entrega.</p></div>
+    <div class="card tight rise" style="--i:4; border-top:6px solid #B45309"><p class="k">P1</p><p>Falta estado obrigatório ou quebra contrato.</p></div>
+    <div class="card tight rise" style="--i:5; border-top:6px solid #1F4E79"><p class="k" style="color:#1F4E79">P2 erro</p><p>Muda resultado ou confunde: segura a rodada.</p></div>
+    <div class="card tight rise" style="--i:6; border-top:6px solid #2F6F4E"><p class="k" style="color:#2F6F4E">P2 melhoria</p><p>Vira anotação, não conserto obrigatório.</p></div>
+  </div>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:7; background:#F1ECDF"><h3>Refutador</h3><p>Tenta derrubar cada achado antes de aceitá-lo.</p></div>
+    <div class="card tight rise" style="--i:8; background:#F1ECDF"><h3>Juiz de repetidos</h3><p>Dois achados iguais não contam duas vezes.</p></div>
+    <div class="card tight rise" style="--i:9; background:#F1ECDF"><h3>Memória da rodada</h3><p>Melhoria descartada não volta depois.</p></div>
+    <div class="card tight rise" style="--i:10; background:#F1ECDF"><h3>Placar por lente</h3><p>Mede o que cada lente acha, para cortar a inútil.</p></div>
+  </div>
+  <aside>A revisão não roda para sempre: tem no máximo três rodadas. A primeira descobre problemas; as seguintes só conferem se o que foi achado foi corrigido. Cada achado recebe uma gravidade, de P0, o mais grave, a P2 de melhoria, que só vira anotação. A última linha mostra os ajudantes que mantêm a revisão justa: um que tenta provar que o achado é falso, outro que junta achados repetidos, e uma medição de quanto cada lente rende, que já fez o sworn tirar lentes que não achavam nada.</aside>
+</section>
+<section id="comandos" style="gap:18px">
+  <p class="eyebrow">As skills que você chama</p>
+  <p class="title" style="font-size:56px">12 comandos, cada um com um propósito</p>
+  <div class="grid4" style="gap:18px">
+    <div class="card tight rise" style="--i:0; padding:20px 26px; gap:6px"><p class="k">/sworn:init</p><p>Entrevista o projeto e grava as regras.</p><p class="pill blq" style="padding:2px 14px">trava 1</p></div>
+    <div class="card tight rise" style="--i:1; padding:20px 26px; gap:6px"><p class="k">/sworn:review</p><p>Revisão cega do trabalho, até 3 rodadas.</p><p class="pill blq" style="padding:2px 14px">trava 2</p></div>
+    <div class="card tight rise" style="--i:2; padding:20px 26px; gap:6px"><p class="k">/sworn:learn</p><p>Sua correção vira regra, com o seu sim.</p><p class="pill avi" style="padding:2px 14px">pede aprovação</p></div>
+    <div class="card tight rise" style="--i:3; padding:20px 26px; gap:6px"><p class="k">/sworn:handoff</p><p>Texto pronto para continuar em outro chat.</p><p class="pill aut" style="padding:2px 14px">grava arquivo</p></div>
+    <div class="card tight rise" style="--i:4; padding:20px 26px; gap:6px"><p class="k">/sworn:audit</p><p>Mostra o que cortar nas regras e skills.</p><p class="pill cmd" style="padding:2px 14px">só lê</p></div>
+    <div class="card tight rise" style="--i:5; padding:20px 26px; gap:6px"><p class="k">/sworn:calibrate</p><p>Mede quando trocar de chat compensa.</p><p class="pill avi" style="padding:2px 14px">pede aprovação</p></div>
+    <div class="card tight rise" style="--i:6; padding:20px 26px; gap:6px"><p class="k">/sworn:shortcuts</p><p>Lista simplificações sem prazo de troca.</p><p class="pill cmd" style="padding:2px 14px">só lê</p></div>
+    <div class="card tight rise" style="--i:7; padding:20px 26px; gap:6px"><p class="k">/sworn:review-plan</p><p>Confere o plano antes da primeira edição.</p><p class="pill cmd" style="padding:2px 14px">só lê</p></div>
+    <div class="card tight rise" style="--i:8; padding:20px 26px; gap:6px"><p class="k">/sworn:drift</p><p>Mostra onde o código fugiu do plano.</p><p class="pill cmd" style="padding:2px 14px">só lê</p></div>
+    <div class="card tight rise" style="--i:9; padding:20px 26px; gap:6px"><p class="k">/sworn:diagnose</p><p>Descobre por que uma sessão deu errado.</p><p class="pill cmd" style="padding:2px 14px">só lê</p></div>
+    <div class="card tight rise" style="--i:10; padding:20px 26px; gap:6px"><p class="k">/sworn:reference</p><p>Estuda os melhores do tipo e faz a régua.</p><p class="pill avi" style="padding:2px 14px">pede aprovação</p></div>
+    <div class="card tight rise" style="--i:11; padding:20px 26px; gap:6px"><p class="k">/sworn:radar</p><p>Acha projetos parecidos com ideias úteis.</p><p class="pill cmd" style="padding:2px 14px">só lê e propõe</p></div>
+  </div>
+  <p class="small"><b>E 4 skills que a IA usa sozinha:</b> o manual de execução (o nível de rigor de cada tarefa) · esforço baixo · esforço alto · trabalho em paralelo.</p>
+  <aside>Uma skill é um pacote de instruções que a IA carrega quando precisa. Estas doze você chama digitando o nome, como /sworn:review. Só duas são travas, a entrevista e a revisão; as outras ajudam e nenhuma muda o projeto sem você ver. As quatro do rodapé a IA usa por conta própria: o manual decide se a tarefa é rápida, padrão ou de rigor máximo, e as skills de esforço ajustam o quanto a IA pensa, sem trocar o modelo.</aside>
+</section>
+<section id="paineis-agentes" class="alt" style="gap:20px">
+  <p class="eyebrow">Ajudantes e o que aparece na tela</p>
+  <p class="title" style="font-size:56px">Quatro ajudantes e o painel à vista</p>
+  <div class="grid2" style="gap:20px; flex:1">
+    <div class="col" style="gap:14px">
+      <div class="card tight rise" style="--i:0"><h3>Inspetor</h3><p>O juiz cego de uma lente. Só lê.</p></div>
+      <div class="card tight rise" style="--i:1"><h3>Juiz de repetidos</h3><p>Diz se dois achados são o mesmo defeito.</p></div>
+      <div class="card tight rise" style="--i:2"><h3>Refutador</h3><p>Tenta derrubar um achado antes de aceitá-lo.</p></div>
+      <div class="card tight rise" style="--i:3"><h3>Leitor leve</h3><p>Abre com 6.347 tokens, contra cerca de 56 mil.</p></div>
+    </div>
+    <div class="col" style="gap:14px">
+      <div class="term rise" style="--i:4"><p class="note">linha de status, sempre visível</p><p>contexto 24% · 5h 4% até 13:50 · semana 18%</p><p class="gate">troca de chat em 180 mil tokens</p></div>
+      <div class="card tight rise" style="--i:5"><p class="k">4 painéis ao lado do chat</p><p><b>/sworn-session</b> contexto, gasto, previsão</p><p><b>/sworn-plan</b> andamento do plano</p><p><b>/sworn-review</b> rodadas da revisão</p><p><b>/sworn-replay</b> o que o turno mudou</p></div>
+      <div class="card tight rise" style="--i:6"><p class="k">Faixa com 7 botões</p><div class="row" style="flex-wrap:wrap; gap:10px"><p class="pill aut">handoff</p><p class="pill cmd">revisar</p><p class="pill avi">virar regra</p><p class="pill aut">configurar</p><p class="pill cmd">o que cortar</p><p class="pill avi">calibrar</p><p class="pill blq">manual</p></div></div>
+    </div>
+  </div>
+  <aside>À esquerda, os quatro ajudantes que o sworn traz. Os três primeiros trabalham dentro da revisão cega. O leitor leve serve para tarefas de leitura em paralelo: ele abre sem carregar as instruções do projeto, por isso custa uma fração do ajudante padrão. À direita, o que você vê: uma linha de status com o tamanho da conversa e o uso do plano, quatro painéis que ficam abertos ao lado do chat e uma faixa com sete botões de atalho para os comandos mais usados.</aside>
+</section>
+<section id="chaves" style="gap:28px">
+  <p class="eyebrow">Você decide o que liga</p>
+  <p class="title" style="font-size:56px">26 chaves de liga e desliga</p>
+  <div class="row" style="gap:28px; align-items:stretch">
+    <div class="card rise" style="--i:0; width:520px; justify-content:center"><p class="num">22</p><p class="cap">vêm ligadas: avisos, regras de resposta, portões de commit e de revisão, lista de pedidos, teste vermelho primeiro e outros</p></div>
+    <div class="col grow" style="gap:18px">
+      <p class="k">4 vêm desligadas, cada uma por um motivo</p>
+      <div class="grid2" style="gap:18px">
+        <div class="card tight rise" style="--i:1"><h3>Revisão em todo código</h3><p>Para quem quer revisão até no menor ajuste.</p></div>
+        <div class="card tight rise" style="--i:2"><h3>Abertura enxuta</h3><p>Corta cerca de 2,3 mil caracteres da abertura.</p></div>
+        <div class="card tight rise" style="--i:3"><h3>Prova por arquivo</h3><p>Testa só o arquivo mexido; a suíte fica para o commit.</p></div>
+        <div class="card tight rise" style="--i:4"><h3>Vigia semanal</h3><p>Só para quem mantém o próprio sworn.</p></div>
+      </div>
+    </div>
+  </div>
+  <div style="flex:1"></div>
+  <p class="small">Mais 4 chaves das travas (fecho, comando perigoso, outra frente, escopo). Só vale <b>true</b> ou <b>false</b>: o valor entre aspas não muda nada, para um erro de digitação não desligar uma proteção.</p>
+  <aside>Tudo fica num arquivo de configuração do projeto. As quatro que vêm desligadas são para casos específicos, como quem quer revisão até no menor ajuste, e cada um liga só o que quiser. Algumas proteções de segurança, como a de senha no texto de continuação, não têm chave e não desligam.</aside>
+</section>
+<section id="casos-1" style="gap:24px">
+  <p class="eyebrow">Na prática · 1 de 2</p>
+  <p class="title" style="font-size:56px">Você pede, o sworn cuida, você recebe</p>
+  <div class="grid2" style="gap:24px; flex:1">
+    <div class="card tight rise" style="--i:0; border-top:6px solid #B45309; gap:10px"><p class="k">Corrigir um erro</p><p><b>Você pede:</b> “O cálculo do frete está errado.”</p><p><b>O sworn faz:</b> só aceita “achei a causa” com o erro reproduzido, e só aceita “pronto” com o teste rodado.</p><p><b>Você recebe:</b> a correção e a saída do teste na própria resposta.</p></div>
+    <div class="card tight rise" style="--i:1; border-top:6px solid #1F4E79; gap:10px"><p class="k">Criar ou mudar uma tela</p><p><b>Você pede:</b> “Refaça a página de preços.”</p><p><b>O sworn faz:</b> fotografa antes e depois, confere em 3 larguras de tela e chama juízes cegos de visual.</p><p><b>Você recebe:</b> a tela conferida, e o que não deu para comparar dito por escrito.</p></div>
+    <div class="card tight rise" style="--i:2; border-top:6px solid #2F6F4E; gap:10px"><p class="k">Começar num projeto</p><p><b>Você pede:</b> /sworn:init</p><p><b>O sworn faz:</b> lê o projeto, mostra o que entendeu e faz 6 perguntas que só você responde.</p><p><b>Você recebe:</b> regras gravadas que valem em toda conversa dali em diante.</p></div>
+    <div class="card tight rise" style="--i:3; border-top:6px solid #6B7280; gap:10px"><p class="k">Trabalho longo, de vários dias</p><p><b>Você pede:</b> “Siga o plano até o fim.”</p><p><b>O sworn faz:</b> confere o plano antes de editar, marca o andamento e grava o texto de continuação.</p><p><b>Você recebe:</b> o trabalho retomado do ponto exato, sem refazer nada.</p></div>
+  </div>
+  <aside>Quatro situações do dia a dia, sempre no mesmo formato: o que você pede, o que o sworn faz por baixo e o que chega para você. No erro, ele não deixa a IA dizer que achou a causa sem reproduzir o problema. Na tela, ele compara fotos em larguras diferentes. No começo, faz a entrevista. No trabalho longo, guarda o ponto exato para continuar.</aside>
+</section>
+<section id="casos-2" class="alt" style="gap:24px">
+  <p class="eyebrow">Na prática · 2 de 2</p>
+  <p class="title" style="font-size:56px">Mais quatro situações do dia a dia</p>
+  <div class="grid2" style="gap:24px; flex:1">
+    <div class="card tight rise" style="--i:0; border-top:6px solid #B45309; gap:10px"><p class="k">Duas conversas no mesmo projeto</p><p><b>Você pede:</b> um segundo chat para outra frente de trabalho.</p><p><b>O sworn faz:</b> dá a cada frente o seu escopo e avisa antes de pisar no plano da outra.</p><p><b>Você recebe:</b> duas linhas de trabalho sem atropelo.</p></div>
+    <div class="card tight rise" style="--i:1; border-top:6px solid #1F4E79; gap:10px"><p class="k">Publicar uma versão</p><p><b>Você pede:</b> “Publique.”</p><p><b>O sworn faz:</b> exige a bateria inteira de testes e a revisão cega fechada; envio só com o seu sim.</p><p><b>Você recebe:</b> a versão publicada, com a prova de cada etapa.</p></div>
+    <div class="card tight rise" style="--i:2; border-top:6px solid #2F6F4E; gap:10px"><p class="k">Pedir uma melhoria</p><p><b>Você pede:</b> “Quero exportar o relatório em PDF.”</p><p><b>O sworn faz:</b> oferece o radar: procura projetos parecidos e o que vale trazer deles.</p><p><b>Você recebe:</b> 3 opções com custo, e a escolha continua sua.</p></div>
+    <div class="card tight rise" style="--i:3; border-top:6px solid #6B7280; gap:10px"><p class="k">Entender o que deu errado</p><p><b>Você pede:</b> “Por que essa sessão demorou tanto?”</p><p><b>O sworn faz:</b> lê os registros da sessão e só relata o que um script confirma.</p><p><b>Você recebe:</b> as causas, cada uma com o ponto exato de onde veio.</p></div>
+  </div>
+  <aside>Mais quatro casos. Duas conversas ao mesmo tempo no mesmo projeto: cada uma tem a sua frente, e o sworn avisa se uma for mexer no plano da outra. Publicar: nada sai sem os testes e a revisão, e o envio espera o seu sim. Pedir melhoria: o radar mostra o que projetos parecidos já resolveram. E, quando algo dá errado, o diagnóstico explica por quê, com prova.</aside>
+</section>
+<section id="custo" class="alt" style="gap:24px">
+  <p class="eyebrow">Custo e desempenho · 1 de 2</p>
+  <p class="title" style="font-size:56px">Quanto custa ter um porteiro</p>
+  <div class="grid3" style="gap:24px; flex:1">
+    <div class="card tight rise" style="--i:0"><p class="k">As travas</p><p class="num mid">0</p><p class="cap">tokens de IA para barrar: as travas são programas comuns, que respondem em segundos</p></div>
+    <div class="card tight rise" style="--i:1"><p class="k">A revisão</p><p class="num mid">1 a 18</p><p class="cap">juízes por revisão, conforme o tamanho da mudança: um ajuste curto tem 1 só</p></div>
+    <div class="card tight rise" style="--i:2"><p class="k">Os ajudantes</p><p class="num mid">8</p><p class="cap">ajudantes ao mesmo tempo, no máximo; o modelo barato lê e o médio edita</p></div>
+    <div class="card tight rise" style="--i:3"><p class="k">O preço do rigor</p><p class="num mid">+23%</p><p class="cap">de custo e +30% de tempo no experimento: é a IA voltando para mostrar a prova</p></div>
+    <div class="card tight rise" style="--i:4"><p class="k">O experimento</p><p class="num mid">US$ 37</p><p class="cap">custo das 120 execuções, sem e com o sworn (US$ 16,66 e US$ 20,48)</p></div>
+    <div class="card tight rise" style="--i:5; background:#FBEBD3; border:none"><p class="k">O custo à vista</p><p class="num mid">US$</p><p class="cap">do mês e da sessão sempre na linha de status; ao fechar, a sessão anota o quanto custou</p></div>
+  </div>
+  <aside>Quanto custa o sworn. As travas não gastam IA: são programas que leem e respondem sim ou não. A revisão é proporcional: uma mudança pequena tem um juiz, uma grande pode ter dezoito. Os ajudantes têm teto e usam o modelo mais barato que resolve. No experimento, o rigor custou 23% a mais e 30% a mais de tempo, porque a IA volta para mostrar a prova. E o gasto fica sempre à vista.</aside>
+</section>
+<section id="economia" style="gap:24px">
+  <p class="eyebrow">Custo e desempenho · 2 de 2</p>
+  <p class="title" style="font-size:56px">Onde ele economiza, com número medido</p>
+  <div class="grid3" style="gap:24px; flex:1">
+    <div class="card tight rise" style="--i:0; border-top:6px solid #2F6F4E"><p class="k">Leitor leve</p><p class="num mid">9× menos</p><p class="cap">o ajudante de leitura abre com 6.347 tokens, contra cerca de 56 mil do padrão</p></div>
+    <div class="card tight rise" style="--i:1; border-top:6px solid #2F6F4E"><p class="k">No VS Code</p><p class="num mid">4× menos</p><p class="cap">três leituras custam 38.514 tokens, contra 169.098 antes do ajuste</p></div>
+    <div class="card tight rise" style="--i:2; border-top:6px solid #2F6F4E"><p class="k">Hora de trocar de chat</p><p class="num mid">175 mil</p><p class="cap">tokens: o ponto em que trocar compensa; cada troca custa US$ 1,56 (444 sessões)</p></div>
+    <div class="card tight rise" style="--i:3; border-top:6px solid #1F4E79"><p class="k">Conversa gigante</p><p class="num mid">4×</p><p class="cap">o preço de cada chamada acima de 500 mil tokens: por isso ele avisa antes</p></div>
+    <div class="card tight rise" style="--i:4; border-top:6px solid #1F4E79"><p class="k">Voltar a um chat parado</p><p class="num mid">US$ 119</p><p class="cap">em 44 dias, contra cerca de US$ 23 num chat novo: agora ele grava um resumo para retomar</p></div>
+    <div class="card tight rise" style="--i:5; border-top:6px solid #1F4E79"><p class="k">Plano por fatia</p><p class="num mid">65× menos</p><p class="cap">lê 5 KB do plano, só a tarefa de agora, em vez dos 327 KB inteiros</p></div>
+  </div>
+  <aside>Onde o sworn faz economizar, cada número medido nas próprias sessões. O leitor leve custa nove vezes menos para abrir. No VS Code, um ajuste cortou o custo de leitura em quatro vezes. A troca de chat é sugerida no ponto em que passa a compensar, porque conversas gigantes custam até quatro vezes mais por chamada. E o plano longo é lido por fatias: só a parte da tarefa de agora, em vez do arquivo inteiro.</aside>
+</section>
+<section id="evidencia-medicao" style="gap:28px">
+  <p class="eyebrow">Evidência · 1 de 4 · o experimento</p>
+  <p class="title" style="font-size:56px">Medimos com e sem o sworn</p>
+  <p class="lead" style="width:1560px; font-size:30px">20 tarefas com armadilhas, 3 vezes cada, no modelo Sonnet: 60 execuções de cada lado.</p>
+  <div class="row" style="gap:28px; align-items:center">
+    <div class="row" style="gap:10px; align-items:center"><div style="width:28px; height:28px; border-radius:6px; background:#2F6FB0"></div><p class="small">sem o sworn</p></div>
+    <div class="row" style="gap:10px; align-items:center"><div style="width:28px; height:28px; border-radius:6px; background:#B45309"></div><p class="small">com o sworn</p></div>
+  </div>
+  <div class="row" style="gap:40px; align-items:stretch; flex:1">
+    <div class="col grow" style="gap:30px; justify-content:center">
+      <div class="col" style="gap:10px">
+        <p style="font-size:30px; font-weight:600">Mostrou a prova ao dizer “pronto”</p>
+        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:44px; border-left:2px solid #6B7280; display:flex; align-items:center"><p style="font-size:28px; margin-left:16px">0 de 60</p></div></div>
+        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:44px; border-left:2px solid #6B7280; display:flex; align-items:center"><div class="rise" style="--i:1; width:255px; height:44px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:28px; font-weight:700; margin-left:16px">17 de 60</p></div></div>
+      </div>
+      <div class="col" style="gap:10px">
+        <p style="font-size:30px; font-weight:600">Afrouxou um limite para o teste passar</p>
+        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:44px; border-left:2px solid #6B7280; display:flex; align-items:center"><div class="rise" style="--i:2; width:75px; height:44px; background:#2F6FB0; border-radius:0 4px 4px 0"></div><p style="font-size:28px; margin-left:16px">1 de 12</p></div></div>
+        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:44px; border-left:2px solid #6B7280; display:flex; align-items:center"><p style="font-size:28px; font-weight:700; margin-left:16px">0 de 12</p></div></div>
+      </div>
+    </div>
+    <div class="card rise" style="--i:4; width:560px; justify-content:center; background:#FBEBD3; border:none">
+      <p class="k">Medido com rigor</p>
+      <h3>A prova passou a aparecer.</h3>
+      <p>Sem o sworn, a IA nunca mostrou o resultado do teste. Com ele, mostrou em 17 de 60 execuções.</p>
+      <p>A hipótese foi escrita antes de rodar, e quem contou foi um script, não uma IA.</p>
+    </div>
+  </div>
+  <aside>Este é o teste mais rigoroso feito com o sworn. As tarefas tinham armadilhas, como um teste que não roda ou um limite que dá vontade de afrouxar. O ganho mais claro foi a prova: sem o sworn, a IA nunca mostrou o resultado do teste ao dizer que terminou; com ele, mostrou em 17 de 60 execuções. E na armadilha do limite, com o sworn a IA não afrouxou nenhuma vez. A hipótese foi escrita antes, e a contagem foi feita por um script.</aside>
+</section>
+<section id="evidencia-suite" class="dark">
+  <p class="eyebrow">Evidência · 2 de 4 · os testes do próprio sworn</p>
+  <div class="row" style="align-items:baseline; gap:36px">
+    <p class="hero" style="color:#F59E0B">4.241</p>
+    <p class="statement" style="font-size:64px">testes automáticos. <span class="hl">0 falham.</span></p>
+  </div>
+  <div style="flex:1"></div>
+  <div class="grid4" style="gap:20px">
+    <div class="card rise" style="--i:0; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">17/17</p><p class="cap" style="color:#B8C0CC">testes de ponta a ponta, com o Claude Code de verdade</p></div>
+    <div class="card rise" style="--i:1; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">165</p><p class="cap" style="color:#B8C0CC">arquivos de teste para 74 programas e 116 módulos</p></div>
+    <div class="card rise" style="--i:2; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">48</p><p class="cap" style="color:#B8C0CC">contadores do que as travas fizeram: 30 negam, 18 só contam</p></div>
+    <div class="card rise" style="--i:3; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">6</p><p class="cap" style="color:#B8C0CC">sistemas de IA em que os 4 testes essenciais passam: o Claude Code e mais 5</p></div>
+  </div>
+  <aside>Todo o sworn é testado por ele mesmo: 4.241 testes, nenhum falhando (11 ficam pulados de propósito, por dependerem do ambiente). Os 17 de ponta a ponta abrem o Claude Code de verdade e conferem que as travas agem. O último número mostra o alcance: além do Claude Code, os testes essenciais passam em outros cinco sistemas de IA: Codex, Qwen Code, Antigravity, dsh e OpenCode.</aside>
+</section>
+<section id="evidencia-casos" style="gap:24px">
+  <p class="eyebrow">Evidência · 3 de 4 · uso real</p>
+  <p class="title" style="font-size:56px">No dia a dia, as travas agem de verdade</p>
+  <p class="small">Vezes em que cada porteiro agiu, contadas pelo próprio sworn no projeto em que ele é desenvolvido.</p>
+  <div class="col" style="gap:12px; flex:1; justify-content:center">
+    <div class="row" style="align-items:center; gap:16px"><p style="width:460px; text-align:right; font-size:26px">“Pronto” sem prova, devolvido</p><div class="rise" style="--i:0; width:1000px; height:40px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:26px; font-weight:700">340</p></div>
+    <div class="row" style="align-items:center; gap:16px"><p style="width:460px; text-align:right; font-size:26px">Comando perigoso negado</p><div class="rise" style="--i:1; width:274px; height:40px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:26px; font-weight:700">93</p></div>
+    <div class="row" style="align-items:center; gap:16px"><p style="width:460px; text-align:right; font-size:26px">Leitura de arquivo enorme avisada</p><div class="rise" style="--i:2; width:182px; height:40px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:26px; font-weight:700">62</p></div>
+    <div class="row" style="align-items:center; gap:16px"><p style="width:460px; text-align:right; font-size:26px">Continuação sem prompt barrada</p><div class="rise" style="--i:3; width:129px; height:40px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:26px; font-weight:700">44</p></div>
+    <div class="row" style="align-items:center; gap:16px"><p style="width:460px; text-align:right; font-size:26px">Commit sem revisão negado</p><div class="rise" style="--i:4; width:121px; height:40px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:26px; font-weight:700">41</p></div>
+    <div class="row" style="align-items:center; gap:16px"><p style="width:460px; text-align:right; font-size:26px">Criar arquivo sem procurar</p><div class="rise" style="--i:5; width:118px; height:40px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:26px; font-weight:700">40</p></div>
+    <div class="row" style="align-items:center; gap:16px"><p style="width:460px; text-align:right; font-size:26px">Régua de qualidade afrouxada</p><div class="rise" style="--i:6; width:82px; height:40px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:26px; font-weight:700">28</p></div>
+    <div class="row" style="align-items:center; gap:16px"><p style="width:460px; text-align:right; font-size:26px">Escrita fora do combinado</p><div class="rise" style="--i:7; width:71px; height:40px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:26px; font-weight:700">24</p></div>
+    <div class="row" style="align-items:center; gap:16px"><p style="width:460px; text-align:right; font-size:26px">Armadilha do shell barrada</p><div class="rise" style="--i:8; width:71px; height:40px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:26px; font-weight:700">24</p></div>
+  </div>
+  <p class="small">E ainda: <b>2.269</b> revisões cegas fechadas e <b>11.104</b> ajudantes despachados e contados.</p>
+  <aside>Estes números não são de laboratório: são do uso diário, no projeto onde o próprio sworn é construído. Cada barra é um momento em que a IA ia fazer algo errado e um porteiro agiu. O campeão, de longe, é a IA dizendo “pronto” sem mostrar a prova: 340 vezes ela teve de voltar e provar. Em seguida, 93 comandos perigosos, que poderiam apagar trabalho, foram negados.</aside>
+</section>
+<section id="evidencia-terminal" class="alt" style="gap:20px">
+  <p class="eyebrow">Evidência · 4 de 4 · na prática</p>
+  <p class="title" style="font-size:56px">Como isso aparece na tela, e o que o uso ensinou</p>
+  <div class="row" style="gap:32px; align-items:stretch; flex:1">
+    <div class="term rise" style="--i:0; width:900px; justify-content:center">
+      <p class="note">exemplo ilustrativo</p>
+      <p class="user">› Corrija o cálculo do frete.</p>
+      <p class="agent">Corrigi o cálculo. Pronto!</p>
+      <p class="gate">sworn: “pronto” sem prova. Rode o teste do projeto e mostre a saída.</p>
+      <p class="agent">Rodando os testes…</p>
+      <p>tests 38 · pass 38 · fail 0</p>
+      <p class="agent">Pronto: os 38 testes passam, saída acima.</p>
+    </div>
+    <div class="col grow" style="gap:12px">
+      <p class="k">O uso real fez o sworn melhorar</p>
+      <div class="card tight rise" style="--i:1"><p>Numa extensão de navegador: 13 melhorias numa rodada, revisadas por 27 juízes.</p></div>
+      <div class="card tight rise" style="--i:2"><p>Uma subpasta do projeto agora é protegida como a raiz.</p></div>
+      <div class="card tight rise" style="--i:3"><p>Os ajudantes em paralelo: 20 de 20, em cinco rodadas seguidas.</p></div>
+      <div class="card tight rise" style="--i:4"><p>Um texto que só cita “rm” não é mais barrado à toa.</p></div>
+      <div class="card tight rise" style="--i:5"><p>Cada caso virou um teste automático, para não voltar.</p></div>
+    </div>
+  </div>
+  <aside>À esquerda, a cena mais comum: a IA diz que terminou, o porteiro devolve, ela roda o teste e só então encerra, com a prova. O exemplo é ilustrativo, montado para a apresentação. À direita, o que o uso diário ensinou: cada situação real virou uma melhoria no sworn e um teste automático, para não voltar.</aside>
+</section>
+<section id="radar-como" style="gap:24px">
+  <p class="eyebrow">De onde vêm as ideias · 1 de 8 · o radar</p>
+  <p class="title" style="font-size:56px">Toda semana, o sworn procura ideias lá fora</p>
+  <div class="row" style="gap:20px; align-items:stretch">
+    <div class="card tight rise grow" style="--i:0; flex:1"><div class="badge">1</div><h3>Buscar</h3><p>Os projetos em alta da semana, toda segunda às 10:30.</p></div>
+    <div class="card tight rise grow" style="--i:1; flex:1"><div class="badge">2</div><h3>Triar</h3><p>Nota de 0 a 3 para cada um, lendo o começo e a licença.</p></div>
+    <div class="card tight rise grow" style="--i:2; flex:1"><div class="badge">3</div><h3>Aprofundar</h3><p>Os melhores são lidos inteiros, numa cópia só de leitura.</p></div>
+    <div class="card tight rise grow" style="--i:3; flex:1"><div class="badge">4</div><h3>Ficha</h3><p>Como entra, e onde fica melhor que o original.</p></div>
+    <div class="card tight rise grow" style="--i:4; flex:1; background:#FBEBD3; border:none"><div class="badge">5</div><h3>Você escolhe</h3><p>Nada entra sem o seu sim, e passa pela revisão cega.</p></div>
+  </div>
+  <div style="flex:1"></div>
+  <div class="grid4" style="gap:24px">
+    <div class="card tight rise" style="--i:5"><p class="num mid">~50</p><p class="cap">projetos públicos estudados</p></div>
+    <div class="card tight rise" style="--i:6"><p class="num mid">16</p><p class="cap">viraram recurso do sworn</p></div>
+    <div class="card tight rise" style="--i:7"><p class="num mid">0</p><p class="cap">dependências: toda ideia é reescrita por dentro</p></div>
+    <div class="card tight rise" style="--i:8"><p class="num mid">1</p><p class="cap">ficha por semana, conferida na abertura do chat</p></div>
+  </div>
+  <p class="small">No seu projeto, o radar procura por tema: ele se oferece quando você pede uma melhoria.</p>
+  <aside>O radar é a forma como o sworn aprende com o mundo. Toda segunda-feira, uma rotina lê os projetos em alta no GitHub, dá nota a cada um, estuda a fundo os melhores e escreve uma ficha. A ficha chega na abertura do chat e é conferida. Nada entra sozinho: o dono escolhe, e o que entra passa pela mesma revisão de qualquer mudança. Cerca de cinquenta projetos já foram estudados e dezesseis viraram recurso.</aside>
+</section>
+<section id="radar-trouxe-1" class="alt" style="gap:24px">
+  <p class="eyebrow">De onde vêm as ideias · 2 de 8 · revisão e prova</p>
+  <p class="title" style="font-size:56px">O que estudamos, e o que trouxemos</p>
+  <div class="col" style="gap:0">
+    <div style="display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:0 0 10px; border-bottom:2px solid #1F2937"><p class="k">Projeto</p><p class="k">O que ele faz</p><p class="k">Virou no sworn</p><p class="k">Onde ficou melhor</p></div>
+    <div class="rise" style="--i:1; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">google /</span><br><b>elephant-goldfish-model</b></p><p>Um agente planeja, outros revisam o plano</p><p>Conferência do plano e do desvio</p><p style="color:#2F6F4E">Um script confere cada caminho e comando citado</p></div>
+    <div class="rise" style="--i:2; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">mattpocock /</span><br><b>skills</b></p><p>Habilidades de engenharia para IA</p><p>“Achei a causa” só com o erro reproduzido</p><p style="color:#2F6F4E">A trava exige o comando rodado e colado</p></div>
+    <div class="rise" style="--i:3; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">cloudflare /</span><br><b>security-audit-skill</b></p><p>Auditoria de segurança</p><p>Juiz de segurança na revisão cega</p><p style="color:#2F6F4E">Dúvida vira “pendente”, nunca aprovação</p></div>
+    <div class="rise" style="--i:4; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">pbakaus /</span><br><b>impeccable</b></p><p>Revisão de telas</p><p>Aviso “DEGRADADO” na revisão sem isolamento</p><p style="color:#2F6F4E">O “pronto” sem o aviso é barrado</p></div>
+    <div class="rise" style="--i:5; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">obra /</span><br><b>superpowers</b></p><p>Fluxo de trabalho com skills</p><p>“Decisão: o que, por que, custo” e o diagnóstico</p><p style="color:#2F6F4E">Só relata o que um script confirma</p></div>
+    <div class="rise" style="--i:6; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">storytold /</span><br><b>craft-anything</b></p><p>Recria um site pelo que se vê</p><p>Conferência de tela em 3 larguras</p><p style="color:#2F6F4E">O que não foi comparado nunca conta como igual</p></div>
+  </div>
+  <aside>Estes são projetos públicos que o radar estudou. Para cada um: o que ele faz, o que virou dentro do sworn e onde a versão do sworn ficou melhor. O padrão se repete: o original pede ao modelo que confira, e o sworn confere com um programa. Por exemplo, o projeto do Google pede ao modelo que revise o plano; o sworn tem um script que confirma que cada arquivo e comando do plano existe.</aside>
+</section>
+<section id="radar-trouxe-2" style="gap:24px">
+  <p class="eyebrow">De onde vêm as ideias · 3 de 8 · memória e continuidade</p>
+  <p class="title" style="font-size:56px">Nada se perde entre uma conversa e outra</p>
+  <div class="col" style="gap:0">
+    <div style="display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:0 0 10px; border-bottom:2px solid #1F2937"><p class="k">Projeto</p><p class="k">O que ele faz</p><p class="k">Virou no sworn</p><p class="k">Onde ficou melhor</p></div>
+    <div class="rise" style="--i:1; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">akitaonrails /</span><br><b>ai-memory</b></p><p>Memória permanente para agentes</p><p>Texto de continuação relido como dado, não como ordem</p><p style="color:#2F6F4E">Sem servidor extra para instalar</p></div>
+    <div class="rise" style="--i:2; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">mksglu /</span><br><b>context-mode</b></p><p>Economia de contexto</p><p>Estado que sobrevive quando a conversa é resumida</p><p style="color:#2F6F4E">Só a ideia: a licença não permite o código</p></div>
+    <div class="rise" style="--i:3; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">deepseek-ai /</span><br><b>dsh-superagent-prototype</b></p><p>Agente com fechamento por estado</p><p>Fecho: pronto, esperando, bloqueado ou falhou</p><p style="color:#2F6F4E">O estado fica ligado à prova</p></div>
+    <div class="rise" style="--i:4; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">ChromeDevTools /</span><br><b>chrome-devtools-mcp</b></p><p>O navegador Chrome para a IA</p><p>Aviso de versão carregada diferente da instalada</p><p style="color:#2F6F4E">Comparação exata, sem adivinhar</p></div>
+    <div class="rise" style="--i:5; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">Donchitos /</span><br><b>Claude-Code-Game-Studios</b></p><p>Um estúdio de ajudantes de IA</p><p>Cobra o arquivo que o ajudante não gravou</p><p style="color:#2F6F4E">A cobrança chega no mesmo turno</p></div>
+  </div>
+  <aside>Este grupo cuida da continuidade. A memória do projeto akitaonrails inspirou a cerca de confiança: o texto de continuação é relido como informação, nunca como ordem. O context-mode inspirou o estado que sobrevive ao resumo da conversa; como a licença dele é restrita, só a ideia entrou, reescrita. Os outros três trouxeram o fecho com estado, o aviso de versão e a cobrança do arquivo que um ajudante esqueceu de gravar.</aside>
+</section>
+<section id="radar-trouxe-3" class="alt" style="gap:24px">
+  <p class="eyebrow">De onde vêm as ideias · 4 de 8 · telas, rotina e estudo</p>
+  <p class="title" style="font-size:56px">Telas, rotina e o estudo dos melhores</p>
+  <div class="col" style="gap:0">
+    <div style="display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:0 0 10px; border-bottom:2px solid #1F2937"><p class="k">Projeto</p><p class="k">O que ele faz</p><p class="k">Virou no sworn</p><p class="k">Onde ficou melhor</p></div>
+    <div class="rise" style="--i:1; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">nextlevelbuilder /</span><br><b>ui-ux-pro-max-skill</b></p><p>Sistema de design para IA</p><p>Arquivo de design com desvios declarados</p><p style="color:#2F6F4E">Desvio sem motivo e prazo reprova</p></div>
+    <div class="rise" style="--i:2; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">Nutlope /</span><br><b>hallmark</b></p><p>Reforma de telas</p><p>Inventário do que a tela tinha antes</p><p style="color:#2F6F4E">Nada some da tela sem alguém ver</p></div>
+    <div class="rise" style="--i:3; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">affaan-m /</span><br><b>ECC</b></p><p>Pacote de ganchos e regras</p><p>Perfil leve, padrão ou estrito</p><p style="color:#2F6F4E">Nada gravado fora da pasta do Claude</p></div>
+    <div class="rise" style="--i:4; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">DietrichGebert /</span><br><b>ponytail</b></p><p>“A escada antes do código”</p><p>Lista de atalhos e a marca “atalho:”</p><p style="color:#2F6F4E">Cada atalho diz quando deve ser trocado</p></div>
+    <div class="rise" style="--i:5; display:grid; grid-template-columns:360px 1fr 1fr 1fr; gap:28px; padding:14px 0; border-bottom:1px solid #E3DDCD; font-size:24px; line-height:1.35"><p><span style="color:#6B7280">morluto /</span><br><b>rea</b></p><p>Examina um programa por fora</p><p>/sworn:reference, o estudo dos melhores</p><p style="color:#2F6F4E">Ficha em camadas, com o que ficou sem saber</p></div>
+  </div>
+  <p class="small" style="margin-top:auto"><b>Na fila:</b> addyosmani/agent-skills e alibaba/open-code-review. <b>Só a ideia, sem código:</b> agent-browser (virou a captura própria), claude-mem, caveman (o sworn venceu 12 a 0), gg-framework, GitNexus.</p>
+  <aside>O último grupo. O sistema de design virou o arquivo que diz quais cores e medidas valem, com desvios declarados. O hallmark inspirou o inventário que impede uma tela de perder algo sem ninguém ver. No rodapé, o que ainda está na fila para a próxima versão e o que foi estudado e ficou só como ideia: o caveman, por exemplo, foi comparado com o modo de resposta do sworn e perdeu as 12 comparações.</aside>
+</section>
+<section id="radar-melhor" class="dark" style="gap:28px">
+  <p class="eyebrow">De onde vêm as ideias · 5 de 8 · o que melhoramos</p>
+  <p class="title" style="font-size:56px">Quatro regras para trazer uma ideia de fora</p>
+  <div class="grid2" style="gap:28px; flex:1">
+    <div class="card rise" style="--i:0; background:#161B22; border-color:#30363D"><p class="k" style="color:#F59E0B">1 · Instrução vira programa</p><h3 style="color:#FFFEFA">Onde o original pede “confira”, o sworn confere</h3><p style="color:#B8C0CC">Um script verifica caminho, comando e prova. Não depende de a IA lembrar.</p></div>
+    <div class="card rise" style="--i:1; background:#161B22; border-color:#30363D"><p class="k" style="color:#F59E0B">2 · Conselho vira trava</p><h3 style="color:#FFFEFA">Onde o original sugere, o sworn barra</h3><p style="color:#B8C0CC">A ação só passa quando a prova aparece na resposta.</p></div>
+    <div class="card rise" style="--i:2; background:#161B22; border-color:#30363D"><p class="k" style="color:#F59E0B">3 · Nenhuma dependência</p><h3 style="color:#FFFEFA">Nada de terceiros é instalado no seu projeto</h3><p style="color:#B8C0CC">A ideia é reescrita por dentro, e um teste reprova se alguém importar código de fora.</p></div>
+    <div class="card rise" style="--i:3; background:#161B22; border-color:#30363D"><p class="k" style="color:#F59E0B">4 · Licença respeitada</p><h3 style="color:#FFFEFA">Licença restrita: só a ideia, nunca o código</h3><p style="color:#B8C0CC">Projetos de uso não comercial ou de licença fechada inspiram, mas não são copiados.</p></div>
+  </div>
+  <aside>Estas são as quatro regras que transformam uma ideia de fora em recurso do sworn. Primeiro: o que no original é um pedido ao modelo vira um programa que confere. Segundo: o que é conselho vira trava. Terceiro: nada de terceiros é instalado; tudo é reescrito, e um teste automático garante isso. Quarto: a licença de cada projeto é respeitada, e quando ela é restrita só a ideia entra.</aside>
+</section>
+<section id="cursos" class="alt" style="gap:24px">
+  <p class="eyebrow">De onde vêm as ideias · 6 de 8 · cursos e documentação</p>
+  <p class="title" style="font-size:56px">O que os cursos do Claude Code ensinaram</p>
+  <div class="grid2" style="gap:24px; flex:1">
+    <div class="card tight rise" style="--i:0; gap:24px"><p class="k">7 cursos da Claude Academy</p>
+      <p><b>“Procure teste enfraquecido”</b> → o juiz de correção pergunta por teste pulado ou apagado</p>
+      <p><b>“Skill longa pesa em toda conversa”</b> → a auditoria avisa acima de 500 linhas</p>
+      <p><b>“Ajudante com retorno fixo e limite”</b> → o leitor leve tem formato e teto de passos</p>
+      <p><b>“O trabalho do meio importa?”</b> → regra de quando não delegar</p>
+      <p><b>“Requisitos numerados no plano”</b> → R1, R2… conferidos por script</p>
+      <p><b>“Cada servidor extra pesa”</b> → a auditoria lista os servidores ligados</p>
+    </div>
+    <div class="card tight rise" style="--i:1; gap:24px"><p class="k">Documentação oficial e vídeos</p>
+      <p><b>Ganchos</b> → o texto de continuação relido quando a conversa é resumida</p>
+      <p><b>Memória</b> → teto de 200 linhas conferido na auditoria</p>
+      <p><b>Plugins</b> → toda mudança sai numa versão nova, com número</p>
+      <p><b>Modelos e skills</b> → a escada de modelo e esforço</p>
+      <p><b>Vídeos “10 Mods” e “14 Mods”</b> → o medidor da sessão, o painel do plano e o diagnóstico</p>
+    </div>
+  </div>
+  <p class="small">Outras 12 sugestões dos cursos foram estudadas e ficaram de fora, cada uma com o motivo escrito.</p>
+  <aside>Além do radar, o sworn aprendeu com os sete cursos oficiais de Claude Code da Anthropic e com a documentação do produto. À esquerda, a lição do curso e o que ela virou. À direita, o que a documentação e dois vídeos sobre extensões do Claude Code trouxeram. Nem toda sugestão entrou: doze foram analisadas e recusadas, e o motivo de cada uma está registrado.</aside>
+</section>
+<section id="ideias-dono" style="gap:24px">
+  <p class="eyebrow">De onde vêm as ideias · 7 de 8 · o dono</p>
+  <p class="title" style="font-size:56px">As ideias do dono que moldaram o sworn</p>
+  <div class="grid4" style="gap:20px; flex:1">
+    <div class="card tight rise" style="--i:0; border-top:6px solid #B45309"><p class="k">1</p><h3>Porteiro, não conselheiro</h3><p>A trava barra na hora, sem outra IA no meio.</p></div>
+    <div class="card tight rise" style="--i:1; border-top:6px solid #B45309"><p class="k">2</p><h3>Juízes às cegas</h3><p>Revisão antes de salvar, repetida até zerar os erros.</p></div>
+    <div class="card tight rise" style="--i:2; border-top:6px solid #B45309"><p class="k">3</p><h3>Nada se perde</h3><p>O texto de continuação sempre aparece no chat.</p></div>
+    <div class="card tight rise" style="--i:3; border-top:6px solid #B45309"><p class="k">4</p><h3>Ver sem perguntar</h3><p>Painel do plano e linha de status sempre à vista.</p></div>
+    <div class="card tight rise" style="--i:4; border-top:6px solid #1F4E79"><p class="k">5</p><h3>O modelo certo</h3><p>Leve no simples, completo no crítico.</p></div>
+    <div class="card tight rise" style="--i:5; border-top:6px solid #1F4E79"><p class="k">6</p><h3>Outras IAs também</h3><p>Codex, Qwen, Antigravity, dsh e OpenCode.</p></div>
+    <div class="card tight rise" style="--i:6; border-top:6px solid #1F4E79"><p class="k">7</p><h3>Liga sozinho</h3><p>Radar, vigia semanal e lembretes sem comando.</p></div>
+    <div class="card tight rise" style="--i:7; border-top:6px solid #1F4E79"><p class="k">8</p><h3>Decidir em 3 opções</h3><p>A recomendada primeiro, com o custo de cada uma.</p></div>
+  </div>
+  <p class="small"><b>E ainda:</b> comparar com o melhor do mercado · responder no idioma de quem conversa · o nome “sworn”.</p>
+  <aside>O sworn não nasceu pronto: cada parte importante veio de um pedido do dono. Ele quis um porteiro que barra, e não um conselheiro que sugere. Quis juízes que não sabem de quem é o trabalho. Quis nunca perder o ponto ao trocar de conversa, ver o andamento sem perguntar, usar o modelo certo para cada tarefa, funcionar em outras IAs e decidir sempre entre três opções claras.</aside>
+</section>
+<section id="historia" class="dark" style="gap:24px">
+  <p class="eyebrow">De onde vêm as ideias · 8 de 8 · a jornada</p>
+  <p class="title" style="font-size:56px">Como chegamos aqui, pedido a pedido</p>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:0; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">249</p><p class="cap" style="color:#B8C0CC">pedidos do dono, numerados</p></div>
+    <div class="card tight rise" style="--i:1; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">913</p><p class="cap" style="color:#B8C0CC">decisões registradas, cada uma com o porquê</p></div>
+    <div class="card tight rise" style="--i:2; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">126</p><p class="cap" style="color:#B8C0CC">versões publicadas</p></div>
+    <div class="card tight rise" style="--i:3; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">4</p><p class="cap" style="color:#B8C0CC">meses: de agosto a novembro de 2026</p></div>
+  </div>
+  <div style="flex:1"></div>
+  <div class="grid4" style="gap:20px">
+    <div class="rise" style="--i:4; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Agosto</p><p style="color:#B8C0CC">A pesquisa e as 5 primeiras travas.</p></div>
+    <div class="rise" style="--i:5; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Setembro</p><p style="color:#B8C0CC">Os portões de prova e a revisão cega.</p></div>
+    <div class="rise" style="--i:6; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Outubro</p><p style="color:#B8C0CC">Painéis, trabalho em paralelo, a escada de modelos e o nome sworn.</p></div>
+    <div class="rise" style="--i:7; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Novembro</p><p style="color:#B8C0CC">Mais 5 IAs, os cursos, o radar e a revisão até zerar.</p></div>
+  </div>
+  <aside>A jornada em números: em cerca de quatro meses, o dono fez 249 pedidos numerados, que viraram 913 decisões registradas, cada uma com o motivo, e 126 versões publicadas. Em agosto vieram a pesquisa e as primeiras travas; em setembro, os portões e a revisão cega; em outubro, os painéis, o paralelo e o novo nome; em novembro, as outras IAs, os cursos e o radar.</aside>
+</section>
+<section id="ganhos" style="gap:26px">
+  <p class="eyebrow">Os ganhos</p>
+  <p class="title" style="font-size:56px">O que muda no bolso e na confiança</p>
+  <div class="grid3" style="gap:20px">
+    <div class="card tight rise" style="--i:0"><p class="num mid" style="font-size:64px">0 → 17</p><p class="cap">em 60 execuções, a IA passou a mostrar a prova ao dizer “pronto”</p></div>
+    <div class="card tight rise" style="--i:1"><p class="num mid" style="font-size:64px">1 → 0</p><p class="cap">vezes em que a IA afrouxou um limite de qualidade, em 12 tentativas</p></div>
+    <div class="card tight rise" style="--i:2"><p class="num mid" style="font-size:64px">−89%</p><p class="cap">no custo de abrir um ajudante de leitura: 6.347 tokens, não 56 mil</p></div>
+    <div class="card tight rise" style="--i:3"><p class="num mid" style="font-size:64px">−77%</p><p class="cap">em três leituras no VS Code: 38.514 tokens contra 169.098</p></div>
+    <div class="card tight rise" style="--i:4"><p class="num mid" style="font-size:64px">5 KB</p><p class="cap">lidos do plano em vez de 327 KB: só a parte da tarefa de agora</p></div>
+    <div class="card tight rise" style="--i:5"><p class="num mid" style="font-size:64px">US$ 23</p><p class="cap">em vez de US$ 119: voltar a chat parado como chat novo, em 44 dias</p></div>
+    <div class="card tight rise" style="--i:6"><p class="num mid" style="font-size:64px">4×</p><p class="cap">mais cara é cada mensagem acima de 500 mil tokens: o aviso de troca evita</p></div>
+    <div class="card tight rise" style="--i:7"><p class="num mid" style="font-size:64px">−25%</p><p class="cap">de texto nas respostas, com a mesma qualidade da resposta padrão</p></div>
+    <div class="card tight rise" style="--i:8"><p class="num mid" style="font-size:64px">12 a 0</p><p class="cap">as regras de resposta do sworn contra o modo ultrarresumido, em 12 perguntas</p></div>
+  </div>
+  <aside>O resumo dos ganhos, todos com número medido. Os dois primeiros são de confiança: a IA passa a mostrar a prova e para de afrouxar a régua. Os outros são de custo: o sworn lê menos, abre ajudantes mais leves e avisa a hora de trocar de conversa antes que cada mensagem fique cara. Os dois últimos são de qualidade de resposta: respostas um quarto mais curtas, e as regras do sworn venceram as 12 comparações contra um modo de resposta ultrarresumido.</aside>
+</section>
+<section id="novidades" class="dark" style="gap:26px">
+  <p class="eyebrow">O que há de novo · versão 0.89.0</p>
+  <p class="title" style="font-size:52px">A apresentação no GitHub Pages, e o README com cada trava e a chave que a desliga</p>
+  <div class="grid2" style="gap:20px">
+    <div class="card tight rise" style="--i:0"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">A apresentação do sworn no GitHub Pages</p></div>
+    <div class="card tight rise" style="--i:1"><p class="k">Melhorado</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">O README diz cada trava, portão e aviso, com a chave que o desliga</p></div>
+  </div>
+  <p class="small">A lista completa de cada versão está no <a href="https://github.com/wendellmcs/sworn/blob/main/CHANGELOG.md" style="color:#F59E0B">CHANGELOG</a>.</p>
+  <aside>As novidades da versão 0.89.0, tiradas do registro de mudanças a cada versão publicada. Este slide se refaz sozinho: quem publica a versão roda um comando que lê as novidades e monta a página de novo.</aside>
+</section>
+<section id="instalar" class="alt" style="gap:28px">
+  <p class="eyebrow">Como começar</p>
+  <p class="title" style="font-size:56px">Três passos, uma vez por computador e por projeto</p>
+  <div class="grid3" style="gap:24px; flex:1">
+    <div class="card rise" style="--i:0; gap:18px">
+      <div class="badge">1</div>
+      <h3>Adicionar a loja</h3>
+      <div class="term" style="padding:24px 28px"><p>claude plugin marketplace add wendellmcs/sworn</p></div>
+      <p>Diz ao Claude Code onde o sworn está publicado.</p>
+    </div>
+    <div class="card rise" style="--i:1; gap:18px">
+      <div class="badge">2</div>
+      <h3>Instalar o plugin</h3>
+      <div class="term" style="padding:24px 28px"><p>claude plugin install sworn@sworn-local</p></div>
+      <p>A atualização automática vem desligada: você escolhe quando trocar de versão.</p>
+    </div>
+    <div class="card rise" style="--i:2; gap:18px">
+      <div class="badge">3</div>
+      <h3>Apresentar o projeto</h3>
+      <div class="term" style="padding:24px 28px"><p>/sworn:init</p></div>
+      <p>O sworn olha o projeto, mostra o que entendeu e faz 6 perguntas que só o dono responde.</p>
+    </div>
+  </div>
+  <div class="card tight" style="background:#FBFAF6"><p>Depois disso não há mais nada a fazer: as travas, os avisos e as rotinas passam a agir sozinhos em cada sessão.</p></div>
+  <p class="small">O que o sworn não faz, e os limites de qualquer ferramenta deste tipo, estão no <a href="https://github.com/wendellmcs/sworn/blob/main/GUIA.md#o-que-o-sworn-não-promete" style="color:#B45309">guia, na seção “O que o sworn não promete”</a>.</p>
+  <aside>Instalar é simples. Os dois primeiros comandos são digitados uma vez no computador. O terceiro é dado dentro do Claude Code, uma vez por projeto: o sworn examina os arquivos, mostra o que entendeu e pergunta o que nenhuma varredura descobre, como qual comando prova que o trabalho está pronto e quem decide. A partir daí, tudo o que vimos acontece sozinho. A atualização automática vem desligada de propósito, para nenhuma versão nova mudar o comportamento no meio do trabalho.</aside>
+</section>
+<section id="uso-dia" style="gap:20px">
+  <p class="eyebrow">No seu projeto · o dia a dia</p>
+  <p class="title" style="font-size:56px">Você pede como sempre. O sworn cuida do resto</p>
+  <div class="grid3" style="gap:20px">
+    <div class="card tight rise" style="--i:0"><div class="badge" style="width:64px; height:64px; font-size:32px">1</div><h3>Peça normalmente</h3><p>Converse com o Claude Code como já faz. O sworn mede o tamanho da tarefa e escolhe o rigor sozinho: rápido, padrão ou máximo.</p></div>
+    <div class="card tight rise" style="--i:1"><div class="badge" style="width:64px; height:64px; font-size:32px">2</div><h3>Ele trabalha vigiado</h3><p>Escrever fora do combinado, rodar um comando perigoso ou dizer “pronto” sem a prova é barrado na hora, com o motivo.</p></div>
+    <div class="card tight rise" style="--i:2"><div class="badge" style="width:64px; height:64px; font-size:32px">3</div><h3>Revise antes de entregar</h3><div class="term" style="padding:12px 22px"><p>/sworn:review</p></div><p>Revisores às cegas julgam o arquivo, e um script conta os votos.</p></div>
+    <div class="card tight rise" style="--i:3"><div class="badge" style="width:64px; height:64px; font-size:32px">4</div><h3>Acompanhe nos painéis</h3><div class="term" style="padding:12px 22px"><p>/sworn-plan</p></div><p>O plano, o que está feito e quantas sessões faltam. O <span style="font-weight:700">/sworn-session</span> mostra a sessão de agora.</p></div>
+    <div class="card tight rise" style="--i:4"><div class="badge" style="width:64px; height:64px; font-size:32px">5</div><h3>Corrija uma vez</h3><div class="term" style="padding:12px 22px"><p>/sworn:learn</p></div><p>Sua correção vira regra do projeto, e só é gravada com o seu OK.</p></div>
+    <div class="card tight rise" style="--i:5; background:#FBEBD3; border:none"><p class="k">o que não muda</p><h3>Nada de rotina nova</h3><p>Sem tela extra e sem outra IA vigiando: os porteiros rodam no seu computador, sem custo de tokens.</p></div>
+  </div>
+  <aside>Como fica o trabalho depois de instalar. Você continua pedindo do mesmo jeito. O sworn decide sozinho quanto rigor a tarefa pede, barra na hora o que sai do combinado e não deixa a IA dizer que terminou sem mostrar a prova. Antes de entregar, um comando chama a revisão às cegas. Os painéis mostram o plano e a sessão. E quando você corrige a IA, a correção pode virar regra do projeto, sempre com o seu OK.</aside>
+</section>
+<section id="uso-ganhos" class="alt" style="gap:26px">
+  <p class="eyebrow">No seu projeto · que ganhos esperar</p>
+  <p class="title" style="font-size:56px">O que o sworn agrega, seja qual for o projeto</p>
+  <div class="grid3" style="gap:20px; flex:1">
+    <div class="card rise" style="--i:0; gap:14px">
+      <p class="k">Confiança</p>
+      <h3>O “pronto” vem com a prova</h3>
+      <p>No teste com armadilhas, a IA mostrou o resultado do teste em 17 de 60 entregas, contra nenhuma sem o sworn.</p>
+      <p>E não afrouxou a régua de qualidade nenhuma vez.</p>
+    </div>
+    <div class="card rise" style="--i:1; gap:14px">
+      <p class="k">Custo</p>
+      <h3>A conta de tokens encolhe</h3>
+      <p>Lê só a parte do plano da tarefa de agora: 65 vezes menos texto.</p>
+      <p>Ajudantes de leitura 89% mais leves, e o aviso de trocar de conversa antes de cada mensagem custar 4 vezes mais.</p>
+    </div>
+    <div class="card rise" style="--i:2; gap:14px">
+      <p class="k">Qualidade</p>
+      <h3>Revisão de verdade, sempre</h3>
+      <p>Código, tela ou texto: revisores às cegas, cada um com uma lente, e um script que conta os votos.</p>
+      <p>Telas são conferidas por foto em três larguras: computador, tablet e celular.</p>
+    </div>
+  </div>
+  <div class="card tight" style="background:#FFFDF7"><p>Os números vêm de medições feitas no próprio sworn. No seu projeto, o tamanho de cada ganho depende do trabalho: a economia de leitura, por exemplo, cresce com o tamanho do plano.</p></div>
+  <aside>O que esperar ao usar o sworn em qualquer projeto, com os números medidos. Na confiança: a IA passa a mostrar a prova quando diz que terminou, e para de afrouxar a régua. No custo: ela lê só o que a tarefa precisa, abre ajudantes mais leves e avisa a hora de trocar de conversa. Na qualidade: todo trabalho pode passar por revisores às cegas, e as telas são conferidas por foto no computador, no tablet e no celular. O tamanho de cada ganho depende do trabalho: a economia de leitura, por exemplo, cresce com o tamanho do plano.</aside>
+</section>
+<section id="onde-roda" style="gap:24px">
+  <p class="eyebrow">Onde roda</p>
+  <p class="title" style="font-size:56px">Feito para o Claude Code, testado em mais cinco</p>
+  <p class="small">Os mesmos 4 testes em cada um: regras na abertura, escrita fora negada, comando perigoso negado, “pronto” sem prova barrado.</p>
+  <div class="grid4" style="gap:18px">
+    <div class="card tight rise" style="--i:0; background:#FBEBD3; border:none"><p class="k">a casa</p><h3>Claude Code</h3><p class="num mid" style="font-size:48px">nativo</p><p class="cap">tudo, inclusive com o modelo DeepSeek: 4/4</p></div>
+    <div class="card tight rise" style="--i:1"><p class="k">OpenAI</p><h3>Codex</h3><p class="num mid" style="font-size:48px">4/4</p><p class="cap">os ganchos precisam ser aprovados uma vez</p></div>
+    <div class="card tight rise" style="--i:2"><p class="k">Alibaba</p><h3>Qwen Code</h3><p class="num mid" style="font-size:48px">4/4</p><p class="cap">com DeepSeek; com outro modelo, 3/4</p></div>
+    <div class="card tight rise" style="--i:3"><p class="k">Google</p><h3>Antigravity</h3><p class="num mid" style="font-size:48px">4/4</p><p class="cap">o plugin numa pasta sem espaço no nome</p></div>
+    <div class="card tight rise" style="--i:4"><p class="k">DeepSeek</p><h3>dsh</h3><p class="num mid" style="font-size:48px">4/4</p><p class="cap">pergunta em 3 opções só no modo web</p></div>
+    <div class="card tight rise" style="--i:5"><p class="k">código aberto</p><h3>OpenCode</h3><p class="num mid" style="font-size:48px">4/4</p><p class="cap">o portão do fim segura no modo servidor</p></div>
+    <div class="card tight rise" style="--i:6; grid-column:span 2; background:#F1ECDF; border:none"><p class="k">só no Claude Code</p><p>Os painéis, os ajudantes em paralelo, o ajuste de esforço, o aviso antes de compactar e a conferência da entrega do ajudante.</p></div>
+  </div>
+  <p class="small">Testado no Windows 11 com Node 24.12. Precisa do Node.js instalado. Linux e macOS ainda não foram testados.</p>
+  <aside>O sworn nasceu para o Claude Code, onde tudo funciona. Ele também foi adaptado e testado em outros seis sistemas de IA que trabalham no terminal, de empresas diferentes. Em todos, os quatro testes essenciais passaram: as regras chegam, a escrita fora do combinado e o comando perigoso são negados, e o “pronto” sem prova é barrado. Algumas partes, como os painéis, só existem no Claude Code. Cada cartão traz a ressalva principal daquele sistema.</aside>
+</section>
+<section id="encerramento" class="dark" style="justify-content:center; gap:40px">
+  <div style="position:absolute; right:-160px; top:140px; width:800px; height:800px; border-radius:50%; border:2px solid #30363D"></div>
+  <div style="position:absolute; right:80px; top:380px; width:320px; height:320px; border-radius:50%; background:#F59E0B"></div>
+  <p class="eyebrow rise" style="--i:0">Para levar</p>
+  <p class="statement rise" style="--i:1; font-size:72px; width:1180px">A IA continua rápida. Agora ela <span class="hl">mostra a prova</span>.</p>
+  <div class="col" style="gap:18px; width:1100px">
+    <p class="lead rise" style="--i:2">· Porteiros barram o erro antes que ele aconteça, sem outra IA e sem custo extra.</p>
+    <p class="lead rise" style="--i:3">· Revisores às cegas julgam o trabalho, e um script conta os votos.</p>
+    <p class="lead rise" style="--i:4">· Cada ganho tem número medido, e cada limite está escrito.</p>
+  </div>
+  <p class="small rise" style="--i:5; color:#B8C0CC">github.com/wendellmcs/sworn · código aberto</p>
+  <aside>Fechamento. Três ideias para lembrar: os porteiros barram o erro na hora, sem chamar outra IA; a revisão é feita às cegas e contada por script, não por opinião; e tudo o que o sworn diz de si mesmo tem número medido, inclusive o que ele não faz. Abra para perguntas.</aside>
+</section>
+</div>
+</main>
+<div id="notas" aria-live="polite" hidden></div>
+<nav id="barra" aria-label="Navegação da apresentação">
+<button id="b-ant" type="button" aria-label="Slide anterior">‹</button>
+<span id="contador" aria-live="polite"></span>
+<button id="b-prox" type="button" aria-label="Próximo slide">›</button>
+<span id="secao"></span>
+<button id="b-notas" type="button" aria-pressed="false">Notas</button>
+<button id="b-tela" type="button">Tela cheia</button>
+</nav>
+<script type="application/json" id="secoes">[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null]</script>
+<script>(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('#palco > section'));
+  var total = slides.length, atual = 0;
+  var visor = document.getElementById('visor'), palco = document.getElementById('palco');
+  var contador = document.getElementById('contador'), secao = document.getElementById('secao');
+  var notas = document.getElementById('notas'), bNotas = document.getElementById('b-notas');
+  var bTela = document.getElementById('b-tela');
+  var secoes = JSON.parse(document.getElementById('secoes').textContent);
+  slides.forEach(function (s, i) {
+    s.setAttribute('role', 'group');
+    s.setAttribute('aria-roledescription', 'slide');
+    s.setAttribute('aria-label', 'Slide ' + (i + 1) + ' de ' + total);
+  });
+  function escala() {
+    var r = visor.getBoundingClientRect();
+    var e = Math.min(r.width / 1920, r.height / 1080);
+    palco.style.transform = 'translate(' + (r.width - 1920 * e) / 2 + 'px,' + (r.height - 1080 * e) / 2 + 'px) scale(' + e + ')';
+  }
+  function ir(n, semHash) {
+    n = Math.max(0, Math.min(total - 1, n));
+    slides[atual].classList.remove('on');
+    slides[atual].setAttribute('aria-hidden', 'true');
+    atual = n;
+    slides[n].classList.add('on');
+    slides[n].removeAttribute('aria-hidden');
+    contador.textContent = (n + 1) + ' / ' + total;
+    secao.textContent = secoes[n] || '';
+    var nota = slides[n].querySelector('aside');
+    notas.textContent = nota ? nota.textContent.trim() : '';
+    if (!semHash && history.replaceState) history.replaceState(null, '', '#' + (n + 1));
+  }
+  function doEndereco() {
+    var h = location.hash.slice(1);
+    try { h = decodeURIComponent(h); } catch (e) { return 0; }
+    if (/^\d+$/.test(h)) return parseInt(h, 10) - 1;
+    for (var i = 0; i < total; i++) if (slides[i].id === h) return i;
+    return 0;
+  }
+  function alternarTela() {
+    var p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    // o navegador que recusa (iframe sem allowfullscreen, politica de permissao) esconde o botao que nao funciona
+    if (p && p.catch) p.catch(function () { bTela.hidden = true; });
+  }
+  function alternarNotas(abrir) {
+    notas.hidden = !abrir;
+    bNotas.setAttribute('aria-pressed', abrir ? 'true' : 'false');
+    escala();
+  }
+  document.getElementById('b-ant').addEventListener('click', function () { ir(atual - 1); });
+  document.getElementById('b-prox').addEventListener('click', function () { ir(atual + 1); });
+  bNotas.addEventListener('click', function () { alternarNotas(notas.hidden); });
+  if (document.fullscreenEnabled && document.documentElement.requestFullscreen) {
+    bTela.addEventListener('click', alternarTela);
+  } else {
+    bTela.hidden = true;
+  }
+  visor.addEventListener('click', function (ev) {
+    if (ev.target.closest('a')) return;
+    var r = visor.getBoundingClientRect();
+    ir(ev.clientX - r.left < r.width / 3 ? atual - 1 : atual + 1);
+  });
+  var toque = null;
+  visor.addEventListener('touchstart', function (ev) {
+    toque = ev.touches.length === 1 ? { x: ev.touches[0].clientX, y: ev.touches[0].clientY } : null;
+  }, { passive: true });
+  visor.addEventListener('touchend', function (ev) {
+    if (!toque) return;
+    var dx = ev.changedTouches[0].clientX - toque.x, dy = ev.changedTouches[0].clientY - toque.y;
+    toque = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { ev.preventDefault(); ir(dx < 0 ? atual + 1 : atual - 1); }
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+    var k = ev.key;
+    if ((k === ' ' || k === 'Enter') && ev.target.closest && ev.target.closest('button, a')) return;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ') ir(atual + 1);
+    else if (k === 'ArrowLeft' || k === 'PageUp') ir(atual - 1);
+    else if (k === 'Home') ir(0);
+    else if (k === 'End') ir(total - 1);
+    else if (k === 'n' || k === 'N') alternarNotas(notas.hidden);
+    else return;
+    ev.preventDefault();
+  });
+  window.addEventListener('hashchange', function () { ir(doEndereco(), true); });
+  if (window.ResizeObserver) new ResizeObserver(escala).observe(visor); else window.addEventListener('resize', escala);
+  slides.forEach(function (s) { s.setAttribute('aria-hidden', 'true'); });
+  alternarNotas(window.matchMedia('(max-width: 700px)').matches);
+  ir(doEndereco(), true);
+})();</script>
+</body>
+</html>

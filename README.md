@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <strong>English</strong> · <a href="README.pt-BR.md">Português</a> · <a href="GUIA.md">Full guide (in Portuguese)</a>
+  <strong>English</strong> · <a href="README.pt-BR.md">Português</a> · <a href="GUIA.md">Full guide (in Portuguese)</a> · <a href="https://wendellmcs.github.io/sworn/apresentacao/">Slide deck (in Portuguese)</a>
 </p>
 
 <p align="center">
@@ -140,18 +140,19 @@ more, the main agent closes saying what still fails, with the output, instead of
 | 8 | **Loosened ratchet**<br>Blocks: the edit that raises a ceiling or lowers a floor.<br>Why: Lowering the bar is the easy way to make a test pass; loosening is a human decision. |
 <!-- /pagina:travas -->
 
-Gates 3 to 8 cost zero tokens. Without `/sworn:init`, only gates 3 and 5 work.
+Gates 3 to 8 cost zero tokens. Without `/sworn:init`, only gates 3 and 5 work. Only gates 3 and 5 have switches, under `travas` in the config: `travas.fecho` (gate 3), `travas.destrutivo` (gate 5's delete, stray `cd`, wrong shell syntax and shell traps, together) and `travas.outraFrente` (gate 5's other session). Gates 4, 6, 7 and 8 have none; the guide says what stops each one.
+Gate 3 also hands back a "done" when a test file edited in the session never failed after the edit (`vermelhoAntes`: a test that never failed may test nothing). With `provaPorArquivoTocado` (off by default), each turn needs only the tests that name the code files touched, and the full suite moves to the commit gate.
 
 ### Nine more gates, outside the count
 
 They have no number because each one has its own switch, depends on an optional module, or only warns.
-Every switch is a `true`/`false` key in `.claude/sworn/projeto.json`.
+Every switch is a `true`/`false` key in `.claude/sworn/projeto.json`; the [guide](GUIA.md#o-projetojson-chave-por-chave) (in Portuguese) lists every key, one by one.
 
 <!-- pagina:portoes -->
 | Gate | What it does | Why | Off switch |
 |---|---|---|---|
-| Review before commit | Denies `git commit` while code changed in the session has no approved blind review, and says how many inspectors each file needs. Before `git push`, shows what it would publish: destination, commits, files, authors and sanitization. | A review after the commit is a review nobody does, and publishing should be a decision you saw. | `portaoCommit` |
-| Review before "done" | On `aaa` code changed in the session, a claim of delivery needs an approved review, or a stated reason why there is none. | The riskiest files are where a blind review pays. | `portaoRevisao` |
+| Review before commit | Denies `git commit` while code changed in the session has no approved blind review, and says how many inspectors each file needs. It also scans the staged lines for keys and tokens (`sk-`, `ghp_`, `AKIA`, JWT, `Bearer`, private key and kin) and denies with the file, the line and the kind, never the value; a false positive passes with `# sworn: segredo-visto` ("secret seen") at the end of the commit command. Before `git push`, shows what it would publish: destination, commits, files, authors and sanitization. | A review after the commit is a review nobody does, a key in a commit is a key to rotate, and publishing should be a decision you saw. | `portaoCommit`; the secret scan alone, `segredoNoCommit` |
+| Review before "done" | On `aaa` code changed in the session, a claim of delivery needs an approved review, or a stated reason why there is none. With `revisaoTodoCodigo` (off by default), every code file changed in the session, of any gear. | The riskiest files are where a blind review pays. | `portaoRevisao` |
 | Top reference | With a reference declared for the file type, an `aaa` delivery needs a review against it, in both orders. | Judged against the best of its kind, not against taste. | `portaoReferencia` |
 | Manual first | Denies editing an `aaa` file before the execution manual was loaded in the session. | Rigor that was never loaded is never applied. | `portaoManual` |
 | Three options | Denies a question to you without exactly 3 options and the recommended one first; a plain question of fact passes with `(fato)` ("fact") in its header. | A choice hidden in a wall of text is a choice you did not make. | `portaoDecisao` |
@@ -173,25 +174,26 @@ preamble, a technical term explained the first time, one line between tools, evi
 proves it, no repeating what you just read; the reply comes in your language); and
 **less code** (7 questions asked in order before writing code, stopping at the first that settles it: does it need to exist, does the project already have
 it, does the language or platform do it). Subagents that can write code get the last block too.
+Three blocks have a switch: `paralelismo` (parallel work), `qualidadeDeResposta` (response quality) and `menosCodigo` (less code); the project rules and fewer stops always come. The official model guide (its "How to ask" part) goes into each sworn agent's prompt and into the opening (off with `guiaDoModelo`), and `aberturaEnxuta` (off by default) cuts the opening to one line per block, about 2,300 characters less, for short-context models.
 
 ### Knowing when to switch chats
 
 Long chats drift: the plan gets executed from memory. sworn counts instead of guessing, and warns once,
 at the end of a turn, with the reason:
 
-- **Counted triggers:** conversation size (a warning at 250 thousand tokens with the continuous mode,
+- **Counted triggers:** conversation size (a warning at 250 thousand tokens with the continuous mode, `modoContinuo`, on by default;
   an alarm at 450 thousand), 6 gate blocks, and your own question "is the context ok?". With the
   continuous mode off, also turns with work, reviews closed, files touched, your decisions and commits.
   Every number is a key in `limiares` (thresholds) in the project config.
 - **The handoff:** `/sworn:handoff` writes the continuation (paths, `HEAD`, current step, decisions,
-  open items) and pastes the ready prompt; the handoff gate makes sure the prompt reaches you.
+  open items) and pastes the ready prompt; the handoff gate makes sure the prompt reaches you. Each of your messages becomes a numbered line in `.claude/sworn/pedidos/`, which the handoff reads. Off with `pedidos`.
 - **Before an expensive return:** a message to a chat of 200 thousand tokens or more, idle for over an
   hour, is stopped once with the cost of going on against a new chat, and a summary of the chat is
   saved for it. In the author's chats, those returns cost US$ 119 in 44 days, against about US$ 23 as new
   chats. Off with `avisoDeVolta`.
 - **Before a big read:** reading a text file over 64 KB whole, with no `offset` or `limit`, puts all of it in the
   context. Claude is told the size and that Grep plus `offset` and `limit` bring only the part it needs; the read
-  goes on. Once per file in a session. Off with `avisoDeLeitura`.
+  goes on. Once per file in a session. Off with `avisoDeLeitura`. The long output of a passing test reaches Claude as the test runner's summary plus the path of the whole output, in `.sworn/provas/`; a failing one comes whole. Off with `saidaEnxuta`.
 - **`/sworn:calibrate`** measures, in your own chats, the size from which switching pays off.
 
 ### Panels
@@ -210,10 +212,10 @@ blind-review round runs, how many of its inspectors have finished, their model a
 ### Learning, pruning and studying
 
 - **A correction becomes a proposed rule.** When you correct how the agent works, it answers, runs
-  `/sworn:learn` in the same reply and asks you, in 3 options, whether to save it. It never learns alone.
+  `/sworn:learn` in the same reply and asks you, in 3 options, whether to save it. It never learns alone. Off with `sugerirAprender`.
 - **The audit runs by itself** every 7 days at the opening: instruction weight, repeated skills, rules
   that contradict each other, stale skills, shortcuts with no trigger to replace them. It speaks only
-  when something crossed a limit.
+  when something crossed a limit. Off with `auditarNaAbertura`.
 - **What actually ran.** `/sworn:audit`, run by hand, reads the subagent transcripts and shows, for each
   agent of the ladder, the model and effort that answered against what the ladder asks. A nickname that
   started answering with another model id without anyone changing the ladder (the id is the full name, with
@@ -221,10 +223,10 @@ blind-review round runs, how many of its inspectors have finished, their model a
   rung stays as it is. The automatic run skips this: it reads
   every subagent transcript of the last 30 days, too slow for the session opening.
 - **Shortcuts are labeled.** A deliberate shortcut carries `atalho: <what>. limite: <how far>. trocar
-  quando: <trigger>.`, and `/sworn:shortcuts` lists them and flags the ones with no trigger.
+  quando: <trigger>.`, and `/sworn:shortcuts` lists them and flags the ones with no trigger. The opening lists them by itself every 30 days; off with `atalhosNaAbertura`.
 - **Study before building.** `/sworn:reference` builds a sourced sheet of 2-3 leading products of the
   same kind; `/sworn:radar` finds similar public projects and says what is worth bringing over, and
-  offers itself once a session when you ask for a new feature. The weekly watch (`vigia`, Portuguese for
+  offers itself once a session when you ask for a new feature (off with `oferecerRadar`). The weekly watch (`vigia`, Portuguese for
   "watchman") is for the plugin's maintainer and is off by default; `"vigia": true` in `projeto.json`
   turns it on.
 
@@ -236,7 +238,7 @@ inspector starts from reject. A round is one pass of all the inspectors; a dry r
 new serious defect. Two dry rounds in a row approve, a first round in which no inspector points out anything
 approves by itself, and the cap is 3 rounds. A small change goes to fewer
 inspectors: up to 3 changed lines get a single inspector. A second agent judges whether two findings are
-the same defect, and the tally is a script. On screens, the lenses check every state, the minimum
+the same defect, and the tally is a script. The first-round inspectors run one model above the session's (Haiku to Sonnet, Sonnet to Opus; Opus stays), and the checking rounds one step below the first round's: Haiku in a Haiku session, Sonnet in a Sonnet or Opus session. Off with `juizAcima`. On screens, the lenses check every state, the minimum
 reading contrast (level AA of WCAG, the web accessibility standard), a clickable area of at least 24 × 24 px per
 button, and INP (the time from a click to the screen's response).
 

@@ -14,6 +14,7 @@ const RAIZ = path.join(__dirname, '..');
 
 // Scripts de entrada que rodam a mao, sem chamador: o motivo e obrigatorio (peca nova sem motivo reprova).
 const AUTONOMAS = {
+  'apresentacao.js': 'roda a mao (apresentacao/LEIA-ME.md): o mantenedor monta a pagina do Pages a cada versao, e test/apresentacao.test.js reprova a pagina velha',
   'experimento.js': 'roda a mao (README, tabela do fim): monta e julga a tabela de obrigacoes do manual do usuario',
   'medir-travas.js': 'roda a mao (README, tabela do fim): a medicao paga de antes/depois das travas, com pre-registro',
   'plataforma.js': 'roda a mao (README): diz em que sistemas cada trecho dependente de plataforma foi exercitado',

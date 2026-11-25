@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.89.0 — a apresentação no GitHub Pages, e o README com cada trava e a chave que a desliga
+
+**Novo**
+
+- **A apresentação do sworn no GitHub Pages** (`apresentacao/`, `scripts/apresentacao.js`). É uma página só, para
+  quem não é técnico: o que o sworn faz, os ganhos medidos, como usar no seu projeto e que ganhos esperar. Navega por
+  teclado, por toque e em tela cheia, também no celular. O link fica no topo dos dois READMEs. A página é montada, não
+  editada à mão: a versão vem do `plugin.json` e o slide "O que há de novo", do topo deste CHANGELOG. O
+  `test/apresentacao.test.js` reprova a versão que sai com a página velha.
+
+**Melhorado**
+
+- **O README diz cada trava, portão e aviso, com a chave que o desliga** (`README.md`, `README.pt-BR.md`). O que antes
+  só o `GUIA.md` trazia entra em linhas curtas, nas tabelas e seções que já existem, com o link à seção das chaves do
+  GUIA. O `test/pagina.test.js` confere as chaves nos dois idiomas e a âncora no GUIA.
+
 ## 0.88.0 — a ficha de segunda que ninguém conferia, a versão velha na sessão, e o `cd /c/` do Git Bash
 
 **Novo**

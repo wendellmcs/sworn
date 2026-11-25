@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <strong>Português</strong> · <a href="GUIA.md">Guia completo</a>
+  <a href="README.md">English</a> · <strong>Português</strong> · <a href="GUIA.md">Guia completo</a> · <a href="https://wendellmcs.github.io/sworn/apresentacao/">Apresentação</a>
 </p>
 
 <p align="center">
@@ -140,18 +140,19 @@ principal fecha dizendo o que segue falhando, com a saída, em vez de perguntar 
 | 8 | **Catraca afrouxada**<br>Bloqueia: a edição que sobe um teto ou desce um piso.<br>Por quê: Baixar a régua é o jeito fácil de o teste passar; afrouxar é decisão humana. |
 <!-- /pagina:travas -->
 
-As travas 3 a 8 custam zero token. Sem `/sworn:init`, só as travas 3 e 5 funcionam.
+As travas 3 a 8 custam zero token. Sem `/sworn:init`, só as travas 3 e 5 funcionam. Só as travas 3 e 5 têm chave, em `travas`, na configuração: `travas.fecho` (trava 3), `travas.destrutivo` (o apagar, o `cd` solto, a sintaxe errada do shell e as armadilhas do shell da trava 5, juntos) e `travas.outraFrente` (a outra sessão da trava 5). As travas 4, 6, 7 e 8 não têm; o guia diz o que segura cada uma.
+A trava 3 também devolve o "pronto" quando um arquivo de teste editado na sessão nunca falhou depois da edição (`vermelhoAntes`: teste que nunca falhou pode não testar nada). Com `provaPorArquivoTocado` (desligada por padrão), cada turno pede só os testes que citam os arquivos de código mexidos, e a suíte inteira passa para o portão do commit.
 
 ### Mais nove portões, fora da conta
 
 Não têm número porque cada um tem chave própria, depende de um módulo opcional ou só avisa. Toda chave é
-um `true`/`false` em `.claude/sworn/projeto.json`.
+um `true`/`false` em `.claude/sworn/projeto.json`; o [guia](GUIA.md#o-projetojson-chave-por-chave) traz cada chave, uma por uma.
 
 <!-- pagina:portoes -->
 | Portão | O que faz | Por quê | Desliga com |
 |---|---|---|---|
-| Revisão antes do commit | Nega o `git commit` enquanto o código mudado na sessão não tem revisão cega aprovada, e diz quantos inspetores cada arquivo pede. Antes do `git push`, mostra o que ele publicaria: destino, commits, arquivos, autores e sanitação. | Revisão depois do commit é revisão que ninguém faz, e publicar tem de ser decisão vista. | `portaoCommit` |
-| Revisão antes do "pronto" | Em código `aaa` mudado na sessão, a alegação de entrega pede revisão aprovada, ou o motivo dito de não ter. | Os arquivos de mais risco são onde a revisão cega compensa. | `portaoRevisao` |
+| Revisão antes do commit | Nega o `git commit` enquanto o código mudado na sessão não tem revisão cega aprovada, e diz quantos inspetores cada arquivo pede. Também varre as linhas preparadas atrás de chave e token (`sk-`, `ghp_`, `AKIA`, JWT, `Bearer`, chave privada e afins) e nega com o arquivo, a linha e o tipo, nunca o valor; o falso positivo passa com `# sworn: segredo-visto` no fim do comando do commit. Antes do `git push`, mostra o que ele publicaria: destino, commits, arquivos, autores e sanitação. | Revisão depois do commit é revisão que ninguém faz, chave num commit é chave a trocar, e publicar tem de ser decisão vista. | `portaoCommit`; só a varredura de segredo, `segredoNoCommit` |
+| Revisão antes do "pronto" | Em código `aaa` mudado na sessão, a alegação de entrega pede revisão aprovada, ou o motivo dito de não ter. Com `revisaoTodoCodigo` (desligada por padrão), todo arquivo de código mudado na sessão, de qualquer marcha. | Os arquivos de mais risco são onde a revisão cega compensa. | `portaoRevisao` |
 | Referência de topo | Com referência declarada para o tipo do arquivo, a entrega `aaa` pede revisão contra ela, nas duas ordens. | Julgado contra o melhor do mesmo tipo, não contra o gosto. | `portaoReferencia` |
 | Manual antes | Nega editar arquivo `aaa` antes de o manual de execução ser carregado na sessão. | Rigor que nunca foi carregado nunca é aplicado. | `portaoManual` |
 | Três opções | Nega a pergunta a você sem exatamente 3 opções e a recomendada primeiro; a pergunta de fato passa com `(fato)` no título curto. | Escolha escondida numa muralha de texto é escolha que você não fez. | `portaoDecisao` |
@@ -174,22 +175,25 @@ ferramentas, evidência reduzida à linha que prova, nada de repetir o que você
 no seu idioma); e **menos código** (7 perguntas em ordem antes de escrever código, parando na primeira que resolve: precisa existir, o
 projeto já tem, a linguagem ou a plataforma já faz). Os subagentes que podem escrever código recebem o
 último bloco também.
+Três blocos têm chave: `paralelismo` (trabalho em paralelo), `qualidadeDeResposta` (qualidade de resposta) e `menosCodigo` (menos código); as regras do projeto e o menos paradas vêm sempre. O guia oficial do modelo (a parte "How to ask", como pedir) entra no pedido de cada agente do sworn e na abertura (desliga com `guiaDoModelo`), e a `aberturaEnxuta` (desligada por padrão) reduz a abertura a uma linha por bloco, perto de 2,3 mil caracteres a menos, para modelo de contexto curto.
 
 ### Saber quando trocar de chat
 
 Chat longo deriva: o plano passa a ser executado de memória. O sworn conta em vez de adivinhar, e avisa
 uma vez, no fim de um turno, com o motivo:
 
-- **Gatilhos contados:** o tamanho da conversa (aviso a 250 mil tokens com o modo contínuo, alarme a
+- **Gatilhos contados:** o tamanho da conversa (aviso a 250 mil tokens com o modo contínuo, `modoContinuo`, ligado por padrão; alarme a
   450 mil), 6 bloqueios de portão, e a sua própria pergunta "o contexto está bom?". Com o modo contínuo
   desligado, também turnos com trabalho, revisões fechadas, arquivos tocados, decisões suas e commits.
   Cada número é uma chave em `limiares`.
 - **O handoff:** o `/sworn:handoff` escreve a continuação (caminhos, `HEAD`, etapa atual, decisões,
-  pendências) e cola o prompt pronto; o portão do handoff garante que o prompt chegue a você.
+  pendências) e cola o prompt pronto; o portão do handoff garante que o prompt chegue a você. Cada mensagem sua vira uma linha numerada em `.claude/sworn/pedidos/`, que o handoff lê. Desliga com `pedidos`.
 - **Antes de uma volta cara:** a mensagem num chat de 200 mil tokens ou mais, parado há mais de uma hora,
   é barrada uma vez com o custo de seguir ali contra o de um chat novo, e um resumo do chat fica gravado
   para ele. Nos chats do autor, essas voltas custaram US$ 119 em 44 dias, contra uns US$ 23 como chats
   novos. Desliga com `avisoDeVolta`.
+- **Antes de uma leitura grande:** ler inteiro um arquivo de texto acima de 64 KB, sem `offset` nem `limit`, põe tudo no contexto. O Claude recebe o tamanho e o lembrete de que Grep, depois `offset` e `limit`, trazem só o trecho que ele precisa; a leitura segue.
+  Uma vez por arquivo na sessão. Desliga com `avisoDeLeitura`. A saída longa de um teste que passou chega ao Claude só com o resumo do executor de testes e o caminho da saída inteira, em `.sworn/provas/`; a de um teste que falhou chega inteira. Desliga com `saidaEnxuta`.
 - **O `/sworn:calibrate`** mede, nos seus chats, a partir de que tamanho trocar compensa.
 
 ### Painéis
@@ -209,9 +213,9 @@ inspetores dela já terminaram, o modelo deles e o custo até agora.
 ### Aprender, podar e estudar
 
 - **Correção vira regra proposta.** Quando você corrige o jeito de o agente trabalhar, ele atende, roda o
-  `/sworn:learn` na mesma resposta e pergunta a você, em 3 opções, se grava. Nunca aprende sozinho.
+  `/sworn:learn` na mesma resposta e pergunta a você, em 3 opções, se grava. Nunca aprende sozinho. Desliga com `sugerirAprender`.
 - **A auditoria roda sozinha** a cada 7 dias, na abertura: peso de instrução, skills repetidas, regras
-  que se contradizem, skills paradas, atalhos sem gatilho de troca. Só fala quando algo passou do limite.
+  que se contradizem, skills paradas, atalhos sem gatilho de troca. Só fala quando algo passou do limite. Desliga com `auditarNaAbertura`.
 - **O que rodou de fato.** O `/sworn:audit`, rodado à mão, lê as transcrições dos subagentes e mostra, para
   cada agente da escada, o modelo e o esforço que responderam contra o que a escada pede. Apelido que
   passou a responder com outro id de modelo sem ninguém mudar a escada (o id é o nome completo, com a
@@ -219,10 +223,10 @@ inspetores dela já terminaram, o modelo deles e o custo até agora.
   fica como está. A rodada automática não mede isso: ela
   leria toda transcrição de subagente dos últimos 30 dias, lento demais para a abertura da sessão.
 - **Atalho leva rótulo.** O atalho de propósito leva `atalho: <o que>. limite: <até onde vale>. trocar
-  quando: <gatilho>.`, e o `/sworn:shortcuts` lista todos e marca os que não têm gatilho.
+  quando: <gatilho>.`, e o `/sworn:shortcuts` lista todos e marca os que não têm gatilho. A abertura os lista sozinha a cada 30 dias; desliga com `atalhosNaAbertura`.
 - **Estudar antes de construir.** O `/sworn:reference` monta uma ficha com fonte de 2-3 produtos líderes
   do mesmo tipo; o `/sworn:radar` acha projetos públicos parecidos e diz o que vale trazer, e se oferece
-  uma vez por sessão quando você pede função nova. O vigia da semana (`vigia`) é do mantenedor do plugin
+  uma vez por sessão quando você pede função nova (desliga com `oferecerRadar`). O vigia da semana (`vigia`) é do mantenedor do plugin
   e vem desligado.
 
 ### A revisão cega, por dentro
@@ -232,7 +236,7 @@ de leitura só, como correção, borda ou texto): **dez** de código, **oito** d
 reprovar. Uma ronda é uma passada de todos os inspetores; ronda seca é a que não acha defeito grave novo.
 Duas rondas secas seguidas aprovam, e o teto é de 3 rondas.
 Mudança pequena vai a menos inspetores: com até 3 linhas mudadas, um inspetor só. Um segundo agente julga
-se dois achados são o mesmo defeito, e a apuração é um script. Em tela, as lentes conferem cada estado, o
+se dois achados são o mesmo defeito, e a apuração é um script. Os inspetores da ronda 1 rodam um modelo acima do da sessão (Haiku vira Sonnet, Sonnet vira Opus; Opus fica), e os das rondas que só conferem, um degrau abaixo do da ronda 1: Haiku numa sessão Haiku, Sonnet numa sessão Sonnet ou Opus. Desliga com `juizAcima`. Em tela, as lentes conferem cada estado, o
 contraste mínimo de leitura (o nível AA da WCAG, a norma de acessibilidade da web), a área clicável de pelo
 menos 24 × 24 px em cada botão e o INP (o tempo do clique até a tela responder).
 

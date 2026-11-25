@@ -1,0 +1,130 @@
+{
+  "v": 5,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-24T23:15:06Z"
+  },
+  "lists": "css",
+  "format": {
+    "v": 1,
+    "shared": [
+      "project/deck.css"
+    ]
+  },
+  "title": "sworn: a IA sob juramento",
+  "order": [
+    "cover",
+    "uma-frase",
+    "agenda",
+    "problema",
+    "antes-depois",
+    "como-funciona",
+    "jornada",
+    "custo-zero",
+    "travas",
+    "portoes-a",
+    "portoes-b",
+    "auto-contexto",
+    "auto-qualidade",
+    "auto-rotina",
+    "revisao-cega",
+    "revisao-rondas",
+    "comandos",
+    "paineis-agentes",
+    "chaves",
+    "casos-1",
+    "casos-2",
+    "custo",
+    "economia",
+    "evidencia-medicao",
+    "evidencia-suite",
+    "evidencia-casos",
+    "evidencia-terminal",
+    "radar-como",
+    "radar-trouxe-1",
+    "radar-trouxe-2",
+    "radar-trouxe-3",
+    "radar-melhor",
+    "cursos",
+    "ideias-dono",
+    "historia",
+    "ganhos",
+    "novidades",
+    "instalar",
+    "uso-dia",
+    "uso-ganhos",
+    "onde-roda",
+    "encerramento"
+  ],
+  "sections": {
+    "s1": {
+      "description": "O que é",
+      "start": "cover"
+    },
+    "s2": {
+      "description": "O problema",
+      "start": "problema"
+    },
+    "s3": {
+      "description": "Como funciona",
+      "start": "como-funciona"
+    },
+    "s4": {
+      "description": "Travas e portões",
+      "start": "travas"
+    },
+    "s5": {
+      "description": "O automático",
+      "start": "auto-contexto"
+    },
+    "s6": {
+      "description": "A revisão cega",
+      "start": "revisao-cega"
+    },
+    "s7": {
+      "description": "Comandos e painéis",
+      "start": "comandos"
+    },
+    "s8": {
+      "description": "Na prática",
+      "start": "casos-1"
+    },
+    "s9": {
+      "description": "Custo e desempenho",
+      "start": "custo"
+    },
+    "s10": {
+      "description": "As evidências",
+      "start": "evidencia-medicao"
+    },
+    "s11": {
+      "description": "De onde vêm as ideias",
+      "start": "radar-como"
+    },
+    "s12": {
+      "description": "Ganhos e novidades",
+      "start": "ganhos"
+    },
+    "s13": {
+      "description": "No seu projeto",
+      "start": "instalar"
+    }
+  },
+  "cover": "cover",
+  "faces": {
+    "fraunces": {
+      "family": "Fraunces",
+      "href": "https://fonts.googleapis.com/css2?family=Fraunces:wght@400..700&display=swap"
+    },
+    "dm-sans": {
+      "family": "DM Sans",
+      "href": "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..700&display=swap"
+    },
+    "jetbrains-mono": {
+      "family": "JetBrains Mono",
+      "href": "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400..700&display=swap"
+    }
+  },
+  "designSystems": [],
+  "versao": "0.89.0"
+}

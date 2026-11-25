@@ -1,0 +1,20 @@
+<section id="auto-contexto" class="alt" style="gap:28px">
+  <p class="eyebrow">O automático · 1 de 3 · memória e custo</p>
+  <p class="title" style="font-size:56px">Ele cuida do tamanho da conversa</p>
+  <div class="grid4" style="gap:20px">
+    <div class="card tight rise" style="--i:0; border-top:6px solid #2F6F4E"><p class="k">Regras de volta</p><p>Ao abrir e após resumir, relembra o combinado.</p></div>
+    <div class="card tight rise" style="--i:1; border-top:6px solid #1F4E79"><p class="k">Hora de trocar</p><p>Aos 175 mil tokens, avisa que trocar compensa.</p></div>
+    <div class="card tight rise" style="--i:2; border-top:6px solid #2F6F4E"><p class="k">Volta a chat parado</p><p>Chat grande parado 1 hora? Grava um resumo.</p></div>
+    <div class="card tight rise" style="--i:3; border-top:6px solid #1F4E79"><p class="k">Arquivo enorme</p><p>Avisa antes de ler texto acima de 64 KB.</p></div>
+    <div class="card tight rise" style="--i:4; border-top:6px solid #2F6F4E"><p class="k">Antes de resumir</p><p>Salva o estado real antes da compactação.</p></div>
+    <div class="card tight rise" style="--i:5; border-top:6px solid #2F6F4E"><p class="k">Plano por fatia</p><p>Lê 5 KB do plano, não os 327 KB inteiros.</p></div>
+    <div class="card tight rise" style="--i:6; border-top:6px solid #1F4E79"><p class="k">Nota do plano</p><p>A cada 5 turnos, relembra onde o plano está.</p></div>
+    <div class="card tight rise" style="--i:7; border-top:6px solid #1F4E79"><p class="k">Modo contínuo</p><p>Trabalho longo: aviso a 250 mil, alarme a 450 mil.</p></div>
+  </div>
+  <div style="flex:1"></div>
+  <div class="card rise" style="--i:8; flex-direction:row; align-items:center; gap:36px; padding:28px 36px">
+    <p class="num mid" style="font-size:80px">US$ 119</p>
+    <p class="lead" style="font-size:28px">foi o custo de voltar a chats grandes parados em 44 dias. Como chat novo, seriam cerca de <b>US$ 23</b>. Nas 64 voltas com mais de 1 hora, o cache tinha esfriado em todas.</p>
+  </div>
+  <aside>Conversa longa custa caro: cada mensagem reenvia tudo o que veio antes. O sworn mede o tamanho e avisa na hora certa de começar outro chat, levando um resumo. O limite de 175 mil tokens não foi chutado: é o menor ponto em que trocar não sai mais caro que continuar, medido em 444 sessões. O número de baixo vem das conversas do próprio autor: voltar a um chat grande depois de uma hora custa caro porque o cache, a memória barata do provedor, já expirou.</aside>
+</section>

@@ -315,6 +315,22 @@ test('pagina: a tabela dos portoes fora da conta cita cada chave portao* do codi
   assert.strictEqual(new Set(contagens).size, 1, 'os dois idiomas contam portoes diferentes: ' + contagens);
 });
 
+// D917 (H13): toda chave de liga/desliga do projeto.json aparece, entre crases, nos dois READMEs, e cada um aponta a
+// secao do guia que traz as chaves uma por uma.
+test('pagina: cada chave de CHAVES_LIGA_DESLIGA esta citada nos dois idiomas, com o link para a secao das chaves no guia', () => {
+  const chaves = require('../scripts/lib/projeto.js').CHAVES_LIGA_DESLIGA;
+  assert.ok(chaves.length > 20, 'CHAVES_LIGA_DESLIGA veio curta: o leitor quebrou');
+  // a ancora tem de existir no guia: o slug do GitHub (minusculas, sem pontuacao, espaco vira hifen) de algum titulo
+  const ancora = 'o-projetojson-chave-por-chave';
+  const slugs = fs.readFileSync(path.join(RAIZ, GUIA), 'utf8').split(/\r?\n/).filter((l) => /^#{1,6} /.test(l))
+    .map((l) => l.replace(/^#+ /, '').trim().toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/ /g, '-'));
+  assert.ok(slugs.indexOf(ancora) !== -1, GUIA + ': nenhum titulo gera a ancora #' + ancora);
+  cada((rel, t) => {
+    assert.deepStrictEqual(chaves.filter((k) => t.indexOf('`' + k + '`') === -1), [], rel + ': chave de liga/desliga sem citar');
+    assert.ok(t.indexOf('](' + GUIA + '#' + ancora + ')') !== -1, rel + ': falta o link para a secao das chaves no guia');
+  });
+});
+
 test('pagina: todo link relativo aponta para arquivo que existe, e cada idioma aponta o outro e o guia', () => {
   cada((rel, t) => {
     const alvos = [];
