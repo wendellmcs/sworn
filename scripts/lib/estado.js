@@ -263,7 +263,9 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   'testesSemVermelho',
   // H6g (15.6): a saida verde que o H6a cortou, { vezes, bytes poupados } (recibo-da-prova.js); o custo da sessao a
   // grava no fim (lib/custo-da-sessao.js).
-  'saidaCortada'];
+  'saidaCortada',
+  // H15(b) (D923): o portao do advisor ja cobrou, ou achou a consulta, nesta sessao (portao-fecho.js); vale a sessao.
+  'advisorVisto'];
 const CAMPOS_DO_TURNO = ['trabalhoReal', 'bloqueouNesteTurno', 'buscouNesteTurno', 'contadores', 'gravouHandoff',
   // D785 (2.1): a edicao de codigo do turno e a volta do laco da prova (portao-fecho.js).
   'arquivoDoHandoff', 'editouCodigo', 'lacoDaProva',

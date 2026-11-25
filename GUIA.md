@@ -1024,6 +1024,7 @@ um módulo opcional, ou têm a própria chave. Cada um abaixo diz o que faz e co
 | Prompt do handoff (`scripts/portao-fecho.js`, no fim do turno) | no turno que gravou um arquivo de handoff e não colou o prompt na resposta final, mostra a você o prompt do arquivo; barra só quando o arquivo não tem um prompt legível | `"portaoHandoff": false` (ver "Como desligar uma trava") |
 | Referência de topo (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo mudado na sessão é da marcha AAA, o tipo dele tem `referencias` declarada e nenhuma revisão contra ela fechou na sessão; a mensagem diz o comando, `/sworn:review <arquivo>` | `"portaoReferencia": false` (ver "Como desligar uma trava") |
 | Revisão aprovada (`scripts/portao-fecho.js`, no fim do turno) | barra a resposta que alega entrega quando um arquivo de código mudado na sessão é da marcha AAA (de qualquer marcha, com `"revisaoTodoCodigo": true`) e não tem revisão aprovada (a mesma que libera o commit), com ou sem `referencias`; a mensagem cita os arquivos e o comando, `/sworn:review <arquivo>` | `"portaoRevisao": false` (ver "Como desligar uma trava") |
+| Consulta ao advisor (`scripts/portao-fecho.js`, no fim do turno) | com o advisor do Claude Code ligado (`advisorModel` nas settings), barra uma vez por sessão a resposta que alega entrega quando um arquivo de código mudado na sessão é da marcha AAA e a sessão não chamou o advisor; a mensagem pede a consulta e diz o custo medido. Sem o advisor ligado, nada muda | `"portaoAdvisor": false` (ver "Como desligar uma trava") |
 | Qualidade de resposta (a abertura) | injeta as seis regras de clareza das respostas no chat; não barra nada | `"qualidadeDeResposta": false` (ver "Qualidade de resposta") |
 | Vigia (a abertura) | mostra uma vez a "novidade da semana" do plugin e, do radar da semana, quantos projetos são candidatos e quantos a ficha propõe adotar; até cada uma ser triada, lembra uma vez por dia; só para quem mantém o plugin | **desligado por padrão**, menos no repositório do próprio plugin; `"vigia": true` liga, `false` desliga |
 
@@ -1072,7 +1073,7 @@ sworn: ATENCAO - valor de tipo errado em .claude/sworn/projeto.json: portaoDecis
 ~~~
 
 E a conferência final do `/sworn:init` (`scripts/validar.js`) reprova o arquivo com a mesma frase, `<chave> tem
-de ser true ou false`. O `vigia`, o `revisaoTodoCodigo`, o `aberturaEnxuta` e o `provaPorArquivoTocado` são o contrário (só `true` liga), e `"true"` entre aspas também não liga. A lista das vinte e seis chaves, com o padrão de cada uma, está em "O `projeto.json` chave por chave".
+de ser true ou false`. O `vigia`, o `revisaoTodoCodigo`, o `aberturaEnxuta` e o `provaPorArquivoTocado` são o contrário (só `true` liga), e `"true"` entre aspas também não liga. A lista das vinte e sete chaves, com o padrão de cada uma, está em "O `projeto.json` chave por chave".
 
 ---
 
@@ -2157,6 +2158,18 @@ entregar sem revisão dizendo o que segue aberto;
 ou dizer ao usuário que a entrega fica sem revisão, e por quê ("sem revisão", "without review"
 na resposta liberam). O arquivo que o portão da referência já cita no turno não sai de novo. Desliga com `"portaoRevisao": false` no `projeto.json`; `travas.fecho: false` não o desliga.
 
+**O portão da consulta ao advisor** também não lê a chave `travas`. Ele só cobra com o advisor do Claude Code (um
+modelo mais forte que o agente consulta no meio da tarefa) ligado: o `advisorModel` da primeira settings que o declara
+(a `.claude/settings.local.json` do projeto, depois a `.claude/settings.json`, depois a do usuário) é um texto não
+vazio, e a variável `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` não o desliga (`1`, `true`, `yes` ou `on`). Com ele ligado, barra
+uma vez por sessão o fim do turno cuja resposta alega entrega quando um arquivo de código da marcha `aaa` mudou na
+sessão e a transcrição da sessão não traz nenhuma chamada ao advisor; a chamada feita só por um subagente não conta. A
+mensagem pede uma consulta antes da entrega e diz o custo medido na bateria do sworn: perto de US$ 0,22 a mais por
+rodada, 3,9 vezes o custo da rodada sem ele; na única tarefa que falhava sem ele, a consulta evitou o defeito em 2 de 3
+rodadas. Sem a ferramenta do advisor na sessão, basta dizer isso numa linha e entregar. Sem transcrição legível, fica
+calado. A flag `--advisor` da linha de comando não chega ao gancho: só o `advisorModel` das settings se vê. Desliga com
+`"portaoAdvisor": false` no `projeto.json`; `travas.fecho: false` não o desliga.
+
 ---
 
 ## O `projeto.json` chave por chave
@@ -2199,6 +2212,7 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 | `portaoHandoff` | o portão do prompt do handoff no chat | ligado; `false` desliga |
 | `portaoReferencia` | o portão da referência de topo: barra a entrega AAA sem revisão contra a `referencias` na sessão | ligado; `false` desliga |
 | `portaoRevisao` | o portão da revisão aprovada: barra a entrega com arquivo de código da marcha AAA mudado na sessão sem revisão aprovada | ligado; `false` desliga |
+| `portaoAdvisor` | o portão da consulta ao advisor: com o advisor do Claude Code ligado, barra uma vez por sessão a entrega com arquivo de código da marcha AAA mudado na sessão sem chamada ao advisor | ligado (só cobra com o advisor ligado); `false` desliga |
 | `revisaoTodoCodigo` | o portão da revisão aprovada cobra todo arquivo de código mudado na sessão, de qualquer marcha, como o portão do commit | desligado; `true` liga |
 | `portaoManual` | o portão do manual: nega editar arquivo da marcha AAA enquanto o manual de execução (skill com "padrao" no nome) não foi carregado na sessão | ligado; `false` desliga |
 | `portaoCommit` | o portão do commit (`scripts/portao-commit.js`): nega o `git commit` enquanto um arquivo de código mudado na sessão não tem revisão aprovada; diz a faixa e quantos inspetores cada um pede, e aponta o atalho novo sem "trocar quando:". Do arquivo cuja revisão fechou no teto de 3 rondas ele não pede revisão nova: pede o commit com `# sworn: sem-revisao`, depois dos consertos com teste e da suíte inteira verde. Antes do `git push`, nega com o cartão do que ele publicaria: o destino (o endereço sai sem usuário nem senha), os commits que o remoto não tem pelo que este repositório sabe dele (um `git fetch` antes atualiza a conta), os arquivos, os autores, a sanitação de autores, mensagens e conteúdo dos arquivos (a classe e o lugar de cada achado, nunca o texto achado), e o aviso do `--force`, do `--delete` e do `--all`. Com o sim do dono, o mesmo push com `# sworn: push-visto` no fim do comando passa | ligado; `false` desliga, o cartão do push e o segredo no commit (`segredoNoCommit`) junto |
@@ -2226,14 +2240,14 @@ propósito, para não invalidar o `projeto.json` de quem já tem um.
 | `fontesDeConsulta` | as fontes canônicas que se consultam, mas não se carregam como instrução (um registro de decisões, por exemplo): seguem mandando, mas saem do peso de instrução do `/sworn:audit`, que as mostra à parte com a contagem de cada uma; cada item tem de estar em `fontesCanonicas`, senão reprova no validar | sem a chave: todas as canônicas pesam |
 | `admissao` | o resultado do teste de admissão do modelo, que o `/sworn:init` oferece e só roda com o seu sim (`node scripts/admissao.js --modelo <id> --gravar`): os 4 testes ao vivo (a abertura põe as regras, a edição fora do escopo é negada, o apagar é negado, o "passou" sem a saída do teste é barrado), cada um numa pasta temporária, com o modelo e a data; cada resultado é `ok`, `falhou`, `inconclusivo` ou `nao rodou`, e o que falhou é o que, com aquele modelo, não vale. No Claude Code e no Codex (com `--harness codex --codex <codex.exe>`, que gasta da cota do seu login do Codex) | sem a chave: o teste não rodou |
 | `provaDeCoerencia` | o comando dos testes que conferem o disco inteiro de uma vez (a lista dos arquivos por sistema, a documentação de cada chave, o que não pode ir a público), que costumam reprovar por uma edição esquecida em outro arquivo. Com `provaPorArquivoTocado` ligada, a prova de cada turno também cobra esse comando verde depois da última edição de código, e o erro aparece no turno, não só na suíte inteira antes do commit. É um comando de terminal, como `"node --test test/plataforma.test.js test/readme.test.js"`; sem a `provaPorArquivoTocado`, não muda nada. Texto não vazio, senão reprova no validar | sem a chave: só os testes dos arquivos mexidos |
-| `perfil` | o perfil de instalação, que dá o padrão de cada chave que o arquivo não escreve; a chave escrita no arquivo vence, também dentro de `travas`. `leve` deixa a trava do comando destrutivo e a revisão que você pede à mão, e desliga `travas.fecho`, `travas.outraFrente`, `portaoRevisao`, `portaoReferencia`, `portaoManual`, `portaoCommit`, `sugerirAprender`, `oferecerRadar`, `auditarNaAbertura` e `atalhosNaAbertura`; `padrao` não muda nada; `estrito` liga `revisaoTodoCodigo`. Com perfil, `travas` pode vir em parte: para o `leve` valer numa trava que o arquivo já escreve, tire-a de `travas` (o `/sworn:init` que troca de perfil já troca as travas pelas que você responde na hora). Outro nome reprova no validar | sem a chave: tudo como no `padrao` |
+| `perfil` | o perfil de instalação, que dá o padrão de cada chave que o arquivo não escreve; a chave escrita no arquivo vence, também dentro de `travas`. `leve` deixa a trava do comando destrutivo e a revisão que você pede à mão, e desliga `travas.fecho`, `travas.outraFrente`, `portaoRevisao`, `portaoReferencia`, `portaoManual`, `portaoCommit`, `portaoAdvisor`, `sugerirAprender`, `oferecerRadar`, `auditarNaAbertura` e `atalhosNaAbertura`; `padrao` não muda nada; `estrito` liga `revisaoTodoCodigo`. Com perfil, `travas` pode vir em parte: para o `leve` valer numa trava que o arquivo já escreve, tire-a de `travas` (o `/sworn:init` que troca de perfil já troca as travas pelas que você responde na hora). Outro nome reprova no validar | sem a chave: tudo como no `padrao` |
 | `gravidade` | o teto de bagatelas da revisão cega: `{ "ligada": true, "bagatelasPorRonda": 3 }` põe no briefing de cada inspetor que devolva no máximo esse número de achados `melhoria` (a bagatela, que já não segura a ronda), e o `apurar-ronda.js` guarda só esses nos `registros` de cada ronda, contando o resto em `bagatelasCortadas`. Fica desligada até uma leva de medição com achados plantados mostrar que as rondas e os tokens caem sem perder achado importante. `ligada` booleana e `bagatelasPorRonda` inteira de 1 para cima, senão reprova no validar | sem a chave, ou com `"ligada": false`: nada muda |
 
 **As quatro travas**, dentro de `travas`. As quatro são obrigatórias e booleanas; com `perfil`, a que falta vem dele.
 
 | Chave | O que `false` faz | Padrão |
 |---|---|---|
-| `travas.fecho` | desliga a cobrança de evidência no fim do turno (trava 3); o portão do prompt do handoff, o da referência de topo e o da revisão aprovada não desligam com ela | `true` |
+| `travas.fecho` | desliga a cobrança de evidência no fim do turno (trava 3); o portão do prompt do handoff, o da referência de topo, o da revisão aprovada e o da consulta ao advisor não desligam com ela | `true` |
 | `travas.destrutivo` | desliga o bloqueio de comando destrutivo e o do `cd` solto, juntos (trava 5) | `true` |
 | `travas.outraFrente` | desliga o bloqueio de escrita em arquivo que outra frente já mexeu (trava 5) | `true` |
 | `travas.escopo` | nada: a chave é exigida pelo schema, mas nenhum portão a lê (ver "Como desligar uma trava") | `true` |

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.90.0 — o advisor medido, e a consulta a ele na entrega AAA quando ele está ligado
+
+**Novo**
+
+- **Com o advisor ligado, a entrega AAA consulta o advisor uma vez** (`scripts/portao-fecho.js`,
+  `scripts/lib/advisor.js`). O advisor do Claude Code é um modelo mais forte que o agente consulta no meio da tarefa
+  (`/advisor`, ou `advisorModel` nas settings). Com ele ligado, a resposta que alega entrega de arquivo de código da
+  marcha AAA mudado na sessão, sem nenhuma chamada ao advisor na sessão, volta uma vez por sessão com a ordem de
+  consultá-lo e o custo medido. A chamada feita só por um subagente não conta. Sem o advisor ligado, nada muda, e o
+  sworn não mexe nas settings. Limite: a flag `--advisor` da linha de comando não chega ao gancho; só o `advisorModel`
+  das settings se vê. Desliga com `"portaoAdvisor": false` no `projeto.json`; o perfil `leve` o desliga.
+- **O ganho medido antes do aviso.** Na bateria do sworn, com o advisor ligado e sem pedido, o agente não o chamou em
+  nenhuma de 9 rodadas. Com o pedido, chamou uma vez por rodada e, na única tarefa que falhava sem ele, evitou o defeito
+  em 2 de 3 rodadas, por perto de US$ 0,22 a mais por rodada (3,9 vezes o custo da rodada sem ele). Na outra tarefa
+  medida, sem defeito nos dois braços, não houve ganho.
+- Para quem mantém o plugin: são **49 baldes** de contador: 31 que negam, 18 que só contam; o novo,
+  `fecho_sem_advisor`, é dos que negam. As chaves de liga/desliga passam a vinte e sete.
+
 ## 0.89.0 — a apresentação no GitHub Pages, e o README com cada trava e a chave que a desliga
 
 **Novo**

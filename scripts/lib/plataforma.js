@@ -135,7 +135,7 @@ const PONTOS = [
     chave: 'pasta_pessoal',
     classe: INJETAVEL,
     titulo: 'Onde o claude grava a transcricao da sessao',
-    arquivos: ['scripts/admissao.js', 'scripts/autorizar-paralelo.js', 'scripts/instalar.js', 'scripts/lib/ambiente.js', 'scripts/lib/calibracao.js',
+    arquivos: ['scripts/admissao.js', 'scripts/autorizar-paralelo.js', 'scripts/instalar.js', 'scripts/lib/advisor.js', 'scripts/lib/ambiente.js', 'scripts/lib/calibracao.js',
                'scripts/lib/gasto.js', 'scripts/lib/injetado.js', 'scripts/lib/migracao.js',
                'scripts/lib/prova-no-fecho.js', 'scripts/lib/versao-carregada.js', 'scripts/lib/vigia-local.js',
                'scripts/medir-qualidade.js',

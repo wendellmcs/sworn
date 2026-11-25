@@ -66,7 +66,8 @@ const LISTAS_LIDAS = ['comandosLiberados', 'comandosBloqueados', 'intocaveis'];
 // F4e: `guiaDoModelo` liga por padrao (so `=== false` desliga; lido por portao-juiz.js e abertura.js).
 // Lote 5 item 12 (D846): `avisoDeLeitura` liga por padrao (so `=== false` desliga, aviso-leitura.js).
 // H6c (D895): `segredoNoCommit` liga por padrao (so `=== false` desliga, portao-commit.js); `portaoCommit` false tambem desliga.
-const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura', 'pedidos', 'juizAcima', 'revisaoTodoCodigo', 'aberturaEnxuta', 'provaPorArquivoTocado', 'guiaDoModelo', 'avisoDeLeitura', 'saidaEnxuta', 'segredoNoCommit', 'vermelhoAntes'];
+// H15(b) (D923): `portaoAdvisor` liga por padrao (so `=== false` desliga, portao-fecho.js); so cobra com o advisor ligado.
+const CHAVES_LIGA_DESLIGA = ['sugerirAprender', 'oferecerRadar', 'auditarNaAbertura', 'qualidadeDeResposta', 'portaoDecisao', 'portaoHandoff', 'vigia', 'paralelismo', 'modoContinuo', 'portaoReferencia', 'portaoRevisao', 'avisoDeVolta', 'menosCodigo', 'portaoManual', 'portaoCommit', 'atalhosNaAbertura', 'pedidos', 'juizAcima', 'revisaoTodoCodigo', 'aberturaEnxuta', 'provaPorArquivoTocado', 'guiaDoModelo', 'avisoDeLeitura', 'saidaEnxuta', 'segredoNoCommit', 'vermelhoAntes', 'portaoAdvisor'];
 
 // Padrao que NUNCA casa um alvo relativo: letra de unidade (C: ou C:\) ou esquema
 // (file://). O alvo que chega aos portoes e sempre relativo a raiz do projeto
@@ -128,7 +129,7 @@ function travasDe(projeto) {
 const PERFIS = {
   leve: {
     travas: { fecho: false, outraFrente: false },
-    portaoRevisao: false, portaoReferencia: false, portaoManual: false, portaoCommit: false,
+    portaoRevisao: false, portaoReferencia: false, portaoManual: false, portaoCommit: false, portaoAdvisor: false,
     sugerirAprender: false, oferecerRadar: false, auditarNaAbertura: false, atalhosNaAbertura: false
   },
   padrao: {},

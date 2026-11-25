@@ -873,7 +873,7 @@ test('H3: comPerfil aplica leve e estrito, a chave escrita vence, e entrada tort
   assert.strictEqual(leve.travas.outraFrente, false);
   assert.notStrictEqual(projeto.travasDe(leve).destrutivo, false, 'o leve nao desliga o apagar');
   assert.notStrictEqual(projeto.travasDe(leve).escopo, false, 'o leve nao mexe em travas.escopo');
-  for (const k of ['portaoRevisao', 'portaoReferencia', 'portaoManual', 'portaoCommit', 'sugerirAprender',
+  for (const k of ['portaoRevisao', 'portaoReferencia', 'portaoManual', 'portaoCommit', 'portaoAdvisor', 'sugerirAprender',
     'oferecerRadar', 'auditarNaAbertura', 'atalhosNaAbertura']) assert.strictEqual(leve[k], false, k);
   const escrito = projeto.comPerfil({ perfil: 'leve', travas: { fecho: true }, portaoCommit: true });
   assert.strictEqual(escrito.travas.fecho, true, 'a trava escrita vence o perfil');

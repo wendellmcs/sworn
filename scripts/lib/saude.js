@@ -448,6 +448,8 @@ const BALDES_DE_BLOQUEIO = [
   'fecho_sem_referencia',
   // D655: entrega com arquivo AAA mudado sem revisao aprovada na sessao.
   'fecho_sem_revisao',
+  // H15(b) (D923): entrega AAA com o advisor ligado e sem consulta a ele na sessao.
+  'fecho_sem_advisor',
   // D678 T2: agente dos degraus chamado com model ou effort fora da tabela.
   'chamada_fora_da_tabela',
   // D694 (T3 da escada): fim do turno com pedido de escalada sem despacho.

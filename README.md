@@ -7,7 +7,7 @@
 
 <p align="center">
   <strong>Your coding agent says "done". sworn makes it show the proof.</strong><br>
-  A Claude Code plugin with eight numbered gates, nine more gates outside that count (each one a script that
+  A Claude Code plugin with eight numbered gates, ten more gates outside that count (each one a script that
   blocks or hands back the agent's action), and twelve commands.
   Each gate runs in a hook: a fixed point in the session where Claude Code calls a script.
   The script is deterministic, with no model in the loop.
@@ -143,7 +143,7 @@ more, the main agent closes saying what still fails, with the output, instead of
 Gates 3 to 8 cost zero tokens. Without `/sworn:init`, only gates 3 and 5 work. Only gates 3 and 5 have switches, under `travas` in the config: `travas.fecho` (gate 3), `travas.destrutivo` (gate 5's delete, stray `cd`, wrong shell syntax and shell traps, together) and `travas.outraFrente` (gate 5's other session). Gates 4, 6, 7 and 8 have none; the guide says what stops each one.
 Gate 3 also hands back a "done" when a test file edited in the session never failed after the edit (`vermelhoAntes`: a test that never failed may test nothing). With `provaPorArquivoTocado` (off by default), each turn needs only the tests that name the code files touched, and the full suite moves to the commit gate.
 
-### Nine more gates, outside the count
+### Ten more gates, outside the count
 
 They have no number because each one has its own switch, depends on an optional module, or only warns.
 Every switch is a `true`/`false` key in `.claude/sworn/projeto.json`; the [guide](GUIA.md#o-projetojson-chave-por-chave) (in Portuguese) lists every key, one by one.
@@ -153,6 +153,7 @@ Every switch is a `true`/`false` key in `.claude/sworn/projeto.json`; the [guide
 |---|---|---|---|
 | Review before commit | Denies `git commit` while code changed in the session has no approved blind review, and says how many inspectors each file needs. It also scans the staged lines for keys and tokens (`sk-`, `ghp_`, `AKIA`, JWT, `Bearer`, private key and kin) and denies with the file, the line and the kind, never the value; a false positive passes with `# sworn: segredo-visto` ("secret seen") at the end of the commit command. Before `git push`, shows what it would publish: destination, commits, files, authors and sanitization. | A review after the commit is a review nobody does, a key in a commit is a key to rotate, and publishing should be a decision you saw. | `portaoCommit`; the secret scan alone, `segredoNoCommit` |
 | Review before "done" | On `aaa` code changed in the session, a claim of delivery needs an approved review, or a stated reason why there is none. With `revisaoTodoCodigo` (off by default), every code file changed in the session, of any gear. | The riskiest files are where a blind review pays. | `portaoRevisao` |
+| Advisor consult | With Claude Code's advisor on (a stronger model the agent consults mid-task; `advisorModel` in a Claude Code `settings.json`: the user, project or local one), a claim of delivery on `aaa` code changed in the session, with no advisor call in the session, goes back once per session with the order to consult it and the measured cost. Without the advisor on, nothing changes. | In sworn's own test runs (the same test tasks run with and without the advisor), the advisor on but unasked was called 0 times in 9 runs; asked, it avoided the defect in 2 of 3 runs of the one task that failed without it, at about 3.9 times the cost of the same run without the advisor. | `portaoAdvisor` |
 | Top reference | With a reference declared for the file type, an `aaa` delivery needs a review against it, in both orders. | Judged against the best of its kind, not against taste. | `portaoReferencia` |
 | Manual first | Denies editing an `aaa` file before the execution manual was loaded in the session. | Rigor that was never loaded is never applied. | `portaoManual` |
 | Three options | Denies a question to you without exactly 3 options and the recommended one first; a plain question of fact passes with `(fato)` ("fact") in its header. | A choice hidden in a wall of text is a choice you did not make. | `portaoDecisao` |

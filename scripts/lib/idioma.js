@@ -70,8 +70,12 @@ function ultimaResposta(caminho) {
 }
 
 // pendencia #4: depois da compactacao, o Claude Code manda o resumo (em ingles, escrito por ele) como a mensagem do
-// turno; nao e o dono escrevendo, e o aviso dizia "o dono escreve em ingles" com o dono em portugues
-const RESUMO_DA_COMPACTACAO = /^\s*This session is being continued from a previous conversation that ran out of context/;
+// turno; nao e o dono escrevendo, e o aviso dizia "o dono escreve em ingles" com o dono em portugues. H16: o resumo
+// novo vem com a marca <artifact-content-authored-by-others/> e um paragrafo na frente; so essa marca pode vir antes
+// da frase, que abre uma linha ou vem colada nela (citada pelo dono, mesmo numa linha propria, segue contando como
+// dele). Depois da marca, a busca anda linha a linha: um [\s\S]*? seguido de \n\s* era quadratico nas linhas vazias
+const RESUMO_DA_COMPACTACAO =
+  /^\s*(?:<artifact-content-authored-by-others\/>(?:[^\n]*\n)*?[ \t]*)?This session is being continued from a previous conversation that ran out of context/;
 // pendencia #5: o relatorio de subagente (e o aviso de tarefa em segundo plano) chega como a mensagem do turno, com o
 // prompt comecando pela marca do Claude Code; e texto de modelo, em ingles, e nao o dono escrevendo
 const DE_OUTRO_AGENTE = /^\s*<(?:agent-message from=|task-notification>)/;
@@ -81,7 +85,9 @@ const DE_OUTRO_AGENTE = /^\s*<(?:agent-message from=|task-notification>)/;
 function aviso(prompt, caminho) {
   const texto = String(prompt || '');
   if (RESUMO_DA_COMPACTACAO.test(texto) || DE_OUTRO_AGENTE.test(texto)) return null;
-  const dono = detectar(prompt);
+  // H16: o bloco que o Claude Code injeta na mensagem (o <browser_instruction> do Claude in Chrome, em ingles e maior
+  // que o teto) nao e o dono escrevendo; sai pela limpeza do registro de pedidos (retomar.js), que guarda as quebras
+  const dono = typeof prompt === 'string' ? detectar(require('./retomar.js').limparLinhas(prompt)) : null;
   if (!dono) return null;
   const resposta = detectar(ultimaResposta(caminho));
   if (!resposta || resposta === dono) return null;

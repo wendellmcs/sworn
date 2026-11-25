@@ -60,7 +60,9 @@ const NUMEROS = {
   // H6c (D895): a 25a chave (segredoNoCommit).
   'vinte e cinco': 25,
   // H6f (D902): a 26a chave (vermelhoAntes).
-  'vinte e seis': 26
+  'vinte e seis': 26,
+  // H15(b) (D923): a 27a chave (portaoAdvisor).
+  'vinte e sete': 27
 };
 
 // ── a licenca ────────────────────────────────────────────────────────────
@@ -421,6 +423,8 @@ const TRAVA_DO_BALDE = {
   fecho_sem_referencia: null,
   // D655: portao proprio da revisao aprovada no fecho da marcha AAA, com chave propria (portaoRevisao)
   fecho_sem_revisao: null,
+  // H15(b) (D923): portao proprio da consulta ao advisor no fecho da marcha AAA, com chave propria (portaoAdvisor)
+  fecho_sem_advisor: null,
   // Plano 091 (#6, D559): portao proprio do manual antes de arquivo AAA, com chave propria (portaoManual)
   sem_manual: null,
   // Plano 091 (#1, D558/D559): portao proprio da revisao antes do commit, com chave propria (portaoCommit)

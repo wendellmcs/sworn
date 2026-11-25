@@ -163,7 +163,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <div style="position:absolute; right:80px; top:380px; width:320px; height:320px; border-radius:50%; background:#F59E0B; display:flex; align-items:center; justify-content:center">
     <p style="font-family:'Fraunces', Georgia, serif; font-size:44px; font-weight:600; line-height:1.1; color:#0D1117; text-align:center; width:240px">sob<br>juramento</p>
   </div>
-  <p class="eyebrow rise" style="--i:0">Um plugin para o Claude Code · versão 0.89.0</p>
+  <p class="eyebrow rise" style="--i:0">Um plugin para o Claude Code · versão 0.90.0</p>
   <p class="hero rise" style="--i:1; width:1100px">sworn</p>
   <p class="statement rise" style="--i:2; font-size:64px; width:1100px">A IA trabalha rápido. O sworn <span class="hl">exige a prova</span> antes do “pronto”.</p>
   <p class="lead rise" style="--i:3; width:1000px">Tudo o que ele faz, explicado sem jargão: cada passo vigiado, o que acontece sozinho, os comandos e as evidências.</p>
@@ -303,7 +303,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <div class="grid3">
     <div class="card rise" style="--i:0"><p class="num">0</p><p class="cap">tokens de IA gastos pelas travas 3 a 8: só a entrevista inicial e a revisão cega usam IA</p></div>
     <div class="card rise" style="--i:1"><p class="num">29</p><p class="cap">programas vigiando os 11 momentos da sessão, todos com tempo-limite de segundos</p></div>
-    <div class="card rise" style="--i:2"><p class="num">26</p><p class="cap">chaves de liga e desliga: o projeto escolhe quais avisos e portões opcionais quer</p></div>
+    <div class="card rise" style="--i:2"><p class="num">27</p><p class="cap">chaves de liga e desliga: o projeto escolhe quais avisos e portões opcionais quer</p></div>
   </div>
   <aside>Ponto importante para quem se preocupa com custo: a maior parte do sworn não usa IA nenhuma. As travas 3 a 8 são programas comuns que leem o que a IA quer fazer e respondem sim ou não. Só duas peças gastam IA: a entrevista inicial do projeto, uma vez, e a revisão cega, só quando é pedida. Os avisos e portões opcionais têm chaves de liga e desliga; os de segurança, como a senha no handoff, não desligam.</aside>
 </section>
@@ -335,7 +335,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     <div class="card tight rise" style="--i:6"><h3>Pacote inventado</h3><p>Avisa ao instalar algo que o projeto nunca declarou.</p><p class="pill avi">avisa</p></div>
     <div class="card tight rise" style="--i:7"><h3>Estilo fora do padrão</h3><p>Com design system declarado, estilo gravado por comando é barrado.</p><p class="pill blq">bloqueia</p></div>
   </div>
-  <aside>Além das oito travas, há 31 portões menores. Este slide mostra os que agem antes de gravar e publicar o trabalho, e antes de a IA te fazer uma pergunta. O “commit” é a gravação de uma versão no histórico do projeto; o “handoff” é o texto que permite continuar o trabalho em outra conversa. Os portões que só fazem coisas sozinhos aparecem na seção do automático.</aside>
+  <aside>Além das oito travas, há 32 portões menores. Este slide mostra os que agem antes de gravar e publicar o trabalho, e antes de a IA te fazer uma pergunta. O “commit” é a gravação de uma versão no histórico do projeto; o “handoff” é o texto que permite continuar o trabalho em outra conversa. Os portões que só fazem coisas sozinhos aparecem na seção do automático.</aside>
 </section>
 <section id="portoes-b" style="gap:28px">
   <p class="eyebrow">Portões extras · 2 de 2</p>
@@ -351,7 +351,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     <div class="card tight rise" style="--i:7"><h3>Armadilhas do shell</h3><p>Barra comandos que falham calados no Windows.</p><p class="pill blq">bloqueia</p></div>
   </div>
   <div style="flex:1"></div>
-  <p class="small">31 portões ao todo, além das 8 travas. Os que agem sozinhos, sem barrar nada, estão nas próximas três telas.</p>
+  <p class="small">32 portões ao todo, além das 8 travas; o mais novo, com o advisor ligado, pede uma consulta a ele antes da entrega. Os que agem sozinhos, sem barrar nada, estão nas próximas três telas.</p>
   <aside>Estes portões agem na hora em que a IA quer encerrar dizendo que terminou. O “vermelho antes do verde” é uma regra de teste: primeiro se prova que o teste pega o defeito, falhando; só depois se corrige. A “prova que confere” compara o resultado que a IA colou na resposta com o que realmente rodou na sessão, para pegar resultado inventado. A referência de topo é o melhor produto do mesmo tipo, usado como régua na revisão.</aside>
 </section>
 <section id="auto-contexto" class="alt" style="gap:28px">
@@ -500,9 +500,9 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
 </section>
 <section id="chaves" style="gap:28px">
   <p class="eyebrow">Você decide o que liga</p>
-  <p class="title" style="font-size:56px">26 chaves de liga e desliga</p>
+  <p class="title" style="font-size:56px">27 chaves de liga e desliga</p>
   <div class="row" style="gap:28px; align-items:stretch">
-    <div class="card rise" style="--i:0; width:520px; justify-content:center"><p class="num">22</p><p class="cap">vêm ligadas: avisos, regras de resposta, portões de commit e de revisão, lista de pedidos, teste vermelho primeiro e outros</p></div>
+    <div class="card rise" style="--i:0; width:520px; justify-content:center"><p class="num">23</p><p class="cap">vêm ligadas: avisos, regras de resposta, portões de commit, de revisão e do advisor, lista de pedidos, teste vermelho primeiro e outros</p></div>
     <div class="col grow" style="gap:18px">
       <p class="k">4 vêm desligadas, cada uma por um motivo</p>
       <div class="grid2" style="gap:18px">
@@ -767,9 +767,9 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <p class="eyebrow">De onde vêm as ideias · 8 de 8 · a jornada</p>
   <p class="title" style="font-size:56px">Como chegamos aqui, pedido a pedido</p>
   <div class="grid4" style="gap:20px">
-    <div class="card tight rise" style="--i:0; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">249</p><p class="cap" style="color:#B8C0CC">pedidos do dono, numerados</p></div>
-    <div class="card tight rise" style="--i:1; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">913</p><p class="cap" style="color:#B8C0CC">decisões registradas, cada uma com o porquê</p></div>
-    <div class="card tight rise" style="--i:2; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">126</p><p class="cap" style="color:#B8C0CC">versões publicadas</p></div>
+    <div class="card tight rise" style="--i:0; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">255</p><p class="cap" style="color:#B8C0CC">pedidos do dono, numerados</p></div>
+    <div class="card tight rise" style="--i:1; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">917</p><p class="cap" style="color:#B8C0CC">decisões registradas, cada uma com o porquê</p></div>
+    <div class="card tight rise" style="--i:2; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">127</p><p class="cap" style="color:#B8C0CC">versões publicadas</p></div>
     <div class="card tight rise" style="--i:3; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">4</p><p class="cap" style="color:#B8C0CC">meses: de agosto a novembro de 2026</p></div>
   </div>
   <div style="flex:1"></div>
@@ -779,7 +779,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     <div class="rise" style="--i:6; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Outubro</p><p style="color:#B8C0CC">Painéis, trabalho em paralelo, a escada de modelos e o nome sworn.</p></div>
     <div class="rise" style="--i:7; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Novembro</p><p style="color:#B8C0CC">Mais 5 IAs, os cursos, o radar e a revisão até zerar.</p></div>
   </div>
-  <aside>A jornada em números: em cerca de quatro meses, o dono fez 249 pedidos numerados, que viraram 913 decisões registradas, cada uma com o motivo, e 126 versões publicadas. Em agosto vieram a pesquisa e as primeiras travas; em setembro, os portões e a revisão cega; em outubro, os painéis, o paralelo e o novo nome; em novembro, as outras IAs, os cursos e o radar.</aside>
+  <aside>A jornada em números: em cerca de quatro meses, o dono fez 255 pedidos numerados, que viraram 917 decisões registradas, cada uma com o motivo, e 127 versões publicadas. Em agosto vieram a pesquisa e as primeiras travas; em setembro, os portões e a revisão cega; em outubro, os painéis, o paralelo e o novo nome; em novembro, as outras IAs, os cursos e o radar.</aside>
 </section>
 <section id="ganhos" style="gap:26px">
   <p class="eyebrow">Os ganhos</p>
@@ -798,14 +798,14 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <aside>O resumo dos ganhos, todos com número medido. Os dois primeiros são de confiança: a IA passa a mostrar a prova e para de afrouxar a régua. Os outros são de custo: o sworn lê menos, abre ajudantes mais leves e avisa a hora de trocar de conversa antes que cada mensagem fique cara. Os dois últimos são de qualidade de resposta: respostas um quarto mais curtas, e as regras do sworn venceram as 12 comparações contra um modo de resposta ultrarresumido.</aside>
 </section>
 <section id="novidades" class="dark" style="gap:26px">
-  <p class="eyebrow">O que há de novo · versão 0.89.0</p>
-  <p class="title" style="font-size:52px">A apresentação no GitHub Pages, e o README com cada trava e a chave que a desliga</p>
+  <p class="eyebrow">O que há de novo · versão 0.90.0</p>
+  <p class="title" style="font-size:52px">O advisor medido, e a consulta a ele na entrega AAA quando ele está ligado</p>
   <div class="grid2" style="gap:20px">
-    <div class="card tight rise" style="--i:0"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">A apresentação do sworn no GitHub Pages</p></div>
-    <div class="card tight rise" style="--i:1"><p class="k">Melhorado</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">O README diz cada trava, portão e aviso, com a chave que o desliga</p></div>
+    <div class="card tight rise" style="--i:0"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">Com o advisor ligado, a entrega AAA consulta o advisor uma vez</p></div>
+    <div class="card tight rise" style="--i:1"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">O ganho medido antes do aviso</p></div>
   </div>
   <p class="small">A lista completa de cada versão está no <a href="https://github.com/wendellmcs/sworn/blob/main/CHANGELOG.md" style="color:#F59E0B">CHANGELOG</a>.</p>
-  <aside>As novidades da versão 0.89.0, tiradas do registro de mudanças a cada versão publicada. Este slide se refaz sozinho: quem publica a versão roda um comando que lê as novidades e monta a página de novo.</aside>
+  <aside>As novidades da versão 0.90.0, tiradas do registro de mudanças a cada versão publicada. Este slide se refaz sozinho: quem publica a versão roda um comando que lê as novidades e monta a página de novo.</aside>
 </section>
 <section id="instalar" class="alt" style="gap:28px">
   <p class="eyebrow">Como começar</p>

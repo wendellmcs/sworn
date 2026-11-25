@@ -406,6 +406,14 @@ function promptDoHandoff(arquivo) {
 // D503 (plano d503, Tarefa 5): no maximo tantos arquivos citados no motivo; o resto vira "+N".
 const MAX_CITADOS = 5;
 
+/** Os arquivos do motivo, um por linha entre aspas, ate MAX_CITADOS e o resto contado; fora de ASCII vira "?" (R5). */
+function citarArquivos(arquivos) {
+  const ascii = require('./lib/escopo.js').ascii;
+  const citados = arquivos.slice(0, MAX_CITADOS).map(function (a) { return '  - "' + ascii(a) + '"'; });
+  if (arquivos.length > MAX_CITADOS) citados.push('  - and ' + (arquivos.length - MAX_CITADOS) + ' more');
+  return citados;
+}
+
 /** D503 (plano d503, Tarefa 5): o motivo quando a resposta alega entrega, um arquivo mudado na sessao resolve para
  *  `aaa`, o tipo dele tem referencia de topo declarada (`marcha.aaaComReferencia`) e nenhuma revisao contra a
  *  referencia fechou na sessao (o balde que o apurar-ronda.js grava). Sem isso, null. So `"portaoReferencia": false`
@@ -458,9 +466,7 @@ function semRevisaoAprovada(e, s, projeto, cwd, jaCobrados) {
   const arquivos = require('./lib/marcha.js').semRevisao(s.arquivosTocados, s.revisadosAprovados, projeto, cwd, marcha)
     .filter(function (a) { return jaCobrados.indexOf(a) === -1; });
   if (!arquivos.length) return null;
-  const ascii = require('./lib/escopo.js').ascii;
-  const citados = arquivos.slice(0, MAX_CITADOS).map(function (a) { return '  - "' + ascii(a) + '"'; });
-  if (arquivos.length > MAX_CITADOS) citados.push('  - and ' + (arquivos.length - MAX_CITADOS) + ' more');
+  const citados = citarArquivos(arquivos);
   return [
     'sworn - the review is missing on a changed code file.',
     '',
@@ -478,6 +484,51 @@ function semRevisaoAprovada(e, s, projeto, cwd, jaCobrados) {
     '',
     'Turn off in this project: "portaoRevisao": false in .claude/sworn/projeto.json.'
   ]).join('\n');
+}
+
+// H15(b) (D923): o custo e o ganho medidos na leva da consulta pedida (docs/bateria/metodo-advisor.md, par. 8): a
+// rodada e uma execucao de uma tarefa de teste, com e sem o advisor; o motivo cita os arquivos AAA mudados.
+function motivoAdvisor(arquivos) {
+  return [
+    'sworn - the advisor is on, and this session has not consulted it.',
+    '',
+    'You said the work is done, and you changed files this project checks with',
+    'the most care (the AAA gear):'
+  ].concat(citarArquivos(arquivos), [
+    '',
+    'The advisor is on (advisorModel in a Claude Code settings.json: the user,',
+    'project or local one), and this session has no advisor call. Before you',
+    'call the task delivered, consult the advisor tool once about the work done,',
+    'and act on what it finds.',
+    '',
+    'Measured cost, in sworn\'s own test runs: about US$ 0.22 more per run of a',
+    'task, 3.9 times the cost of the same run without the advisor. On the one',
+    'test task that failed without it, the consult avoided the defect in 2 of 3',
+    'runs.',
+    '',
+    'If the advisor tool is not in this session, say so in one line and deliver.',
+    'This check runs once per session.',
+    '',
+    'Only the owner turns this off in this project: "portaoAdvisor": false in',
+    '.claude/sworn/projeto.json.'
+  ]).join('\n');
+}
+
+/** H15(b) (D923): o motivo quando a resposta alega entrega, um arquivo de codigo AAA mudou na sessao (aprovado na
+ *  revisao ou nao), o advisor esta ligado (lib/advisor.js) e a transcricao nao tem consulta a ele. Uma vez por
+ *  sessao: `advisorVisto` marca a cobranca e a consulta achada, e a transcricao nao se le de novo. Sem transcricao
+ *  que se leia, calado. So `"portaoAdvisor": false` desliga (a trava 3 desligada nao). */
+function semConsultaAoAdvisor(e, s, projeto, cwd) {
+  if (!projeto || projeto.portaoAdvisor === false || s.advisorVisto === true) return null;
+  if (!evidencia.analisar(e.last_assistant_message).alegaSucesso) return null;
+  const aaa = require('./lib/marcha.js').semRevisao(s.arquivosTocados, [], projeto, cwd, 'aaa');
+  if (!aaa.length) return null;
+  const advisor = require('./lib/advisor.js');
+  if (!advisor.ligado(cwd, process.env)) return null;
+  const visto = advisor.consultou(e.transcript_path);
+  if (visto === null) return null;
+  s.advisorVisto = true;
+  return visto ? null : motivoAdvisor(aaa);
 }
 
 /** B2 (s369, R-impeccable): o pronto com arquivo aprovado por revisao degradada (sem isolamento, sem navegador) tem
@@ -774,8 +825,14 @@ io.blindar(function () {
     // entram so por aqui, e sempre depois dos outros do turno (o do handoff, o barrar soma no fim).
     // B2: a revisao degradada sem a linha DEGRADADO, no mesmo grupo e no mesmo balde da revisao que falta.
     const degradadaSemAviso = semAvisoDeDegradada(e, s, projeto);
+    // H15(b) (D923): a consulta ao advisor ligado, no fim do mesmo grupo, com balde proprio.
+    const semAdvisor = semConsultaAoAdvisor(e, s, projeto, cwd);
+    if (semAdvisor) {
+      s.contadores = s.contadores || {};
+      s.contadores.fecho_sem_advisor = (s.contadores.fecho_sem_advisor || 0) + 1;
+    }
     const daRevisao = (semReferencia ? [semReferencia] : []).concat(semRevisao ? [semRevisao] : [],
-      degradadaSemAviso ? [degradadaSemAviso] : []);
+      degradadaSemAviso ? [degradadaSemAviso] : [], semAdvisor ? [semAdvisor] : []);
     // um Stop, um ponto no balde: com a revisao que falta, ela ja contou
     if (degradadaSemAviso && !semRevisao) {
       s.contadores = s.contadores || {};

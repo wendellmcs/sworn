@@ -7,7 +7,7 @@
 
 <p align="center">
   <strong>O seu agente de código diz "pronto". O sworn o obriga a mostrar a prova.</strong><br>
-  Um plugin do Claude Code com oito travas numeradas, mais nove portões fora dessa conta (cada um, um script
+  Um plugin do Claude Code com oito travas numeradas, mais dez portões fora dessa conta (cada um, um script
   que barra ou devolve a ação do agente), e doze comandos.
   Cada portão roda num gancho (hook): o momento fixo da sessão em que o Claude Code chama um script.
   O script é determinístico, sem modelo no meio.
@@ -143,7 +143,7 @@ principal fecha dizendo o que segue falhando, com a saída, em vez de perguntar 
 As travas 3 a 8 custam zero token. Sem `/sworn:init`, só as travas 3 e 5 funcionam. Só as travas 3 e 5 têm chave, em `travas`, na configuração: `travas.fecho` (trava 3), `travas.destrutivo` (o apagar, o `cd` solto, a sintaxe errada do shell e as armadilhas do shell da trava 5, juntos) e `travas.outraFrente` (a outra sessão da trava 5). As travas 4, 6, 7 e 8 não têm; o guia diz o que segura cada uma.
 A trava 3 também devolve o "pronto" quando um arquivo de teste editado na sessão nunca falhou depois da edição (`vermelhoAntes`: teste que nunca falhou pode não testar nada). Com `provaPorArquivoTocado` (desligada por padrão), cada turno pede só os testes que citam os arquivos de código mexidos, e a suíte inteira passa para o portão do commit.
 
-### Mais nove portões, fora da conta
+### Mais dez portões, fora da conta
 
 Não têm número porque cada um tem chave própria, depende de um módulo opcional ou só avisa. Toda chave é
 um `true`/`false` em `.claude/sworn/projeto.json`; o [guia](GUIA.md#o-projetojson-chave-por-chave) traz cada chave, uma por uma.
@@ -153,6 +153,7 @@ um `true`/`false` em `.claude/sworn/projeto.json`; o [guia](GUIA.md#o-projetojso
 |---|---|---|---|
 | Revisão antes do commit | Nega o `git commit` enquanto o código mudado na sessão não tem revisão cega aprovada, e diz quantos inspetores cada arquivo pede. Também varre as linhas preparadas atrás de chave e token (`sk-`, `ghp_`, `AKIA`, JWT, `Bearer`, chave privada e afins) e nega com o arquivo, a linha e o tipo, nunca o valor; o falso positivo passa com `# sworn: segredo-visto` no fim do comando do commit. Antes do `git push`, mostra o que ele publicaria: destino, commits, arquivos, autores e sanitação. | Revisão depois do commit é revisão que ninguém faz, chave num commit é chave a trocar, e publicar tem de ser decisão vista. | `portaoCommit`; só a varredura de segredo, `segredoNoCommit` |
 | Revisão antes do "pronto" | Em código `aaa` mudado na sessão, a alegação de entrega pede revisão aprovada, ou o motivo dito de não ter. Com `revisaoTodoCodigo` (desligada por padrão), todo arquivo de código mudado na sessão, de qualquer marcha. | Os arquivos de mais risco são onde a revisão cega compensa. | `portaoRevisao` |
+| Consulta ao advisor | Com o advisor do Claude Code ligado (um modelo mais forte que o agente consulta no meio da tarefa; `advisorModel` num `settings.json` do Claude Code: o do usuário, o do projeto ou o local), a alegação de entrega em código `aaa` mudado na sessão, sem chamada ao advisor na sessão, volta uma vez por sessão com a ordem de consultá-lo e o custo medido. Sem o advisor ligado, nada muda. | Nos testes do próprio sworn (as mesmas tarefas de teste rodadas com e sem o advisor), o advisor ligado e sem pedido foi chamado 0 vezes em 9 execuções; com o pedido, evitou o defeito em 2 de 3 execuções da única tarefa que falhava sem ele, por cerca de 3,9 vezes o custo da mesma execução sem o advisor. | `portaoAdvisor` |
 | Referência de topo | Com referência declarada para o tipo do arquivo, a entrega `aaa` pede revisão contra ela, nas duas ordens. | Julgado contra o melhor do mesmo tipo, não contra o gosto. | `portaoReferencia` |
 | Manual antes | Nega editar arquivo `aaa` antes de o manual de execução ser carregado na sessão. | Rigor que nunca foi carregado nunca é aplicado. | `portaoManual` |
 | Três opções | Nega a pergunta a você sem exatamente 3 opções e a recomendada primeiro; a pergunta de fato passa com `(fato)` no título curto. | Escolha escondida numa muralha de texto é escolha que você não fez. | `portaoDecisao` |

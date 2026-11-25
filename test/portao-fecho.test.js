@@ -14,8 +14,10 @@ const RAIZ = path.join(__dirname, '..');
 // como o portao-apelido.js), salvo com `processo`: o processo de verdade fica nos testes do R6, que conferem o exit 0
 // depois da falha. Em processo o gancho que falha e libera volta com status 1: a falha que o teste nao provocou
 // reprova o assert do status, em vez de passar como "sem opiniao".
+// H15(b) (D923): o advisor sai desligado por padrao, para o advisorModel das settings de quem roda a suite nao mudar
+// os testes; os do H15(b) o ligam com fechoComAdvisor.
 function rodar(script, entrada, tmp, envExtra, processo) {
-  const env = Object.assign({}, process.env, { SWORN_TMP: tmp }, envExtra || {});
+  const env = Object.assign({}, process.env, { SWORN_TMP: tmp, CLAUDE_CODE_DISABLE_ADVISOR_TOOL: '1' }, envExtra || {});
   if (!processo) return comum.ganchoComoProcesso(path.join('scripts', script), entrada, { env: env });
   const r = spawnSync(process.execPath, [path.join(RAIZ, 'scripts', script)], {
     input: JSON.stringify(entrada),
@@ -1972,6 +1974,201 @@ test('D655 T1: declaraSemRevisao - a declaracao de entrega sem revisao, nos dois
     'There were no review findings.', 'No review comments are left open.'];
   for (const t of sim) assert.strictEqual(ev.declaraSemRevisao(t), true, 'devia reconhecer: ' + t);
   for (const t of nao) assert.strictEqual(ev.declaraSemRevisao(t), false, 'falso positivo: ' + t);
+});
+
+// ------------------------------- H15(b) (D923): com o advisor ligado, a entrega AAA consulta o advisor uma vez
+
+const MOTIVO_ADVISOR = [
+  'sworn - the advisor is on, and this session has not consulted it.',
+  '',
+  'You said the work is done, and you changed files this project checks with',
+  'the most care (the AAA gear):',
+  '  - "src/a.js"',
+  '',
+  'The advisor is on (advisorModel in a Claude Code settings.json: the user,',
+  'project or local one), and this session has no advisor call. Before you',
+  'call the task delivered, consult the advisor tool once about the work done,',
+  'and act on what it finds.',
+  '',
+  'Measured cost, in sworn\'s own test runs: about US$ 0.22 more per run of a',
+  'task, 3.9 times the cost of the same run without the advisor. On the one',
+  'test task that failed without it, the consult avoided the defect in 2 of 3',
+  'runs.',
+  '',
+  'If the advisor tool is not in this session, say so in one line and deliver.',
+  'This check runs once per session.',
+  '',
+  'Only the owner turns this off in this project: "portaoAdvisor": false in',
+  '.claude/sworn/projeto.json.'
+].join('\n');
+
+// A linha de assistente sem consulta: o usage de toda linha traz server_tool_use, e isso nao e consulta.
+const LINHA_SEM_CONSULTA = JSON.stringify({ type: 'assistant', isSidechain: false, message: { role: 'assistant',
+  content: [{ type: 'tool_use', id: 'toolu_1', name: 'Edit', input: {} }],
+  usage: { server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 } } } });
+
+function linhaDeConsulta(lateral) {
+  return JSON.stringify({ type: 'assistant', isSidechain: lateral, message: { role: 'assistant',
+    content: [{ type: 'server_tool_use', id: 'srvtoolu_1', name: 'advisor', input: {} }] } });
+}
+
+function transcricao(tmp, nome, linhas) {
+  const arq = path.join(tmp, nome + '.jsonl');
+  fs.writeFileSync(arq, linhas.join('\n') + '\n', 'utf8');
+  return arq;
+}
+
+/** As settings do Claude Code em `<dir>/.claude/<arquivo>`, com o advisorModel dado. */
+function settingsCom(dir, arquivo, advisorModel) {
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', arquivo), JSON.stringify({ advisorModel: advisorModel }), 'utf8');
+}
+
+/** O fecho com o advisor possivel: a pasta de config do usuario vazia (por id) e a variavel que o desliga limpa. */
+function fechoComAdvisor(tmp, id, cwd, mensagem, extra, envExtra) {
+  const config = path.join(tmp, 'config-' + id);
+  fs.mkdirSync(config, { recursive: true });
+  return rodar('portao-fecho.js', Object.assign({ session_id: id, cwd: cwd, hook_event_name: 'Stop',
+    last_assistant_message: mensagem }, extra || {}), tmp,
+  Object.assign({ CLAUDE_CONFIG_DIR: config, CLAUDE_CODE_DISABLE_ADVISOR_TOOL: '' }, envExtra || {}));
+}
+
+/** Projeto com o arquivo AAA mudado e aprovado na revisao (so o advisor fica por cobrar), e a transcricao dada. */
+function cenaDoAdvisor(tmp, id, conteudo, linhas) {
+  const dir = projetoCom(tmp, id, conteudo || SO_AAA);
+  mudar(tmp, id, dir, path.join('src', 'a.js'));
+  aprovar(tmp, id, path.join(dir, 'src', 'a.js'));
+  settingsCom(dir, 'settings.json', 'opus');
+  return { dir: dir, extra: { transcript_path: transcricao(tmp, id, linhas || [LINHA_SEM_CONSULTA]) } };
+}
+
+test('H15(b): advisor ligado, entrega AAA e nenhuma consulta na transcricao -> barra com o motivo e conta o balde', () => {
+  comTmp((tmp) => {
+    const c = cenaDoAdvisor(tmp, 'adv');
+    const r = fechoComAdvisor(tmp, 'adv', c.dir, ENTREGA, c.extra);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(r.json && r.json.decision === 'block', 'tinha de barrar: ' + r.stdout);
+    assert.strictEqual(r.json.reason, MOTIVO_ADVISOR);
+    assert.ok(/^[\n\x20-\x7E]*$/.test(r.json.reason), 'ASCII (R5)');
+    assert.strictEqual(sessaoDe(tmp, 'adv').contadores.fecho_sem_advisor, 1);
+    assert.strictEqual(fechoComAdvisor(tmp, 'adv', c.dir, ENTREGA, c.extra).json, null, 'a segunda passada libera');
+    // turno seguinte, de novo com entrega AAA e sem consulta: uma vez por sessao
+    mudar(tmp, 'adv', c.dir, path.join('src', 'a.js'));
+    aprovar(tmp, 'adv', path.join(c.dir, 'src', 'a.js'));
+    assert.strictEqual(fechoComAdvisor(tmp, 'adv', c.dir, ENTREGA, c.extra).json, null, 'uma vez por sessao');
+  });
+});
+
+test('H15(b): o advisor das settings do usuario e a consulta so de subagente tambem cobram', () => {
+  comTmp((tmp) => {
+    const u = cenaDoAdvisor(tmp, 'adv-usuario');
+    fs.rmSync(path.join(u.dir, '.claude', 'settings.json'));
+    fs.mkdirSync(path.join(tmp, 'config-adv-usuario'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'config-adv-usuario', 'settings.json'), '{"advisorModel":"opus"}', 'utf8');
+    const ru = fechoComAdvisor(tmp, 'adv-usuario', u.dir, ENTREGA, u.extra);
+    assert.ok(ru.json && ru.json.reason === MOTIVO_ADVISOR, 'settings do usuario: ' + ru.stdout);
+    const l = cenaDoAdvisor(tmp, 'adv-lateral', null, [LINHA_SEM_CONSULTA, linhaDeConsulta(true)]);
+    const rl = fechoComAdvisor(tmp, 'adv-lateral', l.dir, ENTREGA, l.extra);
+    assert.ok(rl.json && rl.json.reason === MOTIVO_ADVISOR, 'a consulta de subagente nao conta: ' + rl.stdout);
+  });
+});
+
+test('H15(b): chave propria - travas.fecho false nao desliga o portao do advisor', () => {
+  comTmp((tmp) => {
+    const c = cenaDoAdvisor(tmp, 'adv-trava', Object.assign({ travas: { fecho: false } }, SO_AAA));
+    const r = fechoComAdvisor(tmp, 'adv-trava', c.dir, 'Pronto.', c.extra);
+    assert.ok(r.json && r.json.decision === 'block', 'tinha de barrar: ' + r.stdout);
+    assert.strictEqual(r.json.reason, MOTIVO_ADVISOR);
+  });
+});
+
+test('H15(b): controles - calado sem advisor, com consulta, fora do AAA, chave desligada, sem transcricao', () => {
+  comTmp((tmp) => {
+    const casos = [
+      ['sem-advisor', (c) => fs.rmSync(path.join(c.dir, '.claude', 'settings.json'))],
+      ['advisor-vazio', (c) => settingsCom(c.dir, 'settings.json', '  ')],
+      ['local-desliga', (c) => settingsCom(c.dir, 'settings.local.json', '')],
+      ['consultou', null, [LINHA_SEM_CONSULTA, linhaDeConsulta(false)]],
+      ['chave', null, null, Object.assign({ portaoAdvisor: false }, SO_AAA)],
+      ['fora-do-aaa', null, null, { marchas: { aaa: ['lib/**'] } }],
+      ['sem-alegacao', null, null, null, 'Anotado; sigo na proxima tarefa.'],
+      ['variavel', null, null, null, null, { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: '1' }],
+      ['sem-transcricao', (c) => { delete c.extra.transcript_path; }],
+      ['transcricao-sumiu', (c) => fs.rmSync(c.extra.transcript_path)],
+      ['nao-e-transcricao', null, ['{"type":"assistant","message":{"content":[]}}']]
+    ];
+    for (const [nome, ajuste, linhas, conteudo, mensagem, env] of casos) {
+      const id = 'adv-' + nome;
+      const c = cenaDoAdvisor(tmp, id, conteudo, linhas);
+      if (ajuste) ajuste(c);
+      const r = fechoComAdvisor(tmp, id, c.dir, mensagem || ENTREGA, c.extra, env);
+      assert.strictEqual(r.status, 0, nome + ': ' + r.stderr);
+      assert.strictEqual(r.json, null, nome + ': nao devia barrar: ' + r.stdout);
+    }
+    // a consulta achada vale a sessao: a transcricao nao e lida de novo
+    assert.strictEqual(sessaoDe(tmp, 'adv-consultou').advisorVisto, true);
+  });
+});
+
+test('H15(b): advisor.ligado - a ordem das settings, a pasta de config e a variavel que desliga', () => {
+  const advisor = require('../scripts/lib/advisor.js');
+  comTmp((tmp) => {
+    const dir = path.join(tmp, 'proj');
+    const config = path.join(tmp, 'config');
+    fs.mkdirSync(config, { recursive: true });
+    const env = { CLAUDE_CONFIG_DIR: config };
+    assert.strictEqual(advisor.ligado(dir, env), false, 'nenhuma settings');
+    fs.writeFileSync(path.join(config, 'settings.json'), '{"advisorModel":"opus"}', 'utf8');
+    assert.strictEqual(advisor.ligado(dir, env), true, 'a do usuario');
+    settingsCom(dir, 'settings.json', '');
+    assert.strictEqual(advisor.ligado(dir, env), false, 'a do projeto, que declara, manda sobre a do usuario');
+    settingsCom(dir, 'settings.local.json', 'sonnet');
+    assert.strictEqual(advisor.ligado(dir, env), true, 'a local manda sobre a do projeto');
+    fs.writeFileSync(path.join(dir, '.claude', 'settings.local.json'), '{"advisorModel":', 'utf8');
+    assert.strictEqual(advisor.ligado(dir, env), false, 'a local rasgada nao decide: vale a do projeto');
+    fs.writeFileSync(path.join(dir, '.claude', 'settings.local.json'), '{"model":"opus"}', 'utf8');
+    settingsCom(dir, 'settings.json', 7);
+    assert.strictEqual(advisor.ligado(dir, env), false, 'advisorModel que nao e texto');
+    settingsCom(dir, 'settings.json', 'opus');
+    // a regra de verdade das variaveis do Claude Code: 1, true, yes e on, sem caixa e sem espaco nas pontas
+    for (const v of ['1', 'true', 'yes', 'on', ' TRUE ']) {
+      assert.strictEqual(advisor.ligado(dir, { CLAUDE_CONFIG_DIR: config, CLAUDE_CODE_DISABLE_ADVISOR_TOOL: v }), false, v);
+    }
+    for (const v of ['', '0', 'false', 'no', 'off']) {
+      assert.strictEqual(advisor.ligado(dir, { CLAUDE_CONFIG_DIR: config, CLAUDE_CODE_DISABLE_ADVISOR_TOOL: v }), true, v);
+    }
+  });
+});
+
+test('H15(b): advisor.consultou - so o bloco server_tool_use de nome advisor, fora de subagente', () => {
+  const advisor = require('../scripts/lib/advisor.js');
+  comTmp((tmp) => {
+    assert.strictEqual(advisor.consultou(undefined), null, 'sem caminho');
+    assert.strictEqual(advisor.consultou(path.join(tmp, 'nao-existe.jsonl')), null, 'arquivo que nao existe');
+    assert.strictEqual(advisor.consultou(transcricao(tmp, 'alheia', ['{"advisor":1}'])), null, 'nao e do Claude Code');
+    assert.strictEqual(advisor.consultou(transcricao(tmp, 'sem', [LINHA_SEM_CONSULTA])), false, 'o usage nao e consulta');
+    const comum = JSON.stringify({ type: 'assistant', isSidechain: false, message: { role: 'assistant',
+      content: [{ type: 'tool_use', id: 'toolu_2', name: 'advisor', input: {} }] } });
+    assert.strictEqual(advisor.consultou(transcricao(tmp, 'comum', [comum])), false, 'tool_use comum nao e a do servidor');
+    assert.strictEqual(advisor.consultou(transcricao(tmp, 'rasgada', [LINHA_SEM_CONSULTA,
+      linhaDeConsulta(false).slice(0, -3)])), false, 'linha rasgada nao conta');
+    assert.strictEqual(advisor.consultou(transcricao(tmp, 'lateral', [linhaDeConsulta(true)])), false, 'subagente');
+    assert.strictEqual(advisor.consultou(transcricao(tmp, 'com', [LINHA_SEM_CONSULTA, linhaDeConsulta(false)])), true);
+    // a linha com o nome que nao e consulta nao encerra a busca: a seguinte ainda conta
+    assert.strictEqual(advisor.consultou(transcricao(tmp, 'depois', [comum, linhaDeConsulta(false)])), true, 'segunda');
+    // o BOM do comeco (o PowerShell 5.1 grava) nao esconde a consulta da 1a linha
+    assert.strictEqual(advisor.consultou(transcricao(tmp, 'bom', ['﻿' + linhaDeConsulta(false)])), true, 'BOM');
+    // a ultima linha sem quebra no fim, e a quebra do Windows
+    const crua = path.join(tmp, 'crua.jsonl');
+    fs.writeFileSync(crua, LINHA_SEM_CONSULTA + '\r\n' + linhaDeConsulta(false), 'utf8');
+    assert.strictEqual(advisor.consultou(crua), true, 'sem quebra no fim');
+  });
+});
+
+test('H15(b): a chave nova, o balde novo e o campo da sessao estao nas listas', () => {
+  assert.ok(require('../scripts/lib/projeto.js').CHAVES_LIGA_DESLIGA.indexOf('portaoAdvisor') !== -1);
+  assert.ok(require('../scripts/lib/saude.js').BALDES_DE_BLOQUEIO.indexOf('fecho_sem_advisor') !== -1);
+  assert.ok(require('../scripts/lib/estado.js').CAMPOS_DA_SESSAO.indexOf('advisorVisto') !== -1);
 });
 
 // Plano 082, Tarefa 6 (p7-25): o motivo da referencia entra por um caminho so e sempre depois dos outros (subitem,
