@@ -176,7 +176,7 @@ ferramentas, evidência reduzida à linha que prova, nada de repetir o que você
 no seu idioma); e **menos código** (7 perguntas em ordem antes de escrever código, parando na primeira que resolve: precisa existir, o
 projeto já tem, a linguagem ou a plataforma já faz). Os subagentes que podem escrever código recebem o
 último bloco também.
-Três blocos têm chave: `paralelismo` (trabalho em paralelo), `qualidadeDeResposta` (qualidade de resposta) e `menosCodigo` (menos código); as regras do projeto e o menos paradas vêm sempre. O guia oficial do modelo (a parte "How to ask", como pedir) entra no pedido de cada agente do sworn e na abertura (desliga com `guiaDoModelo`), e a `aberturaEnxuta` (desligada por padrão) reduz a abertura a uma linha por bloco, perto de 2,3 mil caracteres a menos, para modelo de contexto curto.
+Três blocos têm chave: `paralelismo` (trabalho em paralelo), `qualidadeDeResposta` (qualidade de resposta) e `menosCodigo` (menos código); as regras do projeto e o menos paradas vêm sempre. O guia oficial do modelo (a parte "How to ask", como pedir) entra no pedido de cada subagente, do sworn ou não, e na abertura (desliga com `guiaDoModelo`), e a `aberturaEnxuta` (desligada por padrão) reduz a abertura a uma linha por bloco, perto de 2,3 mil caracteres a menos, para modelo de contexto curto.
 
 **A skill certa na hora certa.** Cinco rotas dizem a skill do sworn que a tarefa pede, uma vez por sessão e por tipo:
 a edição de tela, o plano a seguir, a etapa marcada no plano, o "por que a sessão deu errado?" e o arquivo `aaa`. A
@@ -296,4 +296,4 @@ A lista inteira (quatorze promessas que ele não faz e seis limites que não fec
 
 ## Licença
 
-MIT. Veja o [LICENSE](LICENSE).
+MIT. Veja o [LICENSE](LICENSE). O sworn reescreve ideias de outros projetos, skills e cursos, e não depende de nenhum deles. Cada ideia, com o crédito à fonte, o arquivo que a carrega e quando esse arquivo roda, está em [ORIGENS.md](ORIGENS.md).

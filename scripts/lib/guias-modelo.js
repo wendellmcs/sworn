@@ -185,14 +185,25 @@ function bloco(raiz, familia) {
   return p ? p.bloco : '';
 }
 
+// a variavel de ligar, como o Claude Code costuma ler (inferido: a doc so mostra o 1)
+const LIGADA = /^(?:1|true|yes|on)$/i;
+
 /**
- * A familia do modelo que vai rodar o despacho: a do `pedido` (o `model` do Agent, apelido ou id), sem pedido a do
- * `padrao` (o `model` do agents/<nome>.md); `inherit`, ou nenhum dos dois, e a `sessao` (ja o apelido, como o de
- * juiz.modeloDaSessao). '' quando nao e Claude ou nao se sabe. Limite: a variavel CLAUDE_CODE_SUBAGENT_MODEL, que troca o
- * padrao do subagente, nao entra.
+ * A familia do modelo que vai rodar o despacho, na ordem da doc oficial dos subagentes: a do `pedido` (o `model` do
+ * Agent, apelido ou id); sem pedido, a do `padrao` (o `model` da definicao do agente, `inherit` tambem); sem os dois, a
+ * variavel CLAUDE_CODE_SUBAGENT_MODEL de `opcoes.env`; `inherit`, ou nada disso, e a `sessao` (ja o apelido, como o de
+ * juiz.modeloDaSessao). Com CLAUDE_CODE_SUBAGENT_MODEL_FORCE ligada e a variavel posta, a variavel vale sobre tudo.
+ * `opcoes.semDefinicao`: a definicao do agente nao foi achada, e so o pedido (ou a variavel forcada) diz o modelo.
+ * '' quando nao e Claude ou nao se sabe. Sem `opcoes`, nenhuma variavel entra.
  */
-function familiaDoDespacho(pedido, padrao, sessao) {
-  const p = String(pedido || '').trim() || String(padrao || '').trim();
+function familiaDoDespacho(pedido, padrao, sessao, opcoes) {
+  const o = opcoes || {};
+  const env = o.env || {};
+  const variavel = String(env.CLAUDE_CODE_SUBAGENT_MODEL || '').trim();
+  const forcada = variavel !== '' && LIGADA.test(String(env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE || '').trim());
+  let p = forcada ? variavel : String(pedido || '').trim();
+  if (!p && o.semDefinicao) return '';
+  if (!p) p = String(padrao || '').trim() || variavel;
   const f = !p || p.toLowerCase() === 'inherit' ? String(sessao || '') : apelidoDoId(p);
   return FAMILIAS.indexOf(f) === -1 ? '' : f;
 }

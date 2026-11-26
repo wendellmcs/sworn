@@ -110,7 +110,10 @@ browser) is the environment, not a dependency. The third-party product is instal
 against sworn's version, with the owner's yes, in a temporary folder outside the repository, and removed
 afterwards. `test/sem-terceiros.test.js`
 fails when the plugin imports a third-party module or `package.json` declares a dependency: remove the import or
-the dependency, and rewrite what it did inside the plugin.
+the dependency, and rewrite what it did inside the plugin. Each adopted idea gets a row in `ORIGENS.md`, at the
+repository root (the source, what came, the file that carries it, its trigger and the mark), and the file's origin
+comment cites that mark; `test/origens.test.js` fails when a listed file is gone or when none of the row's files
+still carries its mark.
 
 ## Step 4 — the interview (user mode)
 

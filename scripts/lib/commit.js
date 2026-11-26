@@ -4,8 +4,8 @@
  * Plano 091 (#1, D558, D559): o portao do commit. Commit com arquivo de codigo mudado na sessao (Write/Edit, o
  * `arquivosTocados` do estado) que ainda difere do HEAD e nao tem revisao aprovada (`revisadosAprovados`, gravado pelo
  * apurar-ronda.js no "aprovado") e negado com a lista, a faixa de cada um (D485, a mesma do preparar-revisao.js) e a
- * ordem de rodar o /sworn:review. Texto (.md, .txt) fica fora, e o JS ou TS que so mudou comentario ou espaco tambem
- * (H1-custo, so-comentario.js). A saida de emergencia e visivel: a marca
+ * ordem de rodar o /sworn:review. Texto (.md, .txt) fica fora, e o JS, TS, Apps Script, Python ou CSS que so mudou
+ * comentario ou espaco tambem (H1-custo, so-comentario.js). A saida de emergencia e visivel: a marca
  * "# sworn: sem-revisao" no comando, so depois do sim do dono. Texto do motivo em ASCII (D532), o do mock.
  */
 const fs = require('node:fs');
@@ -418,8 +418,8 @@ function mudouDepois(hashes, abs) {
  * repositorio, o portao nao libera.
  * A2-12 (H1): um git de raiz por pasta (F1g) e, por repositorio, o `lote` (blob, ignorado e tamanho da mudanca de
  * todos os arquivos dele de uma vez); o que o lote nao respondeu se mede um a um, como antes.
- * H1-custo (D868): o JS ou TS que difere do HEAD so em comentario ou espaco (soComentarioNoLote) fica fora, salvo com
- * atalho novo sem gatilho.
+ * H1-custo (D868): o JS, TS, Apps Script, Python ou CSS que difere do HEAD so em comentario ou espaco
+ * (soComentarioNoLote) fica fora, salvo com atalho novo sem gatilho.
  * H6e1 (15.0): `hashes` (o `revisadosHash` do estado) prende a aprovacao ao conteudo julgado: o aprovado cujo arquivo
  * mudou depois volta a pendente, com `mudou` ('conteudo' ou 'ilegivel', o retorno do mudouDepois).
  */
@@ -498,8 +498,8 @@ function pendentes(arquivos, aprovados, raiz, topoDoCommit, ehEstilo, marcas, te
 const TAMANHO_DO_SO_COMENTARIO = 2 * 1024 * 1024;
 
 /**
- * H1-custo (D868): as chaves (chaveRel) dos arquivos JS ou TS de `rels` que diferem do HEAD so em comentario ou espaco
- * (so-comentario.js). O texto do HEAD de todos vem num `git grep` por pedaco, e nao num git por arquivo.
+ * H1-custo (D868): as chaves (chaveRel) dos arquivos de `rels` com leitor (so-comentario.js, leitorDe) que diferem
+ * do HEAD so em comentario ou espaco. O texto do HEAD de todos vem num `git grep` por pedaco, e nao num git por arquivo.
  * Fail-closed: lote null, git que falha, arquivo binario, grande ou que nao se le, e o leitor em duvida deixam o
  * arquivo fora do conjunto, e ele segue pendente como antes.
  */
@@ -536,7 +536,7 @@ function soComentarioNoLote(topoAbs, l, rels) {
       if (fs.statSync(abs).size > TAMANHO_DO_SO_COMENTARIO) continue;
       atual = fs.readFileSync(abs, 'utf8');
     } catch (e) { continue; } // fail-closed: o arquivo que nao se le segue pendente
-    if (sc.soComentario(doHead.get(k).join('\n'), atual)) conjunto.add(k);
+    if (sc.soComentario(doHead.get(k).join('\n'), atual, r)) conjunto.add(k);
   }
   return conjunto;
 }

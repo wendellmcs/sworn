@@ -124,6 +124,42 @@ test('F4e guias: a familia do despacho vem do pedido, do padrao do agente ou, co
   assert.match(guias.ler(RAIZ, '../claude/opus').erro, /familia desconhecida/, 'so as quatro familias, nunca um caminho');
 });
 
+// G4e parte 5: a ordem da doc oficial dos subagentes: o `model` do despacho, o da definicao (inherit tambem), a
+// variavel CLAUDE_CODE_SUBAGENT_MODEL, a sessao; com CLAUDE_CODE_SUBAGENT_MODEL_FORCE ligada, a variavel vale sobre tudo
+test('G4e guias: a variavel do modelo do subagente entra so onde o pedido e a definicao nao dizem', () => {
+  const f = guias.familiaDoDespacho;
+  const env = function (modelo, forca) {
+    const e = { CLAUDE_CODE_SUBAGENT_MODEL: modelo };
+    if (forca !== undefined) e.CLAUDE_CODE_SUBAGENT_MODEL_FORCE = forca;
+    return { env: e };
+  };
+  assert.strictEqual(f(undefined, null, 'opus', env('haiku')), 'haiku', 'agente sem modelo: a variavel antes da sessao');
+  assert.strictEqual(f(undefined, null, 'opus', env('claude-sonnet-5-5')), 'sonnet', 'a variavel com id vale pelo apelido');
+  assert.strictEqual(f(undefined, null, 'opus', env('  ')), 'opus', 'variavel so de espaco: a sessao');
+  assert.strictEqual(f(undefined, null, 'opus', env('inherit')), 'opus', 'variavel inherit: a sessao');
+  assert.strictEqual(f(undefined, null, 'opus', env('gpt-5')), '', 'variavel de fora: nada');
+  assert.strictEqual(f(undefined, 'sonnet', 'opus', env('haiku')), 'sonnet', 'a definicao vale sobre a variavel');
+  assert.strictEqual(f(undefined, 'inherit', 'opus', env('haiku')), 'opus', 'a definicao com inherit tambem');
+  assert.strictEqual(f('sonnet', null, 'opus', env('haiku')), 'sonnet', 'o pedido vale sobre a variavel');
+  ['1', 'true', 'YES', ' on '].forEach(function (v) {
+    assert.strictEqual(f('sonnet', 'opus', 'opus', env('haiku', v)), 'haiku', 'forcada com ' + JSON.stringify(v));
+  });
+  ['0', 'false', '', 'sim'].forEach(function (v) {
+    assert.strictEqual(f('sonnet', 'opus', 'opus', env('haiku', v)), 'sonnet', 'nao forcada com ' + JSON.stringify(v));
+  });
+  assert.strictEqual(f('sonnet', null, 'opus', { env: { CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' } }), 'sonnet',
+    'forca sem a variavel: nada muda');
+  assert.strictEqual(f(undefined, null, 'opus', { env: {} }), 'opus');
+  assert.strictEqual(f(undefined, null, 'opus', {}), 'opus', 'sem env: como antes');
+  // sem definicao conhecida (o agente nao foi achado): so o pedido ou a variavel forcada dizem o modelo
+  const sem = function (o) { return Object.assign({ semDefinicao: true }, o); };
+  assert.strictEqual(f(undefined, null, 'opus', sem(env('haiku'))), '', 'sem definicao, a variavel sozinha nao diz');
+  assert.strictEqual(f('', null, 'opus', sem({})), '', 'sem definicao e sem pedido: nada');
+  assert.strictEqual(f('sonnet', null, 'opus', sem(env('haiku'))), 'sonnet', 'sem definicao, o pedido diz');
+  assert.strictEqual(f('inherit', null, 'opus', sem({})), 'opus', 'sem definicao, o pedido inherit e a sessao');
+  assert.strictEqual(f(undefined, null, 'opus', sem(env('haiku', '1'))), 'haiku', 'sem definicao, a forcada diz');
+});
+
 test('F4e guias: o guia entra no fim do pedido, uma vez so, e a tarefa vale mais que ele', () => {
   const g = guias.blocoDoTexto(guiaDeTeste());
   const p = guias.comGuia('Your lens is X.', g);

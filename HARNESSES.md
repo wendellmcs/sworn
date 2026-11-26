@@ -146,7 +146,8 @@ Os limites, um a um:
     `.codex/config.toml` do projeto o tamanho de conversa em que o Codex compacta, um pouco acima do tamanho em que
     o sworn pede o handoff: assim a compactação vem logo depois de o sworn pedir o handoff. O Qwen compacta no
     tamanho padrão dele (uma fração da janela do modelo, que o sworn não conhece) e não precisa de ajuste; vale o
-    caso de quando a compactação acontecer, na lista acima.
+    caso de quando a compactação acontecer, na lista acima. No OpenCode, no agy e no `dsh` o instalador também não
+    regula esse tamanho: nenhum dos três tem uma chave conhecida para ele, e vale o mesmo caso da lista.
   - agy e `dsh` não avisam a compactação, então o sworn guarda o maior tamanho de conversa que viu. Se esse maior
     tamanho passou de 80 mil tokens e a conversa cai para menos de 60% dele, o sworn entende que ela foi compactada:
     com o handoff gravado, manda reler; sem ele, se o maior tamanho tinha chegado ao tamanho em que o sworn pede o
@@ -169,6 +170,11 @@ Os limites, um a um:
 - **`/sworn:effort-high` e `/sworn:effort-low`:** o campo `effort:` de skill só existe no Claude Code; o instalador
   não leva as duas. Por isso a rota da marcha AAA, que pede o `sworn:effort-high` a cada turno, não sai pela ponte.
   O `effort:` de cada papel (`agents/<papel>.md`) vai ao Codex como `model_reasoning_effort` no `.toml` do agente [T].
+- **O inspetor um degrau acima e o guia do modelo no pedido do subagente** (`scripts/portao-juiz.js`): o gancho
+  troca o modelo e o pedido do despacho pela entrada reescrita (`updatedInput`) do `PreToolUse`, que o Claude Code
+  aplica. Pela ponte, o agy, o `dsh` e o OpenCode não recebem essa troca (a ponte só leva a negação, o bloqueio, o
+  contexto e o aviso); o Codex e o Qwen recebem a saída do gancho como veio, mas não se provou que apliquem a troca.
+  Fora do Claude Code, conte com o inspetor no modelo que o despacho pedir e com o pedido sem o guia.
 - **O advisor** (a ferramenta do Claude Code que consulta um modelo mais forte no meio da tarefa): pela ponte, o
   portão de fecho não cobra a consulta a ele, mesmo com o `advisorModel` nas settings do Claude Code.
 - **A aprovação do `/hooks` do Codex** não é limite do sworn: é a segurança do Codex, uma vez por caminho de projeto

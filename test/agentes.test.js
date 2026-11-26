@@ -95,6 +95,23 @@ test('agentes: agente sem model: aparece com model null, e nao some da lista', (
   assert.strictEqual(r.agentes[0].temFrontmatter, true);
 });
 
+// G4e parte 5: a mesma leitura numa pasta qualquer (a ~/.claude/agents do usuario, pelo portao-juiz)
+test('agentes: listarPasta le uma pasta de agentes qualquer, com os mesmos estados do listar', (t) => {
+  const raiz = pastaTemporaria(t);
+  const dir = path.join(raiz, 'qualquer');
+  assert.deepStrictEqual(agentes.listarPasta(dir), { existe: false, agentes: [] });
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'nao e agente');
+  assert.deepStrictEqual(agentes.listarPasta(dir), { existe: true, agentes: [] }, 'a pasta sem agente existe');
+  fs.writeFileSync(path.join(dir, 'b.md'), '---\nname: busca\nmodel: barato\n---\n');
+  assert.deepStrictEqual(agentes.listarPasta(dir), { existe: true, agentes: [
+    { arquivo: 'b.md', nome: 'busca', model: 'barato', effort: null, temFrontmatter: true }] });
+  fs.writeFileSync(path.join(raiz, 'arquivo'), 'x');
+  assert.match(agentes.listarPasta(path.join(raiz, 'arquivo')).erro, /\S/, 'o que nao e pasta leva a causa');
+  escrever(raiz, 'busca', '---\nname: busca\n---\n');
+  assert.deepStrictEqual(agentes.listar(raiz), agentes.listarPasta(path.join(raiz, '.claude', 'agents')));
+});
+
 test('agentes: arquivo sem frontmatter entra na lista marcado como tal', (t) => {
   const raiz = pastaTemporaria(t);
   escrever(raiz, 'rascunho', '# anotacao qualquer\n');

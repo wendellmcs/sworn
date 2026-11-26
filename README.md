@@ -175,7 +175,7 @@ preamble, a technical term explained the first time, one line between tools, evi
 proves it, no repeating what you just read; the reply comes in your language); and
 **less code** (7 questions asked in order before writing code, stopping at the first that settles it: does it need to exist, does the project already have
 it, does the language or platform do it). Subagents that can write code get the last block too.
-Three blocks have a switch: `paralelismo` (parallel work), `qualidadeDeResposta` (response quality) and `menosCodigo` (less code); the project rules and fewer stops always come. The official model guide (its "How to ask" part) goes into each sworn agent's prompt and into the opening (off with `guiaDoModelo`), and `aberturaEnxuta` (off by default) cuts the opening to one line per block, about 2,300 characters less, for short-context models.
+Three blocks have a switch: `paralelismo` (parallel work), `qualidadeDeResposta` (response quality) and `menosCodigo` (less code); the project rules and fewer stops always come. The official model guide (its "How to ask" part) goes into each subagent's prompt, sworn's or not, and into the opening (off with `guiaDoModelo`), and `aberturaEnxuta` (off by default) cuts the opening to one line per block, about 2,300 characters less, for short-context models.
 
 **The right skill at the right moment.** Five routes name the sworn skill a task calls for, once per session and per
 kind: a screen edit, a plan to follow, a plan step ticked, "why did the session go wrong?" and an `aaa` file. A skill
@@ -296,4 +296,4 @@ The full list (fourteen non-promises and six limits that cannot be closed) is in
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). sworn rewrites ideas from other projects, skills and courses, and depends on none of them. Each idea, with credit to its source, the file that carries it and when that file runs, is in [ORIGENS.md](ORIGENS.md) (in Portuguese).

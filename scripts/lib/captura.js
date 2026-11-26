@@ -3,7 +3,8 @@
 // Esta lib e a parte pura: argumentos, onde achar o navegador, a porta do arquivo DevToolsActivePort, o resumo do
 // console, dos erros e da arvore de acessibilidade, a leitura do estilo calculado (a funcao que roda na pagina e o
 // resumo do que ela devolve, E3 item 2) e a limpeza de segredo do que vai para o disco. O processo, o socket e o
-// disco ficam em scripts/capturar-tela.js.
+// disco ficam em scripts/capturar-tela.js. O vercel-labs/agent-browser, que faz o mesmo, fica so como termo de
+// comparacao: nao se instala nem se chama daqui.
 
 // Acima de ~16 mil px de altura o Chrome nao grava a imagem (limite de textura, medido no Windows em 2026-09-28).
 const ALTURA_MAXIMA = 16000;

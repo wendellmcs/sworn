@@ -69,7 +69,11 @@ function caminho(raiz, nome) {
  * `erro` - antes a pasta ilegivel virava "nao tem" e o agente ilegivel virava "nao declara model:".
  */
 function listar(raiz) {
-  const dir = path.join(String(raiz), PASTA[0], PASTA[1]);
+  return listarPasta(path.join(String(raiz), PASTA[0], PASTA[1]));
+}
+
+/** O mesmo que o `listar`, numa pasta de agentes qualquer (a do usuario, por exemplo): `dir` ja e a pasta. */
+function listarPasta(dir) {
   let arquivos;
   try {
     arquivos = fs.readdirSync(dir, { withFileTypes: true })
@@ -162,4 +166,4 @@ function escalaPara(degraus, i) {
   return 'quem decide neste projeto (veja `quemDecide` em `.claude/sworn/projeto.json`)';
 }
 
-module.exports = { PASTA, CERCA, ESFORCOS, frontmatter, caminho, listar, validarFatias, escalaPara };
+module.exports = { PASTA, CERCA, ESFORCOS, frontmatter, caminho, listar, listarPasta, validarFatias, escalaPara };

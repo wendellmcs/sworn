@@ -139,7 +139,7 @@ const PONTOS = [
                'scripts/lib/gasto.js', 'scripts/lib/harness.js', 'scripts/lib/injetado.js', 'scripts/lib/migracao.js',
                'scripts/lib/prova-no-fecho.js', 'scripts/lib/versao-carregada.js', 'scripts/lib/vigia-local.js',
                'scripts/medir-qualidade.js',
-               'scripts/ponte.js'],
+               'scripts/ponte.js', 'scripts/portao-juiz.js'],
     comoSeProva: 'a pasta pessoal entra por parametro, ou uma variavel a sobrepoe (CLAUDE_CONFIG_DIR, SWORN_VIGIA, ' +
                  'ou HOME e USERPROFILE, que o Node le para achar a pasta pessoal); o teste de cada modulo roda ' +
                  'por essa porta',

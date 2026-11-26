@@ -1,7 +1,7 @@
 'use strict';
 // C3 (D808, D769 (b)): o inspetor um degrau acima do executor. O modelo da sessao sai da transcricao; o gancho troca o
 // `model` do despacho do sworn:inspector pelo updatedInput, e so dele. F4e: o mesmo gancho reescreve o `prompt` de todo
-// agente do sworn, com o guia do modelo que vai roda-lo no fim; agente de fora do sworn passa como veio.
+// agente, do sworn ou de fora dele (G4e parte 5), com o guia do modelo que vai roda-lo no fim.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -27,10 +27,13 @@ function transcricao(dir, modelos) {
 }
 
 // F1g (s372): no processo do teste (comum.ganchoComoProcesso), com o ambiente do teste, como o spawnSync herdava; o
-// gancho que falha e libera volta com status 1, e o assert o pega
-function gancho(dir, entrada) {
+// gancho que falha e libera volta com status 1, e o assert o pega. G4e parte 5: sem as variaveis do modelo do subagente
+// da maquina, e com a pasta do usuario numa pasta do teste; `env` acrescenta ou tira (undefined) variaveis
+function gancho(dir, entrada, env) {
+  const isolado = { CLAUDE_CODE_SUBAGENT_MODEL: undefined, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: undefined,
+    CLAUDE_CONFIG_DIR: path.join(dir, 'config-do-usuario') };
   const r = comum.ganchoComoProcesso(GANCHO, Object.assign({ cwd: dir }, entrada),
-    { cwd: dir, env: Object.assign({}, process.env) });
+    { cwd: dir, env: Object.assign({}, process.env, isolado, env) });
   assert.strictEqual(r.status, 0, r.stderr);
   return r.json;
 }
@@ -82,9 +85,10 @@ test('C3 juiz: o gancho sobe o inspetor um degrau, so o inspetor, e respeita o p
     assert.strictEqual(fora.hookSpecificOutput.updatedInput.model, 'sonnet');
     assert.match(fora.hookSpecificOutput.updatedInput.prompt, /^Guidance for claude-sonnet-5-5 /, 'sem prompt, so o guia, sem "undefined"');
     assert.ok(!/undefined/.test(fora.hookSpecificOutput.updatedInput.prompt));
-    // outro agente passa como veio
-    assert.strictEqual(gancho(dir, Object.assign({}, inspetor, { tool_input: { subagent_type: 'general-purpose' } })),
-      null);
+    // outro agente nao sobe de modelo (so leva o guia do dele, G4e parte 5)
+    const outro = gancho(dir, Object.assign({}, inspetor, { tool_input: { subagent_type: 'general-purpose' } }));
+    assert.strictEqual(outro.hookSpecificOutput.updatedInput.model, undefined);
+    assert.match(outro.hookSpecificOutput.updatedInput.prompt, /^Guidance for claude-haiku-5-5 /);
     // o pedido que ja e mais forte fica (e leva o guia dele, F4e)
     const forte = gancho(dir, Object.assign({}, inspetor,
       { tool_input: { subagent_type: 'sworn:inspector', model: 'opus', prompt: 'lente' } }));
@@ -221,8 +225,8 @@ test('D829 juiz: o gancho poe o inspetor da ronda 2 um degrau abaixo do juiz', (
   });
 });
 
-// F4e: todo agente do sworn leva no fim do pedido o guia oficial do modelo que vai roda-lo
-test('F4e juiz: o gancho poe no pedido de cada agente do sworn o guia do modelo que vai rodar', () => {
+// F4e: todo agente, do sworn ou de fora dele, leva no fim do pedido o guia oficial do modelo que vai roda-lo
+test('F4e juiz: o gancho poe no pedido de cada agente, do sworn ou de fora, o guia do modelo que vai rodar', () => {
   pasta(function (dir) {
     const opus = transcricao(dir, ['claude-opus-5-5']);
     const ag = function (tipo, model) {
@@ -249,8 +253,8 @@ test('F4e juiz: o gancho poe no pedido de cada agente do sworn o guia do modelo 
     assert.match(saida(ag('sworn:reader', 'inherit')).prompt, /Guidance for claude-opus-5-5 /);
     // fora do Claude Code o agente se chama sworn-<nome>
     assert.match(saida(ag('sworn-reader', 'sonnet')).prompt, /Guidance for claude-sonnet-5-5 /);
-    // agente de fora do sworn, modelo de fora ou nome torto: passa como veio
-    assert.strictEqual(ag('general-purpose', 'opus'), null);
+    // agente de fora do sworn tambem leva o guia (G4e parte 5); modelo de fora ou nome torto: passa como veio
+    assert.match(saida(ag('general-purpose', 'opus')).prompt, /Guidance for claude-opus-5-5 /);
     assert.strictEqual(ag('sworn:reader', 'gpt-5'), null);
     assert.strictEqual(ag('sworn:../../x', 'opus'), null);
     // o pedido reenviado como o gancho o reescreveu passa como veio: o guia nao entra duas vezes
@@ -261,5 +265,132 @@ test('F4e juiz: o gancho poe no pedido de cada agente do sworn o guia do modelo 
     assert.deepStrictEqual(saida(ag('sworn:inspector')), { subagent_type: 'sworn:inspector', prompt: 'tarefa',
       description: 'x', model: 'opus' });
     assert.strictEqual(ag('sworn:reader', 'haiku'), null);
+  });
+});
+
+// G4e parte 5: o guia tambem no agente de fora do sworn. O modelo que vai roda-lo segue a ordem da doc oficial dos
+// subagentes: o `model` do despacho, o da definicao (do projeto, depois do usuario, depois o embutido), a variavel
+// CLAUDE_CODE_SUBAGENT_MODEL, a sessao; a variavel forcada vale sobre tudo. Sem definicao achada, so o pedido ou a
+// forcada dizem.
+test('G4e juiz: o agente de fora do sworn leva o guia do modelo que a ordem oficial escolhe', () => {
+  pasta(function (dir) {
+    const opus = transcricao(dir, ['claude-opus-5-5']);
+    const agente = function (pastaDele, arquivo, frente) {
+      fs.mkdirSync(pastaDele, { recursive: true });
+      fs.writeFileSync(path.join(pastaDele, arquivo), '---\n' + frente + '\n---\nfaz uma coisa\n');
+    };
+    const doProjeto = path.join(dir, '.claude', 'agents');
+    const doUsuario = path.join(dir, 'config-do-usuario', 'agents');
+    const despacho = function (tipo, model, env, cwd) {
+      const entrada = { tool_name: 'Agent', transcript_path: opus, tool_input: { prompt: 'tarefa', description: 'x' } };
+      if (tipo !== undefined) entrada.tool_input.subagent_type = tipo;
+      if (model) entrada.tool_input.model = model;
+      if (cwd) entrada.cwd = cwd;
+      return gancho(dir, entrada, env);
+    };
+    // a familia do guia que entrou: null quando o gancho deixa passar como veio
+    const ag = function (tipo, model, env, cwd) {
+      const r = despacho(tipo, model, env, cwd);
+      if (r === null) return null;
+      const m = /\n\nGuidance for claude-([a-z]+)-/.exec(r.hookSpecificOutput.updatedInput.prompt);
+      return m ? m[1] : 'sem guia';
+    };
+    const VAR = 'CLAUDE_CODE_SUBAGENT_MODEL';
+    const FORCA = 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE';
+    const variavel = function (m, f) { const e = {}; e[VAR] = m; if (f) e[FORCA] = f; return e; };
+    // os embutidos: o de uso geral segue a variavel e a sessao; Explore e Plan herdam a sessao, so a forcada os muda
+    assert.strictEqual(ag('general-purpose'), 'opus');
+    assert.strictEqual(ag(undefined), 'opus', 'sem tipo e o de uso geral');
+    assert.strictEqual(ag(''), 'opus', 'tipo vazio e o de uso geral');
+    assert.strictEqual(ag('claude'), 'opus');
+    assert.strictEqual(ag('general-purpose', undefined, variavel('haiku')), 'haiku');
+    assert.strictEqual(ag('general-purpose', 'sonnet', variavel('haiku')), 'sonnet', 'o pedido vale sobre a variavel');
+    assert.strictEqual(ag('Explore', undefined, variavel('haiku')), 'opus');
+    assert.strictEqual(ag('Explore', undefined, variavel('haiku', '1')), 'haiku');
+    assert.strictEqual(ag('Explore', 'sonnet'), 'sonnet');
+    assert.strictEqual(ag('Plan', undefined, variavel('sonnet')), 'opus');
+    assert.strictEqual(ag('claude-code-guide'), 'haiku');
+    assert.strictEqual(ag('web-fetch', undefined, variavel('sonnet')), 'haiku');
+    assert.strictEqual(ag('statusline-setup'), 'sonnet');
+    // o gancho so poe o guia: nao poe model nem troca o tipo
+    const geral = despacho('general-purpose').hookSpecificOutput.updatedInput;
+    assert.strictEqual(geral.model, undefined);
+    assert.strictEqual(geral.subagent_type, 'general-purpose');
+    assert.strictEqual(despacho(undefined).hookSpecificOutput.updatedInput.subagent_type, undefined);
+    // o agente do projeto, pelo name do frontmatter (nao pelo nome do arquivo)
+    agente(doProjeto, 'revisor.md', 'name: revisor-de-texto\nmodel: sonnet');
+    agente(doProjeto, 'herdeiro.md', 'name: herdeiro\nmodel: inherit');
+    agente(doProjeto, 'solto.md', 'name: solto');
+    assert.strictEqual(ag('revisor-de-texto', undefined, variavel('haiku')), 'sonnet');
+    assert.strictEqual(ag('revisor'), null, 'o nome do arquivo nao e o do agente');
+    assert.strictEqual(ag('herdeiro', undefined, variavel('haiku')), 'opus', 'o inherit da definicao vale sobre a variavel');
+    assert.strictEqual(ag('solto'), 'opus');
+    assert.strictEqual(ag('solto', undefined, variavel('haiku')), 'haiku');
+    assert.strictEqual(ag('revisor-de-texto', undefined, variavel('haiku', 'true')), 'haiku', 'a forcada vale sobre a definicao');
+    // o do usuario (CLAUDE_CONFIG_DIR/agents); com o mesmo nome no projeto, vale o do projeto
+    agente(doUsuario, 'pessoal.md', 'name: pessoal\nmodel: haiku');
+    agente(doUsuario, 'outro-revisor.md', 'name: revisor-de-texto\nmodel: haiku');
+    assert.strictEqual(ag('pessoal'), 'haiku');
+    assert.strictEqual(ag('revisor-de-texto'), 'sonnet');
+    // agente do projeto com o nome de um embutido vale sobre o embutido
+    agente(doProjeto, 'meu-plan.md', 'name: Plan\nmodel: haiku');
+    assert.strictEqual(ag('Plan'), 'haiku');
+    // sem CLAUDE_CONFIG_DIR, a pasta do usuario e a ~/.claude
+    const casa = path.join(dir, 'casa');
+    agente(path.join(casa, '.claude', 'agents'), 'de-casa.md', 'name: de-casa\nmodel: haiku');
+    assert.strictEqual(ag('de-casa', undefined, { CLAUDE_CONFIG_DIR: undefined, HOME: casa, USERPROFILE: casa }), 'haiku');
+    assert.strictEqual(ag('de-casa', undefined, { HOME: casa, USERPROFILE: casa }), null,
+      'com CLAUDE_CONFIG_DIR, a ~/.claude nao entra');
+    // sem definicao achada: so o pedido ou a forcada dizem o modelo
+    assert.strictEqual(ag('desconhecido'), null);
+    assert.strictEqual(ag('desconhecido', undefined, variavel('haiku')), null);
+    assert.strictEqual(ag('desconhecido', 'haiku'), 'haiku');
+    assert.strictEqual(ag('desconhecido', undefined, variavel('sonnet', 'on')), 'sonnet');
+    assert.strictEqual(ag('outro:agente'), null, 'agente de outro plugin: a definicao nao se le');
+    assert.strictEqual(ag('outro:agente', 'sonnet'), 'sonnet');
+    // a bifurcacao (fork) roda no modelo e no contexto da sessao, que ja tem o guia: passa como veio
+    assert.strictEqual(ag('fork', 'opus'), null);
+    // nome torto passa como veio, com modelo ou sem
+    assert.strictEqual(ag('../x', 'opus'), null);
+    assert.strictEqual(ag('a b', 'opus'), null);
+    assert.strictEqual(ag('-x', 'opus'), null);
+    // os agentes do sworn tambem seguem a variavel, abaixo da definicao
+    assert.strictEqual(ag('sworn:reader', undefined, variavel('haiku')), 'haiku');
+    assert.strictEqual(ag('sworn:dedupe-judge', undefined, variavel('sonnet')), 'haiku');
+    const inspetor = despacho('sworn:inspector', undefined, variavel('sonnet', '1')).hookSpecificOutput.updatedInput;
+    assert.strictEqual(inspetor.model, 'opus', 'o juiz segue trocando o model');
+    assert.match(inspetor.prompt, /\n\nGuidance for claude-sonnet-5-5 /, 'mas a forcada e o modelo que roda');
+  });
+  // pasta de agentes que nao se le: nao se sabe a definicao, e so o pedido diz o modelo
+  pasta(function (dir) {
+    const opus = transcricao(dir, ['claude-opus-5-5']);
+    fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'agents'), 'nao e pasta');
+    const r = function (tipo, model) {
+      const entrada = { tool_name: 'Agent', transcript_path: opus, tool_input: { subagent_type: tipo, prompt: 'tarefa' } };
+      if (model) entrada.tool_input.model = model;
+      return gancho(dir, entrada);
+    };
+    assert.strictEqual(r('general-purpose'), null);
+    assert.match(r('general-purpose', 'sonnet').hookSpecificOutput.updatedInput.prompt, /Guidance for claude-sonnet-5-5 /);
+    fs.unlinkSync(path.join(dir, '.claude', 'agents'));
+    fs.mkdirSync(path.join(dir, 'config-do-usuario'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'config-do-usuario', 'agents'), 'nao e pasta');
+    assert.strictEqual(r('general-purpose'), null, 'a pasta do usuario tambem');
+    // o arquivo de agente que nao se le pode ser o agente pedido (o name dele nao se sabe): nenhum se sabe
+    fs.unlinkSync(path.join(dir, 'config-do-usuario', 'agents'));
+    fs.mkdirSync(path.join(dir, '.claude', 'agents'));
+    fs.writeFileSync(path.join(dir, '.claude', 'agents', 'travado.md'), '---\nname: travado\nmodel: haiku\n---\n');
+    const ler = fs.readFileSync;
+    fs.readFileSync = function (p) {
+      if (/travado\.md$/.test(String(p))) { const e = new Error('EACCES: travado'); e.code = 'EACCES'; throw e; }
+      return ler.apply(fs, arguments);
+    };
+    try {
+      assert.strictEqual(r('travado'), null);
+      assert.strictEqual(r('general-purpose'), null);
+    } finally { fs.readFileSync = ler; }
+    assert.match(r('travado').hookSpecificOutput.updatedInput.prompt, /Guidance for claude-haiku-5-5 /);
+    assert.match(r('general-purpose').hookSpecificOutput.updatedInput.prompt, /Guidance for claude-opus-5-5 /);
   });
 });

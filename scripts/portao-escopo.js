@@ -160,8 +160,8 @@ io.blindar(function () {
     const alvo = naWorktree ? naWorktree.rel : bruto;
     const base = naWorktree ? path.join(cwd, naWorktree.pasta) : cwd;
 
-    // H12b (D913): o handoff vai para o proximo chat; o segredo no texto novo nega antes de qualquer passe livre, com
-    // ou sem projeto.json. O motivo diz o padrao e a linha, nunca o valor (o motivo vai para a conversa).
+    // H12b (D913, ideia do mattpocock/skills): o handoff vai para o proximo chat; o segredo no texto novo nega antes
+    // de qualquer passe livre, com ou sem projeto.json. O motivo diz o padrao e a linha, nunca o valor (o motivo vai para a conversa).
     const textoNovo = typeof entrada.content === 'string' ? entrada.content
       : typeof entrada.new_string === 'string' ? entrada.new_string : entrada.new_source;
     if (/^\.sworn\/handoff\//i.test(alvo) && typeof textoNovo === 'string') {

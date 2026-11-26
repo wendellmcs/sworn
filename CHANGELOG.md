@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.96.0 — o mapa do que veio de fora, o corte de comentário em Python, CSS e .gs, e o guia do modelo a todo subagente
+
+**Novo**
+
+- **O mapa do que veio de fora** (`ORIGENS.md`, `test/origens.test.js`). Cada ideia que o sworn trouxe de outro
+  projeto, skill ou curso tem uma linha com cinco colunas:
+  - a fonte;
+  - o que veio;
+  - a peça que a carrega;
+  - o gatilho que a faz rodar;
+  - a marca, o texto que o comentário de origem da peça cita.
+  O teste reprova a suíte quando uma peça do mapa some ou muda de nome, e quando nenhuma peça da linha leva mais a
+  marca. O mapa também lista o que foi estudado e recusado, com o motivo medido. O radar (`skills/radar/SKILL.md`)
+  manda dar uma linha no mapa à ideia adotada. Os dois READMEs apontam o mapa como o crédito às fontes. O
+  `scripts/portao-escopo.js` e o `scripts/lib/captura.js` ganham o comentário de origem que faltava.
+- **O commit só de comentário em Python, CSS ou Apps Script, sem revisão cega** (`scripts/lib/so-comentario.js`,
+  `scripts/lib/commit.js`). O commit que só muda comentário ou espaço não pede revisão cega. O portão de commit já
+  fazia isso no JS e no TS, e agora lê também `.py`, `.pyi`, `.pyw`, `.css` e `.gs` (este, como JS). Na dúvida, o
+  portão pede a revisão.
+  - **No Python**, o recuo e a quebra de linha fora de parêntese contam como código. O comentário que o interpretador
+    ou uma ferramenta lê também conta como código: a linha `#!`, a codificação, o tipo (`type:`), o lint (`noqa`, por
+    exemplo), o formatador, a cobertura e a célula do caderno (`# %%`). A f-string incerta e a codificação que não é UTF-8 pedem a revisão.
+  - **No CSS**, o `/*!` que o minificador guarda e os comentários de ferramenta contam como código. O comentário que
+    separa dois nomes (`a/**/b`) também conta. O `@charset`, a url sem aspas com aspa, parêntese ou espaço no meio, e a
+    string sem fecho pedem a revisão.
+- **O guia do modelo a todo subagente, do sworn ou não** (`scripts/portao-juiz.js`, `scripts/lib/guias-modelo.js`,
+  `scripts/lib/agentes.js`). Antes, a parte "How to ask" do guia oficial só ia aos agentes do sworn. O modelo do
+  subagente sai na ordem da documentação oficial:
+  1. o `model` do despacho;
+  2. o da definição do agente: a pasta `.claude/agents` do projeto, depois a do usuário (`CLAUDE_CONFIG_DIR` ou
+     `~/.claude`), depois os agentes que vêm com o Claude Code;
+  3. a `CLAUDE_CODE_SUBAGENT_MODEL`;
+  4. o modelo da sessão.
+  Com a `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` ligada, a variável vale antes de tudo. A pasta ou o arquivo de agente que
+  não se lê conta como sem definição, e a bifurcação (`fork`) passa sem guia.
+
+**Mudou**
+
+- **A `HARNESSES.md` diz o que roda só no Claude Code.** O inspetor um degrau acima e o guia no pedido do subagente
+  dependem da entrada reescrita do gancho, que só o Claude Code aplica. O OpenCode, o agy e o `dsh` também não têm
+  uma chave conhecida para o tamanho em que a conversa é compactada.
+
 ## 0.95.0 — os defeitos que a prova ao vivo da skill de design achou, e a ronda refeita sem apagar nada
 
 **Novo**

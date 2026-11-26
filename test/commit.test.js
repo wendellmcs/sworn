@@ -1282,3 +1282,29 @@ test('H1-custo: se o leitor so-comentario lanca, o arquivo segue pendente', () =
     assert.deepStrictEqual(commit.pendentes([path.join(dir, 'src', 'c.js')], [], dir, null, null, []), [], 'com o leitor, sai');
   });
 });
+
+// G4e: o .py, o .css e o .gs so de comentario saem da lista, cada um pelo leitor do seu nome (o # do Python nao e
+// comentario no JS); os de codigo seguem nela.
+test('G4e: pendentes tira o .py, o .css e o .gs so de comentario e segue cobrando os de codigo', () => {
+  comRepo(function (dir) {
+    const g = function (args) { return spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false }); };
+    const antes = {
+      'a.py': 'x = 1  # um\n', 'b.py': 'x = 1  # um\n',
+      'c.css': 'a { color: red; } /* um */\n', 'd.css': 'a { color: red; } /* um */\n',
+      'e.gs': 'f(1); // um\n', 'f.gs': 'f(1); // um\n'
+    };
+    const nomes = Object.keys(antes);
+    for (const n of nomes) fs.writeFileSync(path.join(dir, 'src', n), antes[n]);
+    g(['add'].concat(nomes.map(function (n) { return 'src/' + n; })));
+    g(['commit', '-qm', 'base']);
+    const depois = {
+      'a.py': 'x = 1  # o um, explicado\n\n# e mais um\n', 'b.py': 'x = 2  # um\n',
+      'c.css': '/* novo */\na  {  color: red; }\n', 'd.css': 'a { color: blue; } /* um */\n',
+      'e.gs': 'f(1); /* outro */\n', 'f.gs': 'f(2); // um\n'
+    };
+    for (const n of nomes) fs.writeFileSync(path.join(dir, 'src', n), depois[n]);
+    const abs = nomes.map(function (n) { return path.join(dir, 'src', n); });
+    const lista = commit.pendentes(abs, [], dir, null, null, []).map(function (p) { return p.rel; });
+    assert.deepStrictEqual(lista, ['src/b.py', 'src/d.css', 'src/f.gs']);
+  });
+});
