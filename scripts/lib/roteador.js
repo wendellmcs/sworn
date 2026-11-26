@@ -4,7 +4,8 @@
  * pela edicao (portao-escopo.js) - e da, uma vez por sessao e por tipo, a linha com a peca do sworn que serve a ele.
  * Cada linha dada e uma ordem do ordens.js (dada / cumprida pela skill da rota), e a auditoria mostra a contagem.
  * G4b: a skill do sworn que ja entrou na sessao cala a rota dela (jaEntrou); a skill local com "padrao" no nome cumpre
- * so a ordem do manual, e a rota de tela segue entrando junto.
+ * so a ordem do manual, e a rota de tela segue entrando junto. G4c: a rota de tela carrega a skill design (o roteiro de
+ * construir a tela); o playbook e o manual e tambem nao a cala.
  * Nada aqui lanca: entrada torta devolve lista vazia, e o gancho segue como antes.
  */
 const ordens = require('./ordens.js');
@@ -128,9 +129,10 @@ function textoDa(tipo, contexto) {
   const temDesign = ehObjeto(contexto) && contexto.temDesign === true;
   const carregue = ordens.comoCarregar;
   if (tipo === 'tela') {
-    return 'sworn: ' + (alvo || 'este arquivo') + ' e tela. Agora, ' + carregue('playbook') + ' e siga a ' +
-      'references/02-rubrica-aaa.md dele: os estados obrigatorios, o foco visivel, o contraste legivel, o movimento ' +
-      'curto que respeita prefers-reduced-motion e o alvo de pelo menos 24 x 24 px.' +
+    return 'sworn: ' + (alvo || 'este arquivo') + ' e tela. Agora, ' + carregue('design') + ' e siga o roteiro ' +
+      'dela: os estados de cada controle (o pressionado incluido), o foco visivel, o contraste legivel, o movimento ' +
+      'curto que respeita prefers-reduced-motion, o alvo de pelo menos 24 x 24 px e a tela testada com o dado do ' +
+      'pior caso.' +
       (temDesign ? ' Use so os valores de .claude/sworn/design.json; valor que falta nele e desvio: pergunte ao dono antes de usa-lo.' : '') +
       ' Com a tela pronta, rode /sworn:review com --tela-depois <endereco da pagina>. A skill do projeto com "padrao" ' +
       'no nome, se houver, vale junto: as duas se somam.';

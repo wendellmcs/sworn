@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.94.0 — a skill de design: a tela construída para a rubrica, com o movimento que se justifica e o dado do pior caso
+
+**Novo**
+
+- **A skill de design** (`skills/design/SKILL.md`, `skills/design/references/pior-caso.md`). É o roteiro de quem
+  constrói a tela: o lado da construção da rubrica que as lentes de tela do `/sworn:review` julgam. Ela pede:
+  - só os valores do `design.json`; o valor que falta nele é desvio, perguntado ao dono e gravado em `desvios`;
+  - cada estado de cada controle, o pressionado incluído, o foco visível, o contraste e o alvo de 24 x 24 px;
+  - o movimento: primeiro se ele precisa existir, pela frequência com que o usuário o vê; depois a curva e a duração;
+    com `prefers-reduced-motion`, menos movimento, não zero;
+  - o texto, o número e o tempo pelo `Intl`, no formato do usuário;
+  - a tela testada com o catálogo do pior caso (o nome longo, a direita para a esquerda, o zero, os milhões, a conexão
+    que cai) a 320 px e a 200% de zoom, antes da revisão cega.
+  O filtro e a tabela do movimento, as regras de texto e número e o catálogo são adaptados e reescritos das skills de
+  Emil Kowalski, sob a licença MIT; o aviso dela está em `skills/design/LICENSE-emil-kowalski.txt`.
+- **A rota de tela carrega a skill de design** (`scripts/lib/ordens.js`, `scripts/lib/roteador.js`). Na 1ª edição de
+  marcação ou estilo da sessão, o sworn manda carregar o `sworn:design`, e não mais o `sworn:playbook`. O playbook e a
+  rubrica de tela apontam para ela. A skill do projeto com "padrao" no nome segue valendo junto.
+
+**Mudou**
+
+- **A apresentação mostra só o ganho forte e medido** (`apresentacao/`, pedido do dono). O "afrouxou o limite: 1 de
+  12 → 0 de 12" saiu dos slides da medição e dos ganhos: verdadeiro, mas pequeno demais para convencer. Ficam a prova
+  ao dizer "pronto" (0 → 17 de 60, agora com o rótulo escrito em cada barra) e as 28 vezes em que a trava negou, no
+  uso real, a edição que baixaria a régua de qualidade. A tabela inteira da medição segue no `GUIA.md`. O slide de
+  onde roda passa a dizer "outros cinco sistemas", como o título e os cartões.
+
 ## 0.93.0 — o protótipo do painel de sessões, a tecla no roteiro da foto e a skill que conta fora do Claude Code
 
 **Novo**

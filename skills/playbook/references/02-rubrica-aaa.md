@@ -41,9 +41,9 @@ as decoration. **P2:** valid value but inconsistent with the reference artifact.
 
 **Question:** does every control and every region with data have the states it needs, or only the happy path?
 
-**Checklist (universal):** default · hover · focus-visible · disabled (reduced opacity but still
-legible) · loading/busy (marked semantically, repeated clicks blocked) · error · empty ·
-selected.
+**Checklist (universal):** default · hover · focus-visible · pressed (`:active`, feedback inside the press
+itself) · disabled (reduced opacity but still legible) · loading/busy (marked semantically, repeated clicks
+blocked) · error · empty · selected.
 
 **Content rules of the states:**
 
@@ -75,7 +75,9 @@ serve produces a false finding; omitting one it serves lets a real bug through.
 **Check:** `min-width: 0` on flex/grid children; **intentional** wrap, truncate or scroll for
 email, domain, protocol, JSON, command, long name, chip and button; multi-column layout collapsing
 structurally at the **declared collapse point** — `{{texto:pontoDeColapso}}`; dropdown out of
-context with clipped overflow (or `fixed`/portal/native).
+context with clipped overflow (or `fixed`/portal/native). The cases to try, by kind of data (names, strings that do
+not break, numbers, collections, time, images, environment), are in the worst-case catalog of the `design` skill,
+`skills/design/references/pior-caso.md`.
 
 **With no declared collapse point, the lens does not go quiet: it demands collapse below tablet
 (`max-width: 768px`) and says in its opinion that it used the default.** An empty slice authorizes declaring the absence;

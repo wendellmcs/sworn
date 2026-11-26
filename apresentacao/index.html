@@ -163,7 +163,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <div style="position:absolute; right:80px; top:380px; width:320px; height:320px; border-radius:50%; background:#F59E0B; display:flex; align-items:center; justify-content:center">
     <p style="font-family:'Fraunces', Georgia, serif; font-size:44px; font-weight:600; line-height:1.1; color:#0D1117; text-align:center; width:240px">sob<br>juramento</p>
   </div>
-  <p class="eyebrow rise" style="--i:0">Um plugin para o Claude Code · versão 0.93.0</p>
+  <p class="eyebrow rise" style="--i:0">Um plugin para o Claude Code · versão 0.94.0</p>
   <p class="hero rise" style="--i:1; width:1100px">sworn</p>
   <p class="statement rise" style="--i:2; font-size:64px; width:1100px">A IA trabalha rápido. O sworn <span class="hl">exige a prova</span> antes do “pronto”.</p>
   <p class="lead rise" style="--i:3; width:1000px">Tudo o que ele faz, explicado sem jargão: cada passo vigiado, o que acontece sozinho, os comandos e as evidências.</p>
@@ -477,8 +477,8 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     <div class="card tight rise" style="--i:10; padding:20px 26px; gap:6px"><p class="k">/sworn:reference</p><p>Estuda os melhores do tipo e faz a régua.</p><p class="pill avi" style="padding:2px 14px">pede aprovação</p></div>
     <div class="card tight rise" style="--i:11; padding:20px 26px; gap:6px"><p class="k">/sworn:radar</p><p>Acha projetos parecidos com ideias úteis.</p><p class="pill cmd" style="padding:2px 14px">só lê e propõe</p></div>
   </div>
-  <p class="small"><b>E 4 skills que a IA usa sozinha:</b> o manual de execução (o nível de rigor de cada tarefa) · esforço baixo · esforço alto · trabalho em paralelo.</p>
-  <aside>Uma skill é um pacote de instruções que a IA carrega quando precisa. Estas doze você chama digitando o nome, como /sworn:review. Só duas são travas, a entrevista e a revisão; as outras ajudam e nenhuma muda o projeto sem você ver. As quatro do rodapé a IA usa por conta própria: o manual decide se a tarefa é rápida, padrão ou de rigor máximo, e as skills de esforço ajustam o quanto a IA pensa, sem trocar o modelo.</aside>
+  <p class="small"><b>E 5 skills que a IA usa sozinha:</b> o manual de execução (o nível de rigor de cada tarefa) · o roteiro de construir tela · esforço baixo · esforço alto · trabalho em paralelo.</p>
+  <aside>Uma skill é um pacote de instruções que a IA carrega quando precisa. Estas doze você chama digitando o nome, como /sworn:review. Só duas são travas, a entrevista e a revisão; as outras ajudam e nenhuma muda o projeto sem você ver. As cinco do rodapé a IA usa por conta própria: o manual decide se a tarefa é rápida, padrão ou de rigor máximo, o roteiro de tela entra na primeira edição de uma tela, com cada estado, o movimento e o dado do pior caso, e as skills de esforço ajustam o quanto a IA pensa, sem trocar o modelo.</aside>
 </section>
 <section id="paineis-agentes" class="alt" style="gap:20px">
   <p class="eyebrow">Ajudantes e o que aparece na tela</p>
@@ -569,21 +569,12 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <p class="eyebrow">Evidência · 1 de 4 · o experimento</p>
   <p class="title" style="font-size:56px">Medimos com e sem o sworn</p>
   <p class="lead" style="width:1560px; font-size:30px">20 tarefas com armadilhas, 3 vezes cada, no modelo Sonnet: 60 execuções de cada lado.</p>
-  <div class="row" style="gap:28px; align-items:center">
-    <div class="row" style="gap:10px; align-items:center"><div style="width:28px; height:28px; border-radius:6px; background:#2F6FB0"></div><p class="small">sem o sworn</p></div>
-    <div class="row" style="gap:10px; align-items:center"><div style="width:28px; height:28px; border-radius:6px; background:#B45309"></div><p class="small">com o sworn</p></div>
-  </div>
   <div class="row" style="gap:40px; align-items:stretch; flex:1">
     <div class="col grow" style="gap:30px; justify-content:center">
-      <div class="col" style="gap:10px">
-        <p style="font-size:30px; font-weight:600">Mostrou a prova ao dizer “pronto”</p>
-        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:44px; border-left:2px solid #6B7280; display:flex; align-items:center"><p style="font-size:28px; margin-left:16px">0 de 60</p></div></div>
-        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:44px; border-left:2px solid #6B7280; display:flex; align-items:center"><div class="rise" style="--i:1; width:255px; height:44px; background:#B45309; border-radius:0 4px 4px 0"></div><p style="font-size:28px; font-weight:700; margin-left:16px">17 de 60</p></div></div>
-      </div>
-      <div class="col" style="gap:10px">
-        <p style="font-size:30px; font-weight:600">Afrouxou um limite para o teste passar</p>
-        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:44px; border-left:2px solid #6B7280; display:flex; align-items:center"><div class="rise" style="--i:2; width:75px; height:44px; background:#2F6FB0; border-radius:0 4px 4px 0"></div><p style="font-size:28px; margin-left:16px">1 de 12</p></div></div>
-        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:44px; border-left:2px solid #6B7280; display:flex; align-items:center"><p style="font-size:28px; font-weight:700; margin-left:16px">0 de 12</p></div></div>
+      <div class="col" style="gap:18px">
+        <p style="font-size:40px; font-weight:600">Mostrou a prova ao dizer “pronto”</p>
+        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:80px; border-left:2px solid #6B7280; display:flex; align-items:center"><p style="font-size:40px; margin-left:20px">sem o sworn: 0 de 60</p></div></div>
+        <div class="row" style="align-items:center; gap:16px"><div style="width:900px; height:80px; border-left:2px solid #6B7280; display:flex; align-items:center"><div class="rise" style="--i:1; width:255px; height:80px; background:#B45309; border-radius:0 6px 6px 0"></div><p style="font-size:40px; font-weight:700; margin-left:20px">com o sworn: 17 de 60</p></div></div>
       </div>
     </div>
     <div class="card rise" style="--i:4; width:560px; justify-content:center; background:#FBEBD3; border:none">
@@ -593,7 +584,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
       <p>A hipótese foi escrita antes de rodar, e quem contou foi um script, não uma IA.</p>
     </div>
   </div>
-  <aside>Este é o teste mais rigoroso feito com o sworn. As tarefas tinham armadilhas, como um teste que não roda ou um limite que dá vontade de afrouxar. O ganho mais claro foi a prova: sem o sworn, a IA nunca mostrou o resultado do teste ao dizer que terminou; com ele, mostrou em 17 de 60 execuções. E na armadilha do limite, com o sworn a IA não afrouxou nenhuma vez. A hipótese foi escrita antes, e a contagem foi feita por um script.</aside>
+  <aside>Este é o teste mais rigoroso feito com o sworn. As tarefas tinham armadilhas, como um teste que não roda ou um limite que dá vontade de afrouxar. O ganho mais claro foi a prova: sem o sworn, a IA nunca mostrou o resultado do teste ao dizer que terminou; com ele, mostrou em 17 de 60 execuções. A hipótese foi escrita antes, e a contagem foi feita por um script.</aside>
 </section>
 <section id="evidencia-suite" class="dark">
   <p class="eyebrow">Evidência · 2 de 4 · os testes do próprio sworn</p>
@@ -769,7 +760,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <div class="grid4" style="gap:20px">
     <div class="card tight rise" style="--i:0; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">255</p><p class="cap" style="color:#B8C0CC">pedidos do dono, numerados</p></div>
     <div class="card tight rise" style="--i:1; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">917</p><p class="cap" style="color:#B8C0CC">decisões registradas, cada uma com o porquê</p></div>
-    <div class="card tight rise" style="--i:2; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">130</p><p class="cap" style="color:#B8C0CC">versões publicadas</p></div>
+    <div class="card tight rise" style="--i:2; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">131</p><p class="cap" style="color:#B8C0CC">versões publicadas</p></div>
     <div class="card tight rise" style="--i:3; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">4</p><p class="cap" style="color:#B8C0CC">meses: de agosto a novembro de 2026</p></div>
   </div>
   <div style="flex:1"></div>
@@ -779,14 +770,14 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     <div class="rise" style="--i:6; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Outubro</p><p style="color:#B8C0CC">Painéis, trabalho em paralelo, a escada de modelos e o nome sworn.</p></div>
     <div class="rise" style="--i:7; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Novembro</p><p style="color:#B8C0CC">Mais 5 IAs, os cursos, o radar e a revisão até zerar.</p></div>
   </div>
-  <aside>A jornada em números: em cerca de quatro meses, o dono fez 255 pedidos numerados, que viraram 917 decisões registradas, cada uma com o motivo, e 130 versões publicadas. Em agosto vieram a pesquisa e as primeiras travas; em setembro, os portões e a revisão cega; em outubro, os painéis, o paralelo e o novo nome; em novembro, as outras IAs, os cursos e o radar.</aside>
+  <aside>A jornada em números: em cerca de quatro meses, o dono fez 255 pedidos numerados, que viraram 917 decisões registradas, cada uma com o motivo, e 131 versões publicadas. Em agosto vieram a pesquisa e as primeiras travas; em setembro, os portões e a revisão cega; em outubro, os painéis, o paralelo e o novo nome; em novembro, as outras IAs, os cursos e o radar.</aside>
 </section>
 <section id="ganhos" style="gap:26px">
   <p class="eyebrow">Os ganhos</p>
   <p class="title" style="font-size:56px">O que muda no bolso e na confiança</p>
   <div class="grid3" style="gap:20px">
     <div class="card tight rise" style="--i:0"><p class="num mid" style="font-size:64px">0 → 17</p><p class="cap">em 60 execuções, a IA passou a mostrar a prova ao dizer “pronto”</p></div>
-    <div class="card tight rise" style="--i:1"><p class="num mid" style="font-size:64px">1 → 0</p><p class="cap">vezes em que a IA afrouxou um limite de qualidade, em 12 tentativas</p></div>
+    <div class="card tight rise" style="--i:1"><p class="num mid" style="font-size:64px">28</p><p class="cap">vezes em que a IA ia baixar a régua de qualidade e a trava negou, no uso real</p></div>
     <div class="card tight rise" style="--i:2"><p class="num mid" style="font-size:64px">−89%</p><p class="cap">no custo de abrir um ajudante de leitura: 6.347 tokens, não 56 mil</p></div>
     <div class="card tight rise" style="--i:3"><p class="num mid" style="font-size:64px">−77%</p><p class="cap">em três leituras no VS Code: 38.514 tokens contra 169.098</p></div>
     <div class="card tight rise" style="--i:4"><p class="num mid" style="font-size:64px">5 KB</p><p class="cap">lidos do plano em vez de 327 KB: só a parte da tarefa de agora</p></div>
@@ -795,18 +786,17 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     <div class="card tight rise" style="--i:7"><p class="num mid" style="font-size:64px">−25%</p><p class="cap">de texto nas respostas, com a mesma qualidade da resposta padrão</p></div>
     <div class="card tight rise" style="--i:8"><p class="num mid" style="font-size:64px">12 a 0</p><p class="cap">as regras de resposta do sworn contra o modo ultrarresumido, em 12 perguntas</p></div>
   </div>
-  <aside>O resumo dos ganhos, todos com número medido. Os dois primeiros são de confiança: a IA passa a mostrar a prova e para de afrouxar a régua. Os outros são de custo: o sworn lê menos, abre ajudantes mais leves e avisa a hora de trocar de conversa antes que cada mensagem fique cara. Os dois últimos são de qualidade de resposta: respostas um quarto mais curtas, e as regras do sworn venceram as 12 comparações contra um modo de resposta ultrarresumido.</aside>
+  <aside>O resumo dos ganhos, todos com número medido. Os dois primeiros são de confiança: a IA passa a mostrar a prova, e a régua de qualidade não baixa sem o dono. Os outros são de custo: o sworn lê menos, abre ajudantes mais leves e avisa a hora de trocar de conversa antes que cada mensagem fique cara. Os dois últimos são de qualidade de resposta: respostas um quarto mais curtas, e as regras do sworn venceram as 12 comparações contra um modo de resposta ultrarresumido.</aside>
 </section>
 <section id="novidades" class="dark" style="gap:26px">
-  <p class="eyebrow">O que há de novo · versão 0.93.0</p>
-  <p class="title" style="font-size:52px">O protótipo do painel de sessões, a tecla no roteiro da foto e a skill que conta fora do Claude Code</p>
+  <p class="eyebrow">O que há de novo · versão 0.94.0</p>
+  <p class="title" style="font-size:52px">A skill de design: a tela construída para a rubrica, com o movimento que se justifica e o dado do pior caso</p>
   <div class="grid2" style="gap:20px">
-    <div class="card tight rise" style="--i:0"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">O protótipo do painel de sessões</p></div>
-    <div class="card tight rise" style="--i:1"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">A tecla no roteiro da foto</p></div>
-    <div class="card tight rise" style="--i:2"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">Fora do Claude Code, a skill lida conta como carregada</p></div>
+    <div class="card tight rise" style="--i:0"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">A skill de design</p></div>
+    <div class="card tight rise" style="--i:1"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">A rota de tela carrega a skill de design</p></div>
   </div>
   <p class="small">A lista completa de cada versão está no <a href="https://github.com/wendellmcs/sworn/blob/main/CHANGELOG.md" style="color:#F59E0B">CHANGELOG</a>.</p>
-  <aside>As novidades da versão 0.93.0, tiradas do registro de mudanças a cada versão publicada. Este slide se refaz sozinho: quem publica a versão roda um comando que lê as novidades e monta a página de novo.</aside>
+  <aside>As novidades da versão 0.94.0, tiradas do registro de mudanças a cada versão publicada. Este slide se refaz sozinho: quem publica a versão roda um comando que lê as novidades e monta a página de novo.</aside>
 </section>
 <section id="instalar" class="alt" style="gap:28px">
   <p class="eyebrow">Como começar</p>
@@ -856,7 +846,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
       <p class="k">Confiança</p>
       <h3>O “pronto” vem com a prova</h3>
       <p>No teste com armadilhas, a IA mostrou o resultado do teste em 17 de 60 entregas, contra nenhuma sem o sworn.</p>
-      <p>E não afrouxou a régua de qualidade nenhuma vez.</p>
+      <p>E, no uso real, a trava negou 28 vezes a edição que baixaria a régua de qualidade.</p>
     </div>
     <div class="card rise" style="--i:1; gap:14px">
       <p class="k">Custo</p>
@@ -872,7 +862,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     </div>
   </div>
   <div class="card tight" style="background:#FFFDF7"><p>Os números vêm de medições feitas no próprio sworn. No seu projeto, o tamanho de cada ganho depende do trabalho: a economia de leitura, por exemplo, cresce com o tamanho do plano.</p></div>
-  <aside>O que esperar ao usar o sworn em qualquer projeto, com os números medidos. Na confiança: a IA passa a mostrar a prova quando diz que terminou, e para de afrouxar a régua. No custo: ela lê só o que a tarefa precisa, abre ajudantes mais leves e avisa a hora de trocar de conversa. Na qualidade: todo trabalho pode passar por revisores às cegas, e as telas são conferidas por foto no computador, no tablet e no celular. O tamanho de cada ganho depende do trabalho: a economia de leitura, por exemplo, cresce com o tamanho do plano.</aside>
+  <aside>O que esperar ao usar o sworn em qualquer projeto, com os números medidos. Na confiança: a IA passa a mostrar a prova quando diz que terminou, e a régua de qualidade não baixa sem o dono. No custo: ela lê só o que a tarefa precisa, abre ajudantes mais leves e avisa a hora de trocar de conversa. Na qualidade: todo trabalho pode passar por revisores às cegas, e as telas são conferidas por foto no computador, no tablet e no celular. O tamanho de cada ganho depende do trabalho: a economia de leitura, por exemplo, cresce com o tamanho do plano.</aside>
 </section>
 <section id="onde-roda" style="gap:24px">
   <p class="eyebrow">Onde roda</p>
@@ -888,7 +878,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     <div class="card tight rise" style="--i:6; grid-column:span 2; background:#F1ECDF; border:none"><p class="k">só no Claude Code</p><p>Os painéis, os ajudantes em paralelo, o ajuste de esforço, o aviso antes de compactar e a conferência da entrega do ajudante.</p></div>
   </div>
   <p class="small">Testado no Windows 11 com Node 24.12. Precisa do Node.js instalado. Linux e macOS ainda não foram testados.</p>
-  <aside>O sworn nasceu para o Claude Code, onde tudo funciona. Ele também foi adaptado e testado em outros seis sistemas de IA que trabalham no terminal, de empresas diferentes. Em todos, os quatro testes essenciais passaram: as regras chegam, a escrita fora do combinado e o comando perigoso são negados, e o “pronto” sem prova é barrado. Algumas partes, como os painéis, só existem no Claude Code. Cada cartão traz a ressalva principal daquele sistema.</aside>
+  <aside>O sworn nasceu para o Claude Code, onde tudo funciona. Ele também foi adaptado e testado em outros cinco sistemas de IA que trabalham no terminal, de empresas diferentes. Em todos, os quatro testes essenciais passaram: as regras chegam, a escrita fora do combinado e o comando perigoso são negados, e o “pronto” sem prova é barrado. Algumas partes, como os painéis, só existem no Claude Code. Cada cartão traz a ressalva principal daquele sistema.</aside>
 </section>
 <section id="encerramento" class="dark" style="justify-content:center; gap:40px">
   <div style="position:absolute; right:-160px; top:140px; width:800px; height:800px; border-radius:50%; border:2px solid #30363D"></div>

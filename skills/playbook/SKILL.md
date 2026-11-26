@@ -224,7 +224,9 @@ diff size, in the other table of the same Step 2.
 8. Governance and security
 
 Criteria, severity cutoff and which lenses apply to each type of change:
-[02-rubrica-aaa.md](references/02-rubrica-aaa.md).
+[02-rubrica-aaa.md](references/02-rubrica-aaa.md). To build a screen, before the review, load `sworn:design`: the
+same rubric as a build checklist, with the motion table and the worst-case data; sworn's router loads it at the
+first screen edit of the session.
 
 ### 4.3 Blind judgment
 

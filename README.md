@@ -266,8 +266,8 @@ button, and INP (the time from a click to the screen's response).
 | `/sworn:radar` | Finds similar public projects and says what is worth bringing over, with effort, value and license. |
 <!-- /pagina:comandos -->
 
-Also installed: `playbook`, the execution manual the agent loads at the start of a task (not a
-command); `effort-low` and `effort-high`, two skills outside the menu that the playbook calls by gear, at
+Also installed: `playbook`, the execution manual the agent loads at the start of a task (not a command); `design`,
+the checklist for building a screen (every state, motion that earns its place, worst-case data), which sworn loads at the first screen edit of a session; `effort-low` and `effort-high`, two skills outside the menu that the playbook calls by gear, at
 the start of each turn of the task, to set how hard the main conversation thinks in that turn (only the
 effort: the model changes only when you type `/model`); the `/sworn:parallel` workflow, which runs 3 or more independent tasks at once with a cap on
 agents, the cheapest model that solves and an isolated copy for whoever edits; and four agents:

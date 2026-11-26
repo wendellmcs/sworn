@@ -1,7 +1,8 @@
 'use strict';
 // G4a, G4b e G4d (pedido 262, D928): o roteador diz o tipo da tarefa (a mensagem do dono e a edicao) e da, uma vez por
 // sessao e por tipo, a linha com a peca do sworn; a skill local com "padrao" no nome nao toma o lugar da rota de tela;
-// e o uso de cada skill do sworn vira contador, que a auditoria mostra.
+// e o uso de cada skill do sworn vira contador, que a auditoria mostra. G4c: a rota de tela carrega a skill design, e o
+// playbook (o manual) nao a cala mais.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -18,7 +19,7 @@ test('roteador: os tipos e a skill de cada um', () => {
   assert.deepStrictEqual(roteador.TIPOS, ['tela', 'plano', 'etapa', 'diagnosticar', 'aaa']);
   for (const tipo of roteador.TIPOS) assert.ok(ordens.TIPOS_DE_ORDEM.indexOf(tipo) !== -1, tipo + ' nao e ordem');
   assert.deepStrictEqual(roteador.TIPOS.map(function (t) { return ordens.SKILL_DA_ORDEM[t]; }),
-    ['playbook', 'review-plan', 'drift', 'diagnose', 'effort-high']);
+    ['design', 'review-plan', 'drift', 'diagnose', 'effort-high']);
   // cada skill nomeada existe no plugin
   for (const tipo of roteador.TIPOS) {
     assert.ok(fs.existsSync(path.join(RAIZ, 'skills', ordens.SKILL_DA_ORDEM[tipo], 'SKILL.md')), tipo);
@@ -103,10 +104,12 @@ test('roteador: dar entrega a linha uma vez por sessao e por tipo, conta "dada" 
   const r = roteador.dar(s, ['tela'], { alvo: 'web/app.css', temDesign: true });
   assert.strictEqual(r.textos.length, 1);
   const t = r.textos[0];
-  for (const pedaco of ['web/app.css', 'sworn:playbook', '02-rubrica-aaa.md', 'prefers-reduced-motion', '24 x 24 px',
+  for (const pedaco of ['web/app.css', 'sworn:design', 'pressionado', 'pior caso', 'prefers-reduced-motion', '24 x 24 px',
     '.claude/sworn/design.json', '--tela-depois', '"padrao"']) {
     assert.ok(t.indexOf(pedaco) !== -1, 'falta ' + pedaco + ' em: ' + t);
   }
+  // a rota de tela nao manda mais carregar o manual: o playbook entra pela ordem do manual, nao por esta
+  assert.strictEqual(t.indexOf('sworn:playbook'), -1, t);
   assert.ok(ASCII.test(t), t);
   assert.deepStrictEqual(r.dadas, ['tela']);
   assert.deepStrictEqual(r.pendentes, ['tela']);
@@ -151,23 +154,28 @@ test('roteador: dar entrega a linha uma vez por sessao e por tipo, conta "dada" 
   assert.deepStrictEqual(roteador.dar({}, 'tela', {}).textos, []);
 });
 
-test('roteador G4b: a skill do sworn que ja entrou cala a rota dela; a local com "padrao" no nome, nao', () => {
-  for (const [nome, tipo] of [['sworn:playbook', 'tela'], ['playbook', 'tela'], ['sworn:review-plan', 'plano'],
+test('roteador G4b: a skill do sworn que ja entrou cala a rota dela; a local com "padrao" no nome e o playbook, nao', () => {
+  for (const [nome, tipo] of [['sworn:design', 'tela'], ['design', 'tela'], ['sworn:review-plan', 'plano'],
     ['sworn:drift', 'etapa'], ['sworn:diagnose', 'diagnosticar'], ['sworn:effort-high', 'aaa']]) {
     const s = {};
     s.rotasDadas = roteador.jaEntrou(s, nome);
     assert.deepStrictEqual(s.rotasDadas, [tipo], nome);
     assert.deepStrictEqual(roteador.dar(s, [tipo], {}).textos, [], nome);
   }
-  const s = {};
-  s.rotasDadas = roteador.jaEntrou(s, 'padrao-aaa');
-  assert.deepStrictEqual(s.rotasDadas, []);
-  assert.strictEqual(roteador.dar(s, ['tela'], { alvo: 'a.css' }).textos.length, 1);
-  // o manual do projeto cumpre a ordem do manual, nunca a da tela
+  for (const manual of ['padrao-aaa', 'sworn:playbook', 'playbook']) {
+    const s = {};
+    s.rotasDadas = roteador.jaEntrou(s, manual);
+    assert.deepStrictEqual(s.rotasDadas, [], manual);
+    assert.strictEqual(roteador.dar(s, ['tela'], { alvo: 'a.css' }).textos.length, 1, manual);
+  }
+  // o manual (o do projeto ou o playbook) cumpre a ordem do manual, nunca a da tela; a design cumpre a da tela
   const p = { ordensPendentes: ['manual', 'tela'] };
   assert.deepStrictEqual(ordens.marcarCumprida(p, 'padrao-aaa'), ['tela']);
-  assert.deepStrictEqual(ordens.marcarCumprida(p, 'sworn:playbook'), []);
+  assert.deepStrictEqual(ordens.marcarCumprida(p, 'sworn:playbook'), ['tela']);
+  assert.strictEqual((p.contadores || {}).ordem_tela_cumprida, undefined);
+  assert.deepStrictEqual(ordens.marcarCumprida(p, 'sworn:design'), []);
   assert.strictEqual(p.contadores.ordem_tela_cumprida, 1);
+  assert.deepStrictEqual(ordens.marcarCumprida({ ordensPendentes: ['manual', 'tela'] }, 'sworn:playbook'), ['tela']);
   // a skill de cada rota cumpre a ordem dela
   const q = { ordensPendentes: ['plano', 'etapa', 'diagnosticar', 'aaa'] };
   for (const nome of ['sworn:review-plan', 'sworn:drift', 'sworn:diagnose', 'sworn:effort-high']) ordens.marcarCumprida(q, nome);
@@ -205,7 +213,7 @@ test('ordens G4d: as linhas do uso na auditoria - as chamadas, as nunca chamadas
   assert.strictEqual(l[0], '- skills do sworn que o Claude chamou nos ultimos 7 dias: handoff 5, review 3');
   const nunca = skills.filter(function (n) { return n !== 'review' && n !== 'handoff'; });
   assert.strictEqual(l[1], '  nunca chamadas: ' + nunca.join(', '));
-  assert.ok(/skill do projeto com "padrao" no nome foi chamada 9 vezes; o sworn:playbook, 0 vezes\. A do projeto cumpre so a ordem do manual: na edicao de tela, o sworn ainda pede o sworn:playbook\.$/.test(l[2]), l[2]);
+  assert.ok(/skill do projeto com "padrao" no nome foi chamada 9 vezes; o sworn:playbook, 0 vezes\. A do projeto cumpre so a ordem do manual: na edicao de tela, o sworn ainda pede o sworn:design\.$/.test(l[2]), l[2]);
   assert.strictEqual(l[l.length - 1], '  Skill do sworn nunca chamada e assunto do sworn, nao deste projeto: ou ele nao a ' +
     'ofereceu na hora certa, ou o projeto nao precisou dela. Diga isso ao dono numa linha, sem pedir decisao.');
   l.forEach(function (x) { assert.ok(ASCII.test(x), x); });
@@ -297,7 +305,7 @@ test('rota no portao-escopo: a 1a edicao de tela da sessao traz a rubrica, sem p
   try {
     const r = editar(dir, 'e1', 'web/app.css');
     assert.strictEqual(r.status, 0, r.stderr);
-    assert.ok(contexto(r.json).indexOf('sworn:playbook') !== -1, JSON.stringify(r.json));
+    assert.ok(contexto(r.json).indexOf('sworn:design') !== -1, JSON.stringify(r.json));
     assert.strictEqual(r.json.hookSpecificOutput.hookEventName, 'PreToolUse');
     assert.strictEqual(r.json.hookSpecificOutput.permissionDecision, undefined);
     // o aviso do projeto sem projeto.json segue junto
@@ -306,7 +314,7 @@ test('rota no portao-escopo: a 1a edicao de tela da sessao traz a rubrica, sem p
     const r2 = editar(dir, 'e1', 'web/b.css');
     assert.strictEqual(contexto(r2.json), '');
     // a skill da rota cumpre a ordem
-    skill(dir, 'e1', 'sworn:playbook');
+    skill(dir, 'e1', 'sworn:design');
     assert.strictEqual(lerEstado(dir, 'e1').contadores.ordem_tela_cumprida, 1);
     // o subagente nao recebe a rota
     assert.strictEqual(contexto(editar(dir, 'e2', 'web/app.css', { agent_id: 'a1' }).json), '');
@@ -315,7 +323,7 @@ test('rota no portao-escopo: a 1a edicao de tela da sessao traz a rubrica, sem p
     // o aviso do projeto sem projeto.json ja saiu nesta sessao: a 1a tela leva a rota mesmo assim
     const depoisDoAviso = editar(dir, 'e3', 'web/c.css');
     assert.strictEqual(depoisDoAviso.json.systemMessage, undefined, JSON.stringify(depoisDoAviso.json));
-    assert.ok(contexto(depoisDoAviso.json).indexOf('sworn:playbook') !== -1, JSON.stringify(depoisDoAviso.json));
+    assert.ok(contexto(depoisDoAviso.json).indexOf('sworn:design') !== -1, JSON.stringify(depoisDoAviso.json));
     // o apagar do Codex (Write com apagar) nao e edicao de tela: sem rota e sem gastar a da sessao
     const apagou = editar(dir, 'e4', 'web/app.css', { tool_input: { file_path: path.join(dir, 'web', 'app.css'), apagar: true } });
     assert.strictEqual(contexto(apagou.json), '');
@@ -331,11 +339,11 @@ test('rota no portao-escopo: a edicao negada nao leva rota', () => {
       marchaPadrao: 'padrao', intocaveis: ['segredos/**'], marchas: { rapida: ['docs/**'] } }), 'utf8');
     const r = editar(dir, 'n1', 'segredos/a.css');
     assert.strictEqual(r.json.hookSpecificOutput.permissionDecision, 'deny');
-    assert.strictEqual(contexto(r.json).indexOf('sworn:playbook'), -1);
+    assert.strictEqual(contexto(r.json).indexOf('sworn:design'), -1);
     assert.strictEqual(estadoSeHouver(dir, 'n1').rotasDadas, undefined);
     // a marcha rapida passa e leva a rota
     const semDesign = contexto(editar(dir, 'n1', 'docs/pagina.html').json);
-    assert.ok(semDesign.indexOf('sworn:playbook') !== -1, semDesign);
+    assert.ok(semDesign.indexOf('sworn:design') !== -1, semDesign);
     assert.strictEqual(semDesign.indexOf('design.json'), -1, semDesign);
     // com o design.json do projeto, a rota de tela manda usar so os valores dele
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'design.json'), '{}', 'utf8');
@@ -347,25 +355,29 @@ test('rota no portao-escopo: a edicao negada nao leva rota', () => {
     fs.writeFileSync(path.join(dir, 'web', 'a.css'), 'b{}', 'utf8');
     const padrao = editar(dir, 'n3', 'web/a.css');
     assert.strictEqual((padrao.json.hookSpecificOutput || {}).permissionDecision, undefined, JSON.stringify(padrao.json));
-    assert.ok(contexto(padrao.json).indexOf('sworn:playbook') !== -1, JSON.stringify(padrao.json));
+    assert.ok(contexto(padrao.json).indexOf('sworn:design') !== -1, JSON.stringify(padrao.json));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('G4b no gancho: com a skill local "padrao-aaa" carregada, a rota de tela entra; com o playbook, nao', () => {
+test('G4b no gancho: com a skill local "padrao-aaa" ou o playbook carregado, a rota de tela entra; com a design, nao', () => {
   const dir = comum.temporaria('sworn-rota-g4b-');
   try {
     skill(dir, 'b1', 'padrao-aaa');
     assert.strictEqual(lerEstado(dir, 'b1').manualCarregado, true);
     assert.strictEqual(lerEstado(dir, 'b1').contadores.uso_skill_manual_do_projeto, 1);
-    assert.ok(contexto(editar(dir, 'b1', 'web/app.css').json).indexOf('sworn:playbook') !== -1);
-    skill(dir, 'b2', 'sworn:playbook');
-    assert.strictEqual(lerEstado(dir, 'b2').contadores.uso_skill_playbook, 1);
+    assert.ok(contexto(editar(dir, 'b1', 'web/app.css').json).indexOf('sworn:design') !== -1);
+    skill(dir, 'b2', 'sworn:design');
+    assert.strictEqual(lerEstado(dir, 'b2').contadores.uso_skill_design, 1);
     assert.strictEqual(contexto(editar(dir, 'b2', 'web/app.css').json), '');
+    // o playbook e o manual: carregado, ele nao cala a rota de tela
+    skill(dir, 'b4', 'sworn:playbook');
+    assert.strictEqual(lerEstado(dir, 'b4').contadores.uso_skill_playbook, 1);
+    assert.ok(contexto(editar(dir, 'b4', 'web/app.css').json).indexOf('sworn:design') !== -1);
     // o subagente que chama uma skill nao conta uso nem cala a rota do principal
     processo(dir, 'marcar-trabalho.js', { session_id: 'b3', cwd: dir, agent_id: 'a1', hook_event_name: 'PostToolUse',
-      tool_name: 'Skill', tool_input: { skill: 'sworn:playbook' } });
-    assert.ok(contexto(editar(dir, 'b3', 'web/app.css').json).indexOf('sworn:playbook') !== -1);
-    assert.strictEqual((lerEstado(dir, 'b3').contadores || {}).uso_skill_playbook, undefined);
+      tool_name: 'Skill', tool_input: { skill: 'sworn:design' } });
+    assert.ok(contexto(editar(dir, 'b3', 'web/app.css').json).indexOf('sworn:design') !== -1);
+    assert.strictEqual((lerEstado(dir, 'b3').contadores || {}).uso_skill_design, undefined);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

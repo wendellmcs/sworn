@@ -187,9 +187,10 @@ function motivoSemManual(alvo) {
 const TIPOS_DE_ORDEM = ['aprender', 'auditar', 'calibrar', 'init', 'revisar', 'manual',
   'tela', 'plano', 'etapa', 'diagnosticar', 'aaa'];
 // A skill que cumpre cada ordem: o tipo fica em portugues (e a chave guardada no contadores.json), a skill e o
-// comando. O manual e qualquer skill com "padrao" no nome (a do projeto) ou o playbook do plugin.
+// comando. O manual e qualquer skill com "padrao" no nome (a do projeto) ou o playbook do plugin. A tela pede a design
+// (G4c), o roteiro de construir a tela; o manual cumpre so a ordem do manual.
 const SKILL_DA_ORDEM = { aprender: 'learn', auditar: 'audit', calibrar: 'calibrate', init: 'init', revisar: 'review',
-  tela: 'playbook', plano: 'review-plan', etapa: 'drift', diagnosticar: 'diagnose', aaa: 'effort-high' };
+  tela: 'design', plano: 'review-plan', etapa: 'drift', diagnosticar: 'diagnose', aaa: 'effort-high' };
 const MANUAL = /padrao|^(sworn:)?playbook$/i;
 const PLAYBOOK = /^(sworn:)?playbook$/i;
 const FASES = ['dada', 'cumprida', 'recusada'];
@@ -386,7 +387,7 @@ function linhasDoUso(antes, agora, dias) {
   if (manual) {
     const playbook = delta(PREFIXO_USO + 'playbook');
     linhas.push('  a skill do projeto com "padrao" no nome foi chamada ' + vezes(manual) + '; o sworn:playbook, ' +
-      vezes(playbook) + '. A do projeto cumpre so a ordem do manual: na edicao de tela, o sworn ainda pede o sworn:playbook.');
+      vezes(playbook) + '. A do projeto cumpre so a ordem do manual: na edicao de tela, o sworn ainda pede o sworn:design.');
   }
   if (nunca.length) {
     linhas.push('  Skill do sworn nunca chamada e assunto do sworn, nao deste projeto: ou ele nao a ofereceu na hora ' +

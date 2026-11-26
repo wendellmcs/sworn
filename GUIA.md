@@ -1413,8 +1413,10 @@ isso repete o já visto. O roteiro não bloqueia o fecho: sai junto, sem esperar
 | `/sworn:reference` | Estuda 2-3 produtos líderes do mesmo tipo do projeto, pelo que é público e em camadas (o que se vê, estados e fluxos, textos, rede e desempenho), e grava uma ficha em `.claude/sworn/referencias/<tipo>-<assunto>.md` em que cada achado diz de onde veio, com que grau (observado, derivado, inferido) e quem agiu, mais o que ficou sem saber (cada pergunta resolvida com a sua evidência). A ficha também diz quanto de cada camada se leu: completa, parcial ou desconhecida, e o que não se declarou conta como desconhecido. Página com login, só a aba que você abriu. **Só põe a ficha na `referencias` com o seu sim.** |
 | `/sworn:radar` | Busca projetos públicos parecidos com o que você está construindo (até 10, por tema, pela busca do GitHub), ou uma lista que você passar, e cruza cada um com o seu projeto: triagem de todos, até 5 lidos a fundo, e uma ficha em `.claude/sworn/radar/<AAAA-MM-DD>.md` com o que vale trazer, como entra, como fica melhor que o original, esforço, valor e licença. De projeto com licença que limita o uso (ELv2, que proíbe oferecer o software como serviço; AGPL, que obriga a abrir o código de quem o usa em rede), fechado ou sem licença, só a ideia entra, nunca o código. Na dúvida sobre o encaixe, faz no máximo 3 perguntas. **Só lê e propõe: o escolhido entra com teste vermelho e revisão cega, com o seu sim.**<br>Se oferece sozinho quando você pede melhoria ou função nova (uma vez por sessão, só com o seu sim; `"oferecerRadar": false` desliga). A lista dos projetos em alta da semana (`github.com/trending?since=weekly`) é só do mantenedor do plugin, para melhorar o sworn. |
 
-Três das quinze skills instaladas **não são comando**. A `playbook` é o manual de execução, que o agente carrega
-no começo da tarefa e que traz junto a conferência do mapa de modelos deste projeto. A `sworn:effort-low` e a
+Quatro das dezesseis skills instaladas **não são comando**. A `playbook` é o manual de execução, que o agente carrega
+no começo da tarefa e que traz junto a conferência do mapa de modelos deste projeto. A `design` é o roteiro de construir
+uma tela (os estados de cada controle, o movimento que se justifica, o texto e o número no formato do usuário, a tela
+testada com o dado do pior caso), que o sworn carrega na 1ª edição de tela da sessão. A `sworn:effort-low` e a
 `sworn:effort-high` o agente chama sozinho pela marcha que classificou (Passo 0 do manual), no começo de cada turno da
 tarefa, porque o esforço de uma skill dura só até o fim do turno (medido pelo sworn no Claude Code 2.1.311): a Rápida
 baixa o esforço da conversa principal, a AAA sobe, a Padrão fica no esforço da sessão. Só o esforço muda: skill chamada pelo
@@ -1439,6 +1441,7 @@ dispara no evento dele.
 |---|---|---|
 | Skills dos comandos | `sworn:init`, `sworn:review`, `sworn:learn`, `sworn:handoff`, `sworn:audit`, `sworn:calibrate`, `sworn:shortcuts`, `sworn:review-plan`, `sworn:drift`, `sworn:diagnose`, `sworn:reference`, `sworn:radar` | os comandos da tabela acima; cada um é uma skill que você chama pelo nome |
 | Skill-manual | `playbook` | não é comando: o manual de execução que o agente carrega no começo da tarefa (marchas, lentes, loop de revisão, decisão em três opções, o que um "pronto" precisa provar). Traz as seis referências listadas mais abaixo |
+| Skill de tela | `design` | não é comando: o roteiro de construir uma tela (estados, foco, contraste, alvo de 24 x 24 px, movimento, texto e número, o dado do pior caso), que a rota de tela carrega na 1ª edição de marcação ou estilo da sessão. Traz o catálogo do pior caso e o aviso da licença MIT da parte adaptada das skills de Emil Kowalski |
 | Skills de esforço | `sworn:effort-low`, `sworn:effort-high` | não são comando: o agente chama sozinho pela marcha, no começo de cada turno da tarefa (a Rápida baixa o esforço da conversa principal naquele turno, a AAA sobe); só o esforço muda, o modelo não (ver o parágrafo depois da tabela de comandos) |
 | Workflow | `sworn:parallel` | tarefas independentes em paralelo, com teto de agentes, modelo barato e cópia isolada para quem edita; o Claude roda direto com 3 ou mais tarefas independentes (ver "Trabalho em paralelo") |
 | Agentes | `inspector`, `dedupe-judge`, `refuter`, `reader` | `inspector`, `dedupe-judge` e `refuter` são da revisão cega; `reader` é o agente de leitura leve do paralelo (ver "Por dentro de cada comando" e "Trabalho em paralelo") |
@@ -1754,8 +1757,8 @@ desliga.
 **A skill certa na hora certa.** Desde a 0.92.0, cinco rotas dizem a skill do sworn que a tarefa pede, uma vez por
 sessão e por tipo:
 
-- a 1ª edição de marcação ou estilo leva ao `sworn:playbook` e à rubrica de tela dele, com o `design.json` quando o
-  projeto tem um e o `/sworn:review --tela-depois` no fim;
+- a 1ª edição de marcação ou estilo leva ao `sworn:design`, o roteiro de construir a tela (desde a 0.94.0; antes, ao
+  `sworn:playbook`), com o `design.json` quando o projeto tem um e o `/sworn:review --tela-depois` no fim;
 - o pedido de seguir um plano, ou a escrita de um `.md` de plano, leva ao `sworn:review-plan`;
 - a edição que marca caixa ou `[FEITO]` num plano leva ao `sworn:drift`;
 - o seu "por que a sessão deu errado?" leva ao `sworn:diagnose`;
@@ -1764,7 +1767,7 @@ sessão e por tipo:
 A linha entra com a sua mensagem (no `abrir-turno.js`) ou com a edição que o portão de escopo já permite (no
 `portao-escopo.js`). Nunca entra numa negação, num subagente ou num apagar, e a falha dela nunca muda a decisão do
 portão. A skill do sworn que já entrou na sessão cala a rota dela. A skill do projeto com "padrao" no nome segue fazendo
-as vezes do manual, e a rota de tela entra junto. Cada rota é uma ordem, contada como as do parágrafo abaixo.
+as vezes do manual, e a rota de tela entra junto; o `sworn:playbook` também é o manual e também não cala a rota de tela. Cada rota é uma ordem, contada como as do parágrafo abaixo.
 
 **O que nunca é usado aparece em número.** Desde a 0.9.0, cada ordem que o sworn dá ao Claude (rodar o
 `/sworn:learn`, o `/sworn:audit`, o `/sworn:calibrate`, o `/sworn:init`, revisar antes do commit,

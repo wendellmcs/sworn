@@ -266,7 +266,8 @@ menos 24 × 24 px em cada botão e o INP (o tempo do clique até a tela responde
 <!-- /pagina:comandos -->
 
 Também vêm instalados: o `playbook`, o manual de execução que o agente carrega no começo da tarefa (não
-é comando); `effort-low` e `effort-high` (esforço baixo e esforço alto; o nome da skill fica em inglês), duas skills fora do menu que o playbook chama pela marcha, no
+é comando); a `design`, o roteiro de construir uma tela (cada estado, o movimento que se justifica, o dado do pior
+caso), que o sworn carrega na 1ª edição de tela da sessão; `effort-low` e `effort-high` (esforço baixo e esforço alto; o nome da skill fica em inglês), duas skills fora do menu que o playbook chama pela marcha, no
 começo de cada turno da tarefa, para ajustar o quanto a conversa principal pensa naquele turno (só o esforço: o modelo só muda quando você digita `/model`);
 o workflow `/sworn:parallel`, que roda 3 ou mais tarefas independentes de uma vez, com teto de
 agentes, o modelo mais barato que resolve e cópia isolada para quem edita; e quatro agentes: `inspector`,
