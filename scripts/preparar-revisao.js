@@ -48,7 +48,7 @@ function secaoDaRegua(texto) {
   return linhas.slice(ini, fim).join('\n').trim() + '\n';
 }
 
-const USO = 'uso: preparar-revisao.js --arquivo <caminho relativo> [--completa] [--degradado <motivo>] ' +
+const USO = 'uso: preparar-revisao.js --arquivo <caminho relativo> [--completa] [--refazer] [--degradado <motivo>] ' +
   '[--semente <texto>] [--tela-depois <endereco> [--tela-antes <endereco>]] [--conferencia]\n';
 
 // 0.3.2, item 10: flag presente sem valor (ultima da linha) ou seguida de outra flag ("--arquivo
@@ -58,7 +58,9 @@ const USO = 'uso: preparar-revisao.js --arquivo <caminho relativo> [--completa] 
 // 0.3.3, itens 13 e 14: so e "valor que falta" quando o proximo argumento e outra flag do USO (um arquivo
 // chamado `--x.js` vale) ou quando e vazio (`--semente ''` caia no pid, calado).
 const FLAGS_DO_USO = ['--arquivo', '--semente', '--completa', '--degradado', '--tela-antes', '--tela-depois',
-  '--conferencia'];
+  '--conferencia', '--refazer'];
+// as do USO que nao levam valor: o argumento seguinte ja e outro
+const FLAGS_SEM_VALOR = ['--completa', '--conferencia', '--refazer'];
 function arg(nome) {
   return flags.valor(process.argv, '--' + nome, FLAGS_DO_USO, function (msg) {
     process.stdout.write('ERRO: ' + msg + '\n' + USO);
@@ -174,7 +176,7 @@ function outroNomeNoHead(cwd, rel) {
 for (let i = 2; i < process.argv.length; i++) {
   const a = process.argv[i];
   if (FLAGS_DO_USO.indexOf(a) !== -1) {
-    if (a !== '--completa' && a !== '--conferencia') i++;
+    if (FLAGS_SEM_VALOR.indexOf(a) === -1) i++;
   } else if (a.startsWith('--')) {
     process.stdout.write('ERRO: ' + a + ' nao e uma opcao deste script; as opcoes estao no uso abaixo. ' +
       'Nada foi gravado.\n' + USO);
@@ -290,6 +292,7 @@ const faixaMedida = veredito.faixaDaMudanca({
 // L3 (A3-04): o revisar manda subir de faixa por julgamento (mudanca que monta tela, duas sem teste vermelho); sem a
 // flag o pacote seguia recortado. --completa sobe a completa (arquivo inteiro); descer nao tem flag.
 const pediuCompleta = process.argv.indexOf('--completa') !== -1;
+const pediuRefazer = process.argv.indexOf('--refazer') !== -1;
 // B2 (s369, R-impeccable): a revisao que roda sem isolamento (inspetor que ve o repositorio ou o contexto de quem
 // escreveu) ou sem navegador (lente de tela sem captura) diz o motivo; o apurar-ronda.js o leva ao fecho.
 // O motivo so de espaco e valor que falta, pela regra da lib/flags.js (A4-71), como em toda flag.
@@ -586,17 +589,20 @@ function abertaVencida() {
 // L3-s105-6 (D872, D881): a conferencia depois do teto. So vale com a revisao fechada no teto sem aprovar, uma vez por
 // revisao, e com a lista do que segurou ronda no fechada.json; a ronda nova sai na mesma base (nada se arquiva), so com
 // esses achados e so com as lentes deles.
+// O caminho relativo a raiz, com a barra normal, como as mensagens o mostram.
+function relDe(p) { return path.relative(cwd, p).replace(/\\/g, '/'); }
+// A recusa de uma flag (--conferencia, --refazer) antes de gravar a ronda. A base do id de antes ja foi para o id novo
+// (A3-12b, acima): a recusa diz isso, e nao que nada mudou no disco.
+function recusarFlag(flag, porque) {
+  process.stdout.write('ERRO: ' + flag + ' ' + porque + (movida
+    ? ' Nada foi gravado; so a pasta da revisao passou do nome antigo (' + relDe(movida.de) + ') para o novo (' +
+      relDe(movida.para) + ').\n'
+    : ' Nada foi gravado.\n'));
+  process.exit(1);
+}
 let conferenciaPedida = null;
 if (process.argv.indexOf('--conferencia') !== -1) {
-  // a base do id de antes ja foi para o id novo (A3-12b, acima): a recusa diz isso, e nao que nada mudou no disco
-  const recusar = function (porque) {
-    process.stdout.write('ERRO: --conferencia ' + porque + (movida
-      ? ' Nada foi gravado; so a pasta da revisao passou do nome antigo (' +
-        path.relative(cwd, movida.de).replace(/\\/g, '/') + ') para o novo (' +
-        path.relative(cwd, movida.para).replace(/\\/g, '/') + ').\n'
-      : ' Nada foi gravado.\n'));
-    process.exit(1);
-  };
+  const recusar = function (porque) { recusarFlag('--conferencia', porque); };
   const arqFechada = path.join(base, 'fechada.json');
   if (formatoAntigo || !fs.existsSync(arqFechada)) {
     recusar('so vale depois do fecho no teto, e ' + rel + ' nao tem revisao fechada: prepare a revisao sem a flag.');
@@ -632,7 +638,9 @@ if (process.argv.indexOf('--conferencia') !== -1) {
         return !!m && typeof m.conferencia === 'object' && m.conferencia !== null;
       } catch (e) { return false; }
     })[0];
-  if (jaPreparada !== undefined) {
+  // com o --refazer, a conferencia ja preparada que e a ultima ronda vai ao bloco do --refazer, abaixo, que a poe de
+  // lado se ainda nao tem voto
+  if (jaPreparada !== undefined && !(pediuRefazer && jaPreparada === cegar.proximaRonda(base) - 1)) {
     recusar('ja foi preparada nesta revisao (ronda ' + jaPreparada + '), e nao se repete: grave nela o veredito de ' +
       'cada lente e rode o apurar-ronda.js.');
   }
@@ -653,6 +661,13 @@ if (process.argv.indexOf('--conferencia') !== -1) {
   conferenciaPedida = { abertos: abertos, lentes: abertos.map(function (a) { return a.lente; })
     .filter(function (l, i, todas) { return todas.indexOf(l) === i; }) };
 }
+// A data e a hora locais, como 2026-09-29-173045: o nome da pasta posta de lado (a revisao arquivada, a ronda refeita).
+function carimboDeAgora() {
+  const d = new Date();
+  const dois = function (v) { return String(v).padStart(2, '0'); };
+  return d.getFullYear() + '-' + dois(d.getMonth() + 1) + '-' + dois(d.getDate()) + '-' +
+    dois(d.getHours()) + dois(d.getMinutes()) + dois(d.getSeconds());
+}
 let arquivada = null;
 let arquivadaAberta = false;
 let herdadosDaFechada = [];
@@ -660,10 +675,7 @@ const fechadaAntes = !formatoAntigo && fs.existsSync(path.join(base, 'fechada.js
 if (!conferenciaPedida && (fechadaAntes || abertaVencida())) {
   arquivadaAberta = !fechadaAntes;
   const pai = path.join(path.dirname(revisao), 'revisao-fechada', path.basename(base));
-  const d = new Date();
-  const dois = function (v) { return String(v).padStart(2, '0'); };
-  const carimbo = d.getFullYear() + '-' + dois(d.getMonth() + 1) + '-' + dois(d.getDate()) + '-' +
-    dois(d.getHours()) + dois(d.getMinutes()) + dois(d.getSeconds());
+  const carimbo = carimboDeAgora();
   let destino = path.join(pai, carimbo);
   for (let k = 2; fs.existsSync(destino); k++) destino = path.join(pai, carimbo + '-' + k);
   const faltavam = pastasQueFaltam(pai);
@@ -695,6 +707,61 @@ if (!conferenciaPedida && (fechadaAntes || abertaVencida())) {
 if (arquivada) {
   herdadosDaFechada = herdadosLib.podar(herdadosLib.daRevisaoArquivada(arquivada,
     path.relative(cwd, arquivada).replace(/\\/g, '/')), normalizado(atual));
+}
+
+// A ronda preparada numa faixa baixa sobe de faixa sem apagar nada (o portao de comando destrutivo recusa apagar dentro
+// de .claude/): o --refazer poe de lado a ultima ronda, ainda sem voto, em <n>-refeita-<carimbo>, nome que nenhuma
+// contagem de ronda le (ronda e pasta so de digitos), e a ronda nova sai com o mesmo numero. Sem ronda (base nova ou
+// recem-arquivada), prepara como sempre. A ronda com voto fica, e a pasta de votos que nao se le tambem: refaze-la
+// jogaria fora o que as lentes ja julgaram.
+let refeita = null;
+const ultimaRonda = cegar.proximaRonda(base) - 1;
+if (pediuRefazer && formatoAntigo) {
+  recusarFlag('--refazer', 'nao vale no formato antigo (rondas em pastas numeradas soltas em ' + relDe(revisao) +
+    '): a ultima delas pode ser da revisao de outro arquivo. Prepare sem a flag ate essa revisao terminar.');
+}
+if (pediuRefazer && ultimaRonda >= 1) {
+  const daUltima = path.join(base, String(ultimaRonda));
+  for (const sub of [['vereditos'], ['invertida', 'vereditos']]) {
+    const votos = path.join(daUltima, ...sub);
+    let nomes = [];
+    try { nomes = fs.readdirSync(votos); } catch (e) {
+      if (!e || e.code !== 'ENOENT') {
+        recusarFlag('--refazer', 'nao mexeu na ronda ' + ultimaRonda + ': nao consegui ler ' + relDe(votos) +
+          ' (causa: ' + textoLib.causaDoErro(e) + ') para saber se ela ja tem voto, e ela segue como estava. Confira ' +
+          'a pasta e rode de novo.');
+      }
+    }
+    // voto e o .json que o gancho grava, como o apurar-ronda.js le; outro arquivo (desktop.ini, .gitkeep) nao conta
+    const voto = nomes.filter(function (nome) { return nome.endsWith('.json'); })[0];
+    if (voto !== undefined) {
+      recusarFlag('--refazer', 'so poe de lado a ronda que ainda nao tem voto, e a ronda ' + ultimaRonda + ' de ' + rel +
+        ' ja tem voto (' + relDe(path.join(votos, voto)) + '). ' + (conferenciaPedida
+        ? 'Apure essa ronda (apurar-ronda.js): a conferencia nao se repete.'
+        : 'Apure essa ronda (apurar-ronda.js) e prepare a proxima com a flag que faltou (--completa, --tela-depois), ' +
+          'sem o --refazer.'));
+    }
+  }
+  const nome = ultimaRonda + '-refeita-' + carimboDeAgora();
+  let destino = path.join(base, nome);
+  for (let k = 2; fs.existsSync(destino); k++) destino = path.join(base, nome + '-' + k);
+  try {
+    fs.renameSync(daUltima, destino);
+    refeita = destino;
+  } catch (e) {
+    recusarFlag('--refazer', 'nao mexeu na ronda ' + ultimaRonda + ': nao consegui mover ' + relDe(daUltima) + ' para ' +
+      relDe(destino) + ' (causa: ' + textoLib.causaDoErro(e) + '), e ela segue onde estava. Feche o que estiver ' +
+      'usando essa pasta e rode de novo.');
+  }
+  // A ronda 1 de uma base arquivada num run anterior guarda os herdados (so o arquivamento deste run os monta): a
+  // refeita os leva, podados contra o arquivo de agora, e a posta de lado fica inteira. Sem o arquivo, ou ilegivel,
+  // nada a levar: o P2 volta a segurar a ronda, como sem a heranca.
+  let daRefeita = null;
+  try { daRefeita = JSON.parse(textoLib.semBom(fs.readFileSync(path.join(refeita, herdadosLib.ARQUIVO), 'utf8'))); }
+  catch (e) { daRefeita = null; }
+  if (Array.isArray(daRefeita)) {
+    herdadosDaFechada = herdadosLib.podar(daRefeita.filter(herdadosLib.valido), normalizado(atual));
+  }
 }
 
 const n = cegar.proximaRonda(base);
@@ -790,16 +857,17 @@ let inventarioJson = null;
 try {
   fs.mkdirSync(dir, { recursive: true });
   criada = true;
+  // H6e3: na ronda 1 da base nova, ao lado do mapa.json; o inspetor nao o recebe. Logo depois do mkdir: a ronda que
+  // fica pela metade ainda o tem, e o --refazer dela o leva.
+  if (herdadosDaFechada.length) {
+    fs.writeFileSync(path.join(dir, herdadosLib.ARQUIVO), JSON.stringify(herdadosDaFechada, null, 2) + '\n', 'utf8');
+  }
   // Artefato INTEIRO na faixa completa. Fatia que corta funcao no meio faz o inspetor reportar o corte como
   // defeito; o recorte das faixas pequenas (D486) marca cada vao e o aviso manda dizer isso no briefing.
   fs.writeFileSync(path.join(dir, 'A.txt'), r.A.conteudo, 'utf8');
   fs.writeFileSync(path.join(dir, 'B.txt'), r.B.conteudo, 'utf8');
   // F2c: o contrato do que o trecho usa de outro arquivo e o mesmo para os dois lados (e para a 2a passada).
   if (contrato && contrato.texto) fs.writeFileSync(path.join(dir, 'contrato.txt'), contrato.texto, 'utf8');
-  // H6e3 (D900): na ronda 1 da base nova, ao lado do mapa.json; o inspetor nao o recebe
-  if (herdadosDaFechada.length) {
-    fs.writeFileSync(path.join(dir, herdadosLib.ARQUIVO), JSON.stringify(herdadosDaFechada, null, 2) + '\n', 'utf8');
-  }
   // L3 (A3-03): a faixa vai no mapa.json; com a da ronda 1, o apurar-ronda.js confere as lentes que votaram.
   const mapaJson = { arquivo: rel, mapa: r.mapa, faixa: faixa, headDoArquivo: marcaDoHead, hashDoTrabalho: hashDoTrabalho };
   // F2d (c): na completa, a lista das lentes escolhidas pelo risco; o apurar confere que todas votaram
@@ -877,15 +945,19 @@ try {
 } catch (e) {
   const causa = textoLib.causaDoErro(e);
   // F2-09: nos dois ramos, a revisao anterior (arquivada por este run) diz para onde foi.
-  const ondeFoi = arquivada ? ' A revisao anterior ja foi arquivada em ' + path.relative(cwd, arquivada).replace(/\\/g, '/') + '.' : '';
+  const ondeFoi = (arquivada ? ' A revisao anterior ja foi arquivada em ' + path.relative(cwd, arquivada).replace(/\\/g, '/') + '.' : '') +
+    (refeita ? ' A ronda ' + n + ' anterior, ainda sem voto, ja foi posta de lado em ' + relDe(refeita) + '.' : '');
   if (criada) {
+    // o portao de comando destrutivo recusa apagar dentro de .claude/: o --refazer poe a pasta de lado (no formato
+    // antigo ele nao vale, e mover a pasta para fora resolve: mover o portao deixa)
     process.stdout.write('ERRO: nao consegui gravar o pacote em ' + dirRel + ' (causa: ' + causa + '). ' +
-      'A pasta ' + dirRel + ' ficou pela metade: apague-a antes de rodar de novo, senao o apurar-ronda ' +
-      'a conta como uma ronda. Depois rode de novo.' + ondeFoi + '\n');
+      'A pasta ' + dirRel + ' ficou pela metade, e o apurar-ronda a conta como uma ronda: ' + (formatoAntigo
+      ? 'mova-a para fora de .claude/sworn/revisao antes de rodar de novo.'
+      : 'rode de novo com --refazer, que a poe de lado sem apagar nada.') + ondeFoi + '\n');
   } else {
     process.stdout.write('ERRO: nao consegui criar a pasta da ronda ' + dirRel + ' (causa: ' + causa + '). ' +
-      'Nada foi gravado. Confira se .claude/sworn/revisao, e cada pasta do caminho ate ela, e uma pasta ' +
-      'e nao um arquivo, e rode de novo.' + ondeFoi + '\n');
+      (arquivada || refeita ? 'A ronda nova nao foi gravada.' : 'Nada foi gravado.') + ' Confira se ' +
+      '.claude/sworn/revisao, e cada pasta do caminho ate ela, e uma pasta e nao um arquivo, e rode de novo.' + ondeFoi + '\n');
   }
   process.exit(1);
 }
@@ -927,6 +999,13 @@ if (arquivada) {
     : ' A revisao anterior deste arquivo ja estava fechada (fechada.json): foi movida inteira, sem apagar ' +
       'nada, para ') + path.relative(cwd, arquivada).replace(/\\/g, '/') + '. Esta e a ronda 1 de uma revisao ' +
     'nova, com o teto de 3 rondas inteiro.';
+}
+if (refeita) {
+  aviso += ' A ronda ' + n + ' anterior, ainda sem voto, foi posta de lado sem apagar nada em ' + relDe(refeita) +
+    ' (--refazer): esta e a ronda ' + n + ' de novo, e a de lado nao conta no teto.';
+} else if (pediuRefazer) {
+  aviso += ' O --refazer nao mudou nada: esta revisao nao tinha ronda para mover (esta e a ronda 1 de uma revisao ' +
+    'nova).';
 }
 if (pediuCompleta && faixaMedida !== 'completa') {
   aviso += ' Faixa completa pedida por --completa (a medida do diff dava "' + faixaMedida + '"): A e B sao o arquivo ' +
@@ -1092,6 +1171,7 @@ if (faltasDaReferencia.length) saida.referenciaQueFalta = faltasDaReferencia;
 if (semPedido) saida.semPedido = semPedido;
 if (arquivada) saida.arquivada = arquivada;
 if (arquivada && arquivadaAberta) saida.arquivadaAberta = true;
+if (refeita) saida.refeita = refeita;
 if (herdadosDaFechada.length) saida.herdados = herdadosDaFechada.length;
 if (degradado) {
   saida.degradado = degradado.trim();
@@ -1114,8 +1194,8 @@ if (inventarioJson) {
     'duas fotos' : '') + ') e o que sumiu no trabalho; o apurar-ronda.js diz o "mantido N/N" no fecho. Nao o mostre a ' +
     'nenhum inspetor.';
 }
-const CAMPOS_DE_CAMINHO = ['base', 'a', 'b', 'regua', 'pedido', 'vereditos', 'contrato', 'referencia', 'arquivada', 'design',
-  'imagem', 'evidencia', 'caminho'];
+const CAMPOS_DE_CAMINHO = ['base', 'a', 'b', 'regua', 'pedido', 'vereditos', 'contrato', 'referencia', 'arquivada',
+  'refeita', 'design', 'imagem', 'evidencia', 'caminho'];
 process.stdout.write(JSON.stringify(saida, function (chave, v) {
   return typeof v === 'string' && CAMPOS_DE_CAMINHO.indexOf(chave) !== -1 ? comBarraNormal(v) : v;
 }, 2) + '\n');

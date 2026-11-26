@@ -378,7 +378,7 @@ function lerComando(cmd, fundo, opts) {
       if (c === '{') { blocos.push({ marca: noForEach, fora: noForEach }); noForEach = false; }
       else if (c === '}') { const b = blocos.pop(); noForEach = b ? b.fora : false; }
       else if (!dePipe) noForEach = false;
-      if (!dePipe) doCano = cano;
+      if (!dePipe) doCano = cano && !op.semCano;
       i++;
       continue;
     }
@@ -455,7 +455,7 @@ function lerComando(cmd, fundo, opts) {
           // fica de fora: o `(` sozinho NAO executa em prosa, e propaga-lo
           // reabria o falso positivo que a D68 fechou.
           const opFilho = seg.posCmd.has(k) ? op
-            : { dolarSepara: !!op.dolarSepara, craseSepara: !!op.craseSepara };
+            : { dolarSepara: !!op.dolarSepara, craseSepara: !!op.craseSepara, semCano: !!op.semCano || padraoDeBusca(seg) };
           for (const s of lerComando(seg.tokens[k], nivel + 1, opFilho)) aninhados.push(s);
           // D67/P0-3: se ESTE segmento e um `cmd`/`cmd.exe`, o argumento citado
           // pode ser lido pelo cmd.exe, onde o `#` NAO e comentario. Releia com o
@@ -475,6 +475,18 @@ function lerComando(cmd, fundo, opts) {
     for (const s of aninhados) segmentos.push(s);
   }
   return segmentos;
+}
+
+// O padrao de uma busca (grep, rg, findstr, Select-String) e texto que nenhum shell roda: relido como comando, o `|`
+// dele nao abre cano (`grep -n "rm -f\|rm -rf" a.js` barrava como apagar no fim do cano). Fica de fora quem roda algo:
+// a substituicao de comando no segmento (`$(...)`, crase), que o shell de fora expande, e o `--pre` do rg, que roda o
+// seu valor. So o cano sai: as outras regras seguem lendo o padrao relido.
+// atalho: so o token 0 diz se o segmento e busca. limite: com prefixo (`LC_ALL=C grep`, `sudo grep`, `env grep`) o
+// padrao segue relido e o `|` dele barra, para o lado seguro. trocar quando: uma busca com prefixo barrar uso real.
+const BUSCA =/^(?:grep|egrep|fgrep|zgrep|rg|findstr|select-string|sls)$/;
+function padraoDeBusca(seg) {
+  return BUSCA.test(nomeBase(seg.tokens[0])) && !/\$\(|`/.test(seg.texto) &&
+    !seg.tokens.some(function (t) { return /^--pre(?:=|$)/.test(t); });
 }
 
 // D244/defeito 5: o corpo de um heredoc so e TEXTO quando quem o recebe e um escritor de
@@ -1586,7 +1598,8 @@ function motivo(comando, r, alvo) {
   ].concat(linhasDoAlvo, [
     '',
     /* a 1a opcao depende da regra: so as de apagar arquivo tem a forma que passa */
-    apagar ? 'Apagar arquivo pelo nome (sem -r e sem curinga), dentro do escopo e fora dos intocaveis, passa.' : null,
+    apagar ? 'Apagar arquivo pelo nome (sem -r e sem curinga), dentro do escopo, fora dos intocaveis e fora de ' +
+      '.claude/ e de .git, passa.' : null,
     apagar ? '' : null,
     'Faca uma destas:',
     apagar

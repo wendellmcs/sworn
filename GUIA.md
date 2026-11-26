@@ -1771,7 +1771,7 @@ as vezes do manual, e a rota de tela entra junto; o `sworn:playbook` também é 
 
 **O que nunca é usado aparece em número.** Desde a 0.9.0, cada ordem que o sworn dá ao Claude (rodar o
 `/sworn:learn`, o `/sworn:audit`, o `/sworn:calibrate`, o `/sworn:init`, revisar antes do commit,
-carregar o manual e, desde a 0.92.0, as cinco rotas da skill certa: a rubrica de tela, revisar o plano, conferir a
+carregar o manual e, desde a 0.92.0, as cinco rotas da skill certa: o design da tela, revisar o plano, conferir a
 etapa com o plano, diagnosticar a sessão e o esforço alto) conta em `.claude/sworn/contadores.json` como **dada** (uma vez enquanto está pendente),
 **cumprida** (a skill pedida rodou depois, na mesma sessão, pelo agente principal) ou **recusada pelo dono** (só onde
 há sinal: o commit com `# sworn: sem-revisao` depois de negado; nas outras sai `-`). A auditoria automática

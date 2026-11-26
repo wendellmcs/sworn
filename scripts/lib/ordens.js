@@ -194,7 +194,7 @@ const SKILL_DA_ORDEM = { aprender: 'learn', auditar: 'audit', calibrar: 'calibra
 const MANUAL = /padrao|^(sworn:)?playbook$/i;
 const PLAYBOOK = /^(sworn:)?playbook$/i;
 const FASES = ['dada', 'cumprida', 'recusada'];
-const ROTULO = { revisar: 'revisar antes do commit', tela: 'rubrica de tela', plano: 'revisar o plano',
+const ROTULO = { revisar: 'revisar antes do commit', tela: 'design da tela', plano: 'revisar o plano',
   etapa: 'conferir a etapa com o plano', diagnosticar: 'diagnosticar a sessao', aaa: 'esforco alto' };
 const RECUSA_MEDIDA = ['revisar'];
 // A5-37 (D735): o que o "-" esconde e o passo.

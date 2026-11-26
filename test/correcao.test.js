@@ -71,6 +71,23 @@ test('correcao: relato de bug, resposta a pergunta e pedido comum NAO disparam',
   for (const p of NEGATIVOS) assert.strictEqual(correcao.pareceCorrecao(p), false, 'disparou sem dever: ' + JSON.stringify(p));
 });
 
+// O dono escreve "vc" por "voce" e "n" por "nao": a correcao abreviada conta como a escrita por inteiro.
+test('correcao: "vc" e "n" abreviados contam como "voce" e "nao"', () => {
+  for (const p of ['vc errou', 'vc esqueceu de rodar os testes', 'vc ja ignorou a regra', 'n foi isso que eu pedi',
+    'ok, n foi isso que pedi', 'cara, n e assim', 'mas n era isso', 'n e assim', 'n era isso', 'N, use o Edit', 'ok. n, volte o que fez',
+    'n e assim que se faz', 'ok. n e assim!', 'mas n e assim, refaca']) {
+    assert.strictEqual(correcao.pareceCorrecao(p), true, 'nao detectou: ' + JSON.stringify(p));
+  }
+  // o "n" fora do comeco da clausula e uma letra, e numa lista depois de virgula ou da conjuncao "e" tambem, e
+  // depois de ponto quando "assim" nao fecha a frase; "n," sem imperativo e resposta; pergunta segue fora
+  for (const p of ['o valor de n e assim calculado', 'o n era assim antes', 'calcule para i, j, n e assim por diante',
+    'a1, a2, ..., n e assim por diante', 'de 1 ate a cota, n e assim por diante', 'n, obrigado', 'n, pode seguir', 'pq vc n faz o push?',
+    'calcule para i, j e n e assim por diante', 'Seja n. N e assim definido', 'calcule para i, j e n e assim.',
+    'some i, j e n e assim']) {
+    assert.strictEqual(correcao.pareceCorrecao(p), false, 'disparou sem dever: ' + JSON.stringify(p));
+  }
+});
+
 // D477: retorno de subagente e aviso de tarefa chegam ao UserPromptSubmit como prompt (mesma forma da D475,
 // lida na transcricao). O relatorio que CITA uma correcao nao e o dono corrigindo; o mesmo texto do dono segue valendo.
 test('correcao (D477): relatorio de subagente e aviso de tarefa NAO disparam; o dono segue disparando', () => {

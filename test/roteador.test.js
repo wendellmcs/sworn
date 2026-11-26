@@ -56,6 +56,18 @@ test('roteador: doPedido acha o "por que deu errado" e o "siga o plano", e so el
   for (const torto of [null, undefined, 5, {}, ['por que voce errou']]) assert.deepStrictEqual(roteador.doPedido(torto), []);
 });
 
+// O dono escreve "n" por "nao" ("pq vc n seguiu?"): o "n" sozinho conta como o "nao", so antes dos mesmos verbos.
+test('roteador: doPedido le o "n" abreviado como o "nao" do que deu errado', () => {
+  for (const frase of ['pq vc n seguiu o plano?', 'por que vc n leu o handoff', 'por que o claude n rodou os testes',
+    'por que a sessao n funcionou']) {
+    assert.deepStrictEqual(roteador.doPedido(frase), ['diagnosticar'], frase);
+  }
+  // o presente e pedido de fazer, nao de diagnosticar; e o "n" fora dos verbos e so uma letra
+  for (const frase of ['pq vc n faz o push?', 'por que vc escolheu n = 5?', 'por que voce n?']) {
+    assert.deepStrictEqual(roteador.doPedido(frase), [], frase);
+  }
+});
+
 test('roteador: daEdicao acha tela, plano, etapa e AAA pelo arquivo e pela edicao', () => {
   const W = function (texto) { return { content: texto }; };
   const E = function (velho, novo) { return { old_string: velho, new_string: novo }; };

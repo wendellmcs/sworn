@@ -425,6 +425,31 @@ test('F4e guias: o despacho com modelo em branco segue o do agente; o guia so na
   assert.strictEqual(guias.comGuia(reenviado + '\n', g), reenviado + '\n', 'o fim com espaco ainda e o reenviado');
 });
 
+// O juiz que troca o modelo do despacho (o inspetor um degrau acima) recebe o pedido ja com o guia de quem o escreveu:
+// o guia que fica no fim e o do modelo que vai rodar, nao o de antes.
+test('F4e guias: o guia de outro modelo no fim do pedido sai, e entra o do modelo que vai rodar', () => {
+  const A = '\nWhere this guidance conflicts with the task above, the task wins.';
+  const g = guias.blocoDoTexto(guiaDeTeste());
+  const outro = guias.blocoDoTexto(guiaDeTeste().replace('model: claude-opus-5-5', 'model: claude-sonnet-5-5'));
+  assert.notStrictEqual(outro, g);
+  assert.strictEqual(guias.comGuia(guias.comGuia('tarefa', outro), g), 'tarefa\n\n' + g + A);
+  assert.strictEqual(guias.comGuia(guias.comGuia('tarefa', outro) + '\n', g), 'tarefa\n\n' + g + A, 'o fim com espaco');
+  assert.strictEqual(guias.comGuia(guias.comGuia('', outro), g), g + A, 'pedido que e so o guia de outro');
+  // so o ultimo cabecalho conta: o guia citado no meio da tarefa fica, e o do fim, do mesmo modelo, tambem
+  const meio = 'Look:\n' + outro + '\nend.';
+  const r = guias.comGuia(meio, g);
+  assert.strictEqual(guias.comGuia(r, g), r);
+  assert.strictEqual(guias.comGuia(guias.comGuia(meio, outro), g), meio + '\n\n' + g + A);
+  // a frase final sem cabecalho de guia nenhum e da tarefa: fica como veio
+  assert.strictEqual(guias.comGuia('tarefa' + A, g), 'tarefa' + A);
+  // o texto da tarefa depois de um guia de outro modelo, terminando na frase final, nao e guia: fica inteiro
+  const tarefaDepois = guias.comGuia('', outro) + '\n\nNova tarefa.' + A;
+  assert.strictEqual(guias.comGuia(tarefaDepois, g), tarefaDepois, 'a tarefa depois do guia velho fica');
+  // o guia de outro modelo com fim de linha CRLF tambem sai
+  const crlf = guias.comGuia('tarefa', outro).replace(/\n/g, '\r\n');
+  assert.strictEqual(guias.comGuia(crlf, g), 'tarefa\n\n' + g + A, 'o guia velho em CRLF');
+});
+
 test('F4e guias: a conferencia acusa a source torta, a pagina vazia e nao chama de novo o id da familia sem guia', async () => {
   const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-f4e3r-'));
   try {

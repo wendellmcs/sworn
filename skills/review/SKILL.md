@@ -98,7 +98,8 @@ The lenses of each band are in `scripts/lib/veredito.js` → `lentesDaFaixa`.
 The script measures lines, not meaning. **You can move up a band, never down:** 3 lines that change logic go up to
 `duas`; `duas` without a red test and mutation run goes up to `completa`; a change that builds a screen goes up to `completa`.
 To go up to `completa`, pass `--completa` in Step 1: the package comes out with the whole file, with no excerpt. If the round was already
-prepared without it, delete its folder, which has no verdicts yet, and prepare again with the flag.
+prepared without it and has no verdicts yet, run Step 1 again with `--completa --refazer`: the old round is set aside, nothing
+deleted, and the new one keeps its number (output field `refeita`). A round with a verdict is not redone.
 Tell the user the band used and, if you went up, why. The stop rule (Step 5) is the same in every band.
 
 **Two families, by owner's decision.** They diverge **by design**:

@@ -582,12 +582,12 @@ const GANCHO_ESCRITA_DO_B_FALHA = [
   "};"
 ].join('\n');
 
-function rodarComGancho(cwd, rel, ganchoSrc) {
+function rodarComGancho(cwd, rel, ganchoSrc, extras) {
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sworn-gancho-'));
   try {
     const gancho = path.join(pasta, 'gancho.js');
     fs.writeFileSync(gancho, ganchoSrc, 'utf8');
-    return spawnSync(process.execPath, ['--require', gancho, CLI, '--arquivo', rel, '--semente', 'fixa'], {
+    return spawnSync(process.execPath, ['--require', gancho, CLI, '--arquivo', rel, '--semente', 'fixa'].concat(extras || []), {
       cwd: cwd, encoding: 'utf8', shell: false
     });
   } finally { fs.rmSync(pasta, { recursive: true, force: true }); }
@@ -638,7 +638,7 @@ test('0.3.2/item 9: pasta das revisoes que e um arquivo (o mkdir falha) vira ERR
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('0.3.2/item 9: gravacao que falha depois de criar a pasta da ronda diz qual pasta ficou pela metade e manda apagar', () => {
+test('0.3.2/item 9: gravacao que falha depois de criar a pasta da ronda diz qual pasta ficou pela metade e manda refazer', () => {
   const dir = repoDeEnsaio();
   try {
     const r = rodarComGancho(dir, 'raiz.txt', GANCHO_ESCRITA_DO_B_FALHA);
@@ -647,11 +647,24 @@ test('0.3.2/item 9: gravacao que falha depois de criar a pasta da ronda diz qual
     assert.match(r.stdout, /^ERRO: /, r.stdout);
     assert.match(r.stdout, /EACCES/, 'a causa vem na mensagem: ' + r.stdout);
     assert.match(r.stdout, /pela metade/, r.stdout);
-    assert.match(r.stdout, /apague/i, r.stdout);
+    // o portao de comando destrutivo recusa apagar dentro de .claude/: a mensagem manda o --refazer, que poe de lado
+    assert.match(r.stdout, /rode de novo com --refazer/, r.stdout);
+    assert.doesNotMatch(r.stdout, /apague/i, r.stdout);
     const pasta = path.join(baseDeRevisao(dir), 'raiz.txt', '1');
     assert.ok(fs.existsSync(pasta), 'a pasta da ronda ficou no disco (o que a mensagem tem de apontar)');
     assert.ok(r.stdout.indexOf('.claude/sworn/revisao/raiz.txt/1') !== -1, 'a mensagem aponta a pasta certa: ' + r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  // controle: no formato antigo (pastas numeradas soltas) o --refazer nao vale; apagar dentro de .claude/ o portao
+  // recusa, mover passa: a mensagem manda mover a pasta para fora
+  const dir2 = repoDeEnsaio();
+  try {
+    fs.mkdirSync(path.join(baseDeRevisao(dir2), '1'), { recursive: true });
+    const r = rodarComGancho(dir2, 'raiz.txt', GANCHO_ESCRITA_DO_B_FALHA);
+    assert.strictEqual(r.stderr, '', 'stack trace na saida de erro: ' + r.stderr);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.match(r.stdout, /A pasta \.claude\/sworn\/revisao\/2 ficou pela metade, .*mova-a para fora de \.claude\/sworn\/revisao antes de rodar de novo/, r.stdout);
+    assert.doesNotMatch(r.stdout, /--refazer|apague/i, r.stdout);
+  } finally { fs.rmSync(dir2, { recursive: true, force: true }); }
 });
 
 test('0.3.2/item 10: flag sem valor, ou seguida de outra flag, e ERRO de uso que nomeia a flag', () => {
@@ -858,6 +871,239 @@ test('0.3.3/item 2: base sem fechada.json (revisao em andamento) segue como ante
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// A ronda preparada numa faixa baixa sobe para a completa sem apagar nada: o --refazer poe de lado a ultima ronda, ainda
+// sem voto, com um nome que nenhuma contagem de ronda le, e a ronda nova sai com o mesmo numero.
+test('--refazer: a ultima ronda sem voto vai para <n>-refeita-<carimbo>, e a nova sai com o mesmo numero', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = JSON.parse(rodarCli(dir, 'raiz.txt').stdout);
+    assert.notStrictEqual(s1.faixa, 'completa', 'o ensaio precisa de uma faixa abaixo da completa');
+    const antes = fotoDaPasta(path.join(s1.base, '1'));
+    const r = rodarComGancho(dir, 'raiz.txt', GANCHO_HORA_FIXA, ['--completa', '--refazer']);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const s2 = JSON.parse(r.stdout);
+    assert.strictEqual(s2.ronda, 1, 'a ronda refeita guarda o numero');
+    assert.strictEqual(s2.faixa, 'completa');
+    const posta = path.join(s1.base, '1-refeita-2026-09-29-173045');
+    assert.strictEqual(s2.refeita, barra(posta), r.stdout);
+    assert.deepStrictEqual(fs.readdirSync(s1.base).sort(), ['1', '1-refeita-2026-09-29-173045']);
+    assert.deepStrictEqual(fotoDaPasta(posta), antes, 'nada se apaga: a ronda de antes, inteira, ao lado');
+    assert.ok(s2.aviso.includes('1-refeita-2026-09-29-173045'), s2.aviso);
+    // refeita de novo no mesmo segundo: o nome ganha sufixo, e a primeira posta de lado segue la
+    const s3 = JSON.parse(rodarComGancho(dir, 'raiz.txt', GANCHO_HORA_FIXA, ['--refazer']).stdout);
+    assert.strictEqual(s3.refeita, barra(posta + '-2'));
+    assert.deepStrictEqual(fotoDaPasta(posta), antes);
+    // a pasta posta de lado nao conta como ronda: a proxima preparacao, sem a flag, sai na ronda 2
+    assert.strictEqual(JSON.parse(rodarCli(dir, 'raiz.txt').stdout).ronda, 2);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('--refazer: ronda com voto, na passada direta ou na invertida, e ERRO e nada se grava', () => {
+  for (const sub of [['vereditos'], ['invertida', 'vereditos']]) {
+    const dir = repoDeEnsaio();
+    try {
+      const s1 = JSON.parse(rodarCli(dir, 'raiz.txt').stdout);
+      const votos = path.join.apply(path, [s1.base, '1'].concat(sub));
+      fs.mkdirSync(votos, { recursive: true });
+      fs.writeFileSync(path.join(votos, 'correcao.json'), '{"lente":"correcao"}', 'utf8');
+      const antes = fotoDaPasta(s1.base);
+      const r = rodarCli(dir, 'raiz.txt', undefined, ['--completa', '--refazer']);
+      assert.strictEqual(r.status, 1, r.stdout);
+      assert.strictEqual(r.stderr, '', r.stderr);
+      assert.match(r.stdout, /^ERRO: --refazer .*ja tem voto \(\.claude\/sworn\/revisao\/raiz\.txt\/1\/.*Nada foi gravado/,
+        r.stdout);
+      assert.match(r.stdout, /prepare a proxima com a flag que faltou \(--completa, --tela-depois\), sem o --refazer\./,
+        'a recusa diz que flag: ' + r.stdout);
+      assert.deepStrictEqual(fotoDaPasta(s1.base), antes, sub.join('/') + ': a base segue como estava');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
+  // a pasta de votos que nao se le (aqui, um arquivo no lugar dela) tambem fica: nao se sabe se ha voto
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = JSON.parse(rodarCli(dir, 'raiz.txt').stdout);
+    fs.rmSync(s1.vereditos, { recursive: true, force: true });
+    fs.writeFileSync(s1.vereditos, 'x', 'utf8');
+    const antes = fotoDaPasta(s1.base);
+    const r = rodarCli(dir, 'raiz.txt', undefined, ['--refazer']);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.strictEqual(r.stderr, '', r.stderr);
+    assert.match(r.stdout, /^ERRO: --refazer nao mexeu na ronda 1: nao consegui ler \.claude\/sworn\/revisao\/raiz\.txt\/1\/vereditos \(causa: .+\) para saber se ela ja tem voto, e ela segue como estava\. Confira a pasta e rode de novo\. Nada foi gravado\.\n$/, r.stdout);
+    assert.deepStrictEqual(fotoDaPasta(s1.base), antes);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('--refazer: sem ronda a refazer, prepara a ronda 1 como sempre; o rename que falha e ERRO', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = JSON.parse(rodarCli(dir, 'raiz.txt', undefined, ['--refazer']).stdout);
+    assert.strictEqual(s1.ronda, 1);
+    assert.strictEqual('refeita' in s1, false);
+    const antes = fotoDaPasta(s1.base);
+    const r = rodarComGancho(dir, 'raiz.txt', GANCHO_RENAME_FALHA, ['--refazer']);
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.strictEqual(r.stderr, '', r.stderr);
+    assert.match(r.stdout, /^ERRO: --refazer nao mexeu na ronda 1: nao consegui mover \.claude\/sworn\/revisao\/raiz\.txt\/1 para \.claude\/sworn\/revisao\/raiz\.txt\/1-refeita-\d{4}-\d{2}-\d{2}-\d{6} \(causa: .*EPERM.*\), e ela segue onde estava\. Feche o que estiver usando essa pasta e rode de novo\. Nada foi gravado\.\n$/, r.stdout);
+    assert.deepStrictEqual(fotoDaPasta(s1.base), antes);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Sem ronda para mover (base nova, ou a fechada que este run arquivou), a flag nao muda nada, e o aviso diz isso.
+test('--refazer sem ronda a refazer, na base nova ou na recem-arquivada, diz no aviso que nao mudou nada', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt', undefined, ['--refazer']));
+    assert.match(s1.aviso, /O --refazer nao mudou nada: esta revisao nao tinha ronda para mover/, s1.aviso);
+    fecharBase(s1);
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt', undefined, ['--refazer']));
+    assert.ok(s2.arquivada, JSON.stringify(s2));
+    assert.strictEqual('refeita' in s2, false);
+    assert.match(s2.aviso, /O --refazer nao mudou nada: esta revisao nao tinha ronda para mover/, s2.aviso);
+    assert.doesNotMatch(saidaOk(rodarCli(dir, 'raiz.txt')).aviso, /--refazer/, 'sem a flag, nada se diz dela');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A ronda 1 de uma base arquivada num run anterior guarda os herdados: a refeita os leva, podados contra o arquivo de
+// agora, e a posta de lado fica inteira.
+test('--refazer: a ronda 1 refeita leva os herdados da posta de lado, podados de novo', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const arq = path.join(dir, 'raiz.txt');
+    const oito = ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8'];
+    fs.writeFileSync(arq, oito.join('\n') + '\n', 'utf8');
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    const mapa = JSON.parse(fs.readFileSync(path.join(s1.base, '1', 'mapa.json'), 'utf8')).mapa;
+    const T = mapa.A === 'trabalho' ? 'A' : 'B';
+    const ref = (linha) => ({ ronda: 1, lente: 'correcao', arquivo: T + '.txt', linha: linha, severidade: 'P2',
+      prova: 'fica assim' });
+    fs.writeFileSync(path.join(s1.base, 'fechada.json'), '{"ronda":1,"sessao":"s1"}', 'utf8');
+    fs.writeFileSync(path.join(s1.base, 'refutados.json'), JSON.stringify([ref(3), ref(6)]), 'utf8');
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s2.herdados, 2, JSON.stringify(s2));
+    const h2 = JSON.parse(fs.readFileSync(path.join(s2.base, '1', 'herdados.json'), 'utf8'));
+    oito[7] = 'MUDOU'; // a janela da linha 6 (t4..t8) muda; a da linha 3 (t1..t5) fica
+    fs.writeFileSync(arq, oito.join('\n') + '\n', 'utf8');
+    const s3 = saidaOk(rodarComGancho(dir, 'raiz.txt', GANCHO_HORA_FIXA, ['--completa', '--refazer']));
+    assert.ok(s3.refeita, JSON.stringify(s3));
+    assert.strictEqual(s3.ronda, 1);
+    assert.strictEqual(s3.herdados, 1, JSON.stringify(s3));
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(s3.base, '1', 'herdados.json'), 'utf8')), [h2[0]]);
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(s3.refeita, 'herdados.json'), 'utf8')), h2,
+      'a posta de lado fica inteira');
+    // a ronda posta de lado sem herdados (a ronda 2) nao leva nada
+    const s4 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    assert.strictEqual(s4.ronda, 2);
+    const s5 = saidaOk(rodarCli(dir, 'raiz.txt', undefined, ['--refazer']));
+    assert.ok(s5.refeita, JSON.stringify(s5));
+    assert.strictEqual('herdados' in s5, false, JSON.stringify(s5));
+    assert.strictEqual(fs.existsSync(path.join(s5.base, '2', 'herdados.json')), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A ronda 1 da base nova que fica pela metade ja tem os herdados: o --refazer dela os leva, sem a base antiga.
+test('--refazer: a ronda 1 que ficou pela metade ainda leva os herdados para a refeita', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    const mapa = JSON.parse(fs.readFileSync(path.join(s1.base, '1', 'mapa.json'), 'utf8')).mapa;
+    const T = mapa.A === 'trabalho' ? 'A' : 'B';
+    fs.writeFileSync(path.join(s1.base, 'fechada.json'), '{"ronda":1,"sessao":"s1"}', 'utf8');
+    fs.writeFileSync(path.join(s1.base, 'refutados.json'), JSON.stringify([{ ronda: 1, lente: 'correcao',
+      arquivo: T + '.txt', linha: 1, severidade: 'P2', prova: 'fica assim' }]), 'utf8');
+    const r = rodarComGancho(dir, 'raiz.txt', GANCHO_ESCRITA_DO_B_FALHA);
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.strictEqual(r.stderr, '', r.stderr);
+    assert.match(r.stdout, /ficou pela metade/, r.stdout);
+    assert.ok(fs.existsSync(path.join(s1.base, '1', 'herdados.json')), 'a ronda pela metade ficou sem os herdados');
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt', undefined, ['--refazer']));
+    assert.ok(s2.refeita, JSON.stringify(s2));
+    assert.strictEqual(s2.herdados, 1, JSON.stringify(s2));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// No formato antigo, as rondas soltas em revisao/ podem ser da revisao de outro arquivo: o --refazer nao as mexe.
+test('--refazer no formato antigo (pastas numeradas soltas) e ERRO e nada se grava', () => {
+  const dir = repoDeEnsaio();
+  try {
+    fs.mkdirSync(path.join(baseDeRevisao(dir), '1'), { recursive: true });
+    const antes = fotoDaPasta(baseDeRevisao(dir));
+    const r = rodarCli(dir, 'raiz.txt', undefined, ['--refazer']);
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.strictEqual(r.stderr, '', r.stderr);
+    assert.match(r.stdout, /^ERRO: --refazer nao vale no formato antigo .*Nada foi gravado\.\n$/, r.stdout);
+    assert.deepStrictEqual(fotoDaPasta(baseDeRevisao(dir)), antes);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Voto e o .json que o gancho do plugin (scripts/gravar-veredito.js) grava; outro arquivo na pasta (desktop.ini, .gitkeep) nao segura a ronda.
+test('--refazer: so o .json na pasta de votos conta como voto', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    for (const nome of ['desktop.ini', '.gitkeep', 'correcao.json.tmp']) {
+      fs.writeFileSync(path.join(s1.vereditos, nome), '', 'utf8');
+    }
+    const s2 = saidaOk(rodarCli(dir, 'raiz.txt', undefined, ['--refazer']));
+    assert.ok(s2.refeita, JSON.stringify(s2));
+    assert.strictEqual(s2.ronda, 1);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A ronda de conferencia sem voto tambem se refaz; com voto, a recusa nao manda preparar outra, que ela nao se repete.
+test('--conferencia --refazer: a conferencia sem voto se refaz; com voto, e ERRO', () => {
+  const dir = repoDeEnsaio();
+  try {
+    const s1 = saidaOk(rodarCli(dir, 'raiz.txt'));
+    fs.writeFileSync(path.join(s1.base, 'fechada.json'), JSON.stringify({ ronda: 3, sessao: 's', motivo: 'm',
+      degradado: null, aprovado: false, seguraram: [{ lente: 'correcao', ronda: 3, severidade: 'P1', linha: 1,
+        descricao: 'quebra' }] }), 'utf8');
+    const c1 = saidaOk(rodarCli(dir, 'raiz.txt', undefined, ['--conferencia']));
+    assert.strictEqual(c1.ronda, 2);
+    const c2 = saidaOk(rodarComGancho(dir, 'raiz.txt', GANCHO_HORA_FIXA, ['--conferencia', '--refazer']));
+    assert.strictEqual(c2.ronda, 2);
+    assert.strictEqual(c2.refeita, barra(path.join(s1.base, '2-refeita-2026-09-29-173045')));
+    assert.deepStrictEqual(c2.lentes, ['correcao']);
+    fs.writeFileSync(path.join(c2.vereditos, 'correcao.json'), '{"lente":"correcao"}', 'utf8');
+    const r = rodarCli(dir, 'raiz.txt', undefined, ['--conferencia', '--refazer']);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.strictEqual(r.stderr, '', r.stderr);
+    assert.match(r.stdout, /^ERRO: --refazer .*ja tem voto .*Apure essa ronda \(apurar-ronda\.js\): a conferencia nao se repete\. Nada foi gravado\.\n$/, r.stdout);
+    // sem o --refazer, a recusa de sempre
+    const sem = rodarCli(dir, 'raiz.txt', undefined, ['--conferencia']);
+    assert.match(sem.stdout, /^ERRO: --conferencia ja foi preparada nesta revisao \(ronda 2\)/, sem.stdout);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+const GANCHO_MKDIR_DA_RONDA_FALHA = [
+  "const fs = require('node:fs');",
+  "const orig = fs.mkdirSync;",
+  "fs.mkdirSync = function (p) {",
+  "  if (/[\\\\/]raiz\\.txt[\\\\/]1$/.test(String(p))) {",
+  "    throw Object.assign(new Error(\"EACCES: permission denied, mkdir '\" + p + \"'\"), { code: 'EACCES' });",
+  "  }",
+  "  return orig.apply(this, arguments);",
+  "};"
+].join('\n');
+
+// A gravacao que falha depois do --refazer: a mensagem diz onde ficou a ronda posta de lado, e nao que nada mudou.
+test('--refazer: a gravacao que falha depois de por a ronda de lado diz onde ela ficou', () => {
+  const dir = repoDeEnsaio();
+  try {
+    saidaOk(rodarCli(dir, 'raiz.txt'));
+    const posta = /A ronda 1 anterior, ainda sem voto, ja foi posta de lado em \.claude\/sworn\/revisao\/raiz\.txt\/1-refeita-\d{4}-\d{2}-\d{2}-\d{6}(-\d+)?\./;
+    const r = rodarComGancho(dir, 'raiz.txt', GANCHO_ESCRITA_DO_B_FALHA, ['--completa', '--refazer']);
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.strictEqual(r.stderr, '', r.stderr);
+    assert.match(r.stdout, /ficou pela metade/, r.stdout);
+    assert.match(r.stdout, posta, r.stdout);
+    const m = rodarComGancho(dir, 'raiz.txt', GANCHO_MKDIR_DA_RONDA_FALHA, ['--refazer']);
+    assert.strictEqual(m.status, 1, m.stdout + m.stderr);
+    assert.strictEqual(m.stderr, '', m.stderr);
+    assert.match(m.stdout, /^ERRO: nao consegui criar a pasta da ronda .*A ronda nova nao foi gravada\./, m.stdout);
+    assert.doesNotMatch(m.stdout, /Nada foi gravado/, m.stdout);
+    assert.match(m.stdout, posta, m.stdout);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // Pendencia #8 (0.47.0): o git do teste, com a saida de erro na mensagem; `env` opcional (o do processo sem ele).
 function gitOk(dir, args, env) {
   const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', shell: false, env: env || process.env });
@@ -883,6 +1129,8 @@ function ultimaDaBase(pasta) {
   })(pasta);
   return maior;
 }
+// A saida JSON de um preparar que deu certo (status 0). Ajudante geral do arquivo, nao so da Pendencia #8: os testes
+// do --refazer, acima, tambem a usam.
 function saidaOk(r) {
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   return JSON.parse(r.stdout);
@@ -2748,6 +2996,13 @@ test('L3-s104-6: flag desconhecida (--completo) e recusada e nada se grava; arqu
     assert.match(r.stdout, /--completo nao e uma opcao deste script/);
     assert.match(r.stdout, /uso: preparar-revisao\.js/);
     assert.strictEqual(fs.existsSync(baseDeRevisao(dir)), false, 'nada foi gravado');
+    // a flag sem valor nao engole a seguinte: a errada logo depois de cada uma tambem e recusada
+    for (const semValor of ['--completa', '--conferencia', '--refazer']) {
+      const s = rodarCli(dir, 'raiz.txt', null, [semValor, '--completo']);
+      assert.strictEqual(s.status, 1, semValor + ': ' + s.stdout);
+      assert.match(s.stdout, /--completo nao e uma opcao deste script/, semValor + ': ' + s.stdout);
+      assert.strictEqual(fs.existsSync(baseDeRevisao(dir)), false, semValor + ': nada foi gravado');
+    }
     fs.writeFileSync(path.join(dir, '--x.txt'), 'arquivo de nome estranho\n', 'utf8');
     assert.strictEqual(saidaOk(rodarCli(dir, '--x.txt')).arquivo, '--x.txt');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

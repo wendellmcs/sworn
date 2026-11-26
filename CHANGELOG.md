@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.95.0 — os defeitos que a prova ao vivo da skill de design achou, e a ronda refeita sem apagar nada
+
+**Novo**
+
+- **A ronda refeita sem apagar nada** (`scripts/preparar-revisao.js --refazer`, `skills/review/SKILL.md`). A ronda
+  preparada do jeito errado (sem o `--completa`, por exemplo) e ainda sem voto vai para `<n>-refeita-<carimbo>`, e a
+  nova fica com o mesmo número: a posta de lado não conta no teto de 3 rondas. Com voto já gravado, o `--refazer` para
+  com `ERRO:` e não grava nada. Antes, refazer pedia apagar a pasta dentro de `.claude/`, e a trava de comando
+  destrutivo recusa apagar ali.
+
+**Corrigido**
+
+- **O rótulo da rota de tela** (`scripts/lib/ordens.js`). Diz "design da tela", como a ordem que, desde a 0.94.0, manda
+  carregar o `sworn:design`. Antes dizia "rubrica de tela".
+- **O guia do modelo no fim do despacho** (`scripts/lib/guias-modelo.js`). Quando o juiz troca o modelo de um
+  subagente, o guia do modelo antigo, no fim do pedido, sai e entra o do novo. Antes ficava o antigo. Só muda a cauda
+  que é só guia: com texto da tarefa depois dele, o pedido fica como está. A quebra de linha CRLF também é lida.
+- **O `|` dentro do padrão de uma busca** (`scripts/lib/destrutivo.js`). `grep -n "rm -f\|rm -rf" a.js` não é mais
+  lido como um cano que termina em apagar. A busca que roda algo (`$(...)`, crase, o `--pre` do rg) e a busca com
+  prefixo (`sudo grep`) seguem barrando, para o lado seguro.
+- **O aviso da trava de comando destrutivo** (`scripts/lib/destrutivo.js`). Ele diz que apagar arquivo pelo nome
+  passa só fora de `.claude/` e de `.git`, que é o que a trava faz.
+- **O "n" e o "vc" abreviados** (`scripts/lib/roteador.js`, `scripts/lib/correcao.js`). "vc errou" e "n foi isso que
+  eu pedi" contam como "você" e "não", na rota do diagnóstico e na correção que vira regra proposta
+  (`/sworn:learn`). O "n" só conta no começo da cláusula, ou antes dos mesmos verbos na rota do diagnóstico. Numa conta
+  ("i, j e n e assim por diante", "Seja n. N e assim definido") ele é uma letra, e a pergunta no presente ("pq vc n faz
+  o push?") segue fora.
+
 ## 0.94.0 — a skill de design: a tela construída para a rubrica, com o movimento que se justifica e o dado do pior caso
 
 **Novo**

@@ -199,10 +199,27 @@ function familiaDoDespacho(pedido, padrao, sessao) {
 
 const A_TAREFA_VALE_MAIS = 'Where this guidance conflicts with the task above, the task wins.';
 
-/** O `prompt` com o `guia` no fim; sem guia, ou ja terminando no guia (o pedido reenviado como o gancho o reescreveu), fica. */
+const RE_CABECALHO = /(?:^|\r?\n)Guidance for (claude-[a-z0-9-]+) \(from Anthropic's official prompting guide\):\r?\n/g;
+
+// a cauda que e so um guia: o cabecalho, as linhas "- " e a frase final, nada mais
+const RE_SO_GUIA = /^\r?\n?Guidance for claude-[a-z0-9-]+ \(from Anthropic's official prompting guide\):\r?\n(?:- [^\r\n]*\r?\n)*Where this guidance conflicts with the task above, the task wins\.\s*$/;
+
+/**
+ * O `prompt` com o `guia` no fim. Sem guia, fica. Ja terminando num guia (o pedido reenviado como o gancho o reescreveu):
+ * fica, se o ultimo cabecalho e do mesmo modelo do `guia`; de outro modelo (o juiz trocou o modelo do despacho), esse
+ * guia do fim sai e entra o `guia`, mas so quando do ultimo cabecalho ao fim e so guia. Com texto da tarefa depois do
+ * guia velho, ou terminando na frase final sem cabecalho nenhum, a frase e da tarefa: fica.
+ */
 function comGuia(prompt, guia) {
   const p = String(prompt || '');
-  if (!guia || p.trimEnd().endsWith(A_TAREFA_VALE_MAIS)) return p;
+  if (!guia) return p;
+  if (p.trimEnd().endsWith(A_TAREFA_VALE_MAIS)) {
+    const ultimo = Array.from(p.matchAll(RE_CABECALHO)).pop();
+    const novo = /^Guidance for (claude-[a-z0-9-]+) /.exec(guia);
+    if (!ultimo || !novo || ultimo[1] === novo[1] || !RE_SO_GUIA.test(p.slice(ultimo.index))) return p;
+    const antes = p.slice(0, ultimo.index).trimEnd();
+    return (antes ? antes + '\n\n' : '') + guia + '\n' + A_TAREFA_VALE_MAIS;
+  }
   return (p ? p + '\n\n' : '') + guia + '\n' + A_TAREFA_VALE_MAIS;
 }
 

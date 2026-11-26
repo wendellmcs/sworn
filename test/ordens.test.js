@@ -223,13 +223,13 @@ test('091 T6: as linhas da auditoria - diferenca contra a foto anterior, os nunc
   assert.deepStrictEqual(ordens.linhasDasOrdens(antes, agora, 7), [
     '- ordens dos ultimos 7 dias que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
     '  aprender 4/3/-; revisar antes do commit 6/5/1; manual 2/2/-',
-    '  nunca disparadas: auditar, calibrar, init, rubrica de tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto'
+    '  nunca disparadas: auditar, calibrar, init, design da tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto'
   ].concat(NOTA));
   // so o revisar mede a recusa: sem "-", sem a nota
   assert.deepStrictEqual(ordens.linhasDasOrdens({}, { ordem_revisar_dada: 1, ordem_revisar_recusada: 1 }, 1), [
     '- ordens do ultimo dia que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
     '  revisar antes do commit 1/0/1',
-    '  nunca disparadas: aprender, auditar, calibrar, init, manual, rubrica de tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto'
+    '  nunca disparadas: aprender, auditar, calibrar, init, manual, design da tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto'
   ]);
   // sem foto anterior (primeira auditoria): desde o comeco
   assert.strictEqual(ordens.linhasDasOrdens(null, agora, null)[0],

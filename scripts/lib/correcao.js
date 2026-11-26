@@ -57,6 +57,15 @@ const PADROES = [
   /\bnao\s+foi\s+(?:isso|isto)\s+que\s+(?:eu\s+)?(?:te\s+)?(?:pedi|quis|falei|disse|mandei)\b/,
   /\bnao\s+e\s+assim\b/,
   /\bnao\s+era\s+(?:isso|assim)\b/,
+  // o "n" abreviado ("n foi isso que eu pedi", "n era isso") so no comeco da clausula: no meio, "n" e uma letra
+  // ("o n era assim antes"). Depois de virgula, so quando o que vem antes e uma interjeicao curta
+  // ("ok, n foi isso"): numa lista ("i, j, n era isso") o "n" tambem e uma letra
+  new RegExp('(?:' + INI_SEM_VIRGULA + '|\\b(?:ok|ta|cara|po|poxa|mano|nossa|olha)\\s*,\\s*)n\\s+(?:foi\\s+(?:isso|isto)\\s+que\\s+(?:eu\\s+)?(?:te\\s+)?(?:pedi|quis|falei|disse|mandei)|' +
+    'era\\s+(?:isso|assim))\\b'),
+  // "n e assim" a parte: numa conta o "n" e letra tambem depois da conjuncao "e" ("i, j e n e assim.") e depois de
+  // ponto ("Seja n. N e assim definido"). Por isso o comeco nao aceita o "e", e so vale quando "assim" fecha a
+  // frase ou vem "que" ("n e assim que se faz")
+  new RegExp('(?:^|[.!?;:]\\s*|\\b(?:mas|ok|entao|ai)\\s+|\\b(?:ok|ta|cara|po|poxa|mano|nossa|olha)\\s*,\\s*)n\\s+e\\s+assim\\s*(?:$|[.!?,;:]|que\\b)'),
   // "de novo isso / esse erro", "outra vez isso" - reclamacao no comeco da frase ("rode de novo esse teste" nao)
   new RegExp(INI + '(?:de novo|outra vez)\\s+(?:isso|(?:esse|essa|este|esta)\\s+(?:erro|problema|bug|falha)|o mesmo erro)\\b'),
   // "pare de <verbo>" (nao "para de")
@@ -70,10 +79,10 @@ const PADROES = [
   new RegExp('(?:' + INI_SEM_VIRGULA + 'da\\s+proxima\\s+vez\\b|,\\s*da\\s+proxima\\s+vez\\b(?!\\s+que\\b))' + DEPOIS_NAO_E_ORDEM_PT),
   // "quantas vezes" so com verbo de falar/pedir ("quantas vezes o job roda por dia?" e pergunta de codigo)
   /\bquantas\s+vezes\b.{0,30}\b(?:dizer|falar|pedir|repetir|avisar|explicar|mandar|disse|falei|pedi|avisei)\b/,
-  // "voce errou"
-  /\bvoce\s+(?:ja\s+)?(?:errou|esqueceu|ignorou)\b/,
-  // "nao," + imperativo no comeco da frase: "nao, use X". Fora: "nao, pode seguir", "nao, obrigado", "nao, deixa assim".
-  new RegExp(FRASE + 'nao,\\s+(?:use|usa|faca|faz|coloque|ponha|troque|mude|remova|tire|apague|crie|escreva|volte|desfaca|nao|leia|rode|corrija|olhe|veja|era\\s+para|e\\s+para)\\b'),
+  // "voce errou" (e o "vc" abreviado)
+  /\b(?:voce|vc)\s+(?:ja\s+)?(?:errou|esqueceu|ignorou)\b/,
+  // "nao," (ou "n,") + imperativo no comeco da frase: "nao, use X". Fora: "nao, pode seguir", "nao, obrigado", "nao, deixa assim".
+  new RegExp(FRASE + 'n(?:ao)?,\\s+(?:use|usa|faca|faz|coloque|ponha|troque|mude|remova|tire|apague|crie|escreva|volte|desfaca|nao|leia|rode|corrija|olhe|veja|era\\s+para|e\\s+para)\\b'),
   // EN
   // "asked you" + palavra interrogativa e pergunta ("i asked you earlier which branch we use"), nao cobranca
   /\bi(?:'ve| have)?\s+(?:already\s+)?(?:told\s+you\b|asked\s+you\b(?!\s+(?:\w+\s+)?(?:which|what|where|when|who|whom|how|why|if|whether)\b))/,

@@ -725,6 +725,24 @@ test('destrutivo D871: del /f do cmd e o apagar no fim do cano barram; o cano qu
   for (const cmd of ['del /f a.txt', 'ls | xargs rm']) {
     assert.ok(destrutivo.motivo(cmd, destrutivo.classificar(cmd)).indexOf('Apagar arquivo pelo nome') !== -1, cmd);
   }
+  // o portao recusa o nome dentro de .claude/ e de .git mesmo no escopo: o aviso diz isso, senao o agente tenta de novo
+  assert.ok(/fora de \.claude\/ e de \.git/.test(destrutivo.motivo('rm -f a.txt', destrutivo.classificar('rm -f a.txt'))));
+});
+
+// O padrao de uma busca e texto que nenhum shell roda: o `|` dentro das aspas nao abre cano. A substituicao de comando
+// dentro do padrao roda, e o `--pre` do rg roda o seu valor: esses seguem barrando.
+test('destrutivo: o | no padrao entre aspas da busca nao e cano; o que roda dentro dele segue barrando', () => {
+  for (const cmd of ['grep -n "rm -f\\|rm -rf" scripts/a.js | head -8', 'grep -E "foo|rm -rf" a.js',
+    "grep -n 'a | rm' b.txt", 'grep.exe -n "a | rm" b', '/usr/bin/egrep -n "x | del" a.js', 'rg -n "a | xargs rm" src',
+    'Select-String -Pattern "a | Remove-Item" x.ps1', 'findstr /c:"a | del" x.txt', "grep -n \"echo 'a | rm'\" f"]) {
+    assert.strictEqual(destrutivo.classificar(cmd).destrutivo, false, 'devia passar: ' + cmd);
+  }
+  const motivo = 'apagar no fim do cano: apaga cada item que o comando anterior lista';
+  for (const cmd of ['grep "$(ls | xargs rm)" a.js', 'grep "`ls | xargs rm`" a.js', 'grep x a.js | xargs rm',
+    'echo "ls | xargs rm" | sh', 'bash -c "grep a b | xargs rm"', 'rg --pre "ls | xargs rm" x src',
+    'rg --pre="sh -c \'ls | xargs rm\'" x src', "sh -c 'ls | xargs rm'", 'grep "a\\\\" | xargs rm b']) {
+    assert.deepStrictEqual(destrutivo.classificar(cmd), { destrutivo: true, motivo: motivo }, cmd);
+  }
 });
 
 test('destrutivo D50: as outras formas de destruir referencia no remoto', () => {

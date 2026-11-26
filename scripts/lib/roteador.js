@@ -21,13 +21,14 @@ const TETO_DO_ALVO = 200;
 
 // "por que" + quem (o Claude, a sessao, o sworn) + o que deu errado, na mesma frase. "por que o teste falhou?" nao
 // entra: sem quem, e pergunta sobre o codigo, nao sobre a sessao. "porque" e "pq" tambem sao "because": so contam
-// na frase que termina em "?" ("o teste falhou porque o hook travou" nao e pergunta).
+// na frase que termina em "?" ("o teste falhou porque o hook travou" nao e pergunta). O "n" sozinho e o "nao" abreviado
+// ("pq vc n seguiu?"), so antes dos mesmos verbos.
 const POR_QUE = /\b(?:por\s+que|why)\b/;
 const POR_QUE_SO_NA_PERGUNTA = /\b(?:porque|pq)\b/;
 const SUJEITO = new RegExp('\\b(?:voce|vc|claude|modelo|agente|ia|sessao|chat|conversa|sworn|plugin|portao|gancho|' +
   'trava|you|model|agent|session|conversation|hook|gate)\\b');
 const FALHA = new RegExp('\\b(?:deu errado|falh\\w*|demor\\w*|travou|travaram|travando|quebr\\w*|repet\\w*|ignor\\w*|' +
-  'errou|esquec\\w*|dispar\\w*|nao (?:seguiu|fez|leu|rodou|funcion\\w*|obedec\\w*)|fail\\w*|went wrong|go wrong|' +
+  'errou|esquec\\w*|dispar\\w*|n(?:ao)? (?:seguiu|fez|leu|rodou|funcion\\w*|obedec\\w*)|fail\\w*|went wrong|go wrong|' +
   'broke|break\\w*|slow|took so long|loop\\w*|stuck|forgot|kept firing)\\b');
 const O_QUE_HOUVE = /\bo que (?:aconteceu|houve|deu errado)\b.*\b(?:sessao|chat|conversa)\b|\bwhat (?:happened|went wrong)\b.*\b(?:session|chat|conversation)\b/;
 const SIGA_O_PLANO = [
