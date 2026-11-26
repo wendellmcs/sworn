@@ -183,7 +183,12 @@ function encerrarTurno(e, s, avisoExtra) {
   if (entrega) {
     // D412: o turno que gravou o handoff e ja colou o bloco nao recebe a ordem de colar de novo.
     // Mesma regra do portao (handoffSemPrompt, declarada mais abaixo: `function` sobe ao topo do arquivo), sem o projeto: a ordem nao depende do portaoHandoff.
-    const jaColado = s.gravouHandoff === true && (!handoffSemPrompt(e, s, null) || promptAoDono !== null);
+    // 0.91.0 (A2): o prompt que so o gancho mostrou (F3b) nao esta na resposta: a ordem aponta a mensagem do sworn.
+    let jaColado = false;
+    if (s.gravouHandoff === true) {
+      if (!handoffSemPrompt(e, s, null)) jaColado = true;
+      else if (promptAoDono !== null) jaColado = saude.PROMPT_PELO_GANCHO;
+    }
     saida.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: saude.instrucaoAoModelo(vs.gatilhos, jaColado) };
   } else if (esperaNova) {
     saida.hookSpecificOutput = { hookEventName: 'Stop', additionalContext: saude.instrucaoAoModelo(vs.gatilhos, false, rodando) };

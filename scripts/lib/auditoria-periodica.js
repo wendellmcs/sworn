@@ -321,8 +321,10 @@ function avisoDaAuditoria(cwd, projeto, opcoes) {
     const ultima = lerMarca(cwd);
     const t = emMs(agora);
     const totais = ordensLib.totaisDasOrdens(cwd);
-    const retro = ordensLib.linhasDasOrdens(lerFoto(cwd), totais,
-      ultima !== null && ultima <= t ? (t - ultima) / DIA_MS : null);
+    const foto = lerFoto(cwd);
+    const janela = ultima !== null && ultima <= t ? (t - ultima) / DIA_MS : null;
+    // G4d (D928): o uso de cada skill do sworn no mesmo intervalo, com as nunca chamadas (lacuna de gatilho).
+    const retro = ordensLib.linhasDasOrdens(foto, totais, janela).concat(ordensLib.linhasDoUso(foto, totais, janela));
     let texto;
     try {
       // Plano 092 (D573): a conversa anterior (`opcoes.transcricao` no teste; senao achada pela entrada do gancho), so

@@ -94,6 +94,15 @@ io.blindar(function () {
         if (!e.agent_id && typeof skill === 'string' && require('./lib/ordens.js').MANUAL.test(skill)) s.manualCarregado = true;
         // Plano 091 T6: a skill do agente principal cumpre a ordem pendente dela (lib/ordens.js).
         if (!e.agent_id) s.ordensPendentes = require('./lib/ordens.js').marcarCumprida(s, skill);
+        // G4b (D928): a skill do sworn que entrou cala a rota dela no resto da sessao (lib/roteador.js); a do projeto
+        // com "padrao" no nome, nao. G4d: o uso conta nos contadores do turno. Try proprio: falha aqui nao desfaz o
+        // manual carregado nem a ordem cumprida.
+        if (!e.agent_id) {
+          try {
+            s.rotasDadas = require('./lib/roteador.js').jaEntrou(s, skill);
+            require('./lib/ordens.js').marcarUso(s, skill);
+          } catch (err) { /* sem a rota calada nem o uso; o resto da skill vale */ }
+        }
         return s;
       }
 

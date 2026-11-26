@@ -900,3 +900,21 @@ test('ponte (processo): falha da ponte libera - entrada torta ou argumento falta
     assert.strictEqual(r.stdout, '');
   }
 });
+
+test('ponte (processo): ler o SKILL.md do playbook pelo Qwen carrega o manual no estado da sessao', () => {
+  // Fora do Claude Code nao ha ferramenta Skill: sem esta conversao o portao do manual AAA negaria toda edicao AAA.
+  const proj = fs.mkdtempSync(path.join(TMP, 'proj-skill-'));
+  const ler = (id, arquivo) => {
+    const e = fixture('qwen-PostToolUse-read_file');
+    Object.assign(e, { session_id: id, cwd: proj, transcript_path: '' });
+    e.tool_input = { file_path: arquivo };
+    const r = chamarPonte(['qwen', 'marcar-trabalho'], e);
+    assert.strictEqual(r.status, 0, r.stderr);
+    return estado.ler(id);
+  };
+  const lido = ler('qwen-skill-lida', path.join(RAIZ, 'skills', 'playbook', 'SKILL.md'));
+  assert.strictEqual(lido.manualCarregado, true, JSON.stringify(lido));
+  // a leitura de outro arquivo nao carrega nada
+  const outro = ler('qwen-skill-outra', path.join(RAIZ, 'skills', 'playbook', 'references', 'x.md'));
+  assert.notStrictEqual(outro.manualCarregado, true, JSON.stringify(outro));
+});

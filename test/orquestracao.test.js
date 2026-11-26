@@ -17,6 +17,7 @@ const AUTONOMAS = {
   'apresentacao.js': 'roda a mao (apresentacao/LEIA-ME.md): o mantenedor monta a pagina do Pages a cada versao, e test/apresentacao.test.js reprova a pagina velha',
   'experimento.js': 'roda a mao (README, tabela do fim): monta e julga a tabela de obrigacoes do manual do usuario',
   'medir-travas.js': 'roda a mao (README, tabela do fim): a medicao paga de antes/depois das travas, com pre-registro',
+  'painel.js': 'roda a mao (GUIA.md, tabela de quem mantem o plugin): sobe o prototipo do painel de sessoes, que o dono abre no navegador',
   'plataforma.js': 'roda a mao (README): diz em que sistemas cada trecho dependente de plataforma foi exercitado',
   'provar-apelidos.js': 'roda a mao (README): sonda se os apelidos dos agentes do plugin carregam'
 };

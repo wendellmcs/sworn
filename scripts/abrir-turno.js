@@ -64,6 +64,7 @@ io.blindar(function () {
     } catch (err) { ofertar = false; }
     let oferecer = false;
     let sugerir = false;
+    let textosDaRota = [];
     let frenteDoTurno = null;
     // A5e (D793): os arquivos ja sujos na abertura do turno (o git roda fora da trava do estado). Falhou: sem foto, a
     // conferencia depois do comando fica desligada neste turno, como sem escopo.
@@ -120,9 +121,21 @@ io.blindar(function () {
         } else if (espera > 0) {
           s.esperaAprender = espera - 1;
         }
+        // G4a (D928): o "por que deu errado" e o "siga o plano" do dono dao a rota da skill, uma vez por sessao e tipo
+        // (lib/roteador.js). O subagente nao recebe rota: quem fala com o dono e o principal. Try proprio: a rota que
+        // falha nao desfaz o resto do turno (a espera do aprender, as marcas zeradas).
+        if (!e.agent_id) {
+          try {
+            const roteador = require('./lib/roteador.js');
+            const rota = roteador.dar(s, roteador.doPedido(e.prompt), {});
+            s.rotasDadas = rota.dadas;
+            s.ordensPendentes = rota.pendentes;
+            textosDaRota = rota.textos;
+          } catch (err) { textosDaRota = []; }
+        }
         return s;
       });
-    } catch (err) { sugerir = false; oferecer = false; }
+    } catch (err) { sugerir = false; oferecer = false; textosDaRota = []; }
     // Item 10 (D674): o pedido que passou entra na lista numerada da frente (pedidos.js); o segurado pela volta, nao (ele
     // volta a ser mandado). Le o projeto.json a cada prompt, por causa da chave. Falha de disco cala: o turno segue.
     try {
@@ -163,6 +176,7 @@ io.blindar(function () {
     if (sugerir) avisos.push(correcao.INSTRUCAO_DA_CORRECAO);
     if (oferecer) avisos.push(radarOferta.INSTRUCAO_DA_OFERTA);
     if (notaAviso) avisos.push(notaAviso);
+    for (const texto of textosDaRota) avisos.push(texto);
     // R3d (D833): o dono escreve num idioma e a ultima resposta saiu em outro (idioma.js). Falha cala: sem a linha.
     try {
       const idioma = require('./lib/idioma.js').aviso(e.prompt, e.transcript_path);

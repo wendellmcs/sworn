@@ -113,12 +113,38 @@ function antesDaCelula(atual, entrada) {
  * derrubava a protecao de `intocaveis`, porque `permitir` sai do portao.
  * Uma vez por sessao, como o `avisouSemConfig` do passo 3, abaixo.
  */
-function permitirComAviso(e, s, avisos) {
+function permitirComAviso(e, s, avisos, rota) {
   if (avisos.length && !s.avisouTipoErrado) {
     marcar(e.session_id, function (x) { x.avisouTipoErrado = true; return x; });
-    return io.permitir({ systemMessage: 'sworn: projeto.json com campo de tipo errado: ' + avisos.join('; ') });
+    return io.permitir(comRota(e, rota, { systemMessage: 'sworn: projeto.json com campo de tipo errado: ' + avisos.join('; ') }));
   }
-  return io.permitir();
+  return io.permitir(comRota(e, rota, undefined));
+}
+
+/**
+ * G4a (D928): a rota do roteador.js pega carona na saida que ja permite, como o aviso do X2a: a 1a edicao de um tipo
+ * de arquivo na sessao (tela, plano, etapa marcada, AAA) leva a linha da skill do sworn no additionalContext. Nunca na
+ * negacao, no subagente nem no apagar. Qualquer falha devolve a saida como veio: a rota nunca muda a decisao.
+ */
+function comRota(e, rota, saida) {
+  try {
+    if (!rota || e.agent_id || rota.entrada.apagar === true) return saida;
+    const roteador = require('./lib/roteador.js');
+    const tipos = roteador.daEdicao(rota.alvo, rota.entrada, rota.projeto);
+    if (!tipos.length) return saida;
+    const temDesign = tipos.indexOf('tela') !== -1 && !!config.carregarDesign(rota.cwd);
+    let textos = [];
+    estado.alterar(e.session_id, function (st) {
+      const r = roteador.dar(st, tipos, { alvo: rota.alvo, temDesign: temDesign });
+      st.rotasDadas = r.dadas;
+      st.ordensPendentes = r.pendentes;
+      textos = r.textos;
+      return st;
+    });
+    if (!textos.length) return saida;
+    return Object.assign({}, saida || {}, { hookSpecificOutput: { hookEventName: 'PreToolUse',
+      additionalContext: textos.join('\n\n') } });
+  } catch (err) { return saida; } // fail-open: a rota e so aviso; a saida que permite volta como veio
 }
 
 io.blindar(function () {
@@ -195,6 +221,8 @@ io.blindar(function () {
 
     const projeto = config.carregarProjeto(cwd);
     const s = estado.ler(e.session_id);
+    // G4a: o que a rota precisa para dizer o tipo da edicao (comRota, so nas saidas que permitem).
+    const rota = { alvo: alvo, entrada: entrada, projeto: projeto, cwd: cwd };
     const esc = escopoLib.carregar(cwd, s.frente);
     const arquivoEmVigor = escopoLib.arquivoEmVigor(cwd, s.frente);
     // X2a e X2b sao calculados AQUI, antes de qualquer decisao: nenhuma saida
@@ -343,13 +371,13 @@ io.blindar(function () {
         // objeto, pasta, sem permissao); so o arquivo no disco separa os dois. Aqui, com o null ja lido, existir quer
         // dizer existir e nao se ler: um projeto configurado com os portoes de escopo e intocaveis DESLIGADOS. Ausente
         // e o normal antes do /sworn:init. A falha segue aberta de proposito: so a mensagem muda, nunca vira negacao.
-        return io.permitir({
+        return io.permitir(comRota(e, rota, {
           systemMessage: projetoNoDisco(cwd)
             ? AVISO_PROJETO_ILEGIVEL
             : 'sworn: este projeto nao tem .claude/sworn/projeto.json. Rode /sworn:init para ligar o portao de escopo.'
-        });
+        }));
       }
-      return io.permitir();
+      return io.permitir(comRota(e, rota, undefined));
     }
 
     // 3b. D244/defeito 7: o que o escopo declara FORA e negado em qualquer marcha, e ganha
@@ -364,7 +392,7 @@ io.blindar(function () {
     const marcha = marchaLib.resolverMarcha(alvo, projeto);
     if (!marchaLib.exigeEscopo(marcha)) {
       const naRapida = motivoDaCatraca() || motivoDoDesign();
-      return naRapida ? negar(naRapida) : permitirComAviso(e, s, avisos);
+      return naRapida ? negar(naRapida) : permitirComAviso(e, s, avisos, rota);
     }
 
     // 5. Marcha padrao ou AAA: escopo declarado, e o arquivo dentro dele.
@@ -403,6 +431,6 @@ io.blindar(function () {
     // 7. A catraca e o design (as duas funcoes la em cima).
     const noFim = motivoDaCatraca() || motivoDoDesign();
     if (noFim) return negar(noFim);
-    permitirComAviso(e, s, avisos);
+    permitirComAviso(e, s, avisos, rota);
   });
 });

@@ -1079,6 +1079,30 @@ test('D412: saude dispara no turno que gravou o handoff e colou o prompt -> nao 
   });
 });
 
+// 0.91.0 (A2, defeito a): a saude dispara no turno que gravou o handoff, a resposta nao traz o prompt e o arquivo traz.
+// O gancho mostra o prompt ao dono (F3b, D828), e a ordem ao modelo diz isso, sem "sua resposta acima".
+test('0.91.0: saude dispara, o prompt esta no arquivo e nao na resposta -> a ordem diz que o sworn mostrou o prompt', () => {
+  comTmp((tmp) => {
+    const dir = projetoQueDispara(tmp, 'h-gancho');
+    const arq = path.join(dir, HANDOFF);
+    fs.mkdirSync(path.dirname(arq), { recursive: true });
+    fs.writeFileSync(arq, '# Handoff\n\n## 8. Prompt\n```\nRetomando a frente x\nPASSO 1\n```\n');
+    gravar(tmp, 'h-gancho', dir, 'Write', HANDOFF);
+    const r = fecho(tmp, 'h-gancho', dir, 'Gravei o handoff.');
+    assert.ok(r.json && r.json.decision === undefined, 'nao barra: ' + r.stdout);
+    assert.ok(r.json.systemMessage.indexOf('PASSO 1') !== -1, 'o gancho mostra o prompt ao dono: ' + r.stdout);
+    const t = r.json.hookSpecificOutput && r.json.hookSpecificOutput.additionalContext;
+    assert.ok(t, 'controle: a saude tinha de disparar: ' + r.stdout);
+    assert.ok(!/sua resposta/.test(t), 'a resposta nao tem o bloco: ' + t);
+    assert.ok(/mensagem do sworn/.test(t) && /nao cole/.test(t), t);
+    // controle: com o prompt colado na resposta, a ordem segue apontando o bloco da resposta
+    const dir2 = projetoQueDispara(tmp, 'h-gancho2');
+    gravar(tmp, 'h-gancho2', dir2, 'Write', HANDOFF);
+    const r2 = fecho(tmp, 'h-gancho2', dir2, PROMPT);
+    assert.match(r2.json.hookSpecificOutput.additionalContext, /sua resposta acima/, r2.stdout);
+  });
+});
+
 // D417: o README diz que, com o portao desligado e a resposta sem bloco, o aviso segue mandando colar.
 test('D417: portaoHandoff false, handoff gravado sem bloco e a saude dispara -> nao barra e manda colar', () => {
   comTmp((tmp) => {
@@ -2930,5 +2954,18 @@ test('F1c: com provaDeCoerencia, a prova focada so vale com o grupo de coerencia
       vermelho.json.reason.indexOf(COERENCIA) !== -1, 'o grupo vermelho: ' + vermelho.stdout);
     const antes = tentar('c4', [usoBash('g', COERENCIA), resultado('g', VERDE)].concat(focado));
     assert.ok(antes.json && antes.json.decision === 'block' && /1 de 3/.test(antes.json.reason), 'o grupo antes da edicao');
+  });
+});
+
+test('H15(b): pela ponte o advisor nunca esta ligado - ele so existe no Claude Code', () => {
+  const advisor = require('../scripts/lib/advisor.js');
+  comTmp((tmp) => {
+    const dir = path.join(tmp, 'proj');
+    settingsCom(dir, 'settings.json', 'opus');
+    const config = path.join(tmp, 'config-vazia');
+    fs.mkdirSync(config, { recursive: true });
+    assert.strictEqual(advisor.ligado(dir, { CLAUDE_CONFIG_DIR: config }), true, 'sem a ponte, a settings liga');
+    assert.strictEqual(advisor.ligado(dir, { CLAUDE_CONFIG_DIR: config, SWORN_PONTE: '1' }), false, 'pela ponte');
+    assert.strictEqual(advisor.ligado(dir, { CLAUDE_CONFIG_DIR: config, SWORN_PONTE: '0' }), true, 'so o "1" da ponte');
   });
 });

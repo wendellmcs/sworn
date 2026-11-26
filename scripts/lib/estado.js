@@ -265,7 +265,9 @@ const CAMPOS_DA_SESSAO = ['avisouSemConfig', 'avisouTipoErrado', 'avisouApelido'
   // grava no fim (lib/custo-da-sessao.js).
   'saidaCortada',
   // H15(b) (D923): o portao do advisor ja cobrou, ou achou a consulta, nesta sessao (portao-fecho.js); vale a sessao.
-  'advisorVisto'];
+  'advisorVisto',
+  // G4a (D928): as rotas do roteador.js ja dadas (ou cumpridas pela skill delas) nesta sessao; uma vez por sessao e tipo.
+  'rotasDadas'];
 const CAMPOS_DO_TURNO = ['trabalhoReal', 'bloqueouNesteTurno', 'buscouNesteTurno', 'contadores', 'gravouHandoff',
   // D785 (2.1): a edicao de codigo do turno e a volta do laco da prova (portao-fecho.js).
   'arquivoDoHandoff', 'editouCodigo', 'lacoDaProva',

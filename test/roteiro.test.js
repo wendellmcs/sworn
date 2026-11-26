@@ -1,7 +1,7 @@
 'use strict';
 // H10c (D884, D889): o roteiro de passos da captura de tela (capturar-tela.js --passos). Aqui, a parte pura
 // (scripts/lib/roteiro.js): ler e validar o roteiro, escolher o elemento entre os achados na arvore, o ponto do clique,
-// o valor do elemento e a soma dos passos. A ponta a ponta, com o navegador de verdade, fica em test/captura.test.js.
+// o valor do elemento, os eventos de cada tecla, o nome do elemento com o foco e a soma dos passos. A ponta a ponta, com o navegador de verdade, fica em test/captura.test.js.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -13,7 +13,7 @@ const captura = require('../scripts/lib/captura.js');
 
 function ler(o) { return roteiro.lerRoteiro(JSON.stringify(o)); }
 
-test('lerRoteiro: os quatro passos validos saem normalizados, com o prazo padrao', function () {
+test('lerRoteiro: os passos validos saem normalizados, com o prazo padrao', function () {
   const r = ler({ passos: [
     { acao: 'digitar', papel: 'textbox', nome: 'E-mail', texto: 'a@b.c' },
     { acao: 'clicar', papel: 'button', nome: 'Entrar', ordem: 2, tempoMax: 9000 },
@@ -43,7 +43,21 @@ test('lerRoteiro: cada roteiro errado diz o passo e o que consertar', function (
     [JSON.stringify({ passos: [] }), /^o roteiro nao tem passos/],
     [JSON.stringify({ passos: [{ acao: 'esperar', texto: 'x' }], extra: 1 }), /^chave desconhecida no roteiro: "extra"/],
     [JSON.stringify({ passos: [1] }), /^passo 1: cada passo e um objeto/],
-    [JSON.stringify({ passos: [{ acao: 'arrastar' }] }), /^passo 1: "acao" e clicar, digitar, esperar ou conferir/],
+    [JSON.stringify({ passos: [{ acao: 'arrastar' }] }), /^passo 1: "acao" e clicar, digitar, tecla, esperar ou conferir/],
+    [JSON.stringify({ passos: [{ acao: 'tecla' }] }),
+      /^passo 1: tecla precisa de "tecla" \(Enter, Escape, Tab, Shift\+Tab, Space, ArrowUp, ArrowDown, ArrowLeft, ArrowRight\)$/],
+    [JSON.stringify({ passos: [{ acao: 'tecla', tecla: 'enter' }] }),
+      /^passo 1: "tecla" e uma destas: Enter, Escape, Tab, Shift\+Tab, Space, ArrowUp, ArrowDown, ArrowLeft, ArrowRight; e veio "enter"$/],
+    // o nome herdado de todo objeto nao e uma tecla
+    [JSON.stringify({ passos: [{ acao: 'tecla', tecla: 'toString' }] }), /^passo 1: "tecla" e uma destas: .*; e veio "toString"$/],
+    [JSON.stringify({ passos: [{ acao: 'tecla', tecla: 13 }] }), /^passo 1: "tecla" e uma destas: .*; e veio 13$/],
+    // o nome vale exato: vazio ou com espaco nas pontas nao e uma tecla
+    [JSON.stringify({ passos: [{ acao: 'tecla', tecla: '' }] }), /^passo 1: "tecla" e uma destas: .*; e veio ""$/],
+    [JSON.stringify({ passos: [{ acao: 'tecla', tecla: ' Enter ' }] }), /^passo 1: "tecla" e uma destas: .*; e veio " Enter "$/],
+    // a tecla vai ao elemento com o foco: sem papel, e sem prazo (nada a esperar antes de apertar)
+    [JSON.stringify({ passos: [{ acao: 'tecla', tecla: 'Tab', papel: 'button' }] }),
+      /^passo 1: chave desconhecida "papel" \(as de tecla: tecla\): a tecla vai ao elemento que tem o foco; para mirar um elemento, ponha antes um passo clicar nele$/],
+    [JSON.stringify({ passos: [{ acao: 'tecla', tecla: 'Tab', tempoMax: 900 }] }), /^passo 1: chave desconhecida "tempoMax"/],
     [JSON.stringify({ passos: [{ acao: 'clicar', papel: 'button', nmoe: 'x' }] }), /^passo 1: chave desconhecida "nmoe"/],
     [JSON.stringify({ passos: [{ acao: 'clicar', nome: 'Entrar' }] }), /^passo 1: clicar precisa de "papel"/],
     [JSON.stringify({ passos: [{ acao: 'clicar', papel: 'button', texto: 'x' }] }), /^passo 1: chave desconhecida "texto"/],
@@ -54,8 +68,8 @@ test('lerRoteiro: cada roteiro errado diz o passo e o que consertar', function (
     [JSON.stringify({ passos: [{ acao: 'conferir', texto: 'x', nome: 'y' }] }),
       /^passo 1: "nome" so vale\(m\) com "papel": tire essa\(s\) chave\(s\), ou troque "texto" por "papel"$/],
     [JSON.stringify({ passos: [{ acao: 'esperar', texto: 'x', valor: 1, ordem: 2 }] }), /^passo 1: "valor", "ordem" so vale\(m\)/],
-    [JSON.stringify({ passos: [{ papel: 'button' }] }), /^passo 1: falta "acao" \(clicar, digitar, esperar ou conferir\)$/],
-    [JSON.stringify({ passos: [{ acao: null }] }), /^passo 1: "acao" e clicar, digitar, esperar ou conferir, e veio null$/],
+    [JSON.stringify({ passos: [{ papel: 'button' }] }), /^passo 1: falta "acao" \(clicar, digitar, tecla, esperar ou conferir\)$/],
+    [JSON.stringify({ passos: [{ acao: null }] }), /^passo 1: "acao" e clicar, digitar, tecla, esperar ou conferir, e veio null$/],
     // a chave que o passo precisa so pede o texto; so a opcional (o nome) pode sair
     [JSON.stringify({ passos: [{ acao: 'clicar', papel: ' ' }] }), /^passo 1: "papel" vazio: escreva o papel$/],
     [JSON.stringify({ passos: [{ acao: 'digitar', papel: 'textbox', texto: ' ' }] }), /^passo 1: "texto" vazio: escreva o texto$/],
@@ -89,6 +103,45 @@ test('lerRoteiro: cada roteiro errado diz o passo e o que consertar', function (
   }
 });
 
+test('lerRoteiro: a tecla sai so com o nome dela, sem prazo', function () {
+  assert.deepStrictEqual(ler({ passos: [{ acao: 'tecla', tecla: 'Enter' }, { acao: 'tecla', tecla: 'Shift+Tab' }] }),
+    { passos: [{ acao: 'tecla', tecla: 'Enter' }, { acao: 'tecla', tecla: 'Shift+Tab' }] });
+  assert.ok(Object.keys(roteiro.TECLAS).length > 0);
+  for (const nome of Object.keys(roteiro.TECLAS)) assert.ok(ler({ passos: [{ acao: 'tecla', tecla: nome }] }).passos, nome);
+});
+
+test('eventosDaTecla: o descer e o subir da tecla, como o protocolo do navegador os quer', function () {
+  // o Enter e o espaco escrevem um texto: e ele que faz o botao com o foco receber o clique, como numa pessoa
+  assert.deepStrictEqual(roteiro.eventosDaTecla('Enter'), [
+    { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, modifiers: 0,
+      text: '\r', unmodifiedText: '\r' },
+    { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, modifiers: 0 },
+  ]);
+  assert.deepStrictEqual(roteiro.eventosDaTecla('Space')[0], { type: 'keyDown', key: ' ', code: 'Space',
+    windowsVirtualKeyCode: 32, nativeVirtualKeyCode: 32, modifiers: 0, text: ' ', unmodifiedText: ' ' });
+  // a que nao escreve desce sem texto; o Shift vai no modificador (8) dos dois eventos
+  assert.deepStrictEqual(roteiro.eventosDaTecla('Shift+Tab'), [
+    { type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9, modifiers: 8 },
+    { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9, modifiers: 8 },
+  ]);
+  assert.deepStrictEqual(roteiro.eventosDaTecla('Escape')[0], { type: 'rawKeyDown', key: 'Escape', code: 'Escape',
+    windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27, modifiers: 0 });
+  assert.strictEqual(roteiro.eventosDaTecla('ArrowDown')[0].windowsVirtualKeyCode, 40);
+  // fora da tabela (o roteiro lido ja barra; quem chama direto recebe o erro com a lista, nunca um evento sem tecla)
+  for (const nome of ['enter', '', undefined, 'constructor']) {
+    assert.throws(function () { roteiro.eventosDaTecla(nome); }, /^Error: tecla desconhecida: .*; as que valem: Enter, Escape, Tab,/,
+      String(nome));
+  }
+});
+
+test('focoDoNo: onde o foco caiu, como a arvore o chama', function () {
+  assert.strictEqual(roteiro.focoDoNo({ role: { value: 'button' }, name: { value: 'Entrar' } }), 'button "Entrar"');
+  assert.strictEqual(roteiro.focoDoNo({ role: { value: 'dialog' }, name: { value: '' } }), 'dialog');
+  for (const no of [null, undefined, { ignored: true, role: { value: 'generic' } }, {}]) {
+    assert.strictEqual(roteiro.focoDoNo(no), 'nenhum elemento: o foco esta no corpo da pagina', JSON.stringify(no));
+  }
+});
+
 test('lerRoteiro: o nome sai sem espaco nas pontas (a arvore o da assim), o meio fica', function () {
   assert.strictEqual(ler({ passos: [{ acao: 'clicar', papel: ' button ', nome: '  Entrar  agora ' }] }).passos[0].nome,
     'Entrar  agora');
@@ -112,7 +165,10 @@ test('ondeQuebrou: o JSON quebrado diz a linha e a coluna, ou que o arquivo acab
   assert.strictEqual(roteiro.ondeQuebrou('Unexpected token ] in JSON at position 8', '{\n"a":1,]}'),
     'perto da linha 2, coluna 7: confira virgulas, aspas e chaves ali');
   assert.match(roteiro.lerRoteiro('{"passos":').erro, /\(o arquivo acaba antes de fechar: confira se falta \} ou \] no fim\)/);
-  assert.match(roteiro.lerRoteiro('x').erro, /^o roteiro nao e um JSON valido \(confira virgulas, aspas e chaves\)/);
+  // sem posicao na mensagem do motor: o caractere que ele nao esperava, quando ela o diz
+  assert.match(roteiro.lerRoteiro('x').erro,
+    /^o roteiro nao e um JSON valido \(o caractere "x" nao cabe ali: confira virgulas, aspas e chaves; um texto sem aspas, por exemplo\)/);
+  assert.strictEqual(roteiro.ondeQuebrou('Bad JSON', '?'), 'confira virgulas, aspas e chaves');
   // a mensagem em ingles do motor nao chega a pessoa
   assert.doesNotMatch(roteiro.lerRoteiro('x').erro, /Unexpected|valid JSON/);
 });
@@ -259,6 +315,7 @@ test('descrever: o alvo do passo como a pessoa le', function () {
   assert.strictEqual(roteiro.descrever({ acao: 'esperar', texto: 'Painel' }), 'esperar o texto "Painel"');
   assert.strictEqual(roteiro.descrever({ acao: 'conferir', papel: 'textbox', nome: 'E', valor: 'x' }),
     'conferir textbox "E" com o valor "x"');
+  assert.strictEqual(roteiro.descrever({ acao: 'tecla', tecla: 'Shift+Tab' }), 'tecla Shift+Tab');
 });
 
 test('somarPassos: a conta do roteiro inteiro, por script', function () {

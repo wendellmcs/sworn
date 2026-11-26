@@ -633,3 +633,170 @@ test('harness: matcher de agente sai do harness (a ponte refiltra pelo nome do C
   assert.strictEqual(harness.matcherDoHarness('dsh', 'Bash'), 'Bash');
   assert.ok(harness.eventosQueDispara('qwen').includes('SubagentStop'));
 });
+
+test('harness: ler o SKILL.md fora do Claude Code vira tambem o Skill, so depois da ferramenta', () => {
+  // Nenhuma sonda viu ferramenta de skill fora do Claude Code: o harness carrega a skill lendo o SKILL.md dela.
+  const raiz = path.resolve('/dev/sworn');
+  // os caminhos daqui sao de mentira: o arquivo lido existe para todos (o que nao existe tem o teste dele, abaixo)
+  const opcoes = { raiz: raiz, plataforma: 'win32', existe: () => true };
+  const skills = (lista) => lista.filter((e) => e.tool_name === 'Skill').map((e) => e.tool_input.skill);
+  const ler = (h, nomeDaFixture, campos, evento) => harness.normalizar(h,
+    Object.assign(fixture(nomeDaFixture), campos), evento || 'PostToolUse', opcoes);
+  const naRaiz = (nome) => path.join(raiz, 'skills', nome, 'SKILL.md');
+
+  // Codex, Qwen e agy leem a skill da raiz do sworn: a pasta skills/<nome> dela e a sworn:<nome>
+  const q = ler('qwen', 'qwen-PostToolUse-read_file', { tool_input: { file_path: naRaiz('playbook') } });
+  assert.deepStrictEqual(q.map((e) => e.tool_name), ['Read', 'Skill']);
+  assert.deepStrictEqual(skills(q), ['sworn:playbook']);
+  assert.deepStrictEqual([q[1].session_id, q[1].cwd, q[1].hook_event_name], [q[0].session_id, q[0].cwd, 'PostToolUse']);
+  assert.deepStrictEqual(q[1].tool_input, { skill: 'sworn:playbook' });
+  assert.strictEqual(q[1].tool_response, undefined);
+  assert.strictEqual(q[0].tool_input.file_path, naRaiz('playbook'), 'a leitura mudou');
+  const a = ler('agy', 'agy-PostToolUse-write_file', { toolCall: { name: 'read_file', args: { Path: naRaiz('drift') } } });
+  assert.deepStrictEqual(skills(a), ['sworn:drift']);
+  // a caixa da raiz nao decide no Windows (o sistema de arquivos ignora)
+  const raizEmCaixaAlta = path.join(raiz.toUpperCase(), 'skills', 'diagnose', 'SKILL.md');
+  assert.deepStrictEqual(skills(ler('qwen', 'qwen-PostToolUse-read_file', { tool_input: { file_path: raizEmCaixaAlta } })),
+    ['sworn:diagnose']);
+  // o caminho relativo da leitura vale a partir do cwd: na raiz do sworn, skills/<nome> e a sworn:<nome>
+  assert.deepStrictEqual(skills(ler('qwen', 'qwen-PostToolUse-read_file',
+    { cwd: raiz, tool_input: { file_path: 'skills/drift/SKILL.md' } })), ['sworn:drift']);
+
+  // dsh e OpenCode leem a copia em .agents/skills/sworn-<nome>/ do projeto, tambem pelo caminho relativo
+  assert.deepStrictEqual(skills(ler('dsh', 'dsh-PreToolUse-write', { tool_name: 'read',
+    tool_input: { file_path: '.agents/skills/sworn-review-plan/SKILL.md' } })), ['sworn:review-plan']);
+  const lido = fixture('opencode-tool.execute.after-read');
+  lido.cwd = 'C:\\dev\\proj';
+  lido.input.args = { filePath: 'C:\\dev\\proj\\.agents\\skills\\sworn-playbook\\SKILL.md' };
+  assert.deepStrictEqual(skills(harness.normalizar('opencode', lido, 'PostToolUse', opcoes)), ['sworn:playbook']);
+
+  // a skill do projeto fica com o nome dela, sem o sworn: (a local com "padrao" no nome segue valendo como manual)
+  assert.deepStrictEqual(skills(ler('qwen', 'qwen-PostToolUse-read_file',
+    { tool_input: { file_path: 'C:\\dev\\proj\\.claude\\skills\\padrao-aaa\\SKILL.md' } })), ['padrao-aaa']);
+  // a pasta com sublinhado tambem e pasta de skill
+  assert.deepStrictEqual(skills(ler('qwen', 'qwen-PostToolUse-read_file',
+    { tool_input: { file_path: 'C:\\dev\\proj\\.claude\\skills\\padrao_api\\SKILL.md' } })), ['padrao_api']);
+  // a pasta vizinha com o nome da raiz por prefixo nao e a raiz
+  assert.deepStrictEqual(skills(ler('qwen', 'qwen-PostToolUse-read_file',
+    { tool_input: { file_path: path.join(raiz + '2', 'skills', 'playbook', 'SKILL.md') } })), ['playbook']);
+
+  // o shell (o Codex so le pelo shell): cada SKILL.md citado, uma vez, com espaco no caminho e entre aspas
+  const comando = 'Get-Content -Raw "' + naRaiz('drift') + '"; Get-Content "C:\\dev\\meu proj\\.agents\\skills\\' +
+    'sworn-diagnose\\SKILL.md"; cat \'' + naRaiz('drift').replace(/\\/g, '/') + '\'';
+  const c = ler('codex', 'codex-PostToolUse-Bash', { tool_input: { command: comando } });
+  assert.deepStrictEqual(c.map((e) => e.tool_name), ['PowerShell', 'Skill', 'Skill']);
+  assert.deepStrictEqual(skills(c), ['sworn:drift', 'sworn:diagnose']);
+  // a barra escapada no shell (\\ no lugar de \) segue sendo a raiz
+  assert.deepStrictEqual(skills(ler('codex', 'codex-PostToolUse-Bash',
+    { tool_input: { command: 'cat ' + naRaiz('drift').replace(/\\/g, '\\\\') } })), ['sworn:drift']);
+  // o caminho relativo no shell tambem vale a partir do cwd, como na leitura; e as formas de ler que o modelo usa
+  const peloShell = (command, cwd) => skills(ler('codex', 'codex-PostToolUse-Bash',
+    Object.assign({ tool_input: { command: command } }, cwd ? { cwd: cwd } : {})));
+  assert.deepStrictEqual(peloShell('cat skills/revisar/SKILL.md', raiz), ['sworn:revisar']);
+  assert.deepStrictEqual(peloShell("sed -n '1,200p' skills/drift/SKILL.md", raiz), ['sworn:drift']);
+  assert.deepStrictEqual(peloShell('$t = Get-Content -Raw "' + naRaiz('drift') + '"'), ['sworn:drift']);
+  assert.deepStrictEqual(peloShell('cat ' + naRaiz('drift') + ' 2>&1 | head -n 80'), ['sworn:drift']);
+  assert.deepStrictEqual(peloShell('(Get-Content "' + naRaiz('drift') + '") -join " "'), ['sworn:drift']);
+  // o comando que cita o SKILL.md sem le-lo nao carrega a skill: apagar, gravar, versionar, comparar, copiar
+  for (const cmd of ['rm skills/foo/SKILL.md', 'git add ' + naRaiz('foo'), 'echo x > skills/foo/SKILL.md',
+    'cat a.txt > ' + naRaiz('foo'), 'Get-Content a.txt | Set-Content "' + naRaiz('foo') + '"',
+    'git diff -- skills/foo/SKILL.md', 'cp skills/foo/SKILL.md b.md', "sed -i 's/a/b/' skills/foo/SKILL.md", "sed -n -i 's/a/b/p' skills/foo/SKILL.md",
+    'Remove-Item "' + naRaiz('foo') + '"', 'cat a.txt; rm skills/foo/SKILL.md']) {
+    assert.deepStrictEqual(peloShell(cmd, raiz), [], cmd);
+  }
+  // ler zero linhas ou zero bytes nao carrega nada
+  for (const cmd of ['head -c0 skills/foo/SKILL.md', 'head -c 0 skills/foo/SKILL.md', 'tail -n 0 skills/foo/SKILL.md',
+    'head --lines=0 skills/foo/SKILL.md', 'Get-Content -TotalCount 0 "' + naRaiz('foo') + '"', 'gc -First 0 skills/foo/SKILL.md']) {
+    assert.deepStrictEqual(peloShell(cmd, raiz), [], cmd);
+  }
+  assert.deepStrictEqual(peloShell('head -n 80 skills/foo/SKILL.md', raiz), ['sworn:foo']);
+  assert.deepStrictEqual(peloShell('head -c 4000 skills/foo/SKILL.md', raiz), ['sworn:foo']);
+  // o caminho relativo entre aspas, com espaco, comeca na aspa e nao no espaco
+  const raizComEspaco = path.resolve('/dev/meu sworn');
+  assert.deepStrictEqual(skills(harness.normalizar('codex', Object.assign(fixture('codex-PostToolUse-Bash'),
+    { cwd: path.resolve('/dev/proj'), tool_input: { command: 'cat "../meu sworn/skills/x/SKILL.md"' } }), 'PostToolUse',
+  { raiz: raizComEspaco, plataforma: 'win32', existe: () => true })), ['sworn:x']);
+  // com duas aspas abertas, o caminho comeca na de fora (o apostrofo dentro das aspas e parte do caminho)
+  const raizComApostrofo = path.resolve("/dev/o'sworn");
+  assert.deepStrictEqual(skills(harness.normalizar('codex', Object.assign(fixture('codex-PostToolUse-Bash'),
+    { cwd: path.resolve('/dev/proj'), tool_input: { command: 'cat "' + path.join(raizComApostrofo, 'skills', 'x',
+      'SKILL.md') + '"' } }), 'PostToolUse', { raiz: raizComApostrofo, plataforma: 'win32', existe: () => true })),
+  ['sworn:x']);
+  // o sed -n que comeca na linha 0 segue lendo
+  assert.deepStrictEqual(peloShell('sed -n 0,80p skills/foo/SKILL.md', raiz), ['sworn:foo']);
+
+  // a leitura de um SKILL.md que nao existe falhou: nao carrega a skill (o arquivo e conferido pelo caminho inteiro)
+  const vistos = [];
+  const soOPlaybook = { raiz: raiz, plataforma: 'win32',
+    existe: (f) => { vistos.push(f); return f.toLowerCase() === naRaiz('playbook').toLowerCase(); } };
+  const lerSo = (h, nomeDaFixture, campos) => skills(harness.normalizar(h,
+    Object.assign(fixture(nomeDaFixture), campos), 'PostToolUse', soOPlaybook));
+  assert.deepStrictEqual(lerSo('qwen', 'qwen-PostToolUse-read_file', { tool_input: { file_path: naRaiz('fantasma') } }), []);
+  assert.deepStrictEqual(lerSo('qwen', 'qwen-PostToolUse-read_file', { tool_input: { file_path: naRaiz('playbook') } }),
+    ['sworn:playbook']);
+  assert.deepStrictEqual(lerSo('codex', 'codex-PostToolUse-Bash',
+    { cwd: raiz, tool_input: { command: 'cat skills/fantasma/SKILL.md; cat skills/playbook/SKILL.md' } }), ['sworn:playbook']);
+  assert.deepStrictEqual(lerSo('codex', 'codex-PostToolUse-Bash',
+    { tool_input: { command: 'Get-Content "' + naRaiz('playbook') + '"' } }), ['sworn:playbook']);
+  assert.ok(vistos.includes(path.join(raiz, 'skills', 'fantasma', 'SKILL.md')), vistos.join(' | '));
+  // o ~ e a variavel do shell se resolvem pelo ambiente do gancho, e o caminho que sai deles tambem se confere
+  const casa = path.resolve('/dev/casa');
+  const daCasa = path.join(casa, '.config', 'opencode', 'skills', 'sworn-drift', 'SKILL.md');
+  const semCwd = path.win32.resolve(process.cwd(), '.agents', 'skills', 'sworn-diagnose', 'SKILL.md');
+  const resto = '.config/opencode/skills/sworn-drift/SKILL.md';
+  // o ~outro e o $(pwd) lidos ao pe da letra, a partir do cwd, tambem existem: so a recusa do expandido os barra
+  const literais = ['~outro/', '$(pwd)/'].map((d) => path.win32.resolve(raiz, d + resto));
+  const comCasa = { raiz: raiz, plataforma: 'win32', ambiente: { HOME: casa, USERPROFILE: casa, NADA: '' },
+    existe: (f) => [daCasa, semCwd].concat(literais).map((x) => x.toLowerCase()).includes(f.toLowerCase()) };
+  const lerComCasa = (command, cwd) => skills(harness.normalizar('codex', Object.assign(fixture('codex-PostToolUse-Bash'),
+    { cwd: cwd, tool_input: { command: command } }), 'PostToolUse', comCasa));
+  for (const cmd of ['cat ~/' + resto, 'cat "$HOME/' + resto + '"', 'cat ${HOME}/' + resto,
+    'Get-Content "$env:USERPROFILE\\' + resto.replace(/\//g, '\\') + '"', 'gc $Env:userprofile/' + resto,
+    'type %USERPROFILE%\\' + resto.replace(/\//g, '\\')]) {
+    assert.deepStrictEqual(lerComCasa(cmd, raiz), ['sworn:drift'], cmd);
+  }
+  // o que o ambiente nao resolve nao conta: a variavel que nao existe, a vazia, o ~ de outro usuario, o $(comando);
+  // e o que se resolve num arquivo que nao existe tambem nao
+  // (a que falta ou esta vazia na frente do caminho inteiro daria um arquivo que existe)
+  for (const cmd of ['cat $FALTA/' + resto, 'cat $NADA/' + resto, 'cat "${FALTA}' + daCasa + '"', 'cat "${NADA}' + daCasa + '"',
+    'cat ~outro/' + resto, 'cat "$(pwd)/' + resto + '"', 'cat ~/.agents/skills/sworn-drift/SKILL.md']) {
+    assert.deepStrictEqual(lerComCasa(cmd, raiz), [], cmd);
+  }
+  // o relativo sem cwd se confere a partir da pasta onde o gancho roda
+  assert.deepStrictEqual(lerComCasa('cat .agents/skills/sworn-diagnose/SKILL.md', undefined), ['sworn:diagnose']);
+  assert.deepStrictEqual(lerComCasa('cat .agents/skills/sworn-drift/SKILL.md', undefined), []);
+  // sem opcoes.existe quem confere e o disco
+  const pastaReal = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'sworn-skill-'));
+  try {
+    fs.mkdirSync(path.join(pastaReal, 'skills', 'real'), { recursive: true });
+    fs.writeFileSync(path.join(pastaReal, 'skills', 'real', 'SKILL.md'), '# real\n');
+    const peloDisco = (nome) => skills(harness.normalizar('qwen', Object.assign(fixture('qwen-PostToolUse-read_file'),
+      { tool_input: { file_path: path.join(pastaReal, 'skills', nome, 'SKILL.md') } }), 'PostToolUse',
+    { raiz: pastaReal, plataforma: process.platform }));
+    assert.deepStrictEqual(peloDisco('real'), ['sworn:real']);
+    assert.deepStrictEqual(peloDisco('fantasma'), []);
+    // sem opcoes.ambiente quem resolve a variavel e o ambiente do processo
+    process.env.SWORN_TESTE_PASTA = pastaReal;
+    assert.deepStrictEqual(skills(harness.normalizar('codex', Object.assign(fixture('codex-PostToolUse-Bash'),
+      { tool_input: { command: 'cat "$SWORN_TESTE_PASTA/skills/real/SKILL.md"' } }), 'PostToolUse',
+    { raiz: pastaReal, plataforma: process.platform })), ['sworn:real']);
+  } finally {
+    delete process.env.SWORN_TESTE_PASTA;
+    fs.rmSync(pastaReal, { recursive: true, force: true });
+  }
+
+  // antes da ferramenta nada: a skill so conta lida
+  assert.deepStrictEqual(ler('qwen', 'qwen-PostToolUse-read_file', { tool_input: { file_path: naRaiz('playbook') } },
+    'PreToolUse').map((e) => e.tool_name), ['Read']);
+  // o que nao e o SKILL.md de uma pasta de skill nao conta
+  for (const p of [naRaiz('playbook') + '.bak', path.join(raiz, 'skills', 'playbook', 'references', '01.md'),
+    path.join(raiz, 'skills', '*', 'SKILL.md'), path.join(raiz, 'skills', 'sworn-', 'SKILL.md'),
+    path.join(raiz, 'myskills', 'playbook', 'SKILL.md'), path.join(raiz, 'SKILL.md')]) {
+    assert.deepStrictEqual(skills(ler('qwen', 'qwen-PostToolUse-read_file', { tool_input: { file_path: p } })), [], p);
+  }
+  // o Write do SKILL.md nao e leitura; o glob que lista as skills tambem nao
+  assert.deepStrictEqual(skills(ler('qwen', 'qwen-PostToolUse-read_file', { tool_name: 'write_file',
+    tool_input: { file_path: naRaiz('playbook'), content: 'x' } })), []);
+  assert.deepStrictEqual(skills(ler('qwen', 'qwen-PostToolUse-read_file', { tool_name: 'glob',
+    tool_input: { pattern: 'skills/playbook/SKILL.md' } })), []);
+});

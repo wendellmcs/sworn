@@ -647,7 +647,7 @@ test('091 T6: nada a cortar, com ordens na janela - so a retroalimentacao, sem a
       'sworn: auditoria automatica (a cada 7 dias): nada a cortar.',
       '- ordens dos ultimos 7 dias que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
       '  aprender 2/2/-',
-      '  nunca disparadas: auditar, calibrar, init, revisar, manual',
+      '  nunca disparadas: auditar, calibrar, init, revisar antes do commit, manual, rubrica de tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto',
       '  ("-": o sworn so ve a recusa no commit sem revisao; nas outras, ' +
         'a ordem que o Claude nao cumpriu foi ignorada ou',
       '  recusada na conversa. Ordem que se repete sem cumprir: o sworn segue cobrando; o dono decide se ela fica.)'
@@ -670,7 +670,7 @@ test('091 T6: com o que cortar, a retroalimentacao entra entre a lista e a ordem
         'Junte ou corte itens.',
       '- ordens desde o comeco que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
       '  revisar antes do commit 2/1/1',
-      '  nunca disparadas: aprender, auditar, calibrar, init, manual',
+      '  nunca disparadas: aprender, auditar, calibrar, init, manual, rubrica de tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto',
       ORDEM_DO_MOCK
     ].join('\n'));
     assert.strictEqual(ap.pedeCorte(t), true);
@@ -698,6 +698,32 @@ test('091 T6: auditar que lanca com ordens na janela - a retroalimentacao sai ju
       'rode /sworn:audit para ver o detalhe.\n'), t);
     assert.ok(t.includes('  aprender 2/0/-'), t);
     assert.deepStrictEqual(lerMarcaBruta(dir).ordens, { ordem_aprender_dada: 2 });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// G4d (D928): o uso de cada skill do sworn sai depois das ordens, contra a mesma foto, e a foto nova o guarda.
+test('G4d: o uso das skills entra depois das ordens, contra a foto da marca; so uso tambem fala', () => {
+  const dir = temp('retro-uso');
+  try {
+    escrever(dir, '.claude/sworn/auditoria.json', JSON.stringify({ ultima: new Date(AGORA - 7 * DIA).toISOString(),
+      ordens: { uso_skill_review: 1 } }));
+    contadores(dir, { uso_skill_review: 4, uso_skill_handoff: 2 });
+    const t = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo()) });
+    const linhas = t.split('\n');
+    assert.strictEqual(linhas[0], 'sworn: auditoria automatica (a cada 7 dias): nada a cortar.');
+    assert.strictEqual(linhas[1], '- skills do sworn que o Claude chamou nos ultimos 7 dias: review 3, handoff 2');
+    const nunca = require('../scripts/lib/ordens.js').skillsDoPlugin()
+      .filter(function (n) { return n !== 'review' && n !== 'handoff'; });
+    assert.strictEqual(linhas[2], '  nunca chamadas: ' + nunca.join(', '));
+    assert.ok(linhas[3].startsWith('  Skill do sworn nunca chamada e assunto do sworn, nao deste projeto'), t);
+    assert.strictEqual(ap.pedeCorte(t), false);
+    assert.deepStrictEqual(lerMarcaBruta(dir).ordens, { uso_skill_review: 4, uso_skill_handoff: 2 });
+    // com ordens tambem: as ordens primeiro
+    fs.rmSync(path.join(dir, '.claude', 'sworn', 'auditoria.json'));
+    contadores(dir, { ordem_aprender_dada: 1, uso_skill_review: 1 });
+    const ambos = ap.avisoDaAuditoria(dir, PROJETO, { agora: AGORA, auditar: stub(limpo()) }).split('\n');
+    assert.ok(ambos[1].startsWith('- ordens desde o comeco'), ambos.join('\n'));
+    assert.ok(ambos.indexOf('- skills do sworn que o Claude chamou desde o comeco: review 1') > 2, ambos.join('\n'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

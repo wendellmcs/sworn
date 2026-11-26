@@ -328,6 +328,29 @@ test('E3 item 2: lerArgs aceita o --arquivo aparado e diz o que fazer quando ele
   assert.match(captura.lerArgs(['--url', 'http://x', '--saida', 's', '--arquivo']).erro, /^--arquivo veio sem valor\. uso: .*\[--arquivo <caminho a partir da raiz do projeto, ex\.: src\/checkout\/tela\.css>\] \[--passos <roteiro\.json>\]$/);
 });
 
+test('rodarRoteiro: a tecla que ja foi apertada nao vira passo falho quando so a leitura do foco falha', async function () {
+  const { rodarRoteiro } = require('../scripts/capturar-tela.js');
+  const enviados = [];
+  // o Enter que envia o formulario troca a pagina: a leitura do foco que vem depois perde o contexto
+  const cdp = { enviar: async function (metodo) {
+    enviados.push(metodo);
+    if (metodo === 'Runtime.evaluate') throw new Error('Cannot find context with specified id');
+    return {};
+  } };
+  const ctx = { esperarRede: async function () { return {}; }, dialogos: function () { return 0; } };
+  const o = { roteiro: { passos: [{ acao: 'tecla', tecla: 'Enter' }, { acao: 'tecla', tecla: 'Tab' }] } };
+  const rastro = await rodarRoteiro(cdp, 'sessao', o, ctx);
+  assert.deepStrictEqual(rastro.map(function (p) { return [p.n, p.ok, p.motivo]; }), [[1, true, undefined], [2, true, undefined]]);
+  assert.deepStrictEqual(rastro.map(function (p) { return p.foco; }), ['nao deu para ler o foco: Cannot find context with specified id',
+    'nao deu para ler o foco: Cannot find context with specified id']);
+  // duas teclas, cada uma com dois eventos: o keyDown e o keyUp
+  assert.strictEqual(enviados.filter(function (m) { return m === 'Input.dispatchKeyEvent'; }).length, 2 * 2);
+  // a tecla que nao chegou a pagina segue parando o roteiro
+  const falha = { enviar: async function (metodo) { if (metodo === 'Input.dispatchKeyEvent') throw new Error('sem pagina'); return {}; } };
+  const parou = await rodarRoteiro(falha, 'sessao', o, ctx);
+  assert.deepStrictEqual(parou.map(function (p) { return [p.n, p.ok, p.motivo]; }), [[1, false, 'sem pagina']]);
+});
+
 test('E3 item 2: o aviso do estilo diz o que fazer, e o desvio so vale com --arquivo', function () {
   const { avisoDoEstilo } = require('../scripts/capturar-tela.js');
   // Sem design.json, o estilo nao foi conferido: o aviso diz de onde rodar, ou como criar o sistema; o --arquivo dado
@@ -966,7 +989,7 @@ test('ponta a ponta (H10c): o roteiro clica, digita, espera e confere pela arvor
       '<button onclick="setTimeout(function () { var h = document.createElement(\'h3\'); h.textContent = \'Atrasado\'; ' +
       'document.body.appendChild(h); }, 800)">Mostrar</button>' +
       '<div style="position:relative"><button>Coberto</button>' +
-      '<div style="position:absolute;inset:0;background:#fff"></div></div><span id=eco></span>' +
+      '<div style="position:absolute;inset:0;background:#fff"></div></div><span id=eco></span><p id=tecla></p>' +
       // o botao e o campo dentro de um shadow root aberto (um web component): o documento so ve o hospedeiro
       '<div id=hs></div>' +
       // o botao que e o proprio hospedeiro, com o miolo no shadow dele: o ponto do clique cai no miolo
@@ -980,6 +1003,9 @@ test('ponta a ponta (H10c): o roteiro clica, digita, espera e confere pela arvor
       'var hb = document.getElementById("hb"); hb.attachShadow({ mode: "open" }).innerHTML = \'<span>Miolo</span>\';' +
       'hb.addEventListener("click", function () { document.getElementById("r").textContent = "Hospedeiro clicado"; });' +
       'var eco = ""; document.getElementById("e").addEventListener("input", function (ev) { eco = ev.target.value; });' +
+      // a tecla chega a pagina com o nome e o Shift de uma pessoa
+      'document.addEventListener("keydown", function (ev) { document.getElementById("tecla").textContent = "Tecla: " + ' +
+      'ev.key + (ev.shiftKey ? " com Shift" : ""); });' +
       'document.getElementById("f").addEventListener("submit", function (ev) { ev.preventDefault();' +
       'fetch("/entrar", { method: "POST", body: document.getElementById("e").value + "|" + document.getElementById("s").value })' +
       '.then(function () { var h = document.createElement("h2"); h.textContent = "Painel"; document.body.appendChild(h);' +
@@ -988,7 +1014,7 @@ test('ponta a ponta (H10c): o roteiro clica, digita, espera e confere pela arvor
   await new Promise(function (r) { servidor.listen(0, '127.0.0.1', r); });
   t.after(function () { servidor.closeAllConnections(); servidor.close(); });
   const base = 'http://127.0.0.1:' + servidor.address().port;
-  const rodarRoteiro = function (nome, passos) {
+  const rodarPeloScript = function (nome, passos) {
     const arquivo = path.join(dir, nome + '.json');
     fs.writeFileSync(arquivo, JSON.stringify({ passos: passos }));
     return new Promise(function (r) {
@@ -998,7 +1024,7 @@ test('ponta a ponta (H10c): o roteiro clica, digita, espera e confere pela arvor
     });
   };
   const senha = 's3nh4-' + 'secreta';
-  const certo = await rodarRoteiro('certo', [
+  const certo = await rodarPeloScript('certo', [
     { acao: 'digitar', papel: 'textbox', nome: 'E-mail', texto: 'ana@exemplo.com' },
     { acao: 'digitar', papel: 'textbox', nome: 'Senha', texto: senha },
     { acao: 'clicar', papel: 'button', nome: 'Entrar' },
@@ -1048,7 +1074,24 @@ test('ponta a ponta (H10c): o roteiro clica, digita, espera e confere pela arvor
   assert.match(e.urlFinal, /\/segunda$/);
   assert.ok(e.acessibilidade.itens.some(function (i) { return i.papel === 'heading' && i.nome === 'Segunda'; }));
 
-  const errado = await rodarRoteiro('errado', [
+  // so o teclado: o Tab anda pela ordem da pagina, o Enter e o espaco clicam o botao com o foco, o Shift+Tab volta, e o
+  // rastro diz onde o foco caiu depois de cada tecla. Os dois botoes se chamam Editar: o Enter depois do Shift+Tab
+  // prova que o foco voltou ao primeiro, porque so ele escreve "Editou 1"
+  const tab = { acao: 'tecla', tecla: 'Tab' };
+  const enter = { acao: 'tecla', tecla: 'Enter' };
+  const teclas = await rodarPeloScript('teclas', [tab, tab, tab, tab, tab, enter,
+    { acao: 'conferir', texto: 'Editou 1' }, tab, { acao: 'tecla', tecla: 'Space' }, { acao: 'conferir', texto: 'Editou 2' },
+    { acao: 'tecla', tecla: 'Shift+Tab' }, { acao: 'conferir', texto: 'Tecla: Tab com Shift' },
+    enter, { acao: 'conferir', texto: 'Editou 1' },
+    { acao: 'tecla', tecla: 'Escape' }, { acao: 'conferir', texto: 'Tecla: Escape' }]);
+  assert.strictEqual(teclas.codigo, 0, teclas.stdout);
+  const et = JSON.parse(fs.readFileSync(JSON.parse(teclas.stdout).evidencia, 'utf8'));
+  assert.deepStrictEqual(et.roteiro.passos.filter(function (p) { return p.acao === 'tecla'; }).map(function (p) { return p.foco; }),
+    ['textbox "E-mail"', 'textbox "Senha"', 'button "Entrar"', 'checkbox "Lembrar"', 'button "Editar"', 'button "Editar"',
+      'button "Editar"', 'button "Editar"', 'button "Editar"', 'button "Editar"', 'button "Editar"']);
+  assert.strictEqual(recebidos.length, 1, 'o Tab pelo botao Entrar enviou o formulario');
+
+  const errado = await rodarPeloScript('errado', [
     { acao: 'conferir', texto: 'Nao existe', tempoMax: 300 },
     { acao: 'conferir', papel: 'textbox', nome: 'E-mail', valor: 'outro', tempoMax: 300 },
     // o escondido nao e texto visivel; a ordem 3 de dois botoes nao existe
@@ -1070,7 +1113,7 @@ test('ponta a ponta (H10c): o roteiro clica, digita, espera e confere pela arvor
   assert.deepStrictEqual([er.roteiro.passos[1].motivo, er.roteiro.passos[1].obtido],
     ['o valor do elemento nao e o esperado', 'velho@x']);
 
-  const coberto = await rodarRoteiro('coberto', [{ acao: 'clicar', papel: 'button', nome: 'Coberto', tempoMax: 300 }]);
+  const coberto = await rodarPeloScript('coberto', [{ acao: 'clicar', papel: 'button', nome: 'Coberto', tempoMax: 300 }]);
   assert.strictEqual(coberto.codigo, 1, coberto.stdout);
   assert.match(JSON.parse(coberto.stdout).aviso, /parou no passo 1 \(clicar button "Coberto"\): outro elemento cobre o ponto do clique/);
   // cada roteiro que parou sai 1, com o aviso do passo e do motivo
@@ -1081,17 +1124,17 @@ test('ponta a ponta (H10c): o roteiro clica, digita, espera e confere pela arvor
     assert.match(lido.aviso, aviso);
     return lido;
   };
-  const botao = await rodarRoteiro('botao', [{ acao: 'digitar', papel: 'button', nome: 'Entrar', texto: 'x', tempoMax: 300 }]);
+  const botao = await rodarPeloScript('botao', [{ acao: 'digitar', papel: 'button', nome: 'Entrar', texto: 'x', tempoMax: 300 }]);
   parou(botao, /parou no passo 1 \(digitar button "Entrar"\): o elemento nao e um campo de texto/);
-  const leitura = await rodarRoteiro('leitura', [{ acao: 'digitar', papel: 'textbox', nome: 'Fixo', texto: 'x', tempoMax: 300 }]);
+  const leitura = await rodarPeloScript('leitura', [{ acao: 'digitar', papel: 'textbox', nome: 'Fixo', texto: 'x', tempoMax: 300 }]);
   parou(leitura, /parou no passo 1 \(digitar textbox "Fixo"\): o campo e so de leitura/);
   // a espera que estoura o tempo e o elemento que nao existe param o roteiro: o passo seguinte nao roda
-  const espera = await rodarRoteiro('espera', [{ acao: 'esperar', texto: 'Nunca aparece', tempoMax: 300 },
+  const espera = await rodarPeloScript('espera', [{ acao: 'esperar', texto: 'Nunca aparece', tempoMax: 300 },
     { acao: 'clicar', papel: 'button', nome: 'Entrar' }]);
   const esperaLida = parou(espera,
     /parou no passo 1 \(esperar o texto "Nunca aparece"\): o texto nao esta no texto visivel da pagina/);
   assert.deepStrictEqual([esperaLida.passos.rodados, recebidos.length], [1, 1], 'o clique depois da espera rodou');
-  const sumido = await rodarRoteiro('sumido', [{ acao: 'clicar', papel: 'button', nome: 'Inexistente', tempoMax: 300 }]);
+  const sumido = await rodarPeloScript('sumido', [{ acao: 'clicar', papel: 'button', nome: 'Inexistente', tempoMax: 300 }]);
   parou(sumido, /parou no passo 1 \(clicar button "Inexistente"\): nenhum elemento com esse papel e nome/);
 
   // o roteiro errado para antes de abrir o navegador (numa pasta propria: os perfis dos outros nao contam)
@@ -1101,10 +1144,10 @@ test('ponta a ponta (H10c): o roteiro clica, digita, espera e confere pela arvor
   fs.writeFileSync(ruim, JSON.stringify({ passos: [{ acao: 'arrastar' }] }));
   const antes = rodar(['--url', base + '/', '--saida', path.join(dir, 'ruim'), '--passos', ruim], { SWORN_TMP: tmpRuim });
   assert.strictEqual(antes.status, 1);
-  assert.match(antes.stdout, /^ERRO: --passos: passo 1: "acao" e clicar, digitar, esperar ou conferir/);
+  assert.match(antes.stdout, /^ERRO: --passos: passo 1: "acao" e clicar, digitar, tecla, esperar ou conferir/);
   assert.deepStrictEqual(fs.readdirSync(tmpRuim), [], 'o roteiro errado abriu o navegador');
-  assertSemSobras(tmp, dir, certo.stdout + errado.stdout + coberto.stdout + botao.stdout + leitura.stdout + espera.stdout +
-    sumido.stdout);
+  assertSemSobras(tmp, dir, certo.stdout + teclas.stdout + errado.stdout + coberto.stdout + botao.stdout + leitura.stdout +
+    espera.stdout + sumido.stdout);
 });
 
 test('ponta a ponta (E3 item 2): o estilo calculado vai para a evidencia e e conferido contra o design.json', function (t) {

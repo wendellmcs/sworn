@@ -390,6 +390,27 @@ async function clicarNoPonto(cdp, s, p) {
     clickCount: 1 }, s, 'clicar');
 }
 
+// O elemento com o foco, dentro dos shadow roots abertos; o corpo da pagina (ou nenhum): null.
+function focoProfundo() {
+  var a = document.activeElement;
+  while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+  return a && a !== document.body && a !== document.documentElement ? a : null;
+}
+
+// A tecla de uma pessoa no elemento com o foco: desce e sobe uma vez, e o rastro leva onde o foco caiu depois.
+async function apertarTecla(cdp, s, passo) {
+  for (const ev of roteiro.eventosDaTecla(passo.tecla)) await cdp.enviar('Input.dispatchKeyEvent', ev, s, 'apertar a tecla');
+}
+
+async function lerFoco(cdp, s) {
+  const r = await cdp.enviar('Runtime.evaluate', { expression: '(' + focoProfundo.toString() + ')()',
+    objectGroup: GRUPO_DO_ROTEIRO }, s, 'ler o foco');
+  const id = r.result && r.result.objectId;
+  if (!id) return roteiro.focoDoNo(null);
+  const arvore = await cdp.enviar('Accessibility.getPartialAXTree', { objectId: id, fetchRelatives: false }, s, 'ler o foco');
+  return roteiro.focoDoNo((arvore.nodes || [])[0]);
+}
+
 // esperar e conferir: o texto visivel, a presenca do elemento (o da ordem, se pedida) ou o valor dele. {} ou { motivo,
 // obtido? }.
 async function conferirNaPagina(cdp, s, passo) {
@@ -410,8 +431,8 @@ async function conferirNaPagina(cdp, s, passo) {
   return obtido === passo.valor ? {} : { motivo: 'o valor do elemento nao e o esperado', obtido };
 }
 
-// Roda os passos na ordem e devolve o rastro, um item por passo que rodou. Clicar, digitar e esperar que falham param
-// o roteiro; a conferencia que falha fica no rastro e o roteiro segue. Depois de cada acao, a rede assenta (como depois
+// Roda os passos na ordem e devolve o rastro, um item por passo que rodou. Clicar, digitar, tecla e esperar que falham
+// param o roteiro; a conferencia que falha fica no rastro e o roteiro segue. Depois de cada acao, a rede assenta (como depois
 // da carga). `ctx`: { esperarRede(teto), dialogos() -> quantos a pagina ja abriu }.
 async function rodarRoteiro(cdp, s, o, ctx) {
   const rastro = [];
@@ -433,6 +454,18 @@ async function rodarRoteiro(cdp, s, o, ctx) {
           if (rede.pendentes) r.requisicoesPendentes = rede.pendentes;
         } catch (e) { r = { motivo: semDeNovo(e) }; }
       }
+    } else if (passo.acao === 'tecla') {
+      try {
+        await apertarTecla(cdp, s, passo);
+        r = {};
+        const rede = await ctx.esperarRede(TETO_DA_REDE);
+        if (rede.pendentes) r.requisicoesPendentes = rede.pendentes;
+      } catch (e) { r = { motivo: semDeNovo(e) }; }
+      // a tecla ja chegou a pagina: a leitura do foco que falha (o Enter que navegou leva o contexto) fica no rastro e
+      // nao para o roteiro
+      if (!r.motivo) {
+        try { r.foco = await lerFoco(cdp, s); } catch (e) { r.foco = 'nao deu para ler o foco: ' + semDeNovo(e); }
+      }
     } else {
       r = await tentarAte(passo.tempoMax, function () { return conferirNaPagina(cdp, s, passo); });
     }
@@ -441,6 +474,7 @@ async function rodarRoteiro(cdp, s, o, ctx) {
     const item = Object.assign({ n: i + 1 }, passo, { ok: !r.motivo, ms: Date.now() - inicio });
     if (r.motivo) item.motivo = r.motivo;
     if (r.obtido !== undefined) item.obtido = r.obtido;
+    if (r.foco !== undefined) item.foco = r.foco;
     if (passo.acao === 'digitar') item.caracteres = Array.from(passo.texto).length;
     if (r.requisicoesPendentes) item.requisicoesPendentes = r.requisicoesPendentes;
     const novos = ctx.dialogos() - dialogosAntes;
@@ -830,4 +864,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { avisoDoEstilo, conferenciaDoEstilo, lerEstiloELayout, conectar };
+module.exports = { avisoDoEstilo, conferenciaDoEstilo, lerEstiloELayout, conectar, rodarRoteiro };

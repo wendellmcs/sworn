@@ -1,5 +1,9 @@
 'use strict';
 
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
 /**
  * Pedido 6 (D752, D755): o que cada harness fora do Claude Code manda e entende, numa fonte so. A ponte.js le daqui
  * para levar a entrada de cada um ao formato do Claude Code, rodar o portao de hoje sem mudar e devolver a saida na
@@ -361,10 +365,114 @@ function doFilho(base) {
   return Object.assign(base, { agent_id: base.session_id, agent_type: tipo });
 }
 
+/*
+ * Fora do Claude Code nao ha a ferramenta Skill (nenhuma sonda viu uma): o harness carrega a skill lendo o SKILL.md
+ * dela, pela leitura ou pelo shell. Depois dessa leitura a ponte poe o Skill que o Claude Code mandaria, e o manual
+ * carregado, a rota cumprida e o uso contado (marcar-trabalho.js) valem igual. A pasta sworn-<nome> (a copia do dsh e
+ * do OpenCode) e a skills/<nome> da raiz do sworn (a do Codex, do Qwen e do agy) dao sworn:<nome>; outra pasta
+ * skills/<nome>, a skill <nome> do projeto. No shell so conta o trecho do comando (entre ;, &&, || e |) que comeca por
+ * um verbo de ler, le mais que zero linhas e nao grava em arquivo pelo >: o rm, o git add, o Set-Content e o head -c0
+ * que citam o SKILL.md nao o leram. O SKILL.md que nao existe no disco tambem nao conta: a leitura dele falhou. O ~ e
+ * a variavel do shell se resolvem pelo ambiente do gancho, e o relativo sem cwd, pela pasta onde o gancho roda; o
+ * caminho que o ambiente nao resolve nao conta.
+ * Limites: ler so um pedaco (head, sed -n) conta como carregar; o comando embrulhado (bash -c "cat ...") e o relativo
+ * depois de um cd no mesmo comando ficam sem contar (o segundo conta se o arquivo tambem existir a partir do cwd); o
+ * comando que falhou por outro motivo (permissao) conta (o formato da resposta muda de harness para harness).
+ */
+const RAIZ = path.join(__dirname, '..', '..');
+// antes do skills/ vem / ou um dos delimitadores onde o caminho comeca (os de inicioDoCaminho, mais a /)
+const SKILL_LIDA = /(?<![^/\s"'`=(])skills\/+([a-z0-9][a-z0-9_-]*)\/+SKILL\.md(?![\w.-])/gi;
+const FIM_DA_SKILL = /(?:^|\/)skills\/+([a-z0-9][a-z0-9_-]*)\/+SKILL\.md$/i;
+const VERBO_DE_LER = /^(?:cat|type|more|less|head|tail|bat|batcat|nl|gc|get-content|sed)$/;
+// o pedaco de tamanho zero: head -c0, tail -n 0, head --lines=0, Get-Content -TotalCount 0
+const LE_ZERO = /\s(?:-[cn]\s*0+|-0+|--(?:bytes|lines)=0+|-(?:totalcount|first|head|tail|last)\s+0+)(?=\s|$)/i;
+
+function ehLeitura(trecho) {
+  const s = trecho.trim().replace(/^\$[\w:]+\s*=\s*/, '').replace(/^\(+\s*/, '');
+  const verbo = (s.split(/\s/)[0] || '').replace(/["'`]/g, '').toLowerCase();
+  if (!VERBO_DE_LER.test(verbo)) return false;
+  if (verbo === 'sed' && (!/\s-n\b/.test(s) || /\s-i/.test(s))) return false;
+  if (LE_ZERO.test(s)) return false;
+  // o > que sobra depois do desvio do erro (2>&1, 2> arquivo) grava em arquivo
+  return !/>/.test(s.replace(/2>>?\s*("[^"]*"|'[^']*'|\S+)/g, ''));
+}
+
+// Onde comeca o caminho que termina em `antes` + skills/...: depois da aspa que ficou aberta (a de fora, quando ha
+// mais de uma), que guarda o caminho com espaco; sem aspa aberta, depois do ultimo espaco, tab, = ou (.
+function inicioDoCaminho(antes) {
+  const abertas = ['"', "'", '`'].filter((q) => (antes.split(q).length - 1) % 2 === 1).map((q) => antes.lastIndexOf(q));
+  if (abertas.length) return Math.min(...abertas) + 1;
+  return Math.max(...[' ', '\t', '=', '('].map((c) => antes.lastIndexOf(c))) + 1;
+}
+
+// O caminho com o ~ e as variaveis ($HOME, ${HOME}, $env:USERPROFILE, %USERPROFILE%) trocados pelo `ambiente`, como
+// o shell faria; null quando sobra algo que so o shell resolve: a variavel que falta ou esta vazia, o ~ de outro
+// usuario, o $(comando). No Windows o nome da variavel ignora a caixa.
+function expandido(lido, plataforma, ambiente) {
+  const valor = (nome) => {
+    if (typeof ambiente[nome] === 'string') return ambiente[nome];
+    const chave = plataforma === 'win32' ? Object.keys(ambiente).find((k) => k.toLowerCase() === nome.toLowerCase()) : undefined;
+    return chave === undefined ? undefined : ambiente[chave];
+  };
+  let falta = false;
+  let s = lido.replace(/\$\{(\w+)\}|\$env:(\w+)|\$(\w+)|%(\w+)%/gi, (_, a, b, c, d) => {
+    const v = valor(a || b || c || d);
+    if (typeof v !== 'string' || !v) falta = true;
+    return v || '';
+  });
+  if (/^~(?=\/|$)/.test(s)) s = (valor('HOME') || valor('USERPROFILE') || os.homedir()) + s.slice(1);
+  return falta || s.startsWith('~') || s.includes('$') ? null : s;
+}
+
+function skillsLidas(base, raiz, plataforma, existe, ambiente) {
+  const ti = base.tool_input;
+  const p = plataforma === 'win32' ? path.win32 : path.posix;
+  const cwd = typeof base.cwd === 'string' && base.cwd ? base.cwd : null;
+  // o path do Windows devolve \ e o comando pode escrever \\: tudo vira uma / so, para comparar
+  const barras = (t) => t.replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+  const caixa = (t) => (plataforma === 'win32' ? t.toLowerCase() : t);
+  let lidos;
+  if (base.tool_name === 'Read' && ti && typeof ti.file_path === 'string') lidos = [barras(ti.file_path)];
+  else if (ti && typeof ti.command === 'string') {
+    lidos = [];
+    for (const t of ti.command.split(/&&|\|\||[;|\n]/).filter(ehLeitura).map(barras)) {
+      for (const m of t.matchAll(SKILL_LIDA)) {
+        const antes = t.slice(0, m.index);
+        lidos.push(antes.slice(inicioDoCaminho(antes)) + m[0]);
+      }
+    }
+  } else return [];
+  const pastaDaRaiz = caixa(barras(p.resolve(raiz)).replace(/\/+$/, ''));
+  const nomes = [];
+  for (const lido of lidos) {
+    const m = FIM_DA_SKILL.exec(lido);
+    if (!m) continue;
+    const real = expandido(lido, plataforma, ambiente);
+    if (real === null) continue;
+    const inteiro = p.isAbsolute(real) ? p.resolve(real) : p.resolve(cwd || process.cwd(), real);
+    if (!existe(inteiro)) continue;
+    const pasta = m[1].toLowerCase();
+    let nome = pasta;
+    if (pasta.startsWith('sworn-')) {
+      nome = nomeDoAgente(pasta);
+      if (nome === 'sworn:') continue;
+    } else if (caixa(barras(p.dirname(p.dirname(p.dirname(inteiro))))) === pastaDaRaiz) {
+      // SKILL.md -> <nome> -> skills -> a raiz do sworn
+      nome = 'sworn:' + pasta;
+    }
+    if (!nomes.includes(nome)) nomes.push(nome);
+  }
+  return nomes.map((nome) => Object.assign({}, base,
+    { tool_name: 'Skill', tool_input: { skill: nome }, tool_response: undefined }));
+}
+
 /**
  * Entrada crua do harness -> lista de entradas no formato do Claude Code para o `evento` pedido (um dos de
  * eventosDoHarness). Quase sempre uma; o apply_patch do Codex da uma por arquivo, e um patch vazio, nenhuma; o shell
- * com patch dentro, a do shell e mais uma por arquivo; o wait_agent do Codex, uma por subagente terminado.
+ * com patch dentro, a do shell e mais uma por arquivo; o wait_agent do Codex, uma por subagente terminado; no
+ * PostToolUse da leitura ou do shell, a dela e mais um Skill por SKILL.md lido (skillsLidas). `opcoes.existe` diz se o
+ * arquivo existe (o padrao e o disco), e `opcoes.ambiente` resolve o ~ e as variaveis do caminho lido (o padrao e o
+ * process.env).
  */
 function normalizar(harness, bruta, evento, opcoes) {
   const plataforma = (opcoes && opcoes.plataforma) || process.platform;
@@ -387,6 +495,10 @@ function normalizar(harness, bruta, evento, opcoes) {
     return [base].concat(patchDoShell(cmd).map((f) => Object.assign({}, base, f)));
   }
   if (evento !== 'PostToolUse') return [base];
+  if (base.tool_name === 'Read' || SHELLS.includes(base.tool_name)) {
+    return [base].concat(skillsLidas(base, (opcoes && opcoes.raiz) || RAIZ, plataforma,
+      (opcoes && opcoes.existe) || fs.existsSync, (opcoes && opcoes.ambiente) || process.env));
+  }
   if (base.tool_name === 'AskUserQuestion') base.tool_response = respostaDaPergunta(harness, base.tool_response);
   if (harness === 'codex' && base.tool_name === 'SubagentHandback') return fimDoWaitAgent(base);
   if ((harness === 'agy' || harness === 'dsh') && base.tool_name === 'SubagentHandback') return [doFilho(base)];

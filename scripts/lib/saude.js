@@ -793,16 +793,22 @@ const ONDE_GRAVAR_O_HANDOFF = '(fora do Claude Code, grave o handoff direto em '
   '.sworn/handoff/AAAA-MM-DD-<tema>.md: e o caminho pedido, nao um contorno de recusa; a skill sworn-handoff faz ' +
   'o mesmo, se abrir)';
 
+// 0.91.0 (A2): o valor de `promptJaColado` quando foi o gancho (F3b, D828), nao a resposta, que mostrou o prompt.
+const PROMPT_PELO_GANCHO = 'gancho';
+
 /**
  * T10-1 (D357): o texto que vai ao MODELO quando a saude dispara (additionalContext do Stop).
  * O aviso de `avaliar` e para o usuario; este e a ordem para o Claude agir na mesma resposta.
  * D412: com `promptJaColado === true` (o turno gravou o handoff e a resposta final ja tem o bloco)
  * a ordem nao manda rodar nem colar de novo - mandar colar sem olhar a resposta era a duplicacao
  * que a decisao 650 da extensao tentou evitar tirando a ordem de colar.
- * So o booleano `true` muda a ordem, de proposito: um valor truthy qualquer (estado corrompido) cai
- * na ordem de colar. Na duvida, colar duas vezes custa menos que o prompt nao chegar ao chat.
+ * So o booleano `true` e o PROMPT_PELO_GANCHO mudam a ordem, de proposito: outro valor truthy qualquer (estado
+ * corrompido) cai na ordem de colar. Na duvida, colar duas vezes custa menos que o prompt nao chegar ao chat.
  * D704: com `rodando` nao vazio, a ordem e esperar, mesmo com o prompt ja colado: o handoff de antes do fim dos
  * agentes e o que sai velho.
+ * 0.91.0 (A2): com `promptJaColado === PROMPT_PELO_GANCHO`, a resposta nao tem o bloco, mas o gancho (F3b, D828) o
+ * mostrou ao dono na mensagem dele: a ordem tambem nao manda rodar nem colar, e aponta a mensagem do sworn, nao a
+ * resposta (dizer "o bloco da sua resposta acima" fazia o modelo afirmar um bloco que o chat nao tem).
  */
 function instrucaoAoModelo(gatilhos, promptJaColado, rodando) {
   if (Array.isArray(rodando) && rodando.length > 0) {
@@ -821,6 +827,16 @@ function instrucaoAoModelo(gatilhos, promptJaColado, rodando) {
       'O prompt do handoff ja esta no bloco de codigo da sua resposta acima: nao rode o handoff de novo e',
       'nao cole o bloco outra vez. Nesta mesma resposta, diga ao usuario numa linha que o handoff esta gravado',
       '(o bloco acima), cite o gatilho acima que disparou e diga que o trabalho segue nesta conversa, sem chat novo.',
+      'Siga com o proximo passo do trabalho, se houver um; nao pergunte "sigo?".'
+    ].join('\n');
+  }
+  if (promptJaColado === PROMPT_PELO_GANCHO) {
+    return [
+      'sworn: gatilho contavel de saude do contexto disparou. E hora do handoff, e ele ja foi gravado.',
+      listaDeGatilhos(gatilhos),
+      'O sworn ja mostrou ao usuario o prompt do handoff, num bloco da mensagem dele: nao rode o handoff de novo e',
+      'nao cole o bloco. Nesta mesma resposta, diga ao usuario numa linha que o handoff esta gravado (o prompt esta',
+      'na mensagem do sworn), cite o gatilho acima que disparou e diga que o trabalho segue nesta conversa, sem chat novo.',
       'Siga com o proximo passo do trabalho, se houver um; nao pergunte "sigo?".'
     ].join('\n');
   }
@@ -1202,6 +1218,6 @@ function saidasDoTranscript(caminho) {
 
 module.exports = { LIMIARES_PADRAO, BALDES_DE_BLOQUEIO, contextoDoTranscript, ultimaChamadaDoTranscript, testesDoTranscript, limiaresValidos, medir, acumular, avaliar, avisoDeSaude, instrucaoAoModelo, perguntaSobreSaude,
   INSTRUCAO_DA_PERGUNTA, ONDE_GRAVAR_O_HANDOFF, ehArquivoDeHandoff, handoffGravadoPeloShell,
-  ehArquivoDeCodigo, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT, MOTIVO_PARADA_NO_HANDOFF, motivoParadaSemDono,
+  ehArquivoDeCodigo, temBlocoDeCodigo, MOTIVO_HANDOFF_SEM_PROMPT, MOTIVO_PARADA_NO_HANDOFF, PROMPT_PELO_GANCHO, motivoParadaSemDono,
   SILENCIO_DO_AGENTE_MS, agentesRodando, linhasDosAgentes, linhaDeSituacao, instrucaoDaPergunta, provasEquivalentes,
   casaComAProva, foraDoProjeto, RODAR_SCRIPT_TEST, saidasDoTranscript };

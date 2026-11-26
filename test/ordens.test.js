@@ -156,7 +156,8 @@ test('ordens #4: contar que lanca nao derruba: devolve vazio', () => {
 // Plano 091, Tarefa 6 (mock D559, secao 5): cada ordem conta "dada", "cumprida" (a skill pedida rodou depois, na
 // mesma sessao) e "recusada pelo dono" nos contadores do turno, que o fecho descarrega em contadores.json.
 test('091 T6: os tipos de ordem e a chave do contador', () => {
-  assert.deepStrictEqual(ordens.TIPOS_DE_ORDEM, ['aprender', 'auditar', 'calibrar', 'init', 'revisar', 'manual']);
+  assert.deepStrictEqual(ordens.TIPOS_DE_ORDEM, ['aprender', 'auditar', 'calibrar', 'init', 'revisar', 'manual',
+    'tela', 'plano', 'etapa', 'diagnosticar', 'aaa']);
   assert.strictEqual(ordens.chaveDaOrdem('revisar', 'dada'), 'ordem_revisar_dada');
 });
 
@@ -222,13 +223,13 @@ test('091 T6: as linhas da auditoria - diferenca contra a foto anterior, os nunc
   assert.deepStrictEqual(ordens.linhasDasOrdens(antes, agora, 7), [
     '- ordens dos ultimos 7 dias que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
     '  aprender 4/3/-; revisar antes do commit 6/5/1; manual 2/2/-',
-    '  nunca disparadas: auditar, calibrar, init'
+    '  nunca disparadas: auditar, calibrar, init, rubrica de tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto'
   ].concat(NOTA));
   // so o revisar mede a recusa: sem "-", sem a nota
   assert.deepStrictEqual(ordens.linhasDasOrdens({}, { ordem_revisar_dada: 1, ordem_revisar_recusada: 1 }, 1), [
     '- ordens do ultimo dia que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
     '  revisar antes do commit 1/0/1',
-    '  nunca disparadas: aprender, auditar, calibrar, init, manual'
+    '  nunca disparadas: aprender, auditar, calibrar, init, manual, rubrica de tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto'
   ]);
   // sem foto anterior (primeira auditoria): desde o comeco
   assert.strictEqual(ordens.linhasDasOrdens(null, agora, null)[0],
@@ -252,4 +253,32 @@ test('091 T6: totaisDasOrdens le so as chaves de ordem do contadores.json; ausen
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'), '[1,2]');
     assert.deepStrictEqual(ordens.totaisDasOrdens(dir), {});
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+/** Roda `fn` com SWORN_PONTE no valor dado (undefined apaga), como o gancho que a ponte chama; devolve o ambiente. */
+function comPonte(valor, fn) {
+  const antes = process.env.SWORN_PONTE;
+  try {
+    if (valor === undefined) delete process.env.SWORN_PONTE; else process.env.SWORN_PONTE = valor;
+    return fn();
+  } finally {
+    if (antes === undefined) delete process.env.SWORN_PONTE; else process.env.SWORN_PONTE = antes;
+  }
+}
+
+test('ordens: pela ponte, o motivo do manual manda ler o SKILL.md inteiro, nao a ferramenta Skill', () => {
+  // fora do Claude Code nao ha a ferramenta Skill: a ponte conta a leitura do SKILL.md como carregar (harness.js)
+  const t = comPonte('1', () => ordens.motivoSemManual('src/auth/login.js'));
+  assert.strictEqual(t.indexOf('ferramenta Skill'), -1, t);
+  assert.ok(t.indexOf('leia inteiro o SKILL.md') !== -1, t);
+  assert.ok(t.indexOf('.agents/skills/sworn-playbook/SKILL.md') !== -1, t);
+  assert.ok(t.indexOf(' skills/playbook/SKILL.md') !== -1, t);
+  assert.ok(t.indexOf('"padrao" no nome') !== -1 && t.indexOf('"src/auth/login.js"') !== -1, t);
+  assert.ok(/^[\x0a\x20-\x7e]*$/.test(t), t);
+  assert.ok(t.endsWith('So o dono desliga neste projeto: "portaoManual": false em .claude/sworn/projeto.json.'), t);
+  // so o "1" que a ponte poe vale; sem ele, o texto do Claude Code
+  for (const v of ['0', '', undefined]) {
+    const cc = comPonte(v, () => ordens.motivoSemManual('a.js'));
+    assert.ok(cc.indexOf('carregue pela ferramenta Skill o sworn:playbook') !== -1, String(v));
+  }
 });

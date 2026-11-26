@@ -1,0 +1,832 @@
+/* Painel de sessoes, prototipo da fase 2. Segue o tema do sistema ate o dono escolher no botao; a escolha entra
+   como data-tema na raiz. Cada cor de uso tem as duas versoes por light-dark(): a clara primeiro, a escura depois.
+   As cores-base sao as do deck (apresentacao/fonte/deck.css), copiadas porque o servidor do prototipo so serve esta
+   pasta. No escuro, amber, green e blue clareiam por color-mix para o texto passar de 4,5:1; no claro, amber e gold
+   escurecem pelo mesmo motivo. */
+:root {
+  color-scheme: dark light;
+  --night: #0D1117;
+  --night2: #161B22;
+  --night-line: #30363D;
+  --night-text: #F3F4F6;
+  --night-soft: #B8C0CC;
+  --paper: #FBFAF6;
+  --paper2: #F1ECDF;
+  --card: #FFFEFA;
+  --line: #E3DDCD;
+  --ink: #1F2937;
+  --soft: #4B5563;
+  --mute: #6B7280;
+  --amber: #B45309;
+  --blue: #1F4E79;
+  --green: #2F6F4E;
+  --gold: #F59E0B;
+  --branco: #fff;
+  --preto: #000;
+
+  --fundo: light-dark(var(--paper), var(--night));
+  --superficie: light-dark(color-mix(in srgb, var(--paper2) 55%, var(--paper)), var(--night2));
+  --mesa: light-dark(var(--card), color-mix(in srgb, var(--night2) 88%, var(--night-soft)));
+  --elevado: light-dark(color-mix(in srgb, var(--paper2) 70%, var(--card)), color-mix(in srgb, var(--night2) 80%, var(--night-soft)));
+  --tela: light-dark(var(--branco), color-mix(in srgb, var(--night) 60%, var(--preto)));
+  --moldura: light-dark(color-mix(in srgb, var(--line) 75%, var(--soft)), color-mix(in srgb, var(--night-line) 70%, var(--night)));
+  --linha: light-dark(var(--line), var(--night-line));
+  --linha-tenue: light-dark(color-mix(in srgb, var(--line) 60%, transparent), color-mix(in srgb, var(--night-line) 45%, transparent));
+  /* A borda de campo de texto passa de 3:1 contra o fundo: e ela que mostra onde se escreve. */
+  --borda-campo: light-dark(var(--mute), color-mix(in srgb, var(--night-soft) 55%, var(--night)));
+  --texto: light-dark(var(--ink), var(--night-text));
+  --texto-2: light-dark(var(--soft), var(--night-soft));
+  /* O texto-3 so vai sobre o fundo, a mesa e a tela: sobre a superficie do tema claro ele fica abaixo de 4,5:1. */
+  --texto-3: light-dark(var(--mute), color-mix(in srgb, var(--night-soft) 78%, var(--night)));
+
+  --cor-amber: light-dark(color-mix(in srgb, var(--amber) 88%, var(--preto)), color-mix(in srgb, var(--amber) 65%, var(--branco)));
+  --cor-green: light-dark(var(--green), color-mix(in srgb, var(--green) 60%, var(--branco)));
+  --cor-blue: light-dark(var(--blue), color-mix(in srgb, var(--blue) 55%, var(--branco)));
+  --cor-gold: light-dark(color-mix(in srgb, var(--gold) 55%, var(--preto)), var(--gold));
+  --fundo-gold: light-dark(color-mix(in srgb, var(--gold) 14%, var(--card)), color-mix(in srgb, var(--gold) 16%, var(--night2)));
+  --fundo-amber: light-dark(color-mix(in srgb, var(--amber) 12%, var(--card)), color-mix(in srgb, var(--amber) 24%, var(--night2)));
+  --fundo-green: light-dark(color-mix(in srgb, var(--green) 10%, var(--card)), color-mix(in srgb, var(--green) 22%, var(--night2)));
+  --fundo-blue: light-dark(color-mix(in srgb, var(--blue) 9%, var(--card)), color-mix(in srgb, var(--blue) 30%, var(--night2)));
+  --borda-gold: light-dark(color-mix(in srgb, var(--gold) 70%, var(--line)), color-mix(in srgb, var(--gold) 60%, var(--night-line)));
+  --borda-amber: light-dark(color-mix(in srgb, var(--amber) 60%, var(--line)), color-mix(in srgb, var(--amber) 70%, var(--night-line)));
+  --listra: light-dark(color-mix(in srgb, var(--line) 55%, transparent), color-mix(in srgb, var(--night-line) 35%, transparent));
+  --foco: light-dark(var(--blue), color-mix(in srgb, var(--blue) 35%, var(--branco)));
+  --veu: color-mix(in srgb, var(--preto) 55%, transparent);
+  --sombra: color-mix(in srgb, var(--preto) 28%, transparent);
+  /* O botao cheio (texto sobre --texto) clareia um pouco no hover. */
+  --cheio-hover: color-mix(in srgb, var(--texto) 86%, var(--fundo));
+
+  /* Cada estado tem cor, icone e rotulo: a cor nunca fala sozinha. */
+  --estado-precisa: var(--cor-gold);
+  --estado-trabalhando: var(--cor-blue);
+  --estado-parada: var(--texto-2);
+  --estado-concluida: var(--cor-green);
+
+  --fonte: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  /* Raios, do maior ao menor: a caixa e a sala, a mesa e o pedido, o botao, a etiqueta, a amostra de cor; a pilula
+     arredonda as pontas de qualquer altura. O monitor tem os seus. */
+  --raio-g: 0.75rem;
+  --raio: 0.625rem;
+  --raio-p: 0.375rem;
+  --raio-xs: 0.25rem;
+  --raio-xxs: 0.125rem;
+  --raio-pilula: 999px;
+  --raio-monitor: 0.5rem;
+  --raio-tela: 0.3125rem;
+}
+:root[data-tema="claro"] { color-scheme: light; }
+:root[data-tema="escuro"] { color-scheme: dark; }
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* Com o painel lateral aberto, a pagina de tras nao rola junto. */
+html:has(.lateral[open]) { overflow: hidden; }
+
+body {
+  margin: 0;
+  font-family: var(--fonte);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--texto);
+  background: var(--fundo);
+}
+
+h1, h2, h3, h4, p { margin: 0; }
+h2 { font-size: 0.9375rem; font-weight: 650; }
+
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+
+.so-leitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pular {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  z-index: 10;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--raio-p);
+  color: var(--fundo);
+  background: var(--texto);
+  font-weight: 600;
+  text-decoration: none;
+}
+.pular:focus { top: 0.75rem; }
+
+.num { font-variant-numeric: tabular-nums; }
+
+.icone {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- topo ---- */
+.topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--linha);
+  background: var(--superficie);
+}
+.topo__marca { display: flex; align-items: center; gap: 0.625rem; }
+.topo__logo { width: 1.25rem; height: 1.25rem; flex: none; }
+.topo__logo-mesa { fill: var(--texto-3); }
+.topo__logo-mesa--chama { fill: var(--cor-gold); }
+.topo h1 { font-size: 1rem; font-weight: 650; letter-spacing: -0.01em; }
+.selo {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-pilula);
+  color: var(--texto-2);
+  white-space: nowrap;
+}
+.topo__sinal { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; color: var(--texto-2); }
+.topo__luz {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--texto-3);
+}
+.topo__sinal[data-sinal="aovivo"] .topo__luz { background: var(--cor-green); animation: pulsar 2s ease-in-out infinite; }
+.topo__sinal[data-sinal="reconectando"] .topo__luz { background: var(--cor-gold); }
+.topo__sinal[data-sinal="sem"] .topo__luz { background: transparent; box-shadow: inset 0 0 0 1.5px var(--cor-amber); }
+.topo__sinal[data-sinal="sem"] { color: var(--cor-amber); }
+.topo__frota { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin-left: auto; }
+.maquinas { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.maquina {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-pilula);
+  font-size: 0.8125rem;
+  color: var(--texto-2);
+}
+.maquina__nome { min-width: 0; color: var(--texto); font-weight: 550; overflow-wrap: anywhere; }
+.maquina__luz { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--cor-green); flex: none; }
+.maquina[data-conexao="offline"] { border-style: dashed; color: var(--cor-amber); }
+.maquina[data-conexao="offline"] .maquina__luz { background: transparent; box-shadow: inset 0 0 0 1.5px var(--cor-amber); }
+.topo__total { font-size: 0.8125rem; color: var(--texto-2); }
+.topo__acoes { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* ---- corpo: a caixa de decisoes ao lado do escritorio e da equipe, ou em cima deles na tela estreita ---- */
+.corpo {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 100rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+@media (min-width: 64rem) {
+  .corpo { grid-template-columns: minmax(20rem, 23.5rem) minmax(0, 1fr); align-items: start; }
+  .caixa { grid-row: span 2; position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); overflow-y: auto; }
+}
+
+.caixa,
+.sala {
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-g);
+  background-color: var(--superficie);
+}
+.caixa { padding: 1rem; }
+.caixa__topo { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.contador {
+  font-size: 0.75rem;
+  font-weight: 650;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--raio-pilula);
+  color: var(--cor-gold);
+  background: var(--fundo-gold);
+  white-space: nowrap;
+}
+.caixa__ajuda,
+.escritorio__ajuda,
+.equipe__ajuda { margin-top: 0.25rem; font-size: 0.8125rem; color: var(--texto-2); }
+.caixa__ajuda { margin-bottom: 0.75rem; }
+.caixa__carregando { font-size: 0.8125rem; color: var(--texto-2); }
+
+.fila { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.pedido {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--fundo);
+}
+.pedido[data-urgencia="alta"] { border-color: var(--borda-gold); }
+.pedido--novo { animation: chegar 1.6s ease-out; }
+.pedido__topo { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem 0.5rem; font-size: 0.75rem; }
+.urgencia {
+  padding: 0.0625rem 0.375rem;
+  border-radius: var(--raio-xs);
+  font-weight: 650;
+  color: var(--texto);
+  background: var(--elevado);
+}
+.urgencia[data-urgencia="alta"] { color: var(--cor-gold); background: var(--fundo-gold); }
+.urgencia[data-urgencia="baixa"] { color: var(--texto-2); background: transparent; box-shadow: inset 0 0 0 1px var(--linha); }
+.pedido__tipo { color: var(--texto-2); }
+.pedido__espera { margin-left: auto; color: var(--texto-2); }
+.pedido__onde { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; font-size: 0.8125rem; color: var(--texto-2); }
+.pedido__sessao { min-width: 0; color: var(--texto); font-weight: 550; overflow-wrap: anywhere; }
+.pedido__texto { font-size: 0.875rem; overflow-wrap: anywhere; }
+.pedido__opcoes { display: flex; flex-wrap: wrap; gap: 0.375rem; margin: 0; padding: 0; list-style: none; }
+.pedido__opcoes li {
+  min-width: 0;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-pilula);
+  font-size: 0.75rem;
+  color: var(--texto-2);
+  overflow-wrap: anywhere;
+}
+.pedido__alvo { font-size: 0.75rem; color: var(--texto-2); }
+.codigo {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 0.125rem;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-xs);
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--texto);
+  background: var(--tela);
+  overflow-wrap: anywhere;
+}
+.pedido__limite,
+.pedido__semsinal { font-size: 0.75rem; }
+.pedido__limite { color: var(--texto-3); }
+.pedido__semsinal { color: var(--cor-amber); }
+.pedido__acoes { display: flex; justify-content: flex-end; }
+
+/* O vazio da fila e o da sala: a mesma caixa tracejada. */
+.fila__vazia,
+.sala__vazia {
+  padding: 1rem;
+  border: 1px dashed var(--linha);
+  border-radius: var(--raio);
+  font-size: 0.8125rem;
+  color: var(--texto-2);
+  text-align: center;
+}
+.fila__vazia-titulo { color: var(--texto); font-weight: 600; }
+
+.botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-p);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 550;
+  color: var(--texto);
+  background: var(--elevado);
+  cursor: pointer;
+}
+.botao:hover { border-color: var(--texto-3); }
+.botao:active { transform: translateY(1px); }
+/* Cheio: o botao principal, o alternado ligado e o chip ligado. */
+.botao--primario,
+.botao--alterna[aria-pressed="true"],
+.chip[aria-pressed="true"] { color: var(--fundo); background: var(--texto); border-color: var(--texto); }
+.botao--primario:hover { border-color: var(--texto); background: var(--cheio-hover); }
+/* Desligado: sem preenchimento e com borda tracejada, para nao parecer um botao que so nao respondeu. */
+.botao:disabled,
+.botao:disabled:hover {
+  color: var(--texto-2);
+  background: transparent;
+  border-color: var(--linha);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+.botao:disabled:active { transform: none; }
+
+/* ---- escritorio ---- */
+.escritorio__topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1rem;
+}
+.filtro { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-pilula);
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--texto-2);
+  background: transparent;
+  cursor: pointer;
+}
+/* So o chip desligado muda no hover: o ligado fica cheio (a regra dele vem antes, com o botao). */
+.chip:not([aria-pressed="true"]):hover { color: var(--texto); border-color: var(--texto-3); }
+.chip__num { font-weight: 650; font-variant-numeric: tabular-nums; }
+.chip .icone { width: 0.75rem; height: 0.75rem; }
+
+.salas { display: grid; gap: 1.5rem; }
+.salas__vazia { font-size: 0.875rem; color: var(--texto-2); }
+
+/* A sala tem piso de planta baixa: a grade leve lembra o escritorio sem disputar com as mesas. */
+.sala {
+  padding: 1rem;
+  background-image:
+    linear-gradient(var(--linha-tenue) 1px, transparent 1px),
+    linear-gradient(90deg, var(--linha-tenue) 1px, transparent 1px);
+  background-size: 1.5rem 1.5rem;
+  background-position: -1px -1px;
+}
+.sala__topo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 1rem; margin-bottom: 0.875rem; }
+.sala__nome {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.sala__resumo { font-size: 0.8125rem; color: var(--texto-2); }
+.sala__custo { margin-left: auto; font-size: 0.8125rem; color: var(--texto-2); }
+.sala__vazia { background: var(--superficie); }
+
+.amostra {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: var(--raio-xxs);
+  flex: none;
+  background: var(--texto-3);
+}
+.amostra[data-cor="amber"] { background: var(--cor-amber); }
+.amostra[data-cor="green"] { background: var(--cor-green); }
+.amostra[data-cor="blue"] { background: var(--cor-blue); }
+.amostra[data-cor="gold"] { background: var(--cor-gold); }
+
+.mesas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17.5rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mesas > li { display: flex; }
+
+/* ---- a mesa: um monitor com a tarefa e a ultima fala, o agente sentado, os dados e o limite ---- */
+.mesa {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--mesa);
+}
+.mesa:hover { border-color: var(--texto-3); }
+.mesa[data-estado="precisa"] { border-color: var(--estado-precisa); }
+
+.mesa__estado { display: flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; font-weight: 650; }
+.mesa[data-estado="precisa"] .mesa__estado { color: var(--estado-precisa); }
+.mesa[data-estado="trabalhando"] .mesa__estado { color: var(--estado-trabalhando); }
+.mesa[data-estado="parada"] .mesa__estado { color: var(--estado-parada); }
+.mesa[data-estado="concluida"] .mesa__estado { color: var(--estado-concluida); }
+.mesa[data-estado="trabalhando"] .mesa__estado .icone { animation: girar 1.4s linear infinite; }
+.mesa__tempo { margin-left: auto; font-weight: 400; color: var(--texto-2); }
+.mesa__nome { font-size: 0.9375rem; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+/* O nome e o botao da mesa; o ::after estica a area de clique e o anel de foco sobre a mesa inteira. */
+.mesa__abrir {
+  padding: 0;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  background: none;
+  cursor: pointer;
+}
+.mesa__abrir::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--raio);
+}
+.mesa__abrir:focus-visible { outline: none; }
+.mesa__abrir:focus-visible::after { outline: 2px solid var(--foco); outline-offset: 3px; }
+.mesa:hover .mesa__abrir { text-decoration: underline; text-underline-offset: 0.15em; }
+
+.monitor {
+  position: relative;
+  margin-bottom: 0.5rem;
+  padding: 0.25rem;
+  border-radius: var(--raio-monitor);
+  background: var(--moldura);
+}
+/* O pe do monitor. */
+.monitor::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -0.5rem;
+  width: 2.5rem;
+  height: 0.5rem;
+  transform: translateX(-50%);
+  background: var(--moldura);
+  clip-path: polygon(20% 0, 80% 0, 100% 100%, 0 100%);
+}
+.monitor__tela {
+  display: grid;
+  gap: 0.375rem;
+  min-height: 6.25rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--raio-tela);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--texto);
+  background: var(--tela);
+  align-content: start;
+}
+.monitor__tarefa,
+.monitor__fala {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.monitor__tarefa { -webkit-line-clamp: 2; line-clamp: 2; color: var(--texto-3); }
+/* Aqui e no cursor logo abaixo, o "/ """ tira o enfeite do leitor de tela; a declaracao simples, antes dela, fica
+   para o navegador que nao entende a segunda. As duas sao de proposito. */
+.monitor__tarefa::before { content: "› "; content: "› " / ""; }
+.monitor__fala { -webkit-line-clamp: 3; line-clamp: 3; }
+.mesa[data-estado="trabalhando"] .monitor__fala::after {
+  content: "▍";
+  content: "▍" / "";
+  margin-left: 0.125rem;
+  color: var(--estado-trabalhando);
+  animation: piscar 1.1s steps(1) infinite;
+}
+/* Sem sinal: a tela fica listrada e o texto continua legivel, porque e o ultimo estado que chegou. */
+.mesa[data-sinal="sem"] .monitor__tela {
+  background-image: repeating-linear-gradient(135deg, transparent 0 0.5rem, var(--listra) 0.5rem 0.625rem);
+}
+
+.mesa__espera {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--raio-p);
+  font-size: 0.8125rem;
+  background: var(--fundo-gold);
+}
+.mesa__espera-tipo { font-size: 0.75rem; font-weight: 650; color: var(--cor-gold); }
+.mesa__espera-texto { overflow-wrap: anywhere; }
+
+.mesa__semsinal {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px dashed var(--borda-amber);
+  border-radius: var(--raio-p);
+  font-size: 0.75rem;
+  color: var(--cor-amber);
+}
+.mesa__semsinal .icone { margin-top: 0.125rem; }
+
+.mesa__agente { display: flex; align-items: center; gap: 0.625rem; }
+.avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border: 1px solid var(--linha);
+  border-radius: 50%;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--texto);
+  background: var(--elevado);
+}
+.avatar__luz {
+  position: absolute;
+  right: -0.125rem;
+  bottom: -0.125rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid var(--mesa);
+  border-radius: 50%;
+  background: var(--texto-3);
+}
+.mesa[data-estado="precisa"] .avatar__luz { background: var(--estado-precisa); }
+.mesa[data-estado="trabalhando"] .avatar__luz { background: var(--estado-trabalhando); }
+.mesa[data-estado="parada"] .avatar__luz { background: var(--estado-parada); }
+.mesa[data-estado="concluida"] .avatar__luz { background: var(--estado-concluida); }
+.mesa__quem { display: grid; min-width: 0; }
+.mesa__modelo { font-size: 0.8125rem; font-weight: 550; overflow-wrap: anywhere; }
+.mesa__maquina { font-size: 0.75rem; color: var(--texto-2); overflow-wrap: anywhere; }
+
+.mesa__dados { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; font-size: 0.75rem; color: var(--texto-2); }
+
+.mesa__limite {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--linha);
+  font-size: 0.75rem;
+  color: var(--texto-3);
+}
+.mesa__limite .icone { margin-top: 0.125rem; }
+
+/* ---- a equipe: os numeros por projeto e por maquina ---- */
+.equipe { display: grid; gap: 0.75rem; min-width: 0; }
+/* Uma tabela embaixo da outra: lado a lado, nem a coluna principal mais larga (o corpo para em 100rem) cabe as seis
+   colunas das duas, e o custo e a ultima atividade ficavam escondidos na rolagem. */
+.equipe__tabelas { display: grid; gap: 1rem; }
+.rolagem {
+  overflow-x: auto;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-g);
+  background: var(--superficie);
+}
+.tabela { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.tabela caption { padding: 0.75rem 1rem 0.5rem; text-align: left; font-weight: 650; }
+.tabela th,
+.tabela td { padding: 0.5rem 1rem; text-align: left; white-space: nowrap; border-top: 1px solid var(--linha); }
+.tabela thead th { font-size: 0.75rem; font-weight: 600; color: var(--texto-2); }
+/* Sessoes, precisam de voce, arquivos e custo sao numeros: alinham a direita, o cabecalho junto. */
+.tabela th:nth-child(n+2):nth-child(-n+5),
+.tabela td:nth-child(n+2):nth-child(-n+5) { text-align: right; }
+.tabela tbody th { font-weight: 550; }
+.tabela tfoot th,
+.tabela tfoot td { font-weight: 650; border-top-width: 2px; }
+.tabela td[data-alerta] { color: var(--cor-gold); font-weight: 650; }
+.tabela__nome { display: inline-flex; align-items: center; gap: 0.5rem; }
+.tabela__nota {
+  padding: 0 0.375rem;
+  border: 1px dashed var(--borda-amber);
+  border-radius: var(--raio-xs);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--cor-amber);
+}
+.tabela__quando { color: var(--texto-2); }
+/* A barra do custo repete o numero ao lado para o olho comparar as linhas. */
+.tabela__barra {
+  width: 4rem;
+  height: 0.375rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  appearance: none;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: var(--linha);
+}
+.tabela__barra::-webkit-meter-bar { height: 0.375rem; border: 0; border-radius: var(--raio-pilula); background: var(--linha); }
+.tabela__barra::-webkit-meter-optimum-value { border-radius: var(--raio-pilula); background: var(--cor-blue); }
+.tabela__barra::-moz-meter-bar { border-radius: var(--raio-pilula); background: var(--cor-blue); }
+
+/* ---- o painel lateral de uma sessao ---- */
+.lateral {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(100%, 36rem);
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-left: 1px solid var(--linha);
+  color: var(--texto);
+  background: var(--superficie);
+  box-shadow: -1rem 0 2.5rem var(--sombra);
+}
+.lateral[open] { display: flex; flex-direction: column; animation: entrar 0.18s ease-out; }
+.lateral::backdrop { background: var(--veu); }
+.lateral__topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--linha);
+}
+.lateral__cabeca { display: grid; gap: 0.25rem; min-width: 0; }
+.lateral__projeto { display: flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; color: var(--texto-2); }
+/* O nome e item de flex: sem o min-width, o nome comprido de uma palavra so nao encolhe e vaza do painel. */
+.lateral__projeto > :last-child { min-width: 0; overflow-wrap: anywhere; }
+.lateral__titulo { font-size: 1.125rem; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.lateral__estado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--texto-2);
+}
+.lateral__estado[data-estado="precisa"] { --cor-do-estado: var(--estado-precisa); }
+.lateral__estado[data-estado="trabalhando"] { --cor-do-estado: var(--estado-trabalhando); }
+.lateral__estado[data-estado="parada"] { --cor-do-estado: var(--estado-parada); }
+.lateral__estado[data-estado="concluida"] { --cor-do-estado: var(--estado-concluida); }
+.lateral__estado .icone,
+.lateral__rotulo { color: var(--cor-do-estado, var(--texto)); }
+.lateral__rotulo { font-weight: 650; }
+.lateral__quem { overflow-wrap: anywhere; }
+.lateral__tarefa { font-size: 0.8125rem; color: var(--texto-2); overflow-wrap: anywhere; }
+.lateral__corpo {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 1.5rem;
+  min-height: 0;
+  padding: 1rem 1.25rem 1.5rem;
+  overflow-y: auto;
+}
+
+.bloco { display: grid; gap: 0.5rem; min-width: 0; }
+.bloco__titulo {
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texto-2);
+}
+.bloco__conteudo { display: grid; gap: 0.5rem; min-width: 0; }
+.bloco__nada,
+.bloco__nota { font-size: 0.8125rem; color: var(--texto-2); }
+.decisao { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.conversa {
+  max-height: 20rem;
+  padding: 0.75rem;
+  overflow-y: auto;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--fundo);
+}
+.conversa__lista { display: grid; gap: 0.625rem; margin: 0; padding: 0; list-style: none; }
+.conversa__vazia { font-size: 0.8125rem; color: var(--texto-2); }
+.fala {
+  display: grid;
+  gap: 0.125rem;
+  max-width: 92%;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--raio);
+  background: var(--elevado);
+}
+.fala[data-quem="dono"] { justify-self: end; background: var(--fundo-blue); }
+.fala__quem { font-size: 0.75rem; font-weight: 650; color: var(--texto-2); }
+.fala__texto { font-size: 0.875rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.resposta { display: grid; gap: 0.375rem; }
+.resposta__rotulo { font-size: 0.8125rem; font-weight: 550; }
+.resposta__texto {
+  width: 100%;
+  min-height: 5rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--borda-campo);
+  border-radius: var(--raio-p);
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--texto);
+  background: var(--fundo);
+  resize: vertical;
+}
+.resposta__texto[aria-invalid="true"] { border-color: var(--cor-amber); }
+.resposta__dica { font-size: 0.75rem; color: var(--texto-2); }
+.resposta__erro { font-size: 0.8125rem; font-weight: 550; color: var(--cor-amber); }
+.resposta__erro:empty { display: none; }
+.resposta__semsinal { font-size: 0.75rem; color: var(--cor-amber); }
+.resposta__acoes { display: flex; justify-content: flex-end; }
+.resposta__limite {
+  padding: 0.625rem 0.75rem;
+  border: 1px dashed var(--linha);
+  border-radius: var(--raio-p);
+  font-size: 0.8125rem;
+  color: var(--texto-2);
+}
+
+.arquivos { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.arquivo {
+  min-width: 0;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-p);
+  background: var(--fundo);
+}
+.arquivo__topo { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.625rem; font-size: 0.8125rem; }
+summary.arquivo__topo { cursor: pointer; list-style: none; }
+summary.arquivo__topo::-webkit-details-marker { display: none; }
+/* A seta do resumo e desenhada pela borda: sem texto, o leitor de tela fica so com o estado aberto ou fechado. */
+summary.arquivo__topo::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: none;
+  border-right: 1.5px solid var(--texto-2);
+  border-bottom: 1.5px solid var(--texto-2);
+  transform: rotate(-45deg);
+}
+.arquivo[open] > summary.arquivo__topo::before { transform: rotate(45deg); }
+.arquivo__caminho { min-width: 0; font-family: var(--mono); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.arquivo__conta { display: inline-flex; gap: 0.375rem; flex: none; margin-left: auto; font-size: 0.75rem; font-weight: 600; }
+.arquivo__mais { color: var(--cor-green); }
+.arquivo__menos { color: var(--cor-amber); }
+
+.diff {
+  margin: 0;
+  padding: 0.375rem 0;
+  overflow-x: auto;
+  border-top: 1px solid var(--linha);
+  border-radius: 0 0 var(--raio-p) var(--raio-p);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  background: var(--tela);
+}
+.diff__linha { display: block; width: max-content; min-width: 100%; padding: 0 0.75rem; white-space: pre; }
+.diff__linha[data-tipo="mais"] { color: var(--cor-green); background: var(--fundo-green); }
+.diff__linha[data-tipo="menos"] { color: var(--cor-amber); background: var(--fundo-amber); }
+.diff__linha[data-tipo="lugar"] { color: var(--texto-3); }
+.diff__sinal { display: inline-block; width: 1.5ch; user-select: none; }
+.diff__cortadas { padding: 0.375rem 0.75rem; border-top: 1px solid var(--linha); font-size: 0.75rem; color: var(--texto-2); }
+
+.erro-geral {
+  max-width: 40rem;
+  margin: 1.5rem auto;
+  padding: 1rem;
+  border: 1px solid var(--cor-amber);
+  border-radius: var(--raio);
+  background: var(--fundo-amber);
+}
+
+@media (max-width: 40rem) {
+  .topo { padding: 0.75rem 1rem; }
+  .topo__frota { margin-left: 0; }
+  .corpo { gap: 1rem; padding: 1rem; }
+  .lateral { border-left: 0; }
+  .lateral__topo,
+  .lateral__corpo { padding-left: 1rem; padding-right: 1rem; }
+  .tabela th,
+  .tabela td { padding-left: 0.75rem; padding-right: 0.75rem; }
+}
+
+@media (pointer: coarse) {
+  .botao,
+  .chip,
+  summary.arquivo__topo { min-height: 2.75rem; }
+}
+
+@keyframes pulsar { 50% { opacity: 0.35; } }
+@keyframes girar { to { transform: rotate(360deg); } }
+@keyframes piscar { 50% { opacity: 0; } }
+@keyframes chegar { from { background-color: var(--fundo-gold); } }
+@keyframes entrar { from { opacity: 0; transform: translateX(1.5rem); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

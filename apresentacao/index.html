@@ -163,7 +163,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <div style="position:absolute; right:80px; top:380px; width:320px; height:320px; border-radius:50%; background:#F59E0B; display:flex; align-items:center; justify-content:center">
     <p style="font-family:'Fraunces', Georgia, serif; font-size:44px; font-weight:600; line-height:1.1; color:#0D1117; text-align:center; width:240px">sob<br>juramento</p>
   </div>
-  <p class="eyebrow rise" style="--i:0">Um plugin para o Claude Code · versão 0.90.0</p>
+  <p class="eyebrow rise" style="--i:0">Um plugin para o Claude Code · versão 0.93.0</p>
   <p class="hero rise" style="--i:1; width:1100px">sworn</p>
   <p class="statement rise" style="--i:2; font-size:64px; width:1100px">A IA trabalha rápido. O sworn <span class="hl">exige a prova</span> antes do “pronto”.</p>
   <p class="lead rise" style="--i:3; width:1000px">Tudo o que ele faz, explicado sem jargão: cada passo vigiado, o que acontece sozinho, os comandos e as evidências.</p>
@@ -398,7 +398,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <p class="eyebrow">O automático · 3 de 3 · rotina e saúde</p>
   <p class="title" style="font-size:56px">Ele lembra o que ninguém lembraria</p>
   <div class="grid4" style="gap:16px">
-    <div class="card tight rise" style="--i:0; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Faxina de regras</p><p>A cada 7 dias, mostra regras a cortar.</p></div>
+    <div class="card tight rise" style="--i:0; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Faxina de regras</p><p>A cada 7 dias: regras a cortar, skills sem uso.</p></div>
     <div class="card tight rise" style="--i:1; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Atalhos</p><p>A cada 30 dias, lista as simplificações.</p></div>
     <div class="card tight rise" style="--i:2; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Calibrar</p><p>Com 30 conversas, sugere medir o limite.</p></div>
     <div class="card tight rise" style="--i:3; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Sem entrevista</p><p>Projeto sem configuração? Oferece a entrevista.</p></div>
@@ -412,8 +412,8 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     <div class="card tight rise" style="--i:11; border-top:6px solid #1F4E79; padding:20px 26px; gap:6px"><p class="k">Ideias de fora</p><p>Num pedido de melhoria, oferece o radar.</p></div>
   </div>
   <div style="flex:1"></div>
-  <p class="small"><b>E ainda:</b> subida de modelo no limite de uso · kit por linguagem · o radar semanal.</p>
-  <aside>São lembretes de rotina que, numa equipe, dependeriam de alguém anotar na agenda. A “proteção vazia” é um caso sutil: o projeto diz “não mexa nesta pasta”, mas o nome está errado e a regra não protege nada; o sworn avisa. Os avisos de “dois chats” e “plano de outro chat” evitam que duas conversas trabalhem em cima da mesma coisa. Tudo aqui só avisa ou anota; nada bloqueia.</aside>
+  <p class="small"><b>E ainda:</b> subida de modelo no limite de uso · kit por linguagem · o radar semanal · a skill certa na hora da tarefa.</p>
+  <aside>São lembretes de rotina que, numa equipe, dependeriam de alguém anotar na agenda. A “proteção vazia” é um caso sutil: o projeto diz “não mexa nesta pasta”, mas o nome está errado e a regra não protege nada; o sworn avisa. Os avisos de “dois chats” e “plano de outro chat” evitam que duas conversas trabalhem em cima da mesma coisa. A “skill certa na hora”: quando você pede para seguir um plano, ou a IA edita uma tela, o sworn diz qual skill serve, uma vez por sessão; a faxina conta quantas vezes cada skill entrou. Tudo aqui só avisa ou anota; nada bloqueia.</aside>
 </section>
 <section id="revisao-cega" class="dark">
   <p class="eyebrow">Revisão cega · 1 de 2</p>
@@ -769,7 +769,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <div class="grid4" style="gap:20px">
     <div class="card tight rise" style="--i:0; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">255</p><p class="cap" style="color:#B8C0CC">pedidos do dono, numerados</p></div>
     <div class="card tight rise" style="--i:1; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">917</p><p class="cap" style="color:#B8C0CC">decisões registradas, cada uma com o porquê</p></div>
-    <div class="card tight rise" style="--i:2; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">127</p><p class="cap" style="color:#B8C0CC">versões publicadas</p></div>
+    <div class="card tight rise" style="--i:2; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">130</p><p class="cap" style="color:#B8C0CC">versões publicadas</p></div>
     <div class="card tight rise" style="--i:3; background:#161B22; border-color:#30363D"><p class="num mid" style="color:#F59E0B">4</p><p class="cap" style="color:#B8C0CC">meses: de agosto a novembro de 2026</p></div>
   </div>
   <div style="flex:1"></div>
@@ -779,7 +779,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
     <div class="rise" style="--i:6; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Outubro</p><p style="color:#B8C0CC">Painéis, trabalho em paralelo, a escada de modelos e o nome sworn.</p></div>
     <div class="rise" style="--i:7; border-top:4px solid #F59E0B; padding-top:16px"><p class="k" style="color:#F59E0B">Novembro</p><p style="color:#B8C0CC">Mais 5 IAs, os cursos, o radar e a revisão até zerar.</p></div>
   </div>
-  <aside>A jornada em números: em cerca de quatro meses, o dono fez 255 pedidos numerados, que viraram 917 decisões registradas, cada uma com o motivo, e 127 versões publicadas. Em agosto vieram a pesquisa e as primeiras travas; em setembro, os portões e a revisão cega; em outubro, os painéis, o paralelo e o novo nome; em novembro, as outras IAs, os cursos e o radar.</aside>
+  <aside>A jornada em números: em cerca de quatro meses, o dono fez 255 pedidos numerados, que viraram 917 decisões registradas, cada uma com o motivo, e 130 versões publicadas. Em agosto vieram a pesquisa e as primeiras travas; em setembro, os portões e a revisão cega; em outubro, os painéis, o paralelo e o novo nome; em novembro, as outras IAs, os cursos e o radar.</aside>
 </section>
 <section id="ganhos" style="gap:26px">
   <p class="eyebrow">Os ganhos</p>
@@ -798,14 +798,15 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; ove
   <aside>O resumo dos ganhos, todos com número medido. Os dois primeiros são de confiança: a IA passa a mostrar a prova e para de afrouxar a régua. Os outros são de custo: o sworn lê menos, abre ajudantes mais leves e avisa a hora de trocar de conversa antes que cada mensagem fique cara. Os dois últimos são de qualidade de resposta: respostas um quarto mais curtas, e as regras do sworn venceram as 12 comparações contra um modo de resposta ultrarresumido.</aside>
 </section>
 <section id="novidades" class="dark" style="gap:26px">
-  <p class="eyebrow">O que há de novo · versão 0.90.0</p>
-  <p class="title" style="font-size:52px">O advisor medido, e a consulta a ele na entrega AAA quando ele está ligado</p>
+  <p class="eyebrow">O que há de novo · versão 0.93.0</p>
+  <p class="title" style="font-size:52px">O protótipo do painel de sessões, a tecla no roteiro da foto e a skill que conta fora do Claude Code</p>
   <div class="grid2" style="gap:20px">
-    <div class="card tight rise" style="--i:0"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">Com o advisor ligado, a entrega AAA consulta o advisor uma vez</p></div>
-    <div class="card tight rise" style="--i:1"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">O ganho medido antes do aviso</p></div>
+    <div class="card tight rise" style="--i:0"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">O protótipo do painel de sessões</p></div>
+    <div class="card tight rise" style="--i:1"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">A tecla no roteiro da foto</p></div>
+    <div class="card tight rise" style="--i:2"><p class="k">Novo</p><p style="font-size:28px; line-height:1.3; color:#F3F4F6">Fora do Claude Code, a skill lida conta como carregada</p></div>
   </div>
   <p class="small">A lista completa de cada versão está no <a href="https://github.com/wendellmcs/sworn/blob/main/CHANGELOG.md" style="color:#F59E0B">CHANGELOG</a>.</p>
-  <aside>As novidades da versão 0.90.0, tiradas do registro de mudanças a cada versão publicada. Este slide se refaz sozinho: quem publica a versão roda um comando que lê as novidades e monta a página de novo.</aside>
+  <aside>As novidades da versão 0.93.0, tiradas do registro de mudanças a cada versão publicada. Este slide se refaz sozinho: quem publica a versão roda um comando que lê as novidades e monta a página de novo.</aside>
 </section>
 <section id="instalar" class="alt" style="gap:28px">
   <p class="eyebrow">Como começar</p>

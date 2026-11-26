@@ -480,9 +480,20 @@ test('F4c handoff: o rascunho cabe no orcamento (teto menos 1 KB): muitas penden
   const t = hc.montar(dir, { slug: 'x', hoje: HOJE, frente: 'frente-x' }).texto;
   assert.ok(Buffer.byteLength(t, 'utf8') <= hc.TETO - 1024, Buffer.byteLength(t, 'utf8') + ' bytes');
   const secao5 = t.slice(t.indexOf('## 5.'), t.indexOf('## 6.'));
-  const mostradas = (secao5.match(/^ {2}- #\d+ /gm) || []).length;
-  assert.ok(mostradas < 10, 'mostrou ' + mostradas);
-  assert.match(secao5, new RegExp('e mais ' + (12 - mostradas) + ' no arquivo'));
+  // 12 pendencias longas passam do orcamento ate com 5 (LIMITES desce de 5 a 0): nenhuma listada
+  assert.strictEqual((secao5.match(/^ {2}- #\d+ /gm) || []).length, 0, secao5);
+  // 0.91.0 (A2, b): com nenhuma listada, a conta e o arquivo numa linha so, sem o "e mais 12" depois de uma lista vazia
+  assert.match(secao5, /^- abertas em \.sworn\/PENDENCIAS\.md \(12\): o texto delas nao coube aqui; leia no arquivo\.$/m, secao5);
+  assert.ok(!/e mais \d+ no arquivo/.test(secao5), secao5);
+  // 12 curtas cabem com 5: a lista e o "e mais 7" depois dela
+  const curtas = projeto({ 'docs/plano.md': '# Plano\n- [ ] T1 ' + 'c'.repeat(2000) + '\n' });
+  for (let i = 1; i <= 12; i++) pend.adicionar(curtas, { dono: 'D'.repeat(10), texto: 'p'.repeat(40), hoje: HOJE });
+  const tc = hc.montar(curtas, { slug: 'x', hoje: HOJE, frente: 'frente-x' }).texto;
+  const secao5c = tc.slice(tc.indexOf('## 5.'), tc.indexOf('## 6.'));
+  assert.strictEqual((secao5c.match(/^ {2}- #\d+ /gm) || []).length, 5, secao5c);
+  assert.match(secao5c, /^- abertas em \.sworn\/PENDENCIAS\.md \(12\):$/m, secao5c);
+  assert.match(secao5c, /^ {2}- e mais 7 no arquivo\.$/m, secao5c);
+  assert.ok(!/nao coube aqui/.test(secao5c), secao5c);
   assert.match(t, /- \[ \] T1 c+ \[\.\.\.\]/, 'a caixa segue no handoff, cortada');
   assert.match(hc.caixaAberta('- [ ] ' + 'c'.repeat(2000), 400).texto, /^- \[ \] c{394} \[\.\.\.\]$/, 'o corte do limite vale (400)');
   const soltas = projeto();
@@ -506,6 +517,24 @@ test('F4c handoff: o prompt aponta o PENDENCIAS so quando ele existe; o comando 
   const com = hc.montar(dir, { slug: 'x', hoje: HOJE, frente: 'frente-x' }).texto;
   assert.match(com, /e as pendencias com dono em \.sworn\/PENDENCIAS\.md\./);
   assert.match(com, /o texto de cada um, com o comando: node ".+pedidos\.js" --abertos --frente frente-x\n/, 'sem ponto colado no comando');
+});
+
+// 0.91.0 (A2, defeito c): sem vinculo, o plano vem da unica frente com plano e os pedidos tambem; os sem frente (quase
+// todos sondas "responda so: ok") so dao a conta e o comando. Vinculada, so a lista da frente, como antes.
+test('0.91.0 handoff: sem vinculo, os pedidos sao os da unica frente com plano; os sem frente so dao a conta', () => {
+  const dir = projeto();
+  const pasta = path.join(dir, '.claude', 'sworn', 'pedidos');
+  fs.mkdirSync(pasta, { recursive: true });
+  fs.writeFileSync(path.join(pasta, 'frente-x.md'), '1. faca a F4 [feito: abc1234]\n2. e a F5\n');
+  fs.writeFileSync(path.join(pasta, 'sem-frente.md'), '1. responda so: ok\n2. responda so: ok\n3. continue no handoff\n');
+  const t = hc.montar(dir, { slug: 'x', hoje: HOJE }).texto;
+  assert.match(t, /achado pela unica frente com plano/, 'controle: a sessao nao esta vinculada');
+  const s5 = t.slice(t.indexOf('## 5.'), t.indexOf('## 6.'));
+  assert.match(s5, /- pedidos do dono abertos \(1\): #2; o texto de cada um, com o comando: node ".+pedidos\.js" --abertos --frente frente-x\n/, s5);
+  assert.match(s5, /- pedidos sem frente abertos \(3\): o texto, com o comando: node ".+pedidos\.js" --abertos\n/, s5);
+  const v = hc.montar(dir, { slug: 'x', hoje: HOJE, frente: 'frente-x' }).texto;
+  assert.ok(v.indexOf('pedidos sem frente') === -1, 'vinculada, so a lista da frente: ' + v);
+  assert.match(v, /- pedidos do dono abertos \(1\): #2;/);
 });
 
 test('F4c conferir: cada defeito do prompt da a sua mensagem', () => {

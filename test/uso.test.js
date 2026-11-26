@@ -118,13 +118,15 @@ test('091 T6: as chaves de ordem ficam fora da lista e do total das travas', () 
   try {
     fs.mkdirSync(path.join(dir, '.claude', 'sworn'), { recursive: true });
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'),
-      JSON.stringify({ fora_do_escopo: 4, ordem_revisar_dada: 30, ordem_aprender_cumprida: 2 }), 'utf8');
+      JSON.stringify({ fora_do_escopo: 4, ordem_revisar_dada: 30, ordem_aprender_cumprida: 2, uso_skill_review: 7 }), 'utf8');
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: 'utf8', timeout: 30000 });
     assert.strictEqual(r.status, 0, r.stderr);
     const linhas = r.stdout.split('\n').filter((l) => l.includes('|'));
+    // G4d: o uso da skill tambem fica fora da lista e do total
     assert.deepStrictEqual(linhas.map((l) => l.split('|')[1].trim()), ['fora_do_escopo', 'TOTAL']);
     assert.ok(linhas[1].trim().startsWith('4 |'), r.stdout);
-    assert.ok(r.stdout.includes('As ordens (dadas, cumpridas, recusadas) saem na auditoria automatica.'), r.stdout);
+    assert.ok(r.stdout.includes('As ordens (dadas, cumpridas, recusadas) e o uso das skills saem na auditoria ' +
+      'automatica.'), r.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -138,8 +140,13 @@ test('A6-01: o arquivo so com contadores de ordem diz que eles saem na auditoria
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: 'utf8', timeout: 30000 });
     assert.strictEqual(r.status, 0, r.stderr + (r.error ? ' [' + r.error.code + ']' : ''));
     assert.match(r.stdout, /^sworn: nenhum disparo registrado ainda em /, r.stdout);
-    assert.ok(r.stdout.endsWith('trabalho.\nO arquivo so tem contadores de ordem (dadas, cumpridas, recusadas), que ' +
-      'nao sao disparo de trava; eles saem na auditoria automatica.\n'), r.stdout);
+    assert.ok(r.stdout.endsWith('trabalho.\nO arquivo so tem contadores de ordem (dadas, cumpridas, recusadas) e de ' +
+      'uso das skills, que nao sao disparo de trava; eles saem na auditoria automatica.\n'), r.stdout);
+    // G4d: so com o uso de uma skill, a mesma frase
+    fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'), JSON.stringify({ uso_skill_review: 2 }), 'utf8');
+    const soUso = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: 'utf8', timeout: 30000 });
+    assert.strictEqual(soUso.status, 0, soUso.stderr);
+    assert.ok(soUso.stdout.endsWith('que nao sao disparo de trava; eles saem na auditoria automatica.\n'), soUso.stdout);
     // sem ordem nenhuma, a frase das ordens nao sai
     fs.writeFileSync(path.join(dir, '.claude', 'sworn', 'contadores.json'), '{}', 'utf8');
     const vazio = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: 'utf8', timeout: 30000 });

@@ -5,26 +5,47 @@
 // nome, `backend/snapshot.ts`; as asserções, `backend/verify.ts`; o codigo gravado, `backend/codegen.ts`), aqui com
 // o rastro e as conferencias somados por script, o que la cada asserção so devolve "Done" ou erro.
 //
-// O roteiro: { "passos": [ { "acao": "clicar" | "digitar" | "esperar" | "conferir", ... } ] }
+// O roteiro: { "passos": [ { "acao": "clicar" | "digitar" | "tecla" | "esperar" | "conferir", ... } ] }
 //   clicar   papel, [nome], [ordem], [tempoMax]
 //   digitar  papel, [nome], texto, [ordem], [tempoMax]   (troca o que o campo tinha pelo texto)
+//   tecla    tecla   (aperta no elemento com o foco; o rastro diz onde o foco caiu depois)
 //   esperar  papel, [nome], [valor], [ordem]  ou  texto; [tempoMax]   (falhou: o roteiro para)
 //   conferir papel, [nome], [valor], [ordem]  ou  texto; [tempoMax]   (falhou: fica no rastro, e o roteiro segue)
 // O tempoMax e em milissegundos (o padrao, 5000, e 5 s).
-// Aqui so a parte pura: ler e validar, escolher o elemento, o ponto do clique, o valor e a soma. O navegador fica no
-// capturar-tela.js.
+// Aqui so a parte pura: ler e validar, escolher o elemento, o ponto do clique, o valor, os eventos de cada tecla, o nome
+// do elemento com o foco e a soma. O navegador fica no capturar-tela.js.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const captura = require('./captura.js');
 
-const ACOES = ['clicar', 'digitar', 'esperar', 'conferir'];
+const ACOES = ['clicar', 'digitar', 'tecla', 'esperar', 'conferir'];
+const LISTA_DAS_ACOES = ACOES.slice(0, -1).join(', ') + ' ou ' + ACOES[ACOES.length - 1];
 // As chaves de cada acao; o resto e erro (o "nmoe" digitado errado nao vira um passo que ignora o nome).
 const CHAVES = {
   clicar: ['acao', 'papel', 'nome', 'ordem', 'tempoMax'],
   digitar: ['acao', 'papel', 'nome', 'texto', 'ordem', 'tempoMax'],
+  tecla: ['acao', 'tecla'],
   esperar: ['acao', 'papel', 'nome', 'valor', 'ordem', 'texto', 'tempoMax'],
   conferir: ['acao', 'papel', 'nome', 'valor', 'ordem', 'texto', 'tempoMax'],
 };
+// As teclas do passo `tecla`, com os nomes do Playwright (o `key` do DOM; o espaco e "Space"): o code do DOM, o codigo
+// virtual do Windows e o texto que a tecla escreve. O Enter e o espaco escrevem: e esse texto que faz o botao com o foco
+// receber o clique, como numa pessoa.
+const TECLAS = {
+  Enter: { key: 'Enter', code: 'Enter', vk: 13, texto: '\r' },
+  Escape: { key: 'Escape', code: 'Escape', vk: 27 },
+  Tab: { key: 'Tab', code: 'Tab', vk: 9 },
+  'Shift+Tab': { key: 'Tab', code: 'Tab', vk: 9, shift: true },
+  Space: { key: ' ', code: 'Space', vk: 32, texto: ' ' },
+  ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', vk: 38 },
+  ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', vk: 40 },
+  ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', vk: 37 },
+  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', vk: 39 },
+};
+const LISTA_DAS_TECLAS = Object.keys(TECLAS).join(', ');
+// O modificador do Shift no Input.dispatchKeyEvent (Alt 1, Ctrl 2, Meta 4, Shift 8).
+const SHIFT = 8;
+const SEM_FOCO = 'nenhum elemento: o foco esta no corpo da pagina';
 // Quanto cada passo espera o elemento (ou o texto, ou o valor) aparecer: o padrao das asserções do Playwright.
 const PRAZO_DO_PASSO = 5000;
 const TETO_DE_PASSOS = 200;
@@ -57,14 +78,23 @@ function lerPasso(p, i) {
   const numero = 'passo ' + (i + 1) + ': ';
   if (!p || typeof p !== 'object' || Array.isArray(p)) return { erro: numero + 'cada passo e um objeto' + EXEMPLO };
   const acao = p.acao;
-  if (acao === undefined) return { erro: numero + 'falta "acao" (clicar, digitar, esperar ou conferir)' };
+  if (acao === undefined) return { erro: numero + 'falta "acao" (' + LISTA_DAS_ACOES + ')' };
   if (!ACOES.includes(acao)) {
-    return { erro: numero + '"acao" e clicar, digitar, esperar ou conferir, e veio ' + JSON.stringify(acao) };
+    return { erro: numero + '"acao" e ' + LISTA_DAS_ACOES + ', e veio ' + JSON.stringify(acao) };
   }
   for (const k of Object.keys(p)) {
     if (!CHAVES[acao].includes(k)) {
-      return { erro: numero + 'chave desconhecida "' + k + '" (as de ' + acao + ': ' + CHAVES[acao].slice(1).join(', ') + ')' };
+      return { erro: numero + 'chave desconhecida "' + k + '" (as de ' + acao + ': ' + CHAVES[acao].slice(1).join(', ') + ')' +
+        (acao === 'tecla' ? ': a tecla vai ao elemento que tem o foco; para mirar um elemento, ponha antes um passo clicar nele' : '') };
     }
+  }
+  // a tecla vai ao elemento com o foco, sem prazo: nada a esperar antes de apertar
+  if (acao === 'tecla') {
+    if (!Object.hasOwn(p, 'tecla')) return { erro: numero + 'tecla precisa de "tecla" (' + LISTA_DAS_TECLAS + ')' };
+    if (typeof p.tecla !== 'string' || !Object.hasOwn(TECLAS, p.tecla)) {
+      return { erro: numero + '"tecla" e uma destas: ' + LISTA_DAS_TECLAS + '; e veio ' + JSON.stringify(p.tecla) };
+    }
+    return { passo: { acao, tecla: p.tecla } };
   }
   const comPapel = Object.hasOwn(p, 'papel');
   const comTexto = Object.hasOwn(p, 'texto');
@@ -139,6 +169,10 @@ function ondeQuebrou(mensagem, t) {
       ': confira virgulas, aspas e chaves ali';
   }
   if (/end of JSON/i.test(m)) return 'o arquivo acaba antes de fechar: confira se falta } ou ] no fim';
+  // sem posicao (o motor do Node 20 em diante, numa palavra sem aspas): o caractere que ele nao esperava, sem o ingles
+  const token = /Unexpected token '(.)'/.exec(m);
+  if (token) return 'o caractere ' + JSON.stringify(token[1]) + ' nao cabe ali: confira virgulas, aspas e chaves; um texto sem ' +
+    'aspas, por exemplo';
   return 'confira virgulas, aspas e chaves';
 }
 
@@ -218,7 +252,29 @@ function alvo(passo) {
 }
 
 function descrever(passo) {
+  if (passo.acao === 'tecla') return 'tecla ' + passo.tecla;
   return passo.acao + ' ' + alvo(passo) + (passo.valor !== undefined ? ' com o valor "' + passo.valor + '"' : '');
+}
+
+// O descer e o subir da tecla, como o Input.dispatchKeyEvent os quer. A que escreve desce como keyDown, com o texto (o
+// navegador solta o keypress dela); a que nao escreve, como rawKeyDown. O nome fora da tabela e erro (o lerRoteiro ja o
+// barra no passo).
+function eventosDaTecla(nome) {
+  if (typeof nome !== 'string' || !Object.hasOwn(TECLAS, nome)) {
+    throw new Error('tecla desconhecida: ' + JSON.stringify(nome) + '; as que valem: ' + LISTA_DAS_TECLAS);
+  }
+  const t = TECLAS[nome];
+  const base = { key: t.key, code: t.code, windowsVirtualKeyCode: t.vk, nativeVirtualKeyCode: t.vk, modifiers: t.shift ? SHIFT : 0 };
+  const descer = Object.assign({ type: t.texto ? 'keyDown' : 'rawKeyDown' }, base);
+  if (t.texto) Object.assign(descer, { text: t.texto, unmodifiedText: t.texto });
+  return [descer, Object.assign({ type: 'keyUp' }, base)];
+}
+
+// Onde o foco caiu depois da tecla, como a arvore chama o elemento ('button "Entrar"'). O corpo da pagina (sem no, ou o
+// no que a arvore ignora): que nenhum elemento tem o foco.
+function focoDoNo(no) {
+  if (!no || no.ignored || !no.role || !no.role.value) return SEM_FOCO;
+  return alvo({ papel: String(no.role.value), nome: no.name && no.name.value ? String(no.name.value) : '' });
 }
 
 // O motivo de um passo nunca repete o alvo nem o texto da pagina: eles vao em campos proprios do rastro, cada um limpo
@@ -326,7 +382,7 @@ function rastroParaODisco(rastro) {
 }
 
 module.exports = {
-  PRAZO_DO_PASSO, TETO_DE_PASSOS, TETO_DO_TEXTO, TETO_DO_ARQUIVO,
+  PRAZO_DO_PASSO, TETO_DE_PASSOS, TETO_DO_TEXTO, TETO_DO_ARQUIVO, TECLAS,
   lerRoteiro, lerArquivoDoRoteiro, ondeQuebrou, falhaAoLer, escolherNo, valorDoNo, desabilitado, soLeitura, editavel, pontoDoClique, descrever,
-  somarPassos, avisoDoRoteiro, rastroParaODisco,
+  eventosDaTecla, focoDoNo, somarPassos, avisoDoRoteiro, rastroParaODisco,
 };

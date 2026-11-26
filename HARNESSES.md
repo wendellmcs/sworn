@@ -62,6 +62,7 @@ O Qwen solta versão quase todo dia: versão mais nova que a da tabela não foi 
 | Portão de fecho (a última resposta) | o Codex manda [T] | o Qwen manda [T] | a ponte lê da transcrição [T] | a ponte lê da transcrição [T] | só com o servidor vivo [T] |
 | Contexto e cobrança do teste vermelho (pela transcrição) | sim [T] | sim [T] | sim [T] | sim, com zstd no Node [T] | sim, com `node:sqlite` [T] |
 | Catraca (nega a edição que baixa um piso, como a cobertura mínima) | sim [T] | sim [T] | sim [T] | sim [T] | sim [T] |
+| Skill carregada (o manual que o arquivo AAA pede, a rota da tarefa e o uso na auditoria; sem marca: provado só no teste de unidade, com o evento gravado de cada harness, ainda sem a prova ao vivo) | lendo o `SKILL.md` pelo shell (o Codex não tem ferramenta de leitura) | lendo o `SKILL.md` | lendo o `SKILL.md` | lendo o `SKILL.md` | lendo o `SKILL.md` |
 | Portão do handoff (devolve o turno quando o modelo gravou o arquivo de continuação, mas não colou na resposta o texto que abre o chat seguinte) | sim [T] | sim [T] | sim [T] | sim [T] | só com o servidor vivo [T] |
 | Pergunta ao dono em 3 opções | só no modo Plan [T] | só com interface [T] | a ponte lê a resposta da transcrição [T] | só no perfil `web` [T] | só com interface [T] |
 | Subagentes do `/sworn:review`, com o veredito gravado pelo gancho | `spawn_agent`, no app-server [T] e na TUI | `agent` [T] | veredito pelo `send_message` [T] | veredito pelo `send_message` [T] | `task` [T] |
@@ -98,6 +99,24 @@ Os limites, um a um:
   processo): o executor de testes abre processo filho, e o sandbox nega [T]. Para rodar a suíte: num terminal fora
   do harness (o portão de fecho não vê esse teste, que fica fora da transcrição) ou, no Codex, numa sessão com
   `--sandbox danger-full-access`, sem isolamento nenhum [L].
+- **Skill carregada.** Nenhuma sonda viu ferramenta de skill fora do Claude Code: o modelo carrega a skill lendo o
+  `SKILL.md` dela. A ponte conta essa leitura, pela ferramenta de leitura ou pelo shell (só o trecho do comando que
+  começa por um verbo de ler, como `cat`, `type`, `Get-Content`, `head` ou `sed -n`, lê mais que zero linhas e não
+  grava em arquivo com `>`: o `rm`, o `git add`, o `Set-Content` e o `head -c0` que citam o `SKILL.md` não contam;
+  o `SKILL.md` que não existe no disco também não, porque a ponte confere o arquivo, não o resultado do comando),
+  como a skill carregada: a do
+  sworn em `.agents/skills/sworn-<nome>/` do projeto (`dsh` e OpenCode) ou em `skills/<nome>/` da pasta do sworn
+  (Codex, Qwen e agy); a do projeto, pela pasta dela. Com isso valem, como no Claude Code e só para o agente
+  principal, o portão do manual (o arquivo da marcha AAA pede o `sworn:playbook`, ou a skill do projeto com "padrao"
+  no nome, carregado antes da edição), a rota da tarefa (menos a da marcha AAA, abaixo) e o uso de cada skill na
+  auditoria. Pela ponte, o motivo do
+  portão e a linha da rota mandam ler o `SKILL.md` inteiro, não usar a ferramenta Skill. O `~` e a variável do shell
+  (`$HOME`, `${HOME}`, `$env:USERPROFILE`, `%USERPROFILE%`) se resolvem pelo ambiente do gancho, e o caminho relativo
+  de um evento sem pasta de trabalho, pela pasta onde o gancho roda; o caminho que o ambiente não resolve (a variável
+  que falta ou está vazia, o `~` de outro usuário, o `$(...)`) não conta. Limites: a ponte não confere que a leitura
+  foi inteira, então ler só um pedaço (`head`, `sed -n`) também conta como carregar; o comando embrulhado noutro shell
+  (`bash -c "cat ..."`) e o relativo depois de um `cd` no mesmo comando não contam (o segundo conta se o arquivo
+  também existir a partir da pasta do evento); a leitura de um `SKILL.md` que existe e falhou (permissão negada) conta.
 - **Agente de memória.** O do Codex e o do Qwen disparam os ganchos com a pasta fora do projeto; a ponte deixa passar
   [T].
 - **Ganchos em paralelo.** O Codex roda ao mesmo tempo os ganchos do mesmo evento (os quatro do comando de shell, por
@@ -148,7 +167,9 @@ Os limites, um a um:
 - **O `/sworn:parallel` pela ferramenta Workflow:** ela só existe no Claude Code. Fora dele, o playbook manda
   despachar os subagentes nativos do harness com o mesmo teto de 8.
 - **`/sworn:effort-high` e `/sworn:effort-low`:** o campo `effort:` de skill só existe no Claude Code; o instalador
-  não leva as duas. O `effort:` de cada papel (`agents/<papel>.md`) vai ao Codex como `model_reasoning_effort` no
-  `.toml` do agente [T].
+  não leva as duas. Por isso a rota da marcha AAA, que pede o `sworn:effort-high` a cada turno, não sai pela ponte.
+  O `effort:` de cada papel (`agents/<papel>.md`) vai ao Codex como `model_reasoning_effort` no `.toml` do agente [T].
+- **O advisor** (a ferramenta do Claude Code que consulta um modelo mais forte no meio da tarefa): pela ponte, o
+  portão de fecho não cobra a consulta a ele, mesmo com o `advisorModel` nas settings do Claude Code.
 - **A aprovação do `/hooks` do Codex** não é limite do sworn: é a segurança do Codex, uma vez por caminho de projeto
   e de novo para o gancho que uma versão nova do sworn mudar.

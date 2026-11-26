@@ -232,6 +232,24 @@ test('D412: com o prompt ja colado, a instrucao da saude nao manda colar de novo
   assert.strictEqual(saude.instrucaoAoModelo(g, 'sim'), normal);
 });
 
+// 0.91.0 (A2, defeito a): o gancho (F3b, D828) mostrou o prompt ao dono na mensagem dele, e a resposta do modelo nao tem
+// o bloco. A ordem nao pode dizer "sua resposta acima": diz que o sworn mostrou o prompt, sem mandar rodar nem colar.
+test('0.91.0: com o prompt mostrado pelo gancho, a instrucao da saude nao diz que ele esta na resposta do modelo', () => {
+  const g = ['175500 tokens de contexto, o tamanho desta conversa (limiar 175000)'];
+  const t = saude.instrucaoAoModelo(g, saude.PROMPT_PELO_GANCHO);
+  assert.ok(t.indexOf(g[0]) !== -1, 'tem de citar o gatilho: ' + t);
+  assert.ok(!/sua resposta|bloco acima/.test(t), 'diz que o prompt esta na resposta: ' + t);
+  assert.ok(/mensagem do sworn/.test(t), 'tem de dizer onde o prompt esta: ' + t);
+  assert.ok(!/Cole o prompt/.test(t) && !/Rode \/sworn:handoff/.test(t), 'mandou rodar ou colar: ' + t);
+  assert.ok(/nao cole/.test(t) && /segue nesta conversa/.test(t) && /sigo/.test(t), t);
+  assert.ok(/^[\x20-\x7E\n]+$/.test(t), 'tem de ser ASCII (R5): ' + JSON.stringify(t));
+  assert.notStrictEqual(t, saude.instrucaoAoModelo(g, true), 'controle: o colado na resposta segue com o seu texto');
+  assert.match(saude.instrucaoAoModelo(g, true), /sua resposta acima/, 'controle: o colado aponta o bloco da resposta');
+  // com agente rodando, a espera manda, como no colado (D704)
+  const rodando = [{ id: 'a1', descricao: 'Inventario' }];
+  assert.strictEqual(saude.instrucaoAoModelo(g, saude.PROMPT_PELO_GANCHO, rodando), saude.instrucaoAoModelo(g, false, rodando));
+});
+
 test('D412: o motivo do bloqueio diz o que fazer, como desligar, e e ASCII', () => {
   const m = saude.MOTIVO_HANDOFF_SEM_PROMPT;
   assert.ok(/handoff/.test(m) && /bloco/.test(m), m);
@@ -1007,7 +1025,7 @@ test('H1: os gatilhos saem na mesma forma no aviso e nas ordens; o que nao e lis
   const lista = '  - a (limiar 1)\n  - b (limiar 2)';
   const rodando = [{ id: 'x1', descricao: 'leva' }];
   for (const texto of [saude.avisoDeSaude(g, false), saude.instrucaoAoModelo(g), saude.instrucaoAoModelo(g, true),
-    saude.instrucaoAoModelo(g, false, rodando)]) {
+    saude.instrucaoAoModelo(g, saude.PROMPT_PELO_GANCHO), saude.instrucaoAoModelo(g, false, rodando)]) {
     assert.ok(texto.indexOf(lista) !== -1, texto);
   }
   for (const v of ['texto', 42, { a: 1 }, null, undefined, []]) {
@@ -1063,6 +1081,7 @@ test('D786 passo 2: os textos do gatilho de saude mandam gravar o handoff e segu
     aviso: saude.avisoDeSaude(g, false), avisoEspera: saude.avisoDeSaude(g, false, rodando),
     alarme: saude.avisoDeSaude(g, true), alarmeEspera: saude.avisoDeSaude(g, true, rodando),
     modelo: saude.instrucaoAoModelo(g), jaColado: saude.instrucaoAoModelo(g, true),
+    peloGancho: saude.instrucaoAoModelo(g, saude.PROMPT_PELO_GANCHO),
     espera: saude.instrucaoAoModelo(g, false, rodando),
     pergunta: saude.instrucaoDaPergunta(), perguntaEspera: saude.instrucaoDaPergunta(rodando)
   };
@@ -1329,6 +1348,7 @@ test('s353: a ordem de rodar o handoff diz a skill fora do Claude Code e a pasta
   }
   // o handoff ja colado nao manda gravar de novo: sem a linha
   assert.strictEqual(saude.instrucaoAoModelo(g, true).indexOf('sworn-handoff'), -1);
+  assert.strictEqual(saude.instrucaoAoModelo(g, saude.PROMPT_PELO_GANCHO).indexOf('sworn-handoff'), -1);
 });
 
 // D875: a edicao de codigo fora do projeto depois da prova so a deixa pendente quando o mesmoCodigoDaProva nao diz true.

@@ -178,6 +178,10 @@ projeto já tem, a linguagem ou a plataforma já faz). Os subagentes que podem e
 último bloco também.
 Três blocos têm chave: `paralelismo` (trabalho em paralelo), `qualidadeDeResposta` (qualidade de resposta) e `menosCodigo` (menos código); as regras do projeto e o menos paradas vêm sempre. O guia oficial do modelo (a parte "How to ask", como pedir) entra no pedido de cada agente do sworn e na abertura (desliga com `guiaDoModelo`), e a `aberturaEnxuta` (desligada por padrão) reduz a abertura a uma linha por bloco, perto de 2,3 mil caracteres a menos, para modelo de contexto curto.
 
+**A skill certa na hora certa.** Cinco rotas dizem a skill do sworn que a tarefa pede, uma vez por sessão e por tipo:
+a edição de tela, o plano a seguir, a etapa marcada no plano, o "por que a sessão deu errado?" e o arquivo `aaa`. A
+skill que já entrou cala a rota dela; o [guia](GUIA.md) traz cada rota.
+
 ### Saber quando trocar de chat
 
 Chat longo deriva: o plano passa a ser executado de memória. O sworn conta em vez de adivinhar, e avisa
@@ -216,7 +220,8 @@ inspetores dela já terminaram, o modelo deles e o custo até agora.
 - **Correção vira regra proposta.** Quando você corrige o jeito de o agente trabalhar, ele atende, roda o
   `/sworn:learn` na mesma resposta e pergunta a você, em 3 opções, se grava. Nunca aprende sozinho. Desliga com `sugerirAprender`.
 - **A auditoria roda sozinha** a cada 7 dias, na abertura: peso de instrução, skills repetidas, regras
-  que se contradizem, skills paradas, atalhos sem gatilho de troca. Só fala quando algo passou do limite. Desliga com `auditarNaAbertura`.
+  que se contradizem, skills paradas, atalhos sem gatilho de troca, e as rotas e skills usadas desde a última. Fala
+  quando algo passou do limite ou há uso a contar. Desliga com `auditarNaAbertura`.
 - **O que rodou de fato.** O `/sworn:audit`, rodado à mão, lê as transcrições dos subagentes e mostra, para
   cada agente da escada, o modelo e o esforço que responderam contra o que a escada pede. Apelido que
   passou a responder com outro id de modelo sem ninguém mudar a escada (o id é o nome completo, com a

@@ -30,8 +30,9 @@ if (lido !== null) {
     sairIlegivel('nao e um objeto: ' + JSON.stringify(dados));
   }
 }
-// Plano 091 T6: os contadores de ordem (lib/ordens.js) moram no mesmo arquivo, mas nao sao disparo de trava.
-const RE_ORDEM = /^ordem_/;
+// Plano 091 T6: os contadores de ordem (lib/ordens.js) moram no mesmo arquivo, mas nao sao disparo de trava. G4d (D928):
+// o uso de cada skill (uso_skill_<nome>) tambem nao.
+const RE_ORDEM = /^(?:ordem|uso_skill)_/;
 const temOrdens = !!dados && Object.keys(dados).some(function (k) { return RE_ORDEM.test(k); });
 if (temOrdens) dados = Object.fromEntries(Object.entries(dados).filter(function (par) { return !RE_ORDEM.test(par[0]); }));
 
@@ -40,8 +41,8 @@ if (!dados || Object.keys(dados).length === 0) {
     'ela barra ou avisa algo, e vai para este arquivo no fim do turno. Rode de novo depois de alguns turnos de ' +
     'trabalho.\n');
   // A6-01: o arquivo so com contadores de ordem nao e vazio; diz onde eles aparecem
-  if (temOrdens) process.stdout.write('O arquivo so tem contadores de ordem (dadas, cumpridas, recusadas), que nao ' +
-    'sao disparo de trava; eles saem na auditoria automatica.\n');
+  if (temOrdens) process.stdout.write('O arquivo so tem contadores de ordem (dadas, cumpridas, recusadas) e de uso das ' +
+    'skills, que nao sao disparo de trava; eles saem na auditoria automatica.\n');
   process.exit(0);
 }
 
@@ -88,5 +89,6 @@ process.stdout.write('Para desligar ' + nomes + ', ponha o nome em "travas" no .
   '"travas": { "' + desligam[desligam.length - 1] + '": false }; o contador que cada uma desliga diz o nome dela ' +
   'entre parenteses. A chave "escopo" existe, mas nao desliga nada: o mesmo portao guarda os arquivos intocaveis. ' +
   'As outras travas que se desligam dizem como na ultima linha do aviso delas.\n');
-if (temOrdens) process.stdout.write('As ordens (dadas, cumpridas, recusadas) saem na auditoria automatica.\n');
+if (temOrdens) process.stdout.write('As ordens (dadas, cumpridas, recusadas) e o uso das skills saem na auditoria ' +
+  'automatica.\n');
 process.exit(0);

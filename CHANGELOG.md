@@ -1,5 +1,80 @@
 # Changelog
 
+## 0.93.0 — o protótipo do painel de sessões, a tecla no roteiro da foto e a skill que conta fora do Claude Code
+
+**Novo**
+
+- **O protótipo do painel de sessões** (`scripts/painel.js --prototipo`, `painel/prototipo/`). Um servidor só em
+  `127.0.0.1` serve a página e manda os eventos de dados simulados (`simulado.json`) por SSE, retomando pelo
+  `Last-Event-ID`. Ele recusa outro `Host` e caminho com `..`. A página tem:
+  - a fila de decisões por urgência;
+  - uma sala por projeto e uma mesa por sessão, nos 4 estados;
+  - o painel lateral com a conversa, os arquivos mudados com o trecho do diff e o pedido com aprovar ou negar;
+  - a visão de equipe, com sessões e custo por projeto e por máquina;
+  - o tema claro e escuro e o caminho inteiro pelo teclado.
+  O dado é simulado: as sessões de verdade entram na fase 3, em que o aviso do sistema só diz "uma decisão espera
+  você", sem o texto do pedido fora da aba.
+- **A tecla no roteiro da foto** (`scripts/capturar-tela.js --passos`, `scripts/lib/roteiro.js`). O passo
+  `{ "acao": "tecla", "tecla": "Tab" }` aperta a tecla no elemento com o foco. Valem `Enter`, `Escape`, `Tab`,
+  `Shift+Tab`, `Space` e as setas. O rastro diz onde o foco caiu. Assim o caminho pelo teclado vira prova, como o
+  clique.
+- **Fora do Claude Code, a skill lida conta como carregada** (`scripts/lib/harness.js`, `scripts/lib/ordens.js`,
+  `scripts/lib/roteador.js`, `scripts/lib/advisor.js`, `HARNESSES.md`). Na ponte (Codex, Qwen Code, OpenCode, agy e
+  dsh) não há ferramenta Skill. Ler o `SKILL.md` de uma skill do sworn passa a contar como carregá-la, pela ferramenta
+  de leitura ou pelo shell. Só vale o verbo de ler, com mais de zero linhas, sem `>` e com o arquivo no disco. A
+  leitura cumpre:
+  - o portão do manual;
+  - a rota da tarefa, menos a AAA, que fora do Claude Code não tem o `sworn:effort-high`;
+  - o uso na auditoria.
+  A `HARNESSES.md` declara os dois limites:
+  - o nome da pasta da skill só vale em `[a-z0-9][a-z0-9_-]*`;
+  - ler só um pedaço (`head`, `sed -n`) conta como carregar.
+
+## 0.92.0 — a peça certa na hora certa: a rota da skill pelo pedido e pela edição, e o uso de cada skill na auditoria
+
+**Novo**
+
+- **O sworn diz a skill que serve à tarefa, na hora dela** (`scripts/lib/roteador.js`, `scripts/abrir-turno.js`,
+  `scripts/portao-escopo.js`). Cinco rotas, cada uma uma vez por sessão e por tipo:
+  - a 1ª edição de marcação ou estilo leva ao `sworn:playbook` e à rubrica de tela dele, com o `design.json` quando o
+    projeto tem um e o `/sworn:review --tela-depois` no fim;
+  - o pedido de seguir um plano, ou a escrita de um `.md` de plano, leva ao `sworn:review-plan`;
+  - a edição que marca caixa ou `[FEITO]` num plano leva ao `sworn:drift`;
+  - o "por que a sessão deu errado" do dono leva ao `sworn:diagnose`;
+  - a edição de um arquivo da marcha AAA leva ao `sworn:effort-high`.
+  A linha entra pela mensagem do dono (no `abrir-turno.js`) ou pela edição que o portão de escopo já permite (no
+  `additionalContext`). Nunca entra numa negação, num subagente ou num apagar, e a falha dela nunca muda a decisão do
+  portão. Cada rota é uma ordem do `ordens.js`: a auditoria automática conta quantas foram dadas e quantas a skill
+  cumpriu.
+- **A skill que já entrou cala a rota dela** (`scripts/marcar-trabalho.js`). A skill do sworn carregada na sessão vale
+  pela rota no resto dela. A skill do projeto com "padrao" no nome segue fazendo as vezes do manual, e a rota de tela
+  entra junto: as duas se somam.
+- **O uso de cada skill na auditoria automática** (`scripts/lib/ordens.js`, `scripts/lib/auditoria-periodica.js`). Cada
+  skill do sworn que o agente principal carrega conta `uso_skill_<nome>` nos contadores; a do projeto com "padrao" no
+  nome conta `uso_skill_manual_do_projeto`. A auditoria diz as chamadas desde a última, as nunca chamadas e quantas
+  vezes a do projeto entrou no lugar do `sworn:playbook`. O `uso.js` deixa essas chaves fora dos disparos de trava.
+- Para quem mantém o plugin: os tipos de ordem passam de 6 a 11 (`tela`, `plano`, `etapa`, `diagnosticar` e `aaa`), e
+  o estado da sessão ganha o campo `rotasDadas`.
+
+## 0.91.0 — a ordem do handoff aponta onde o prompt está, e o rascunho traz os pedidos certos
+
+**Corrigido**
+
+- **A ordem do handoff não aponta mais um bloco que o chat não tem** (`scripts/lib/saude.js`,
+  `scripts/portao-fecho.js`). Quando o handoff foi gravado e a resposta saiu sem o prompt, o próprio gancho do sworn
+  mostra o prompt ao dono, numa mensagem dele. A ordem ao modelo dizia que o bloco estava "na sua resposta acima", e o
+  modelo afirmava um bloco que a resposta não tinha. Agora a ordem diz que o sworn já mostrou o prompt, e não manda
+  rodar o handoff nem colar o bloco de novo.
+- **O rascunho do handoff cheio diz quantas pendências estão abertas e onde ler** (`scripts/lib/handoff-curto.js`). Com o handoff cheio, a
+  seção de pendências dizia "(2):" e logo "e mais 2 no arquivo", uma lista vazia. Agora diz, numa linha só, quantas
+  estão abertas e onde ler.
+- **Os pedidos do dono no rascunho de uma sessão sem frente ligada** (`scripts/lib/handoff-curto.js`). A sessão achava
+  o plano pela única frente com plano, mas os pedidos vinham do arquivo dos pedidos sem frente: na prova, 203 pedidos
+  em vez dos 7 da frente. Agora os pedidos são os da frente do plano, e os sem frente dão só a conta e o comando que os
+  lista. O refazer de antes da compactação troca essas linhas e guarda as que o modelo escreveu parecidas.
+- Os três saíram da prova ao vivo nas sessões reais: 102 gatilhos de troca de chat em 25 sessões, desde 6 de novembro.
+  Desde a 0.23.0, nenhuma parou no handoff; 86 seguiram trabalhando na mesma conversa.
+
 ## 0.90.0 — o advisor medido, e a consulta a ele na entrega AAA quando ele está ligado
 
 **Novo**

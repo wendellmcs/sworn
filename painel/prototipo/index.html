@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Painel de sessões · protótipo</title>
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="stylesheet" href="painel.css">
+<script src="estado.js" defer></script>
+<script src="painel.js" defer></script>
+</head>
+<body>
+<a class="pular" href="#fila">Pular para a caixa de decisões</a>
+<header class="topo">
+  <div class="topo__marca">
+    <svg class="topo__logo" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <rect class="topo__logo-mesa" x="2" y="2" width="7" height="7" rx="2"/>
+      <rect class="topo__logo-mesa topo__logo-mesa--chama" x="11" y="2" width="7" height="7" rx="2"/>
+      <rect class="topo__logo-mesa" x="2" y="11" width="7" height="7" rx="2"/>
+      <rect class="topo__logo-mesa" x="11" y="11" width="7" height="7" rx="2"/>
+    </svg>
+    <h1>Painel de sessões</h1>
+    <span class="selo">Protótipo · dados simulados</span>
+  </div>
+  <p class="topo__sinal" id="sinal" data-sinal="conectando"><span class="topo__luz" aria-hidden="true"></span><span id="sinal-texto">Conectando…</span></p>
+  <div class="topo__frota">
+    <ul class="maquinas" id="maquinas" aria-label="Máquinas"></ul>
+    <p class="topo__total" id="total"></p>
+  </div>
+  <div class="topo__acoes">
+    <button type="button" class="botao" id="avisos" hidden>Ligar avisos</button>
+    <button type="button" class="botao botao--alterna" id="tema" aria-pressed="false" hidden>Tema claro</button>
+  </div>
+</header>
+<main class="corpo" id="conteudo">
+  <section class="caixa" id="fila" aria-labelledby="fila-titulo" tabindex="-1">
+    <div class="caixa__topo">
+      <h2 id="fila-titulo">Caixa de decisões</h2>
+      <span class="contador" id="fila-conta" hidden></span>
+    </div>
+    <p class="caixa__ajuda">O que espera por você em todas as sessões, da urgência mais alta para a mais baixa. Na mesma urgência, quem espera há mais tempo vem antes.</p>
+    <p class="caixa__carregando" id="fila-carregando">Carregando os pedidos…</p>
+    <ol class="fila" id="fila-lista" aria-labelledby="fila-titulo"></ol>
+    <div class="fila__vazia" id="fila-vazia" hidden>
+      <p class="fila__vazia-titulo">Nada espera por você.</p>
+      <p>Quando uma sessão perguntar algo ou pedir permissão, o pedido aparece aqui.</p>
+    </div>
+  </section>
+  <section class="escritorio" aria-labelledby="escritorio-titulo">
+    <div class="escritorio__topo">
+      <div>
+        <h2 id="escritorio-titulo">Escritório</h2>
+        <p class="escritorio__ajuda">Uma sala por projeto, uma mesa por sessão. Abra a mesa para ver a conversa, os arquivos e decidir.</p>
+      </div>
+      <div class="filtro" id="filtro" role="group" aria-label="Mostrar as mesas por estado"></div>
+    </div>
+    <div class="salas" id="salas"></div>
+    <p class="salas__vazia" id="salas-vazia">Carregando as sessões…</p>
+  </section>
+  <section class="equipe" aria-labelledby="equipe-titulo" hidden>
+    <h2 id="equipe-titulo">Equipe</h2>
+    <p class="equipe__ajuda">Os números de cada projeto e de cada máquina, somando as sessões de cada um.</p>
+    <div class="equipe__tabelas">
+      <div class="rolagem" tabindex="0" role="region" aria-labelledby="equipe-projetos">
+        <table class="tabela">
+          <caption id="equipe-projetos">Por projeto</caption>
+          <thead>
+            <tr><th scope="col">Projeto</th><th scope="col">Sessões</th><th scope="col">Precisam de você</th><th scope="col">Arquivos</th><th scope="col">Custo</th><th scope="col">Última atividade</th></tr>
+          </thead>
+          <tbody id="equipe-projetos-linhas"></tbody>
+          <tfoot id="equipe-projetos-total"></tfoot>
+        </table>
+      </div>
+      <div class="rolagem" tabindex="0" role="region" aria-labelledby="equipe-maquinas">
+        <table class="tabela">
+          <caption id="equipe-maquinas">Por máquina</caption>
+          <thead>
+            <tr><th scope="col">Máquina</th><th scope="col">Sessões</th><th scope="col">Precisam de você</th><th scope="col">Arquivos</th><th scope="col">Custo</th><th scope="col">Última atividade</th></tr>
+          </thead>
+          <tbody id="equipe-maquinas-linhas"></tbody>
+          <tfoot id="equipe-maquinas-total"></tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+<p class="so-leitor" id="anuncio" role="status" aria-live="polite"></p>
+<dialog class="lateral" id="lateral" aria-labelledby="lateral-titulo">
+  <div class="lateral__topo">
+    <div class="lateral__cabeca">
+      <p class="lateral__projeto" id="lateral-projeto"></p>
+      <h2 class="lateral__titulo" id="lateral-titulo" tabindex="-1"></h2>
+      <p class="lateral__estado" id="lateral-estado"></p>
+      <p class="lateral__tarefa" id="lateral-tarefa"></p>
+    </div>
+    <button type="button" class="botao" id="lateral-fechar" data-foco="lateral:fechar">Fechar</button>
+  </div>
+  <div class="lateral__corpo">
+    <section class="bloco" aria-labelledby="bloco-pedido">
+      <h3 class="bloco__titulo" id="bloco-pedido">O pedido</h3>
+      <div class="bloco__conteudo" id="lateral-pedido"></div>
+    </section>
+    <section class="bloco" aria-labelledby="bloco-conversa">
+      <h3 class="bloco__titulo" id="bloco-conversa">Conversa</h3>
+      <div class="conversa" id="lateral-conversa" tabindex="0" role="region" aria-labelledby="bloco-conversa">
+        <ol class="conversa__lista" id="conversa-lista"></ol>
+        <p class="conversa__vazia" id="conversa-vazia" hidden>Ainda sem conversa.</p>
+      </div>
+    </section>
+    <section class="bloco" aria-labelledby="bloco-resposta">
+      <h3 class="bloco__titulo" id="bloco-resposta">Responder</h3>
+      <form class="resposta" id="resposta" novalidate>
+        <label class="resposta__rotulo" for="resposta-texto">Sua resposta para a sessão</label>
+        <!-- o limite e a dica vem do painel.js, de LIMITE_DA_RESPOSTA: um numero so, no estado.js -->
+        <textarea class="resposta__texto" id="resposta-texto" rows="3" data-foco="lateral:resposta" aria-describedby="resposta-dica resposta-erro"></textarea>
+        <p class="resposta__dica" id="resposta-dica"></p>
+        <p class="resposta__erro" id="resposta-erro" aria-live="polite"></p>
+        <p class="resposta__semsinal" id="resposta-semsinal" hidden></p>
+        <div class="resposta__acoes"><button type="submit" class="botao botao--primario" id="resposta-enviar" data-foco="lateral:enviar">Enviar resposta</button></div>
+      </form>
+      <p class="resposta__limite" id="resposta-limite" hidden></p>
+    </section>
+    <section class="bloco" aria-labelledby="bloco-arquivos">
+      <h3 class="bloco__titulo" id="bloco-arquivos">Arquivos mudados</h3>
+      <div class="bloco__conteudo" id="lateral-arquivos"></div>
+    </section>
+  </div>
+  <p class="so-leitor" id="lateral-anuncio" role="status" aria-live="polite"></p>
+</dialog>
+<noscript><p class="erro-geral">O painel precisa de JavaScript: ligue o JavaScript no navegador e recarregue a página.</p></noscript>
+</body>
+</html>

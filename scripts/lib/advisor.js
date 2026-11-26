@@ -30,6 +30,8 @@ function arquivosDeSettings(cwd, env) {
  */
 function ligado(cwd, env) {
   const ambiente = env || process.env;
+  // pela ponte (scripts/ponte.js poe SWORN_PONTE=1) o harness nao e o Claude Code: nao ha advisor a consultar
+  if (ambiente.SWORN_PONTE === '1') return false;
   if (VERDADE.test(String(ambiente.CLAUDE_CODE_DISABLE_ADVISOR_TOOL || '').trim())) return false;
   for (const arquivo of arquivosDeSettings(cwd, ambiente)) {
     const r = jsonio.ler(arquivo, { objeto: true });

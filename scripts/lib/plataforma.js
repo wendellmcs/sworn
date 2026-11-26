@@ -136,7 +136,7 @@ const PONTOS = [
     classe: INJETAVEL,
     titulo: 'Onde o claude grava a transcricao da sessao',
     arquivos: ['scripts/admissao.js', 'scripts/autorizar-paralelo.js', 'scripts/instalar.js', 'scripts/lib/advisor.js', 'scripts/lib/ambiente.js', 'scripts/lib/calibracao.js',
-               'scripts/lib/gasto.js', 'scripts/lib/injetado.js', 'scripts/lib/migracao.js',
+               'scripts/lib/gasto.js', 'scripts/lib/harness.js', 'scripts/lib/injetado.js', 'scripts/lib/migracao.js',
                'scripts/lib/prova-no-fecho.js', 'scripts/lib/versao-carregada.js', 'scripts/lib/vigia-local.js',
                'scripts/medir-qualidade.js',
                'scripts/ponte.js'],
@@ -165,8 +165,8 @@ const PONTOS = [
     classe: SO_NO_SISTEMA,
     titulo: 'Caminho relativo remontado pelo separador do sistema',
     arquivos: ['scripts/antes-do-compact.js', 'scripts/apurar-ronda.js', 'scripts/aviso-leitura.js', 'scripts/capturar-tela.js', 'scripts/drift.js', 'scripts/lib/alvo-apagar.js', 'scripts/lib/cicatriz.js',
-               'scripts/lib/busca.js', 'scripts/lib/caminho.js', 'scripts/lib/citacao.js', 'scripts/lib/commit.js', 'scripts/lib/contrato.js', 'scripts/lib/replay.js', 'scripts/medir-qualidade.js',
-               'scripts/medir-travas.js', 'scripts/vigentes.js'],
+               'scripts/lib/busca.js', 'scripts/lib/caminho.js', 'scripts/lib/citacao.js', 'scripts/lib/commit.js', 'scripts/lib/contrato.js', 'scripts/lib/harness.js', 'scripts/lib/replay.js', 'scripts/medir-qualidade.js',
+               'scripts/medir-travas.js', 'scripts/painel.js', 'scripts/vigentes.js'],
     comoSeProva: 'rodando a suite naquele sistema: o separador e o do proprio Node',
     ressalva: 'no Windows a troca vira barra normal; fora dele e identidade. ' +
               'A suite so exercita o lado do Windows.'
@@ -178,7 +178,7 @@ const PONTOS = [
     arquivos: [
       'scripts/abertura.js', 'scripts/antes-do-compact.js', 'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/handoff-curto.js',
       'scripts/lib/alvo-apagar.js', 'scripts/lib/ambiente.js', 'scripts/lib/cegar.js', 'scripts/lib/fatia.js',
-      'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
+      'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/harness.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
       'scripts/lib/guias-modelo.js', 'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
       'scripts/lib/projeto.js', 'scripts/lib/reabertura-curta.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',
       'scripts/lib/toques.js', 'scripts/lib/veredito.js', 'scripts/lib/vermelho-antes.js', 'scripts/modelos.js', 'scripts/preparar-revisao.js', 'scripts/recibo-da-prova.js'

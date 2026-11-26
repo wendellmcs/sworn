@@ -1158,8 +1158,11 @@ Desde a 0.86.0, a captura também segue um roteiro antes da foto: `--passos rote
 papel e o nome são os da lista do `evidencia.json` (`acessibilidade`), escritos iguais; com dois elementos iguais,
 `"ordem": 2` diz qual. As ações são `clicar`, `digitar` (troca o que o campo tinha), `esperar` e `conferir` (o texto
 visível da página, a presença do elemento, ou o `valor` dele: o texto do campo, ou `true`/`false` numa caixa de
-marcar; um número vai entre aspas, como o campo o mostra: `"1.50"`). Cada passo espera até 5 s
-(`"tempoMax"`, em milissegundos, muda: `10000` são 10 s). Clicar, digitar ou esperar que não dão certo param o roteiro, e
+marcar; um número vai entre aspas, como o campo o mostra: `"1.50"`). Para provar o caminho pelo teclado,
+`{ "acao": "tecla", "tecla": "Tab" }` aperta a tecla no elemento que está com o foco (`Enter`, `Escape`, `Tab`,
+`Shift+Tab`, `Space`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`), e o rastro diz onde o foco caiu depois
+(`"foco": "button \"Entrar\""`). Cada passo espera até 5 s
+(`"tempoMax"`, em milissegundos, muda: `10000` são 10 s; a tecla não espera). Clicar, digitar, tecla ou esperar que não dão certo param o roteiro, e
 a foto mostra a página nesse ponto; a conferência que falha só fica anotada e o roteiro segue. O `evidencia.json` leva
 o rastro em `roteiro`, sem o texto digitado (só quantos caracteres); a saída soma os passos e termina com o código 1
 quando o roteiro parou ou alguma conferência falhou. Um clique que abre outra aba, um `confirm()` que precisa de "sim"
@@ -1748,9 +1751,25 @@ até 10 e deixa o resto para o `/sworn:shortcuts`; sem atalho, silêncio. A data
 `.claude/sworn/atalhos-revisao.json`, o prazo em `limiares.diasEntreAtalhos`, e `"atalhosNaAbertura": false`
 desliga.
 
+**A skill certa na hora certa.** Desde a 0.92.0, cinco rotas dizem a skill do sworn que a tarefa pede, uma vez por
+sessão e por tipo:
+
+- a 1ª edição de marcação ou estilo leva ao `sworn:playbook` e à rubrica de tela dele, com o `design.json` quando o
+  projeto tem um e o `/sworn:review --tela-depois` no fim;
+- o pedido de seguir um plano, ou a escrita de um `.md` de plano, leva ao `sworn:review-plan`;
+- a edição que marca caixa ou `[FEITO]` num plano leva ao `sworn:drift`;
+- o seu "por que a sessão deu errado?" leva ao `sworn:diagnose`;
+- a edição de um arquivo `aaa` leva ao `sworn:effort-high`.
+
+A linha entra com a sua mensagem (no `abrir-turno.js`) ou com a edição que o portão de escopo já permite (no
+`portao-escopo.js`). Nunca entra numa negação, num subagente ou num apagar, e a falha dela nunca muda a decisão do
+portão. A skill do sworn que já entrou na sessão cala a rota dela. A skill do projeto com "padrao" no nome segue fazendo
+as vezes do manual, e a rota de tela entra junto. Cada rota é uma ordem, contada como as do parágrafo abaixo.
+
 **O que nunca é usado aparece em número.** Desde a 0.9.0, cada ordem que o sworn dá ao Claude (rodar o
 `/sworn:learn`, o `/sworn:audit`, o `/sworn:calibrate`, o `/sworn:init`, revisar antes do commit,
-carregar o manual) conta em `.claude/sworn/contadores.json` como **dada** (uma vez enquanto está pendente),
+carregar o manual e, desde a 0.92.0, as cinco rotas da skill certa: a rubrica de tela, revisar o plano, conferir a
+etapa com o plano, diagnosticar a sessão e o esforço alto) conta em `.claude/sworn/contadores.json` como **dada** (uma vez enquanto está pendente),
 **cumprida** (a skill pedida rodou depois, na mesma sessão, pelo agente principal) ou **recusada pelo dono** (só onde
 há sinal: o commit com `# sworn: sem-revisao` depois de negado; nas outras sai `-`). A auditoria automática
 guarda a foto desses números em `auditoria.json` e mostra o que mudou desde a vez anterior:
@@ -1760,8 +1779,21 @@ guarda a foto desses números em `auditoria.json` e mostra o que mudou desde a v
   aprender 4/3/-; revisar antes do commit 6/5/1; manual 2/2/-
   nunca disparadas: auditar, calibrar, init
   ("-": o sworn so ve a recusa no commit sem revisao; nas outras, a ordem que o Claude nao cumpriu foi ignorada ou
-  recusada na conversa. Ordem que se repete sem cumprir: vale perguntar ao dono se ela ainda serve.)
+  recusada na conversa. Ordem que se repete sem cumprir: o sworn segue cobrando; o dono decide se ela fica.)
 ~~~
+
+**O uso de cada skill também.** Desde a 0.92.0, cada skill do sworn que o agente principal carrega conta
+`uso_skill_<nome>` nos mesmos contadores, e a skill do projeto com "padrao" no nome conta
+`uso_skill_manual_do_projeto`. A auditoria automática mostra, no mesmo intervalo, as chamadas, as nunca chamadas e
+quantas vezes a do projeto entrou no lugar do `sworn:playbook`:
+
+~~~text
+- skills do sworn que o Claude chamou nos ultimos 7 dias: playbook 5, review 3, handoff 2
+  nunca chamadas: calibrate, diagnose, radar, reference, shortcuts
+  Skill do sworn nunca chamada e assunto do sworn, nao deste projeto: ...
+~~~
+
+Sem nenhuma skill chamada no intervalo, a linha não sai.
 
 Sem nada a cortar, essa parte sai sozinha, sem a ordem de auditar; nada disparado e nada a cortar segue em
 silêncio. O `uso.js` não soma essas chaves no total das travas. Limite conhecido: num projeto sem
@@ -1957,6 +1989,7 @@ dois lugares, como na tabela.
 | `node "<plugin>/scripts/vigia-puxar.js" --repo <pasta do clone> [--remote backup] [--ramo claude/vigia] [--arquivo vigia/novidades.md] [--destino <pasta>] [--espera 30]` | só para quem mantém o plugin: traz a novidade da semana do ramo `claude/vigia` para a pasta do vigia (ver "Os portões que não são travas"); com `--ramo claude/radar --arquivo radar/semana.md --destino <pasta do vigia>/radar`, traz a ficha do radar da semana. A busca que falha tenta 3 vezes, com `--espera` segundos (0 a 600) entre elas. Roda por tarefa agendada, nunca por gancho. Saída 0 se gravou, 1 se falhou, 2 se faltou `--repo`, se uma opção veio sem valor ou se o `--espera` não é inteiro de 0 a 600 (nada é gravado) |
 | `node "<plugin>/scripts/vigia-triar.js" (--vigia \| --radar) --semana AAAA-MM-DD --como "<o que foi decidido>" [--pasta <dir>]` | só para quem mantém o plugin: grava no `visto.json` a marca de que a ficha da semana (a do vigia, ou com `--radar` a do radar) foi triada, e a abertura para de lembrar dela. Recusa a semana que não é a da ficha no disco. Saída 0 se gravou, 1 se recusou (sem ficha, semana errada, `--como` sem letras ou com o marcador `<o que foi decidido>` copiado sem troca, falha ao gravar), 2 se o uso veio errado (flag faltando, flag sem valor ou `--como ""`); com 1 ou 2 nada é gravado |
 | `node "<clone do plugin>/scripts/modelos.js" --conferir [--salvar <pasta>]` e `--citacoes <guia> <página> [<página>...]` | só para quem mantém o plugin: relê as páginas oficiais de cada guia de modelo (`modelos/claude/`) e o "Models overview" e diz, em JSON, o que mudou pela impressão digital e se saiu modelo novo, com os passos para propor o guia novo (sai 0 sem mudança, 1 com mudança, 2 quando alguma página não abriu); o `--citacoes` confere o formato do rascunho e se cada citação é trecho literal da página. O guia novo só entra com o seu sim. No repositório do plugin, a abertura lembra a conferência quando a última passa de 30 dias |
+| `node "<clone do plugin>/scripts/painel.js" --prototipo [--porta N]` | só para quem mantém o plugin: sobe o protótipo do painel de sessões em `http://127.0.0.1:<porta>/`, com dados inventados (`painel/prototipo/simulado.json`) que chegam aos poucos, como chegariam de sessões de verdade. Escuta só em 127.0.0.1 e recusa outro `--endereco`; `--porta 0` (o padrão) pega uma porta livre. Sai 2 com opção errada e 1 quando o servidor não sobe (a porta ocupada diz como escolher outra) |
 | `node "<clone do plugin>/scripts/exportar.js" --raiz "<clone do plugin>" --destino <pasta>` | só para quem publica o próprio plugin: monta, numa pasta à parte, exatamente o que iria para um repositório público (sem `--gravar` só mostra o que copiaria) |
 | `node "<clone do plugin>/scripts/apresentacao.js" [--gravar] [--slides <pasta>]` | só para quem publica o próprio plugin: monta a apresentação (`apresentacao/index.html`, a página do GitHub Pages) a partir de `apresentacao/fonte/`, da seção do topo do `CHANGELOG.md` (o slide de novidades) e da versão do `plugin.json`; sem nada, só confere e sai 1 com a página velha; `--slides` grava a fonte com as marcas trocadas, para publicar o deck em outro lugar |
 | `node "<plugin>/scripts/experimento.js" --manual <pasta do seu manual>` | monta a tabela de obrigações do seu manual e do plugin; depois de preenchida (o script diz onde), rode de novo com `--veredito` para julgar: o plugin bastou, ou ainda falta manual? Sem `--manual` a tabela traz só as obrigações do plugin |

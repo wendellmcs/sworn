@@ -15,7 +15,8 @@ const AGORA = new Date(2026, 10, 13, 14, 5, 0);
 const JUIZO = ['JUIZO-ONDE metade do T2 feita', 'JUIZO-DECISOES do dono', 'JUIZO-ERROS nenhum', 'JUIZO-TERCEIROS nenhum'];
 // linhas do modelo que comecam como as mecanicas da secao 5, sem o resto da forma delas
 const MODELO_PARECIDO = ['  - #7 decidido com o dono: adiar', '- abertas em revisao: o PR 12', '- nenhuma aberta em outro repo, conferido',
-  '- pedidos do dono abertos ate ontem: so o #9, respondido de boca'];
+  '- pedidos do dono abertos ate ontem: so o #9, respondido de boca',
+  '- pedidos sem frente abertos (3): o texto, com o comando: ver o painel', '- nao li os pedidos sem frente (o dono pediu para ignorar)'];
 
 /** Um repo com a frente, o plano (T2 aberto), uma pendencia e o handoff ja preenchido, gravado no disco. */
 function cenario() {
@@ -184,6 +185,63 @@ test('H6a2 (3): refazer - os pedidos do dono nao se leem agora: a linha gravada 
   assert.ok(!s5.includes('nao li os pedidos do dono'), 'sem o aviso no lugar dela');
   assert.ok(s5.includes('- nao li o log do CI, falta acesso'), 'a linha do modelo fica');
   assert.match(s5, /#2 2026-11-13 \| dono: Bia/, 'as pendencias, que se leem, saem do disco');
+});
+
+// 0.91.0 (A2, defeito b): o handoff cheio cai no ultimo limite (nenhuma pendencia listada) e a secao dizia "(2):" seguido
+// so de "e mais 2 no arquivo". Agora diz numa linha so quantas estao abertas e onde ler; o refazer seguinte a troca.
+test('0.91.0 (b): refazer - sem espaco para nenhuma pendencia, a secao diz quantas e onde ler numa linha so', () => {
+  const c = cenario();
+  pend.adicionar(c.dir, { dono: 'Bia', texto: 'p'.repeat(300), hoje: HOJE });
+  // mede o refazer com as duas listadas e enche o julgamento ate so a forma sem nenhuma listada caber no teto
+  const largo = hc.refazer(c.dir, c.texto, { frente: 'frente-x', agora: AGORA }).texto;
+  assert.match(secao(largo, 5), /dono: Bia/, 'controle: com folga, as duas saem listadas');
+  // +100: a forma com as duas listadas passa 100 bytes do teto; a sem nenhuma, que tira as duas linhas delas (mais
+  // de 100 bytes), cabe. Que foi o ultimo limite, e nao um do meio, prova o "nenhuma listada" logo abaixo
+  const cheio = c.texto.replace('JUIZO-DECISOES do dono', 'JUIZO-DECISOES do dono ' +
+    'd'.repeat(hc.TETO - Buffer.byteLength(largo, 'utf8') + 100));
+  const r = hc.refazer(c.dir, cheio, { frente: 'frente-x', agora: AGORA });
+  assert.strictEqual(r.mudou, true, 'controle: coube em algum limite');
+  assert.ok(Buffer.byteLength(r.texto, 'utf8') <= hc.TETO);
+  const s5 = secao(r.texto, 5);
+  assert.ok(!/dono: Bia|dono: Ana/.test(s5), 'controle: nenhuma listada: ' + s5);
+  assert.match(s5, /^- abertas em \.sworn\/PENDENCIAS\.md \(2\): o texto delas nao coube aqui; leia no arquivo\.$/m, s5);
+  assert.ok(!/e mais \d+ no arquivo/.test(s5), 'o "e mais" sem nenhuma listada: ' + s5);
+  // o refazer seguinte reconhece a linha como dele: com folga de novo, ela sai e as pendencias voltam listadas
+  const folga = r.texto.replace(/JUIZO-DECISOES do dono d+/, 'JUIZO-DECISOES do dono');
+  const s5b = secao(hc.refazer(c.dir, folga, { frente: 'frente-x', agora: AGORA }).texto, 5);
+  assert.ok(!/nao coube aqui/.test(s5b) && /dono: Bia/.test(s5b), s5b);
+});
+
+// 0.91.0 (A2, defeito c): a sessao sem vinculo acha o plano pela unica frente com plano, mas os pedidos vinham do
+// sem-frente.md (203 abertos, quase todos sondas "responda so: ok"). Os pedidos sao os da frente do plano; os sem frente
+// so dao a conta e o comando, numa linha que o refazer tambem troca.
+test('0.91.0 (c): refazer sem vinculo - os pedidos sao os da unica frente com plano; os sem frente so dao a conta', () => {
+  const c = cenario();
+  const pasta = path.join(c.dir, '.claude', 'sworn', 'pedidos');
+  fs.mkdirSync(pasta, { recursive: true });
+  fs.writeFileSync(path.join(pasta, 'frente-x.md'), '1. faca a F4\n');
+  fs.writeFileSync(path.join(pasta, 'sem-frente.md'), '1. responda so: ok\n2. responda so: ok\n');
+  const t = hc.refazer(c.dir, c.texto, { agora: AGORA }).texto;
+  const s5 = secao(t, 5);
+  assert.match(s5, /- pedidos do dono abertos \(1\): #1; o texto de cada um, com o comando: node ".+pedidos\.js" --abertos --frente frente-x\n/, s5);
+  assert.match(s5, /- pedidos sem frente abertos \(2\): o texto, com o comando: node ".+pedidos\.js" --abertos\n/, s5);
+  // os sem frente respondidos: a linha deles sai, sem duplicar a dos pedidos da frente
+  fs.writeFileSync(path.join(pasta, 'sem-frente.md'), '1. responda so: ok [respondido: sonda]\n2. ok [respondido: sonda]\n');
+  const s5b = secao(hc.refazer(c.dir, t, { agora: AGORA }).texto, 5);
+  assert.ok(!/^- pedidos sem frente abertos \(\d+\): o texto, com o comando: node /m.test(s5b), s5b);
+  // a forma mecanica "(N):"; o cenario tem uma linha do modelo que comeca por "- pedidos do dono abertos ate ontem"
+  assert.strictEqual((s5b.match(/^- pedidos do dono abertos \(\d+\): /gm) || []).length, 1, s5b);
+  assert.match(s5b, /^- pedidos do dono abertos ate ontem: so o #9, respondido de boca$/m, s5b);
+  // os sem frente nao se leem: o aviso da a causa e o comando, e o refazer seguinte troca o aviso em vez de somar outro
+  fs.unlinkSync(path.join(pasta, 'sem-frente.md'));
+  fs.mkdirSync(path.join(pasta, 'sem-frente.md'));
+  const t3 = hc.refazer(c.dir, t, { agora: AGORA }).texto;
+  const s5c = secao(hc.refazer(c.dir, t3, { agora: AGORA }).texto, 5);
+  assert.strictEqual((s5c.match(/^- nao li os pedidos sem frente \(.+\): rode node ".+pedidos\.js" --abertos\.$/gm) || []).length, 1, s5c);
+  assert.ok(!/^- pedidos sem frente abertos \(\d+\): o texto, com o comando: node /m.test(s5c), s5c);
+  assert.match(s5c, /--abertos --frente frente-x\n/, s5c);
+  // as linhas do modelo que so comecam como as dos sem frente ficam nos dois refazer
+  for (const l of MODELO_PARECIDO) assert.ok(s5b.includes(l + '\n') && s5c.includes(l + '\n'), 'a linha do modelo fica: ' + l);
 });
 
 test('H6a2 (3): refazer - a secao 3 sem item aberto volta a ter item quando o plano ganha outro', () => {

@@ -36,7 +36,9 @@ covers what counts as proof, and how not to be fooled by your own instrument.
   PNG before citing it, and quote the console and errors from `evidencia.json`, not from memory.
   To prove a flow, not only a still page, add `--passos <roteiro.json>`: `{ "passos": [ { "acao": "clicar",
   "papel": "button", "nome": "Entrar" }, { "acao": "conferir", "texto": "Bem-vindo" } ] }`, with `clicar`, `digitar`,
-  `esperar` and `conferir` by the role and name the accessibility tree in `evidencia.json` lists. The photo comes after
+  `esperar` and `conferir` by the role and name the accessibility tree in `evidencia.json` lists. To prove the keyboard
+  path, `{ "acao": "tecla", "tecla": "Tab" }` presses a key on the focused element (`Enter`, `Escape`, `Tab`,
+  `Shift+Tab`, `Space`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`), and the trace says where focus landed. The photo comes after
   the last step; `evidencia.json` carries the trace in `roteiro`, and the script exits 1, with the JSON, when a step
   stopped the script or a check failed. Exit 0 with every check passing is the proof the flow works.
 

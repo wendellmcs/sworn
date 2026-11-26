@@ -1,0 +1,275 @@
+{
+  "versao": 1,
+  "nota": "Dados simulados do protótipo do painel de sessões. Nada aqui é real: projetos, máquinas, sessões e custos são inventados.",
+  "maquinas": [
+    { "id": "notebook-trabalho", "nome": "notebook-trabalho", "sistema": "Windows 11", "conexao": "online" },
+    { "id": "desktop-casa", "nome": "desktop-casa", "sistema": "Ubuntu 24.04", "conexao": "online" }
+  ],
+  "projetos": [
+    { "id": "loja-online", "nome": "loja-online", "cor": "amber" },
+    { "id": "api-pagamentos", "nome": "api-pagamentos", "cor": "green" },
+    { "id": "app-agenda", "nome": "app-agenda", "cor": "blue" },
+    { "id": "site-institucional", "nome": "site-institucional", "cor": "gold" }
+  ],
+  "sessoes": [
+    {
+      "id": "s1",
+      "nome": "carrinho com cupom",
+      "projeto": "loja-online",
+      "maquina": "notebook-trabalho",
+      "origem": "painel",
+      "estado": "trabalhando",
+      "tarefa": "Aplicar o cupom de desconto no carrinho e mostrar o total novo",
+      "modelo": "claude-opus-5-5",
+      "minutosNoEstado": 6,
+      "custoUsd": 1.84,
+      "arquivos": [
+        { "caminho": "src/carrinho/total.js", "mais": 42, "menos": 7, "trecho": [
+          "@@ -18,5 +18,9 @@ function total(carrinho) {",
+          "   const itens = carrinho.itens.filter(ativo);",
+          "   let soma = itens.reduce(somarItem, 0);",
+          "-  if (carrinho.cupom) soma -= carrinho.cupom.valor;",
+          "+  const cupom = cupomValido(carrinho.cupom, hoje());",
+          "+  if (cupom) {",
+          "+    const desconto = cupom.tipo === 'percentual' ? soma * cupom.valor / 100 : cupom.valor;",
+          "+    soma -= Math.min(desconto, soma);",
+          "+  }",
+          "   return arredondar(soma + frete(carrinho));",
+          " }"
+        ] },
+        { "caminho": "test/carrinho.test.js", "mais": 58, "menos": 0 }
+      ],
+      "conversa": [
+        { "quem": "dono", "texto": "O cupom precisa valer só para produtos fora da promoção." },
+        { "quem": "agente", "texto": "Entendi. Escrevi primeiro o teste que falha com um produto em promoção; agora ajusto o cálculo." }
+      ]
+    },
+    {
+      "id": "s2",
+      "nome": "frete por CEP",
+      "projeto": "loja-online",
+      "maquina": "notebook-trabalho",
+      "origem": "painel",
+      "estado": "precisa",
+      "tarefa": "Calcular o frete pela tabela da transportadora",
+      "modelo": "claude-sonnet-5-5",
+      "minutosNoEstado": 14,
+      "custoUsd": 0.62,
+      "arquivos": [
+        { "caminho": "src/frete/tabela.js", "mais": 11, "menos": 0, "trecho": [
+          "@@ -0,0 +1,11 @@",
+          "+// Faixas de CEP por região: cada faixa tem o preço base e o adicional por quilo.",
+          "+const FAIXAS = [",
+          "+  { regiao: 'capital', de: '01000-000', ate: '05999-999', base: 12.9, porQuilo: 1.5 },",
+          "+  { regiao: 'interior', de: '01310-000', ate: '19999-999', base: 18.4, porQuilo: 2.1 },",
+          "+];",
+          "+",
+          "+function faixaDoCep(cep) {",
+          "+  const achadas = FAIXAS.filter((f) => cep >= f.de && cep <= f.ate);",
+          "+  // TODO: o CEP 01310-100 cai nas duas faixas; perguntar qual vale.",
+          "+  return achadas[0];",
+          "+}"
+        ] }
+      ],
+      "conversa": [
+        { "quem": "agente", "texto": "A tabela tem duas faixas para o mesmo CEP. Preciso saber qual vale." }
+      ],
+      "pedido": {
+        "tipo": "pergunta",
+        "urgencia": "alta",
+        "texto": "O CEP 01310-100 aparece na faixa capital e na faixa interior. Qual faixa vale?",
+        "opcoes": [
+          { "rotulo": "Capital (Recomendada)", "descricao": "Frete mais barato; é a faixa do cadastro mais novo." },
+          { "rotulo": "Interior", "descricao": "Frete mais caro; é a faixa da tabela impressa." },
+          { "rotulo": "A mais barata das duas", "descricao": "Regra geral para todo CEP repetido." }
+        ]
+      }
+    },
+    {
+      "id": "s3",
+      "nome": "página do produto",
+      "projeto": "loja-online",
+      "maquina": "desktop-casa",
+      "origem": "terminal",
+      "estado": "concluida",
+      "tarefa": "Trocar a galeria de fotos da página do produto",
+      "modelo": "claude-sonnet-5-5",
+      "minutosNoEstado": 52,
+      "custoUsd": 2.10,
+      "arquivos": [
+        { "caminho": "src/produto/galeria.css", "mais": 64, "menos": 31 },
+        { "caminho": "src/produto/galeria.js", "mais": 88, "menos": 40 }
+      ],
+      "conversa": [
+        { "quem": "agente", "texto": "Pronto: a galeria funciona pelo teclado e as fotos carregam sob demanda. Testes 214 de 214." }
+      ]
+    },
+    {
+      "id": "s4",
+      "nome": "estorno parcial",
+      "projeto": "api-pagamentos",
+      "maquina": "desktop-casa",
+      "origem": "terminal",
+      "estado": "precisa",
+      "tarefa": "Permitir estorno de parte do valor de uma compra",
+      "modelo": "claude-opus-5-5",
+      "minutosNoEstado": 3,
+      "custoUsd": 3.47,
+      "arquivos": [
+        { "caminho": "src/estorno/parcial.ts", "mais": 96, "menos": 12, "trecho": [
+          "@@ -41,4 +41,7 @@ export async function estornar(pagamento: Pagamento, valor: number) {",
+          "-  if (valor !== pagamento.valor) throw new Error('so estorno total');",
+          "+  const jaEstornado = await somarEstornos(pagamento.id);",
+          "+  if (valor <= 0 || valor > pagamento.valor - jaEstornado) {",
+          "+    throw new ErroDeEstorno('valor acima do saldo do pagamento');",
+          "+  }",
+          "   const pedido = await gateway.estornar(pagamento.idExterno, valor);",
+          "   await registrar(pagamento.id, valor, pedido.protocolo);",
+          "   return pedido;"
+        ] },
+        { "caminho": "migracoes/0042_estorno_parcial.sql", "mais": 8, "menos": 0, "trecho": [
+          "@@ -0,0 +1,8 @@",
+          "+CREATE TABLE estornos (",
+          "+  id SERIAL PRIMARY KEY,",
+          "+  pagamento_id INTEGER NOT NULL REFERENCES pagamentos(id),",
+          "+  valor NUMERIC(12, 2) NOT NULL CHECK (valor > 0),",
+          "+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()",
+          "+);",
+          "+",
+          "+CREATE INDEX estornos_por_pagamento ON estornos (pagamento_id);"
+        ] }
+      ],
+      "conversa": [
+        { "quem": "agente", "texto": "Vou rodar a migração no banco de teste para conferir o índice novo." }
+      ],
+      "pedido": {
+        "tipo": "permissao",
+        "urgencia": "media",
+        "texto": "Rodar um comando no terminal",
+        "comando": "npm run migrar -- --banco teste"
+      }
+    },
+    {
+      "id": "s5",
+      "nome": "webhook do banco",
+      "projeto": "api-pagamentos",
+      "maquina": "notebook-trabalho",
+      "origem": "painel",
+      "estado": "parada",
+      "tarefa": "Receber o aviso de pagamento confirmado do banco",
+      "modelo": "claude-sonnet-5-5",
+      "minutosNoEstado": 95,
+      "custoUsd": 0.91,
+      "arquivos": [
+        { "caminho": "src/webhook/banco.ts", "mais": 37, "menos": 2 }
+      ],
+      "conversa": [
+        { "quem": "agente", "texto": "Parei: o teste de assinatura do aviso precisa da chave de teste do banco, que não está no projeto. Quando ela estiver no .env.test, eu continuo." }
+      ]
+    },
+    {
+      "id": "s6",
+      "nome": "relatório diário",
+      "projeto": "api-pagamentos",
+      "maquina": "desktop-casa",
+      "origem": "painel",
+      "estado": "trabalhando",
+      "tarefa": "Gerar o relatório diário de vendas em CSV",
+      "modelo": "claude-haiku-5-5",
+      "minutosNoEstado": 2,
+      "custoUsd": 0.18,
+      "arquivos": [
+        { "caminho": "src/relatorio/diario.ts", "mais": 51, "menos": 0 }
+      ],
+      "conversa": [
+        { "quem": "dono", "texto": "Coluna de data no formato dia/mês/ano, por favor." },
+        { "quem": "agente", "texto": "Feito no gerador; agora confiro o arquivo de exemplo." }
+      ]
+    },
+    {
+      "id": "s7",
+      "nome": "lembrete por e-mail",
+      "projeto": "app-agenda",
+      "maquina": "notebook-trabalho",
+      "origem": "terminal",
+      "estado": "trabalhando",
+      "tarefa": "Mandar lembrete por e-mail 1 hora antes do compromisso",
+      "modelo": "claude-sonnet-5-5",
+      "minutosNoEstado": 11,
+      "custoUsd": 1.05,
+      "arquivos": [
+        { "caminho": "app/lembretes/agendador.py", "mais": 73, "menos": 9, "trecho": [
+          "@@ -12,2 +12,5 @@ def agendar(compromisso):",
+          "-    quando = compromisso.inicio - timedelta(minutes=30)",
+          "+    antecedencia = compromisso.lembrete or timedelta(hours=1)",
+          "+    quando = compromisso.inicio - antecedencia",
+          "+    if quando <= agora():",
+          "+        return None",
+          "     return fila.agendar('lembrete', quando, compromisso.id)"
+        ] },
+        { "caminho": "app/lembretes/modelos de e-mail/lembrete uma hora antes.html", "mais": 40, "menos": 0 },
+        { "caminho": "tests/test_agendador.py", "mais": 66, "menos": 0 }
+      ],
+      "conversa": [
+        { "quem": "agente", "texto": "O fuso horário do usuário entra no cálculo; testando com São Paulo e Lisboa." }
+      ]
+    },
+    {
+      "id": "s8",
+      "nome": "tela de login",
+      "projeto": "app-agenda",
+      "maquina": "desktop-casa",
+      "origem": "painel",
+      "estado": "concluida",
+      "tarefa": "Mensagem de erro clara quando a senha está errada",
+      "modelo": "claude-haiku-5-5",
+      "minutosNoEstado": 130,
+      "custoUsd": 0.27,
+      "arquivos": [
+        { "caminho": "app/web/login.html", "mais": 12, "menos": 4 }
+      ],
+      "conversa": [
+        { "quem": "dono", "texto": "O campo aceita <b>negrito</b>? Testei <script>alert(1)</script> no nome e nada aconteceu." },
+        { "quem": "agente", "texto": "Não aceita: o texto é mostrado como texto. A mensagem de erro nova diz qual campo corrigir." }
+      ]
+    },
+    {
+      "id": "s9",
+      "nome": "exportar calendário",
+      "projeto": "app-agenda",
+      "maquina": "notebook-trabalho",
+      "origem": "terminal",
+      "estado": "parada",
+      "tarefa": "Exportar a agenda no formato de calendário padrão (.ics)",
+      "modelo": "claude-opus-5-5",
+      "minutosNoEstado": 240,
+      "custoUsd": 4.02,
+      "arquivos": [],
+      "conversa": [
+        { "quem": "agente", "texto": "Parei antes de terminar e não gravei nada. Para continuar, retome esta sessão no terminal onde ela foi aberta." }
+      ]
+    }
+  ],
+  "eventos": [
+    { "tipo": "mensagem", "sessao": "s1", "quem": "agente", "texto": "O teste do cupom passou; rodando todos os testes." },
+    { "tipo": "custo", "sessao": "s1", "custoUsd": 1.97 },
+    { "tipo": "arquivo", "sessao": "s7", "caminho": "app/lembretes/agendador.py", "mais": 81, "menos": 9, "trecho": [
+      "@@ -12,2 +12,7 @@ def agendar(compromisso):",
+      "-    quando = compromisso.inicio - timedelta(minutes=30)",
+      "+    antecedencia = compromisso.lembrete or timedelta(hours=1)",
+      "+    quando = compromisso.inicio - antecedencia",
+      "+    if quando <= agora():",
+      "+        return None",
+      "+    if compromisso.fuso:",
+      "+        quando = quando.astimezone(compromisso.fuso)",
+      "     return fila.agendar('lembrete', quando, compromisso.id)"
+    ] },
+    { "tipo": "estado", "sessao": "s6", "estado": "concluida" },
+    { "tipo": "mensagem", "sessao": "s6", "quem": "agente", "texto": "Relatório pronto: 31 linhas no exemplo, datas em dia/mês/ano." },
+    { "tipo": "estado", "sessao": "s7", "estado": "precisa", "pedido": { "tipo": "permissao", "urgencia": "media", "texto": "Editar um arquivo fora da pasta da tarefa", "arquivo": "app/config/fuso.py" } },
+    { "tipo": "custo", "sessao": "s4", "custoUsd": 3.52 },
+    { "tipo": "estado", "sessao": "s1", "estado": "concluida" },
+    { "tipo": "mensagem", "sessao": "s1", "quem": "agente", "texto": "Pronto: o cupom ignora produto em promoção. Testes 188 de 188." },
+    { "tipo": "maquina", "maquina": "desktop-casa", "conexao": "offline" }
+  ]
+}

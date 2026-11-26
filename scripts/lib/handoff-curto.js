@@ -131,14 +131,28 @@ function plano(raiz, frente) {
   if (!achado || !achado.arquivo || (achado.semVinculo && frente)) {
     return { falta: 'Nenhum plano achado para esta sessao' + (frente ? ' (frente ' + frente + ')' : '') + ': diga abaixo o que esta em curso.' };
   }
-  return { rel: achado.arquivo, abs: planoLib.caminhoDoPlano(raiz, achado.arquivo), semVinculo: Boolean(achado.semVinculo) };
+  return { rel: achado.arquivo, abs: planoLib.caminhoDoPlano(raiz, achado.arquivo), semVinculo: Boolean(achado.semVinculo),
+    frente: achado.frente || null };
+}
+
+/**
+ * 0.91.0 (A2, defeito c): a frente dos pedidos da secao 5. Vinculada, a da sessao. Sem vinculo, com o plano achado
+ * pela unica frente com plano, a dessa frente (a do trabalho que a secao 3 aponta), e os sem frente so com a conta:
+ * no sem-frente.md desta frente, 203 abertos eram quase todos sondas "responda so: ok" do claude -p.
+ */
+function frenteDosPedidos(frente, pl) {
+  if (!frente && pl.semVinculo && RE_FRENTE_NO_COMANDO.test(pl.frente || '')) return { frente: pl.frente, semFrenteTambem: true };
+  return { frente: frente || null, semFrenteTambem: false };
 }
 
 const PEDIDOS_NAO_LIDOS = '- nao li os pedidos do dono (';
-function secaoPendencias(raiz, frente, p, quantas) {
+function secaoPendencias(raiz, fp, p, quantas) {
+  const frente = fp.frente;
   const out = [];
   if (p.erro) out.push('- nao li ' + pendencias.ARQUIVO + ': ' + p.erro + '.');
   else if (!p.abertas.length) out.push('- nenhuma aberta em ' + pendencias.ARQUIVO + '.');
+  // 0.91.0 (A2, defeito b): no ultimo limite nenhuma cabe; "(N):" seguido so de "e mais N" parecia lista vazia
+  else if (quantas === 0) out.push('- abertas em ' + pendencias.ARQUIVO + ' (' + p.abertas.length + '): o texto delas nao coube aqui; leia no arquivo.');
   else {
     out.push('- abertas em ' + pendencias.ARQUIVO + ' (' + p.abertas.length + '):');
     p.abertas.slice(0, quantas).forEach(function (x) {
@@ -155,17 +169,23 @@ function secaoPendencias(raiz, frente, p, quantas) {
   }
   const comando = 'node "' + barra(path.join(__dirname, '..', 'pedidos.js')) + '" --abertos' +
     (frente && RE_FRENTE_NO_COMANDO.test(frente) ? ' --frente ' + frente : '');
-  let pedidos;
+  let pedidos = null;
   try { pedidos = pedidosLib.abertos(raiz, frente || null); } catch (e) {
     out.push(PEDIDOS_NAO_LIDOS + textoLib.causaDoErro(e) + '): rode ' + comando + ' para ver os abertos.');
-    return out;
   }
-  if (pedidos.length) {
+  if (pedidos && pedidos.length) {
     const nums = pedidos.map(function (x) { return '#' + x.n; });
     out.push('- pedidos do dono abertos (' + pedidos.length + '): ' + nums.slice(0, PEDIDOS_NO_HANDOFF).join(', ') +
       (nums.length > PEDIDOS_NO_HANDOFF ? ' e mais ' + (nums.length - PEDIDOS_NO_HANDOFF) : '') +
       '; o texto de cada um, com o comando: ' + comando);
-  } else out.push('- nenhum pedido do dono aberto.');
+  } else if (pedidos) out.push('- nenhum pedido do dono aberto.');
+  if (fp.semFrenteTambem) {
+    const semFrente = 'node "' + barra(path.join(__dirname, '..', 'pedidos.js')) + '" --abertos';
+    try {
+      const soltos = pedidosLib.abertos(raiz, null);
+      if (soltos.length) out.push('- pedidos sem frente abertos (' + soltos.length + '): o texto, com o comando: ' + semFrente);
+    } catch (e) { out.push('- nao li os pedidos sem frente (' + textoLib.causaDoErro(e) + '): rode ' + semFrente + '.'); }
+  }
   return out;
 }
 
@@ -242,7 +262,7 @@ function montar(raiz, opcoes) {
         '<<DECISOES: as do dono nesta sessao, com data; e as linhas Decisao: das suas respostas. Sem nenhuma: nenhuma nova>>',
         '',
         SECOES[4]
-      ], secaoPendencias(raiz, o.frente, pend, lim.pend), [
+      ], secaoPendencias(raiz, frenteDosPedidos(o.frente, pl), pend, lim.pend), [
         '',
         SECOES[5],
         '<<ERROS: so os erros de metodo desta sessao que custaram tempo. Sem nenhum: nenhum>>',
@@ -264,9 +284,14 @@ function montar(raiz, opcoes) {
 // O "- nao li " vai com o que vem depois dele no secaoPendencias: uma linha do modelo que abre por "- nao li " fica.
 // Cada forma vai inteira, como o secaoPendencias escreve: uma linha do modelo que so comeca igual ("  - #7 decidido...")
 // fica.
+// 0.91.0 (A2): mais tres formas, a linha unica das pendencias sem espaco e as duas dos pedidos sem frente. Elas ficam
+// fora do RE_PEDIDOS_GRAVADOS: com os pedidos da frente ilegiveis, o refazer repoe as gravadas e a dos sem frente
+// sairia duas vezes.
 const RE_PEDIDOS_GRAVADOS = /^(- pedidos do dono abertos \(\d+\): .*; o texto de cada um, com o comando: |- nenhum pedido do dono aberto\.$)/;
 const RE_PENDENCIA_MECANICA = new RegExp('^(- abertas em \\.sworn/PENDENCIAS\\.md \\(\\d+\\):$|  - #\\d+ \\d{4}-\\d{2}-\\d{2} \\| dono: |' +
-  '  - e mais \\d+ no arquivo\\.$|- nenhuma aberta em \\.sworn/PENDENCIAS\\.md\\.$|- nao li \\.sworn/PENDENCIAS\\.md: |' +
+  '  - e mais \\d+ no arquivo\\.$|- abertas em \\.sworn/PENDENCIAS\\.md \\(\\d+\\): o texto delas nao coube aqui; leia no arquivo\\.$|' +
+  '- pedidos sem frente abertos \\(\\d+\\): o texto, com o comando: node ".*pedidos\\.js" --abertos$|' +
+  '- nao li os pedidos sem frente \\(.*\\): rode node ".*pedidos\\.js" --abertos\\.$|- nenhuma aberta em \\.sworn/PENDENCIAS\\.md\\.$|- nao li \\.sworn/PENDENCIAS\\.md: |' +
   '- nao li os pedidos do dono \\(.*\\): rode .* para ver os abertos\\.$|' +
   '- \\d+ item\\(ns\\) fora do formato \\(sem numero, data ou dono\\), linha\\(s\\) )|' + RE_PEDIDOS_GRAVADOS.source);
 const CABECA_DO_ITEM = 'Proximo item nao marcado do plano (';
@@ -331,7 +356,7 @@ function refazer(raiz, texto, opcoes) {
   function secao5(quantas) {
     const b = corpo(4);
     if (pend.erro) return b;
-    const novo = secaoPendencias(raiz, o.frente, pend, quantas);
+    const novo = secaoPendencias(raiz, frenteDosPedidos(o.frente, pl), pend, quantas);
     // os pedidos nao se leem agora: a linha deles que ja estava gravada fica no lugar do aviso
     const gravados = b.filter(function (l) { return RE_PEDIDOS_GRAVADOS.test(l); });
     const k = novo.findIndex(function (l) { return l.startsWith(PEDIDOS_NAO_LIDOS); });
