@@ -1,16 +1,28 @@
-// Painel de sessoes, prototipo da fase 2: a tela. Le simulado.json, desenha a caixa de decisoes, o escritorio (uma
-// sala por projeto, uma mesa por sessao) e a visao de equipe, aplica os eventos do SSE em /eventos e abre o painel
-// lateral de cada sessao: o pedido, a conversa, a resposta e os arquivos. A logica sem tela mora em estado.js
-// (window.PainelEstado). Texto de sessao e dado: entra so por textContent, nunca como HTML.
+// Painel de sessoes: a tela. Le dados.json (o retrato do servidor ao vivo, com modo 'ao-vivo' e seq, ou o simulado do
+// prototipo), desenha a caixa de decisoes, o escritorio (uma sala por projeto, uma mesa por sessao) e a visao de
+// equipe, aplica os eventos do SSE em /eventos e abre o painel lateral de cada sessao: o pedido, a conversa, a
+// resposta e os arquivos. Ao vivo, a decisao vai ao servidor (/decidir) e a tela so muda quando ele confirma. A logica
+// sem tela mora em estado.js (window.PainelEstado). Texto de sessao e dado: entra so por textContent, nunca como HTML.
 (function () {
   'use strict';
 
   const E = window.PainelEstado;
   const SVG = 'http://www.w3.org/2000/svg';
   const RELOGIO_MS = 30000;
-  // Prazo da carga inicial: sem ele, um servidor que aceita a conexao e nunca responde deixa a pagina carregando.
+  // Prazo de cada busca ao servidor (a carga, o retrato de novo e a decisao): sem ele, um servidor que aceita a conexao
+  // e nunca responde deixa a pagina esperando.
   const ESPERA_MS = 10000;
-  const TIPOS_DE_EVENTO = ['mensagem', 'custo', 'arquivo', 'estado', 'maquina'];
+  const TIPOS_DE_EVENTO = ['mensagem', 'custo', 'arquivo', 'estado', 'maquina', 'sessao', 'voltou', 'decisao'];
+  // O POST ao servidor ao vivo: o X-Painel e o que ele exige de quem nao e outro site (painel-rotas.js).
+  const CABECALHOS = { 'Content-Type': 'application/json', 'X-Painel': '1' };
+  const VOLTOU = 'Este pedido voltou para o terminal: decida por lá.';
+  const NAO_CHEGOU = 'A decisão não chegou ao servidor do painel: confira no terminal se ele está rodando e tente de novo.';
+  const SEM_RESPOSTA = 'O servidor do painel demorou a responder, e a decisão pode ter chegado: veja na conversa da ' +
+    'sessão; se o pedido seguir aqui, tente de novo.';
+  const SEM_A_CHAVE = 'O painel não reconheceu esta aba: abra-o de novo pelo endereço com a chave que o terminal mostrou ' +
+    'ao iniciar o painel.';
+  const ENVIANDO = 'Enviando a decisão à sessão…';
+  const SELO = { 'ao-vivo': 'Ao vivo · esta máquina', prototipo: 'Protótipo · dados simulados' };
   const ICONES = {
     precisa: ['M12 3.5 2.8 19.5h18.4z', 'M12 10v4', 'M12 16.8h.01'],
     trabalhando: ['M20.5 12a8.5 8.5 0 1 1-5.6-8'],
@@ -55,6 +67,21 @@
   let quemAbriu = null;
   // O tema escolhido no botao; null segue o do sistema.
   let temaEscolhido = null;
+  // Ao vivo: o seq do ultimo evento aplicado (o retrato traz o dele); enquanto o retrato e buscado de novo, os eventos
+  // que chegam esperam em `guardados`. `geracao` descarta a busca que outra mais nova ja substituiu.
+  let modo = 'prototipo';
+  let ultimoSeq = 0;
+  let buscando = false;
+  let guardados = [];
+  let geracao = 0;
+  // Os ids dos pedidos cuja decisao foi ao servidor e ainda nao voltou; e, por sessao, a nota da ultima decisao que nao
+  // passou ({ pedido, texto, semBotoes }), que vale enquanto o pedido for o mesmo.
+  const decidindo = new Set();
+  const notas = new Map();
+  // O id desta aba, que o servidor usa para saber se ha painel olhando (POST /presenca).
+  const idDaAba = window.crypto && typeof window.crypto.randomUUID === 'function'
+    ? window.crypto.randomUUID()
+    : 'aba' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 
   function $(id) { return document.getElementById(id); }
 
@@ -212,13 +239,15 @@
     desenharAvisos();
   }
 
-  // O aviso do navegador sai so quando o dono nao esta olhando o painel; o clique traz a aba e abre a sessao.
-  function notificar(id, texto) {
+  // O aviso do navegador sai so quando o dono nao esta olhando o painel; o clique traz a aba e abre a sessao. O texto e
+  // generico (decisao do dono): o aviso aparece fora da aba, na tela bloqueada e na central do sistema, e nem o nome da
+  // sessao nem o texto do pedido saem dela.
+  function notificar(id) {
     if (!temAvisos || Notification.permission !== 'granted' || document.hasFocus()) return;
-    const s = E.sessao(st, id);
-    if (!s) return;
+    if (!E.sessao(st, id)) return;
     try {
-      const aviso = new Notification('Precisa de você: ' + s.nome, { body: texto, tag: 'painel-' + id, icon: 'icone.svg' });
+      const aviso = new Notification('Uma decisão espera você',
+        { body: 'Abra o painel de sessões para ver.', tag: 'painel-' + id, icon: 'icone.svg' });
       aviso.addEventListener('click', function () {
         window.focus();
         aviso.close();
@@ -245,7 +274,7 @@
       lista.appendChild(li);
     }
     const n = st.sessoes.length;
-    $('total').textContent = (n === 1 ? '1 sessão' : n + ' sessões') + ', ' + E.formatarCusto(E.custoTotal(st)) + ' no total';
+    $('total').textContent = (n === 1 ? '1 sessão' : n + ' sessões') + ', ' + E.custoDoGrupo(E.resumo(st), 'no total');
   }
 
   // O 'sem' e o fim da linha: todo texto dele manda recarregar, e a reconexao que vem depois (o Last-Event-ID ja passou
@@ -302,6 +331,7 @@
     if (E.semSinal(st, s)) {
       li.appendChild(el('p', 'pedido__semsinal', 'Sem sinal de ' + nomeDaMaquina(s) + ': o pedido pode já ter mudado.'));
     }
+    if (p.voltou) li.appendChild(el('p', 'bloco__nota', VOLTOU));
     li.appendChild(el('p', 'pedido__limite', E.limiteDaMesa(s)));
 
     const acoes = el('div', 'pedido__acoes');
@@ -407,10 +437,18 @@
     $('salas-vazia').hidden = st.sessoes.length > 0;
   }
 
+  // A sessao nova ou o retrato novo: o escritorio sai inteiro e volta, com as salas e as mesas que valem agora.
+  function reconstruirSalas() {
+    $('salas').replaceChildren();
+    mesas.clear();
+    salas.clear();
+    montarSalas();
+  }
+
   function desenharSalas() {
     for (const [id, sala] of salas) {
       sala.resumo.textContent = E.resumoDaContagem(E.contar(st, id));
-      sala.custo.textContent = E.formatarCusto(E.custoTotal(st, id));
+      sala.custo.textContent = E.custoDoGrupo(E.resumo(st, id));
     }
   }
 
@@ -476,7 +514,7 @@
 
     const dados = el('p', 'mesa__dados');
     const custo = el('span', 'num');
-    custo.append(soLeitor('Custo: '), document.createTextNode(E.formatarCusto(s.custoUsd)));
+    custo.append(soLeitor('Custo: '), document.createTextNode(E.custoDaSessao(s)));
     dados.append(custo, el('span', 'num', E.resumoDosArquivos(s.arquivos)));
 
     const limite = el('p', 'mesa__limite');
@@ -497,7 +535,7 @@
     const precisa = el('td', 'num', String(g.estados.precisa));
     if (g.estados.precisa > 0) precisa.dataset.alerta = 'sim';
     const custo = el('td', 'num tabela__custo');
-    custo.appendChild(el('span', null, E.formatarCusto(g.custoUsd)));
+    custo.appendChild(el('span', null, E.custoDoGrupo(g)));
     if (total !== null) {
       // A barra repete o numero ao lado so para o olho comparar: o leitor de tela fica com o numero.
       const barra = el('meter', 'tabela__barra');
@@ -569,12 +607,18 @@
     preencherArquivos(s);
   }
 
-  function botaoDeDecisao(rotulo, escolha, primario, semSinal) {
+  // Com a decisao no servidor, o botao fica aria-disabled e nao disabled: o foco segue nele enquanto a resposta nao vem,
+  // e o clique repetido nao manda nada.
+  function botaoDeDecisao(rotulo, escolha, primario, semSinal, ocupado) {
     const b = el('button', primario ? 'botao botao--primario' : 'botao', rotulo);
     b.type = 'button';
     b.dataset.foco = 'decidir:' + escolha;
     b.disabled = semSinal;
-    b.addEventListener('click', function () { decidirAgora(escolha); });
+    if (ocupado) b.setAttribute('aria-disabled', 'true');
+    b.addEventListener('click', function () {
+      if (b.getAttribute('aria-disabled') === 'true') return;
+      decidirAgora(escolha);
+    });
     return b;
   }
 
@@ -598,34 +642,138 @@
       partes.push(el('p', 'pedido__semsinal', 'Sem sinal de ' + nomeDaMaquina(s) +
         ': a decisão não chegaria à sessão. Os botões voltam quando a máquina voltar.'));
     }
+    // Sem botoes: o pedido que voltou para o terminal e a pergunta da sessao do terminal, que so o terminal responde.
+    if (p.voltou) {
+      partes.push(el('p', 'bloco__nota', VOLTOU));
+      caixa.replaceChildren(...partes);
+      return;
+    }
+    if (p.tipo === 'pergunta' && !E.podeResponder(s)) {
+      partes.push(el('p', 'bloco__nota', 'Responda esta pergunta no terminal.'));
+      caixa.replaceChildren(...partes);
+      return;
+    }
+    const nota = notas.get(s.id);
+    if (nota && nota.pedido === p.id) {
+      partes.push(el('p', 'pedido__semsinal', nota.texto));
+      if (nota.semBotoes) {
+        caixa.replaceChildren(...partes);
+        return;
+      }
+    }
+    // Ao vivo, o servidor so aceita a decisao pelo id do pedido: sem ele, o botao levaria a um "ja mudou" falso.
+    if (modo === 'ao-vivo' && !temTexto(p.id)) {
+      partes.push(el('p', 'bloco__nota', 'Este pedido chegou sem identificação, e o painel não consegue decidi-lo: ' +
+        'decida pelo terminal.'));
+      caixa.replaceChildren(...partes);
+      return;
+    }
+    const ocupado = temTexto(p.id) && decidindo.has(p.id);
     const acoes = el('div', 'decisao');
+    if (ocupado) acoes.setAttribute('aria-busy', 'true');
     if (p.tipo === 'pergunta') {
+      // Aqui so chega a pergunta da sessao do painel: a do terminal saiu acima.
       const opcoes = Array.isArray(p.opcoes) ? p.opcoes : [];
       acoes.setAttribute('role', 'group');
       acoes.setAttribute('aria-label', 'Escolha uma opção');
-      opcoes.forEach(function (o, i) { acoes.appendChild(botaoDeDecisao(E.rotuloDaOpcao(o), i, false, semSinal)); });
-      if (!opcoes.length) {
-        partes.push(el('p', 'bloco__nota', E.podeResponder(s)
-          ? 'A pergunta veio sem opções: responda por escrito, abaixo.'
-          : 'A pergunta veio sem opções, e esta sessão só recebe resposta escrita pelo terminal.'));
-      }
+      opcoes.forEach(function (o, i) { acoes.appendChild(botaoDeDecisao(E.rotuloDaOpcao(o), i, false, semSinal, ocupado)); });
+      if (!opcoes.length) partes.push(el('p', 'bloco__nota', 'A pergunta veio sem opções: responda por escrito, abaixo.'));
     } else {
-      acoes.append(botaoDeDecisao('Aprovar', 'aprovar', true, semSinal), botaoDeDecisao('Negar', 'negar', false, semSinal));
+      acoes.append(botaoDeDecisao('Aprovar', 'aprovar', true, semSinal, ocupado),
+        botaoDeDecisao('Negar', 'negar', false, semSinal, ocupado));
     }
     if (acoes.childElementCount) partes.push(acoes);
+    if (ocupado) partes.push(el('p', 'pedido__limite', ENVIANDO));
     caixa.replaceChildren(...partes);
   }
 
+  // O pedido mudou entre o desenho e o clique (a maquina caiu, a sessao seguiu): a tela mostra o que vale agora.
+  function pedidoMudou() {
+    preencherLateral();
+    $('lateral-titulo').focus();
+    anunciar('Este pedido já mudou: confira o que a sessão mostra agora.');
+  }
+
   function decidirAgora(escolha) {
+    if (modo === 'ao-vivo') { decidirNoServidor(escolha); return; }
     const r = E.decidir(st, aberta, escolha, Date.now());
-    if (!r.mudou.length) {
-      // O pedido mudou entre o desenho e o clique (a maquina caiu, a sessao seguiu): a tela mostra o que vale agora.
-      preencherLateral();
-      $('lateral-titulo').focus();
-      anunciar('Este pedido já mudou: confira o que a sessão mostra agora.');
-      return;
-    }
+    if (!r.mudou.length) { pedidoMudou(); return; }
     depois(r);
+  }
+
+  // O painel lateral de `id` desenhado de novo, se ainda for o aberto, com o foco onde estava.
+  function refazerLateral(id) {
+    if (!$('lateral').open || aberta !== id) return;
+    const foco = chaveDoFoco();
+    preencherLateral();
+    restaurarFoco(foco);
+  }
+
+  // Ao vivo, quem decide e o servidor: ele entrega a decisao ao gancho que segura o pedido e difunde o evento
+  // 'decisao' as outras abas. A tela espera ocupada e so tira o pedido da fila quando ele confirma; a recusa diz o
+  // porque (voltou para o terminal, ou ja foi decidido) e a falha de rede, o prazo esgotado, a chave recusada e o erro
+  // do servidor devolvem os botoes.
+  function decidirNoServidor(escolha) {
+    const id = aberta;
+    const s = E.sessao(st, id);
+    const p = s && s.pedido;
+    if (!s || s.estado !== 'precisa' || !p || !temTexto(p.id) || p.voltou || E.semSinal(st, s)) { pedidoMudou(); return; }
+    if (decidindo.has(p.id)) return;
+    const pedido = p.id;
+    notas.delete(id);
+    decidindo.add(pedido);
+    refazerLateral(id);
+    anunciar(ENVIANDO);
+    const opcoes = { method: 'POST', headers: CABECALHOS, cache: 'no-store',
+      body: JSON.stringify({ pedido: pedido, sessao: id, escolha: escolha }) };
+    const prazo = prazoDaCarga();
+    if (prazo) opcoes.signal = prazo;
+    fetch('decidir', opcoes)
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (corpo) { return { ok: r.ok, status: r.status, corpo: corpo || {} }; });
+      })
+      .then(function (r) {
+        decidindo.delete(pedido);
+        if (r.ok && r.corpo.ok === true) {
+          depois(E.aplicar(st, { tipo: 'decisao', sessao: id, pedido: pedido, escolha: escolha }, Date.now()));
+          refazerLateral(id);
+          return;
+        }
+        if (r.status === 409 && r.corpo.motivo === 'voltou') {
+          depois(E.aplicar(st, { tipo: 'voltou', sessao: id, pedido: pedido }, Date.now()));
+          refazerLateral(id);
+          anunciar(VOLTOU);
+          return;
+        }
+        // O 409 nao diz quem decidiu nem o que: a conversa da sessao mostra o que veio depois.
+        if (r.status === 409 && r.corpo.motivo === 'decidido') {
+          recusarDecisao(id, pedido, 'Este pedido já foi decidido (nesta aba ou em outra): veja na conversa da sessão o ' +
+            'que ela fez.', true);
+          return;
+        }
+        console.warn('painel: o servidor recusou a decisão, código ' + r.status);
+        // 401 sem o cookie da chave; 403 sem o cabecalho do painel ou de outra origem (painel-rotas.js).
+        if (r.status === 401 || r.status === 403) { recusarDecisao(id, pedido, SEM_A_CHAVE, false); return; }
+        recusarDecisao(id, pedido, 'O servidor do painel recusou a decisão (código ' + r.status + '): recarregue a ' +
+          'página e tente de novo.', false);
+      }, function (erro) {
+        decidindo.delete(pedido);
+        // O prazo que vence nao diz se o servidor recebeu: a tela nao afirma que a decisao nao chegou. Decidir de novo
+        // e seguro, porque o pedido ja decidido volta com o 409 'decidido'.
+        if (erro && (erro.name === 'TimeoutError' || erro.name === 'AbortError')) {
+          console.warn('painel: o servidor não respondeu à decisão no prazo', erro);
+          recusarDecisao(id, pedido, SEM_RESPOSTA, false);
+          return;
+        }
+        console.warn('painel: a decisão não chegou ao servidor', erro);
+        recusarDecisao(id, pedido, NAO_CHEGOU, false);
+      });
+  }
+
+  function recusarDecisao(id, pedido, texto, semBotoes) {
+    notas.set(id, { pedido: pedido, texto: texto, semBotoes: semBotoes });
+    refazerLateral(id);
+    anunciar(texto);
   }
 
   function preencherConversa(s) {
@@ -805,6 +953,8 @@
   function depois(r) {
     if (!r.mudou.length && !r.aviso) return;
     const foco = chaveDoFoco();
+    // A sessao nova pode trazer sala nova: o escritorio volta inteiro, ja com a mesa dela.
+    if (r.nova) reconstruirSalas();
     for (const id of r.mudou) {
       const mesa = mesas.get(id);
       const s = E.sessao(st, id);
@@ -814,19 +964,32 @@
     if ($('lateral').open && r.mudou.includes(aberta)) preencherLateral();
     restaurarFoco(foco);
     if (r.aviso) anunciar(r.aviso);
-    if (r.chamado) notificar(r.chamado, r.aviso);
+    if (r.chamado) notificar(r.chamado);
   }
 
   // ---- os eventos ----
-  // A reconexao confia no Last-Event-ID: o servidor do prototipo segue a lista dali, sem repetir nem pular. Na fase 3,
-  // com sessoes de verdade, a tela tera de buscar o estado de novo ao reconectar.
+  // No prototipo, a reconexao confia no Last-Event-ID: o servidor segue a lista dali, sem repetir nem pular. Ao vivo, o
+  // servidor nao repete o que passou: cada ligacao busca o retrato de novo (religar), e o seq de cada evento diz se o
+  // retrato ja o tem.
+  function urlDosEventos() {
+    if (modo !== 'ao-vivo') return 'eventos';
+    return 'eventos?cliente=' + encodeURIComponent(idDaAba) + '&visivel=' + (document.visibilityState === 'visible' ? 1 : 0);
+  }
+
   function ouvir() {
     if (typeof EventSource !== 'function') {
-      sinal('sem', 'Sem atualização ao vivo neste navegador: recarregue a página para ver o estado novo');
+      // Recarregar nao da a este navegador o que falta: o passo e outro navegador.
+      sinal('sem', 'Este navegador não acompanha ao vivo: abra o painel no Chrome, no Edge ou no Firefox');
       return;
     }
-    const fonte = new EventSource('eventos');
-    fonte.addEventListener('open', function () { sinal('aovivo', 'Ao vivo'); });
+    const fonte = new EventSource(urlDosEventos());
+    fonte.addEventListener('open', function () {
+      sinal('aovivo', 'Ao vivo');
+      if (modo !== 'ao-vivo') return;
+      // A reconexao usa o endereco da 1a ligacao, com o visivel daquela hora: a presenca diz o de agora.
+      dizerPresenca();
+      religar();
+    });
     fonte.addEventListener('error', function () {
       if (fonte.readyState === EventSource.CLOSED) sinal('sem', 'Sem conexão: recarregue a página');
       else sinal('reconectando', 'Reconectando…');
@@ -842,13 +1005,91 @@
           sinal('sem', 'Uma atualização chegou quebrada: recarregue a página');
           return;
         }
-        depois(E.aplicar(st, ev, Date.now()));
+        const seq = modo === 'ao-vivo' && /^\d+$/.test(e.lastEventId) ? Number(e.lastEventId) : null;
+        if (buscando) guardados.push([seq, ev]);
+        else receber(seq, ev);
       });
     }
   }
 
-  function montar(dados) {
+  // O evento que o retrato ja tem (seq ate o dele) nao se aplica duas vezes.
+  function receber(seq, ev) {
+    if (seq !== null) {
+      if (seq <= ultimoSeq) return;
+      ultimoSeq = seq;
+    }
+    depois(E.aplicar(st, ev, Date.now()));
+  }
+
+  // Busca o retrato de novo e, se o servidor seguiu sem a tela, troca o estado por ele; depois aplica os eventos que
+  // chegaram durante a busca. A busca que falha deixa a tela atrasada: o sinal manda recarregar, ou abrir pelo
+  // endereco com a chave quando o servidor recusou a aba.
+  function religar() {
+    const minha = ++geracao;
+    buscando = true;
+    buscarDados().then(function (dados) {
+      if (minha !== geracao) return;
+      const seq = Number(dados && dados.seq) || 0;
+      if (seq !== ultimoSeq) trocarRetrato(dados, seq);
+      const fila = guardados;
+      guardados = [];
+      buscando = false;
+      for (const [s, ev] of fila) receber(s, ev);
+    }).catch(function (erro) {
+      if (minha !== geracao) return;
+      guardados = [];
+      buscando = false;
+      console.warn('painel: falha ao buscar o retrato de novo', erro);
+      // A aba que perdeu o cookie da chave: recarregar nao resolve, abrir pelo endereco com ela sim.
+      if (erro && (erro.status === 401 || erro.status === 403)) { sinal('sem', SEM_A_CHAVE); return; }
+      sinal('sem', 'Não deu para buscar o estado de novo: recarregue a página');
+    });
+  }
+
+  function trocarRetrato(dados, seq) {
+    const foco = chaveDoFoco();
     st = E.criar(dados, Date.now());
+    ultimoSeq = seq;
+    reconstruirSalas();
+    redesenhar();
+    if ($('lateral').open) {
+      if (E.sessao(st, aberta)) preencherLateral();
+      else {
+        $('lateral').close();
+        anunciar('Esta sessão não está mais no painel: o painel lateral foi fechado.');
+      }
+    }
+    restaurarFoco(foco);
+  }
+
+  // Diz ao servidor se esta aba esta a vista: sem aba visivel, o pedido de permissao volta na hora para o terminal.
+  function dizerPresenca() {
+    fetch('presenca', { method: 'POST', headers: CABECALHOS, cache: 'no-store',
+      body: JSON.stringify({ cliente: idDaAba, visivel: document.visibilityState === 'visible' }) })
+      .catch(function (erro) { console.warn('painel: a presença não chegou ao servidor', erro); });
+  }
+
+  function buscarDados() {
+    const opcoes = { cache: 'no-store' };
+    const prazo = prazoDaCarga();
+    if (prazo) opcoes.signal = prazo;
+    return fetch('dados.json', opcoes).then(function (r) {
+      if (!r.ok) { const erro = new Error('HTTP ' + r.status); erro.status = r.status; throw erro; }
+      return r.json();
+    });
+  }
+
+  function montar(dados) {
+    modo = dados && dados.modo === 'ao-vivo' ? 'ao-vivo' : 'prototipo';
+    ultimoSeq = Number(dados && dados.seq) || 0;
+    st = E.criar(dados, Date.now());
+    const selo = $('selo');
+    selo.textContent = SELO[modo];
+    selo.hidden = false;
+    if (modo === 'ao-vivo') {
+      document.title = 'Painel de sessões · ao vivo';
+      if (typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', dizerPresenca);
+    }
     const carregando = $('fila-carregando');
     if (carregando) carregando.remove();
     montarFiltro();
@@ -870,25 +1111,31 @@
   }
 
   function falharCarga(causa) {
-    falhar('Não deu para carregar as sessões simuladas: ' + causa.motivo + '. ' + causa.passo);
+    falhar('Não deu para carregar as sessões: ' + causa.motivo + '. ' + causa.passo);
   }
 
   // O motivo e o passo seguinte em portugues para o dono, um par por causa: quando o servidor respondeu, mandar
   // conferir se ele esta rodando leva o dono ao lugar errado. A mensagem tecnica do navegador vai so para o console.
-  const RODAR_O_SERVIDOR = 'Confira se o servidor do protótipo está rodando (node scripts/painel.js --prototipo) e ' +
-    'recarregue a página.';
+  // A tela nao sabe o modo antes de carregar: o texto serve ao painel ao vivo e ao prototipo.
+  const RODAR_O_SERVIDOR = 'Confira se o servidor do painel está rodando: no terminal, rode node scripts/painel.js (ou ' +
+    'node scripts/painel.js --prototipo, para os dados simulados) e recarregue a página.';
   function causaDaCarga(erro) {
     // AbortError e o prazo do navegador sem AbortSignal.timeout (prazoDaCarga): nada mais aborta a carga.
     if (erro && (erro.name === 'TimeoutError' || erro.name === 'AbortError')) {
       return { motivo: 'o servidor não respondeu em ' + ESPERA_MS / 1000 + ' segundos', passo: RODAR_O_SERVIDOR };
     }
     if (erro && erro.name === 'SyntaxError') {
-      return { motivo: 'o arquivo simulado.json chegou quebrado',
-        passo: 'Confira se painel/prototipo/simulado.json é um JSON válido e recarregue a página.' };
+      return { motivo: 'os dados chegaram quebrados',
+        passo: 'Recarregue a página; no protótipo, confira se painel/prototipo/simulado.json é um JSON válido.' };
+    }
+    // O servidor ao vivo recusa a aba sem o cookie da chave: recarregar nao resolve, abrir pelo endereco com ela sim.
+    if (erro && erro.status === 401) {
+      return { motivo: 'o painel não reconheceu esta aba',
+        passo: 'Abra o painel pelo endereço com a chave que o terminal mostrou ao iniciar o painel (node scripts/painel.js).' };
     }
     if (erro && erro.status) {
       return { motivo: 'o servidor respondeu com o código ' + erro.status,
-        passo: 'Recarregue a página; se continuar, reinicie o servidor (node scripts/painel.js --prototipo).' };
+        passo: 'Recarregue a página; se continuar, reinicie o servidor (node scripts/painel.js).' };
     }
     return { motivo: 'o servidor não respondeu', passo: RODAR_O_SERVIDOR };
   }
@@ -911,25 +1158,18 @@
       passo: 'Confira se painel/prototipo/estado.js existe e recarregue a página; o detalhe está no console do navegador.' });
     return;
   }
-  const opcoes = { cache: 'no-store' };
-  const prazo = prazoDaCarga();
-  if (prazo) opcoes.signal = prazo;
-  fetch('simulado.json', opcoes)
-    .then(function (r) {
-      if (!r.ok) { const erro = new Error('HTTP ' + r.status); erro.status = r.status; throw erro; }
-      return r.json();
-    })
+  buscarDados()
     .then(function (dados) {
       // A montagem falha por outro motivo que a carga: o dono nao deve ir conferir o servidor por um defeito da tela.
       try {
         montar(dados);
       } catch (erro) {
         console.error('painel: falha ao desenhar as sessões', erro);
-        falhar('O painel não conseguiu desenhar as sessões simuladas. Recarregue a página; se continuar, o detalhe ' +
+        falhar('O painel não conseguiu desenhar as sessões. Recarregue a página; se continuar, o detalhe ' +
           'está no console do navegador.');
       }
     }, function (erro) {
-      console.warn('painel: falha ao carregar simulado.json', erro);
+      console.warn('painel: falha ao carregar dados.json', erro);
       falharCarga(causaDaCarga(erro));
     });
 })();

@@ -39,8 +39,23 @@ const GANCHOS = path.join(__dirname, '..', 'hooks', 'hooks.json');
 // No plugin do OpenCode a ponte roda dentro do processo dele (Bun), e o execPath nao e o node.
 const NODE = /^node(\.exe)?$/i.test(path.basename(process.execPath)) ? process.execPath : 'node';
 
+// Ganchos do hooks.json que so o Claude Code roda: a ponte e os instaladores dos outros harnesses nao os veem. O do
+// painel de sessoes segura o PermissionRequest, que so o Claude Code tem, e a fase 3 do painel so le sessoes dele.
+const SO_NO_CLAUDE_CODE = ['painel-gancho'];
+
+/** Os ganchos do hooks.json sem os SO_NO_CLAUDE_CODE; grupo e evento que ficam vazios saem. */
 function lerGanchos() {
-  return JSON.parse(fs.readFileSync(GANCHOS, 'utf8')).hooks || {};
+  const todos = JSON.parse(fs.readFileSync(GANCHOS, 'utf8')).hooks || {};
+  const r = {};
+  for (const evento of Object.keys(todos)) {
+    const ficam = [];
+    for (const grupo of todos[evento] || []) {
+      const hooks = ((grupo && grupo.hooks) || []).filter((h) => !SO_NO_CLAUDE_CODE.includes(scriptDoGancho(h)));
+      if (hooks.length) ficam.push(Object.assign({}, grupo, { hooks }));
+    }
+    if (ficam.length) r[evento] = ficam;
+  }
+  return r;
 }
 
 /** O nome do script de um gancho do hooks.json ("${CLAUDE_PLUGIN_ROOT}/scripts/abertura.js" -> "abertura"). */

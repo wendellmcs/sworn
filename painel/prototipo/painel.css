@@ -321,15 +321,20 @@ h2 { font-size: 0.9375rem; font-weight: 650; }
 .chip[aria-pressed="true"] { color: var(--fundo); background: var(--texto); border-color: var(--texto); }
 .botao--primario:hover { border-color: var(--texto); background: var(--cheio-hover); }
 /* Desligado: sem preenchimento e com borda tracejada, para nao parecer um botao que so nao respondeu. */
+/* aria-disabled: o botao que espera o servidor fica focavel, para o foco nao cair no corpo da pagina. */
 .botao:disabled,
-.botao:disabled:hover {
+.botao:disabled:hover,
+.botao[aria-disabled="true"],
+.botao[aria-disabled="true"]:hover {
   color: var(--texto-2);
   background: transparent;
   border-color: var(--linha);
   border-style: dashed;
   cursor: not-allowed;
 }
-.botao:disabled:active { transform: none; }
+[aria-busy="true"] > .botao[aria-disabled="true"] { cursor: progress; }
+.botao:disabled:active,
+.botao[aria-disabled="true"]:active { transform: none; }
 
 /* ---- escritorio ---- */
 .escritorio__topo {

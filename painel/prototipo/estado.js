@@ -61,6 +61,8 @@
         // para a visao de equipe juntar as sessoes sem maquina numa linha so.
         if (typeof s.projeto !== 'string') s.projeto = '';
         if (typeof s.maquina !== 'string') s.maquina = '';
+        // Sem origem valida, do terminal, como a mesa nova do painel ao vivo: so o painel abre sessao com resposta.
+        if (s.origem !== 'painel') s.origem = 'terminal';
         return comNome(s, 'Sessão sem nome');
       }),
     };
@@ -90,27 +92,34 @@
     });
   }
 
-  // Os numeros de um grupo de sessoes: quantas, quantas em cada estado, o custo em dolares (arredondado ao centavo), os
-  // arquivos mudados e o ultimo evento (null no grupo vazio).
+  // A sessao do terminal sem custo: o gancho nao traz custo, e a tela diz isso em vez de inventar US$ 0,00.
+  function semCusto(s) { return !podeResponder(s) && !ehNumero(s.custoUsd); }
+
+  // Os numeros de um grupo de sessoes: quantas, quantas em cada estado, o custo em dolares (arredondado ao centavo),
+  // quantas estao sem custo (semCusto), os arquivos mudados e o ultimo evento (null no grupo vazio).
   function somar(sessoes) {
     const estados = Object.fromEntries(ESTADOS.map(function (e) { return [e, 0]; }));
     let custo = 0;
+    let semCustoNoGrupo = 0;
     let arquivos = 0;
     let atividade = null;
     for (const s of sessoes) {
       if (Object.hasOwn(estados, s.estado)) estados[s.estado] += 1;
       if (ehNumero(s.custoUsd)) custo += s.custoUsd;
+      if (semCusto(s)) semCustoNoGrupo += 1;
       arquivos += s.arquivos.length;
       if (atividade === null || s.atividade > atividade) atividade = s.atividade;
     }
-    return { sessoes: sessoes.length, estados, custoUsd: Math.round(custo * 100) / 100, arquivos, atividade };
+    return { sessoes: sessoes.length, estados, custoUsd: Math.round(custo * 100) / 100, semCusto: semCustoNoGrupo,
+      arquivos, atividade };
   }
 
   function sessoesCom(st, campo, id) { return st.sessoes.filter(function (s) { return s[campo] === id; }); }
   function doProjeto(st, idDoProjeto) { return idDoProjeto === undefined ? st.sessoes : sessoesCom(st, 'projeto', idDoProjeto); }
 
-  function contar(st, idDoProjeto) { return somar(doProjeto(st, idDoProjeto)).estados; }
-  function custoTotal(st, idDoProjeto) { return somar(doProjeto(st, idDoProjeto)).custoUsd; }
+  function resumo(st, idDoProjeto) { return somar(doProjeto(st, idDoProjeto)); }
+  function contar(st, idDoProjeto) { return resumo(st, idDoProjeto).estados; }
+  function custoTotal(st, idDoProjeto) { return resumo(st, idDoProjeto).custoUsd; }
 
   // Os itens da lista (projetos ou maquinas) e, depois deles, os que so aparecem no `campo` de uma sessao, montados
   // por `novo`.
@@ -154,12 +163,51 @@
     return Object.assign({ mudou: [s.id] }, extra);
   }
 
+  // A mesa de uma sessao que o painel ao vivo viu pela 1a vez, sem arquivos nem conversa. Sem estado ou origem
+  // validos, nasce parada e do terminal; "precisa" so chega com o pedido (evento `estado`), entao sem ele nasce parada.
+  // O projeto entra na lista com o nome que veio, e a maquina desconhecida entra com sinal: o evento acabou de chegar
+  // dela. A mesa que ja existe so troca o nome, o modelo e a tarefa. `nova` diz a tela que ha mesa para montar.
+  function aplicarSessao(st, ev, t) {
+    if (!ehTexto(ev.sessao)) return NADA;
+    const s = sessao(st, ev.sessao);
+    if (s) {
+      let mudou = false;
+      for (const campo of ['nome', 'modelo', 'tarefa']) {
+        if (ehTexto(ev[campo]) && ev[campo] !== s[campo]) { s[campo] = ev[campo]; mudou = true; }
+      }
+      return mudou ? aceito(s, t) : NADA;
+    }
+    const nova = comNome({
+      id: ev.sessao,
+      nome: ev.nome,
+      projeto: ehTexto(ev.projeto) ? ev.projeto : '',
+      maquina: ehTexto(ev.maquina) ? ev.maquina : '',
+      origem: ev.origem === 'painel' ? 'painel' : 'terminal',
+      estado: ESTADOS.includes(ev.estado) && ev.estado !== 'precisa' ? ev.estado : 'parada',
+      desde: t,
+      atividade: t,
+      arquivos: [],
+      conversa: [],
+    }, 'Sessão sem nome');
+    if (ehTexto(ev.modelo)) nova.modelo = ev.modelo;
+    if (ehTexto(ev.tarefa)) nova.tarefa = ev.tarefa;
+    st.sessoes.push(nova);
+    if (nova.projeto && !projeto(st, nova.projeto)) {
+      st.projetos.push(comNome({ id: nova.projeto, nome: ev.projetoNome }, 'Projeto sem nome'));
+    }
+    if (nova.maquina && !maquina(st, nova.maquina)) {
+      st.maquinas.push(comNome({ id: nova.maquina, conexao: 'online' }, 'Máquina sem nome'));
+    }
+    return aceito(nova, t, { nova: true });
+  }
+
   // Aplica um evento do SSE. Devolve as sessoes que mudaram (`mudou`), o `aviso` que a tela anuncia quando o dono
   // precisa saber e, no pedido novo, o `chamado` (o id da sessao) para a notificacao do navegador. Evento que nao se
   // entende (tipo, sessao, estado ou valor desconhecido ou fora da faixa) nao muda nada.
   function aplicar(st, ev, agora) {
     if (!ehObjeto(ev)) return NADA;
     const t = relogio(agora);
+    if (ev.tipo === 'sessao') return aplicarSessao(st, ev, t);
     if (ev.tipo === 'maquina') {
       const m = maquina(st, ev.maquina);
       if (!m || !CONEXOES.includes(ev.conexao) || m.conexao === ev.conexao) return NADA;
@@ -171,6 +219,7 @@
         mudou: afetadas,
         aviso: ev.conexao === 'offline'
           ? m.nome + ' perdeu a conexão: ' + quantas + ' sem sinal, mostrando o último estado que chegou.'
+            + ' Aprovar, negar e responder esperam a conexão voltar.'
           : m.nome + ' voltou: ' + quantas + ' com sinal de novo.',
       };
     }
@@ -218,6 +267,21 @@
         chamado: s.id,
       });
     }
+    // O pedido que o painel nao segurou mais (sem aba aberta, prazo vencido ou o gancho caiu) voltou para o terminal:
+    // a mesa segue mostrando, mas a decisao dali nao chegaria a ninguem.
+    if (ev.tipo === 'voltou') {
+      const p = s.pedido;
+      if (s.estado !== 'precisa' || !ehObjeto(p) || p.voltou || !ehTexto(ev.pedido) || p.id !== ev.pedido) return NADA;
+      p.voltou = true;
+      return aceito(s, t);
+    }
+    // A decisao que o servidor ao vivo ja aceitou, para cada aba aplicar igual: so vale para o pedido que a sessao tem.
+    // Quem decidiu foi o servidor, entao vale mesmo com a maquina sem sinal nesta aba (o clique daqui segue recusado).
+    if (ev.tipo === 'decisao') {
+      const p = s.pedido;
+      if (!ehObjeto(p) || !ehTexto(ev.pedido) || p.id !== ev.pedido) return NADA;
+      return aplicarDecisao(st, s, ev.escolha, t);
+    }
     return NADA;
   }
 
@@ -235,14 +299,19 @@
   }
 
   // A decisao do dono no pedido da sessao, pelo painel lateral. Vale nas duas origens: a sessao do terminal so nao
-  // recebe resposta escrita (decisao do dono). Sessao sem sinal recusa: a decisao nao chegaria. Aceita, a decisao entra
-  // na conversa, o pedido sai da fila e a sessao volta a trabalhar.
+  // recebe resposta escrita (decisao do dono). Sessao sem sinal, ou pedido que ja voltou para o terminal, recusa: a
+  // decisao nao chegaria. Aceita, a decisao entra na conversa, o pedido sai da fila e a sessao volta a trabalhar.
   function decidir(st, id, escolha, agora) {
     const s = sessao(st, id);
-    if (!s || s.estado !== 'precisa' || !ehObjeto(s.pedido) || semSinal(st, s)) return NADA;
+    if (!s || !ehObjeto(s.pedido) || s.pedido.voltou || semSinal(st, s)) return NADA;
+    return aplicarDecisao(st, s, escolha, relogio(agora));
+  }
+
+  // A decisao posta na sessao, sem conferir o sinal: o clique passa por `decidir`, o evento do servidor vem direto.
+  function aplicarDecisao(st, s, escolha, t) {
+    if (s.estado !== 'precisa' || !ehObjeto(s.pedido)) return NADA;
     const fala = falaDaDecisao(s.pedido, escolha);
     if (fala === null) return NADA;
-    const t = relogio(agora);
     falar(s, 'dono', fala);
     delete s.pedido;
     s.estado = 'trabalhando';
@@ -251,7 +320,8 @@
   }
 
   // A resposta escrita do dono, so na sessao aberta pelo painel e com sinal. Ela responde o pedido que houver e poe a
-  // sessao para trabalhar; a que ja trabalha segue com o mesmo tempo no estado.
+  // sessao para trabalhar; a que ja trabalha segue com o mesmo tempo no estado. O pedido que ja voltou para o terminal
+  // recusa: a resposta nao chegaria a ninguem.
   // A resposta recusada diz o porque em `recusa`, para a tela dar ao dono a causa certa.
   function recusada(motivo) { return { mudou: [], recusa: motivo }; }
 
@@ -260,6 +330,7 @@
     if (!s) return recusada('sem-sessao');
     if (!podeResponder(s)) return recusada('terminal');
     if (semSinal(st, s)) return recusada('sem-sinal');
+    if (ehObjeto(s.pedido) && s.pedido.voltou) return recusada('voltou');
     if (!ehTexto(texto)) return recusada('vazia');
     const limpo = texto.trim();
     if (limpo.length > LIMITE_DA_RESPOSTA) return recusada('longa');
@@ -399,12 +470,25 @@
 
   function formatarCusto(usd) { return CUSTO.format(ehNumero(usd) ? usd : 0); }
 
+  // "sem custo" leria como "de graca": o texto diz que o custo nao veio.
+  const SEM_CUSTO = 'custo não informado pelo terminal';
+  function custoDaSessao(s) { return semCusto(s) ? SEM_CUSTO : formatarCusto(s.custoUsd); }
+
+  // O custo de um grupo (o resumo de somar): todo sem custo diz isso; parte sem custo leva, depois do valor e do
+  // `sufixo` ("no total"), quantas sessoes ficaram fora da conta, com virgula so quando ha sufixo.
+  function custoDoGrupo(g, sufixo) {
+    if (g.sessoes > 0 && g.semCusto === g.sessoes) return SEM_CUSTO;
+    const valor = formatarCusto(g.custoUsd) + (sufixo ? ' ' + sufixo : '');
+    if (!g.semCusto) return valor;
+    return valor + (sufixo ? ', ' : ' ') + 'sem o custo de ' + plural(g.semCusto, 'sessão', 'sessões') + ' do terminal';
+  }
+
   const api = {
     ESTADOS, LIMITE_DA_CONVERSA, LIMITE_DA_RESPOSTA, LIMITE_DO_TRECHO, criar, sessao, maquina, projeto, semSinal,
-    minutos, fila, contar, custoTotal, todosOsProjetos, equipe, aplicar, decidir, responder, linhasDoTrecho,
+    minutos, fila, resumo, contar, custoTotal, todosOsProjetos, equipe, aplicar, decidir, responder, linhasDoTrecho,
     rotuloDoProjeto, alvoDoPedido, tipoDoPedido, rotuloDaOpcao, resumoDasOpcoes, podeResponder, limiteDaMesa,
     rotuloDoEstado, urgencia, rotuloDaUrgencia, resumoDaContagem, nomeDoModelo, resumoDosArquivos, formatarTempo,
-    formatarCusto,
+    formatarCusto, custoDaSessao, custoDoGrupo,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else raiz.PainelEstado = api;

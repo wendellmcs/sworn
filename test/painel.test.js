@@ -2,8 +2,9 @@
 // Painel de sessoes, fase 2 (D927). Passo P1: o servidor do prototipo e os dados simulados. O servidor escuta so em
 // 127.0.0.1, serve so a pasta do prototipo (nada com `..`) e manda os eventos simulados por SSE, na ordem do arquivo.
 // Passo P2 (do meio do arquivo): a pagina do prototipo e a logica sem tela dela, em estado.js.
-// Passo P3 (os testes do fim): decidir e responder pelo painel lateral, a visao de equipe, o trecho do diff e as mensagens do
-// servidor que dizem o que fazer.
+// Passo P3 (o bloco depois do P2): decidir e responder pelo painel lateral, a visao de equipe, o trecho do diff e as mensagens do
+// servidor que dizem o que fazer. Fase 3, passo P2 (o bloco "ao vivo"): o servidor ao vivo, com o /gancho, o /decisao,
+// as abas e a ponte, pelos ajudantes de test/lib/painel-rede.js.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -236,10 +237,11 @@ test('criarServidor recusa evento de tipo invalido e ritmo que nao e inteiro pos
 });
 
 // Roda o painel.js. Resolve com a porta quando ele imprime o endereco, ou com o codigo de saida quando ele fecha;
-// passado o prazo, mata o processo e reprova.
-function rodar(args) {
+// passado o prazo, mata o processo e reprova. `env` entra por cima do ambiente (a pasta de config da ponte).
+function rodar(args, env) {
   return new Promise(function (resolver, rejeitar) {
-    const filho = spawn(process.execPath, [SCRIPT].concat(args), { stdio: ['ignore', 'pipe', 'pipe'] });
+    const filho = spawn(process.execPath, [SCRIPT].concat(args), { stdio: ['ignore', 'pipe', 'pipe'],
+      env: Object.assign({}, process.env, env) });
     let saida = '';
     const relogio = setTimeout(function () {
       filho.kill();
@@ -258,7 +260,7 @@ function rodar(args) {
   });
 }
 
-test('pela linha de comando: --prototipo sobe em 127.0.0.1 e imprime o endereco; outro endereco, porta invalida e falta de modo sao recusados', async function (t) {
+test('pela linha de comando: --prototipo sobe em 127.0.0.1 e imprime o endereco; outro endereco, porta invalida e opcao desconhecida sao recusados', async function (t) {
   const r = await rodar(['--prototipo']);
   t.after(function () { if (r.filho) r.filho.kill(); });
   assert.ok(r.filho, 'subiu: ' + r.saida);
@@ -267,7 +269,7 @@ test('pela linha de comando: --prototipo sobe em 127.0.0.1 e imprime o endereco;
   assert.match(json.texto, /content-type: application\/json/i);
   const recusas = {};
   for (const args of [['--prototipo', '--endereco', '0.0.0.0'], ['--prototipo', '--porta', 'abc'],
-    ['--prototipo', '--porta', '70000'], []]) {
+    ['--prototipo', '--porta', '70000'], ['--desconhecida']]) {
     const e = await rodar(args);
     if (e.filho) e.filho.kill();
     assert.strictEqual(e.codigo, 2, args.join(' ') + ': ' + e.saida);
@@ -674,6 +676,59 @@ test('estado.js: responder so na sessao do painel, com texto de 1 a LIMITE_DA_RE
   assert.deepStrictEqual([semSinal.mudou, semSinal.recusa], [[], 'sem-sinal'], 'a s6 e do painel, mas a maquina dela esta sem sinal');
 });
 
+// Duas sessoes com pedido de id conhecido, na mesma maquina: a do painel (pergunta) e a do terminal (permissao).
+function comPedidos(E) {
+  return E.criar({ maquinas: [{ id: 'm1', nome: 'Notebook', conexao: 'online' }], projetos: [], sessoes: [
+    { id: 'p', origem: 'painel', maquina: 'm1', estado: 'precisa', pedido: { id: 'p1', tipo: 'pergunta', texto: 'Qual?' } },
+    { id: 't', origem: 'terminal', maquina: 'm1', estado: 'precisa',
+      pedido: { id: 'p2', tipo: 'permissao', texto: 'Rodar?', comando: 'ls' } },
+  ] }, AGORA);
+}
+
+// A resposta ao pedido que voltou para o terminal nao chegaria a ninguem, e a mesa diria que ele saiu da fila.
+test('estado.js: responder recusa o pedido que ja voltou para o terminal, sem mexer na sessao', function () {
+  const E = carregarEstado();
+  const st = comPedidos(E);
+  E.aplicar(st, { tipo: 'voltou', sessao: 'p', pedido: 'p1' }, AGORA);
+  const antes = JSON.stringify(st);
+  const r = E.responder(st, 'p', 'Vale a capital.', AGORA + 1000);
+  assert.deepStrictEqual([r.mudou, r.recusa], [[], 'voltou']);
+  assert.strictEqual(JSON.stringify(st), antes);
+});
+
+// Quem decidiu foi o servidor: a aba que ve a maquina sem sinal aplica a decisao igual, so o clique dela segue recusado.
+test('estado.js: o evento decisao do servidor vale com a maquina sem sinal nesta aba', function () {
+  const E = carregarEstado();
+  const st = comPedidos(E);
+  E.aplicar(st, { tipo: 'maquina', maquina: 'm1', conexao: 'offline' }, AGORA);
+  assert.deepStrictEqual(E.decidir(st, 't', 'aprovar', AGORA).mudou, [], 'o clique desta aba segue recusado');
+  const r = E.aplicar(st, { tipo: 'decisao', sessao: 't', pedido: 'p2', escolha: 'aprovar' }, AGORA + 1000);
+  assert.deepStrictEqual(r.mudou, ['t']);
+  const t = E.sessao(st, 't');
+  assert.deepStrictEqual([t.estado, t.pedido, t.desde], ['trabalhando', undefined, AGORA + 1000]);
+  assert.deepStrictEqual(ultimaFala(t), { quem: 'dono', texto: 'Aprovado: ls' });
+  assert.deepStrictEqual(E.aplicar(st, { tipo: 'decisao', sessao: 't', pedido: 'p2', escolha: 'aprovar' }, AGORA).mudou, [],
+    'a mesma decisao de novo');
+  assert.deepStrictEqual(E.aplicar(st, { tipo: 'decisao', sessao: 'p', pedido: 'p1', escolha: 'talvez' }, AGORA).mudou, [],
+    'a escolha que nao cabe no pedido');
+  const semFila = E.criar({ maquinas: [{ id: 'm1', nome: 'Notebook', conexao: 'online' }], projetos: [], sessoes: [
+    { id: 'w', origem: 'terminal', maquina: 'm1', estado: 'trabalhando', pedido: { id: 'p3', tipo: 'permissao', comando: 'ls' } },
+  ] }, AGORA);
+  assert.deepStrictEqual(E.aplicar(semFila, { tipo: 'decisao', sessao: 'w', pedido: 'p3', escolha: 'aprovar' }, AGORA).mudou, [],
+    'a sessao que trabalha nao esta na fila, mesmo com um pedido velho nos dados');
+  assert.deepStrictEqual(E.decidir(semFila, 'w', 'aprovar', AGORA).mudou, [], 'o clique tambem');
+});
+
+// A sessao sem origem valida nos dados e do terminal, como a mesa nova do painel ao vivo: a origem fica escrita na
+// sessao, e o custo, o limite da mesa e o responder leem a mesma.
+test('estado.js: a sessao sem origem valida nos dados nasce do terminal', function () {
+  const E = carregarEstado();
+  const st = E.criar({ sessoes: [{ id: 'x' }, { id: 'y', origem: 'outra' }, { id: 'z', origem: 'painel' }] }, AGORA);
+  assert.deepStrictEqual(st.sessoes.map(function (s) { return s.origem; }), ['terminal', 'terminal', 'painel']);
+  assert.strictEqual(E.custoDaSessao(E.sessao(st, 'x')), 'custo não informado pelo terminal');
+  assert.match(E.limiteDaMesa(E.sessao(st, 'x')), /^Aberta no terminal: /);
+});
+
 test('estado.js: a visao de equipe soma sessoes, estados, custo, arquivos e a ultima atividade por projeto e por maquina', function () {
   const E = carregarEstado();
   const dados = painel.lerSimulado(SIMULADO);
@@ -814,4 +869,393 @@ test('o servidor diz o que fazer: 403 e 405 com o endereco certo, JSON quebrado 
     '--porta N, ou --porta 0 para uma livre');
   assert.match(painel.motivoDaFalha({ code: 'EXYZ' }, 1), /\(EXYZ\)/);
   assert.match(painel.motivoDaFalha({}, 1), /\(erro sem codigo nem mensagem\)/);
+});
+
+// Fase 3, passo P2: o modo ao vivo. O gancho das sessoes manda cada nota ao /gancho, com o token da ponte, e espera a
+// decisao no /decisao; a aba entra pela chave que o terminal imprime, que vira o cookie, e so com ele le o retrato
+// (/dados.json), os eventos (/eventos) e decide (/decidir). O pedido de permissao so fica no painel enquanto uma aba
+// visivel pode decidir; senao volta para o terminal.
+const rede = require('./lib/painel-rede.js');
+const ponteDoPainel = require(path.join(__dirname, '..', 'scripts', 'lib', 'painel-ponte.js'));
+const ID_VIVO = 'b7e3c1d2-4f5a-4b6c-9d8e-0a1b2c3d4e5f';
+function nota(evento, extra) { return Object.assign({ sessao: ID_VIVO, evento, cwd: 'C:\\dev\\loja' }, extra); }
+const PEDE = nota('PermissionRequest', { ferramenta: 'PowerShell', comando: 'echo sonda > feito.txt',
+  descricao: 'Cria o arquivo da sonda' });
+function mesa(d) { return d.sessoes.find(function (s) { return s.id === ID_VIVO; }); }
+function precisa(e) { return e.tipo === 'estado' && e.dado.estado === 'precisa'; }
+
+test('ao vivo: /gancho e /decisao pedem o token, e o corpo do /gancho tem teto e forma', async function (t) {
+  const { porta } = await rede.subirVivo(t);
+  for (const token of [null, 'c3'.repeat(32), rede.TOKEN.slice(1)]) {
+    const r = await rede.pedir(porta, { metodo: 'POST', caminho: '/gancho', corpo: nota('SessionStart'),
+      cabecalhos: token === null ? {} : { 'X-Painel-Token': token } });
+    assert.strictEqual(r.status, 401, 'token ' + token);
+  }
+  assert.strictEqual((await rede.decisao(porta, 'x', 'c3'.repeat(32))).status, 401);
+  assert.strictEqual((await rede.pedir(porta, { caminho: '/decisao?pedido=x' })).status, 401);
+  const grande = JSON.stringify(nota('UserPromptSubmit', { texto: 'x'.repeat(300 * 1024) }));
+  assert.strictEqual((await rede.gancho(porta, grande)).status, 413, 'com Content-Length');
+  const emPedacos = await rede.pedir(porta, { metodo: 'POST', caminho: '/gancho', corpo: grande, semTamanho: true,
+    cabecalhos: { 'Content-Type': 'application/json', 'X-Painel-Token': rede.TOKEN } });
+  assert.strictEqual(emPedacos.status, 413, 'em pedacos');
+  assert.strictEqual((await rede.gancho(porta, '{ quebrado')).status, 400);
+  assert.strictEqual((await rede.gancho(porta, '[1]')).status, 400);
+  const ok = await rede.gancho(porta, nota('SessionStart'));
+  assert.deepStrictEqual([ok.status, ok.json], [200, { segurar: false }], ok.texto);
+  assert.deepStrictEqual((await rede.gancho(porta, nota('Nada'))).json, { segurar: false }, 'a nota que nao se entende');
+  const desconhecido = await rede.decisao(porta, 'f'.repeat(32));
+  assert.deepStrictEqual([desconhecido.status, desconhecido.json], [200, { decisao: null }]);
+  assert.strictEqual((await rede.pedir(porta, { metodo: 'GET', caminho: '/gancho' })).status, 405);
+});
+
+// O gancho pergunta antes de mandar a nota: so o painel que tem o token sabe responder o HMAC do numero. A ponte velha de
+// um painel que caiu pode apontar para uma porta que outro processo ocupou.
+test('ao vivo: /ola responde a prova do token para o numero do gancho, sem pedir o token', async function (t) {
+  const { porta } = await rede.subirVivo(t);
+  const numero = 'd4'.repeat(32);
+  const r = await rede.pedir(porta, { caminho: '/ola?numero=' + numero });
+  assert.deepStrictEqual([r.status, r.json], [200, { prova: ponteDoPainel.prova(rede.TOKEN, numero) }], r.texto);
+  assert.notStrictEqual(r.json.prova, ponteDoPainel.prova('c3'.repeat(32), numero), 'a prova depende do token');
+  for (const ruim of ['', 'curto', 'G'.repeat(64), 'd4'.repeat(33)]) {
+    assert.strictEqual((await rede.pedir(porta, { caminho: '/ola?numero=' + ruim })).status, 400, 'numero ' + ruim);
+  }
+  assert.strictEqual((await rede.pedir(porta, { caminho: '/ola' })).status, 400, 'sem numero');
+  assert.strictEqual((await rede.pedir(porta, { metodo: 'POST', caminho: '/ola?numero=' + numero, corpo: '{}' })).status, 405);
+  const outroHost = await rede.pedir(porta, { caminho: '/ola?numero=' + numero, cabecalhos: { Host: 'example.test:' + porta } });
+  assert.strictEqual(outroHost.status, 403, 'o Host conferido vale tambem aqui');
+});
+
+test('ao vivo: a chave do terminal vira o cookie da aba, e sem ele o retrato e os eventos recusam', async function (t) {
+  const { porta } = await rede.subirVivo(t);
+  const entrar = await rede.pedir(porta, { caminho: '/?chave=' + rede.CHAVE });
+  assert.strictEqual(entrar.status, 302);
+  assert.strictEqual(entrar.cabecalhos.location, '/');
+  const cookie = String(entrar.cabecalhos['set-cookie']);
+  assert.ok(cookie.startsWith('painel_' + porta + '=' + rede.CHAVE + ';'), cookie);
+  for (const parte of ['HttpOnly', 'SameSite=Strict', 'Path=/']) assert.ok(cookie.includes(parte), parte + ': ' + cookie);
+  const errada = await rede.pedir(porta, { caminho: '/?chave=' + 'c3'.repeat(32) });
+  assert.strictEqual(errada.status, 401);
+  assert.match(errada.texto, /terminal/, 'diz onde esta o endereco certo');
+  for (const c of [undefined, rede.cookie(porta, 'c3'.repeat(32)), 'painel_1=' + rede.CHAVE]) {
+    const r = await rede.pedir(porta, { caminho: '/dados.json', cabecalhos: c === undefined ? {} : { Cookie: c } });
+    assert.strictEqual(r.status, 401, 'cookie ' + c);
+    assert.match(r.texto, /terminal/);
+  }
+  assert.strictEqual((await rede.pedir(porta, { caminho: '/eventos' })).status, 401);
+  const d = await rede.dados(porta);
+  assert.strictEqual(d.status, 200);
+  assert.match(d.cabecalhos['content-type'], /application\/json/);
+  assert.deepStrictEqual([d.json.modo, d.json.seq, d.json.sessoes, d.json.maquinas.map(function (m) { return m.id; })],
+    ['ao-vivo', 0, [], ['local']]);
+  assert.strictEqual((await rede.pedir(porta, { caminho: '/' })).status, 200, 'a pagina abre sem a chave');
+  assert.strictEqual((await rede.pedir(porta, { caminho: '/painel.css' })).status, 200);
+  for (const r of [entrar, errada, d]) assert.ok(!r.texto.includes(rede.TOKEN), 'o token nunca sai');
+});
+
+test('ao vivo: os eventos saem com id crescente, o retrato diz ate onde ja tem, e a batida mantem a conexao', async function (t) {
+  const { porta } = await rede.subirVivo(t, { batidaMs: 50 });
+  const aba = await rede.abrirAba(t, porta);
+  assert.strictEqual(aba.status, 200);
+  await rede.gancho(porta, nota('SessionStart', { fonte: 'startup' }));
+  await rede.gancho(porta, nota('UserPromptSubmit', { texto: 'Arrume o carrinho' }));
+  await aba.esperar(function (e) { return e.tipo === 'mensagem'; }, 'a fala do dono');
+  const ids = aba.eventos.map(function (e) { return e.id; });
+  assert.deepStrictEqual(ids, ids.map(function (x, i) { return i + 1; }), 'ids 1, 2, 3...');
+  assert.deepStrictEqual(aba.eventos.map(function (e) { return e.tipo; }), ['sessao', 'sessao', 'estado', 'mensagem']);
+  assert.ok(aba.eventos.every(function (e) { return e.tipo === e.dado.tipo; }), 'event: e o tipo do evento');
+  const d = (await rede.dados(porta)).json;
+  assert.strictEqual(d.seq, ids[ids.length - 1]);
+  assert.deepStrictEqual([mesa(d).nome, mesa(d).estado], ['Arrume o carrinho', 'trabalhando']);
+  await aba.esperarBatida();
+});
+
+// A batida que vence entre o fechar e o 'close' da resposta nao escreve depois do fim: no Node, isso e um
+// ERR_STREAM_WRITE_AFTER_END sem quem ouca. A resposta falsa so emite 'close' no fim do teste, o pior caso da janela.
+test('ao vivo: depois do fechar, a batida nao escreve na aba ja encerrada', async function (t) {
+  const { criarVivo } = require(path.join(__dirname, '..', 'scripts', 'lib', 'painel-rotas.js'));
+  const { EventEmitter } = require('events');
+  const rotas = criarVivo({ token: rede.TOKEN, chave: rede.CHAVE, batidaMs: 5, cabecalhos: function (x) { return x; } });
+  const escritas = [];
+  const res = Object.assign(new EventEmitter(), {
+    writableEnded: false, writableLength: 0, depoisDoFim: 0,
+    writeHead: function () {},
+    write: function (bloco) {
+      if (this.writableEnded) this.depoisDoFim += 1;
+      escritas.push(bloco);
+      return true;
+    },
+    end: function () { this.writableEnded = true; },
+  });
+  t.after(function () { res.emit('close'); });
+  const porta = 47999;
+  const req = { method: 'GET', headers: { cookie: rede.cookie(porta) } };
+  const query = new URLSearchParams('cliente=' + rede.CLIENTE + '&visivel=1');
+  assert.strictEqual(rotas.atender(req, res, '/eventos', query, porta), true);
+  const ate = Date.now() + 5000;
+  while (!escritas.includes(': batida\n\n') && Date.now() < ate) {
+    await new Promise(function (ok) { setTimeout(ok, 5); });
+  }
+  assert.ok(escritas.includes(': batida\n\n'), 'a batida escreve enquanto a aba esta aberta');
+  rotas.fechar();
+  assert.strictEqual(res.writableEnded, true, 'o fechar encerra a aba');
+  await new Promise(function (ok) { setTimeout(ok, 60); });
+  assert.strictEqual(res.depoisDoFim, 0, 'nenhuma escrita depois do fim');
+});
+
+test('ao vivo: /decidir pede o cabecalho do painel, o cookie e a mesma origem, e so decide o pedido que o painel segura', async function (t) {
+  const { porta } = await rede.subirVivo(t);
+  const aba = await rede.abrirAba(t, porta);
+  const r = await rede.gancho(porta, PEDE);
+  assert.strictEqual(r.json.segurar, true, r.texto);
+  const pedido = r.json.pedido;
+  assert.match(pedido, /^[0-9a-f]{32}$/);
+  assert.strictEqual((await aba.esperar(precisa)).dado.pedido.id, pedido, 'a aba recebe o pedido com o id');
+  const certo = { sessao: ID_VIVO, pedido, escolha: 'aprovar' };
+  const recusas = [
+    [{ 'X-Painel': undefined }, certo, 403], [{ Cookie: undefined }, certo, 401],
+    [{ Origin: 'http://exemplo.invalid' }, certo, 403], [{ Origin: 'http://127.0.0.1:1' }, certo, 403],
+    [{ 'Sec-Fetch-Site': 'cross-site' }, certo, 403],
+    [{}, Object.assign({}, certo, { escolha: 'talvez' }), 400], [{}, '{ quebrado', 400],
+    [{}, Object.assign({}, certo, { pedido: 'f'.repeat(32) }), 409],
+    [{}, Object.assign({}, certo, { sessao: 'outra' }), 409],
+  ];
+  for (const [cab, corpo, status] of recusas) {
+    const x = await rede.decidir(porta, corpo, cab);
+    assert.strictEqual(x.status, status, JSON.stringify(cab) + ' ' + JSON.stringify(corpo) + ': ' + x.texto);
+  }
+  assert.strictEqual((await rede.decidir(porta, Object.assign({}, certo, { pedido: 'f'.repeat(32) }))).json.motivo, 'voltou');
+  const sim = await rede.decidir(porta, certo, { Origin: undefined, 'Sec-Fetch-Site': undefined });
+  assert.deepStrictEqual([sim.status, sim.json], [200, { ok: true }], 'sem Origin nem Sec-Fetch-Site tambem vale');
+  const de2 = await rede.decidir(porta, Object.assign({}, certo, { escolha: 'negar' }));
+  assert.deepStrictEqual([de2.status, de2.json], [409, { ok: false, motivo: 'decidido' }]);
+  await aba.esperar(function (e) { return e.tipo === 'decisao' && e.dado.pedido === pedido; }, 'a decisao');
+  assert.deepStrictEqual((await rede.decisao(porta, pedido)).json, { decisao: 'aprovar' }, 'a decisao espera o gancho');
+  assert.deepStrictEqual((await rede.decisao(porta, pedido)).json, { decisao: null }, 'e sai depois de entregue');
+});
+
+test('ao vivo: o pedido que ninguem ve volta para o terminal: sem aba, aba escondida, aba que fecha ou some, prazo e pedido novo', async function (t) {
+  const { porta } = await rede.subirVivo(t, { folgaMs: 50 });
+  assert.deepStrictEqual((await rede.gancho(porta, PEDE)).json, { segurar: false }, 'sem aba');
+  assert.strictEqual(mesa((await rede.dados(porta)).json).pedido.voltou, true, 'a mesa diz que voltou');
+  const escondida = await rede.abrirAba(t, porta, { visivel: false, cliente: 'aba-escondida' });
+  assert.deepStrictEqual((await rede.gancho(porta, PEDE)).json, { segurar: false }, 'so aba escondida');
+  await escondida.esperar(function (e) { return e.tipo === 'voltou'; }, 'o voltou');
+
+  const aba = await rede.abrirAba(t, porta);
+  const r1 = (await rede.gancho(porta, PEDE)).json;
+  assert.strictEqual(r1.segurar, true);
+  assert.deepStrictEqual((await rede.presenca(porta, { cliente: rede.CLIENTE, visivel: false })).json, { ok: true });
+  assert.deepStrictEqual((await rede.decisao(porta, r1.pedido)).json, { decisao: null }, 'a aba que some');
+  await escondida.esperar(function (e) { return e.tipo === 'voltou' && e.dado.pedido === r1.pedido; });
+  assert.strictEqual((await rede.presenca(porta, { cliente: 'nunca-abriu', visivel: true })).status, 404);
+  assert.strictEqual((await rede.presenca(porta, { cliente: rede.CLIENTE, visivel: true })).status, 200);
+
+  const r2 = (await rede.gancho(porta, PEDE)).json;
+  const r3 = (await rede.gancho(porta, PEDE)).json;
+  assert.ok(r2.segurar && r3.segurar && r2.pedido !== r3.pedido);
+  assert.deepStrictEqual((await rede.decisao(porta, r2.pedido)).json, { decisao: null }, 'o pedido novo solta o velho');
+  aba.fechar();
+  assert.deepStrictEqual((await rede.decisao(porta, r3.pedido)).json, { decisao: null }, 'a ultima aba visivel fecha');
+});
+
+test('ao vivo: o prazo vence, o SessionEnd solta o pedido, e fechar o servidor responde quem espera', async function (t) {
+  const curto = await rede.subirVivo(t, { prazoMs: 100 });
+  await rede.abrirAba(t, curto.porta);
+  const r1 = (await rede.gancho(curto.porta, PEDE)).json;
+  assert.strictEqual(r1.segurar, true);
+  assert.deepStrictEqual((await rede.decisao(curto.porta, r1.pedido)).json, { decisao: null }, 'o prazo');
+
+  const p = await rede.subirVivo(t);
+  const aba = await rede.abrirAba(t, p.porta);
+  const r2 = (await rede.gancho(p.porta, PEDE)).json;
+  const espera2 = rede.decisao(p.porta, r2.pedido);
+  await rede.gancho(p.porta, nota('SessionEnd', { motivo: 'prompt_input_exit' }));
+  assert.deepStrictEqual((await espera2).json, { decisao: null }, 'o SessionEnd');
+  assert.strictEqual(mesa((await rede.dados(p.porta)).json).estado, 'concluida');
+  const tarde = await rede.decidir(p.porta, { sessao: ID_VIVO, pedido: r2.pedido, escolha: 'aprovar' });
+  assert.deepStrictEqual(tarde.json, { ok: false, motivo: 'voltou' }, 'o pedido que voltou nao vira decidido');
+
+  const r3 = (await rede.gancho(p.porta, nota('PermissionRequest', { sessao: 'outra-sessao', ferramenta: 'Edit',
+    arquivo: 'C:\\dev\\loja\\a.js' }))).json;
+  assert.strictEqual(r3.segurar, true);
+  // a espera precisa estar no servidor antes do fechar: a resposta do /decisao em curso vem do fechar, nao do prazo
+  const chegada3 = rede.chegou(p.servidor, '/decisao?pedido=' + r3.pedido);
+  const espera3 = rede.decisao(p.porta, r3.pedido);
+  await chegada3;
+  p.servidor.close();
+  assert.deepStrictEqual((await espera3).json, { decisao: null }, 'o fechar');
+  assert.strictEqual(await aba.esperarFim(), null, 'o fechar termina a aba com o fim limpo, nao com a conexao caida');
+});
+
+test('ao vivo: o estado mais velho que o ultimo da sessao nao volta o relogio, e o resto do evento entra', async function (t) {
+  const { porta } = await rede.subirVivo(t);
+  await rede.abrirAba(t, porta);
+  await rede.gancho(porta, Object.assign({}, PEDE, { quando: 2000 }));
+  await rede.gancho(porta, nota('PostToolUse', { quando: 1000, ferramenta: 'Edit', arquivo: 'C:\\dev\\loja\\a.js',
+    mudanca: { mais: 2, menos: 1, trecho: ['@@ -1,1 +1,2 @@', '-a', '+b', '+c'] } }));
+  let s = mesa((await rede.dados(porta)).json);
+  assert.strictEqual(s.estado, 'precisa', 'o PostToolUse velho chegou depois e nao tira o pedido');
+  assert.deepStrictEqual(s.arquivos.map(function (a) { return [a.caminho, a.mais, a.menos]; }), [['a.js', 2, 1]]);
+  await rede.gancho(porta, nota('Stop', { quando: 3000, texto: 'Pronto.' }));
+  s = mesa((await rede.dados(porta)).json);
+  assert.deepStrictEqual([s.estado, s.conversa[s.conversa.length - 1].texto], ['parada', 'Pronto.']);
+  // o instante do futuro (relogio errado, valor quebrado) vale como agora: senao a sessao congelava ate ele chegar
+  await rede.gancho(porta, nota('UserPromptSubmit', { quando: Date.now() + 1e12, texto: 'Mais uma coisa' }));
+  assert.strictEqual(mesa((await rede.dados(porta)).json).estado, 'trabalhando');
+  await rede.gancho(porta, nota('Stop', { quando: Date.now(), texto: 'Feito.' }));
+  assert.strictEqual(mesa((await rede.dados(porta)).json).estado, 'parada', 'a sessao nao congela');
+});
+
+// Recusas que dizem o que fazer: o numero do /ola so em minusculas, e o 403 da aba aponta o endereco do terminal.
+test('ao vivo: as recusas do /ola e da aba dizem o que fazer', async function (t) {
+  const { porta } = await rede.subirVivo(t);
+  const maiusculo = await rede.pedir(porta, { caminho: '/ola?numero=' + 'D4'.repeat(32) });
+  assert.strictEqual(maiusculo.status, 400);
+  assert.match(maiusculo.texto, /minusculos/, maiusculo.texto);
+  const origem = await rede.decidir(porta, { sessao: ID_VIVO, pedido: 'f'.repeat(32), escolha: 'aprovar' },
+    { Origin: 'http://[::1]:' + porta });
+  assert.strictEqual(origem.status, 403);
+  assert.match(origem.texto, /endereco que o terminal imprimiu/, origem.texto);
+});
+
+// Duas abas: a 1a aprova com o gancho ja esperando, e a decisao sai na hora. A 2a, que clica depois, ouve que o
+// pedido ja foi decidido, nao que voltou para o terminal. A lembranca dura o prazo do pedido e depois se apaga.
+test('ao vivo: decidir de novo o pedido ja entregue ao gancho responde decidido', async function (t) {
+  const { servidor, porta } = await rede.subirVivo(t, { prazoMs: 1500 });
+  await rede.abrirAba(t, porta);
+  const r = (await rede.gancho(porta, PEDE)).json;
+  assert.strictEqual(r.segurar, true, JSON.stringify(r));
+  // o gancho ja espera quando a aba decide: a decisao vai direto para a espera, sem ficar guardada
+  const chegada = rede.chegou(servidor, '/decisao?pedido=' + r.pedido);
+  const espera = rede.decisao(porta, r.pedido);
+  await chegada;
+  const sim = await rede.decidir(porta, { sessao: ID_VIVO, pedido: r.pedido, escolha: 'aprovar' });
+  assert.deepStrictEqual([sim.status, sim.json], [200, { ok: true }], sim.texto);
+  assert.deepStrictEqual((await espera).json, { decisao: 'aprovar' });
+  const tarde = await rede.decidir(porta, { sessao: ID_VIVO, pedido: r.pedido, escolha: 'negar' });
+  assert.deepStrictEqual([tarde.status, tarde.json], [409, { ok: false, motivo: 'decidido' }]);
+  const outra = await rede.decidir(porta, { sessao: 'outra-sessao', pedido: r.pedido, escolha: 'negar' });
+  assert.deepStrictEqual([outra.status, outra.json], [409, { ok: false, motivo: 'voltou' }], 'so a mesma sessao');
+  // passa do prazo do pedido (o prazoMs de 1500 ms la em cima), com 200 ms de folga
+  await new Promise(function (ok) { setTimeout(ok, 1700); });
+  const depois = await rede.decidir(porta, { sessao: ID_VIVO, pedido: r.pedido, escolha: 'negar' });
+  assert.deepStrictEqual(depois.json, { ok: false, motivo: 'voltou' }, 'passado o prazo, o painel esquece o pedido');
+});
+
+// A aba que para de ler (suspensa, com a conexao aberta) nao junta eventos sem fim na memoria do painel: passou do
+// teto, a conexao dela cai, e a aba que voltar reconecta e le o retrato. A outra aba segue recebendo. Com o teto
+// acima da rajada, a mesma aba parada nao cai e, ao voltar a ler, recebe tudo: quem corta e o teto.
+async function rajadaComAbaParada(t, teto) {
+  const { porta } = await rede.subirVivo(t, { tetoDoAtraso: teto });
+  const viva = await rede.abrirAba(t, porta);
+  const parada = net.connect(porta, '127.0.0.1');
+  t.after(function () { parada.destroy(); });
+  // `erro` fica a parte do `fechou`: o corte do teto chega como fim ou como ECONNRESET, e outro erro nao e o corte
+  const r = { lido: '', fechou: false, erro: null };
+  parada.setEncoding('utf8');
+  parada.on('error', function (e) { r.erro = e.code || e.message; });
+  parada.on('close', function () { r.fechou = true; });
+  await rede.comPrazo(new Promise(function (ok, falha) { parada.once('connect', ok); parada.once('error', falha); }),
+    'a aba parada conectar');
+  const abriu = rede.comPrazo(new Promise(function (ok, falha) {
+    parada.once('data', ok);
+    parada.once('close', function () { falha(new Error('a aba parada fechou antes de abrir: ' + r.lido)); });
+  }), 'a aba parada abrir');
+  parada.on('data', function (d) { r.lido += d; });
+  parada.write('GET /eventos?cliente=aba-parada-1&visivel=1 HTTP/1.1\r\nHost: 127.0.0.1:' + porta + '\r\nCookie: ' +
+    rede.cookie(porta) + '\r\n\r\n');
+  await abriu;
+  parada.pause();
+  const fala = 'x'.repeat(64 * 1024);
+  for (let i = 0; i < 80; i += 1) await rede.gancho(porta, nota('UserPromptSubmit', { texto: fala + ' ' + i }));
+  await rede.gancho(porta, nota('Stop', { texto: 'fim-da-rajada' }));
+  await viva.esperar(function (e) { return e.tipo === 'mensagem' && e.dado.texto === 'fim-da-rajada'; }, 'o fim');
+  parada.resume();
+  const ate = Date.now() + 5000;
+  while (!r.fechou && !r.lido.includes('fim-da-rajada') && Date.now() < ate) {
+    await new Promise(function (ok) { setTimeout(ok, 50); });
+  }
+  return r;
+}
+
+test('ao vivo: a aba que para de ler cai no teto do atraso, e a outra segue recebendo', async function (t) {
+  const cortada = await rajadaComAbaParada(t, 32 * 1024);
+  assert.ok(cortada.fechou, 'o painel cortou a aba parada (lidos ' + cortada.lido.length + ' caracteres)');
+  assert.ok(cortada.erro === null || cortada.erro === 'ECONNRESET', 'o fim veio do corte, nao de outro erro: ' +
+    cortada.erro);
+  assert.ok(!cortada.lido.includes('fim-da-rajada'), 'o que passou do teto nao foi guardado para ela');
+  const folgada = await rajadaComAbaParada(t, 64 * 1024 * 1024);
+  assert.ok(folgada.lido.includes('fim-da-rajada') && !folgada.fechou && folgada.erro === null,
+    'abaixo do teto, a aba parada recebe tudo: ' + folgada.erro);
+});
+
+// O fechar do servidor solta a espera do gancho; o /eventos que vinha na fila do mesmo socket nao chega as rotas, que
+// ja fecharam: o close do Node corta a conexao depois da resposta em curso. (Guarda da refutacao da ronda 1 do
+// painel-rotas.js: o rotaEventos nao precisa conferir o `fechado`.)
+test('ao vivo: o /eventos na fila de um socket aberto nao entra depois do fechar', async function (t) {
+  const { servidor, porta } = await rede.subirVivo(t);
+  await rede.abrirAba(t, porta);
+  const r = (await rede.gancho(porta, PEDE)).json;
+  assert.strictEqual(r.segurar, true, JSON.stringify(r));
+  const s = net.connect(porta, '127.0.0.1');
+  t.after(function () { s.destroy(); });
+  let lido = '';
+  s.setEncoding('utf8');
+  s.on('data', function (d) { lido += d; });
+  const fechou = new Promise(function (ok) { s.on('close', ok); });
+  const host = 'Host: 127.0.0.1:' + porta + '\r\n';
+  // os dois pedidos vao no mesmo pacote: quando o /decisao chega, o /eventos ja esta lido na fila do socket
+  const chegada = rede.chegou(servidor, '/decisao?pedido=' + r.pedido);
+  s.write('GET /decisao?pedido=' + r.pedido + ' HTTP/1.1\r\n' + host + 'X-Painel-Token: ' + rede.TOKEN + '\r\n\r\n' +
+    'GET /eventos?cliente=aba-tardia-1&visivel=1 HTTP/1.1\r\n' + host + 'Cookie: ' + rede.cookie(porta) + '\r\n\r\n');
+  await chegada;
+  const parou = new Promise(function (ok) { servidor.close(ok); });
+  await rede.comPrazo(Promise.all([fechou, parou]), 'o socket e o servidor fecharem');
+  assert.strictEqual(lido.split('HTTP/1.1 ').length - 1, 1, 'so a resposta do /decisao: ' + lido);
+  assert.ok(lido.includes('{"decisao":null}'), lido);
+  assert.ok(!lido.includes('text/event-stream'), 'o /eventos tardio nao abriu');
+});
+
+test('no prototipo: /dados.json e o simulado, e as rotas ao vivo nao existem', async function (t) {
+  const servidor = await subir(t, { pasta: PROTOTIPO, eventos: [] });
+  const porta = servidor.address().port;
+  const d = await rede.pedir(porta, { caminho: '/dados.json' });
+  assert.strictEqual(d.status, 200);
+  assert.deepStrictEqual(d.json, JSON.parse(fs.readFileSync(SIMULADO, 'utf8')));
+  assert.strictEqual((await rede.gancho(porta, nota('SessionStart'))).status, 405);
+  assert.strictEqual((await rede.decisao(porta, 'x')).status, 404);
+});
+
+test('pela linha de comando: o ao vivo grava a ponte, imprime a chave sem o token e recusa um segundo painel', async function (t) {
+  const config = pastaTemporaria(t);
+  const env = { CLAUDE_CONFIG_DIR: config };
+  // a ponte velha de um pid vivo cuja porta nao responde e sobrescrita
+  ponteDoPainel.gravar({ porta: 1, token: 'c3'.repeat(32), pid: process.pid }, env);
+  const r = await rodar([], env);
+  t.after(function () { if (r.filho) r.filho.kill(); });
+  assert.ok(r.filho, 'subiu: ' + r.saida);
+  const chave = (/\?chave=([0-9a-f]{64}) /.exec(r.saida) || [])[1];
+  assert.ok(chave, 'imprime o endereco com a chave: ' + r.saida);
+  assert.match(r.saida, /ao vivo nesta maquina/);
+  const lida = ponteDoPainel.ler(env);
+  assert.deepStrictEqual([lida && lida.porta, lida && lida.pid], [r.porta, r.filho.pid]);
+  assert.match(lida.token, /^[0-9a-f]{64}$/);
+  assert.notStrictEqual(lida.token, chave);
+  assert.ok(!r.saida.includes(lida.token), 'o token nunca vai para a saida');
+  assert.strictEqual((await rede.pedir(r.porta, { caminho: '/?chave=' + chave })).status, 302);
+  const segundo = await rodar([], env);
+  if (segundo.filho) segundo.filho.kill();
+  assert.strictEqual(segundo.codigo, 1, segundo.saida);
+  assert.match(segundo.saida, /ja ha um painel ao vivo nesta maquina/);
+  assert.match(segundo.saida, new RegExp('porta ' + r.porta));
+});
+
+test('pela linha de comando: o painel ao vivo que para apaga a ponte', { skip: process.platform === 'win32' &&
+  'no Windows o kill encerra sem sinal, e o painel nao roda o que faz ao sair' }, async function (t) {
+  const env = { CLAUDE_CONFIG_DIR: pastaTemporaria(t) };
+  const r = await rodar([], env);
+  assert.ok(r.filho, r.saida);
+  assert.ok(ponteDoPainel.ler(env), 'gravou a ponte');
+  await new Promise(function (resolver) { r.filho.on('close', resolver); r.filho.kill('SIGTERM'); });
+  assert.strictEqual(fs.existsSync(ponteDoPainel.caminho(env)), false);
 });

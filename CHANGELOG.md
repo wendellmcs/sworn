@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.98.0 — o painel de sessões ao vivo: as sessões do Claude Code desta máquina, e a permissão aprovada ou negada nele
+
+**Novo**
+
+- **O painel ao vivo** (`scripts/painel.js`, `scripts/lib/painel-rotas.js`, `scripts/lib/painel-vivo.js`,
+  `scripts/lib/painel-ponte.js`). `node "<plugin>/scripts/painel.js"` sobe o painel e imprime o endereço com a chave
+  (`http://127.0.0.1:<porta>/?chave=<chave>`): abra por ele, porque a aba sem a chave é recusada.
+  - Cada sessão do Claude Code desta máquina vira uma mesa, com o pedido que ela recebeu, a ferramenta em uso, a
+    pergunta e o pedido de permissão em aberto.
+  - Escuta só em 127.0.0.1, e é um painel por máquina: o segundo diz onde está o primeiro e sai 1.
+  - A tela é a mesma do protótipo, com o selo "Ao vivo · esta máquina"; a cada religação ela busca o retrato de novo,
+    sem repetir nem pular evento.
+- **A permissão aprovada ou negada no painel** (`scripts/painel-gancho.js`, `hooks/hooks.json`). O gancho do painel
+  leva ao painel a abertura da sessão, o seu pedido, a pergunta, o pedido de permissão, cada ferramenta, o fim do
+  turno e o fim da sessão.
+  - Só o pedido de permissão espera: com uma aba do painel visível, até 120 s pela sua decisão. Sem aba visível, sem
+    decisão no prazo ou sem o painel, o pedido volta para o terminal, como antes.
+  - Os outros eventos rodam em segundo plano e não seguram a sessão. Sem o painel de pé, o gancho sai na hora, sem
+    escrever nada.
+  - Só no Claude Code.
+- **O que fica no terminal.** A sessão aberta no terminal mostra a pergunta com "Responda esta pergunta no
+  terminal.", sem botões, e o custo dela diz "custo não informado pelo terminal". O pedido que já voltou para o
+  terminal diz "Este pedido voltou para o terminal: decida por lá." A resposta escrita fica para as sessões que o
+  próprio painel abrir, numa versão seguinte.
+
 ## 0.97.0 — a rota de defeito e a rota de teste no roteador, e os sinais de página genérica na revisão de tela
 
 **Novo**

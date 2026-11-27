@@ -12,6 +12,17 @@
             "statusMessage": "sworn: lendo o estado do repositorio"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/painel-gancho.js"],
+            "async": true,
+            "timeout": 10
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -21,6 +32,17 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/abrir-turno.js"],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/painel-gancho.js"],
+            "async": true,
             "timeout": 10
           }
         ]
@@ -91,6 +113,26 @@
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/portao-decisao.js"],
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/painel-gancho.js"],
+            "async": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/painel-gancho.js"],
+            "timeout": 130,
+            "statusMessage": "sworn: se o painel de sessoes estiver aberto, responda este pedido nele; sem resposta em 2 min, o pedido volta para o terminal"
           }
         ]
       }
@@ -136,6 +178,17 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/escalar.js"],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/painel-gancho.js"],
+            "async": true,
             "timeout": 10
           }
         ]
@@ -211,6 +264,17 @@
             "timeout": 90
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/painel-gancho.js"],
+            "async": true,
+            "timeout": 10
+          }
+        ]
       }
     ],
     "StopFailure": [
@@ -245,6 +309,13 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/fim-sessao.js"],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/painel-gancho.js"],
+            "async": true,
             "timeout": 10
           }
         ]

@@ -149,6 +149,28 @@ test('ponte: script fora do evento, harness desconhecido ou nome torto passam se
   assert.strictEqual(f.chamadas.length, 0);
 });
 
+// Fase 3 do painel: o gancho do painel de sessoes so roda no Claude Code, que le o hooks.json direto. A ponte e os
+// instaladores dos outros harnesses leem pelo lerGanchos, que o tira.
+test('ponte: o gancho do painel de sessoes fica so no Claude Code; a ponte e os instaladores nao o veem', () => {
+  const todos = JSON.parse(fs.readFileSync(path.join(RAIZ, 'hooks', 'hooks.json'), 'utf8')).hooks;
+  const scripts = (g) => Object.values(g).flatMap((grupos) => grupos.flatMap((gr) => gr.hooks.map(ponte.scriptDoGancho)));
+  assert.ok(scripts(todos).includes('painel-gancho'), 'o hooks.json do Claude Code tem o gancho do painel');
+  const filtrados = ponte.lerGanchos();
+  assert.ok(!scripts(filtrados).includes('painel-gancho'), 'a ponte nao ve o gancho do painel');
+  assert.ok(!Object.hasOwn(filtrados, 'PermissionRequest'), 'o evento so do painel sai inteiro');
+  for (const [evento, grupos] of Object.entries(filtrados)) {
+    for (const g of grupos) assert.ok(g.hooks.length > 0, 'grupo vazio em ' + evento);
+  }
+  assert.deepStrictEqual(scripts(filtrados), scripts(todos).filter((s) => s !== 'painel-gancho'), 'o resto fica');
+  assert.deepStrictEqual(ponte.scriptsDe(filtrados, 'SessionEnd'), ['fim-sessao']);
+  // E a ponte nao roda o gancho do painel por harness nenhum.
+  const f = falso(() => 'x');
+  assert.strictEqual(ponte.rodar('codex', 'painel-gancho', fixture('codex-SessionStart'), { executar: f.executar }), '');
+  assert.strictEqual(ponte.rodar('codex', 'painel-gancho', fixture('codex-PostToolUse-Bash'), { executar: f.executar }),
+    '');
+  assert.strictEqual(f.chamadas.length, 0);
+});
+
 test('ponte: a chamada do agente de memoria do harness passa direto', () => {
   const f = falso(() => 'x');
   assert.strictEqual(ponte.rodar('codex', 'portao-shell', fixture('codex-PreToolUse-Bash-memoria'),

@@ -834,7 +834,8 @@ test('D388: o hooks.json liga o portao-decisao.js no PreToolUse com o matcher As
   const grupos = json('hooks/hooks.json').hooks.PreToolUse;
   const g = grupos.filter((x) => x.matcher === 'AskUserQuestion');
   assert.strictEqual(g.length, 1, 'tem de haver um grupo PreToolUse para o AskUserQuestion');
-  assert.deepStrictEqual(g[0].hooks.map((h) => path.basename(h.args[0])), ['portao-decisao.js']);
+  // o painel-gancho (fase 3 do painel de sessoes) vem depois do portao, no mesmo grupo
+  assert.deepStrictEqual(g[0].hooks.map((h) => path.basename(h.args[0])), ['portao-decisao.js', 'painel-gancho.js']);
   assert.ok(grupos.indexOf(g[0]) > grupos.findIndex((x) => x.matcher === 'Task|Agent'), 'o portao vem depois do Task|Agent');
 });
 

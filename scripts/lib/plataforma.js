@@ -138,7 +138,7 @@ const PONTOS = [
     arquivos: ['scripts/admissao.js', 'scripts/autorizar-paralelo.js', 'scripts/instalar.js', 'scripts/lib/advisor.js', 'scripts/lib/ambiente.js', 'scripts/lib/calibracao.js',
                'scripts/lib/gasto.js', 'scripts/lib/harness.js', 'scripts/lib/injetado.js', 'scripts/lib/migracao.js',
                'scripts/lib/prova-no-fecho.js', 'scripts/lib/versao-carregada.js', 'scripts/lib/vigia-local.js',
-               'scripts/medir-qualidade.js',
+               'scripts/medir-qualidade.js', 'scripts/lib/painel-ponte.js',
                'scripts/ponte.js', 'scripts/portao-juiz.js'],
     comoSeProva: 'a pasta pessoal entra por parametro, ou uma variavel a sobrepoe (CLAUDE_CONFIG_DIR, SWORN_VIGIA, ' +
                  'ou HOME e USERPROFILE, que o Node le para achar a pasta pessoal); o teste de cada modulo roda ' +
@@ -179,7 +179,7 @@ const PONTOS = [
       'scripts/abertura.js', 'scripts/antes-do-compact.js', 'scripts/apurar-ronda.js', 'scripts/capturar-tela.js', 'scripts/conferir-depois.js', 'scripts/handoff-curto.js',
       'scripts/lib/alvo-apagar.js', 'scripts/lib/ambiente.js', 'scripts/lib/cegar.js', 'scripts/lib/fatia.js',
       'scripts/instalar.js', 'scripts/lib/busca.js', 'scripts/lib/handoff-curto.js', 'scripts/lib/harness.js', 'scripts/lib/citacao.js', 'scripts/lib/git.js', 'scripts/lib/glob.js',
-      'scripts/lib/guias-modelo.js', 'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
+      'scripts/lib/guias-modelo.js', 'scripts/lib/injetado.js', 'scripts/lib/instrucoes.js', 'scripts/lib/molde.js', 'scripts/lib/painel-vivo.js', 'scripts/lib/pastas.js', 'scripts/lib/plano.js', 'scripts/lib/plataforma.js',
       'scripts/lib/projeto.js', 'scripts/lib/reabertura-curta.js', 'scripts/lib/retomar.js', 'scripts/lib/sanitacao.js', 'scripts/lib/saude.js',
       'scripts/lib/toques.js', 'scripts/lib/veredito.js', 'scripts/lib/vermelho-antes.js', 'scripts/modelos.js', 'scripts/preparar-revisao.js', 'scripts/recibo-da-prova.js'
     ],

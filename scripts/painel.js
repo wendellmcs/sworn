@@ -1,17 +1,22 @@
 #!/usr/bin/env node
 'use strict';
-// Painel de sessoes (pedido 15, D927), fase 2: o servidor do prototipo navegavel, com dados simulados.
+// Painel de sessoes (pedido 15, D927): o servidor do painel.
 //
-//   node scripts/painel.js --prototipo [--porta N]
+//   node scripts/painel.js [--porta N]               fase 3: ao vivo, as sessoes do Claude Code desta maquina
+//   node scripts/painel.js --prototipo [--porta N]   fase 2: o prototipo navegavel, com dados simulados
 //
 // Escuta so em 127.0.0.1 ate a fase 5 (a rede e decisao do dono, D927). Serve so a pasta painel/prototipo, sem nada
-// com `..`, e manda os eventos de painel/prototipo/simulado.json por SSE (`/eventos`), um a cada RITMO_PADRAO ms, na
-// ordem do arquivo. So Node puro: http, fs e path, sem dependencia.
+// com `..`. No prototipo, manda os eventos de painel/prototipo/simulado.json por SSE (`/eventos`), um a cada
+// RITMO_PADRAO ms, na ordem do arquivo. Ao vivo, as rotas de scripts/lib/painel-rotas.js recebem as notas do gancho
+// das sessoes e a ponte (scripts/lib/painel-ponte.js) diz ao gancho a porta e o token. So Node puro, sem dependencia.
 const http = require('http');
 const fs = require('fs');
+const net = require('net');
 const path = require('path');
 // So o ondeQuebrou: a linha e a coluna do JSON quebrado, no mesmo texto que o roteiro da captura usa.
 const { ondeQuebrou } = require('./lib/roteiro.js');
+const ponte = require('./lib/painel-ponte.js');
+const { criarVivo } = require('./lib/painel-rotas.js');
 
 const ENDERECO = '127.0.0.1';
 const PASTA_PROTOTIPO = path.join(__dirname, '..', 'painel', 'prototipo');
@@ -31,9 +36,14 @@ const TIPO_EVENTO = /^[a-z]+$/;
 // O caminho pedido, ja decodificado: so letras sem acento, digitos, `.`, `_`, `-` e `/`. Fica de fora a barra
 // invertida, o `:` (unidade e fluxo alternativo no Windows), o `%` e o byte nulo.
 const CAMINHO_ACEITO = /^\/[A-Za-z0-9._\/-]*$/;
-const USO = 'uso: node scripts/painel.js --prototipo [--porta N] [--endereco 127.0.0.1]\n' +
-  '  sobe o prototipo do painel em http://127.0.0.1:<porta>/, com dados simulados (porta 0 = uma livre)\n' +
+const USO = 'uso: node scripts/painel.js [--prototipo] [--porta N] [--endereco 127.0.0.1]\n' +
+  '  sem --prototipo: o painel ao vivo das sessoes do Claude Code desta maquina; abra o endereco que ele imprime,\n' +
+  '    que ja leva a chave de acesso\n' +
+  '  --porta N: a porta do painel; 0, o padrao, escolhe uma livre\n' +
+  '  --prototipo: o prototipo do painel, com dados simulados\n' +
   '  --endereco so aceita 127.0.0.1 por enquanto: abrir o painel de outra maquina ainda nao existe\n';
+// Quanto o painel que sobe espera a porta do outro painel responder, antes de contar a ponte como velha.
+const ESPERA_DO_OUTRO_MS = 1500;
 
 // A regra mora aqui, e o lerSimulado e o criarServidor passam por ela: quem chama o servidor direto, sem o
 // arquivo, tambem nao consegue por uma quebra de linha na linha `event:`.
@@ -117,20 +127,36 @@ function criarServidor(opcoes) {
     throw new Error('criarServidor: o ritmo precisa ser um inteiro de milissegundos maior que zero');
   }
   const ritmo = opcoes.ritmo === undefined ? RITMO_PADRAO : opcoes.ritmo;
+  // Ao vivo (`opcoes.vivo`: token, chave e os prazos), as rotas do gancho e da aba; sem ele, o prototipo.
+  const rotas = opcoes.vivo ? criarVivo(Object.assign({}, opcoes.vivo, { cabecalhos })) : null;
   const servidor = http.createServer(function (req, res) {
     const porta = servidor.address().port;
     const endereco = 'http://' + ENDERECO + ':' + porta + '/';
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      return responder(res, 405, 'metodo nao aceito: o prototipo so responde a GET e HEAD; abra ' + endereco +
-        ' no navegador', { Allow: 'GET, HEAD' });
+    if (!hostAceito(req.headers.host, porta)) {
+      req.resume();
+      return responder(res, 403, 'host recusado: abra o painel por ' + endereco);
     }
-    if (!hostAceito(req.headers.host, porta)) return responder(res, 403, 'host recusado: abra o painel por ' + endereco);
+    const i = req.url.indexOf('?');
     let nome;
-    try { nome = decodeURIComponent(req.url.split('?')[0]); } catch (e) {
+    try { nome = decodeURIComponent(i === -1 ? req.url : req.url.slice(0, i)); } catch (e) {
+      req.resume();
       return responder(res, 400, 'caminho invalido');
     }
-    if (!CAMINHO_ACEITO.test(nome) || nome.split('/').indexOf('..') !== -1) return responder(res, 400, 'caminho invalido');
-    if (nome === '/eventos') return transmitir(req, res, eventos, ritmo);
+    if (!CAMINHO_ACEITO.test(nome) || nome.split('/').indexOf('..') !== -1) {
+      req.resume();
+      return responder(res, 400, 'caminho invalido');
+    }
+    if (rotas && rotas.atender(req, res, nome, new URLSearchParams(i === -1 ? '' : req.url.slice(i + 1)), porta)) {
+      return undefined;
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      req.resume();
+      return responder(res, 405, 'metodo nao aceito: ' + (rotas ? 'a pagina do painel' : 'o prototipo') +
+        ' so responde a GET e HEAD; abra ' + endereco + ' no navegador', { Allow: 'GET, HEAD' });
+    }
+    if (!rotas && nome === '/eventos') return transmitir(req, res, eventos, ritmo);
+    // O cliente le o retrato em /dados.json nos dois modos: no prototipo, e o simulado.
+    if (!rotas && nome === '/dados.json') nome = '/simulado.json';
     if (nome === '/') nome = '/index.html';
     const arquivo = path.resolve(pasta, '.' + nome);
     if (!dentro(arquivo, pasta)) return responder(res, 404, 'nao encontrado');
@@ -150,6 +176,15 @@ function criarServidor(opcoes) {
       });
     });
   });
+  if (rotas) {
+    // O close do Node espera as conexoes abertas (os /eventos das abas e os /decisao dos ganchos): as rotas fecham
+    // antes, e quem espera recebe a resposta.
+    const fecharServidor = servidor.close.bind(servidor);
+    servidor.close = function (fim) {
+      rotas.fechar();
+      return fecharServidor(fim);
+    };
+  }
   return servidor;
 }
 
@@ -175,8 +210,8 @@ function principal(args) {
     } else return erroDeUso('opcao desconhecida: ' + a);
   }
   if (!prototipo) {
-    process.stderr.write(USO);
-    return 2;
+    subirAoVivo(porta);
+    return 0;
   }
   let simulado;
   try { simulado = lerSimulado(path.join(PASTA_PROTOTIPO, 'simulado.json')); } catch (e) {
@@ -193,6 +228,65 @@ function principal(args) {
       '/ (prototipo, dados simulados; Ctrl+C para parar)\n');
   });
   return 0;
+}
+
+// O outro painel da ponte esta de pe se a porta dele responde. O pid ja foi conferido antes: o ponte.ler devolve null
+// para a ponte de pid morto. A ponte de um painel que caiu sem apagar fica velha, e o painel novo grava por cima.
+function outroDePe(dados, fim) {
+  if (!dados) return fim(false);
+  let feito = false;
+  const sonda = net.connect({ host: ENDERECO, port: dados.porta });
+  const relogio = setTimeout(function () { acabar(false); }, ESPERA_DO_OUTRO_MS);
+  function acabar(dePe) {
+    if (feito) return;
+    feito = true;
+    clearTimeout(relogio);
+    sonda.destroy();
+    fim(dePe);
+  }
+  sonda.on('connect', function () { acabar(true); });
+  sonda.on('error', function () { acabar(false); });
+  return undefined;
+}
+
+// O painel ao vivo: um por maquina, porque o gancho das sessoes so conhece uma ponte. A chave vai so no endereco que o
+// terminal imprime; o token, so na ponte, que o gancho le.
+function subirAoVivo(porta) {
+  const outro = ponte.ler();
+  outroDePe(outro, function (dePe) {
+    if (dePe) {
+      process.stderr.write('ERRO: ja ha um painel ao vivo nesta maquina (pid ' + outro.pid + ', porta ' + outro.porta +
+        '): use o endereco que o terminal dele imprimiu, ou pare ele com Ctrl+C e suba de novo\n');
+      process.exitCode = 1;
+      return;
+    }
+    const token = ponte.novoToken();
+    const chave = ponte.novoToken();
+    const servidor = criarServidor({ pasta: PASTA_PROTOTIPO, vivo: { token, chave } });
+    servidor.on('error', function (e) {
+      process.stderr.write('ERRO: o painel nao subiu: ' + motivoDaFalha(e, porta) + '\n');
+      process.exitCode = 1;
+    });
+    servidor.listen(porta, ENDERECO, function () {
+      const p = servidor.address().port;
+      try {
+        ponte.gravar({ porta: p, token, pid: process.pid });
+      } catch (e) {
+        process.stderr.write('ERRO: o painel subiu, mas nao gravou o arquivo que as sessoes leem para achar o painel (' +
+          ponte.caminho() + ': ' + (e.code || e.message) + '); confira se essa pasta aceita gravacao e se ha espaco ' +
+          'em disco, e suba o painel de novo\n');
+        process.exitCode = 1;
+        servidor.close();
+        return;
+      }
+      process.on('exit', function () { ponte.apagar(process.pid); });
+      for (const sinal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+        process.on(sinal, function () { process.exit(0); });
+      }
+      process.stdout.write('painel: http://' + ENDERECO + ':' + p + '/?chave=' + chave +
+        ' (ao vivo nesta maquina; Ctrl+C para parar)\n');
+    });
+  });
 }
 
 // Por que o servidor nao subiu, em portugues e com o que fazer.

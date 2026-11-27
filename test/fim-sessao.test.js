@@ -364,7 +364,12 @@ test('hooks.json: o SessionEnd roda o fim-sessao.js, sem matcher (todas as razoe
   const grupos = hooks.SessionEnd;
   assert.ok(Array.isArray(grupos) && grupos.length === 1, 'falta o evento SessionEnd no hooks.json');
   assert.strictEqual(grupos[0].matcher, undefined, 'com matcher o gancho so rodaria em algumas razoes');
-  assert.strictEqual(grupos[0].hooks.length, 1);
+  // O fim-sessao vem primeiro; depois dele so o gancho do painel de sessoes (fase 3, s377), async, que avisa o painel
+  // ao vivo que a sessao fechou.
+  assert.deepStrictEqual(grupos[0].hooks.slice(1).map(function (h) {
+    return [h.type, h.command, h.args, h.async, typeof h.timeout];
+  }), [['command', 'node', ['${CLAUDE_PLUGIN_ROOT}/scripts/painel-gancho.js'], true, 'number']]);
+  assert.ok(fs.existsSync(path.join(RAIZ, 'scripts', 'painel-gancho.js')), 'o script do painel no hooks.json nao existe');
   const g = grupos[0].hooks[0];
   assert.strictEqual(g.type, 'command');
   assert.strictEqual(g.command, 'node');

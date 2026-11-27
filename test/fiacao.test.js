@@ -2531,13 +2531,15 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
         assert.strictEqual(h.type + ' ' + h.command, 'command node', evento);
         assert.strictEqual(h.onFailure, undefined, evento + ' ' + h.args[0] + ': onFailure contra o R6 (D912)');
         assert.ok(fs.existsSync(h.args[0].replace('${CLAUDE_PLUGIN_ROOT}', RAIZ)), h.args[0]);
-        return path.basename(h.args[0]) + ' ' + h.timeout;
+        return path.basename(h.args[0]) + ' ' + h.timeout + (h.async === true ? ' async' : '');
       }));
     });
   }
+  // Fase 3 do painel de sessoes (s377): o painel-gancho leva cada evento ao painel ao vivo, async (nao segura a sessao)
+  // em todos menos o PermissionRequest, que espera a decisao do dono ate 120 s (o timeout de 130 s cobre o gancho).
   assert.deepStrictEqual(mapa, {
-    SessionStart: [['', 'abertura.js 15']],
-    UserPromptSubmit: [['', 'abrir-turno.js 10']],
+    SessionStart: [['', 'abertura.js 15'], ['', 'painel-gancho.js 10 async']],
+    UserPromptSubmit: [['', 'abrir-turno.js 10'], ['', 'painel-gancho.js 10 async']],
     PreToolUse: [
       ['Write|Edit|NotebookEdit', 'portao-escopo.js 10'],
       // Colheita lote 5, item 12 (D846): o aviso de leitura grande, que nunca nega
@@ -2546,14 +2548,16 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
       // P14 (A1-06): o Monitor roda shell do Bash e passa pelos mesmos portoes
       ['Bash|PowerShell|Monitor', 'portao-shell.js 40'],
       ['Task|Agent', 'portao-agente.js 10', 'portao-apelido.js 10', 'portao-juiz.js 10'],
-      ['AskUserQuestion', 'portao-decisao.js 10']
+      ['AskUserQuestion', 'portao-decisao.js 10', 'painel-gancho.js 10 async']
     ],
+    PermissionRequest: [['', 'painel-gancho.js 130']],
     PostToolUse: [
       ['Write|Edit|NotebookEdit|Grep|Glob|Read|AskUserQuestion|Skill', 'marcar-trabalho.js 10'],
       // F3a (D828): no shell, o marcar-trabalho e o conferir-depois rodam num processo so
       ['Bash|PowerShell', 'depois-do-shell.js 15'],
       ['SubagentHandback', 'gravar-veredito.js 10'],
-      ['SubagentHandback', 'escalar.js 10']
+      ['SubagentHandback', 'escalar.js 10'],
+      ['', 'painel-gancho.js 10 async']
     ],
     // H6a (D891): o recibo da rodada de teste que falhou (o codigo diferente de 0 so dispara este evento)
     PostToolUseFailure: [['Bash|PowerShell', 'recibo-da-prova.js 10']],
@@ -2561,13 +2565,24 @@ test('hooks.json: cada evento chama os scripts certos, com o matcher, a ordem e 
     // H12c (D914): o arquivo pedido no briefing e conferido no fim do subagente, no grupo sem matcher
     SubagentStop: [['^sworn:(inspector|refuter)$', 'gravar-veredito.js 10'], ['', 'escalar.js 10', 'conferir-entrega.js 10']],
     // D794: o fecho pode rodar a prova de pronto (teto de 60 s) no projeto que o dono ligou
-    Stop: [['', 'portao-fecho.js 90']],
+    Stop: [['', 'portao-fecho.js 90'], ['', 'painel-gancho.js 10 async']],
     // H6i (D905): o subagente encerrado no limite de uso sobe o degrau (o SubagentStop dele nao dispara)
     StopFailure: [['rate_limit', 'escalar.js 10']],
     // H6a2 (D892): as secoes mecanicas do handoff da sessao se refazem logo antes da compactacao
     PreCompact: [['', 'antes-do-compact.js 15']],
-    SessionEnd: [['', 'fim-sessao.js 10']]
+    SessionEnd: [['', 'fim-sessao.js 10', 'painel-gancho.js 10 async']]
   });
+});
+
+// P5 da fase 3 do painel (s377, microcopy da ronda 2 do hooks.json): o PermissionRequest e o unico gancho do painel
+// que segura a sessao (ate 2 min com uma aba aberta); sem texto na tela, quem espera nao sabe que a resposta e no painel.
+test('hooks.json: o gancho do painel no PermissionRequest diz onde responder e quanto ele espera', () => {
+  const hooks = JSON.parse(fs.readFileSync(path.join(RAIZ, 'hooks', 'hooks.json'), 'utf8')).hooks;
+  const h = hooks.PermissionRequest[0].hooks[0];
+  assert.strictEqual(path.basename(h.args[0]), 'painel-gancho.js');
+  assert.strictEqual(typeof h.statusMessage, 'string', 'sem statusMessage');
+  assert.ok(/painel/.test(h.statusMessage) && /2 min/.test(h.statusMessage) && /terminal/.test(h.statusMessage),
+    h.statusMessage);
 });
 
 // A4-120: a pasta com espaco em volta era gravada com os espacos (o chaveDaRaiz nao apara) e a abertura nela
