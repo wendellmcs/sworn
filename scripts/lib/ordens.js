@@ -183,9 +183,10 @@ function motivoSemManual(alvo) {
  * "Dada" conta uma vez por pendencia (`s.ordensPendentes`, campo da sessao): o commit negado de novo e a mesma ordem.
  * Recusa so tem sinal no commit (a marca sem-revisao); nas outras, a auditoria mostra "-".
  */
-// G4a (D928): as 5 ultimas sao as rotas do roteador.js (tela, plano, etapa fechada, "por que deu errado", AAA).
+// G4a (D928): as 7 ultimas sao as rotas do roteador.js (tela, plano, etapa fechada, "por que deu errado", AAA, G4h,
+// o defeito, e G4i, o teste).
 const TIPOS_DE_ORDEM = ['aprender', 'auditar', 'calibrar', 'init', 'revisar', 'manual',
-  'tela', 'plano', 'etapa', 'diagnosticar', 'aaa'];
+  'tela', 'plano', 'etapa', 'diagnosticar', 'aaa', 'bug', 'teste'];
 // A skill que cumpre cada ordem: o tipo fica em portugues (e a chave guardada no contadores.json), a skill e o
 // comando. O manual e qualquer skill com "padrao" no nome (a do projeto) ou o playbook do plugin. A tela pede a design
 // (G4c), o roteiro de construir a tela; o manual cumpre so a ordem do manual.
@@ -195,7 +196,12 @@ const MANUAL = /padrao|^(sworn:)?playbook$/i;
 const PLAYBOOK = /^(sworn:)?playbook$/i;
 const FASES = ['dada', 'cumprida', 'recusada'];
 const ROTULO = { revisar: 'revisar antes do commit', tela: 'design da tela', plano: 'revisar o plano',
-  etapa: 'conferir a etapa com o plano', diagnosticar: 'diagnosticar a sessao', aaa: 'esforco alto' };
+  etapa: 'conferir a etapa com o plano', diagnosticar: 'diagnosticar a sessao', aaa: 'esforco alto',
+  bug: 'reproduzir o defeito', teste: 'teste vermelho primeiro' };
+// G4h e G4i: as ordens que nenhuma skill cumpre: so o teste visto vermelho (recibo-da-prova.js), o defeito reproduzido
+// ou o teste novo falhando primeiro. Uma skill que as cumprisse as calaria cedo: o playbook entra no comeco da tarefa,
+// antes de qualquer teste.
+const CUMPRE_O_VERMELHO = ['bug', 'teste'];
 const RECUSA_MEDIDA = ['revisar'];
 // A5-37 (D735): o que o "-" esconde e o passo.
 const NOTA_DA_RECUSA = [
@@ -234,22 +240,33 @@ function marcarDada(s, tipo) {
 
 /** A skill `nome` cumpre a ordem `tipo`: a de SKILL_DA_ORDEM (com ou sem o "sworn:"); o manual, pelo MANUAL. */
 function skillCumpre(tipo, nome) {
-  if (typeof nome !== 'string') return false;
+  if (typeof nome !== 'string' || CUMPRE_O_VERMELHO.indexOf(tipo) !== -1) return false;
   if (tipo === 'manual') return MANUAL.test(nome);
   const skill = SKILL_DA_ORDEM[tipo];
   return nome === tipo || (!!skill && (nome === skill || nome === 'sworn:' + skill));
+}
+
+// Tira das pendentes as que `cumpre(tipo)` aceita, cada uma contada "cumprida".
+function cumprirSe(s, cumpre) {
+  s.ordensPendentes = pendentes(s).filter(function (tipo) {
+    const sim = cumpre(tipo);
+    if (sim) somar(s, tipo, 'cumprida');
+    return !sim;
+  });
+  return s.ordensPendentes;
 }
 
 /** A skill `nome` rodou: cumpre as ordens pendentes dela (skillCumpre). */
 function marcarCumprida(s, nome) {
   if (!ehObjeto(s)) return [];
   if (typeof nome !== 'string') return pendentes(s);
-  s.ordensPendentes = pendentes(s).filter(function (tipo) {
-    const cumpre = skillCumpre(tipo, nome);
-    if (cumpre) somar(s, tipo, 'cumprida');
-    return !cumpre;
-  });
-  return s.ordensPendentes;
+  return cumprirSe(s, function (tipo) { return skillCumpre(tipo, nome); });
+}
+
+/** G4h e G4i: um teste rodou e falhou (o vermelho de verdade do recibo-da-prova.js): cumpre as de CUMPRE_O_VERMELHO. */
+function vermelhoVisto(s) {
+  if (!ehObjeto(s)) return [];
+  return cumprirSe(s, function (tipo) { return CUMPRE_O_VERMELHO.indexOf(tipo) !== -1; });
 }
 
 /** O dono recusou a ordem `tipo` pendente. Sem ordem pendente nao conta. */
@@ -398,7 +415,7 @@ function linhasDoUso(antes, agora, dias) {
 
 module.exports = {
   ARQUIVO_INIT_RECUSADO, ordemDoCalibrar, ordemDoInit, recusarInit, naPonte, comoCarregar, motivoSemManual,
-  TIPOS_DE_ORDEM, SKILL_DA_ORDEM,
-  ROTULO, MANUAL, chaveDaOrdem, skillCumpre, marcarDada, marcarCumprida, marcarRecusada, skillsDoPlugin, marcarUso,
+  TIPOS_DE_ORDEM, SKILL_DA_ORDEM, CUMPRE_O_VERMELHO,
+  ROTULO, MANUAL, chaveDaOrdem, skillCumpre, marcarDada, marcarCumprida, vermelhoVisto, marcarRecusada, skillsDoPlugin, marcarUso,
   totaisDasOrdens, linhasDasOrdens, linhasDoUso, arquivoDaRecusa
 };

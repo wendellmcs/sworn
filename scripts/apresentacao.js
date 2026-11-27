@@ -6,7 +6,8 @@
  * Entradas, todas publicas: apresentacao/fonte/ (deck.json com a ordem, as secoes e o `versao`; deck.css; slides/,
  * um <section> por arquivo, com as notas do apresentador num <aside>), o CHANGELOG.md (o slide `novidades` sai da
  * secao do topo) e o .claude-plugin/plugin.json (a versao da capa). Marcas que a montagem troca nos slides:
- * {{versao}} e {{versoes}} (quantas versoes o CHANGELOG traz); no slide de novidades, tambem {{titulo}}, {{itens}}
+ * {{versao}}, {{versoes}} (quantas versoes o CHANGELOG traz), {{pedidos}} e {{decisoes}} (os inteiros "pedidos" e
+ * "decisoes" do deck.json, que o mantenedor sobe com o "versao"); no slide de novidades, tambem {{titulo}}, {{itens}}
  * e {{mais}}. Marca que sobra para tras e erro.
  *
  * Uso, da raiz do repositorio (quem chama: o mantenedor a cada versao, pela regra de apresentacao/LEIA-ME.md; quem
@@ -130,6 +131,13 @@ function lerFonte(raiz) {
   if (Object.values(deck.faces || {}).some((x) => !x || typeof x.href !== 'string')) {
     throw new Error('deck.json: cada item de "faces" precisa de "href"');
   }
+  // os contadores do slide da historia: subidos junto com o "versao", a cada versao, pelo registro do dia
+  for (const campo of ['pedidos', 'decisoes']) {
+    if (!Number.isInteger(deck[campo]) || deck[campo] < 0) {
+      throw new Error('deck.json: "' + campo + '" tem de ser um inteiro >= 0 (o numero do slide da historia), veio '
+        + JSON.stringify(deck[campo]));
+    }
+  }
   const changelog = lerTexto(path.join(raiz, 'CHANGELOG.md'));
   const versoes = changelog.split('\n').filter((l) => SECAO.test(l)).length;
   const slides = deck.order.map((id) => {
@@ -137,11 +145,11 @@ function lerFonte(raiz) {
     if (!fs.existsSync(arq)) throw new Error('deck.json lista "' + id + '" em "order", mas falta ' + FONTE_ROTULO + '/slides/' + id + '.html');
     let html = lerTexto(arq);
     if (id === 'novidades') html = slideDeNovidades(html, novidades(changelog));
-    html = trocar(html, { versao: escapar(versao), versoes });
+    html = trocar(html, { versao: escapar(versao), versoes, pedidos: deck.pedidos, decisoes: deck.decisoes });
     const sobra = html.match(/\{\{[a-z]+\}\}/);
     if (sobra) {
-      throw new Error('slides/' + id + '.html: marca sem valor ' + sobra[0] + ' (valem {{versao}} e {{versoes}} em qualquer slide;'
-        + ' {{titulo}}, {{itens}} e {{mais}} so em novidades.html)');
+      throw new Error('slides/' + id + '.html: marca sem valor ' + sobra[0] + ' (valem {{versao}}, {{versoes}}, {{pedidos}} e'
+        + ' {{decisoes}} em qualquer slide; {{titulo}}, {{itens}} e {{mais}} so em novidades.html)');
     }
     return { id, html: html.trim() };
   });

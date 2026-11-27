@@ -647,7 +647,7 @@ test('091 T6: nada a cortar, com ordens na janela - so a retroalimentacao, sem a
       'sworn: auditoria automatica (a cada 7 dias): nada a cortar.',
       '- ordens dos ultimos 7 dias que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
       '  aprender 2/2/-',
-      '  nunca disparadas: auditar, calibrar, init, revisar antes do commit, manual, design da tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto',
+      '  nunca disparadas: auditar, calibrar, init, revisar antes do commit, manual, design da tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto, reproduzir o defeito, teste vermelho primeiro',
       '  ("-": o sworn so ve a recusa no commit sem revisao; nas outras, ' +
         'a ordem que o Claude nao cumpriu foi ignorada ou',
       '  recusada na conversa. Ordem que se repete sem cumprir: o sworn segue cobrando; o dono decide se ela fica.)'
@@ -670,7 +670,7 @@ test('091 T6: com o que cortar, a retroalimentacao entra entre a lista e a ordem
         'Junte ou corte itens.',
       '- ordens desde o comeco que o sworn deu ao Claude (dadas / cumpridas / recusadas pelo dono):',
       '  revisar antes do commit 2/1/1',
-      '  nunca disparadas: aprender, auditar, calibrar, init, manual, design da tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto',
+      '  nunca disparadas: aprender, auditar, calibrar, init, manual, design da tela, revisar o plano, conferir a etapa com o plano, diagnosticar a sessao, esforco alto, reproduzir o defeito, teste vermelho primeiro',
       ORDEM_DO_MOCK
     ].join('\n'));
     assert.strictEqual(ap.pedeCorte(t), true);

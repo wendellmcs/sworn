@@ -1615,6 +1615,11 @@ function abrirComPrompt(dir, id, prompt) {
   return r.stdout.trim() ? JSON.parse(r.stdout) : null;
 }
 
+// G4h: o pedido que fala de erro, bug ou quebra traz a rota de defeito (lib/roteador.js), e so ela: a saida inteira e
+// esta, sem o aviso da saude do contexto e sem a oferta do radar.
+const SO_A_ROTA_DE_DEFEITO = { hookSpecificOutput: { hookEventName: 'UserPromptSubmit',
+  additionalContext: require('../scripts/lib/roteador.js').dar({}, ['bug'], {}).textos[0] } };
+
 test('T10-4: perguntar se o contexto/memoria esta bom devolve additionalContext mandando trocar de chat', () => {
   const dir = temp('pergunta-saude');
   try {
@@ -1646,9 +1651,12 @@ test('T10-4: pedido que so cita contexto/memoria sem perguntar pelo estado NAO d
       'add a memory cache to the loader', 'the context menu is broken', 'rode os testes', '',
       'write a memory-safe parser'
     ];
+    // o "erro" e o "broken" trazem a rota de defeito, e so ela
+    const comDefeito = ['qual o contexto desse erro no stack trace?', 'the context menu is broken'];
     negativos.forEach(function (p, i) {
       const j = abrirComPrompt(dir, 'pn' + i, p);
-      assert.strictEqual(j, null, 'disparou sem dever para: ' + JSON.stringify(p) + ' -> ' + JSON.stringify(j));
+      assert.deepStrictEqual(j, comDefeito.indexOf(p) !== -1 ? SO_A_ROTA_DE_DEFEITO : null,
+        'disparou sem dever para: ' + JSON.stringify(p) + ' -> ' + JSON.stringify(j));
     });
     // prompt ausente ou nao-texto nao estoura
     const r = rodar('abrir-turno.js', dir, { session_id: 'pn-x', cwd: dir, prompt: { x: 1 } });
@@ -1740,7 +1748,7 @@ test('A1: no maximo 1 sugestao a cada 5 turnos por sessao - todo prompt conta co
     const roteiro = [
       ['já te disse isso', true],          // 1: sugere
       ['nunca mais faça isso', false],     // 2: janela
-      ['adicione um teste', false],        // 3: nao e correcao, mas conta como turno
+      ['adicione a coluna de total', false], // 3: nao e correcao, mas conta como turno
       ['você errou', false],               // 4
       ['pare de inventar teste', false],   // 5: ainda dentro dos 5 turnos
       ['não foi isso que eu pedi', true],  // 6: janela passou, sugere de novo
@@ -1803,7 +1811,7 @@ test('A1: saude e correcao no mesmo prompt viram UM additionalContext com os doi
 
 // ------------------------------- T3b (D611): o radar do usuario se oferece sozinho
 
-test('T3b: pedido de funcao nova devolve a ordem de oferecer o radar (ASCII, sem gravar nada); relato de bug segue calado', () => {
+test('T3b: pedido de funcao nova devolve a ordem de oferecer o radar (ASCII, sem gravar nada); relato de bug traz so a rota de defeito', () => {
   const dir = temp('oferta-radar');
   try {
     const j = abrirComPrompt(dir, 'or1', 'quero adicionar uma função de exportar relatório em CSV');
@@ -1813,7 +1821,8 @@ test('T3b: pedido de funcao nova devolve a ordem de oferecer o radar (ASCII, sem
     assert.ok(t.indexOf('/sworn:radar') !== -1 && /AskUserQuestion, em 3 opcoes/.test(t) && /Nada roda sem o sim/.test(t), t);
     assert.ok(/^[\x20-\x7E\n]+$/.test(t), 'additionalContext tem de ser ASCII: ' + JSON.stringify(t));
     assert.ok(!fs.existsSync(path.join(dir, '.claude')), 'o gancho nao pode criar nada no projeto');
-    assert.strictEqual(abrirComPrompt(dir, 'or2', 'o botão parou de funcionar'), null);
+    // G4h: sem a oferta do radar; a rota de defeito, sim
+    assert.deepStrictEqual(abrirComPrompt(dir, 'or2', 'o botão parou de funcionar'), SO_A_ROTA_DE_DEFEITO);
     assert.strictEqual(abrirComPrompt(dir, 'or2', 'faça o commit'), null);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

@@ -69,6 +69,29 @@ test('veredito: toda lente de UI tem titulo e pergunta', () => {
   }
 });
 
+// G4j (pedido 263, 5.4): as perguntas de tela ganham os sinais do frontend-design do anthropics/skills (Apache 2.0),
+// reescritos: a pagina generica pelos sinais concretos, e a microcopy pelo mesmo nome para a mesma acao. A pergunta de
+// antes fica inteira no comeco.
+test('G4j: a ui-antiref cita os sinais concretos de pagina generica e a ui-microcopy o mesmo nome para a mesma acao', () => {
+  const p = Object.fromEntries(v.LENTES_UI.map((l) => [l.chave, l.pergunta]));
+  for (const k of ['ui-antiref', 'ui-microcopy']) assert.equal(typeof p[k], 'string', 'falta a lente ' + k);
+  assert.ok(p['ui-antiref'].startsWith('O que parece template generico em vez do produto? Cite o elemento e a tela ' +
+    'irma que faz melhor. '), 'a pergunta de antes da ui-antiref tem de seguir inteira no comeco');
+  for (const t of ['cartoes iguais', 'mesmo raio', 'mesma sombra', 'caixa alta acima de cada titulo',
+    'uma palavra so do titulo', '01, 02, 03', 'nao e sequencia', 'entrada animada em cada secao',
+    'numero grande com legenda pequena', 'seta no fim', 'so conta quando nem o pedido nem o design system o pedem']) {
+    assert.ok(p['ui-antiref'].includes(t), 'a ui-antiref nao diz: ' + t);
+  }
+  assert.ok(p['ui-microcopy'].startsWith('Texto que nao diz o que fazer a seguir, jargao, ingles solto, tom que culpa ' +
+    'quem le. '), 'a pergunta de antes da ui-microcopy tem de seguir inteira no comeco');
+  for (const t of ['mesma acao', 'nomes diferentes', 'diz o que acontece', 'pede desculpa', 'nao diz o que houve']) {
+    assert.ok(p['ui-microcopy'].includes(t), 'a ui-microcopy nao diz: ' + t);
+  }
+  for (const k of ['ui-antiref', 'ui-microcopy']) {
+    assert.ok(/^[\x20-\x7E]+$/.test(p[k]), k + ': a pergunta tem de ser ASCII');
+  }
+});
+
 test('veredito: mudanca sem UI despacha so a familia de codigo', () => {
   assert.deepStrictEqual(v.familiasPara(true, false), ['codigo']);
 });

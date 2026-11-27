@@ -8,16 +8,17 @@ A página `index.html` desta pasta é a apresentação do sworn, servida pelo Gi
 ## A cada versão publicada (só quem mantém o plugin)
 
 1. Ponha as novidades da versão nos slides certos de `fonte/slides/` (o que é ganho, função ou melhoria; o que foi
-   medido e não deu ganho não entra). No `fonte/slides/historia.html`, ponha em dia os pedidos do dono (o último
-   número de `.claude/sworn/pedidos/`) e as decisões (o total que `docs/vigentes.md` diz no topo): o `docs/` não vai
-   ao repositório público, então o script não conta esses dois sozinho.
-2. Suba o `"versao"` de `fonte/deck.json` para a versão do `plugin.json`.
+   medido e não deu ganho não entra).
+2. Em `fonte/deck.json`, suba o `"versao"` para a versão do `plugin.json` e ponha em dia os dois números do slide da
+   história: `"pedidos"` (o maior número do registro de pedidos do dono até a data da decisão da versão) e
+   `"decisoes"` (a posição dessa decisão no registro de decisões). Os dois registros não vão ao repositório público,
+   então o script não conta esses números sozinho; no repositório de quem mantém, o teste diz os dois valores certos.
 3. Rode `node scripts/apresentacao.js --gravar`.
 
 O slide "O que há de novo" e o número de versões se refazem sozinhos a partir do CHANGELOG e do `plugin.json`.
-O `test/apresentacao.test.js` reprova quando a página não é a que a fonte monta hoje, ou quando o `"versao"` do deck
-ficou para trás do `plugin.json`: sem os passos 2 e 3, a suíte não passa e a versão não sai. Nenhum teste confere o
-passo 1: ele fica com quem publica.
+O `test/apresentacao.test.js` reprova quando a página não é a que a fonte monta hoje, quando o `"versao"` do deck
+ficou para trás do `plugin.json`, ou, onde os registros existem, quando `"pedidos"` e `"decisoes"` não batem com eles:
+sem os passos 2 e 3, a suíte não passa e a versão não sai. Nenhum teste confere o passo 1: ele fica com quem publica.
 
 ## Outros comandos
 

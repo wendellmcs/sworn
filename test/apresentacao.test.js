@@ -6,6 +6,7 @@
  * - a pagina publicada e a que a fonte monta hoje (quem muda a fonte e nao roda --gravar reprova);
  * - o `versao` do deck.json e o do plugin.json (quem sobe a versao sem rever o deck reprova);
  * - cada slide da ordem existe, e todo arquivo de slide esta na ordem;
+ * - os contadores do slide da historia saem do deck.json e, no repositorio privado, batem com o registro no dia da versao;
  * - nem codigo de decisao (D123) nem e-mail na fonte e na pagina, que sao publicas;
  * - os dois READMEs apontam para a pagina, e a raiz tem o .nojekyll.
  */
@@ -178,11 +179,12 @@ test('a fonte com defeito para a montagem: marca que nao e de valor, versao falt
     editarJson(deck, (j) => { j.order = ['../../fora']; });
     assert.throws(() => ap.lerFonte(tmp), /fora de \[a-z0-9-\]/);
     editarJson(deck, (j) => { j.order = ordem; });
-    fs.writeFileSync(deck, '﻿' + fs.readFileSync(deck, 'utf8'));
+    // o BOM do Windows (U+FEFF), escrito por codigo para nao sumir num editor que apaga o caractere invisivel
+    const bom = String.fromCharCode(0xfeff);
+    fs.writeFileSync(deck, bom + fs.readFileSync(deck, 'utf8'));
     assert.strictEqual(ap.lerFonte(tmp).slides.length, ordem.length, 'o deck.json com BOM do Windows nao abriu');
     // o deck.css salvo com BOM pelo Windows sai sem ele no css que o lerFonte devolve (e o --slides grava)
-    const bom = String.fromCharCode(0xfeff);
-    const css = path.join(tmp, 'apresentacao', 'fonte', 'deck.css');
+    const css = path.join(tmp, FONTE, 'deck.css');
     fs.writeFileSync(css, bom + fs.readFileSync(css, 'utf8'));
     assert.ok(!ap.lerFonte(tmp).css.startsWith(bom), 'o BOM do deck.css ficou no css lido');
   });
@@ -237,6 +239,80 @@ test('a fonte com defeito diz o arquivo e o campo: JSON quebrado, sem title, sem
     fs.writeFileSync(capa, fs.readFileSync(capa, 'utf8') + '{{titulo}}');
     assert.throws(() => ap.lerFonte(tmp), /\{\{titulo\}\}, \{\{itens\}\} e \{\{mais\}\} so em novidades\.html/);
   });
+});
+
+test('os contadores do slide da historia vem do deck.json ("pedidos" e "decisoes"), nunca texto fixo', () => {
+  const fonte = ler(FONTE + '/slides/historia.html');
+  assert.ok(fonte.includes('{{pedidos}}') && fonte.includes('{{decisoes}}'), 'historia.html sem as marcas {{pedidos}} e {{decisoes}}');
+  comCopia((tmp) => {
+    editarJson(path.join(tmp, FONTE, 'deck.json'), (j) => { j.pedidos = 4321; j.decisoes = 8765; });
+    const historia = ap.lerFonte(tmp).slides.find((s) => s.id === 'historia');
+    assert.ok(historia, 'o slide historia sumiu da ordem');
+    // o numero do cartao e o da nota do apresentador saem os dois do deck.json
+    assert.strictEqual(historia.html.split('>4321</p>').length, 2, 'o cartao dos pedidos nao traz o "pedidos" do deck.json');
+    assert.strictEqual(historia.html.split('>8765</p>').length, 2, 'o cartao das decisoes nao traz o "decisoes" do deck.json');
+    assert.match(historia.html, /<aside[\s\S]*4321 pedidos[\s\S]*8765 decisões[\s\S]*<\/aside>/);
+  });
+});
+
+test('o deck.json sem "pedidos" ou "decisoes" inteiro e nao negativo para a montagem, dizendo o campo', () => {
+  comCopia((tmp) => {
+    const deck = path.join(tmp, FONTE, 'deck.json');
+    const original = fs.readFileSync(deck, 'utf8');
+    for (const campo of ['pedidos', 'decisoes']) {
+      for (const valor of [undefined, -1, 1.5, '10', null]) {
+        fs.writeFileSync(deck, original);
+        editarJson(deck, (j) => { if (valor === undefined) delete j[campo]; else j[campo] = valor; });
+        assert.throws(() => ap.lerFonte(tmp), new RegExp('deck\\.json: "' + campo + '" tem de ser um inteiro'),
+          campo + ' = ' + JSON.stringify(valor) + ' passou');
+      }
+    }
+    fs.writeFileSync(deck, original);
+    editarJson(deck, (j) => { j.pedidos = 0; j.decisoes = 0; });
+    assert.ok(ap.lerFonte(tmp).slides.length, 'zero e um valor valido');
+  });
+});
+
+test('a marca sem valor num slide diz as quatro que valem em qualquer slide', () => {
+  comCopia((tmp) => {
+    const capa = path.join(tmp, FONTE, 'slides', 'cover.html');
+    fs.writeFileSync(capa, fs.readFileSync(capa, 'utf8') + '{{outra}}');
+    assert.throws(() => ap.lerFonte(tmp), /valem \{\{versao\}\}, \{\{versoes\}\}, \{\{pedidos\}\} e \{\{decisoes\}\} em qualquer slide/);
+  });
+});
+
+// O registro de decisoes (docs/) e o de pedidos (.claude/, fora do git) so existem no repositorio privado do mantenedor:
+// no publico e num clone novo este teste pula.
+const REGISTRO_DE_DECISOES = path.join(RAIZ, 'docs', 'decisoes.md');
+const REGISTRO_DE_PEDIDOS = path.join(RAIZ, '.claude', 'sworn', 'pedidos', 'esquadro-pendencias.md');
+const semRegistro = !fs.existsSync(REGISTRO_DE_DECISOES) || !fs.existsSync(REGISTRO_DE_PEDIDOS);
+
+test('os contadores do deck.json batem com o registro no dia da versao', { skip: semRegistro && 'sem os registros privados' }, () => {
+  const deck = JSON.parse(ler(FONTE + '/deck.json'));
+  const texto = fs.readFileSync(REGISTRO_DE_DECISOES, 'utf8').replace(/\r\n/g, '\n');
+  const { decisoes } = require('../scripts/lib/vigentes.js').analisar(texto);
+  // a decisao da versao: a 1a cujo titulo abre pela versao, sozinha ou numa lista ("0.91.0, 0.92.0 e 0.93.0 ...")
+  const daVersao = new RegExp('^(?:\\d+\\.\\d+\\.\\d+(?:, | e ))*' + deck.versao.replace(/\./g, '\\.') + '(?![\\d.])');
+  const i = decisoes.findIndex((d) => daVersao.test(d.titulo));
+  assert.ok(i !== -1, 'nenhuma decisao com o titulo aberto por ' + deck.versao + ': registre a da versao antes');
+  const id = decisoes[i].id;
+  // o cabecalho no formato que o vigentes.js le ("### D933 · titulo"), no comeco da linha
+  const cabecalho = new RegExp('^### ' + id + ' · ', 'm').exec(texto);
+  assert.ok(cabecalho, 'o cabecalho "### ' + id + ' · " nao esta no registro de decisoes');
+  const bloco = texto.slice(cabecalho.index);
+  const fim = bloco.indexOf('\n### ', 1);
+  const data = (fim === -1 ? bloco : bloco.slice(0, fim)).match(/\*\*Data:\*\* (\d{4}-\d{2}-\d{2})(?: (\d{2}:\d{2}))?/);
+  assert.ok(data, id + ' sem a linha **Data:**');
+  const ate = data[1] + ' ' + (data[2] || '23:59');
+  const linhas = fs.readFileSync(REGISTRO_DE_PEDIDOS, 'utf8').replace(/\r\n/g, '\n').split('\n')
+    .map((l) => l.match(/^(\d+)\. (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) /)).filter(Boolean);
+  // o registro sem nenhuma linha no formato "N. AAAA-MM-DD HH:MM " e ilegivel, nunca "0 pedidos"
+  assert.ok(linhas.length, 'nenhuma linha "N. AAAA-MM-DD HH:MM " no registro de pedidos: o formato mudou');
+  const pedidos = linhas.filter((m) => m[2] <= ate).map((m) => Number(m[1]));
+  const esperado = { pedidos: Math.max(0, ...pedidos), decisoes: i + 1 };
+  assert.deepStrictEqual({ pedidos: deck.pedidos, decisoes: deck.decisoes }, esperado,
+    'deck.json: ponha "pedidos" ' + esperado.pedidos + ' (o maior numero ate ' + ate + ', a data da ' + id + ') e "decisoes" '
+    + esperado.decisoes + ' (a posicao da ' + id + ' no registro), e rode node scripts/apresentacao.js --gravar');
 });
 
 test('novidades: versao com sufixo (-rc.1) e a do topo, e secao sem item de ganho e erro, nunca slide vazio', () => {

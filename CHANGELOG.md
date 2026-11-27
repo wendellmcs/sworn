@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.97.0 — a rota de defeito e a rota de teste no roteador, e os sinais de página genérica na revisão de tela
+
+**Novo**
+
+- **A rota de defeito** (`scripts/lib/roteador.js`, `scripts/lib/ordens.js`). A mensagem que fala de erro, bug ou
+  quebra, ou que cola uma pilha de erro, traz a ordem de reproduzir o defeito com um teste vermelho antes do conserto.
+  Traz também a depuração por causa raiz: o erro lido inteiro, o que mudou, cada fronteira instrumentada e uma
+  hipótese por vez. A ideia veio do `obra/superpowers` (MIT), reescrita em texto próprio. Nenhuma skill cumpre a
+  ordem: só o teste visto vermelho.
+- **A rota de teste** (`scripts/lib/roteador.js`, `scripts/lib/ordens.js`). A primeira edição de um arquivo de teste
+  na sessão, ou o pedido de escrever testes ("escreva os testes", "add unit tests"), traz a ordem que aponta ao
+  manual: o teste vermelho primeiro e a mutação antes do pronto, sem skill nova.
+  - A negação de até 3 palavras antes do verbo cala a rota ("não escreva testes", "don't ever add tests").
+  - A negação logo depois de "por que" ou "why" é sugestão e não cala ("por que você não cria os testes?").
+  - Fora do Claude Code, a linha da ordem cita as duas pastas do manual.
+- **Os sinais de página genérica na revisão de tela** (`scripts/lib/veredito.js`). A lente `ui-antiref` passa a citar
+  os sinais concretos de template:
+  - o conteúdo picado em cartões iguais, com o mesmo raio e a mesma sombra;
+  - um rótulo em caixa alta acima de cada título;
+  - uma palavra só do título em outra cor;
+  - a numeração 01, 02, 03 em conteúdo que não é sequência;
+  - a mesma entrada animada em cada seção;
+  - o número grande com legenda pequena no topo;
+  - a seta no fim de todo link.
+  O sinal só conta quando nem o pedido nem o design system o pedem. A lente `ui-microcopy` cobra o mesmo nome para a
+  mesma ação em todo o fluxo, o botão que diz o que acontece ao clicar e o erro que diz o que houve sem pedir
+  desculpa. As frases vieram do `frontend-design` do `anthropics/skills` (Apache 2.0), reescritas, e as duas fontes
+  ganham a sua linha no `ORIGENS.md`.
+
+**Corrigido**
+
+- **Os contadores do slide da história** (`scripts/apresentacao.js`, `apresentacao/fonte/deck.json`). Os pedidos e as
+  decisões eram texto fixo desde a 0.90.0. Agora o gerador os lê do `deck.json`, e para com erro no contador que não é
+  um inteiro maior ou igual a zero.
+
 ## 0.96.0 — o mapa do que veio de fora, o corte de comentário em Python, CSS e .gs, e o guia do modelo a todo subagente
 
 **Novo**

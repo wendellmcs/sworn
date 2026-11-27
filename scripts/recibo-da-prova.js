@@ -43,6 +43,8 @@ function registrar(sessao, recibo, vermelho, comando, cwd, poupado) {
     if (vermelho && s.testesSemVermelho !== undefined) {
       s.testesSemVermelho = require('./lib/vermelho-antes.js').semOsCobertos(s.testesSemVermelho, comando, cwd);
     }
+    // G4h: o vermelho de qualquer teste (de qualquer agente, como acima) cumpre a ordem de reproduzir o defeito
+    if (vermelho && Array.isArray(s.ordensPendentes)) s.ordensPendentes = require('./lib/ordens.js').vermelhoVisto(s);
     return s;
   });
 }

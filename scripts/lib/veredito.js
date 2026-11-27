@@ -58,8 +58,18 @@ const LENTES_UI = [
   { chave: 'ui-estados', titulo: 'Estados obrigatorios (tela)', pergunta: 'Carregando, vazio, erro e limite estao desenhados, ou so o caso cheio?' },
   { chave: 'ui-responsivo', titulo: 'Responsividade e overflow', pergunta: 'Em qual largura o conteudo vaza, corta ou empilha errado? Diga a largura e o elemento.' },
   { chave: 'ui-a11y', titulo: 'Acessibilidade', pergunta: 'Contraste, alvo de toque, foco visivel, ordem de tabulacao, rotulo de campo e de botao de icone.' },
-  { chave: 'ui-microcopy', titulo: 'Microcopy', pergunta: 'Texto que nao diz o que fazer a seguir, jargao, ingles solto, tom que culpa quem le.' },
-  { chave: 'ui-antiref', titulo: 'Anti-referencias visuais', pergunta: 'O que parece template generico em vez do produto? Cite o elemento e a tela irma que faz melhor.' },
+  // G4j (pedido 263): o mesmo nome para a mesma acao na microcopy e os sinais de pagina generica na antiref, reescritos
+  // do frontend-design de anthropics/skills (Apache 2.0); a pergunta de antes segue inteira no comeco de cada uma.
+  { chave: 'ui-microcopy', titulo: 'Microcopy',
+    pergunta: 'Texto que nao diz o que fazer a seguir, jargao, ingles solto, tom que culpa quem le. A mesma acao com ' +
+      'nomes diferentes no fluxo (o botao "Arquivar" e o aviso "Removido"), botao que nao diz o que acontece ao ' +
+      'clicar ("Enviar" onde cabe "Salvar alteracoes"), erro que pede desculpa ou nao diz o que houve.' },
+  { chave: 'ui-antiref', titulo: 'Anti-referencias visuais',
+    pergunta: 'O que parece template generico em vez do produto? Cite o elemento e a tela irma que faz melhor. ' +
+      'Sinais concretos: o conteudo picado em cartoes iguais, com o mesmo raio e a mesma sombra; um rotulo em caixa ' +
+      'alta acima de cada titulo; uma palavra so do titulo em outra cor ou em italico; numeracao 01, 02, 03 em ' +
+      'conteudo que nao e sequencia; a mesma entrada animada em cada secao; o numero grande com legenda pequena no ' +
+      'topo; uma seta no fim de todo link e botao. O sinal so conta quando nem o pedido nem o design system o pedem.' },
   { chave: 'ui-correcao', titulo: 'Correcao visual e regressao', pergunta: 'O que funcionava e parou de aparecer, ou aparece em lugar errado? Cite viewport e coordenada.' },
   { chave: 'ui-governanca', titulo: 'Governanca e permissao', pergunta: 'Superficie restrita renderizada sem a permissao que a habilita, ou dado sensivel visivel no print.' }
 ];
