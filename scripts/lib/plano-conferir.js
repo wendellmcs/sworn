@@ -64,15 +64,18 @@ function lerOuNull(arquivo) {
   try { return fs.readFileSync(arquivo, 'utf8'); } catch (e) { return null; }
 }
 
-/** O comando citado: o script do `node <script>` e o do `npm run <x>`/`npm test` existem; os outros so contam. */
-function conferirComando(t, raiz) {
+/** O comando citado: o script do `node <script>` e o do `npm run <x>`/`npm test` existem; os outros so contam. O
+ * script node que a linha diz que sera criado (criar) conta, como o caminho: o teste vermelho antes cita um teste
+ * novo (P6 item 3, s378). O npm segue conferido: o "criar" da linha nao diz que o package.json ganha o script. */
+function conferirComando(t, raiz, criar) {
   // marcador (<x>) ou curinga: o comando so conta, nao se confere
   if (/[<>*?]/.test(t)) return null;
   const partes = t.split(/\s+/);
   if (partes[0] === 'node') {
     const script = partes.slice(1).filter(function (p) { return !p.startsWith('-'); })[0];
     if (!script || !/\.[cm]?js$/.test(script)) return null;
-    return fs.existsSync(path.join(raiz, script)) ? null : 'o script ' + script + ' nao existe: corrija o comando';
+    return fs.existsSync(path.join(raiz, script)) || criar ? null
+      : 'o script ' + script + ' nao existe e a linha nao diz que sera criado: corrija o comando ou escreva "criar" na linha';
   }
   if (partes[0] === 'npm') {
     const nome = partes[1] === 'run' ? partes[2] : ['test', 'start'].indexOf(partes[1]) !== -1 ? partes[1] : null;
@@ -218,10 +221,13 @@ function conferir(texto, raiz, opcoes) {
     while ((m = CRASE.exec(l)) !== null) daLinha.push({ t: m[1], ini: m.index, fim: m.index + m[0].length });
     tokens.push(daLinha);
     const criar = CRIAR.test(l);
+    // P6 r1 (s378): o "criar" do comando vem do texto fora das crases; dentro delas, `node scripts/new.js` se isentava
+    // pelo proprio nome. O caminho segue com a linha inteira, como antes (D936).
+    const criarForaDasCrases = CRIAR.test(l.replace(/`[^`\n]+`/g, ' '));
     daLinha.forEach(function (k, j) {
       if (COMANDO.test(k.t)) {
         citados++;
-        const motivo = conferirComando(k.t, raiz);
+        const motivo = conferirComando(k.t, raiz, criarForaDasCrases);
         if (motivo) achados.push({ tipo: 'comando-sem-script', valor: k.t, linha: i + 1, motivo: motivo });
         else conferidos++;
         return;

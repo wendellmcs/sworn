@@ -936,7 +936,8 @@ function eixosDosNovos(novos, chaves, metas) {
 /**
  * O fim da apuracao: { encerrar, aprovado, motivo }. Duas secas aprovam; a ronda 1 completa sem achado aprova sozinha (F2b);
  * o teto encerra sem aprovar; senao, a ronda seguinte. A referencia nao alcancada na ultima ronda barra a aprovacao.
- * c = { ronda, secas, quantosAbertos, referencia, faixa1, ronda1SemAchado, ronda1ComMelhoria, quantosAindaAbertos };
+ * c = { ronda, secas, quantosAbertos, referencia, faixa1, ronda1SemAchado, ronda1ComMelhoria, quantosAindaAbertos,
+ * quantosDaUltima }; quantosDaUltima: quantos de quantosAbertos sao novos da ultima ronda (P6 item 4, s378);
  * ronda1SemAchado ignora a melhoria confirmada (H1-custo), e ronda1ComMelhoria so muda o motivo; quantosAbertos e o
  * numero (no apurar, `abertos` e o Set das chaves). A3-06: com quantosAindaAbertos > 0 (achado que segurou uma ronda
  * e voltou igual na ultima) tambem nao aprova: a lente disse que o defeito segue ali. A3-17: `aprovado` e o booleano
@@ -960,7 +961,10 @@ function fimDaApuracao(c) {
   }
   if (c.ronda >= TETO) {
     return { encerrar: true, aprovado: false,
-      motivo: 'teto de ' + TETO + ' rondas com ' + c.quantosAbertos + ' achado(s) aberto(s) (P0, P1 ou P2 de erro)' +
+      // P6 item 4 (s378): o numero soma as rondas; os da ultima vem apartados, para o consertado antes nao parecer aberto
+      motivo: 'teto de ' + TETO + ' rondas com ' + c.quantosAbertos + ' achado(s) (P0, P1 ou P2 de erro) somados nas ' +
+        'rondas: ' + c.quantosDaUltima + ' novo(s) na ultima ronda e ' + (c.quantosAbertos - c.quantosDaUltima) +
+        ' de rondas anteriores' +
         (atras ? ' e a referencia nao alcancada' + quaisAtras : '') +
         // D785 item 5 (s369, 2.5): o teto nao vai ao dono. D828.3 (F2a): nem abre revisao nova; o conserto sai com
         // teste e mutacao, e o commit com a marca que o portao de commit pede (commit.MARCA).
@@ -1257,7 +1261,8 @@ function apurar(rondas, opcoes) {
   const eixos = eixosDosNovos(novosDaUltima, novosChavesDaUltima, metas);
   const ronda = rondas.length;
   const fim = fimDaApuracao({ ronda: ronda, secas: secas, quantosAbertos: abertos.size, referencia: referencia, faixa1: faixa1,
-    ronda1SemAchado: ronda1SemAchado, ronda1ComMelhoria: ronda1ComMelhoria, quantosAindaAbertos: aindaAbertos.size });
+    ronda1SemAchado: ronda1SemAchado, ronda1ComMelhoria: ronda1ComMelhoria, quantosAindaAbertos: aindaAbertos.size,
+    quantosDaUltima: ehNovoDaUltima.size });
   const achadosAindaAbertos = Array.from(aindaAbertos.values());
   // A3-06: o motivo diz quantos voltaram iguais; com eles a apuracao nao aprova (fimDaApuracao). No teto o proximo
   // passo e o do teto (conserto com teste, o resto no plano), para as duas frases nao mandarem coisas diferentes.

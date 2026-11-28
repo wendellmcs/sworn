@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.98.1 — o handoff que espera os agentes de fundo, a compactação de um subagente separada da conversa e o "criar" no comando do plano
+
+**Corrigido**
+
+- **O handoff que o sworn pede depois da compactação espera os agentes de fundo** (`scripts/portao-escopo.js`,
+  `scripts/portao-fecho.js`, `scripts/lib/reinjecao.js`).
+  - A trava cobrava o handoff a cada edição, e a skill do handoff manda não gravar com agente rodando: as duas se
+    contradiziam.
+  - Agora, enquanto um agente roda, a edição passa com um aviso só, que diz quais agentes rodam e quando gravar. O
+    fecho do turno também não cobra.
+  - Sem agente rodando, a cobrança nega como antes, e o "releia o handoff" segue negando.
+- **A compactação de um subagente não mexe no handoff da conversa** (`scripts/abertura.js`,
+  `scripts/antes-do-compact.js`).
+  - O Claude Code avisa a compactação de um subagente com o mesmo `session_id` da conversa.
+  - Por isso a ordem de reler o handoff voltava logo depois de lido, e o handoff saía refeito antes da hora.
+  - Agora o evento que traz `agent_id` só dá as regras ao subagente.
+- **O `/sworn:review-plan` aceita o comando de um teste que a linha diz que será criado** (`scripts/lib/plano-conferir.js`).
+  - O `node test/novo.test.js` de um passo "criar" não é mais "comando sem script".
+  - O comando de um script que já existe segue conferido.
+- **O teto de 3 rondas não diz mais "37 achado(s) aberto(s)" com tudo consertado** (`scripts/lib/veredito.js`). O
+  motivo separa os achados da última ronda dos que vinham de antes.
+
 ## 0.98.0 — o painel de sessões ao vivo: as sessões do Claude Code desta máquina, e a permissão aprovada ou negada nele
 
 **Novo**

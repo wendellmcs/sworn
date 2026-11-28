@@ -1165,6 +1165,166 @@ test('D786 passo 5: depois do compact com "grave primeiro", so o handoff passa; 
   });
 });
 
+/** A transcricao `<dir>/t/<id>.jsonl` com um agente de fundo rodando (o meta sem finished e o .jsonl recente). */
+function transcricaoComAgente(dir, id) {
+  const sub = path.join(dir, 't', id, 'subagents');
+  fs.mkdirSync(sub, { recursive: true });
+  const transcricao = path.join(dir, 't', id + '.jsonl');
+  fs.writeFileSync(transcricao, '');
+  const meta = path.join(sub, 'agent-x1.meta.json');
+  const fundo = { agentType: 'sworn:reader', description: 'Radar grupo A', requestShape: 'background' };
+  fs.writeFileSync(meta, JSON.stringify(fundo));
+  fs.writeFileSync(path.join(sub, 'agent-x1.jsonl'),
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'tarefa' } }) + '\n');
+  return { transcricao: transcricao, terminar: function () {
+    fs.writeFileSync(meta, JSON.stringify(Object.assign({ finished: true }, fundo)));
+  } };
+}
+
+// P6 item 1 (s378, D936): a cobranca do "grave primeiro" negava a edicao, e a skill do handoff manda esperar os agentes
+// de fundo: com um agente rodando, a edicao passa com o aviso (uma vez) e nada soma no teto; terminado, nega como antes.
+test('P6 (s378): com agente de fundo rodando, o "grave primeiro" vira aviso; sem ele, nega como antes', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(2);
+    try {
+      turnoQueGrava(base, 'e1', p.dir, p.handoff);
+      turnoQueGrava(base, 'e1', p.dir, p.trabalho);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'e1', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_GRAVAR), 0, 'controle: a ordem de gravar saiu');
+      const ag = transcricaoComAgente(p.dir, 'e1');
+      const editar = function () {
+        const r = rodarScript('portao-escopo.js', { session_id: 'e1', cwd: p.dir, hook_event_name: 'PreToolUse',
+          transcript_path: ag.transcricao, tool_name: 'Edit',
+          tool_input: { file_path: p.trabalho, old_string: 'a', new_string: 'b' } }, base);
+        assert.strictEqual(r.status, 0, r.stderr);
+        return r.stdout ? JSON.parse(r.stdout) : {};
+      };
+      const ordemAgora = function () { return require('../scripts/lib/estado.js').ler('e1').ordemDoCompact; };
+      // o subagente, com o agente rodando, fica fora da 1b: passa sem o aviso e sem gastar o aviso da conversa
+      const doSub = rodarScript('portao-escopo.js', { session_id: 'e1', cwd: p.dir, hook_event_name: 'PreToolUse',
+        transcript_path: ag.transcricao, agent_id: 'sub1', tool_name: 'Edit',
+        tool_input: { file_path: p.trabalho, old_string: 'a', new_string: 'b' } }, base);
+      assert.strictEqual(doSub.status, 0, doSub.stderr);
+      assert.ok(!/Radar grupo A/.test(doSub.stdout), 'o subagente recebeu o aviso da espera da conversa: ' + doSub.stdout);
+      assert.notStrictEqual((ordemAgora() || {}).esperaAvisada, true, 'o subagente gastou o aviso da espera da conversa');
+      const s1 = editar();
+      const h1 = s1.hookSpecificOutput || {};
+      assert.notStrictEqual(h1.permissionDecision, 'deny', 'com agente rodando a edicao foi negada: ' +
+        h1.permissionDecisionReason);
+      assert.ok(/agente/.test(h1.additionalContext || '') && /Radar grupo A/.test(h1.additionalContext) &&
+        /\/sworn:handoff/.test(h1.additionalContext), 'o aviso da espera nao chegou ao modelo: ' + JSON.stringify(s1));
+      assert.strictEqual(Number((ordemAgora() || {}).negadas) || 0, 0, 'a espera somou no teto');
+      const s2 = editar();
+      assert.ok(!/Radar grupo A/.test((s2.hookSpecificOutput || {}).additionalContext || ''),
+        'o aviso da espera repetiu: ' + JSON.stringify(s2));
+      assert.notStrictEqual((s2.hookSpecificOutput || {}).permissionDecision, 'deny', 'a 2a edicao foi negada');
+      // o Stop tambem espera: nao leva a ordem ao modelo nem soma no teto
+      const f = rodarScript('portao-fecho.js', { session_id: 'e1', cwd: p.dir, hook_event_name: 'Stop',
+        transcript_path: ag.transcricao, last_assistant_message: 'ok' }, base);
+      assert.strictEqual(f.status, 0, f.stderr);
+      assert.strictEqual(Number((ordemAgora() || {}).negadas) || 0, 0, 'o Stop com agente rodando somou no teto');
+      assert.ok(f.stdout.indexOf(ORDEM_GRAVAR) === -1, 'o Stop com agente rodando levou a ordem: ' + f.stdout);
+      // o subagente segue fora da cobranca, e o agente que terminou devolve a negacao de hoje
+      ag.terminar();
+      assert.strictEqual(portaoNega(base, 'e1', p.dir, p.trabalho, { transcript_path: ag.transcricao, agent_id: 'sub1' }), '',
+        'o subagente foi cobrado pela ordem da conversa');
+      const motivo = portaoNega(base, 'e1', p.dir, p.trabalho, { transcript_path: ag.transcricao });
+      assert.ok(motivo.indexOf(MARCA_DA_COBRANCA) !== -1 && motivo.indexOf('/sworn:handoff') !== -1,
+        'sem agente rodando a edicao passou: ' + motivo);
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('P6 (s378): o "releia" segue negando com agente rodando (ler o handoff nao espera ninguem)', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(99);
+    try {
+      turnoQueGrava(base, 'e2', p.dir, p.handoff);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'e2', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_RELER), 0, 'controle: a ordem de reler saiu');
+      const ag = transcricaoComAgente(p.dir, 'e2');
+      assert.ok(portaoNega(base, 'e2', p.dir, p.trabalho, { transcript_path: ag.transcricao })
+        .indexOf(MARCA_DA_COBRANCA) !== -1, 'o releia deixou de cobrar com agente rodando');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('P6 r1 (s378): o aviso da espera tem teto de 3 nomes e 80 caracteres, nome de reserva e o caminho de fora do Claude Code', () => {
+  const r = require('../scripts/lib/reinjecao.js');
+  const saude = require('../scripts/lib/saude.js');
+  const longo = 'x'.repeat(200);
+  const aviso = r.avisoDaEspera([{ descricao: 'um' }, { descricao: '  ', id: 'id-dois' }, { descricao: { a: 1 } },
+    { descricao: longo }, { descricao: 'cinco' }]);
+  assert.ok(aviso.indexOf('(5 rodando: um; id-dois; sem nome; e mais 2)') !== -1, 'teto de nomes ou reserva: ' + aviso);
+  assert.ok(aviso.indexOf(saude.ONDE_GRAVAR_O_HANDOFF) !== -1, 'sem o caminho de fora do Claude Code: ' + aviso);
+  const so = r.avisoDaEspera([{ descricao: 'linha1\nlinha2' + longo }]);
+  assert.ok(so.indexOf('linha1 linha2' + 'x'.repeat(64) + '...') !== -1 && so.indexOf('x'.repeat(65)) === -1,
+    'o nome longo nao foi cortado em 80 ou a quebra de linha passou: ' + so);
+  assert.ok(r.avisoDaEspera(null).indexOf('(0 rodando: )') !== -1, 'a lista que nao e lista quebrou o aviso');
+  // r2: o nome e limpo antes da reserva; descricao ou id so de controle nao viram nome vazio.
+  const ctl = r.avisoDaEspera([{ descricao: String.fromCharCode(1), id: 'id-tres' }, { id: String.fromCharCode(0x2028) }]);
+  assert.ok(ctl.indexOf('(2 rodando: id-tres; sem nome)') !== -1, 'nome so de controle saiu vazio: ' + ctl);
+  // r3: o corte em 77 cairia no meio do emoji; a metade alta solta sai, e o aviso fica sem substituto orfao.
+  const emoji = r.avisoDaEspera([{ descricao: 'a'.repeat(76) + String.fromCodePoint(0x1f600) + 'xyz' }]);
+  assert.ok(emoji.indexOf('(1 rodando: ' + 'a'.repeat(76) + '...)') !== -1, 'o corte do emoji nao saiu limpo: ' + emoji);
+  assert.ok(!/[\ud800-\udbff](?![\udc00-\udfff])/.test(emoji), 'o corte deixou meio emoji no aviso: ' + emoji);
+});
+
+test('P6 r1 (s378): a negacao de uma trava abaixo nao gasta o aviso da espera; ele sai na edicao que passa', () => {
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(2);
+    try {
+      turnoQueGrava(base, 'e4', p.dir, p.handoff);
+      turnoQueGrava(base, 'e4', p.dir, p.trabalho);
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'e4', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_GRAVAR), 0, 'controle: a ordem de gravar saiu');
+      const ag = transcricaoComAgente(p.dir, 'e4');
+      const ordemAgora = function () { return require('../scripts/lib/estado.js').ler('e4').ordemDoCompact || {}; };
+      // `nada` esta no "Fora de escopo" do ESCOPO_LIVRE: a trava 3b nega depois da 1b
+      const motivo = portaoNega(base, 'e4', p.dir, path.join(p.dir, 'nada'), { transcript_path: ag.transcricao });
+      assert.ok(motivo !== '' && motivo.indexOf(MARCA_DA_COBRANCA) === -1, 'controle: a 3b nao negou o fora: ' + motivo);
+      assert.notStrictEqual(ordemAgora().esperaAvisada, true, 'a negacao marcou o aviso que nao saiu');
+      const r = rodarScript('portao-escopo.js', { session_id: 'e4', cwd: p.dir, hook_event_name: 'PreToolUse',
+        transcript_path: ag.transcricao, tool_name: 'Edit',
+        tool_input: { file_path: p.trabalho, old_string: 'a', new_string: 'b' } }, base);
+      assert.strictEqual(r.status, 0, r.stderr);
+      const h = (r.stdout ? JSON.parse(r.stdout) : {}).hookSpecificOutput || {};
+      assert.ok(/Radar grupo A/.test(h.additionalContext || ''), 'o aviso nao saiu na edicao que passou: ' + r.stdout);
+      assert.strictEqual(ordemAgora().esperaAvisada, true, 'o aviso saiu e nao ficou marcado');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
+test('P6 item 2 (s378): a compactacao de um subagente (agent_id) nao arma a ordem nem zera o handoff da sessao', () => {
+  // Ao vivo (s378): 4 agentes do radar compactaram as 00:07:45, 00:08:03, 00:08:10 e 00:09:00; o Claude Code 2.1.332
+  // dispara o SessionStart "compact" deles com o session_id da conversa e o agent_id do subagente, e a ordem de reler
+  // voltava logo depois do Read inteiro do handoff ("ainda nao foi relido" duas vezes).
+  comTmp((rein, base) => {
+    const p = projetoDaCobranca(99);
+    try {
+      // regras longas: a saida passa do teto de 9000 bytes, e a reabertura iria para .sworn/reabertura/ (reabertura-curta.js)
+      const regras = [];
+      for (let i = 0; i < 120; i++) regras.push('- ao fazer a tarefa numero ' + i + ' do projeto -> rodar a prova de pronto e citar a saida inteira');
+      fs.writeFileSync(path.join(p.dir, '.claude', 'sworn', 'regras.md'), regras.join('\n') + '\n', 'utf8');
+      turnoQueGrava(base, 'e3', p.dir, p.handoff);
+      const doSub = rodarScript('abertura.js', { session_id: 'e3', cwd: p.dir, source: 'compact', agent_id: 'a1' }, base);
+      assert.strictEqual(doSub.status, 0, doSub.stderr);
+      assert.strictEqual(doSub.stdout.indexOf(ORDEM_RELER), -1, 'o subagente recebeu a ordem de reler o handoff da conversa');
+      assert.strictEqual(portaoNega(base, 'e3', p.dir, p.trabalho), '', 'a compactacao do subagente armou a cobranca');
+      const s = require('../scripts/lib/estado.js').ler('e3');
+      assert.strictEqual(s.handoffDaSessao, p.handoff, 'a compactacao do subagente zerou o handoff da sessao');
+      assert.strictEqual(fs.existsSync(path.join(p.dir, '.sworn', 'reabertura', 'e3.md')), false,
+        'a reabertura do subagente foi gravada no lugar da da conversa');
+      // controle: a da conversa (sem agent_id) segue armando
+      assert.strictEqual(rodarScript('abertura.js', { session_id: 'e3', cwd: p.dir, source: 'compact' }, base)
+        .stdout.indexOf(ORDEM_RELER), 0, 'controle: a compactacao da conversa deixou de mandar reler');
+      assert.ok(fs.existsSync(path.join(p.dir, '.sworn', 'reabertura', 'e3.md')),
+        'controle: a reabertura da conversa nao foi gravada (o teste do subagente nao provava nada)');
+      assert.ok(portaoNega(base, 'e3', p.dir, p.trabalho).indexOf(MARCA_DA_COBRANCA) !== -1, 'controle: cobra');
+    } finally { fs.rmSync(p.dir, { recursive: true, force: true }); }
+  });
+});
+
 test('s355 (qw4): a 2a compactacao antes de cumprir a ordem repete a ordem, nao a apaga', () => {
   // qw4 ao vivo: o Qwen compactou 42 vezes; a 1a zerava o handoff e o aviso, e a 2a apagava a ordem pendente.
   comTmp((rein, base) => {

@@ -31,6 +31,8 @@ function cobrancaDaOrdem(e, s) {
   if (!ordem || typeof ordem !== 'object') return null;
   if (e.stop_hook_active === true && s.bloqueouNesteTurno !== true) return null;
   const reinjecao = require('./lib/reinjecao.js');
+  // P6 item 1 (s378): com agente de fundo rodando, o "grave primeiro" espera tambem aqui (nada ao modelo, nada no teto)
+  if (reinjecao.esperaPorAgentes(ordem, e.transcript_path).length) return null;
   const negadas = Number(ordem.negadas) || 0;
   if (negadas >= reinjecao.NEGACOES_DA_ORDEM) { delete s.ordemDoCompact; return null; }
   const texto = reinjecao.ordemDoHandoff(config.raizDoProjeto(e.cwd), s);

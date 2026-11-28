@@ -383,6 +383,43 @@ function motivoDaOrdem(ordem, cwd) {
     'handoff; depois repita esta edicao e siga pelo bloco do prompt dele, sem perguntar. ' + teto;
 }
 
+/**
+ * P6 item 1 (s378, D936): a skill do handoff manda esperar os agentes de fundo, e o "grave primeiro" negava a edicao
+ * enquanto eles rodavam. Com `rodando` (saude.agentesRodando) nao vazio, o portao nao cobra: so a ordem de gravar espera
+ * (o "releia" nao depende de agente). Falha ao ler os agentes: [] e a cobranca de hoje.
+ */
+function esperaPorAgentes(ordem, transcricao) {
+  if (!ordem || ordem.tipo !== 'gravar') return [];
+  try { return saude.agentesRodando(transcricao, Date.now()); } catch (err) { return []; }
+}
+
+// P6 r1 (s378): a descricao vem da transcricao; o aviso mostra ate 3 nomes de ate 80 caracteres, e a ordem do fim
+// nunca se perde no corte do harness.
+const NOMES_NO_AVISO = 3;
+const TETO_DO_NOME = 80;
+
+/** O texto do nome sem controle nem separador de linha; vazio quando nao e texto ou nao sobra nada. */
+function limparNome(bruto) {
+  if (typeof bruto !== 'string') return '';
+  return bruto.replace(/[\x00-\x1f\x7f\u2028\u2029]+/g, ' ').trim();
+}
+
+/** O aviso da espera, uma vez por ordem, no additionalContext da edicao que passa. */
+function avisoDaEspera(rodando) {
+  const lista = Array.isArray(rodando) ? rodando : [];
+  const nomes = lista.slice(0, NOMES_NO_AVISO).map(function (a) {
+    const limpo = [a && a.descricao, a && a.id].map(limparNome).filter(Boolean)[0] || 'sem nome';
+    if (limpo.length <= TETO_DO_NOME) return limpo;
+    // r3: o corte nao parte um par substituto (emoji): a metade alta solta no fim sai junto.
+    return limpo.slice(0, TETO_DO_NOME - 3).replace(/[\ud800-\udbff]$/, '') + '...';
+  });
+  const resto = lista.length - nomes.length;
+  return 'sworn: depois da compactacao, o handoff que o sworn pediu espera os agentes em segundo plano (' +
+    lista.length + ' rodando: ' + nomes.join('; ') + (resto > 0 ? '; e mais ' + resto : '') + '). A edicao passa; ' +
+    'rode /sworn:handoff ' + saude.ONDE_GRAVAR_O_HANDOFF + ' quando o ultimo terminar e, ate la, siga o trabalho que ' +
+    'nao depende deles.';
+}
+
 function ordemDoHandoff(cwd, s) {
   const tipo = tipoDaOrdem(s);
   if (tipo === 'reler') {
@@ -561,5 +598,5 @@ function montar(cwd, sessionId, origem) {
 
 module.exports = {
   contexto, nucleo, ordemDoHandoff, ordensDoCompact, handoffDaOrdem, NEGACOES_DA_ORDEM, ordemDoCompact, cruzouSemAviso, cobrarOrdem,
-  comandoCitaHandoff, motivoDaOrdem, montar, linhaDaFatia
+  comandoCitaHandoff, motivoDaOrdem, esperaPorAgentes, avisoDaEspera, montar, linhaDaFatia
 };

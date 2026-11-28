@@ -300,7 +300,7 @@ test('D828.2/D823: no teto, o P2 de erro e o P1 (mesmo marcado melhoria) nao apr
       [veredito('correcao', [achadoMelhoria(4), aberto])]]);
     assert.strictEqual(r.encerrar, true);
     assert.doesNotMatch(r.motivo, /aprovado/, JSON.stringify(aberto));
-    assert.match(r.motivo, /^teto de 3 rondas com 3 achado\(s\) aberto\(s\)/, JSON.stringify(aberto));
+    assert.match(r.motivo, /^teto de 3 rondas com 3 achado\(s\) \(P0, P1 ou P2 de erro\) somados nas rondas: 1 novo\(s\) na ultima ronda e 2 de rondas anteriores/, JSON.stringify(aberto));
     assert.deepStrictEqual(r.novos.map((a) => a.linha), [3], 'so o que segura a ronda sai em novos');
     assert.deepStrictEqual(r.registros.map((a) => a.linha), [4], 'a melhoria da ronda do teto sai no registro');
   }
@@ -354,11 +354,31 @@ test('D828.3: teto de 3 rondas com P1 aberto encerra e manda consertar com teste
     [veredito('correcao', [achado('P1', 'A.txt', 3)])]
   ]);
   assert.strictEqual(r.encerrar, true);
-  assert.strictEqual(r.motivo, 'teto de 3 rondas com 3 achado(s) aberto(s) (P0, P1 ou P2 de erro): conserte o que e ' +
+  assert.strictEqual(r.motivo, 'teto de 3 rondas com 3 achado(s) (P0, P1 ou P2 de erro) somados nas rondas: 1 novo(s) ' +
+    'na ultima ronda e 2 de rondas anteriores: conserte o que e ' +
     'erro, cada conserto com um teste que reprova quando o codigo e estragado de proposito; com a suite inteira verde, ' +
     'o commit sai com "# sworn: sem-revisao" no fim do comando, sem perguntar; o que sobrar vira registro no plano');
   assert.ok(!/dono|humano|3 opcoes|aprovado|prepare de novo|revisao nova/.test(r.motivo), r.motivo);
   assert.ok(/^[\x20-\x7E]+$/.test(r.motivo), 'o motivo vai ao modelo: so ASCII');
+});
+
+// P6 item 4 (s378): no teto, o numero somava os achados de todas as rondas e dizia "aberto(s)" com tudo consertado.
+test('P6 item 4 (s378): o motivo do teto separa os achados da ultima ronda dos de rondas anteriores', () => {
+  const seca = v.apurar([
+    [veredito('correcao', [achado('P1', 'A.txt', 1), achado('P1', 'A.txt', 5)])],
+    [veredito('correcao', [achado('P1', 'A.txt', 2)])],
+    [veredito('correcao', [])]
+  ]);
+  assert.strictEqual(seca.encerrar, true);
+  assert.strictEqual(seca.aprovado, false, 'a regra do teto nao muda');
+  assert.match(seca.motivo, /^teto de 3 rondas com 3 achado\(s\) \(P0, P1 ou P2 de erro\) somados nas rondas: 0 novo\(s\) na ultima ronda e 3 de rondas anteriores: conserte/);
+  assert.doesNotMatch(seca.motivo, /aberto/, 'a ultima ronda seca nao diz achado aberto');
+  const molhada = v.apurar([
+    [veredito('correcao', [achado('P1', 'A.txt', 1)])],
+    [veredito('correcao', [achado('P1', 'A.txt', 2)])],
+    [veredito('correcao', [achado('P1', 'A.txt', 3), achado('P2', 'A.txt', 4)])]
+  ]);
+  assert.match(molhada.motivo, /^teto de 3 rondas com 4 achado\(s\) \(P0, P1 ou P2 de erro\) somados nas rondas: 2 novo\(s\) na ultima ronda e 2 de rondas anteriores: /);
 });
 
 test('apurar: P0 novo nunca e ronda seca', () => {
@@ -402,7 +422,8 @@ test('apurar: lentes diferentes na mesma linha sao dois achados; a mesma lente r
     [veredito('correcao', [achado('P2', 'A.txt', 7, 'nome que mente')])]
   ]);
   // D823: o P2 aberto tambem conta (sem a marca de melhoria, e erro)
-  assert.ok(r3.motivo.includes('com 3 achado(s) aberto(s)'), 'o teto conta os dois P1 e o P2: ' + r3.motivo);
+  assert.ok(r3.motivo.includes('com 3 achado(s) (P0, P1 ou P2 de erro) somados nas rondas: 1 novo(s) na ultima ronda'),
+    'o teto conta os dois P1 e o P2: ' + r3.motivo);
 });
 
 // Ronda 2 do 8c.10: o apurar contava o que nao e veredito como voto sem achado, e a ronda saia
@@ -1818,7 +1839,7 @@ test('D828.5: o achado que foi registro de linha nova e volta igual na ronda seg
   assert.deepStrictEqual(r.novos.map((a) => [a.linha, a.descricao]), [[30, 'quebra na borda']]);
   assert.strictEqual(r.secas, 0);
   // abertos: o P1 da ronda 1, que a correcao nao voltou para fechar, e este
-  assert.match(r.motivo, /^teto de 3 rondas com 2 achado\(s\) aberto\(s\)/);
+  assert.match(r.motivo, /^teto de 3 rondas com 2 achado\(s\) \(P0, P1 ou P2 de erro\) somados nas rondas: 1 novo\(s\) na ultima ronda e 1 de rondas anteriores/);
   // com o conserto entre as rondas 2 e 3 (1 linha entra depois da 3), o mesmo achado volta na 31 e segura igual
   const levado = v.apurar([r1, [p1DaBorda(30)], [p1DaBorda(31)]],
     { mapas: [TRAB, TRAB, TRAB], mudancas: [null, [], [blocoDe(3, 0, 4, 1)]] });
@@ -2159,7 +2180,7 @@ test('A3-06: o achado que segurou a ronda e volta igual na ultima sai em achados
   assert.deepStrictEqual(r.achadosAindaAbertos, [Object.assign({ ronda: 3, lente: 'correcao' }, achado('P1', 'A.txt', 10))]);
   // duas secas (a repeticao nao molha, D475), mas nao aprova: no teto, o motivo do teto, e o que segue aberto
   assert.strictEqual(r.secas, 2);
-  assert.match(r.motivo, /^teto de 3 rondas com 1 achado\(s\) aberto\(s\)/);
+  assert.match(r.motivo, /^teto de 3 rondas com 1 achado\(s\) \(P0, P1 ou P2 de erro\) somados nas rondas: 0 novo\(s\) na ultima ronda e 1 de rondas anteriores/);
   // no teto, o proximo passo e o do teto (o conserto com teste, o resto no plano): as duas frases nao se contradizem
   assert.ok(r.motivo.endsWith('; 1 achado(s) ainda aberto(s), repetido(s) igual(is) na ultima ronda depois de segurar ' +
     'uma ronda (achadosAindaAbertos): entram no conserto acima como os outros abertos'), r.motivo);

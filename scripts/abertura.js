@@ -158,7 +158,10 @@ io.blindar(function () {
     // passa do que o harness mostra vai inteiro para .sworn/reabertura/ e sai a previa, com as ordens na frente.
     let raizDaReabertura = cwdDaEntrada;
     let ordensDaReabertura = null;
-    if (e.source === 'compact') {
+    // P6 item 2 (s378): o Claude Code dispara este compact tambem quando um SUBAGENTE compacta, com o session_id da
+    // conversa e o agent_id dele; a ordem do handoff, a marca zerada e a reabertura em arquivo sao so da conversa.
+    const compactDaConversa = e.source === 'compact' && !(typeof e.agent_id === 'string' && e.agent_id);
+    if (compactDaConversa) {
       const curta = require('./lib/reabertura-curta.js');
       curta.juntar();
       io.antesDeSair(function () { curta.soltar(raizDaReabertura, e.session_id, ordensDaReabertura); });
@@ -215,7 +218,7 @@ io.blindar(function () {
     // (reinjecao.cruzouSemAviso), e a ordem "grave o handoff" sai no texto abaixo. Estado que nao grava: sem a ordem,
     // e uma linha depois do texto diz isso (A5-05; o texto tem de comecar pela ordem, por causa do corte de 10 mil).
     let semMarca = null;
-    if (e.source === 'compact') {
+    if (compactDaConversa) {
       try {
         /* s359 (F2b): no agy e no dsh a ponte roda este compact depois da queda, com a transcricao ja baixa, e manda
            o pico de antes dela (sworn_pico, ponte.quedaSemAviso). */
@@ -231,14 +234,15 @@ io.blindar(function () {
       }
     }
     // as ordens se leem antes do montar e da marca zerada abaixo, que as consome
-    if (e.source === 'compact') ordensDaReabertura = require('./lib/reinjecao.js').ordensDoCompact(cwd, e.session_id);
-    const texto = require('./lib/reinjecao.js').montar(cwd, e.session_id, e.source);
+    if (compactDaConversa) ordensDaReabertura = require('./lib/reinjecao.js').ordensDoCompact(cwd, e.session_id);
+    // o subagente compactado recebe so as regras: o estado e a ordem sao da conversa
+    const texto = require('./lib/reinjecao.js').montar(cwd, e.session_id, compactDaConversa || e.source !== 'compact' ? e.source : 'subagente');
     if (texto) process.stdout.write(texto);
     if (semEstado) process.stdout.write((texto ? '\n' : '') + semEstado);
     if (semMarca) process.stdout.write((texto || semEstado ? '\n' : '') + semMarca);
     // D786 passo 3: a ordem do handoff (se houve) saiu no texto acima e a marca se consome; a conversa compactada cabe
     // de novo, entao o aviso de saude e o alarme rearmam, so pelo tamanho quando ja houve aviso (saude.avaliar).
-    if (e.source === 'compact') {
+    if (compactDaConversa) {
       try {
         estado.alterar(e.session_id, function (s) {
           // D786 passo 5: a ordem dada acima vira cobranca no portao do Write/Edit; sem ordem, a de antes cai.

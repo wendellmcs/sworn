@@ -127,6 +127,26 @@ function permitirComAviso(e, s, avisos, rota) {
  * negacao, no subagente nem no apagar. Qualquer falha devolve a saida como veio: a rota nunca muda a decisao.
  */
 function comRota(e, rota, saida) {
+  return comEspera(comRotaSo(e, rota, saida));
+}
+
+/** P6 item 1 (s378): o aviso da espera do handoff (1b), quando ha, vai no additionalContext da saida que permite. So
+ * aqui, onde o aviso sai, a ordem fica marcada como avisada: a negacao de uma trava abaixo nao o gasta (P6 r1). */
+let avisoDaEspera = null;
+let sessaoDaEspera = null;
+function comEspera(saida) {
+  if (!avisoDaEspera) return saida;
+  marcar(sessaoDaEspera, function (x) {
+    if (x.ordemDoCompact && typeof x.ordemDoCompact === 'object') x.ordemDoCompact.esperaAvisada = true;
+    return x;
+  });
+  const hs = (saida && saida.hookSpecificOutput) || {};
+  const ctx = hs.additionalContext ? hs.additionalContext + '\n\n' + avisoDaEspera : avisoDaEspera;
+  return Object.assign({}, saida || {}, { hookSpecificOutput: Object.assign({}, hs,
+    { hookEventName: 'PreToolUse', additionalContext: ctx }) });
+}
+
+function comRotaSo(e, rota, saida) {
   try {
     if (!rota || e.agent_id || rota.entrada.apagar === true) return saida;
     const roteador = require('./lib/roteador.js');
@@ -317,7 +337,15 @@ io.blindar(function () {
         (ordem.tipo === 'gravar' ||
           (ordem.tipo === 'reler' && typeof ordem.arquivo === 'string' && fs.existsSync(ordem.arquivo)))) {
       const reinjecao = require('./lib/reinjecao.js');
-      if (reinjecao.cobrarOrdem(e.session_id)) {
+      // P6 item 1 (s378): com agente de fundo rodando, o "grave primeiro" espera; o aviso sai uma vez, pegando carona
+      // na saida que permite (comRota), e as travas abaixo seguem valendo.
+      const rodando = reinjecao.esperaPorAgentes(ordem, e.transcript_path);
+      if (rodando.length) {
+        if (ordem.esperaAvisada !== true) {
+          avisoDaEspera = reinjecao.avisoDaEspera(rodando);
+          sessaoDaEspera = e.session_id;
+        }
+      } else if (reinjecao.cobrarOrdem(e.session_id)) {
         incrementar(e.session_id, 'ordem_do_compact');
         return negar(reinjecao.motivoDaOrdem(ordem, cwd));
       }

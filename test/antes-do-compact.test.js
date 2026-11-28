@@ -291,6 +291,23 @@ test('H6a2 (3): o gancho PreCompact refaz o handoff marcado nesta sessao, e o da
   assert.match(fs.readFileSync(c.abs, 'utf8'), /\?\? c\.js/);
 });
 
+test('P6 item 2 (s378): o PreCompact de um subagente (agent_id) nao refaz o handoff da conversa', () => {
+  // Ao vivo (s378): o handoff saiu "Refeito pelo gancho PreCompact" as 21:08, quatro minutos antes da compactacao da
+  // conversa: era a de um agente do radar, com o mesmo session_id.
+  const c = cenario();
+  andar(c);
+  const antes = fs.readFileSync(c.abs, 'utf8');
+  const r = comum.rodar('scripts/antes-do-compact.js', [], {
+    cwd: c.dir, env: estadoCom('p11', { handoffDaSessao: c.abs, frente: 'frente-x' }),
+    entrada: { session_id: 'p11', cwd: c.dir, hook_event_name: 'PreCompact', trigger: 'auto', agent_id: 'a1', agent_type: 'general-purpose' }
+  });
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(fs.readFileSync(c.abs, 'utf8'), antes, 'o PreCompact do subagente reescreveu o handoff da conversa');
+  // controle: o da conversa refaz
+  assert.strictEqual(gancho(c, 'p12', estadoCom('p12', { handoffDaSessao: c.abs, frente: 'frente-x' })).status, 0);
+  assert.notStrictEqual(fs.readFileSync(c.abs, 'utf8'), antes, 'controle: o PreCompact da conversa deixou de refazer');
+});
+
 test('H6a2 (3): o gancho sem handoff na sessao, ou com caminho fora de .sworn/handoff, nao grava nada', () => {
   const c = cenario();
   andar(c);

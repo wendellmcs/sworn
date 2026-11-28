@@ -24,6 +24,8 @@ io.blindar(function () {
 });
 
 function refazerOHandoff(e) {
+  // P6 item 2 (s378): o subagente que compacta dispara este gancho com o session_id da conversa; o handoff e dela
+  if (typeof e.agent_id === 'string' && e.agent_id) return;
   const s = estado.ler(e.session_id);
   const marcado = require('./lib/reinjecao.js').handoffDaOrdem(s);
   if (!marcado) return;

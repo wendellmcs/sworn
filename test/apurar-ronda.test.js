@@ -2007,7 +2007,7 @@ test('F2a (D828.3): pelo CLI, o fecho no teto marca o arquivo com o blob do HEAD
     const r = noTeto('src__a.js', 'src/a.js');
     assert.strictEqual(r.status, 0, r.stdout);
     assert.strictEqual(r.json.encerrar, true, r.stdout);
-    assert.match(r.json.motivo, /^teto de 3 rondas com 3 achado\(s\) aberto\(s\) \(P0, P1 ou P2 de erro\): conserte o que e erro/);
+    assert.match(r.json.motivo, /^teto de 3 rondas com 3 achado\(s\) \(P0, P1 ou P2 de erro\) somados nas rondas: 1 novo\(s\) na ultima ronda e 2 de rondas anteriores: conserte o que e erro/);
     assert.match(r.json.motivo, /o commit sai com "# sworn: sem-revisao" no fim do comando, sem perguntar/);
     assert.doesNotMatch(r.json.motivo, /aprovado|"registros"/);
     assert.strictEqual(r.json.aprovado, false, r.stdout);

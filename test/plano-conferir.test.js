@@ -93,6 +93,29 @@ test('C2: o caminho marcado criar nao e achado; o que nao e caminho fica fora; o
   });
 });
 
+test('P6 item 3 (s378): o comando node de um teste que a linha diz que sera criado nao e achado; sem criar, e o npm, seguem', () => {
+  projeto((raiz) => {
+    const plano = [
+      '- [ ] Teste vermelho antes, a criar. Prova: `node --test test/frete.test.js` (R1)',
+      '- [ ] Rodar o gerador. Prova: `node scripts/gerar.js` (R1)',
+      '- [ ] Rodar o teste do recibo. Prova: `node --test test/recibo.test.js` (R1)',
+      '- [ ] Script do npm, a criar. Prova: `npm run verificar` (R1)',
+      // o "new" dentro das crases nao diz que o script sera criado: so o texto fora delas diz
+      '- [ ] Rodar o executor. Prova: `node scripts/new-runner.js` (R1)',
+      'R1: o frete tem teste.',
+      ''
+    ].join('\n');
+    const r = lib.conferir(plano, raiz);
+    assert.deepStrictEqual(tipos(r), [
+      'comando-sem-script:node --test test/recibo.test.js',
+      'comando-sem-script:node scripts/new-runner.js',
+      'comando-sem-script:npm run verificar'
+    ], JSON.stringify(r.achados));
+    // o comando do teste a criar conta como conferido, como o caminho a criar
+    assert.strictEqual(r.conferidos, r.citados - 3, JSON.stringify(r));
+  });
+});
+
 test('C2: o que os planos reais citam sem ser caminho do repositorio nao vira achado', () => {
   projeto((raiz) => {
     fs.mkdirSync(path.join(raiz, 'docs', 'tarefas', 'T3', 'saida'), { recursive: true });
