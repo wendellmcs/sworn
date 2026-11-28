@@ -595,3 +595,41 @@ test('D869: o marcar-trabalho poe o .gitignore na .sworn/handoff quando o agente
     }
   } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
 });
+
+// R5 (D939): o handoff gravado que cita o que nao existe no disco avisa no PostToolUse, sem esperar o --conferir
+test('R5: o marcar-trabalho avisa quando o handoff gravado cita caminho que nao existe; o resto cala', () => {
+  const { spawnSync } = require('node:child_process');
+  const raiz = pasta();
+  fs.mkdirSync(path.join(raiz, '.claude', 'sworn'), { recursive: true });
+  const dir = path.join(raiz, '.sworn', 'handoff');
+  fs.mkdirSync(dir, { recursive: true });
+  const h = path.join(dir, '2026-11-28-r5.md');
+  fs.writeFileSync(h, '# Handoff\n\nLeia `docs/sumiu.md` antes.\n');
+  function gancho(arquivo, extra) {
+    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'marcar-trabalho.js')], {
+      cwd: raiz, encoding: 'utf8',
+      input: JSON.stringify(Object.assign({ session_id: 's1-bbbbbb', cwd: raiz, hook_event_name: 'PostToolUse',
+        tool_name: 'Write', tool_input: { file_path: arquivo } }, extra || {})),
+      env: Object.assign({}, process.env, { SWORN_TMP: path.join(raiz, 'sessoes') })
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+    if (!r.stdout.trim()) return '';
+    return (JSON.parse(r.stdout).hookSpecificOutput || {}).additionalContext || '';
+  }
+  try {
+    for (const ferramenta of ['Write', 'Edit']) {
+      const ctx = gancho(h, { tool_name: ferramenta });
+      assert.match(ctx, /cita o que nao existe no disco/, ferramenta + ' sem o aviso: ' + ctx);
+      assert.match(ctx, /docs\/sumiu\.md/);
+    }
+    assert.strictEqual(gancho(h, { agent_id: 'sub1' }), '', 'o subagente recebeu o aviso');
+    assert.doesNotMatch(gancho(h, { tool_name: 'Read' }), /cita o que nao existe/, 'o Read recebeu o aviso do R5');
+    fs.writeFileSync(path.join(raiz, 'README.md'), 'Leia `docs/sumiu.md`.\n');
+    assert.strictEqual(gancho(path.join(raiz, 'README.md')), '', 'o arquivo comum recebeu o aviso');
+    fs.mkdirSync(path.join(raiz, 'docs'));
+    fs.writeFileSync(path.join(raiz, 'docs', 'sumiu.md'), 'x\n');
+    assert.strictEqual(gancho(h), '', 'o handoff com o caminho existente ainda avisa');
+    fs.unlinkSync(h);
+    assert.strictEqual(gancho(h), '', 'o handoff que nao se le avisou');
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});

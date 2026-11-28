@@ -49,6 +49,7 @@ a ideia primeiro.
 | Curso Introduction to agent skills | A descrição de skill curta, com teto declarado, na rubrica | `scripts/lib/rubrica.js` | `/sworn:audit` e `/sworn:init` | `Introduction to agent skills` |
 | Curso Introduction to MCP | Os servidores MCP de fora do `.mcp.json` no inventário do ambiente | `scripts/lib/ambiente.js` | `/sworn:init` e `/sworn:audit` | `Introduction to MCP` |
 | Curso AI-native SDLC | Os requisitos numerados do plano, cada um com a sua prova | `scripts/lib/plano-conferir.js` | `/sworn:review-plan` | `AI-native SDLC` |
+| sandeco/reversa | A passagem de sessão confere no disco o que cita: o caminho, o símbolo e o comando que não existem reprovam o `--conferir` | `scripts/lib/handoff-curto.js` | `/sworn:handoff` (o `--conferir`) e o gancho do Write ou Edit do handoff, que só avisa | `reversa` |
 
 ## Estudado e recusado
 

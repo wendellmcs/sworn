@@ -34,7 +34,10 @@ if (alvo !== undefined) {
   try { texto = fs.readFileSync(abs, 'utf8'); } catch (e) {
     sair('sworn: nao consegui ler ' + abs.replace(/\\/g, '/') + ' (' + textoLib.causaDoErro(e) + '); confira o caminho e rode na raiz do projeto', 2);
   }
-  const r = hc.conferir(texto, path.relative(cwd, abs).replace(/\\/g, '/'));
+  // R5 (D939): o que o handoff cita se confere a partir da raiz onde o comando roda; sem a lista do git (null), o nome
+  // curto nao se confere
+  const r = hc.conferir(texto, path.relative(cwd, abs).replace(/\\/g, '/'),
+    { raiz: cwd, arquivos: require('./lib/git.js').rastreados(cwd) });
   process.stdout.write(JSON.stringify(r, null, 2) + '\n');
   process.exit(r.ok ? 0 : 1);
 }

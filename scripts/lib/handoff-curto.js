@@ -389,10 +389,28 @@ function refazer(raiz, texto, opcoes) {
   return igual;
 }
 
-/** Confere um handoff ja preenchido. { ok, problemas, bytes }. `caminhoRel` e o caminho do arquivo. */
-function conferir(texto, caminhoRel) {
+// R5 (D939, do reversa: o meta-harness confere o que a passagem cita): o handoff que cita entre crases um caminho, um
+// simbolo ou o script de um comando que nao existe manda o chat novo atras do que nao ha. A conferencia e a do plano
+// (plano-conferir.js), sem as regras de caixa e de requisito, que sao do plano e nao da passagem.
+const CITACAO_AUSENTE = ['caminho-inexistente', 'simbolo-ausente', 'comando-sem-script'];
+
+/**
+ * Confere um handoff ja preenchido. { ok, problemas, bytes }. `caminhoRel` e o caminho do arquivo. Com
+ * `opcoes.raiz`, confere tambem no disco o que ele cita entre crases (`opcoes.arquivos`: os do repositorio, para o
+ * nome curto); sem a raiz, so a forma.
+ */
+function conferir(texto, caminhoRel, opcoes) {
   const t = String(texto);
   const problemas = [];
+  const op = opcoes || {};
+  if (op.raiz) {
+    // arquivos null = o git nao respondeu ("nao sei"): o nome curto, sem pasta, so se acharia pela lista, e nao reprova
+    const semLista = !Array.isArray(op.arquivos);
+    require('./plano-conferir.js').conferir(t, op.raiz, { arquivos: op.arquivos || [] }).achados
+      .filter(function (a) { return CITACAO_AUSENTE.indexOf(a.tipo) !== -1; })
+      .filter(function (a) { return !(semLista && a.tipo === 'caminho-inexistente' && String(a.valor).indexOf('/') === -1); })
+      .forEach(function (a) { problemas.push('a linha ' + a.linha + ' cita `' + a.valor + '`: ' + a.motivo); });
+  }
   const nome = barra(caminhoRel);
   if (/-retomar-/.test(path.basename(nome))) {
     problemas.push('o nome ' + nome + ' e de resumo de retomada (-retomar-), nao de handoff: grave em ' + PASTA + '/AAAA-MM-DD-<tema>.md');
@@ -421,4 +439,18 @@ function conferir(texto, caminhoRel) {
   return { ok: problemas.length === 0, problemas: problemas, bytes: bytes };
 }
 
-module.exports = { PASTA, TETO, SECOES, REGRA_DO_SLUG, caixaAberta, montar, refazer, conferir };
+/**
+ * R5 (D939): o aviso do gancho que ve o handoff gravado: as citacoes que nao existem no disco, numa linha, ou null.
+ * Liga sozinho no Write (marcar-trabalho.js), sem esperar o --conferir da skill.
+ */
+function avisoDeCitacao(raiz, abs) {
+  let texto;
+  try { texto = fs.readFileSync(abs, 'utf8'); } catch (e) { return null; }
+  const p = conferir(texto, barra(path.relative(raiz, abs)), { raiz: raiz, arquivos: gitLib.rastreados(raiz) })
+    .problemas.filter(function (x) { return /^a linha \d+ cita /.test(x); });
+  if (!p.length) return null;
+  return 'sworn: o handoff ' + path.basename(abs) + ' cita o que nao existe no disco: ' + p.slice(0, 3).join('; ') +
+    (p.length > 3 ? ' (e mais ' + (p.length - 3) + ')' : '') + '. Corrija com Edit antes de seguir.';
+}
+
+module.exports = { PASTA, TETO, SECOES, REGRA_DO_SLUG, caixaAberta, montar, refazer, conferir, avisoDeCitacao };

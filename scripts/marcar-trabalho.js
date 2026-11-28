@@ -216,6 +216,8 @@ io.blindar(function () {
           // Antes do soltar, que pode lancar; o protegerPasta nao lanca e nao cria a pasta (o handoff fora dela nao a cria)
           retomar.protegerPasta(require('node:path').join(raiz, retomar.PASTA));
           retomar.soltar(raiz, e.session_id);
+          // R5 (D939): o handoff que cita o que nao existe no disco avisa ja, sem esperar o --conferir da skill
+          aviso = require('./lib/handoff-curto.js').avisoDeCitacao(raiz, require('node:path').resolve(raiz, alvo));
         }
       }
     } catch (err) { aviso = null; }

@@ -554,6 +554,94 @@ test('F4c conferir: cada defeito do prompt da a sua mensagem', () => {
 });
 
 // ---------------------------------------------------------------- os comandos
+// R5 (D939): o handoff que cita o que nao existe no disco manda o chat novo atras do que nao ha
+test('R5 conferir: com a raiz, o caminho, o simbolo e o script citados entre crases que nao existem reprovam', () => {
+  const dir = projeto();
+  fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'scripts', 'existe.js'), 'function vivo() {}\n');
+  const p = preenchido(dir);
+  const com = function (linha) { return p.texto.replace('## 6. Erros de metodo', '## 6. Erros de metodo\n' + linha); };
+  const op = { raiz: dir, arquivos: ['scripts/existe.js'] };
+  assert.deepStrictEqual(hc.conferir(p.texto, p.caminho, op).problemas, [], 'o montado, sem citacao torta, passa');
+  assert.deepStrictEqual(hc.conferir(com('- siga em `scripts/existe.js` -> `vivo`, e no nome curto `existe.js`'), p.caminho, op).problemas, []);
+  const sumiu = hc.conferir(com('- siga em `scripts/sumiu.js`'), p.caminho, op);
+  assert.strictEqual(sumiu.ok, false);
+  assert.match(sumiu.problemas.join(' | '), /a linha \d+ cita `scripts\/sumiu\.js`: nao existe/);
+  assert.match(hc.conferir(com('- `scripts/existe.js` -> `morto`'), p.caminho, op).problemas.join(' | '), /cita `morto`: nao aparece em scripts\/existe\.js/);
+  assert.match(hc.conferir(com('- rode `node scripts/sumiu.js`'), p.caminho, op).problemas.join(' | '), /cita `node scripts\/sumiu\.js`: o script scripts\/sumiu\.js nao existe/);
+  assert.deepStrictEqual(hc.conferir(com('- criar `scripts/sumiu.js`'), p.caminho, op).problemas, [], 'o que a linha diz que sera criado passa');
+  assert.deepStrictEqual(hc.conferir(com('- sem caixa nem requisito: - [ ] passo `scripts/existe.js`'), p.caminho, op).problemas, [],
+    'as regras de caixa e de requisito sao do plano, nao do handoff');
+  assert.deepStrictEqual(hc.conferir(com('```\n`scripts/sumiu.js`\n```'), p.caminho, op).problemas.filter(function (x) { return /cita/.test(x); }), [],
+    'o bloco de codigo fica de fora');
+  assert.deepStrictEqual(hc.conferir(com('- siga em `scripts/sumiu.js`'), p.caminho).problemas, [], 'sem a raiz, so a forma');
+  // o git que nao respondeu (null) e "nao sei": o nome curto nao se confere, o caminho com pasta segue conferido
+  const semGit = { raiz: dir, arquivos: null };
+  assert.deepStrictEqual(hc.conferir(com('- siga em `sumiu.js`'), p.caminho, semGit).problemas, [], 'sem a lista do git, o nome curto nao reprova');
+  assert.match(hc.conferir(com('- siga em `scripts/sumiu.js`'), p.caminho, semGit).problemas.join(' | '), /cita `scripts\/sumiu\.js`/);
+  assert.match(hc.conferir(com('- `scripts/existe.js` -> `morto`'), p.caminho, semGit).problemas.join(' | '), /cita `morto`/,
+    'sem a lista do git, o simbolo ausente segue reprovando');
+  assert.match(hc.conferir(com('- siga em `sumiu.js`'), p.caminho, { raiz: dir, arquivos: [] }).problemas.join(' | '), /cita `sumiu\.js`/,
+    'com a lista do git, mesmo vazia, o nome curto ausente reprova');
+});
+
+test('R5 avisoDeCitacao fora do git: o nome curto que existe numa subpasta nao avisa; o caminho com pasta ausente avisa', () => {
+  const dir = comum.pasta('hc-sem-git');
+  fs.mkdirSync(path.join(dir, 'docs', 'fundo'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'docs', 'fundo', 'curto-unico.md'), 'x\n');
+  const h = path.join(dir, '.sworn', 'handoff', '2026-11-13-r5.md');
+  fs.mkdirSync(path.dirname(h), { recursive: true });
+  fs.writeFileSync(h, '# Handoff\nVeja `curto-unico.md`.\n');
+  assert.strictEqual(hc.avisoDeCitacao(dir, h), null);
+  fs.writeFileSync(h, '# Handoff\nVeja `curto-unico.md` e `docs/sumiu.md`.\n');
+  assert.match(hc.avisoDeCitacao(dir, h), /cita `docs\/sumiu\.md`/);
+  assert.doesNotMatch(hc.avisoDeCitacao(dir, h), /curto-unico/);
+});
+
+test('R5 comandos: --conferir confere no disco, a partir da pasta onde roda, o que o handoff cita', () => {
+  const dir = projeto({ 'docs/fundo/curto-unico.md': 'x\n' });
+  const r = comum.scriptComoProcesso('scripts/handoff-curto.js', ['--slug', 'x', '--frente', 'frente-x', '--hoje', HOJE], { cwd: dir });
+  assert.strictEqual(r.status, 0, r.stderr);
+  const alvo = path.join(dir, '.sworn', 'handoff', '2026-11-13-x.md');
+  fs.mkdirSync(path.dirname(alvo), { recursive: true });
+  const texto = r.stdout.replace(/^arquivo: [^\n]*\n\n/, '').replace(/<<[A-Z]+:[^>]*>>/g, 'preenchido');
+  // o nome curto (`curto-unico.md`, rastreado em docs/fundo/) so se acha pela lista do git
+  fs.writeFileSync(alvo, texto.replace('## 6. Erros de metodo', '## 6. Erros de metodo\n- siga em `docs/sumiu.md`, em `curto-unico.md` e em `curto-nada.md`'));
+  const c = comum.scriptComoProcesso('scripts/handoff-curto.js', ['--conferir', alvo], { cwd: dir });
+  assert.strictEqual(c.status, 1, c.stdout);
+  assert.match(JSON.parse(c.stdout).problemas.join(' | '), /cita `docs\/sumiu\.md`/);
+  // no repositorio, com a lista do git, o nome curto que nao esta em parte alguma reprova
+  assert.match(JSON.parse(c.stdout).problemas.join(' | '), /cita `curto-nada\.md`/);
+  assert.doesNotMatch(JSON.parse(c.stdout).problemas.join(' | '), /curto-unico/);
+  fs.mkdirSync(path.join(dir, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'docs', 'sumiu.md'), 'x\n');
+  fs.writeFileSync(path.join(dir, 'curto-nada.md'), 'x\n');
+  const passou = comum.scriptComoProcesso('scripts/handoff-curto.js', ['--conferir', alvo], { cwd: dir });
+  assert.strictEqual(passou.status, 0, passou.stdout);
+});
+
+test('R5 avisoDeCitacao: so a citacao ausente avisa, ate 3 e o resto contado; o nome curto rastreado passa', () => {
+  const dir = projeto({ 'docs/fundo/curto-unico.md': 'x\n' });
+  const h = path.join(dir, '.sworn', 'handoff', '2026-11-13-r5.md');
+  fs.mkdirSync(path.dirname(h), { recursive: true });
+  assert.strictEqual(hc.avisoDeCitacao(dir, h), null, 'o handoff que nao se le avisou');
+  // sem as secoes, com marca sobrando e com o nome curto rastreado: nada disso e citacao ausente
+  fs.writeFileSync(h, '# Handoff\n<<FALTA: x>>\nVeja `curto-unico.md` e `a.js`.\n');
+  assert.strictEqual(hc.avisoDeCitacao(dir, h), null);
+  fs.writeFileSync(h, '# Handoff\n' + ['um', 'dois', 'tres', 'quatro', 'cinco'].map(function (n) {
+    return 'Veja `docs/' + n + '.md`.';
+  }).join('\n') + '\n');
+  const a = hc.avisoDeCitacao(dir, h);
+  assert.match(a, /^sworn: o handoff 2026-11-13-r5\.md cita o que nao existe no disco: /);
+  assert.match(a, /docs\/tres\.md/);
+  assert.doesNotMatch(a, /docs\/quatro\.md/);
+  assert.match(a, /\(e mais 2\)\. Corrija com Edit antes de seguir\.$/);
+  fs.writeFileSync(h, '# Handoff\nVeja `docs/um.md`, `docs/dois.md`, `docs/tres.md`.\nE `docs/quatro.md`.\n');
+  assert.match(hc.avisoDeCitacao(dir, h), /docs\/tres\.md`[^;]* \(e mais 1\)\. Corrija/);
+  fs.writeFileSync(h, '# Handoff\nVeja `docs/um.md`, `docs/dois.md`, `docs/tres.md`.\n');
+  assert.doesNotMatch(hc.avisoDeCitacao(dir, h), /e mais/);
+});
+
 test('F4c comandos: handoff-curto.js imprime o destino e o texto; --conferir sai 1 com marca sobrando', () => {
   const dir = projeto();
   const r = comum.scriptComoProcesso('scripts/handoff-curto.js', ['--slug', 'x', '--frente', 'frente-x', '--hoje', HOJE], { cwd: dir });

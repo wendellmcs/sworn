@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.98.3 — o handoff que confere o que cita
+
+**Corrigido**
+
+- **O `--conferir` do handoff reprova a citação que não existe no disco** (`scripts/lib/handoff-curto.js`,
+  `scripts/handoff-curto.js`). Cada caminho, símbolo (`` `a.js` -> `nome` ``) ou script (`node <script>`,
+  `npm run <x>`) citado entre crases é conferido a partir da pasta onde o comando roda, pela mesma conferência do
+  `/sworn:review-plan`. Antes, um handoff podia mandar o chat novo ler um arquivo que já não existia, e passava.
+- **Ao gravar o handoff, o aviso chega na hora** (`scripts/marcar-trabalho.js`). Depois do Write ou do Edit do handoff, o
+  gancho lista as mesmas citações ausentes como aviso, sem bloquear; quem reprova continua sendo o `--conferir` da skill.
+
 ## 0.98.2 — o radar pela lente do canivete suíço: o que cada peça dá a qualquer projeto, e o gatilho que a liga sozinha
 
 **Mudado**

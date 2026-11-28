@@ -81,7 +81,7 @@ Then check it:
     node "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-curto.js" --conferir <path>
 
 With `"ok": false` (exit 1), fix what `problemas` points to (a mark left, a missing section, the prompt out of place,
-the file above the 4 KB cap) with Edit and run it again; exit 2 means the file was not read at that path, not that the check failed: take the path from the `arquivo:` line,
+the file above the 4 KB cap, a path, symbol or script cited between backticks that is not on disk) with Edit and run it again; exit 2 means the file was not read at that path, not that the check failed: take the path from the `arquivo:` line,
 run from the project root and run `--conferir` again. If the script does not run, write the file by hand with the same sections.
 The sections, in this order:
 
