@@ -112,7 +112,7 @@ test('radar: licenca - ELv2, AGPL, fechada ou sem licenca = so a ideia', () => {
 
 test('radar: a ficha - cabecalhos, valores, conferencia pelo script com --tipo radar', () => {
   const s = secao(lerSkill(), 'Step 5');
-  for (const c of ['| Repo | Licença | Como entra | Como melhora | Esforço | Valor | Veredito |',
+  for (const c of ['| Repo | Licença | Como entra | Como melhora | Alcance | Gatilho automático | Equivalente no projeto | Esforço | Valor | Veredito |',
     '| Camada | Cobertura | O que se leu |',
     '| Camada | Achado | Origem | Grau | Quem agiu |', '| Pergunta | Estado | O que mediria |']) {
     assert.ok(s.includes(c), 'cabecalho: ' + c);
@@ -139,8 +139,8 @@ test('radar: a semana sem aprofundado (a linha da skill) passa no conferidor', (
   const modelo = modeloDaFicha(s).split('\n');
   const i = modelo.findIndex(function (l) { return l.trim() === '## Candidatos'; });
   const j = modelo.findIndex(function (l, k) { return k > i && /^## /.test(l); });
-  const semCand = modelo.slice(0, i + 1).concat(['', '| Repo | Licença | Como entra | Como melhora | Esforço | Valor | Veredito |',
-    '|---|---|---|---|---|---|---|', linha.trim(), ''], modelo.slice(j));
+  const semCand = modelo.slice(0, i + 1).concat(['', '| Repo | Licença | Como entra | Como melhora | Alcance | Gatilho automático | Equivalente no projeto | Esforço | Valor | Veredito |',
+    '|---|---|---|---|---|---|---|---|---|---|', linha.trim(), ''], modelo.slice(j));
   const r = referencia.conferir(semCand.join('\n'), { tipo: 'radar' });
   assert.deepStrictEqual(r.problemas, []);
   assert.strictEqual(r.candidatos, 1);
@@ -157,6 +157,33 @@ test('radar: o fecho - 3 opcoes, a recomendada primeiro, o escolhido entra com t
   assert.match(s, /red test/);
   assert.ok(s.includes('/sworn:review'), 'o que entra passa pela revisao cega');
   assert.match(s, /better than the original/);
+});
+
+// D938 (pedido 282): o estudo julga pelo que a peca da a QUALQUER projeto que usa o sworn, le todas as pecas do
+// repositorio, e o que entra nasce com gatilho automatico e uso medido.
+test('radar (D938): o aprofundamento inventaria todas as pecas e conta quantas leu de quantas', () => {
+  const s = secao(lerSkill(), 'Step 3');
+  assert.match(s, /every piece/, 'inventaria todas as pecas, nao 1 a 4 arquivos');
+  for (const p of ['skill', 'agent', 'command', 'hook', 'script']) assert.ok(s.includes(p), 'tipo de peca: ' + p);
+  assert.ok(s.includes('<repo> peças') && s.includes('N de M'), 'a camada da Cobertura que o script confere');
+  assert.match(s, /any project/, 'a lente: o que a peca da a qualquer projeto');
+  assert.doesNotMatch(s, /1 to 4 key files/, 'o limite velho de 1 a 4 arquivos saiu');
+});
+
+test('radar (D938): a ficha pede alcance, gatilho automatico e equivalente, e a skill diz o que nao e gatilho', () => {
+  const s = secao(lerSkill(), 'Step 5');
+  assert.match(s, /\*\*Alcance\*\*/);
+  assert.match(s, /\*\*Gatilho automático\*\*/);
+  assert.match(s, /\*\*Equivalente no projeto\*\*/);
+  assert.ok(s.includes('nenhum (procurei:'), 'o "nenhum" so depois de procurar');
+  assert.match(s, /typing the command is not a trigger/i);
+});
+
+test('radar (D938): a proposta do fecho diz o gatilho, e o pronto exige gatilho ligado e uso medido', () => {
+  const s = secao(lerSkill(), 'Step 6');
+  assert.match(s, /automatic trigger/);
+  assert.match(s, /measured use/);
+  assert.match(s, /test\/fiacao\.test\.js/, 'o gatilho ligado se prova por teste de fiacao');
 });
 
 test('radar: o que a skill nao faz', () => {

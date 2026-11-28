@@ -23,7 +23,8 @@ const COBERTURA = '## Cobertura';
 const CAB_COBERTURA = ['camada', 'cobertura', 'o que se leu'];
 // A evidencia de uma pergunta resolvida (unknown.rs:86 do original): arquivo:linha, endereco, print ou json, ou o
 // achado da ficha que a resolveu. O arquivo:linha pede nome com extensao: "as 10:30" nao e evidencia.
-const EVIDENCIA = /[\w-]\.[a-z]\w*:\d|https?:\/\/\S|[\w-]\.(png|jpe?g|json)\b|achado da linha \d/i;
+const ARQUIVO_LINHA = /[\w-]\.[a-z]\w*:\d/i;
+const EVIDENCIA = new RegExp(ARQUIVO_LINHA.source + '|https?:\\/\\/\\S|[\\w-]\\.(png|jpe?g|json)\\b|achado da linha \\d', 'i');
 const ACHADOS = '## Achados';
 const SEM_SABER = '## O que ficou sem saber';
 const CAB_ACHADOS = ['camada', 'achado', 'origem', 'grau', 'quem agiu'];
@@ -32,7 +33,46 @@ const SEM_BARRA = 'linha de tabela sem a barra do começo (|): no markdown ela s
 // Plano do radar, T2 (D609): a ficha do radar e esta mesma ficha mais a secao dos candidatos. Valor sem acento tambem
 // vale, como no "Nao li:".
 const CANDIDATOS = '## Candidatos';
-const CAB_CANDIDATOS = ['repo', 'licença', 'como entra', 'como melhora', 'esforço', 'valor', 'veredito'];
+// D938 (pedido 282, o canivete suico): o candidato diz a quem serve (alcance), o evento que o liga sozinho no projeto
+// de quem usa o sworn (gatilho automatico) e o que o projeto ja tem no lugar (equivalente: arquivo:linha, ou
+// "nenhum (procurei: ...)"). A peca que so roda quando alguem digita o comando nao conta como gatilho.
+const CAB_CANDIDATOS = ['repo', 'licença', 'como entra', 'como melhora', 'alcance', 'gatilho automático',
+  'equivalente no projeto', 'esforço', 'valor', 'veredito'];
+const CAB_ANTIGO = ['repo', 'licença', 'como entra', 'como melhora', 'esforço', 'valor', 'veredito'];
+// O evento que dispara sem ninguem digitar, sempre palavra inteira (o "ci" de "decide", o "teste" de "testemunha" e o
+// "cron" de "cronograma" nao contam): o nome de um evento do harness, do CI ou da agenda, ou a palavra generica (hook,
+// commit, teste, evento...). A celula se le por trecho (entre ; , . : e parenteses), e basta um trecho que ligue a
+// peca: "Sem ação do usuário: SessionStart" e "PreToolUse (também sob demanda)" valem. Nao liga o trecho que comeca
+// negando ("nenhum hook", "não roda em CI"), o evento negado logo antes ("sem cron", "nenhum CI"), nem o trecho que diz
+// que alguem roda na mao ("o usuário roda o teste", "os usuários digitam /deploy", "sob demanda").
+const EVENTO = 'sessionstart|userpromptsubmit|pretooluse|posttooluse|stop|subagentstop|subagentstart|precompact|' +
+  'sessionend|notification|ci|pull requests?|cron|ganchos?|hooks?|abertura|commits?|push|testes?|builds?|deploys?|' +
+  'agenda|agendad[oa]s?|agendamentos?|eventos?|portão|portao|portões|portoes';
+const NEGA = '(?<![\\p{L}])(nenhum|nenhuma|sem|n[ãa]o|nunca)(?![\\p{L}])';
+const GATILHO = new RegExp('(?<![\\p{L}\\p{N}])(' + EVENTO + ')(?![\\p{L}\\p{N}])', 'iu');
+const EVENTO_NEGADO = new RegExp(NEGA + '\\s+(\\S+\\s+){0,2}?(' + EVENTO + ')(?![\\p{L}\\p{N}])', 'giu');
+const NEGA_NO_INICIO = new RegExp('^\\s*`?' + NEGA, 'iu');
+const GATILHO_MANUAL = new RegExp('sob demanda|manual(mente)?(?![\\p{L}])|(?<![\\p{L}])[àa] m[ãa]o(?![\\p{L}])|' +
+  '(usu[áa]rios?|donos?|algu[ée]m|pessoas?)\\s+(\\S+\\s+)?(digit|rod|cham|execut|ped)\\p{L}*', 'iu');
+function temGatilho(celula) {
+  return String(celula || '').split(/[;,.:()\n]/).some(function (trecho) {
+    if (NEGA_NO_INICIO.test(trecho) || GATILHO_MANUAL.test(trecho)) return false;
+    return GATILHO.test(trecho.replace(EVENTO_NEGADO, ' '));
+  });
+}
+const REPO = /^[\w.-]+\/[\w.-]+$/;
+// O repo escrito como link do markdown ou endereco do GitHub vira "dono/nome", para a camada de pecas achar o par; do
+// endereco so contam o dono e o nome ("github.com/dono/repo/tree/main" e dono/repo).
+function repoDaCelula(texto) {
+  let r = String(texto).trim();
+  const link = r.match(/^\[[^\]]*\]\(([^)]*)\)$/);
+  if (link) r = link[1].trim();
+  r = r.replace(/^`|`$/g, '');
+  const github = /^(https?:\/\/)?(www\.)?github\.com\//i;
+  if (github.test(r)) r = r.replace(github, '').split(/[?#]/)[0].split('/').slice(0, 2).join('/');
+  r = r.replace(/(\.git)?\/*$/i, '');
+  return REPO.test(r) ? r : null;
+}
 const ESFORCOS = ['p', 'm', 'g'];
 const VALORES = ['baixo', 'médio', 'medio', 'alto'];
 const VEREDITOS = ['adotar', 'inspiração', 'inspiracao', 'descartar'];
@@ -72,28 +112,99 @@ function linhasDaSecao(linhas, titulo, cabecalho) {
   return dados;
 }
 
-/** Os candidatos do radar: { candidatos, adotar }, com os problemas empurrados em `problemas`. */
+/**
+ * Os candidatos do radar: { candidatos, adotar, repos }, com os problemas empurrados em `problemas`. `repos` (cada
+ * "dono/nome", uma vez, com a linha) vai para conferirPecas.
+ */
 function conferirCandidatos(linhas, problemas) {
   const cand = linhasDaSecao(linhas, CANDIDATOS, CAB_CANDIDATOS);
   if (!cand) problemas.push('falta a secao "' + CANDIDATOS + '" (| ' + CAB_CANDIDATOS.join(' | ') + ' |)');
   else if (!cand.length) problemas.push('nenhum candidato na secao "' + CANDIDATOS + '": a semana sem nada diz isso numa linha com veredito descartar');
   let adotar = 0;
+  let candidatos = 0;
+  const repos = [];
   for (const c of cand || []) {
     const p = 'linha ' + c.n + ': ';
-    if (!c.c) { problemas.push(p + SEM_BARRA); continue; }
+    if (!c.c) { candidatos++; problemas.push(p + SEM_BARRA); continue; }
+    // a ficha de antes da D938: o cabecalho velho e dado aqui (nao e o de agora), e diz o que falta uma vez so
+    if (c.c.map(valor).join('|') === CAB_ANTIGO.join('|')) {
+      problemas.push(p + 'cabeçalho antigo da ficha (7 colunas): faltam Alcance, Gatilho automático e Equivalente no ' +
+        'projeto, entre "Como melhora" e "Esforço"');
+      continue;
+    }
+    candidatos++;
     if (c.c.length !== CAB_CANDIDATOS.length) { problemas.push(p + 'o candidato tem ' + c.c.length + ' colunas, e sao ' + CAB_CANDIDATOS.length); continue; }
-    const veredito = valor(c.c[6]);
+    const veredito = valor(c.c[9]);
+    const equivalente = c.c[6];
     if (!temTexto(c.c[0])) problemas.push(p + 'candidato sem o repo');
     if (!temTexto(c.c[1])) problemas.push(p + 'candidato sem licença (o que a fonte diz, ou "sem licença")');
-    // descartado nao entra: so ele pode deixar "como entra" e "como melhora" vazios
-    if (veredito !== 'descartar' && !temTexto(c.c[2])) problemas.push(p + 'candidato sem como entra');
-    if (veredito !== 'descartar' && !temTexto(c.c[3])) problemas.push(p + 'candidato sem como melhora (o que fica melhor que o original)');
-    if (ESFORCOS.indexOf(valor(c.c[4])) === -1) problemas.push(p + 'candidato sem esforço (P, M ou G)');
-    if (VALORES.indexOf(valor(c.c[5])) === -1) problemas.push(p + 'candidato sem valor (baixo, médio ou alto)');
+    if (veredito === 'descartar') {
+      // descartado nao entra: alcance, gatilho e "como melhora" podem ficar vazios, mas o motivo nao - no "como entra"
+      // (por que nao entra) ou no equivalente que o projeto ja tem
+      if (!temTexto(c.c[2]) && !ARQUIVO_LINHA.test(equivalente)) {
+        problemas.push(p + 'descartado sem o motivo: diga no "como entra" por que não entra, ou cite no equivalente o ' +
+          'arquivo:linha do que o projeto já tem');
+      }
+    } else {
+      if (!temTexto(c.c[2])) problemas.push(p + 'candidato sem como entra');
+      if (!temTexto(c.c[3])) problemas.push(p + 'candidato sem como melhora (o que fica melhor que o original)');
+      if (!temTexto(c.c[4])) problemas.push(p + 'candidato sem alcance (a quem serve: qualquer projeto, ou que tipo de projeto)');
+      if (!temGatilho(c.c[5])) {
+        problemas.push(p + 'candidato sem gatilho automático: diga o evento que liga a peça sozinha no projeto de quem ' +
+          'usa (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, PreCompact, commit, CI, teste, agenda); ' +
+          'o usuário digitar o comando, ou "sob demanda", não é gatilho');
+      }
+      // "nenhum", qualquer coisa (o [^] pega tambem a quebra de linha), o primeiro "procurei" e o que se buscou depois
+      // dele; o "não" logo antes desse "procurei" e a busca negada ("não procurei em docs/" depois dela nao conta)
+      const m = String(equivalente).match(/^\s*`?nenhum\b([^]*?)procurei:?([^]*)$/i);
+      const naoProcurou = Boolean(m) && /n[ãa]o\s*$/i.test(m[1]);
+      if (!ARQUIVO_LINHA.test(equivalente) && !(m && temTexto(m[2]) && !naoProcurou)) {
+        problemas.push(p + 'candidato sem equivalente no projeto: o arquivo:linha do que já faz isso, ou "nenhum ' +
+          '(procurei: <o que se buscou e onde>)"');
+      }
+    }
+    if (ESFORCOS.indexOf(valor(c.c[7])) === -1) problemas.push(p + 'candidato sem esforço (P, M ou G)');
+    if (VALORES.indexOf(valor(c.c[8])) === -1) problemas.push(p + 'candidato sem valor (baixo, médio ou alto)');
     if (VEREDITOS.indexOf(veredito) === -1) problemas.push(p + 'candidato sem veredito (adotar, inspiração ou descartar)');
     if (veredito === 'adotar') adotar++;
+    // a linha da semana vazia ("nenhum novo nesta semana", descartar, sem barra nem github) nao e repositorio e nao
+    // pede camada de pecas; o descarte que escreve um repo fora do formato e cobrado como os outros
+    const repo = repoDaCelula(valor(c.c[0]));
+    const pareceRepo = veredito !== 'descartar' || /\/|github/i.test(c.c[0]);
+    if (repo && !repos.some(function (r) { return r.repo === repo; })) repos.push({ n: c.n, repo: repo });
+    else if (!repo && temTexto(c.c[0]) && pareceRepo) {
+      problemas.push(p + 'o repo "' + c.c[0].trim() + '" não está no formato dono/nome (ou o endereço do GitHub)');
+    }
   }
-  return { candidatos: (cand || []).length, adotar: adotar };
+  return { candidatos: candidatos, adotar: adotar, repos: repos };
+}
+
+/**
+ * D938: cada repositorio da ficha diz, na Cobertura, quantas pecas leu de quantas tem (a camada "<repo> peças").
+ * O "ja temos" ou o descarte de uma peca que ninguem leu e o erro que o pedido 282 achou.
+ */
+function conferirPecas(repos, camadas, problemas) {
+  for (const r of repos) {
+    const k = (camadas || []).find(function (x) {
+      if (!x.c || x.c.length !== CAB_COBERTURA.length) return false;
+      const v = valor(x.c[0]);
+      return v.indexOf(r.repo + ' ') === 0 && /pe[çc]as/.test(v.slice(r.repo.length));
+    });
+    if (!k) {
+      problemas.push('linha ' + r.n + ': o candidato ' + r.repo + ' sem a camada "' + r.repo + ' peças" na Cobertura ' +
+        '(quantas peças do repositório se leram de quantas: skills, agentes, comandos, ganchos, scripts)');
+    } else if (valor(k.c[1]) !== 'desconhecida') {
+      // completa tambem conta ("40 de 40"); desconhecida e o clone que falhou, e ja diz por que
+      const conta = /(\d+)\s+de\s+(\d+)/.exec(k.c[2]);
+      if (!conta) {
+        problemas.push('linha ' + k.n + ': a camada "' + r.repo + ' peças" não diz quantas de quantas peças se leram ' +
+          '("N de M", e o que ficou de fora)');
+      } else if (Number(conta[1]) > Number(conta[2])) {
+        problemas.push('linha ' + k.n + ': a camada "' + r.repo + ' peças" diz ' + conta[0] + ': mais peças lidas do ' +
+          'que o repositório tem');
+      }
+    }
+  }
 }
 
 /**
@@ -152,6 +263,7 @@ function conferir(texto, opcoes) {
     cobertura[v]++;
     if (v !== 'completa' && !temTexto(k.c[2])) problemas.push(p + 'cobertura ' + v + ' sem o que se leu (quantos de quantos, o que ficou de fora)');
   }
+  if (radar) conferirPecas(radar.repos, camadas, problemas);
   // REA: falta de cobertura e desconhecido. O "nao achei" so vale sobre o que se leu, e a ficha diz o que nao leu.
   if (!linhas.some(function (l) { const m = l.trim().match(/^N[ãa]o li:(.*)$/); return !!m && temTexto(m[1]); })) {
     problemas.push('falta a linha "Não li:" (o que ficou de fora da leitura)');
@@ -168,7 +280,7 @@ function conferir(texto, opcoes) {
     cobertura: cobertura,
     naoCompleta: cobertura.parcial + cobertura.desconhecida,
     bytes: bytes
-  }, radar);
+  }, radar ? { candidatos: radar.candidatos, adotar: radar.adotar } : null);
 }
 
 /** O tipo pelo caminho relativo a raiz do projeto (`\` ou `/`), ou null fora de .claude/sworn/referencias/<tipo>-<assunto>.md. */

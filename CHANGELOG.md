@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.98.2 — o radar pela lente do canivete suíço: o que cada peça dá a qualquer projeto, e o gatilho que a liga sozinha
+
+**Mudado**
+
+- **A ficha do radar pede alcance, gatilho automático e equivalente** (`skills/radar/SKILL.md`,
+  `scripts/lib/referencia.js`).
+  - `Alcance`: a quem a peça serve, de preferência a qualquer projeto que usa o sworn.
+  - `Gatilho automático`: o evento que liga a peça sem ninguém digitar (gancho, commit, CI, cron, portão). "O usuário
+    roda" e "sob demanda" são recusados.
+  - `Equivalente no projeto`: o `arquivo:linha` do que já faz isso, ou `nenhum (procurei: ...)`. O "já temos" sem
+    linha é recusado.
+- **O aprofundamento lê todas as peças do repositório** (`scripts/lib/referencia.js`). A Cobertura de cada candidato
+  diz quantas peças se leram de quantas (`N de M`), e a conta impossível é recusada. A peça não lida nunca vira
+  "descartar" nem "já temos".
+- **A proposta diz o gatilho e como o uso será medido**: o que entra só fica pronto com o gatilho ligado e um teste
+  que prova que o evento liga a peça.
+
 ## 0.98.1 — o handoff que espera os agentes de fundo, a compactação de um subagente separada da conversa e o "criar" no comando do plano
 
 **Corrigido**

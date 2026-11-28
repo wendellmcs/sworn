@@ -335,14 +335,24 @@ test('script: ficha com problema, fora da pasta ou do nome, ou sem projeto.json 
 const CANDIDATOS = [
   '## Candidatos',
   '',
-  '| Repo | Licença | Como entra | Como melhora | Esforço | Valor | Veredito |',
-  '|---|---|---|---|---|---|---|',
-  '| anomalyco/opencode | MIT | regras allow/ask/deny no portão de escopo | determinístico, sem modelo no meio | M | médio | INSPIRAÇÃO |',
-  '| cursor/plugins | MIT | gatilho "travado" no portão de fecho | barra em vez de só lembrar | P | alto | adotar |',
-  '| NationalSecurityAgency/ghidra | Apache-2.0 | não entra | - | P | baixo | descartar |',
+  '| Repo | Licença | Como entra | Como melhora | Alcance | Gatilho automático | Equivalente no projeto | Esforço | Valor | Veredito |',
+  '|---|---|---|---|---|---|---|---|---|---|',
+  '| anomalyco/opencode | MIT | regras allow/ask/deny no portão de escopo | determinístico, sem modelo no meio | qualquer projeto | PreToolUse de Write/Edit nega o que sai do escopo | scripts/portao-escopo.js:40 | M | médio | INSPIRAÇÃO |',
+  '| cursor/plugins | MIT | gatilho "travado" no portão de fecho | barra em vez de só lembrar | qualquer projeto | Stop: o portão de fecho barra o "pronto" sem prova | nenhum (procurei: grep "travado" em scripts/ e hooks/) | P | alto | adotar |',
+  '| NationalSecurityAgency/ghidra | Apache-2.0 | não entra: engenharia reversa de binário, fora do tema | - | | | | P | baixo | descartar |',
   ''
 ].join('\n');
-const FICHA_RADAR = FICHA.replace('## O que ficou sem saber', CANDIDATOS + '\n## O que ficou sem saber');
+// D938 (pedido 282): cada repositorio aprofundado diz quantas pecas leu de quantas tem
+const PECAS = [
+  '| anomalyco/opencode peças | parcial | 12 de 40: as skills e os ganchos; os comandos não |',
+  '| cursor/plugins peças | completa | 7 de 7 |',
+  '| NationalSecurityAgency/ghidra peças | parcial | 0 de 3: só o README, o domínio é outro |'
+].join('\n');
+assert.notStrictEqual(FICHA.indexOf('| 3 textos | completa | o README e as mensagens dos dois, no commit lido |'), -1,
+  'a linha da Cobertura onde entram as camadas de pecas');
+const FICHA_RADAR = FICHA.replace('## O que ficou sem saber', CANDIDATOS + '\n## O que ficou sem saber')
+  .replace('| 3 textos | completa | o README e as mensagens dos dois, no commit lido |',
+    '| 3 textos | completa | o README e as mensagens dos dois, no commit lido |\n' + PECAS);
 
 test('conferir radar: a ficha com os candidatos passa e conta candidatos e adotados', () => {
   const r = referencia.conferir(FICHA_RADAR, { tipo: 'radar' });
@@ -360,16 +370,30 @@ test('conferir radar: sem a secao dos candidatos, ou com ela vazia, nao passa', 
 });
 
 test('conferir radar: esforco, valor, veredito fora da lista, licenca vazia ou como entra vazio viram problema com a linha', () => {
-  const boa = '| cursor/plugins | MIT | gatilho "travado" no portão de fecho | barra em vez de só lembrar | P | alto | adotar |';
+  const boa = '| cursor/plugins | MIT | gatilho "travado" no portão de fecho | barra em vez de só lembrar | qualquer projeto | Stop: o portão de fecho barra o "pronto" sem prova | nenhum (procurei: grep "travado" em scripts/ e hooks/) | P | alto | adotar |';
+  const meio = ' | qualquer projeto | Stop barra o pronto | scripts/portao-fecho.js:12 | ';
   const casos = [
-    ['| cursor/plugins | MIT | gatilho | barra | XL | alto | adotar |', /esforço/],
-    ['| cursor/plugins | MIT | gatilho | barra | P | enorme | adotar |', /valor/],
-    ['| cursor/plugins | MIT | gatilho | barra | P | alto | talvez |', /veredito/],
-    ['| cursor/plugins |  | gatilho | barra | P | alto | adotar |', /licença/],
-    ['| cursor/plugins | MIT | - | barra | P | alto | adotar |', /como entra/],
-    ['| cursor/plugins | MIT | gatilho | ? | P | alto | inspiracao |', /como melhora/],
-    ['| cursor/plugins | MIT | gatilho | barra | P | alto |', /colunas/],
-    ['cursor/plugins | MIT | gatilho | barra | P | alto | adotar |', /barra/]
+    ['| cursor/plugins | MIT | gatilho | barra' + meio + 'XL | alto | adotar |', /esforço/],
+    ['| cursor/plugins | MIT | gatilho | barra' + meio + 'P | enorme | adotar |', /valor/],
+    ['| cursor/plugins | MIT | gatilho | barra' + meio + 'P | alto | talvez |', /veredito/],
+    ['| cursor/plugins |  | gatilho | barra' + meio + 'P | alto | adotar |', /licença/],
+    ['| cursor/plugins | MIT | - | barra' + meio + 'P | alto | adotar |', /como entra/],
+    ['| cursor/plugins | MIT | gatilho | ?' + meio + 'P | alto | inspiracao |', /como melhora/],
+    ['| cursor/plugins | MIT | gatilho | barra' + meio + 'P | alto |', /colunas/],
+    ['cursor/plugins | MIT | gatilho | barra' + meio + 'P | alto | adotar |', /barra/],
+    // D938 (pedido 282): o alcance, o gatilho que dispara sozinho e o equivalente procurado no projeto
+    ['| cursor/plugins | MIT | gatilho | barra | - | Stop barra o pronto | scripts/portao-fecho.js:12 | P | alto | adotar |', /alcance/],
+    ['| cursor/plugins | MIT | gatilho | barra | qualquer projeto | o usuário digita /sworn:fecho | scripts/portao-fecho.js:12 | P | alto | adotar |', /gatilho automático/],
+    ['| cursor/plugins | MIT | gatilho | barra | qualquer projeto | sob demanda | scripts/portao-fecho.js:12 | P | alto | inspiração |', /gatilho automático/],
+    ['| cursor/plugins | MIT | gatilho | barra | qualquer projeto | - | scripts/portao-fecho.js:12 | P | alto | adotar |', /gatilho automático/],
+    // o evento e palavra inteira: o "stop" de "nonstop" e o "ci" de "cinco" nao sao gatilho (mutantes da s378)
+    ['| cursor/plugins | MIT | gatilho | barra | qualquer projeto | o usuário roda à mão, nonstop | scripts/portao-fecho.js:12 | P | alto | adotar |', /gatilho automático/],
+    ['| cursor/plugins | MIT | gatilho | barra | qualquer projeto | o usuário digita em cinco minutos | scripts/portao-fecho.js:12 | P | alto | adotar |', /gatilho automático/],
+    ['| cursor/plugins | MIT | gatilho | barra | qualquer projeto | Stop barra o pronto | nenhum | P | alto | adotar |', /equivalente/],
+    ['| cursor/plugins | MIT | gatilho | barra | qualquer projeto | Stop barra o pronto | já temos o portão | P | alto | adotar |', /equivalente/],
+    ['| cursor/plugins | MIT | gatilho | barra | qualquer projeto | Stop barra o pronto | nenhum (procurei: ) | P | alto | adotar |', /equivalente/],
+    // descartado sem motivo: nem "como entra" (por que nao entra) nem o equivalente que ja existe
+    ['| cursor/plugins | MIT | - | - | | | | P | baixo | descartar |', /descartado sem o motivo/]
   ];
   for (const [torta, re] of casos) {
     const p = referencia.conferir(FICHA_RADAR.replace(boa, torta), { tipo: 'radar' }).problemas;
@@ -377,9 +401,129 @@ test('conferir radar: esforco, valor, veredito fora da lista, licenca vazia ou c
     assert.match(p[0], re);
     assert.match(p[0], /^linha \d+: /, 'o problema diz a linha');
   }
-  // descartado nao entra: "como entra" e "como melhora" podem ficar vazios; sem acento tambem vale
-  assert.deepStrictEqual(referencia.conferir(FICHA_RADAR.replace(boa,
-    '| cursor/plugins | MIT | - | - | p | medio | Descartar |'), { tipo: 'radar' }).problemas, []);
+  // descartado nao entra: alcance, gatilho e "como melhora" podem ficar vazios; o motivo vem no "como entra" ou no
+  // equivalente que o projeto ja tem; sem acento tambem vale
+  for (const d of ['| cursor/plugins | MIT | não entra: só serve a Cursor | - | | | | p | medio | Descartar |',
+    '| cursor/plugins | MIT | - | - | | | scripts/portao-fecho.js:12 | p | medio | Descartar |']) {
+    assert.deepStrictEqual(referencia.conferir(FICHA_RADAR.replace(boa, d), { tipo: 'radar' }).problemas, [], d);
+  }
+  // os eventos que contam como gatilho, com e sem acento, no comeco ou no meio da celula
+  for (const g of ['SessionStart: a abertura oferece', 'no UserPromptSubmit, pelo tipo do pedido', 'PreToolUse de Bash',
+    'gancho de PostToolUse', 'o commit dispara', 'quando o teste falha', 'no CI', 'PreCompact grava', 'portão de fecho']) {
+    const linha = boa.replace('Stop: o portão de fecho barra o "pronto" sem prova', g);
+    assert.deepStrictEqual(referencia.conferir(FICHA_RADAR.replace(boa, linha), { tipo: 'radar' }).problemas, [], g);
+  }
+});
+
+test('conferir radar (D938): cada repositorio aprofundado tem a camada "<repo> peças" com N de M na Cobertura', () => {
+  const sem = FICHA_RADAR.replace('| cursor/plugins peças | completa | 7 de 7 |\n', '');
+  const p = referencia.conferir(sem, { tipo: 'radar' }).problemas;
+  assert.strictEqual(p.length, 1, JSON.stringify(p));
+  assert.match(p[0], /cursor\/plugins/);
+  assert.match(p[0], /peças/);
+  assert.match(p[0], /^linha \d+: /, 'o problema aponta a linha do candidato');
+  const semConta = FICHA_RADAR.replace('12 de 40: as skills e os ganchos; os comandos não', 'as skills e os ganchos');
+  const q = referencia.conferir(semConta, { tipo: 'radar' }).problemas;
+  assert.strictEqual(q.length, 1, JSON.stringify(q));
+  assert.match(q[0], /anomalyco\/opencode/);
+  assert.match(q[0], /de quantas/);
+  // sem acento tambem vale
+  assert.deepStrictEqual(referencia.conferir(FICHA_RADAR.replace('cursor/plugins peças', 'cursor/plugins pecas'),
+    { tipo: 'radar' }).problemas, []);
+  // a linha "nenhum novo" da semana vazia nao e repositorio e nao pede camada de pecas
+  // a linha exata que a skill do radar manda escrever na semana vazia
+  const vazia = FICHA_RADAR.replace(/\| NationalSecurityAgency\/ghidra \| Apache-2\.0 [^\n]*/,
+    '| nenhum novo nesta semana | não se aplica | não entra: nenhum aprofundado | | | | | P | baixo | descartar |')
+    .replace(/\n\| NationalSecurityAgency\/ghidra peças [^\n]*/, '');
+  assert.notStrictEqual(vazia.indexOf('| nenhum novo nesta semana |'), -1, 'a fixture trocou a linha');
+  assert.strictEqual(vazia.indexOf('ghidra'), -1, 'a fixture tirou a camada do ghidra');
+  assert.deepStrictEqual(referencia.conferir(vazia, { tipo: 'radar' }).problemas, []);
+  // a conta impossivel (mais pecas lidas do que existem) nao passa
+  const demais = FICHA_RADAR.replace('| cursor/plugins peças | completa | 7 de 7 |', '| cursor/plugins peças | completa | 50 de 40 |');
+  assert.match(referencia.conferir(demais, { tipo: 'radar' }).problemas.join(' '), /cursor\/plugins[^]*50 de 40/);
+  // a camada completa tambem diz a conta ("7 de 7"); a desconhecida (o clone falhou) so diz por que
+  const completaSemConta = FICHA_RADAR.replace('| cursor/plugins peças | completa | 7 de 7 |', '| cursor/plugins peças | completa | |');
+  assert.match(referencia.conferir(completaSemConta, { tipo: 'radar' }).problemas.join(' '), /de quantas/);
+  const clone = FICHA_RADAR.replace('| cursor/plugins peças | completa | 7 de 7 |',
+    '| cursor/plugins peças | desconhecida | o clone falhou (repositório privado): li só a página |');
+  assert.deepStrictEqual(referencia.conferir(clone, { tipo: 'radar' }).problemas, []);
+});
+
+test('conferir radar (s378, revisao cega): o repo em endereco ou link acha a camada; fora do formato vira problema', () => {
+  const boa = '| cursor/plugins | MIT | gatilho "travado"';
+  for (const r of ['https://github.com/cursor/plugins', '[cursor/plugins](https://github.com/cursor/plugins)',
+    'github.com/cursor/plugins.git', '`cursor/plugins`']) {
+    assert.deepStrictEqual(referencia.conferir(FICHA_RADAR.replace(boa, '| ' + r + ' | MIT | gatilho "travado"'),
+      { tipo: 'radar' }).problemas, [], r);
+  }
+  // o endereco sem a camada de pecas tambem e cobrado (antes passava calado)
+  const semCamada = FICHA_RADAR.replace(boa, '| https://github.com/cursor/plugins | MIT | gatilho "travado"')
+    .replace('| cursor/plugins peças | completa | 7 de 7 |\n', '');
+  assert.match(referencia.conferir(semCamada, { tipo: 'radar' }).problemas.join(' '), /cursor\/plugins peças/);
+  const torto = referencia.conferir(FICHA_RADAR.replace(boa, '| plugins do cursor | MIT | gatilho "travado"'),
+    { tipo: 'radar' }).problemas;
+  assert.strictEqual(torto.length, 1, JSON.stringify(torto));
+  assert.match(torto[0], /^linha \d+: .*formato dono\/nome/);
+  // o mesmo repositorio em duas linhas cobra a camada uma vez so
+  const dois = FICHA_RADAR.replace('| NationalSecurityAgency/ghidra | Apache-2.0', '| cursor/plugins | Apache-2.0')
+    .replace('| cursor/plugins peças | completa | 7 de 7 |\n', '');
+  assert.strictEqual(referencia.conferir(dois, { tipo: 'radar' }).problemas.filter((x) => /peças/.test(x)).length, 1);
+});
+
+test('conferir radar (s378, revisao cega): gatilho negado nao conta; agenda e cron contam; "nao procurei" nao e busca', () => {
+  const boa = 'Stop: o portão de fecho barra o "pronto" sem prova';
+  for (const g of ['nenhum hook, sob demanda', 'sem evento: o usuário digita', 'Não há: o usuário roda à mão no commit',
+    'cronograma manual', 'roda sob demanda no teste']) {
+    const p = referencia.conferir(FICHA_RADAR.replace(boa, g), { tipo: 'radar' }).problemas;
+    assert.strictEqual(p.length, 1, g + ' -> ' + JSON.stringify(p));
+    assert.match(p[0], /gatilho automático/, g);
+  }
+  for (const g of ['agenda semanal da segunda', 'cron de segunda', 'a rotina agendada']) {
+    assert.deepStrictEqual(referencia.conferir(FICHA_RADAR.replace(boa, g), { tipo: 'radar' }).problemas, [], g);
+  }
+  const p = referencia.conferir(FICHA_RADAR.replace('nenhum (procurei: grep "travado" em scripts/ e hooks/)',
+    'nenhum, não procurei: nada'), { tipo: 'radar' }).problemas;
+  assert.strictEqual(p.length, 1, JSON.stringify(p));
+  assert.match(p[0], /equivalente/);
+});
+
+test('conferir radar (s378, ronda 2): evento do harness vale com "sob demanda"; palavra generica na mao nao; descarte fora do formato', () => {
+  const boa = 'Stop: o portão de fecho barra o "pronto" sem prova';
+  // o nome do evento vale sozinho, mesmo com negacao ou "sob demanda" na mesma celula
+  for (const g of ['Sem ação do usuário: SessionStart', 'PreToolUse (também roda sob demanda)', 'no CI de cada pull request',
+    'o hook PreToolUse barra a edição sem escopo']) {
+    assert.deepStrictEqual(referencia.conferir(FICHA_RADAR.replace(boa, g), { tipo: 'radar' }).problemas, [], g);
+  }
+  // a palavra generica com alguem rodando na mao, ou dentro de outra palavra, nao e gatilho
+  for (const g of ['o usuário digita o comando /deploy', 'o usuário roda o teste manualmente', 'a testemunha confere',
+    // ronda 3: o evento do harness negado tambem nao liga; o plural e o verbo com palavra no meio tambem sao na mao
+    'Sem SessionStart; só roda se o usuário digitar', 'nenhum (não roda em CI)', 'nenhum CI', 'sem cron',
+    'o usuário digita stop', 'os usuários digitam /deploy', 'o usuário pode rodar o teste',
+    // a negacao no meio do trecho (so o evento negado sai) e a negacao longa no inicio (o trecho todo nao liga)
+    'roda sem cron', 'nenhum gatilho automático nem hook']) {
+    const p = referencia.conferir(FICHA_RADAR.replace(boa, g), { tipo: 'radar' }).problemas;
+    assert.strictEqual(p.length, 1, g + ' -> ' + JSON.stringify(p));
+    assert.match(p[0], /gatilho automático/, g);
+  }
+  // a busca declarada com o que ficou de fora continua sendo busca; o "não" antes do primeiro "procurei" nao
+  const equiv = 'nenhum (procurei: grep "travado" em scripts/ e hooks/)';
+  assert.deepStrictEqual(referencia.conferir(FICHA_RADAR.replace(equiv,
+    'nenhum (procurei: grep em scripts/; não procurei em docs/)'), { tipo: 'radar' }).problemas, []);
+  // o endereco com /tree/main acha a camada; o descarte com repo fora do formato e cobrado
+  const ghidra = '| NationalSecurityAgency/ghidra | Apache-2.0';
+  assert.deepStrictEqual(referencia.conferir(FICHA_RADAR.replace('| cursor/plugins | MIT | gatilho "travado"',
+    '| https://github.com/cursor/plugins/tree/main | MIT | gatilho "travado"'), { tipo: 'radar' }).problemas, []);
+  const descTorto = referencia.conferir(FICHA_RADAR.replace(ghidra, '| github.com/NationalSecurityAgency | Apache-2.0'),
+    { tipo: 'radar' }).problemas;
+  assert.ok(descTorto.some((x) => /formato dono\/nome/.test(x)), JSON.stringify(descTorto));
+});
+
+test('conferir radar (D938): a ficha no cabecalho antigo (7 colunas) diz o que falta numa linha so', () => {
+  const velho = FICHA_RADAR.replace(
+    '| Repo | Licença | Como entra | Como melhora | Alcance | Gatilho automático | Equivalente no projeto | Esforço | Valor | Veredito |',
+    '| Repo | Licença | Como entra | Como melhora | Esforço | Valor | Veredito |');
+  const p = referencia.conferir(velho, { tipo: 'radar' }).problemas;
+  assert.ok(p.some(function (x) { return /cabeçalho antigo/.test(x) && /Gatilho automático/.test(x); }), JSON.stringify(p));
 });
 
 test('script --tipo radar: confere a ficha em qualquer pasta, recusa --gravar e tipo desconhecido', () => {

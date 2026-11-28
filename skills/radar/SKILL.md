@@ -84,7 +84,14 @@ agent you call.
 2. **Deepen up to 5**, those with the highest grade (2 or more), except the already studied; tie: method before
    domain, then open license. Read the whole README, the repository page (stars,
    license, language, last commit, root folders), the manifest (`package.json`, `pyproject.toml`
-   or equivalent) and 1 to 4 key files, all from what is public. Read them from a study copy: `node "${CLAUDE_PLUGIN_ROOT}/scripts/pastas.js" --estudar https://github.com/<dono>/<repo>`
+   or equivalent) and **every piece** of the repository: list by Glob, in the copy, each skill, agent, command, hook,
+   script and rule file, count them, and read each one (a large one, at least its head and what it promises). The
+   judgment of each piece is what it gives **any project** (in maintainer mode, any project that uses sworn), not only
+   the one in front of you: reviews, quality, organization, safety, the day-to-day work. The card's Cobertura gets one
+   layer per deepened repository, `<repo> peças`, with how many were read of how many (`N de M`, also when it is
+   `completa`: `40 de 40`) and which were left out; the script refuses the card without it. When the clone fails
+   (below), the layer is `desconhecida` and says why. A piece that was not read is never `descartar` nor "we already have
+   it": it goes to `Não li:`. Read them from a study copy: `node "${CLAUDE_PLUGIN_ROOT}/scripts/pastas.js" --estudar https://github.com/<dono>/<repo>`
    clones a shallow copy into a new folder of the system temp and returns the folder and the commit read; search the
    whole base there (grep, Read), cite `arquivo:linha` of that commit, and never run anything from it: third-party
    code doesn't run here, and sworn's lock 5 refuses installing, building, testing or calling a script of the copy.
@@ -158,16 +165,18 @@ Fonte: https://github.com/trending?since=weekly lida às 12:04 UTC; 15 na págin
 
 ## Candidatos
 
-| Repo | Licença | Como entra | Como melhora | Esforço | Valor | Veredito |
-|---|---|---|---|---|---|---|
-| dono/repo | MIT | <file, skill or step where it fits> | <what gets better than the original> | P | alto | adotar |
-| dono/outro | AGPL-3.0 | <only the idea, rewritten> | <what the project already has and the original doesn't> | M | médio | inspiração |
+| Repo | Licença | Como entra | Como melhora | Alcance | Gatilho automático | Equivalente no projeto | Esforço | Valor | Veredito |
+|---|---|---|---|---|---|---|---|---|---|
+| dono/repo | MIT | <file, skill or step where it fits> | <what gets better than the original> | <who it serves: qualquer projeto, or which kind> | <the event that turns it on: SessionStart, PreToolUse, Stop, commit...; the signal; the action> | nenhum (procurei: <what was searched, and where>) | P | alto | adotar |
+| dono/outro | AGPL-3.0 | <only the idea, rewritten> | <what the project already has and the original doesn't> | <who it serves> | <the hook event, the signal, the action> | <arquivo:linha of what already does part of it, e.g. scripts/portao-escopo.js:40> | M | médio | inspiração |
 
 ## Cobertura
 
 | Camada | Cobertura | O que se leu |
 |---|---|---|
 | dono/repo README | completa | |
+| dono/repo peças | completa | 40 de 40 |
+| dono/outro peças | parcial | 12 de 40: <which pieces were read, and which were left out> |
 | dono/repo código | parcial | <how many files of how many, and which were left out> |
 | triagem | parcial | <how many READMEs of the list were read> |
 
@@ -194,10 +203,22 @@ Não li: <what the triage and deepening left out, and the sources that failed>.
 
 - **Candidatos:** one line per deepened one, from highest value to lowest. Effort `P`, `M` or `G`;
   value `baixo`, `médio` or `alto`; verdict `adotar`, `inspiração` or `descartar`. License never
-  empty (what the source says, or "sem licença"). Only `descartar` may leave "como entra" and "como
-  melhora" empty. A week with no deepened one, a single line:
+  empty (what the source says, or "sem licença"). A week with no deepened one, a single line:
 
-    | nenhum novo nesta semana | não se aplica | | | P | baixo | descartar |
+    | nenhum novo nesta semana | não se aplica | não entra: nenhum aprofundado | | | | | P | baixo | descartar |
+
+- **Alcance**: who the piece serves: `qualquer projeto`, or which kind of project (with a screen, with a database, that
+  publishes). In maintainer mode the question is what it gives every project that uses sworn.
+- **Gatilho automático**: the event that turns the piece on by itself in the project of whoever uses it: a hook event
+  (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `PreCompact`), a commit or push, the CI, a
+  failing test, the weekly schedule, a gate; then the signal it reads and what it does.
+  Typing the command is not a trigger, and neither is "sob demanda": a piece that only runs when someone remembers it is not used. The script
+  refuses the row without an event.
+- **Equivalente no projeto**: the `arquivo:linha` of what the project already has that does this (or part of it), or
+  `nenhum (procurei: <what was searched, and where>)`. A bare "nenhum" or "já temos" without the line is refused: the
+  "we already have it" that nobody checked is how a good piece gets lost.
+- **Descartar** may leave alcance, gatilho and "como melhora" empty, never the reason: "como entra" says why it does not
+  go in (`não entra: <motivo>`), or the equivalente cites the `arquivo:linha` the project already has.
 
 - **Cobertura, achados, o que ficou sem saber and `Não li:`** follow the rules of `/sworn:reference`: each layer
   read says if it was `completa` (the last cell may stay empty), `parcial` (it says what was read) or `desconhecida`
@@ -245,10 +266,14 @@ reference that `/sworn:review` puts next to the work. State the cost first; if t
 assemble the proposal with what the radar already read and say so.
 
 The proposal says, in 3 options and the recommended one first: what the original does, what the project already has
-that is similar, and what ends up **better than the original** in each path (with the effort and the risk). The path
+that is similar, and what ends up **better than the original** in each path (with the effort and the risk), and, for
+each path, its **automatic trigger** (the hook event, the signal it reads and the action, so the piece turns on by
+itself in every project that uses it, with no command to remember) and how its **measured use** will be checked
+(the record, the counter or the opening line that shows it ran in another project). The path
 chosen becomes a task like any other: red test first, the minimum of code that solves it, and the blind
 review of `/sworn:review` (the `enxuto` lens judges the code that didn't need to exist) before
-calling it done. A deliberate simplification carries the comment `atalho: <o que>. limite: <até onde
+calling it done. It is only done with the trigger wired: a test of the project proves that the event turns the piece
+on (in maintainer mode, in `test/fiacao.test.js`, and the piece's row in `ORIGENS.md` names the trigger). A deliberate simplification carries the comment `atalho: <o que>. limite: <até onde
 vale>. trocar quando: <gatilho>.`, which `/sworn:shortcuts` lists. The following week, the candidate already
 taken appears as "já estudado".
 

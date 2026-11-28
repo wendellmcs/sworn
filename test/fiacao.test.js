@@ -2425,8 +2425,9 @@ test('V: com "vigia": true a abertura mostra o radar da semana uma vez, depois d
     // nova"; a ficha e de 2 dias atras, sempre dentro do prazo
     const semana = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     escrever(pastaVigia, 'radar/novidades.md', 'semana: ' + semana + '\n\n## Candidatos\n\n' +
-      '| Repo | Licença | Como entra | Como melhora | Esforço | Valor | Veredito |\n|---|---|---|---|---|---|---|\n' +
-      '| a/b | MIT | no fecho | barra | P | alto | adotar |\n');
+      '| Repo | Licença | Como entra | Como melhora | Alcance | Gatilho automático | Equivalente no projeto | Esforço | Valor | Veredito |\n' +
+      '|---|---|---|---|---|---|---|---|---|---|\n' +
+      '| a/b | MIT | no fecho | barra | qualquer projeto | Stop barra o pronto | scripts/portao-fecho.js:12 | P | alto | adotar |\n');
     const r1 = abrirVigia(dir, 'r1', pastaVigia);
     assert.strictEqual(r1.status, 0, r1.stderr);
     const i = r1.stdout.indexOf('sworn: radar - ficha da semana de ' + semana + ': 1 candidato, 1 para adotar.');
